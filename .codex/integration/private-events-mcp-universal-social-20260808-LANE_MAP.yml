@@ -1,0 +1,189 @@
+mode: worktree_worker_then_serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_sha: 63e411b390489d2a4bbe509622335d00f303416b
+base_branch: main
+integration_branch: integration/private-events-mcp-universal-social
+global_constraints:
+  - no production deploy, restart, or secret mutation during implementation
+  - preserve current ChatGPT and Codex OAuth resource isolation
+  - Codex retains exactly seven event/incident/operations tools and no social provider scopes
+  - ChatGPT receives a broad analyst/copywriter/editor social workspace
+  - no raw provider method-name passthrough; high-level tools must still cover real workflows
+  - TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP remains the only Telegram role for this MCP
+  - secrets, sessions, access tokens, raw provider errors, and private target internals never enter Git or tool output
+  - code changes require canonical docs and CHANGELOG Unreleased sync
+  - targeted editorial sampling is bounded to one resolved target and at most 100 items; no background harvesting or durable content index
+  - Telegram/VK AI read features require an explicit per-target consent/purpose policy before production enablement
+verification_owner: root integrator
+stop_conditions:
+  - current production MCP health or active user request regresses
+  - provider capability requires an unavailable credential scope or unsupported provider contract
+  - any lane would need to reuse E2E or S22 Telegram sessions
+  - destructive live E2E lacks explicit per-action operator approval
+requirements:
+  R01: Telegram dialog/channel/Saved history and keyword/global search over every entity accessible to the dedicated session
+  R02: Telegram target resolution plus Saved Messages, user DMs, channel/group publication, replies/comments/reactions, rich formatting, custom emoji, media/albums, forward/edit/delete, drafts and scheduling
+  R03: Telegram stories, story/media lifecycle, channel/message/story statistics and similar-channel recommendations
+  R04: VK user/group/wall/newsfeed/message reading, keyword search and community discovery for every surface allowed by the configured credential
+  R05: VK target resolution plus user/community messages, wall/community publication, comments/reactions, rich text, media/albums/video, edit/delete and scheduling
+  R06: VK stories, story/media lifecycle, community/post/story statistics and related-community discovery
+  R07: ChatGPT social catalog, granular scopes, dynamic target descriptors, preparation/approval/commit receipts, idempotency, audit, rate/egress/media budgets and truthful annotations
+  R08: Preserve Codex event/incident MCP behavior and seven-tool read-only catalog; Codex uses local Telegram/VK tools instead of social MCP
+  R09: Fake-provider contract tests, OAuth/catalog isolation, full MCP suite, CI gate, non-destructive live E2E and webhook/health regression checks
+  R10: Canonical docs, env/credential generator, connection instructions, rollout/rollback and production acceptance receipts
+  R11: Bounded editorial sample of up to 100 posts from one explicitly resolved channel/community for tone, topics and description drafting; no mass collection
+deferred_followup:
+  R12: >-
+    After the social workspace ships, expand the ChatGPT incident/operations evidence surface with
+    a stability overview, bounded error and operation search, correlation-aware incident evidence,
+    and narrow log retrieval so most investigations can be completed from exact GitHub code plus MCP
+    evidence without downloading the production database.
+  constraints:
+    - keep investigation reads separate from all social mutation scopes and provider credentials
+    - begin with aggregate health, ingestion velocity, queues, scheduler/jobs and recent anomalies
+    - require a bounded time window, component, severity, run/job/correlation id or prior evidence before detailed log retrieval
+    - redact secrets and personal data recursively; never expose arbitrary SQL, filesystem paths, shell or unbounded log/database export
+    - derive the final evidence contract from canonical historical incident records before implementation
+  status: accepted_after_social_workspace
+lanes:
+  - id: L0-core-contract
+    role: worker
+    requirement_ids: [R07, R08, R11]
+    target: provider-neutral workspace contracts, tool catalog, target descriptors, grants, approvals, budgets and OAuth visibility
+    depends_on: []
+    execution_mode: serial_after_read_only_mapping
+    branch: agent/mcp-universal-social/core-contract
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-core
+    writable_files:
+      - private_events_mcp/social_workspace.py
+      - private_events_mcp/access_policy.py
+      - private_events_mcp/protocol.py
+      - private_events_mcp/server.py
+      - private_events_mcp/auth_store.py
+      - private_events_mcp/config.py
+    forbidden_files: [main_part2.py, private_events_mcp_provider_adapters.py, docs, CHANGELOG.md]
+    expected_output: committed provider-neutral contract and focused core tests
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: L1-telegram-workspace
+    role: worker
+    requirement_ids: [R01, R02, R03]
+    target: comprehensive Telethon adapter behind the stable workspace contract
+    depends_on: [L0-core-contract]
+    execution_mode: parallel_after_dependency
+    branch: agent/mcp-universal-social/telegram
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-telegram
+    writable_files:
+      - private_events_mcp_telegram_adapter.py
+      - tests/test_private_events_mcp_telegram_workspace.py
+    forbidden_files: [private_events_mcp/social_workspace.py, private_events_mcp/oauth.py, main_part2.py, docs, CHANGELOG.md]
+    expected_output: committed fake-tested Telegram capability adapter; no live calls
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: L0b-social-oauth-policy
+    role: worker
+    requirement_ids: [R07, R08]
+    target: ChatGPT-only granular scope registry, least-privilege grants and exact Codex isolation
+    depends_on: [L0-core-contract]
+    execution_mode: parallel_with_provider_adapters
+    branch: agent/mcp-universal-social/oauth-policy
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-oauth
+    writable_files:
+      - private_events_mcp/access_policy.py
+      - private_events_mcp/config.py
+      - private_events_mcp/oauth.py
+      - tests/test_private_events_mcp_social_oauth_policy.py
+    forbidden_files: [private_events_mcp/social_workspace.py, private_events_mcp/auth_store.py, private_events_mcp/server.py, private_events_mcp/social.py, main_part2.py, docs, CHANGELOG.md]
+    expected_output: committed scope/client policy and cross-client OAuth tests; no runtime catalog or provider calls
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: L0c-social-runtime-ledger
+    role: worker
+    requirement_ids: [R07, R08, R11]
+    target: durable opaque references, samples, approvals, idempotency, budgets, audits and ChatGPT-only ToolSpec orchestration
+    depends_on: [L0-core-contract]
+    execution_mode: parallel_with_provider_adapters
+    branch: agent/mcp-universal-social/runtime-ledger
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-runtime
+    writable_files:
+      - private_events_mcp/auth_store.py
+      - private_events_mcp/social_workspace_runtime.py
+      - private_events_mcp/social_workspace_tools.py
+      - tests/test_private_events_mcp_social_workspace_runtime.py
+    forbidden_files: [private_events_mcp/social_workspace.py, private_events_mcp/access_policy.py, private_events_mcp/config.py, private_events_mcp/oauth.py, private_events_mcp/server.py, private_events_mcp/integration.py, main_part2.py, docs, CHANGELOG.md]
+    expected_output: committed durable runtime and fake-adapter ToolSpec layer; no server wiring or live provider calls
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: L2-vk-workspace
+    role: worker
+    requirement_ids: [R04, R05, R06]
+    target: comprehensive fixed-operation VK adapter behind the stable workspace contract
+    depends_on: [L0-core-contract]
+    execution_mode: parallel_after_dependency
+    branch: agent/mcp-universal-social/vk
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-vk
+    writable_files:
+      - private_events_mcp_vk_adapter.py
+      - tests/test_private_events_mcp_vk_workspace.py
+    forbidden_files: [private_events_mcp/social_workspace.py, private_events_mcp/oauth.py, main_part2.py, docs, CHANGELOG.md]
+    expected_output: committed fake-tested VK capability adapter; no live calls
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: L3-tests-ci
+    role: worker
+    requirement_ids: [R09]
+    target: cross-client acceptance matrix, fake provider journeys and CI gate
+    depends_on: [L0-core-contract, L0b-social-oauth-policy, L0c-social-runtime-ledger, L1-telegram-workspace, L2-vk-workspace]
+    execution_mode: serial_after_dependency
+    branch: agent/mcp-universal-social/tests-ci
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-tests
+    writable_files:
+      - tests/test_private_events_mcp_social_workspace.py
+      - .github/workflows/ci.yaml
+    forbidden_files: [private_events_mcp, main_part2.py, docs, CHANGELOG.md]
+    expected_output: committed acceptance tests and explicit CI invocation
+    verification_scope: full_local
+    effort: high
+    status: completed
+  - id: L4-docs-rollout
+    role: worker
+    requirement_ids: [R10]
+    target: canonical docs/env/generator/smoke/E2E/rollout alignment
+    depends_on: [L0-core-contract, L1-telegram-workspace, L2-vk-workspace]
+    execution_mode: serial_after_dependency
+    branch: agent/mcp-universal-social/docs-rollout
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-docs
+    writable_files:
+      - docs/operations/private-events-mcp.md
+      - docs/operations/e2e-scenarios.md
+      - docs/README.md
+      - docs/routes.yml
+      - .env.example
+      - scripts/generate_private_events_mcp_credentials.py
+      - scripts/smoke_private_events_mcp.py
+      - CHANGELOG.md
+    forbidden_files: [private_events_mcp, main_part2.py]
+    expected_output: committed canonical operational contract and sanitized scripts
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: L5-independent-review
+    role: reviewer
+    requirement_ids: []
+    target: exact integrated SHA security/code/functional completeness review
+    depends_on: [L0-core-contract, L1-telegram-workspace, L2-vk-workspace, L3-tests-ci, L4-docs-rollout]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: clean exact integration snapshot
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: approve or request-changes with adversarial evidence
+    verification_scope: full_local
+    effort: high
+    status: planned

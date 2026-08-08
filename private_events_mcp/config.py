@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-
 _TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off"}
 _SECRET_RE = re.compile(r"^[A-Za-z0-9_-]{24,160}$")
 _CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9._~-]{8,160}$")
 
@@ -17,6 +17,27 @@ def _bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in _TRUE
+
+
+def _strict_feature_bool(name: str, *, mcp_enabled: bool) -> bool:
+    """Parse an opt-in capability flag without weakening disabled startup.
+
+    An enabled MCP rejects misspelled boolean values instead of unexpectedly
+    enabling or disabling a sensitive capability.  A disabled MCP remains an
+    inert no-op and deliberately ignores stale malformed MCP-only variables.
+    """
+
+    if not mcp_enabled:
+        return False
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return False
+    normalized = raw.strip().lower()
+    if normalized in _TRUE:
+        return True
+    if normalized in _FALSE:
+        return False
+    raise ValueError(f"{name} must be an explicit boolean")
 
 
 def _int(name: str, default: int, *, low: int, high: int) -> int:
@@ -63,6 +84,15 @@ class PrivateEventsMCPConfig:
     repository_root: str
     repository_slug: str
     repository_sha_file: str
+    universal_social_enabled: bool = False
+    universal_social_telegram_enabled: bool = False
+    universal_social_vk_enabled: bool = False
+    universal_social_private_read_enabled: bool = False
+    universal_social_dm_enabled: bool = False
+    universal_social_post_enabled: bool = False
+    universal_social_edit_delete_enabled: bool = False
+    universal_social_media_story_enabled: bool = False
+    social_approval_token: str = ""
     social_targets_json: str = ""
     social_ticket_ttl_seconds: int = 300
     social_provider_timeout_seconds: int = 12
@@ -85,7 +115,7 @@ class PrivateEventsMCPConfig:
     incident_scan_bytes: int = 3 * 1024 * 1024
 
     @classmethod
-    def from_env(cls) -> "PrivateEventsMCPConfig":
+    def from_env(cls) -> PrivateEventsMCPConfig:
         enabled = _bool("PRIVATE_EVENTS_MCP_ENABLED", False)
         base = (os.getenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL") or "").strip()
         config = cls(
@@ -118,6 +148,41 @@ class PrivateEventsMCPConfig:
             repository_sha_file=(
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
+            ).strip(),
+            universal_social_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_telegram_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_vk_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_VK_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_private_read_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_PRIVATE_READ_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_dm_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_post_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_POST_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_edit_delete_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_EDIT_DELETE_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            universal_social_media_story_enabled=_strict_feature_bool(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED",
+                mcp_enabled=enabled,
+            ),
+            social_approval_token=(
+                os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN") or ""
             ).strip(),
             social_targets_json=(
                 os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON") or ""
@@ -239,6 +304,32 @@ class PrivateEventsMCPConfig:
         from .social import TargetAliasPolicy
 
         TargetAliasPolicy.from_json(self.social_targets_json)
+        provider_flags = (
+            self.universal_social_telegram_enabled,
+            self.universal_social_vk_enabled,
+        )
+        capability_flags = (
+            self.universal_social_private_read_enabled,
+            self.universal_social_dm_enabled,
+            self.universal_social_post_enabled,
+            self.universal_social_edit_delete_enabled,
+            self.universal_social_media_story_enabled,
+        )
+        if not self.universal_social_enabled and any((*provider_flags, *capability_flags)):
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED is required for social workspace flags"
+            )
+        if self.universal_social_enabled and not any(provider_flags):
+            raise ValueError("universal social workspace requires at least one provider")
+        if self.universal_social_enabled and len(self.social_approval_token) < 32:
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN must contain at least 32 characters"
+            )
+        if self.universal_social_media_story_enabled:
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED is unavailable "
+                "until authenticated upload storage passes its production gate"
+            )
 
     @property
     def private_prefix(self) -> str:
@@ -263,6 +354,14 @@ class PrivateEventsMCPConfig:
     @property
     def about_path(self) -> str:
         return f"{self.private_prefix}/about"
+
+    @property
+    def social_approval_path(self) -> str:
+        return f"{self.private_prefix}/social/approve"
+
+    @property
+    def social_approval_url(self) -> str:
+        return f"{self.public_base_url}{self.social_approval_path}"
 
     @property
     def protected_resource_metadata_path(self) -> str:

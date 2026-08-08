@@ -5,10 +5,14 @@ import argparse
 import shutil
 from pathlib import Path
 
-
 MARKER = "    app = web.Application()\n"
 APP_MODULE_CANDIDATES = ("main.py", "main_part2.py")
-ROOT_FILES = ("private_events_mcp_provider_adapters.py",)
+ROOT_FILES = (
+    "private_events_mcp_provider_adapters.py",
+    "private_events_mcp_telegram_adapter.py",
+    "private_events_mcp_vk_adapter.py",
+    "private_events_mcp_workspace_providers.py",
+)
 PRIVATE_FIXTURE_MARKER = "@pytest.fixture\ndef repo_root"
 INSERT = (
     "    app = web.Application()\n"
@@ -16,14 +20,22 @@ INSERT = (
     "    from private_events_mcp import PrivateEventsMCPConfig, attach_private_events_mcp\n"
     "    private_mcp_config = PrivateEventsMCPConfig.from_env()\n"
     "    private_mcp_social_adapters = None\n"
+    "    private_mcp_workspace_adapters = None\n"
     "    if private_mcp_config.enabled:\n"
-    "        from main import vk_api\n"
-    "        from private_events_mcp_provider_adapters import (\n"
-    "            build_private_events_mcp_social_adapters,\n"
-    "        )\n"
-    "        private_mcp_social_adapters = build_private_events_mcp_social_adapters(vk_api)\n"
+    "        if private_mcp_config.universal_social_enabled:\n"
+    "            from private_events_mcp_workspace_providers import (\n"
+    "                build_private_events_mcp_workspace_adapters,\n"
+    "            )\n"
+    "            private_mcp_workspace_adapters = build_private_events_mcp_workspace_adapters(private_mcp_config)\n"
+    "        else:\n"
+    "            from main import vk_api\n"
+    "            from private_events_mcp_provider_adapters import (\n"
+    "                build_private_events_mcp_social_adapters,\n"
+    "            )\n"
+    "            private_mcp_social_adapters = build_private_events_mcp_social_adapters(vk_api)\n"
     "    attach_private_events_mcp(\n"
-    "        app, private_mcp_config, social_adapters=private_mcp_social_adapters\n"
+    "        app, private_mcp_config, social_adapters=private_mcp_social_adapters,\n"
+    "        social_workspace_adapters=private_mcp_workspace_adapters,\n"
     "    )\n"
 )
 

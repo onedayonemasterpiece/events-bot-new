@@ -25,7 +25,6 @@ from private_events_mcp.social import (
     SocialReadResult,
 )
 
-
 _TELEGRAM_BUNDLE_ENV = "TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP"
 _TELEGRAM_TARGET_RE = re.compile(r"^-100[0-9]{5,20}$")
 _VK_TARGET_RE = re.compile(r"^[1-9][0-9]{0,19}$")
@@ -64,7 +63,7 @@ def _utc_iso(value: Any) -> str | None:
 
 def _bounded_limit(limit: int) -> int:
     if isinstance(limit, bool):
-        raise ValueError("invalid limit")
+        raise TypeError("invalid limit")
     return max(1, min(int(limit), _MAX_READ_LIMIT))
 
 
@@ -102,7 +101,7 @@ def _telegram_credentials(
         padded = raw_bundle + "=" * (-len(raw_bundle) % 4)
         decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
         payload = json.loads(decoded)
-    except Exception:
+    except Exception:  # noqa: BLE001 - credential parsing errors are intentionally normalized
         raise _generic_error("telegram") from None
     if not isinstance(payload, dict):
         raise _generic_error("telegram")
@@ -127,6 +126,16 @@ def _telegram_credentials(
         if payload.get(key) not in (None, "")
     }
     return session, api_id, api_hash, device
+
+
+def build_role_scoped_telegram_client(
+    environ: Mapping[str, str] | None = None,
+) -> Any:
+    """Build a disconnected client from only the dedicated MCP auth bundle."""
+
+    source = os.environ if environ is None else environ
+    session, api_id, api_hash, device = _telegram_credentials(source)
+    return _telegram_client_factory(session, api_id, api_hash, device)
 
 
 class TelegramSocialAdapter:
@@ -162,7 +171,7 @@ class TelegramSocialAdapter:
                 await result
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001,S110 - disconnect is best-effort and provider-safe
             # Disconnect has been attempted; provider details must never escape.
             pass
 
@@ -204,7 +213,7 @@ class TelegramSocialAdapter:
                 return SocialReadResult(posts=tuple(posts))
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 - provider errors are intentionally normalized
                 raise _generic_error("telegram") from None
             finally:
                 if client is not None:
@@ -239,7 +248,7 @@ class TelegramSocialAdapter:
                 return SocialPublishReceipt(reference=f"telegram-message:{message_id}")
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception:  # noqa: BLE001 - provider errors are intentionally normalized
                 raise _generic_error("telegram") from None
             finally:
                 if client is not None:
@@ -312,7 +321,7 @@ class VKSocialAdapter:
             return SocialReadResult(posts=tuple(posts))
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - provider errors are intentionally normalized
             raise _generic_error("vk") from None
 
     async def publish_text(
@@ -345,7 +354,7 @@ class VKSocialAdapter:
             return SocialPublishReceipt(reference=f"vk-post:{stable_id}")
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001 - provider errors are intentionally normalized
             raise _generic_error("vk") from None
 
 

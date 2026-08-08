@@ -15,10 +15,14 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from aiohttp import web
 
 from .access_policy import (
+    APPROVAL_REQUIRED_SOCIAL_SCOPES,
     CHATGPT_DEFAULT_SCOPES,
     CHATGPT_MAX_SCOPES,
     CODEX_DEFAULT_SCOPES,
     CODEX_MAX_SCOPES,
+    GRANULAR_SOCIAL_SCOPES,
+    LEGACY_PUBLISH_SCOPES,
+    LEGACY_SOCIAL_SCOPES,
     SOCIAL_SCOPES,
 )
 from .auth_store import OAuthStateStore, OAuthStoreError
@@ -358,14 +362,34 @@ class PrivateOAuthServer:
         )
         social_warning = ""
         if social:
-            capability_text += (
-                " Дополнительно запрошены generic-инструменты чтения/публикации "
-                "текста в явно разрешённых Telegram/VK-каналах."
-            )
-            if social & {"telegram:publish", "vk:publish"}:
+            granular = social & GRANULAR_SOCIAL_SCOPES
+            legacy = social & LEGACY_SOCIAL_SCOPES
+            if granular:
+                capability_text += (
+                    " Дополнительно запрошены перечисленные ниже granular social "
+                    "capabilities для Telegram/VK."
+                )
+            if legacy:
+                capability_text += (
+                    " Также запрошены совместимые legacy social scopes для старых "
+                    "allowlist-инструментов."
+                )
+            warnings: list[str] = []
+            if social & APPROVAL_REQUIRED_SOCIAL_SCOPES:
+                warnings.append(
+                    "Новые granular mutation-scopes выполняются только после отдельного "
+                    "внешнего подтверждения оператора и prepare/commit шага."
+                )
+            if social & LEGACY_PUBLISH_SCOPES:
+                warnings.append(
+                    "Legacy publish-scopes используют только старый одноразовый "
+                    "prepare/commit ticket; отдельного внешнего подтверждения у них нет."
+                )
+            if warnings:
                 social_warning = (
-                    '<p><strong>Внимание:</strong> publish-scopes разрешают создавать новые '
-                    "сообщения после отдельного prepare/commit шага.</p>"
+                    '<p><strong>Внимание:</strong> '
+                    + " ".join(warnings)
+                    + "</p>"
                 )
         body = f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -546,6 +570,7 @@ class PrivateOAuthServer:
                         redirect_uri=redirect_uri,
                         resource=resource,
                         code_verifier=verifier,
+                        allowed_scopes=client.allowed_scopes,
                     )
                 except OAuthStoreError as exc:
                     raise OAuthHTTPError(str(exc), "Authorization code is invalid") from exc
@@ -592,6 +617,7 @@ class PrivateOAuthServer:
                         resource=resource,
                         new_expires_at=now + self.config.refresh_ttl_seconds,
                         requested_scopes=requested,
+                        allowed_scopes=client.allowed_scopes,
                     )
                 except OAuthStoreError as exc:
                     error = str(exc)
@@ -647,6 +673,8 @@ class PrivateOAuthServer:
             raise TokenValidationError("wrong_client") from exc
         if resource not in client.allowed_resources:
             raise TokenValidationError("wrong_client")
+        if not identity.scopes.issubset(client.allowed_scopes):
+            raise TokenValidationError("wrong_scope")
         return identity
 
     def challenge(

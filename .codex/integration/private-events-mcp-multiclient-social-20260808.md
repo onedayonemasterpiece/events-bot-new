@@ -1,76 +1,109 @@
-# Private Events MCP multi-client/social integration — 2026-08-08
+# Private Events MCP universal social integration — 2026-08-08
 
-## Scope and status
+## Status
 
-Integration branch: `feature/private-events-mcp-multiclient-social`
-Rebased base: `origin/main` at `0bfbc3f94a6a8bebd9d7c849c3699e3358efde30`
-Pre-report implementation head: `5d8f876531be5279a2ae37f07a35ddf5a8469266`
+Integration branch: `integration/private-events-mcp-universal-social`
+Rebased base: `origin/main` at `93a94b6aba181c40491f03fc3ebcdcc2dc320ced`
+Release-gate remediation candidate: `3d3c1028e5ae35140fd30690083420b54fe3b7d2`
 
-No code or transport from superseded PR #365 is present. No GitHub issue was
-created. Activation, merge, credentials and deployment remain gated on exact-head
-independent approval and GitHub Actions.
+Implementation, fake-provider validation and canonical documentation are
+complete. The first exact-head reviews requested changes; commits `e433fa95f0`,
+`06a6dc55a`, `829abf86b`, and `3d3c1028e` close those findings. Repeat exact-head
+independent review, PR CI, merge,
+credentials, deploy and live provider canaries remain pending. Production was
+not changed.
+No GitHub issue was created. Superseded PR #365 code is absent.
 
 ## Requirement closure
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
-| R1 | ChatGPT confidential OAuth and Codex static public OAuth are isolated | Done | Distinct exact resources/endpoints, client registry, mandatory S256 PKCE, loopback-only Codex callback, exact code/token/refresh bindings and negative cross-client tests. |
-| R2 | Codex uses MCP only for event/incident/operations evidence | Done | Codex maximum/default scopes are the three read domains; `tools/list` is exactly seven read tools; social scope authorization and direct social calls fail closed. |
-| R3 | ChatGPT can generically read/publish allowlisted Telegram/VK text | Done | Four scope-filtered tools: `telegram_read`, `vk_read`, `prepare_text_publication`, `publish_prepared_text`; no event ID/outbox coupling. |
-| R4 | Social actions cannot become raw provider passthrough | Done | Strict alias-only policy, runtime rejection of undeclared arguments, fixed Telegram operations and literal VK `wall.get`/`wall.post`; no raw ID/URL/method/media/edit/delete/forward/MAX surface. |
-| R5 | Destructive calls are bounded and auditable | Done | One-use exact-hash prepare/commit ticket, 90-day bounded replay ledger, atomic persistent daily reservation, timeout `outcome_unknown`/unsafe-to-retry, and redacted append-only action audit including denials. |
-| R6 | Provider credentials remain isolated | Done | Dedicated `TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP` only, no E2E/S22/generic-session/bot-token fallback; VK uses the existing injected throttled runtime helper; adapters are constructed only after the MCP enabled gate. |
-| R7 | Secret/untrusted-data boundaries | Done | Recursive credential/operator redaction includes bare Telegram bot-token shapes; provider text is explicitly untrusted; private URLs and authorization material are filtered from access logs and script receipts. |
-| R8 | CI/docs/operations are synchronized | Done | Canonical runbook, E2E index, `.env.example`, CHANGELOG, overlay installer and explicit GitHub MCP compile/test gate are updated. |
-| R9 | Merge/deploy/live OAuth MCP acceptance | Pending | Must use the exact merged `origin/main` SHA after independent approval and green GitHub Actions. |
+| R01 | Telegram Saved/dialog/channel reads and search | Done in code | Dedicated role adapter, opaque refs, bounded cursors, Saved readback tests |
+| R02 | Telegram exact-person/Saved communication and typed rich mutations | Done in code; live canary pending | Exact target preview, typed action, immutable preflight, operation CAS, rights tests |
+| R03 | Telegram stories/media/stats/recommendations | Partial | Read/stat contracts exist; story/media activation is rejected until an authenticated byte-bound upload path is implemented and reviewed |
+| R04 | VK public/dialog/content reads and discovery | Done in code | Fixed 5.199 adapter, public/private scope isolation and cursor-binding tests |
+| R05 | VK messages/posts/comments/reactions/edit/delete/schedule | Done in code; live canary pending | Explicit actor matrix, full-intent idempotency and reconcile tests |
+| R06 | VK stories/media/statistics | Partial | Statistics contracts exist; story/media activation is rejected until authenticated upload and exact actor grants pass a later gate |
+| R07 | ChatGPT catalog, granular scopes, approval, audit and budgets | Done in code | Capability-filtered catalog, exact human target/item browser preview, durable hashes/CAS/UTC-day budgets |
+| R08 | Codex remains evidence-only | Done | Exact separate resource, max scopes and seven-tool regression |
+| R09 | Fake-provider tests and CI gate | Done locally; repeat GitHub CI pending | Full private MCP suite 205 passed after remediation; explicit workflow gate already present |
+| R10 | Docs/env/generator/rollout | Done | Canonical runbook, E2E index, env template, fresh generator and CHANGELOG |
+| R11 | One-target editorial sample up to 100 posts | Done in code | Runtime + real VK adapter 4×25 integration test, cumulative 100, exact target/purpose/access/authorization-basis cursor binding |
+| R12 | Deeper incident/stability investigation surface | Deferred as requested | Begins only after social workspace release |
 
-## Integrated lanes
+## Integrated lanes and reviews
 
-- OAuth/client policy and secure credential generation: commits `2a7146ae0` through `061ab5e4e`.
-- CI release gate: `470b47388`, evidence `c8c206add`.
-- Provider-neutral social core and integration hardening: `60a6caac3` through `a6dfdfbbf`.
-- Provider adapters: `117e65770`, evidence `223575c1a`.
-- Overlay/CI reconciliation: `5d8f87653`.
+| Lane | Status | Reviewed head/evidence |
+|---|---|---|
+| Provider-neutral contract | Integrated | focused contract suite and schema validation |
+| OAuth/client policy | Approved and integrated | independent approval at `fbbc04447f90710cba8aff88a1396e23ca85e966` |
+| Durable runtime/tool layer | Approved and integrated | independent approval at `3e3555ece127d229b7e3390c14134321b222ae08` |
+| VK workspace | Approved and integrated | final isolation/idempotency remediation integrated from `26b4b878dcaded7278cd9403a63b36fc3b60226a` |
+| Telegram workspace | Approved and integrated | final rights/operation/fencing remediation integrated from `2ddb16984e27ad4a7ad9e45383c3307a325d986a` |
+| Provider bindings/server approval/docs | Remediated; exact-head re-review pending | encrypted restart-safe refs/receipts, DB 0600 from creation, human-readable target/item approval, closed catalog |
 
-Lane evidence is under `.codex/lanes/{oauth_implementation,mcp_ci_gate,social-core,provider_adapters}/RESULTS.md`.
+Worker evidence remains under `.codex/lanes/`. The current integration report
+supersedes the earlier alias-only 65-test report.
 
 ## Validation receipt
 
-Commands on the rebased implementation head:
+On remediation candidate `3d3c1028e5ae35140fd30690083420b54fe3b7d2` rebased directly onto the recorded
+`origin/main`:
 
 ```bash
-PYTHONPATH=. python -m compileall -q private_events_mcp private_events_mcp_provider_adapters.py tests scripts main_part2.py
-PYTHONPATH=. pytest -q tests/test_private_events_mcp_*.py
+PYTHONPATH=. python -m compileall -q \
+  private_events_mcp \
+  private_events_mcp_provider_adapters.py \
+  private_events_mcp_telegram_adapter.py \
+  private_events_mcp_vk_adapter.py \
+  private_events_mcp_workspace_providers.py \
+  tests scripts main_part2.py
+PYTHONPATH=. python -m pytest -q tests/test_private_events_mcp_*.py
 git diff --check origin/main...HEAD
 ```
 
-Result after VK runtime-log hardening: compile PASS; **65 passed**; diff check PASS. The only warnings are three
-existing aiohttp `NotAppKeyWarning` notices exercised by the disabled-create-app
-regression test.
+Result: compile PASS; **205 passed**, three unchanged aiohttp
+`NotAppKeyWarning` warnings; diff check PASS. Targeted integration run was
+**92 passed** before the full gate. Changed/new MCP modules also pass focused
+Ruff checks; the monolithic `main_part2.py` retains repository-pre-existing full
+file lint debt outside the integration hunk.
 
-A local read-only provider probe used the dedicated MCP Telegram role and the
-fixed VK adapter. Both returned two recent records; no text or credential was
-logged and no publication was attempted. The sanitized untracked receipt is at
-`artifacts/codex/private-mcp-live-read-probe/receipt.json`.
+Security/hygiene checks:
 
-An independent review found and reproduced a VK provider-error log leak in the pre-final head; the runtime boundary was then hardened to suppress publication text, owner, GUID, provider message/captcha data and every token fragment, with a real `main.vk_api` regression test. A follow-up review also required bounded social-audit retention and audit coverage for pre-handler denials; both are now closed with a 90-day immutable window and a centralized denial hook covering schema, malformed input, insufficient scope, policy, ticket and budget failures. Final exact-head re-review is required.
-
-Tracked activation/credential files: 0. Legacy `prod_ops_mcp`, `PROD_OPS_MCP_*`
-and static-bearer paths in this diff: 0.
+- tracked `activation/`: 0;
+- credential-shaped literals in the feature diff: 0;
+- `prod_ops_mcp`, `PROD_OPS_MCP_*`, static Bearer/PR365 transport: 0;
+- role fallback from MCP Telegram to E2E/S22/generic session/bot token: 0;
+- provider calls during the local gate: 0 (fakes only);
+- social mutations available to Codex: 0;
+- invalid approval requests receive no-store/self-only CSP error pages and do
+  not disclose the prepared content;
+- auth/social SQLite state is separate from the event DB and mode `0600`;
+- provider bindings, cursors, exact previews and receipts are encrypted and
+  restart-safe; a provider-attempted crash state reconciles without re-send;
+- publication attempts use durable UTC-day budgets (not hourly reset);
+- disabled action/media/story classes are absent from the ChatGPT catalog, and
+  a stale preparation cannot bypass a newly disabled action kill switch;
+- forward and item-only attempt budgets use the actual destination/source target;
+- item mutation/forward approval fails closed without a human-readable source target;
+- media/story activation itself fails configuration until real upload storage.
 
 ## Remaining release gates
 
-1. Obtain independent security/code approval on the exact final head.
-2. Push/open draft PR and require all GitHub Actions to pass; resolve review on a
-   new exact SHA if anything changes.
-3. Merge, fetch and verify the exact merged commit is reachable from
-   `origin/main`.
-4. Generate fresh credentials from that checkout with explicit
-   `--enable-chatgpt-social`; store artifacts outside Git with 0700/0600 modes.
-5. Stage exact aliases and provider secrets, deploy only through
-   `scripts/deploy_fly_main.sh`, then prove exact in-container SHA, `/healthz`,
-   quick_check, DB unchanged and webhook/job non-regression.
-6. Run ChatGPT and Codex OAuth/MCP smokes. Codex must expose exactly seven read
-   tools. ChatGPT social reads may run against allowlisted aliases; a live write
-   requires exact operator-supplied text and target and must never be invented as
-   a smoke payload.
+1. Push the remediation, rerun independent security/code review on the exact
+   remote head; any change invalidates the verdict.
+2. Refresh draft PR #410, run every repository-required GitHub Action and keep
+   it draft until exact-head approval.
+3. Merge only after green CI/review. Fetch and record the exact merged
+   `origin/main` SHA.
+4. Generate fresh credentials from that exact checkout into a new 0700 path;
+   install secrets without logging them. Keep all universal social flags off.
+5. Deploy only through `scripts/deploy_fly_main.sh`, prove exact in-container
+   SHA, Fly release, `/healthz`, `quick_check`, DB unchanged, webhook/scheduler
+   and disk/log health.
+6. Activate in stages: evidence/Codex, Telegram public read/editorial, Saved
+   exact `Привет мир` prepare → browser approval → commit → readback, then one
+   explicitly authorized exact-person reminder. VK and media/story actions stay
+   off until their actor/upload capability canaries pass.
+7. Return only sanitized receipts; never publish the private MCP path, client
+   secret, bootstrap/approval tokens, session, access or refresh token.

@@ -14,7 +14,7 @@ from .server import (
     PrivateEventsMCPServer,
 )
 from .social import SocialAdapter
-
+from .social_workspace_runtime import SocialWorkspaceAdapter
 
 logger = logging.getLogger(__name__)
 _AUTHORIZATION_VALUE_RE = re.compile(
@@ -66,6 +66,7 @@ def _install_access_log_redaction(config: PrivateEventsMCPConfig) -> None:
             config.oauth_client_secret,
             config.operator_token,
             config.signing_key,
+            config.social_approval_token,
         )
         if item
     )
@@ -82,6 +83,7 @@ def attach_private_events_mcp(
     config: PrivateEventsMCPConfig | None = None,
     *,
     social_adapters: Mapping[str, SocialAdapter] | None = None,
+    social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
 ) -> PrivateEventsMCPServer | None:
     """Attach the private MCP routes to the existing aiohttp app.
 
@@ -97,7 +99,11 @@ def attach_private_events_mcp(
     if SERVER_APP_KEY in app:
         return app[SERVER_APP_KEY]
     _install_access_log_redaction(resolved)
-    server = PrivateEventsMCPServer(resolved, social_adapters=social_adapters)
+    server = PrivateEventsMCPServer(
+        resolved,
+        social_adapters=social_adapters,
+        social_workspace_adapters=social_workspace_adapters,
+    )
     server.register(app)
     logger.info(
         "private_events_mcp attached endpoint_fingerprint=%s mode=read_only",

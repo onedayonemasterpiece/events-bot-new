@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 import time
@@ -60,6 +61,7 @@ class OAuthStateStore:
         self._lock = threading.Lock()
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
+        os.chmod(self.path, 0o600)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=1.0, isolation_level=None)
@@ -180,6 +182,150 @@ class OAuthStateStore:
                 BEGIN
                     SELECT RAISE(ABORT, 'social_action_audit is immutable during retention');
                 END;
+
+                -- Social Workspace state is intentionally colocated with OAuth
+                -- state, never with the canonical events database.  Provider
+                -- identifiers and action bodies are stored only as encrypted
+                -- envelopes; public references are random tokens whose hashes
+                -- form the lookup keys below.
+                CREATE TABLE IF NOT EXISTS social_workspace_ref (
+                    ref_hash TEXT PRIMARY KEY,
+                    ref_kind TEXT NOT NULL CHECK(ref_kind IN ('target','item','asset')),
+                    client_hash TEXT NOT NULL,
+                    subject_hash TEXT NOT NULL,
+                    resource_hash TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    policy_version TEXT NOT NULL,
+                    provider_ref_ciphertext TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_social_workspace_ref_expiry
+                    ON social_workspace_ref(expires_at);
+                CREATE TABLE IF NOT EXISTS social_workspace_ref_preview (
+                    ref_hash TEXT PRIMARY KEY,
+                    preview_json TEXT NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS social_workspace_sample (
+                    sample_hash TEXT PRIMARY KEY,
+                    client_hash TEXT NOT NULL,
+                    subject_hash TEXT NOT NULL,
+                    resource_hash TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    target_ref_hash TEXT NOT NULL,
+                    binding_json TEXT NOT NULL,
+                    continuation_cursor_hash TEXT,
+                    continuation_cursor_ciphertext TEXT,
+                    cumulative_count INTEGER NOT NULL DEFAULT 0,
+                    total_limit INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS social_workspace_preparation (
+                    preparation_hash TEXT PRIMARY KEY,
+                    preparation_ref TEXT NOT NULL UNIQUE,
+                    client_hash TEXT NOT NULL,
+                    subject_hash TEXT NOT NULL,
+                    resource_hash TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    target_ref_hash TEXT,
+                    action_digest TEXT NOT NULL,
+                    idempotency_hash TEXT NOT NULL,
+                    intent_ciphertext TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    UNIQUE(client_hash, subject_hash, resource_hash, platform,
+                           action, idempotency_hash)
+                );
+                CREATE TABLE IF NOT EXISTS social_workspace_approval (
+                    approval_hash TEXT PRIMARY KEY,
+                    approval_ref TEXT NOT NULL UNIQUE,
+                    receipt_ref TEXT NOT NULL,
+                    receipt_hash TEXT NOT NULL UNIQUE,
+                    preparation_hash TEXT NOT NULL,
+                    client_hash TEXT NOT NULL,
+                    subject_hash TEXT NOT NULL,
+                    resource_hash TEXT NOT NULL,
+                    target_ref_hash TEXT,
+                    action_digest TEXT NOT NULL,
+                    operator_hash TEXT NOT NULL,
+                    operator_nonce_hash TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    consumed_at INTEGER,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS social_workspace_operation (
+                    operation_hash TEXT PRIMARY KEY,
+                    operation_ref TEXT NOT NULL UNIQUE,
+                    preparation_hash TEXT NOT NULL UNIQUE,
+                    client_hash TEXT NOT NULL,
+                    subject_hash TEXT NOT NULL,
+                    resource_hash TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    target_ref_hash TEXT,
+                    status TEXT NOT NULL,
+                    retry_safe INTEGER NOT NULL,
+                    result_json TEXT,
+                    error_code TEXT,
+                    provider_attempted_at INTEGER,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS social_workspace_budget (
+                    period TEXT NOT NULL,
+                    dimension TEXT NOT NULL,
+                    bucket_hash TEXT NOT NULL,
+                    metric TEXT NOT NULL,
+                    amount INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(period, dimension, bucket_hash, metric)
+                );
+                CREATE TABLE IF NOT EXISTS social_workspace_circuit (
+                    client_hash TEXT NOT NULL,
+                    subject_hash TEXT NOT NULL,
+                    resource_hash TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    target_ref_hash TEXT NOT NULL,
+                    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                    flood_until INTEGER,
+                    circuit_open_until INTEGER,
+                    updated_at INTEGER NOT NULL,
+                    PRIMARY KEY(client_hash, subject_hash, resource_hash, platform,
+                                target_ref_hash)
+                );
+                CREATE TABLE IF NOT EXISTS social_workspace_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    principal_hash TEXT NOT NULL,
+                    platform TEXT,
+                    operation TEXT NOT NULL,
+                    target_ref_hash TEXT,
+                    action_digest TEXT,
+                    outcome TEXT NOT NULL,
+                    reason_code TEXT NOT NULL,
+                    response_bytes INTEGER NOT NULL DEFAULT 0,
+                    media_items INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_social_workspace_audit_created
+                    ON social_workspace_audit(created_at);
+                CREATE TRIGGER IF NOT EXISTS social_workspace_audit_no_update
+                BEFORE UPDATE ON social_workspace_audit
+                BEGIN
+                    SELECT RAISE(ABORT, 'social_workspace_audit is append-only');
+                END;
+                CREATE TRIGGER IF NOT EXISTS social_workspace_audit_no_delete
+                BEFORE DELETE ON social_workspace_audit
+                BEGIN
+                    SELECT RAISE(ABORT, 'social_workspace_audit is append-only');
+                END;
                 """
             )
 
@@ -216,6 +362,24 @@ class OAuthStateStore:
         conn.execute(
             "DELETE FROM social_publish_daily_budget WHERE budget_day < ?",
             (old_day,),
+        )
+        conn.execute("DELETE FROM social_workspace_ref WHERE expires_at < ?", (now,))
+        conn.execute(
+            """DELETE FROM social_workspace_ref_preview
+               WHERE ref_hash NOT IN (SELECT ref_hash FROM social_workspace_ref)"""
+        )
+        conn.execute("DELETE FROM social_workspace_sample WHERE expires_at < ?", (now,))
+        conn.execute(
+            "DELETE FROM social_workspace_approval WHERE expires_at < ?",
+            (now - 86400,),
+        )
+        conn.execute(
+            "DELETE FROM social_workspace_preparation WHERE created_at < ?",
+            (now - 90 * 86400,),
+        )
+        conn.execute(
+            "DELETE FROM social_workspace_operation WHERE created_at < ?",
+            (now - 90 * 86400,),
         )
 
     def create_authorization_code(
@@ -268,6 +432,7 @@ class OAuthStateStore:
         redirect_uri: str,
         resource: str,
         code_verifier: str,
+        allowed_scopes: frozenset[str] | None = None,
         now: int | None = None,
     ) -> AuthorizationGrant:
         current = int(time.time()) if now is None else int(now)
@@ -289,6 +454,12 @@ class OAuthStateStore:
                     or row["resource"] != resource
                 ):
                     raise OAuthStoreError("invalid_grant")
+                stored_scopes = self._text_to_scopes(row["scopes"])
+                if allowed_scopes is not None and not stored_scopes.issubset(allowed_scopes):
+                    # Stale/corrupt grants must be rejected before the one-use
+                    # row is consumed, so repairing the client policy cannot
+                    # accidentally bless a previously over-broad code.
+                    raise OAuthStoreError("invalid_scope")
                 if not verify_pkce(code_verifier, row["code_challenge"]):
                     raise OAuthStoreError("invalid_grant")
                 changed = conn.execute(
@@ -307,7 +478,7 @@ class OAuthStateStore:
                     client_id=row["client_id"],
                     redirect_uri=row["redirect_uri"],
                     resource=row["resource"],
-                    scopes=self._text_to_scopes(row["scopes"]),
+                    scopes=stored_scopes,
                 )
             except Exception:
                 conn.execute("ROLLBACK")
@@ -353,6 +524,7 @@ class OAuthStateStore:
         resource: str,
         new_expires_at: int,
         requested_scopes: set[str] | frozenset[str] | None = None,
+        allowed_scopes: frozenset[str] | None = None,
         now: int | None = None,
     ) -> RefreshGrant:
         current = int(time.time()) if now is None else int(now)
@@ -371,6 +543,10 @@ class OAuthStateStore:
                 if row["client_id"] != client_id or row["resource"] != resource:
                     raise OAuthStoreError("invalid_grant")
                 original_scopes = self._text_to_scopes(row["scopes"])
+                if allowed_scopes is not None and not original_scopes.issubset(allowed_scopes):
+                    # Check precedes revocation/rotation to keep a rejected
+                    # stale grant unchanged and independently auditable.
+                    raise OAuthStoreError("invalid_scope")
                 scopes = original_scopes
                 if requested_scopes is not None:
                     requested = frozenset(requested_scopes)

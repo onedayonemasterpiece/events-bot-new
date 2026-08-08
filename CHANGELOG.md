@@ -4,14 +4,37 @@
 
 ### Added
 
-- Added lazy generic-text Telegram and VK transports for the private Events MCP:
+- Added a granular, provider-neutral ChatGPT social workspace to Private Events
+  MCP while keeping the Codex resource fixed at exactly seven evidence tools.
+  The workspace supports opaque target resolution (including Telegram Saved and
+  exact users/dialogs), bounded search/feed/thread/story/analytics reads,
+  purpose-bound editorial samples of at most 100 posts, typed rich-content
+  actions and durable status reconciliation. Every mutation freezes an exact
+  digest and requires a separate server-side browser approval before a single
+  provider attempt. Telegram uses only the dedicated MCP Telethon role with
+  cross-process fencing and live-right checks; VK uses explicit per-role actor
+  tokens with no fallback. All new provider/action classes are disabled by
+  strict runtime kill switches until exact-main canary acceptance. Release-gate
+  hardening now persists encrypted provider refs/cursors/receipts across
+  restarts, requires human-readable target/destination/source/item approval
+  previews,
+  binds a closed editorial authorization basis to every server sample, charges
+  publication attempts against durable UTC-day limits for the actual
+  destination/source target, rechecks the current action kill switch at commit,
+  and makes the tool catalog omit disabled action classes. Media/story
+  activation is rejected until a real authenticated byte-bound upload/storage
+  path exists; generated client profiles do not request story scopes.
+
+- Added lazy legacy generic-text Telegram and VK transports for the private
+  Events MCP compatibility mode:
   a dedicated role-scoped Telethon human session handles serialized channel
   reads and plain-text sends, while a fixed `main.vk_api` wrapper permits only
   bounded `wall.get` and idempotency-guided `wall.post` calls. Provider
   credentials stay unparsed while MCP is disabled and provider failures are
   returned only through a redacted generic adapter error.
 
-- Added a provider-neutral private MCP social core for explicitly allowlisted
+- Added the original alias-only provider-neutral private MCP social core for
+  compatibility mode with explicitly allowlisted
   Telegram/VK aliases: scope- and resource-filtered discovery, redacted
   untrusted text reads, one-use text-publication tickets, durable idempotency,
   append-only redacted action audit, and a persistent per-target daily attempt

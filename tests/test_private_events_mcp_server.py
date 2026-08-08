@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import replace
 import logging
 import re
+from dataclasses import replace
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
@@ -12,6 +12,186 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
 from private_events_mcp.integration import attach_private_events_mcp
+from private_events_mcp.social_workspace import validate_prepare_request
+from private_events_mcp.social_workspace_runtime import RuntimePrincipal
+from private_events_mcp.tool_catalog import ToolCallContext
+
+
+class _WorkspaceAdapter:
+    async def capabilities(self, target_ref):
+        return {}
+
+    async def resolve(self, request):
+        return {}
+
+    async def read(self, request):
+        return {}
+
+    async def execute(self, intent, *, operation_ref):
+        return {
+            "target_ref": intent.target_ref,
+            "item_ref": "native-sent-message",
+            "status": "succeeded",
+            "retry_safe": False,
+            "read_after_write": {
+                "verified": True,
+                "observed_item_ref": "native-sent-message",
+                "observed_at": "2026-08-08T12:00:00Z",
+            },
+        }
+
+    async def reconcile(self, operation_ref):
+        return {}
+
+
+def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(config) -> None:
+    universal = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_dm_enabled=True,
+    )
+    app = web.Application()
+    server = attach_private_events_mcp(
+        app,
+        universal,
+        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+    )
+    assert server is not None
+    chatgpt_names = {tool.name for tool in server.protocol.tools}
+    codex_names = {tool.name for tool in server.codex_protocol.tools}
+    assert "social_target_resolve" in chatgpt_names
+    assert "social_action_prepare" in chatgpt_names
+    assert "social_action_commit" in chatgpt_names
+    assert len(codex_names) == 7
+    assert not any(name.startswith("social_") for name in codex_names)
+
+    with pytest.raises(ValueError, match="adapter set"):
+        attach_private_events_mcp(web.Application(), universal)
+
+
+@pytest.mark.asyncio
+async def test_social_approval_page_hides_preview_until_operator_auth_and_commits(
+    config,
+) -> None:
+    universal = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_dm_enabled=True,
+        social_approval_token="approval_" + "a" * 48,
+    )
+    app = web.Application()
+    server = attach_private_events_mcp(
+        app,
+        universal,
+        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+    )
+    assert server is not None and server.social_workspace is not None
+    identity = AccessIdentity(
+        "operator",
+        universal.oauth_client_id,
+        frozenset({"telegram:dm:send"}),
+        universal.resource,
+        "approval-jti",
+        2_000_000_000,
+    )
+    context = ToolCallContext(identity, universal.resource)
+    principal = RuntimePrincipal.from_context(context)
+    target = server.social_workspace._mint_ref(
+        "target", "native-saved", "telegram", principal
+    )
+    server.social_workspace._store_target_preview(
+        target,
+        {
+            "platform": "telegram",
+            "target_ref": target,
+            "kind": "self",
+            "display_name": "Saved Messages",
+        },
+    )
+    prepared = await server.social_workspace.prepare(
+        validate_prepare_request(
+            {
+                "platform": "telegram",
+                "action": "send_message",
+                "idempotency_key": "approval-flow-123",
+                "target_ref": target,
+                "content": {"text": "Привет мир", "entities": [], "media": []},
+            }
+        ),
+        context,
+    )
+    assert prepared["approval_url"].startswith(universal.social_approval_url)
+
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.get(
+            universal.social_approval_path,
+            params={
+                "preparation_ref": prepared["preparation_ref"],
+                "action_digest": prepared["action_digest"],
+            },
+        )
+        page = await response.text()
+        assert response.status == 200 and "Привет мир" not in page
+        assert "form-action 'self'" in response.headers["Content-Security-Policy"]
+        state = re.search(r"name=['\"]state['\"] value=['\"]([^'\"]+)['\"]", page).group(1)
+
+        invalid = await client.get(
+            universal.social_approval_path,
+            params={"preparation_ref": "invalid", "action_digest": "invalid"},
+        )
+        invalid_page = await invalid.text()
+        assert invalid.status == 400 and "Привет мир" not in invalid_page
+        assert "form-action 'self'" in invalid.headers["Content-Security-Policy"]
+        assert invalid.headers["Cache-Control"] == "no-store"
+
+        invalid_state = await client.post(
+            universal.social_approval_path,
+            data={"phase": "preview", "state": "not-signed", "operator_token": "wrong"},
+        )
+        assert invalid_state.status == 400
+        assert "Привет мир" not in await invalid_state.text()
+        assert "form-action 'self'" in invalid_state.headers["Content-Security-Policy"]
+
+        denied = await client.post(
+            universal.social_approval_path,
+            data={"phase": "preview", "state": state, "operator_token": "wrong"},
+        )
+        assert "Привет мир" not in await denied.text()
+
+        preview = await client.post(
+            universal.social_approval_path,
+            data={
+                "phase": "preview",
+                "state": state,
+                "operator_token": universal.social_approval_token,
+            },
+        )
+        preview_page = await preview.text()
+        assert "Привет мир" in preview_page and "Saved Messages" in preview_page
+        cookie = preview.headers["Set-Cookie"].split(";", 1)[0]
+
+        approved = await client.post(
+            universal.social_approval_path,
+            data={"phase": "approve", "state": state},
+            headers={"Cookie": cookie},
+        )
+        assert approved.status == 200
+        assert "Действие подтверждено" in await approved.text()
+    finally:
+        await client.close()
+
+    result = await server.social_workspace.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        context,
+    )
+    assert result["status"] == "succeeded"
 
 
 @pytest.mark.asyncio

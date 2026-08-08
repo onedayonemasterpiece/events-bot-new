@@ -37,3 +37,26 @@ def test_disabled_config_does_not_parse_mcp_only_client_values(monkeypatch) -> N
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_ENABLED", "0")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "invalid id")
     assert PrivateEventsMCPConfig.from_env().enabled is False
+
+
+def test_universal_social_flags_are_strictly_parented_and_provider_bound(
+    monkeypatch,
+) -> None:
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED", "1")
+    with pytest.raises(ValueError, match="UNIVERSAL_SOCIAL_ENABLED"):
+        PrivateEventsMCPConfig.from_env()
+
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED", "1")
+    with pytest.raises(ValueError, match="at least one provider"):
+        PrivateEventsMCPConfig.from_env()
+
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED", "1")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN", "approval_" + "a" * 48
+    )
+    config = PrivateEventsMCPConfig.from_env()
+    assert config.universal_social_enabled is True
+    assert config.universal_social_telegram_enabled is True
+    assert config.universal_social_dm_enabled is True
