@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Fixed the unattended Search OIDC broker's raw Supabase Auth contract: the
+  GoTrue Admin endpoint now receives `redirect_to` and its flat
+  `email_otp`/`action_link` response is accepted. The broker no longer rejects
+  a successful no-mail credential issuance as `503` or loses the exact
+  candidate redirect by sending the supabase-js wrapper shape to raw REST.
+
 - Fixed the root-level GitHub Search wrapper to resolve Playwright from the
   `site` package where CI installs it. Node ESM no longer searches for a
   nonexistent repository-root `node_modules` tree before fixture acceptance.

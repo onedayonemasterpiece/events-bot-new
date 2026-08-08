@@ -89,10 +89,8 @@ class Transport:
             return 200, json.dumps({"admitted": self.admitted}).encode()
         if url.endswith("/auth/v1/admin/generate_link"):
             return 200, json.dumps({
-                "properties": {
-                    "email_otp": "456789",
-                    "action_link": "https://project.supabase.co/auth/v1/verify?token=secret",
-                }
+                "email_otp": "456789",
+                "action_link": "https://project.supabase.co/auth/v1/verify?token=secret",
             }).encode()
         raise AssertionError(url)
 
@@ -125,12 +123,40 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
     assert ledger["p_run_id"] == "123456789"
     assert ledger["p_persona_id"] == "search-cached-browser"
     assert ledger["p_limit"] == 1
+    raw_generate_link = json.loads(transport.calls[1][3])
+    assert raw_generate_link == {
+        "type": "magiclink",
+        "email": "search-cached@example.invalid",
+        "redirect_to": "https://kenigevents.ru/poisk/",
+    }
     assert logs[-1]["outcome"] == "issued"
     serialized = json.dumps(logs)
     assert "example.invalid" not in serialized
     assert "opaque-signed-jwt" not in serialized
     assert "456789" not in serialized
     assert "123456789" not in serialized
+
+
+def test_broker_accepts_sdk_wrapped_generate_link_shape_for_issuer_compatibility():
+    class WrappedTransport(Transport):
+        def __call__(self, method, url, headers, body, timeout):
+            if url.endswith("/auth/v1/admin/generate_link"):
+                self.calls.append((method, url, dict(headers), body, timeout))
+                return 200, json.dumps({
+                    "properties": {
+                        "email_otp": "456789",
+                        "action_link": "https://project.supabase.co/auth/v1/verify?token=secret",
+                    }
+                }).encode()
+            return super().__call__(method, url, headers, body, timeout)
+
+    result = broker.process(
+        {"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/",
+         "run_id": "123456789"},
+        token="jwt", env=environment(), transport=WrappedTransport(),
+        verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
+    )
+    assert result["email_otp"] == "456789"
 
 
 @pytest.mark.parametrize(("claim_name", "claim_value", "code"), [

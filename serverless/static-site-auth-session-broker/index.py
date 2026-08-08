@@ -358,12 +358,17 @@ def process(
         _audit(audit_sink, policy, outcome="limit_rejected", claims=claims, persona=persona, redirect=redirect)
         raise BrokerError("issuance_limit_reached", status=409)
 
+    # This calls the raw GoTrue REST endpoint rather than supabase-js.  Its
+    # request/response contract is snake_case and flat; the SDK alone wraps
+    # these fields below ``data.properties``.
     issued = _json_call("/auth/v1/admin/generate_link", {
-        "type": "magiclink", "email": policy.personas[persona], "options": {"redirectTo": redirect},
+        "type": "magiclink", "email": policy.personas[persona], "redirect_to": redirect,
     }, policy=policy, transport=transport)
     properties = issued.get("properties") if isinstance(issued, Mapping) else None
     if not isinstance(properties, Mapping) and isinstance(issued, Mapping) and isinstance(issued.get("data"), Mapping):
         properties = issued["data"].get("properties")
+    if not isinstance(properties, Mapping) and isinstance(issued, Mapping):
+        properties = issued
     email_otp = str(properties.get("email_otp") if isinstance(properties, Mapping) else "")
     if not _OTP_RE.fullmatch(email_otp):
         raise BrokerError("issuer_response_invalid", status=503)
