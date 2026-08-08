@@ -7,9 +7,11 @@ to their native APIs behind explicit consent, policy, and capability gates.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Mapping, Sequence
 from urllib.parse import urlsplit
@@ -39,6 +41,7 @@ class SocialReadOperation(_StringEnum):
     LIST_REACTIONS = "list_reactions"
     LIST_STORIES = "list_stories"
     GET_STATISTICS = "get_statistics"
+    GET_AUDIENCE = "get_audience"
     EDITORIAL_SAMPLE = "editorial_sample"
 
 
@@ -66,6 +69,7 @@ class SocialTargetKind(_StringEnum):
 
 
 class TargetLocatorKind(_StringEnum):
+    SELF = "self"
     USERNAME = "username"
     PROFILE_LINK = "profile_link"
     PROVIDER_ID = "provider_id"
@@ -115,11 +119,22 @@ class MediaRole(_StringEnum):
     ANIMATION = "animation"
 
 
+class AssetLifecycleStatus(_StringEnum):
+    STAGING = "staging"
+    READY = "ready"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
 class SocialActionStatus(_StringEnum):
     PREPARED = "prepared"
+    AWAITING_HUMAN_APPROVAL = "awaiting_human_approval"
+    APPROVED = "approved"
     COMMITTED = "committed"
     RUNNING = "running"
+    PROVIDER_ATTEMPTED = "provider_attempted"
     SUCCEEDED = "succeeded"
+    OUTCOME_UNKNOWN = "outcome_unknown"
     FAILED = "failed"
     CANCELLED = "cancelled"
     EXPIRED = "expired"
@@ -130,11 +145,33 @@ _OPAQUE_REF_RE = re.compile(r"^(tgt|itm|ast)_[A-Za-z0-9_-]{16,160}$")
 _PREPARATION_REF_RE = re.compile(r"^prep_[A-Za-z0-9_-]{24,160}$")
 _OPERATION_REF_RE = re.compile(r"^op_[A-Za-z0-9_-]{24,160}$")
 _SAMPLE_REF_RE = re.compile(r"^smp_[A-Za-z0-9_-]{24,160}$")
+_APPROVAL_REF_RE = re.compile(r"^apr_[A-Za-z0-9_-]{24,160}$")
+_APPROVAL_RECEIPT_RE = re.compile(r"^arc_[A-Za-z0-9_-]{24,160}$")
+_UPLOAD_REF_RE = re.compile(r"^upl_[A-Za-z0-9_-]{24,160}$")
 _CURSOR_RE = re.compile(r"^[A-Za-z0-9_-]{1,512}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9._~-]{8,128}$")
 _REACTION_RE = re.compile(r"^\S(?:.{0,30}\S)?$", re.DOTALL)
 
-_SCOPE_SUFFIXES = frozenset({"read", "publish", "manage", "stories", "analytics"})
+_SCOPE_SUFFIXES = frozenset(
+    {
+        "discover",
+        "read:public",
+        "read:private",
+        "read:dialogs",
+        "dm:send",
+        "post:publish",
+        "edit",
+        "delete",
+        "forward",
+        "reaction",
+        "comment",
+        "schedule",
+        "story:read",
+        "story:write",
+        "analytics",
+        "audience",
+    }
+)
 SOCIAL_WORKSPACE_SCOPES = frozenset(
     f"{platform.value}:{suffix}"
     for platform in SocialPlatform
@@ -142,20 +179,22 @@ SOCIAL_WORKSPACE_SCOPES = frozenset(
 )
 
 _ACTION_SCOPE_SUFFIX: Mapping[SocialAction, str] = {
-    SocialAction.SEND_MESSAGE: "publish",
-    SocialAction.PUBLISH: "publish",
-    SocialAction.EDIT: "manage",
-    SocialAction.DELETE: "manage",
-    SocialAction.FORWARD: "publish",
-    SocialAction.REACTION: "publish",
-    SocialAction.COMMENT: "publish",
-    SocialAction.SCHEDULE: "publish",
-    SocialAction.STORY: "stories",
+    SocialAction.SEND_MESSAGE: "dm:send",
+    SocialAction.PUBLISH: "post:publish",
+    SocialAction.EDIT: "edit",
+    SocialAction.DELETE: "delete",
+    SocialAction.FORWARD: "forward",
+    SocialAction.REACTION: "reaction",
+    SocialAction.COMMENT: "comment",
+    SocialAction.SCHEDULE: "schedule",
+    SocialAction.STORY: "story:write",
 }
-_READ_SCOPE_SUFFIX: Mapping[SocialReadOperation, str] = {
-    operation: "analytics" if operation is SocialReadOperation.GET_STATISTICS else "read"
-    for operation in SocialReadOperation
-}
+
+
+class SocialReadAccess(_StringEnum):
+    PUBLIC = "public"
+    PRIVATE = "private"
+    DIALOGS = "dialogs"
 
 
 def _enum(value: Any, enum_type: type[_StringEnum], field: str) -> _StringEnum:
@@ -235,7 +274,9 @@ def _validate_rfc3339(value: Any, field: str) -> str:
 
 
 def required_scope_for_read(
-    platform: SocialPlatform | str, operation: SocialReadOperation | str
+    platform: SocialPlatform | str,
+    operation: SocialReadOperation | str,
+    read_access: SocialReadAccess | str | None = None,
 ) -> frozenset[str]:
     normalized_platform = (
         platform
@@ -247,9 +288,25 @@ def required_scope_for_read(
         if isinstance(operation, SocialReadOperation)
         else _enum(operation, SocialReadOperation, "operation")
     )
-    return frozenset(
-        {f"{normalized_platform.value}:{_READ_SCOPE_SUFFIX[normalized_operation]}"}
-    )
+    if normalized_operation in {
+        SocialReadOperation.RESOLVE_TARGET,
+        SocialReadOperation.SEARCH_TARGETS,
+    }:
+        suffix = "discover"
+    elif normalized_operation is SocialReadOperation.LIST_STORIES:
+        suffix = "story:read"
+    elif normalized_operation is SocialReadOperation.GET_STATISTICS:
+        suffix = "analytics"
+    elif normalized_operation is SocialReadOperation.GET_AUDIENCE:
+        suffix = "audience"
+    else:
+        normalized_access = (
+            read_access
+            if isinstance(read_access, SocialReadAccess)
+            else _enum(read_access, SocialReadAccess, "read_access")
+        )
+        suffix = f"read:{normalized_access.value}"
+    return frozenset({f"{normalized_platform.value}:{suffix}"})
 
 
 def required_scope_for_action(
@@ -271,7 +328,7 @@ def required_scope_for_action(
 @dataclass(frozen=True, slots=True)
 class TargetLocator:
     kind: TargetLocatorKind
-    value: str
+    value: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,10 +348,12 @@ class SocialReadRequest:
     date_to: str | None
     page_size: int
     total_limit: int
+    read_access: SocialReadAccess | None
+    expected_target_kinds: tuple[SocialTargetKind, ...]
 
     @property
     def required_scopes(self) -> frozenset[str]:
-        return required_scope_for_read(self.platform, self.operation)
+        return required_scope_for_read(self.platform, self.operation, self.read_access)
 
 
 @dataclass(frozen=True, slots=True)
@@ -366,6 +425,26 @@ class SocialCapabilities:
 
 
 @dataclass(frozen=True, slots=True)
+class EditorialSampleState:
+    sample_ref: str
+    target_ref: str
+    target_kinds: frozenset[SocialTargetKind]
+    purpose: SocialReadPurpose
+    date_from: str | None
+    date_to: str | None
+    total_limit: int
+    cumulative_count: int
+    server_minted: bool
+    continuation_cursor: str | None
+    cursor_server_minted: bool
+    ephemeral: bool
+    durable_index: bool
+
+
+EditorialSampleStateHook = Callable[[SocialReadRequest], EditorialSampleState]
+
+
+@dataclass(frozen=True, slots=True)
 class GateDecision:
     allowed: bool
     code: str
@@ -383,6 +462,39 @@ class GateDecision:
 ActionGateHook = Callable[[SocialActionIntent], GateDecision]
 CapabilityHook = Callable[[SocialActionIntent], SocialCapabilities]
 ReadGateHook = Callable[[SocialReadRequest], GateDecision]
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovalContext:
+    client_id: str
+    subject: str
+    resource: str
+    action_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovalGrant:
+    approval_ref: str
+    approval_receipt: str
+    client_id: str
+    subject: str
+    resource: str
+    action_digest: str
+    expires_at: str
+    one_time: bool
+    prior_uses: int
+    consumed_now: bool
+
+
+ApprovalConsumeHook = Callable[[str, str, ApprovalContext], ApprovalGrant]
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedCommit:
+    preparation_ref: str
+    approval_ref: str
+    approval_receipt: str
+    action_digest: str
 
 
 def enforce_action_gates(
@@ -424,23 +536,71 @@ def enforce_editorial_sample_gates(
     *,
     consent_hook: ReadGateHook,
     purpose_hook: ReadGateHook,
-) -> None:
+    ephemeral_policy_hook: ReadGateHook,
+    state_hook: EditorialSampleStateHook,
+) -> EditorialSampleState:
     """Require explicit consent and purpose approval for bounded editorial analysis."""
 
     if request.operation is not SocialReadOperation.EDITORIAL_SAMPLE:
         raise SocialWorkspaceValidationError("editorial sample gate requires editorial_sample")
-    for gate_name, hook in (("consent", consent_hook), ("purpose", purpose_hook)):
+    for gate_name, hook in (
+        ("consent", consent_hook),
+        ("purpose", purpose_hook),
+        ("ephemeral_policy", ephemeral_policy_hook),
+    ):
         decision = hook(request)
         if not isinstance(decision, GateDecision):
             raise SocialWorkspaceValidationError(f"{gate_name} gate returned no decision")
         if not decision.allowed:
             raise SocialWorkspaceValidationError(f"{gate_name} denied: {decision.code}")
+    state = state_hook(request)
+    if not isinstance(state, EditorialSampleState):
+        raise SocialWorkspaceValidationError("sample state hook returned no state")
+    if (
+        state.server_minted is not True
+        or state.ephemeral is not True
+        or state.durable_index is not False
+        or not _SAMPLE_REF_RE.fullmatch(state.sample_ref)
+    ):
+        raise SocialWorkspaceValidationError("sample state is not server-minted ephemeral state")
+    if (
+        state.target_ref != request.target_ref
+        or state.target_kinds != frozenset(request.expected_target_kinds)
+        or state.purpose is not request.purpose
+        or state.date_from != request.date_from
+        or state.date_to != request.date_to
+        or state.total_limit != request.total_limit
+    ):
+        raise SocialWorkspaceValidationError("sample continuation binding mismatch")
+    if request.sample_ref is not None and request.sample_ref != state.sample_ref:
+        raise SocialWorkspaceValidationError("sample continuation reference mismatch")
+    if request.sample_ref is None:
+        if state.cumulative_count != 0 or state.continuation_cursor is not None:
+            raise SocialWorkspaceValidationError("new sample must start at zero without cursor")
+    elif (
+        state.cursor_server_minted is not True
+        or state.continuation_cursor != request.cursor
+        or not state.continuation_cursor
+    ):
+        raise SocialWorkspaceValidationError("sample continuation cursor is not server-minted")
+    if (
+        type(state.cumulative_count) is not int
+        or type(state.total_limit) is not int
+        or not 0 <= state.cumulative_count <= state.total_limit <= 100
+        or state.cumulative_count + request.page_size > state.total_limit
+    ):
+        raise SocialWorkspaceValidationError("sample cumulative limit exceeded")
+    return state
 
 
 def _validate_target_locator(value: Any, platform: SocialPlatform) -> TargetLocator:
     data = _object(value, "target_locator")
     _only_fields(data, {"kind", "value"}, "target_locator")
     kind = _enum(data.get("kind"), TargetLocatorKind, "target locator kind")
+    if kind is TargetLocatorKind.SELF:
+        if "value" in data:
+            raise SocialWorkspaceValidationError("self locator must not contain value")
+        return TargetLocator(kind=kind, value=None)
     raw = _optional_text(data.get("value"), "target locator value", maximum=512, required=True)
     assert raw is not None
     if kind is TargetLocatorKind.USERNAME:
@@ -488,7 +648,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         {
             "platform", "operation", "target_ref", "item_ref", "query", "cursor", "limit",
             "item_kinds", "target_locator", "purpose", "sample_ref", "date_from", "date_to",
-            "page_size", "total_limit",
+            "page_size", "total_limit", "read_access", "expected_target_kinds",
         },
         "request",
     )
@@ -516,6 +676,22 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         kind = _enum(value, SocialItemKind, "item_kinds")
         if kind not in kinds:
             kinds.append(kind)
+    read_access = (
+        _enum(data.get("read_access"), SocialReadAccess, "read_access")
+        if "read_access" in data
+        else None
+    )
+    raw_expected_kinds = data.get("expected_target_kinds", [])
+    if (
+        not isinstance(raw_expected_kinds, list)
+        or any(not isinstance(value, str) for value in raw_expected_kinds)
+        or len(raw_expected_kinds) != len(set(raw_expected_kinds))
+    ):
+        raise SocialWorkspaceValidationError("expected_target_kinds must be a unique array")
+    expected_target_kinds = tuple(
+        _enum(value, SocialTargetKind, "expected_target_kinds")
+        for value in raw_expected_kinds
+    )
 
     purpose = (
         _enum(data.get("purpose"), SocialReadPurpose, "purpose")
@@ -541,6 +717,14 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
     if operation is SocialReadOperation.RESOLVE_TARGET:
         if target_locator is None:
             raise SocialWorkspaceValidationError("target_locator is required for exact resolution")
+        expected = set(expected_target_kinds)
+        if target_locator.kind is TargetLocatorKind.SELF:
+            if expected != {SocialTargetKind.SELF}:
+                raise SocialWorkspaceValidationError("self resolution must expect only self")
+        elif expected != {SocialTargetKind.USER}:
+            raise SocialWorkspaceValidationError(
+                "username, profile link, and provider id resolution must expect only user"
+            )
     elif operation is SocialReadOperation.SEARCH_TARGETS:
         if not query:
             raise SocialWorkspaceValidationError("query is required for target discovery")
@@ -556,18 +740,45 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             raise SocialWorkspaceValidationError("item_ref is required")
     elif operation is SocialReadOperation.SEARCH_ITEMS and not (query or target_ref):
         raise SocialWorkspaceValidationError("query or target_ref is required")
-    elif operation is SocialReadOperation.GET_STATISTICS and (target_ref is None) == (item_ref is None):
+    elif operation in {SocialReadOperation.GET_STATISTICS, SocialReadOperation.GET_AUDIENCE} and (
+        target_ref is None
+    ) == (item_ref is None):
         raise SocialWorkspaceValidationError("statistics requires exactly one target_ref or item_ref")
     elif operation is SocialReadOperation.EDITORIAL_SAMPLE:
         if target_ref is None:
             raise SocialWorkspaceValidationError("target_ref is required for editorial sample")
         if purpose is not SocialReadPurpose.EDITORIAL_ANALYSIS:
             raise SocialWorkspaceValidationError("editorial_analysis purpose is required")
+        if read_access not in {SocialReadAccess.PUBLIC, SocialReadAccess.PRIVATE}:
+            raise SocialWorkspaceValidationError("editorial sample requires public or private access")
+        allowed_editorial_targets = {
+            SocialTargetKind.CHANNEL,
+            SocialTargetKind.GROUP,
+            SocialTargetKind.COMMUNITY,
+        }
+        if not expected_target_kinds or not set(expected_target_kinds).issubset(
+            allowed_editorial_targets
+        ):
+            raise SocialWorkspaceValidationError(
+                "editorial sample target must be channel, group, or community"
+            )
+        if (sample_ref is None) != (cursor is None):
+            raise SocialWorkspaceValidationError(
+                "continuation requires server-minted sample_ref and cursor together"
+            )
         forbidden = {"item_ref", "query", "limit", "item_kinds", "target_locator"} & set(data)
         if forbidden:
             raise SocialWorkspaceValidationError(
                 "editorial sample does not allow: " + ", ".join(sorted(forbidden))
             )
+    if operation in {
+        SocialReadOperation.LIST_ITEMS,
+        SocialReadOperation.SEARCH_ITEMS,
+        SocialReadOperation.GET_ITEM,
+        SocialReadOperation.LIST_COMMENTS,
+        SocialReadOperation.LIST_REACTIONS,
+    } and read_access is None:
+        raise SocialWorkspaceValidationError("read_access is required for this operation")
 
     return SocialReadRequest(
         platform=platform,
@@ -585,7 +796,42 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         date_to=date_to,
         page_size=page_size,
         total_limit=total_limit,
+        read_access=read_access,
+        expected_target_kinds=expected_target_kinds,
     )
+
+
+def validate_resolved_target_preview(
+    request: SocialReadRequest, payload: Mapping[str, Any]
+) -> str:
+    if request.operation is not SocialReadOperation.RESOLVE_TARGET or request.target_locator is None:
+        raise SocialWorkspaceValidationError("target preview requires resolve_target request")
+    data = _object(payload, "target preview")
+    _only_fields(
+        data,
+        {
+            "platform", "target_ref", "kind", "display_name", "canonical_handle",
+            "profile_link", "description", "is_exact_match", "trust",
+        },
+        "target preview",
+    )
+    if _enum(data.get("platform"), SocialPlatform, "platform") is not request.platform:
+        raise SocialWorkspaceValidationError("target preview platform mismatch")
+    target_ref = validate_opaque_ref(data.get("target_ref"), "target")
+    kind = _enum(data.get("kind"), SocialTargetKind, "target kind")
+    if kind not in request.expected_target_kinds:
+        raise SocialWorkspaceValidationError("target preview kind mismatch")
+    if request.target_locator.kind is TargetLocatorKind.SELF:
+        if kind is not SocialTargetKind.SELF:
+            raise SocialWorkspaceValidationError("self locator did not resolve self")
+    elif kind is not SocialTargetKind.USER:
+        raise SocialWorkspaceValidationError("exact-person locator did not resolve a user")
+    _optional_text(data.get("display_name"), "display_name", maximum=512, required=True)
+    if data.get("is_exact_match") is not True:
+        raise SocialWorkspaceValidationError("target resolution is not an exact match")
+    if data.get("trust") != "untrusted_external_data":
+        raise SocialWorkspaceValidationError("target preview trust marker is missing")
+    return target_ref
 
 
 def _validate_link_target(value: Any) -> str:
@@ -779,7 +1025,11 @@ def validate_capabilities(payload: Mapping[str, Any]) -> SocialCapabilities:
 
     def enum_set(field: str, enum_type: type[_StringEnum]) -> frozenset[Any]:
         raw = data[field]
-        if not isinstance(raw, list) or len(raw) != len(set(raw)):
+        if (
+            not isinstance(raw, list)
+            or any(not isinstance(value, str) for value in raw)
+            or len(raw) != len(set(raw))
+        ):
             raise SocialWorkspaceValidationError(f"{field} must be a unique array")
         return frozenset(_enum(value, enum_type, field) for value in raw)
 
@@ -801,15 +1051,73 @@ def validate_capabilities(payload: Mapping[str, Any]) -> SocialCapabilities:
     )
 
 
-def validate_commit_request(payload: Mapping[str, Any]) -> tuple[str, bool]:
+def validate_commit_request(
+    payload: Mapping[str, Any],
+    *,
+    context: ApprovalContext | None = None,
+    approval_hook: ApprovalConsumeHook | None = None,
+    now: datetime | None = None,
+) -> ValidatedCommit:
     data = _object(payload, "request")
-    _only_fields(data, {"preparation_ref", "confirm"}, "request")
+    _only_fields(
+        data,
+        {"preparation_ref", "approval_ref", "approval_receipt", "action_digest"},
+        "request",
+    )
     preparation_ref = data.get("preparation_ref")
     if not isinstance(preparation_ref, str) or not _PREPARATION_REF_RE.fullmatch(preparation_ref):
         raise SocialWorkspaceValidationError("preparation_ref is invalid")
-    if data.get("confirm") is not True:
-        raise SocialWorkspaceValidationError("confirm must be true")
-    return preparation_ref, True
+    approval_ref = data.get("approval_ref")
+    approval_receipt = data.get("approval_receipt")
+    action_digest = data.get("action_digest")
+    if not isinstance(approval_ref, str) or not _APPROVAL_REF_RE.fullmatch(approval_ref):
+        raise SocialWorkspaceValidationError("approval_ref is invalid")
+    if not isinstance(approval_receipt, str) or not _APPROVAL_RECEIPT_RE.fullmatch(
+        approval_receipt
+    ):
+        raise SocialWorkspaceValidationError("approval_receipt is invalid")
+    if not isinstance(action_digest, str) or not re.fullmatch(r"[a-f0-9]{64}", action_digest):
+        raise SocialWorkspaceValidationError("action_digest is invalid")
+    if context is None or approval_hook is None:
+        raise SocialWorkspaceValidationError("durable approval validation hook is required")
+    for name, value in (
+        ("client_id", context.client_id),
+        ("subject", context.subject),
+        ("resource", context.resource),
+    ):
+        if not isinstance(value, str) or not value:
+            raise SocialWorkspaceValidationError(f"approval {name} binding is invalid")
+    if action_digest != context.action_digest:
+        raise SocialWorkspaceValidationError("approval action digest mismatch")
+    grant = approval_hook(approval_ref, approval_receipt, context)
+    if not isinstance(grant, ApprovalGrant):
+        raise SocialWorkspaceValidationError("approval hook returned no grant")
+    if (
+        grant.approval_ref != approval_ref
+        or grant.approval_receipt != approval_receipt
+        or grant.client_id != context.client_id
+        or grant.subject != context.subject
+        or grant.resource != context.resource
+        or grant.action_digest != action_digest
+    ):
+        raise SocialWorkspaceValidationError("approval binding mismatch")
+    expires_at = _validate_rfc3339(grant.expires_at, "approval expires_at")
+    expires = datetime.fromisoformat(
+        expires_at[:-1] + "+00:00" if expires_at.endswith("Z") else expires_at
+    )
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    if expires <= current:
+        raise SocialWorkspaceValidationError("approval is expired")
+    if (
+        grant.one_time is not True
+        or type(grant.prior_uses) is not int
+        or grant.prior_uses != 0
+        or grant.consumed_now is not True
+    ):
+        raise SocialWorkspaceValidationError("approval was not atomically consumed once")
+    return ValidatedCommit(preparation_ref, approval_ref, approval_receipt, action_digest)
 
 
 def validate_status_request(payload: Mapping[str, Any]) -> tuple[str, str]:
@@ -834,13 +1142,18 @@ def validate_send_message_receipt(payload: Mapping[str, Any]) -> tuple[str, str]
     data = _object(payload, "receipt")
     _only_fields(
         data,
-        {"platform", "action", "status", "operation_ref", "target_ref", "item_ref", "read_after_write"},
+        {
+            "platform", "action", "status", "operation_ref", "target_ref", "item_ref",
+            "retry_safe", "read_after_write",
+        },
         "receipt",
     )
     if _enum(data.get("action"), SocialAction, "action") is not SocialAction.SEND_MESSAGE:
         raise SocialWorkspaceValidationError("receipt is not for send_message")
     if _enum(data.get("status"), SocialActionStatus, "status") is not SocialActionStatus.SUCCEEDED:
         raise SocialWorkspaceValidationError("send_message has not succeeded")
+    if data.get("retry_safe") is not False:
+        raise SocialWorkspaceValidationError("successful send_message must not be retried")
     _enum(data.get("platform"), SocialPlatform, "platform")
     operation_ref = data.get("operation_ref")
     if not isinstance(operation_ref, str) or not _OPERATION_REF_RE.fullmatch(operation_ref):
@@ -858,6 +1171,191 @@ def validate_send_message_receipt(payload: Mapping[str, Any]) -> tuple[str, str]
     return operation_ref, item_ref
 
 
+@dataclass(frozen=True, slots=True)
+class AssetStageRequest:
+    platform: SocialPlatform
+    upload_ref: str
+    role: MediaRole
+    mime_type: str
+    byte_length: int
+    content_digest: str
+
+
+def validate_asset_stage_request(payload: Mapping[str, Any]) -> AssetStageRequest:
+    data = _object(payload, "request")
+    _only_fields(
+        data,
+        {"platform", "upload_ref", "role", "mime_type", "byte_length", "content_digest"},
+        "request",
+    )
+    upload_ref = data.get("upload_ref")
+    if not isinstance(upload_ref, str) or not _UPLOAD_REF_RE.fullmatch(upload_ref):
+        raise SocialWorkspaceValidationError("upload_ref is invalid")
+    mime_type = _optional_text(data.get("mime_type"), "mime_type", maximum=100, required=True)
+    assert mime_type is not None
+    if not re.fullmatch(r"(?:image|video|audio|application)/[A-Za-z0-9.+-]{1,64}", mime_type):
+        raise SocialWorkspaceValidationError("mime_type is invalid")
+    byte_length = data.get("byte_length")
+    if type(byte_length) is not int or not 1 <= byte_length <= 64 * 1024 * 1024:
+        raise SocialWorkspaceValidationError("byte_length is outside the media budget")
+    digest = data.get("content_digest")
+    if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
+        raise SocialWorkspaceValidationError("content_digest is invalid")
+    return AssetStageRequest(
+        platform=_enum(data.get("platform"), SocialPlatform, "platform"),
+        upload_ref=upload_ref,
+        role=_enum(data.get("role"), MediaRole, "role"),
+        mime_type=mime_type,
+        byte_length=byte_length,
+        content_digest=digest,
+    )
+
+
+def validate_asset_status_request(payload: Mapping[str, Any]) -> str:
+    data = _object(payload, "request")
+    _only_fields(data, {"asset_ref"}, "request")
+    return validate_opaque_ref(data.get("asset_ref"), "asset")
+
+
+def compute_action_digest(intent: SocialActionIntent) -> str:
+    encoded = json.dumps(
+        asdict(intent), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class RecursiveRedactionResult:
+    value: Any
+    recursive: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DurableIdempotencyReservation:
+    key: str
+    action_digest: str
+    durable: bool
+    accepted: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SafetyExecutionContext:
+    client_id: str
+    subject: str
+    resource: str
+    platform: SocialPlatform
+    operation: str
+    action_digest: str | None
+    encoded_response_bytes: int
+    media_items: int
+
+
+@dataclass(frozen=True, slots=True)
+class AuditAppendResult:
+    appended: bool
+    durable: bool
+
+
+RecursiveRedactionHook = Callable[[Any], RecursiveRedactionResult]
+ResponseCapHook = Callable[[SafetyExecutionContext], GateDecision]
+BudgetHook = Callable[[SafetyExecutionContext], GateDecision]
+IdempotencyHook = Callable[[SocialActionIntent, str], DurableIdempotencyReservation]
+AuditAppendHook = Callable[[SafetyExecutionContext], AuditAppendResult]
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionSafetyHooks:
+    recursive_redaction: RecursiveRedactionHook
+    response_cap: ResponseCapHook
+    append_audit: AuditAppendHook
+    durable_idempotency: IdempotencyHook
+    rate_budget: BudgetHook
+    egress_budget: BudgetHook
+    media_budget: BudgetHook
+
+
+def enforce_execution_safety(
+    request: SocialActionIntent | SocialReadRequest,
+    response: Any,
+    *,
+    client_id: str,
+    subject: str,
+    resource: str,
+    hooks: ExecutionSafetyHooks | None,
+    encoded_response_cap: int = 128 * 1024,
+) -> Any:
+    """Apply every mandatory cross-provider guard and return only redacted output."""
+
+    if hooks is None:
+        raise SocialWorkspaceValidationError("execution safety hooks are required")
+    for name, hook in (
+        ("recursive_redaction", hooks.recursive_redaction),
+        ("response_cap", hooks.response_cap),
+        ("append_audit", hooks.append_audit),
+        ("durable_idempotency", hooks.durable_idempotency),
+        ("rate_budget", hooks.rate_budget),
+        ("egress_budget", hooks.egress_budget),
+        ("media_budget", hooks.media_budget),
+    ):
+        if not callable(hook):
+            raise SocialWorkspaceValidationError(f"{name} hook is required")
+    action_digest: str | None = None
+    media_items = 0
+    if isinstance(request, SocialActionIntent):
+        action_digest = compute_action_digest(request)
+        reservation = hooks.durable_idempotency(request, action_digest)
+        if (
+            not isinstance(reservation, DurableIdempotencyReservation)
+            or reservation.key != request.idempotency_key
+            or reservation.action_digest != action_digest
+            or reservation.durable is not True
+            or reservation.accepted is not True
+        ):
+            raise SocialWorkspaceValidationError("durable idempotency reservation denied")
+        media_items = len(request.content.media) if request.content is not None else 0
+    redaction = hooks.recursive_redaction(response)
+    if not isinstance(redaction, RecursiveRedactionResult) or redaction.recursive is not True:
+        raise SocialWorkspaceValidationError("recursive redaction did not complete")
+    try:
+        encoded = json.dumps(
+            redaction.value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise SocialWorkspaceValidationError("redacted response is not JSON encodable") from exc
+    if type(encoded_response_cap) is not int or not 1 <= encoded_response_cap <= 128 * 1024:
+        raise ValueError("encoded_response_cap must be from 1 to 131072")
+    if len(encoded) > encoded_response_cap:
+        raise SocialWorkspaceValidationError("encoded response cap exceeded")
+    context = SafetyExecutionContext(
+        client_id=client_id,
+        subject=subject,
+        resource=resource,
+        platform=request.platform,
+        operation=(request.action.value if isinstance(request, SocialActionIntent) else request.operation.value),
+        action_digest=action_digest,
+        encoded_response_bytes=len(encoded),
+        media_items=media_items,
+    )
+    for name, hook in (
+        ("response_cap", hooks.response_cap),
+        ("rate_budget", hooks.rate_budget),
+        ("egress_budget", hooks.egress_budget),
+        ("media_budget", hooks.media_budget),
+    ):
+        decision = hook(context)
+        if not isinstance(decision, GateDecision) or not decision.allowed:
+            code = decision.code if isinstance(decision, GateDecision) else "invalid_decision"
+            raise SocialWorkspaceValidationError(f"{name} denied: {code}")
+    audit = hooks.append_audit(context)
+    if (
+        not isinstance(audit, AuditAppendResult)
+        or audit.appended is not True
+        or audit.durable is not True
+    ):
+        raise SocialWorkspaceValidationError("append-only durable audit failed")
+    return redaction.value
+
+
 def _enum_values(enum_type: type[_StringEnum]) -> list[str]:
     return [item.value for item in enum_type]
 
@@ -869,15 +1367,23 @@ _DEFS: dict[str, Any] = {
     "target_locator": {
         "type": "object",
         "additionalProperties": False,
-        "required": ["kind", "value"],
+        "required": ["kind"],
         "properties": {
             "kind": {"type": "string", "enum": _enum_values(TargetLocatorKind)},
             "value": {"type": "string", "minLength": 1, "maxLength": 512},
         },
+        "allOf": [
+            {
+                "if": {"properties": {"kind": {"const": "self"}}, "required": ["kind"]},
+                "then": {"not": {"required": ["value"]}},
+                "else": {"required": ["value"]},
+            }
+        ],
     },
     "basic_metrics": {
         "type": "object",
         "additionalProperties": False,
+        "minProperties": 1,
         "properties": {
             "followers": {"type": "integer", "minimum": 0},
             "members": {"type": "integer", "minimum": 0},
@@ -952,6 +1458,13 @@ SOCIAL_WORKSPACE_READ_SCHEMA: Mapping[str, Any] = {
         "date_to": {"type": "string", "format": "date"},
         "page_size": {"type": "integer", "minimum": 1, "maximum": 25},
         "total_limit": {"type": "integer", "minimum": 1, "maximum": 100},
+        "read_access": {"type": "string", "enum": _enum_values(SocialReadAccess)},
+        "expected_target_kinds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": True,
+            "items": {"type": "string", "enum": _enum_values(SocialTargetKind)},
+        },
     },
 }
 
@@ -980,7 +1493,7 @@ SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA: Mapping[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "required": [
-        "sample_ref", "target", "items", "sampled_count", "total_limit",
+        "sample_ref", "target", "items", "sampled_count", "cumulative_count", "total_limit",
         "storage_disposition", "trust",
     ],
     "properties": {
@@ -988,7 +1501,9 @@ SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA: Mapping[str, Any] = {
         "target": {
             "type": "object",
             "additionalProperties": False,
-            "required": ["target_ref", "kind", "title", "basic_metrics"],
+            "required": [
+                "target_ref", "kind", "title", "about", "description", "basic_metrics", "trust"
+            ],
             "properties": {
                 "target_ref": {"$ref": "#/$defs/target_ref"},
                 "kind": {"type": "string", "enum": _enum_values(SocialTargetKind)},
@@ -996,6 +1511,7 @@ SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA: Mapping[str, Any] = {
                 "about": {"type": "string", "maxLength": 1024},
                 "description": {"type": "string", "maxLength": 1024},
                 "basic_metrics": {"$ref": "#/$defs/basic_metrics"},
+                "trust": {"const": "untrusted_external_data"},
             },
         },
         "items": {
@@ -1004,17 +1520,21 @@ SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA: Mapping[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["item_ref", "published_at", "text", "caption", "basic_metrics"],
+                "required": [
+                    "item_ref", "published_at", "text", "caption", "basic_metrics", "trust"
+                ],
                 "properties": {
                     "item_ref": {"$ref": "#/$defs/item_ref"},
                     "published_at": {"type": "string", "format": "date-time"},
                     "text": {"type": "string", "maxLength": 768},
                     "caption": {"type": "string", "maxLength": 256},
                     "basic_metrics": {"$ref": "#/$defs/basic_metrics"},
+                    "trust": {"const": "untrusted_external_data"},
                 },
             },
         },
         "sampled_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "cumulative_count": {"type": "integer", "minimum": 0, "maximum": 100},
         "total_limit": {"type": "integer", "minimum": 1, "maximum": 100},
         "next_cursor": {"type": "string", "pattern": r"^[A-Za-z0-9_-]{1,512}$"},
         "storage_disposition": {"const": "ephemeral_no_index"},
@@ -1049,12 +1569,17 @@ SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "$defs": _DEFS,
     "type": "object",
     "additionalProperties": False,
-    "required": ["preparation_ref", "action", "summary", "expires_at", "required_scopes"],
+    "required": [
+        "preparation_ref", "action", "status", "action_digest", "summary", "expires_at",
+        "required_scopes",
+    ],
     "properties": {
         "preparation_ref": {
             "type": "string", "pattern": r"^prep_[A-Za-z0-9_-]{24,160}$"
         },
         "action": {"type": "string", "enum": _enum_values(SocialAction)},
+        "status": {"const": SocialActionStatus.AWAITING_HUMAN_APPROVAL.value},
+        "action_digest": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
         "target_ref": {"$ref": "#/$defs/target_ref"},
         "item_ref": {"$ref": "#/$defs/item_ref"},
         "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
@@ -1070,12 +1595,18 @@ SOCIAL_WORKSPACE_COMMIT_SCHEMA: Mapping[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "additionalProperties": False,
-    "required": ["preparation_ref", "confirm"],
+    "required": ["preparation_ref", "approval_ref", "approval_receipt", "action_digest"],
     "properties": {
         "preparation_ref": {
             "type": "string", "pattern": r"^prep_[A-Za-z0-9_-]{24,160}$"
         },
-        "confirm": {"const": True},
+        "approval_ref": {
+            "type": "string", "pattern": r"^apr_[A-Za-z0-9_-]{24,160}$"
+        },
+        "approval_receipt": {
+            "type": "string", "pattern": r"^arc_[A-Za-z0-9_-]{24,160}$"
+        },
+        "action_digest": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
     },
 }
 
@@ -1086,7 +1617,10 @@ SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "required": ["operation_ref", "status"],
     "properties": {
         "operation_ref": {"type": "string", "pattern": r"^op_[A-Za-z0-9_-]{24,160}$"},
-        "status": {"type": "string", "enum": ["committed", "running", "succeeded"]},
+        "status": {
+            "type": "string",
+            "enum": ["approved", "committed", "running", "provider_attempted", "succeeded"],
+        },
     },
 }
 
@@ -1123,11 +1657,12 @@ SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "$defs": _DEFS,
     "type": "object",
     "additionalProperties": False,
-    "required": ["operation_ref", "action", "status"],
+    "required": ["operation_ref", "action", "status", "retry_safe"],
     "properties": {
         "operation_ref": {"type": "string", "pattern": r"^op_[A-Za-z0-9_-]{24,160}$"},
         "action": {"type": "string", "enum": _enum_values(SocialAction)},
         "status": {"type": "string", "enum": _enum_values(SocialActionStatus)},
+        "retry_safe": {"type": "boolean"},
         "target_ref": {"$ref": "#/$defs/target_ref"},
         "item_ref": {"$ref": "#/$defs/item_ref"},
         "error_code": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,63}$"},
@@ -1142,6 +1677,22 @@ SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
             },
         },
     },
+    "allOf": [
+        {
+            "if": {"properties": {"status": {"const": "outcome_unknown"}}, "required": ["status"]},
+            "then": {"properties": {"retry_safe": {"const": False}}},
+        },
+        {
+            "if": {
+                "properties": {
+                    "action": {"const": "send_message"},
+                    "status": {"const": "succeeded"},
+                },
+                "required": ["action", "status"],
+            },
+            "then": {"required": ["item_ref", "read_after_write"]},
+        },
+    ],
 }
 
 SOCIAL_WORKSPACE_SEND_MESSAGE_RECEIPT_SCHEMA: Mapping[str, Any] = {
@@ -1151,12 +1702,13 @@ SOCIAL_WORKSPACE_SEND_MESSAGE_RECEIPT_SCHEMA: Mapping[str, Any] = {
     "additionalProperties": False,
     "required": [
         "platform", "action", "status", "operation_ref", "target_ref", "item_ref",
-        "read_after_write",
+        "retry_safe", "read_after_write",
     ],
     "properties": {
         "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
         "action": {"const": SocialAction.SEND_MESSAGE.value},
         "status": {"const": SocialActionStatus.SUCCEEDED.value},
+        "retry_safe": {"const": False},
         "operation_ref": {"type": "string", "pattern": r"^op_[A-Za-z0-9_-]{24,160}$"},
         "target_ref": {"$ref": "#/$defs/target_ref"},
         "item_ref": {"$ref": "#/$defs/item_ref"},
@@ -1206,52 +1758,304 @@ SOCIAL_WORKSPACE_CAPABILITIES_SCHEMA: Mapping[str, Any] = {
     },
 }
 
+_EXTERNAL_TARGET: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "target_ref", "kind", "title", "about", "description", "basic_metrics", "trust"
+    ],
+    "properties": {
+        "target_ref": {"$ref": "#/$defs/target_ref"},
+        "kind": {"type": "string", "enum": _enum_values(SocialTargetKind)},
+        "title": {"type": "string", "minLength": 1, "maxLength": 256},
+        "canonical_handle": {"type": "string", "maxLength": 128},
+        "profile_link": {"type": "string", "maxLength": 512},
+        "about": {"type": "string", "maxLength": 1024},
+        "description": {"type": "string", "maxLength": 1024},
+        "basic_metrics": {"$ref": "#/$defs/basic_metrics"},
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+_EXTERNAL_ITEM: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "item_ref", "kind", "published_at", "text", "caption", "basic_metrics", "trust"
+    ],
+    "properties": {
+        "item_ref": {"$ref": "#/$defs/item_ref"},
+        "target_ref": {"$ref": "#/$defs/target_ref"},
+        "kind": {"type": "string", "enum": _enum_values(SocialItemKind)},
+        "published_at": {"type": "string", "format": "date-time"},
+        "text": {"type": "string", "maxLength": 4096},
+        "caption": {"type": "string", "maxLength": 1024},
+        "basic_metrics": {"$ref": "#/$defs/basic_metrics"},
+        "media": {
+            "type": "array", "maxItems": 10,
+            "items": {"$ref": "#/$defs/asset_ref"},
+        },
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+
+def _external_page_schema(item_schema: Mapping[str, Any]) -> Mapping[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": _DEFS,
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["results", "trust"],
+        "properties": {
+            "results": {"type": "array", "maxItems": 25, "items": item_schema},
+            "next_cursor": {"type": "string", "pattern": r"^[A-Za-z0-9_-]{1,512}$"},
+            "trust": {"const": "untrusted_external_data"},
+        },
+    }
+
+
+SOCIAL_WORKSPACE_TARGET_SEARCH_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_TARGET)
+SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_TARGET)
+SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_ITEM)
+SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_ITEM)
+
+SOCIAL_WORKSPACE_TARGET_GET_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["target", "trust"],
+    "properties": {
+        "target": _EXTERNAL_TARGET,
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["item", "trust"],
+    "properties": {
+        "item": _EXTERNAL_ITEM,
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["root_item_ref", "items", "trust"],
+    "properties": {
+        "root_item_ref": {"$ref": "#/$defs/item_ref"},
+        "items": {"type": "array", "maxItems": 25, "items": _EXTERNAL_ITEM},
+        "next_cursor": {"type": "string", "pattern": r"^[A-Za-z0-9_-]{1,512}$"},
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["item_ref", "reactions", "trust"],
+    "properties": {
+        "item_ref": {"$ref": "#/$defs/item_ref"},
+        "reactions": {
+            "type": "array", "maxItems": 50,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["reaction", "count"],
+                "properties": {
+                    "reaction": {"type": "string", "minLength": 1, "maxLength": 32},
+                    "count": {"type": "integer", "minimum": 0},
+                    "actor_target_ref": {"$ref": "#/$defs/target_ref"},
+                },
+            },
+        },
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["period_from", "period_to", "basic_metrics", "trust"],
+    "properties": {
+        "target_ref": {"$ref": "#/$defs/target_ref"},
+        "item_ref": {"$ref": "#/$defs/item_ref"},
+        "period_from": {"type": "string", "format": "date-time"},
+        "period_to": {"type": "string", "format": "date-time"},
+        "basic_metrics": {"$ref": "#/$defs/basic_metrics"},
+        "trust": {"const": "untrusted_external_data"},
+    },
+    "oneOf": [{"required": ["target_ref"]}, {"required": ["item_ref"]}],
+}
+
+SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["target_ref", "audience", "trust"],
+    "properties": {
+        "target_ref": {"$ref": "#/$defs/target_ref"},
+        "audience": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["total"],
+            "properties": {
+                "total": {"type": "integer", "minimum": 0},
+                "online": {"type": "integer", "minimum": 0},
+            },
+        },
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["platform", "upload_ref", "role", "mime_type", "byte_length", "content_digest"],
+    "properties": {
+        "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
+        "upload_ref": {"type": "string", "pattern": r"^upl_[A-Za-z0-9_-]{24,160}$"},
+        "role": {"type": "string", "enum": _enum_values(MediaRole)},
+        "mime_type": {
+            "type": "string",
+            "pattern": r"^(image|video|audio|application)/[A-Za-z0-9.+-]{1,64}$",
+        },
+        "byte_length": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "content_digest": {"type": "string", "pattern": r"^sha256:[a-f0-9]{64}$"},
+    },
+}
+
+SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["asset_ref", "status"],
+    "properties": {
+        "asset_ref": {"$ref": "#/$defs/asset_ref"},
+        "status": {"type": "string", "enum": ["staging", "ready"]},
+    },
+}
+
+SOCIAL_WORKSPACE_ASSET_STATUS_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["asset_ref"],
+    "properties": {"asset_ref": {"$ref": "#/$defs/asset_ref"}},
+}
+
+SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["asset_ref", "status", "trust"],
+    "properties": {
+        "asset_ref": {"$ref": "#/$defs/asset_ref"},
+        "status": {"type": "string", "enum": _enum_values(AssetLifecycleStatus)},
+        "mime_type": {"type": "string", "maxLength": 100},
+        "byte_length": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "error_code": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,63}$"},
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
 
 __all__ = [
     "ActionGateHook",
+    "ApprovalConsumeHook",
+    "ApprovalContext",
+    "ApprovalGrant",
+    "AssetLifecycleStatus",
+    "AssetStageRequest",
+    "AuditAppendResult",
+    "BudgetHook",
     "CapabilityHook",
     "ContentFeature",
+    "DurableIdempotencyReservation",
+    "EditorialSampleState",
+    "EditorialSampleStateHook",
+    "ExecutionSafetyHooks",
     "GateDecision",
     "MediaAttachment",
     "MediaRole",
     "ReadGateHook",
+    "RecursiveRedactionResult",
     "RichContent",
     "RichEntity",
     "RichEntityKind",
+    "SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA",
+    "SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_ASSET_STATUS_SCHEMA",
+    "SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_CAPABILITIES_SCHEMA",
-    "SOCIAL_WORKSPACE_COMMIT_SCHEMA",
     "SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_COMMIT_SCHEMA",
     "SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA",
-    "SOCIAL_WORKSPACE_PREPARE_SCHEMA",
+    "SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_PREPARE_SCHEMA",
+    "SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_READ_SCHEMA",
     "SOCIAL_WORKSPACE_SCOPES",
     "SOCIAL_WORKSPACE_SEND_MESSAGE_RECEIPT_SCHEMA",
-    "SOCIAL_WORKSPACE_STATUS_SCHEMA",
+    "SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_STATUS_SCHEMA",
+    "SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_TARGET_GET_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA",
+    "SOCIAL_WORKSPACE_TARGET_SEARCH_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA",
+    "SafetyExecutionContext",
     "SocialAction",
     "SocialActionIntent",
     "SocialActionStatus",
     "SocialCapabilities",
     "SocialItemKind",
     "SocialPlatform",
+    "SocialReadAccess",
     "SocialReadOperation",
     "SocialReadPurpose",
     "SocialReadRequest",
     "SocialTargetKind",
+    "SocialWorkspaceValidationError",
     "TargetLocator",
     "TargetLocatorKind",
-    "SocialWorkspaceValidationError",
+    "ValidatedCommit",
+    "compute_action_digest",
     "enforce_action_gates",
     "enforce_editorial_sample_gates",
+    "enforce_execution_safety",
     "required_scope_for_action",
     "required_scope_for_read",
+    "validate_asset_stage_request",
+    "validate_asset_status_request",
     "validate_capabilities",
     "validate_commit_request",
     "validate_opaque_ref",
     "validate_prepare_request",
     "validate_read_request",
+    "validate_resolved_target_preview",
     "validate_send_message_receipt",
     "validate_status_request",
 ]
