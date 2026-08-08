@@ -787,3 +787,11 @@ cache hit с нулевыми provider deltas. В `release_exact` первый m
 
 Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но нельзя и
 заставлять каждый authenticated business test повторять дорогой real-mail OTP.
+Общий exact-target resolver обязан работать и в Linux Bash, и в системном
+macOS Bash 3.2: запрещено использовать `mapfile`; две проверенные строки
+(bearer target и SHA) читаются через `IFS= read -r`, после чего target сразу
+маскируется средствами GitHub Actions.
+Appium browser capabilities на обеих платформах фиксируют
+`wdio:enforceWebDriverClassic=true`: WebdriverIO не должен автоматически
+переключать Chrome/Safari session на частичный BiDi transport, поскольку
+Appium drivers не гарантируют `script.addPreloadScript`.

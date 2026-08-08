@@ -87,4 +87,7 @@ test('target resolver uses the Python runtime shipped in the Fly image', async (
   const source = await readFile(targetResolverUrl, 'utf8');
   assert.match(source, /--command "python3 scripts\/request_static_site_build\.py/u);
   assert.doesNotMatch(source, /\.venv\/bin\/python/u);
+  assert.doesNotMatch(source, /\bmapfile\b/u);
+  assert.match(source, /IFS= read -r target_url/u);
+  assert.match(source, /IFS= read -r repo_sha/u);
 });

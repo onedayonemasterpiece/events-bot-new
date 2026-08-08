@@ -16,6 +16,12 @@
 
 ### Fixed
 
+- Fixed iOS Search L2 target resolution on the macOS runner by replacing the
+  Bash-4-only `mapfile` builtin with Bash-3.2-compatible bounded line reads;
+  secret target masking and exact SHA validation remain unchanged.
+  Android/iOS Appium sessions now also force WebDriver Classic so WebdriverIO
+  does not invoke unsupported partial-BiDi preload commands through Appium.
+
 - Split iterative Search debugging from the multi-hour full-site release gate.
   Manual canaries may use a live-consistent revision policy that still proves
   exact page SHA, one stable catalog/corpus pair and owner-scoped receipts,

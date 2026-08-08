@@ -58,9 +58,10 @@ target = public_url + "poisk/"
 Path(sys.argv[2]).write_text(target + "\n" + repo_sha + "\n", encoding="utf-8")
 PY
 
-mapfile -t resolved <"$parsed_file"
-target_url="${resolved[0]:-}"
-repo_sha="${resolved[1]:-}"
+{
+  IFS= read -r target_url
+  IFS= read -r repo_sha
+} <"$parsed_file"
 test -n "$target_url" && test -n "$repo_sha"
 
 # The review prefix is a bearer secret. Mask it before it is copied into the

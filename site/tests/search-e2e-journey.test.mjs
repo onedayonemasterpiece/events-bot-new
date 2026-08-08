@@ -135,11 +135,17 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   const journey = await readFile(new URL('../e2e/search/journey.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(journey, /playwright|appium|webdriver|mouse|touch|keyboard\.press/iu);
   const mobile = await readFile(new URL('../e2e/search/adapters/appium-base.mjs', import.meta.url), 'utf8');
+  const [android, ios] = await Promise.all([
+    readFile(new URL('../e2e/search/adapters/appium-android.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../e2e/search/adapters/appium-ios.mjs', import.meta.url), 'utf8'),
+  ]);
   assert.match(mobile, /isKeyboardShown/u);
   assert.match(mobile, /driver\.keys\('\\uE007'\)/u);
   assert.match(mobile, /mobile: scrollGesture/u);
   assert.match(mobile, /mobile: scroll/u);
   assert.doesNotMatch(mobile, /screenshot|pageSource|getPageSource|\bhar\b|trace|video/iu);
+  assert.match(android, /'wdio:enforceWebDriverClassic': true/u);
+  assert.match(ios, /'wdio:enforceWebDriverClassic': true/u);
 });
 
 test('runner is fail-closed on exact secret target SHA and carries three incident queries', async () => {
