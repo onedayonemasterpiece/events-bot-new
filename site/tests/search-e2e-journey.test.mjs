@@ -203,6 +203,8 @@ test('runner is fail-closed on exact secret target SHA and carries three inciden
   assert.match(runner, /искусство у моря/u);
   assert.match(runner, /в пятницу бесплатно/u);
   assert.match(runner, /revisionPolicy === 'live_consistent' && mode === 'cached_vector'/u);
+  assert.match(runner, /device_receipt/u);
+  assert.match(runner, /failure_receipt/u);
   assert.doesNotMatch(runner, /focus-email|mailbox|real-mail|otp/iu);
   assert.match(mobileIssuer, /createBrowserVerificationCallback/u);
   assert.doesNotMatch(mobileIssuer, /E2E_AUTH_ACTION_LINK=\$\{actionLink\}/u);

@@ -68,6 +68,13 @@
 
 ### Fixed
 
+- Reused the accepted OTP pre-side-effect restart boundary for iOS Search:
+  a timed-out Appium session creation may get exactly one fresh WebDriver
+  attempt only when sanitized evidence proves the auth callback and Search
+  traffic never started. The shared mobile layer now reduces the local Appium
+  log to closed simulator/WDA phase booleans, elapsed time and attempt number;
+  raw logs, capabilities, URLs and device identifiers are never uploaded.
+
 - Unified the remaining Search/OTP mobile input primitives: iOS Search now
   focuses its web field through one exact native Safari accessibility match and
   proves the software keyboard in `NATIVE_APP`; Android Chrome scroll now uses

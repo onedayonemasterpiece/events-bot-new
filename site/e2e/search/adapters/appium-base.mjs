@@ -1,4 +1,5 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime-probe.mjs';
+import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
 import { dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard,
   performNativeTouchSwipe, prepareIosSafariWebContext,
   withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
@@ -54,27 +55,59 @@ export async function createAppiumSearchAdapter(options = {}) {
   let ownsDriver = false;
   if (!driver) {
     const { remote } = await import('webdriverio');
-    driver = await remote({
-      hostname: options.hostname || '127.0.0.1', port: Number(options.port || 4723), path: options.path || '/',
-      logLevel: options.logLevel || 'error',
-      connectionRetryTimeout: Number(options.connectionRetryTimeout || 300_000),
-      connectionRetryCount: 0,
-      capabilities: options.capabilities,
-    });
+    const startedAt = Date.now();
+    try {
+      driver = await remote({
+        hostname: options.hostname || '127.0.0.1', port: Number(options.port || 4723), path: options.path || '/',
+        logLevel: options.logLevel || 'error',
+        connectionRetryTimeout: Number(options.connectionRetryTimeout || 300_000),
+        connectionRetryCount: 0,
+        capabilities: options.capabilities,
+      });
+    } catch (error) {
+      const receipt = await buildAppiumSessionFailureReceipt({
+        error, platform, startedAt,
+        logPath: options.appiumLogPath || process.env.E2E_APPIUM_LOG_PATH,
+        appiumServerReady: process.env.E2E_APPIUM_STATUS_READY === '1',
+        startupAttempt: process.env.E2E_APPIUM_STARTUP_ATTEMPT,
+      });
+      const failure = error instanceof Error ? error : new Error('webdriver_session_error');
+      failure.searchReceipt = receipt;
+      throw failure;
+    }
     ownsDriver = true;
   }
-  if (platform === 'ios') await prepareIosSafariWebContext(driver);
+  const lifecycle = {
+    failure_stage: 'webdriver_session_created',
+    auth_callback_started: false, auth_callback_authorized: false,
+    webdriver_client_session_created: true, native_safari_stable: platform !== 'ios',
+    webview_attached: platform !== 'ios', search_surface_ready: false,
+    startup_attempt: [1, 2].includes(Number(process.env.E2E_APPIUM_STARTUP_ATTEMPT))
+      ? Number(process.env.E2E_APPIUM_STARTUP_ATTEMPT) : 1,
+  };
+  if (platform === 'ios') {
+    lifecycle.failure_stage = 'native_safari_webview_prepare';
+    await prepareIosSafariWebContext(driver);
+    lifecycle.native_safari_stable = true;
+    lifecycle.webview_attached = true;
+    lifecycle.failure_stage = 'auth_callback_not_started';
+  }
   let configuredPolicy = {};
   let nativeKeyboardObserved = false;
 
   const adapter = {
+    async diagnostics() { return structuredClone(lifecycle); },
     async bootstrapSession(actionLink, returnTarget) {
+      lifecycle.failure_stage = 'auth_callback';
+      lifecycle.auth_callback_started = true;
       await driver.url(actionLink);
       await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(returnTarget).origin,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_timeout' });
       await driver.waitUntil(async () => driver.execute(() => document.querySelector('[data-authorized-search]')
         ?.classList.contains('is-authorized') === true),
       { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_session_not_restored' });
+      lifecycle.auth_callback_authorized = true;
+      lifecycle.failure_stage = 'search_surface';
     },
     async open(targetUrl) {
       await driver.url(targetUrl);
@@ -87,6 +120,8 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.waitUntil(async () => driver.execute(() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized') === true),
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_session_not_restored' });
       await driver.execute(installSearchRuntimeProbe, configuredPolicy);
+      lifecycle.search_surface_ready = true;
+      lifecycle.failure_stage = 'search_journey';
       return driver.execute(() => {
         const root = document.querySelector('[data-authorized-search]'); const input = root?.querySelector('[data-search-input]');
         return { enabled: root?.dataset.searchEnabled === 'true', authorized: root?.classList.contains('is-authorized') === true,

@@ -5,6 +5,7 @@ import { resolveCanaryVariant } from './canary-manifest.mjs';
 import { assertSearchRevisionPolicy } from './acceptance.mjs';
 import { writeSearchEvidence, sanitizedTargetPath } from './evidence.mjs';
 import { runSearchJourney } from './journey.mjs';
+import { readPriorMobileStartupReceipt } from './mobile-startup-retry.mjs';
 
 const closedModes = new Set(['cached_vector', 'cold_vector', 'cold_vector_llm', 'degraded_vector_fallback']);
 const defaultQueries = [
@@ -92,6 +93,9 @@ let adapter = null;
 let targetRepoSha = null;
 let lastJourney = null;
 let exitCode = 0;
+const priorStartupReceipt = await readPriorMobileStartupReceipt(
+  process.env.E2E_APPIUM_PRIOR_RECEIPT_PATH,
+).catch(() => null);
 try {
   if (!closedModes.has(mode)) throw new Error(`search_variant_unknown:${mode}`);
   if (!['release_exact', 'live_consistent'].includes(revisionPolicy)) throw new Error('search_revision_policy_invalid');
@@ -115,18 +119,23 @@ try {
   });
   lastJourney = journey;
   const revisionReceipt = assertSearchRevisionPolicy(journey, targetIdentity, revisionPolicy);
-  const result = { ...journey, platform, execution_mode: mode, target_repo_sha: targetRepoSha, revision_receipt: revisionReceipt };
+  const deviceReceipt = await adapter?.diagnostics?.().catch(() => null);
+  const result = { ...journey, platform, execution_mode: mode, target_repo_sha: targetRepoSha,
+    revision_receipt: revisionReceipt, ...(deviceReceipt ? { device_receipt: deviceReceipt } : {}),
+    ...(priorStartupReceipt ? { prior_startup_receipt: priorStartupReceipt } : {}) };
   await writeSearchEvidence(evidenceDirectory, result);
   process.stdout.write(`search-live PASS platform=${platform} execution_mode=${mode} evidence=${evidenceDirectory}\n`);
 } catch (error) {
   exitCode = 1;
+  const failureReceipt = error?.searchReceipt || await adapter?.diagnostics?.().catch(() => null);
   const result = {
     ...(lastJourney || {}), status: 'FAIL', platform, execution_mode: mode,
     target_origin: safeTarget?.origin || null,
     target_path: safeTarget ? sanitizedTargetPath(safeTarget.pathname) : null,
     target_repo_sha: targetRepoSha,
     counters: lastJourney?.counters || {}, query_cases: lastJourney?.query_cases || [], error_code: errorCode(error),
-    ...(error?.searchReceipt ? { failure_receipt: error.searchReceipt } : {}),
+    ...(failureReceipt ? { failure_receipt: failureReceipt } : {}),
+    ...(priorStartupReceipt ? { prior_startup_receipt: priorStartupReceipt } : {}),
   };
   await writeSearchEvidence(evidenceDirectory, result).catch(() => undefined);
   process.stderr.write(`search-live FAIL code=${result.error_code}\n`);

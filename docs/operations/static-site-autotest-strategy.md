@@ -796,9 +796,14 @@ Appium browser capabilities на обеих платформах фиксиру�
 переключать Chrome/Safari session на частичный BiDi transport, поскольку
 Appium drivers не гарантируют `script.addPreloadScript`.
 Cold simulator/WDA startup получает один WebDriver session POST с бюджетом до
-300 секунд и `connectionRetryCount=0`. После неоднозначного timeout новая
-session автоматически не создаётся; следующий запуск получает новую
-platform-scoped broker session после защитного lease.
+300 секунд и `connectionRetryCount=0`. Search переиспользует принятую OTP
+политику одного Appium restart: только закрытый receipt
+`webdriver_session_create` с `auth_callback_started=false`, пустыми query cases
+и нулевым traffic разрешает второй свежий WebDriver session attempt в том же
+device job. Неиспользованный callback не перевыпускается и не открывался; любой
+callback/Search side effect или неоднозначная стадия запрещают retry. Raw Appium
+log читается только локально и сворачивается в allowlisted phase booleans,
+elapsed time и attempt number, после чего удаляется.
 Android/iOS scroll receipt строится только из реальных Appium touch gestures:
 адаптер повторяет их с bounded limit до попадания последней rendered card во
 viewport и проверяет положительный `scrollY` delta; DOM-scroll не допускается.

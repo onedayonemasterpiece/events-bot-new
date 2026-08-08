@@ -48,6 +48,18 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   Appium new-session POST exhausted the full 300-second cold-start budget. This
   is an unambiguous simulator/WDA infrastructure failure, not Search or keyboard
   evidence; no automatic second session was created with the issued credential.
+- 2026-08-08 Android run `31274932745` is the first terminal L2 PASS on the
+  accepted immutable Search target: all three query families produced 10/10
+  request/response/route receipts, validation produced zero POST, cache repeats
+  had zero provider attempts, pagination stayed duplicate-free, and native
+  1080x2400 W3C swipes produced positive DOM scroll deltas. The native viewport
+  correction is therefore live-proven rather than only unit-tested.
+- 2026-08-08 iOS run `31275022837` repeated the exact pre-product 300-second
+  WebDriver session-create timeout with empty query cases/counters. Official
+  XCUITest documentation confirms startup retries are ineffective with
+  `usePreinstalledWDA`; Search now reuses OTP's single restart pattern only when
+  a closed receipt proves callback/search side effects are zero, and reduces the
+  local Appium log to phase booleans before deleting it.
 
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
@@ -204,7 +216,11 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   BiDi surface and failing on `script.addPreloadScript` before UI acceptance.
 - 2026-08-08 iOS cold-start correction: the single Appium new-session request
   has a five-minute client budget and no ambiguous automatic retry, instead of
-  WebdriverIO aborting a valid cold simulator/WDA launch at 120 seconds.
+  WebdriverIO aborting a valid cold simulator/WDA launch at 120 seconds. This
+  historical no-retry policy was superseded only after runs `31274142041` and
+  `31275022837` both exhausted the outer five-minute bound before callback:
+  the current policy permits one fail-closed Appium restart with retained
+  first-attempt evidence as documented below.
 - 2026-08-08 mobile scroll correction: L2 uses a bounded sequence of real
   Appium touch gestures until the final rendered card intersects the viewport;
   a single gesture is no longer treated as sufficient for an eight-card page.
@@ -239,6 +255,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   `NATIVE_APP`. A sanitized failure receipt retains numeric viewport/gesture
   geometry, gesture count and DOM `scrollY` delta so another no-op cannot remain
   an undifferentiated `search_real_scroll_missing` artifact.
+- 2026-08-08 iOS startup observability/retry correction: the shared mobile
+  layer converts a failed Appium session creation into an allowlisted receipt
+  containing only stage, elapsed time, attempt number and simulator/WDA
+  booleans. The Search workflow may restart Appium exactly once only before the
+  device callback is opened and before any Search traffic, matching the accepted
+  OTP infrastructure-retry boundary without copying OTP feature mechanics.
 
 ## Follow-up Actions
 

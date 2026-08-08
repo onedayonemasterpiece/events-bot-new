@@ -36,7 +36,12 @@ Run `rg -n "appium|UiAutomator2|XCUITest|Mobile Safari|webviewConnect" site/e2e 
 - Focus a critical iOS web input through shared `focusIosSafariWebInput`: an exact allowlisted native accessibility match followed by a native tap and `observeNativeKeyboard`. A WebKit `click()` plus a web-context `isKeyboardShown()` is not keyboard evidence.
 - Scroll an Android Chrome document through shared `performNativeTouchSwipe` in `NATIVE_APP`, resolving viewport dimensions only after that context switch and restoring the original web context before reading `scrollY`. Web-context/CSS dimensions are not native touch coordinates. `mobile: scrollGesture` is a native scrollable-control shortcut and is not accepted as proof for Chrome page content.
 - Dismiss an observed software keyboard through the shared native-context helper before measuring the scrolling baseline; never let a swipe land inside an open IME.
-- Use one bounded WebDriver session creation attempt. Workflow-level retry is allowed only before product side effects and must create a fresh, unambiguous run attempt/session.
+- Use one bounded WebDriver session creation attempt. Reuse the accepted OTP
+  workflow pattern for at most one workflow-level Appium restart only when a
+  sanitized receipt proves session creation failed before callback/product
+  traffic. The retry must create a fresh WebDriver session attempt, reuse only
+  the still-unconsumed callback, and never repeat an ambiguous callback/Search
+  action.
 - For authenticated scenarios, use a fresh persona-scoped credential/session per device, complete callback in the device browser, wait for the authorized UI, then reload the exact target to prove same-storage persistence.
 - For broker-issued magic links, never open the default admin `action_link` directly: use the shared fail-closed converter to an allowlisted `token_hash/type` target callback so verification and persistence occur inside the device browser. Never extract or inject access/refresh tokens.
 
@@ -48,7 +53,7 @@ Artifacts must be sanitized and allowlisted. A failed gesture may retain only ro
 
 ## Debug workflow
 
-1. Read the exact failed step and sanitized artifact; classify runner/session/browser/product failure.
+1. Read the exact failed step and sanitized artifact; classify runner/session/browser/product failure. For a session-create timeout, retain only the shared closed Appium phase receipt (server ready, simulator/WDA phase booleans, elapsed time and attempt number); never upload the raw log.
 2. Compare the failed configuration with the shared profile and the latest terminal Android/iOS receipts.
 3. Add the smallest failing regression test before changing code.
 4. Change one transport variable at a time. After two similar external-tool failures, consult official Appium driver documentation before another attempt.
