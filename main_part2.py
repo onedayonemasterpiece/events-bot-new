@@ -22330,8 +22330,25 @@ def create_app() -> web.Application:
 
     app = web.Application()
     # Private ChatGPT MCP: strict no-op unless PRIVATE_EVENTS_MCP_ENABLED=1.
-    from private_events_mcp import attach_private_events_mcp
-    attach_private_events_mcp(app)
+    # Provider adapters are built only after the core enabled gate has been
+    # parsed, so stale/malformed provider credentials cannot affect normal bot
+    # startup while the MCP surface is disabled.
+    from private_events_mcp import PrivateEventsMCPConfig, attach_private_events_mcp
+
+    private_mcp_config = PrivateEventsMCPConfig.from_env()
+    private_mcp_social_adapters = None
+    if private_mcp_config.enabled:
+        from main import vk_api
+        from private_events_mcp_provider_adapters import (
+            build_private_events_mcp_social_adapters,
+        )
+
+        private_mcp_social_adapters = build_private_events_mcp_social_adapters(vk_api)
+    attach_private_events_mcp(
+        app,
+        private_mcp_config,
+        social_adapters=private_mcp_social_adapters,
+    )
     SimpleRequestHandler(dp, bot).register(app, path="/webhook")
     setup_application(app, dp, bot=bot)
     

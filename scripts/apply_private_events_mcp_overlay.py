@@ -8,12 +8,23 @@ from pathlib import Path
 
 MARKER = "    app = web.Application()\n"
 APP_MODULE_CANDIDATES = ("main.py", "main_part2.py")
+ROOT_FILES = ("private_events_mcp_provider_adapters.py",)
 PRIVATE_FIXTURE_MARKER = "@pytest.fixture\ndef repo_root"
 INSERT = (
     "    app = web.Application()\n"
-    "    # Private ChatGPT MCP: strict no-op unless PRIVATE_EVENTS_MCP_ENABLED=1.\n"
-    "    from private_events_mcp import attach_private_events_mcp\n"
-    "    attach_private_events_mcp(app)\n"
+    "    # Private Events MCP: strict no-op unless PRIVATE_EVENTS_MCP_ENABLED=1.\n"
+    "    from private_events_mcp import PrivateEventsMCPConfig, attach_private_events_mcp\n"
+    "    private_mcp_config = PrivateEventsMCPConfig.from_env()\n"
+    "    private_mcp_social_adapters = None\n"
+    "    if private_mcp_config.enabled:\n"
+    "        from main import vk_api\n"
+    "        from private_events_mcp_provider_adapters import (\n"
+    "            build_private_events_mcp_social_adapters,\n"
+    "        )\n"
+    "        private_mcp_social_adapters = build_private_events_mcp_social_adapters(vk_api)\n"
+    "    attach_private_events_mcp(\n"
+    "        app, private_mcp_config, social_adapters=private_mcp_social_adapters\n"
+    "    )\n"
 )
 
 
@@ -80,7 +91,7 @@ def merge_test_fixtures(source: Path, target: Path) -> bool:
 
 def patch_main(path: Path) -> bool:
     content = path.read_text(encoding="utf-8")
-    if "attach_private_events_mcp(app)" in content:
+    if "attach_private_events_mcp(" in content:
         return False
     occurrences = content.count(MARKER)
     if occurrences != 1:
@@ -113,6 +124,10 @@ def main() -> int:
         if source.exists():
             skipped = frozenset({Path("conftest.py")}) if relative == "tests" else frozenset()
             copy_tree(source, repo / relative, skip=skipped)
+    for relative in ROOT_FILES:
+        source = overlay / relative
+        if source.is_file():
+            shutil.copy2(source, repo / relative)
     fixtures_changed = merge_test_fixtures(source_conftest, target_conftest)
     changed = patch_main(app_module)
     print(

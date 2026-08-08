@@ -1,13 +1,23 @@
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
+from .crypto import AccessIdentity
 from .repository import EventsEvidenceRepository, InvalidArgumentsError
 
 
-ToolHandler = Callable[[Mapping[str, Any]], Awaitable[dict[str, Any]]]
+@dataclass(frozen=True, slots=True)
+class ToolCallContext:
+    identity: AccessIdentity
+    resource: str
+
+
+ToolHandler = Callable[[Mapping[str, Any], ToolCallContext], Awaitable[dict[str, Any]]]
+DenialHandler = Callable[[Mapping[str, Any], ToolCallContext, str], Awaitable[None]]
+ScopeSelector = Callable[[Mapping[str, Any]], frozenset[str]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,21 +29,66 @@ class ToolSpec:
     output_schema: Mapping[str, Any]
     scopes: frozenset[str]
     handler: ToolHandler
+    denial_handler: DenialHandler | None = None
+    scope_options: tuple[frozenset[str], ...] = ()
+    scope_selector: ScopeSelector | None = None
+    read_only: bool = True
+    destructive: bool = False
+    idempotent: bool = True
+    open_world: bool = False
+    cacheable: bool = True
+    publicly_discoverable: bool = True
+    timeout_seconds: float | None = None
 
-    def descriptor(self) -> dict[str, Any]:
-        schemes = [{"type": "oauth2", "scopes": sorted(self.scopes)}]
+    def is_visible(self, granted_scopes: frozenset[str]) -> bool:
+        options = self.scope_options or (self.scopes,)
+        return any(option.issubset(granted_scopes) for option in options)
+
+    def required_scopes(self, arguments: Mapping[str, Any]) -> frozenset[str]:
+        if self.scope_selector is not None:
+            return self.scope_selector(arguments)
+        return self.scopes
+
+    def validate_arguments(self, arguments: Mapping[str, Any]) -> None:
+        properties = self.input_schema.get("properties", {})
+        if self.input_schema.get("additionalProperties") is False and isinstance(
+            properties, Mapping
+        ):
+            unknown = sorted(str(key) for key in arguments if key not in properties)
+            if unknown:
+                raise InvalidArgumentsError(
+                    "Unsupported argument field(s): " + ", ".join(unknown)
+                )
+
+    def descriptor(self, granted_scopes: frozenset[str] | None = None) -> dict[str, Any]:
+        options = self.scope_options or (self.scopes,)
+        if granted_scopes is not None:
+            options = tuple(option for option in options if option.issubset(granted_scopes))
+        schemes = [{"type": "oauth2", "scopes": sorted(option)} for option in options]
+        input_schema = copy.deepcopy(dict(self.input_schema))
+        platform_schema = input_schema.get("properties", {}).get("platform")
+        if self.scope_options and isinstance(platform_schema, dict):
+            allowed_platforms = sorted(
+                {
+                    scope.split(":", 1)[0]
+                    for option in options
+                    for scope in option
+                    if ":" in scope
+                }
+            )
+            platform_schema["enum"] = allowed_platforms
         return {
             "name": self.name,
             "title": self.title,
             "description": self.description,
-            "inputSchema": dict(self.input_schema),
+            "inputSchema": input_schema,
             "outputSchema": dict(self.output_schema),
             "securitySchemes": schemes,
             "annotations": {
-                "readOnlyHint": True,
-                "destructiveHint": False,
-                "idempotentHint": True,
-                "openWorldHint": False,
+                "readOnlyHint": self.read_only,
+                "destructiveHint": self.destructive,
+                "idempotentHint": self.idempotent,
+                "openWorldHint": self.open_world,
             },
             # Older ChatGPT Apps clients mirrored this field under _meta.
             "_meta": {"securitySchemes": schemes},
@@ -131,7 +186,9 @@ def _string_list(value: Any, *, name: str, allowed: set[str]) -> list[str] | Non
 
 
 def build_tools(repository: EventsEvidenceRepository) -> tuple[ToolSpec, ...]:
-    async def search(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    async def search(
+        arguments: Mapping[str, Any], _context: ToolCallContext
+    ) -> dict[str, Any]:
         query = _string(arguments.get("query"), name="query", required=True, limit=1000)
         kinds = _string_list(
             arguments.get("kinds"),
@@ -142,11 +199,15 @@ def build_tools(repository: EventsEvidenceRepository) -> tuple[ToolSpec, ...]:
         hits = await repository.global_search(query, kinds=kinds, limit=limit)
         return {"results": [hit.as_search_result() for hit in hits]}
 
-    async def fetch(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    async def fetch(
+        arguments: Mapping[str, Any], _context: ToolCallContext
+    ) -> dict[str, Any]:
         document_id = _string(arguments.get("id"), name="id", required=True, limit=220)
         return (await repository.fetch(document_id)).as_fetch_result()
 
-    async def events_search(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    async def events_search(
+        arguments: Mapping[str, Any], _context: ToolCallContext
+    ) -> dict[str, Any]:
         hits = await repository.search_events(
             query=_string(arguments.get("query"), name="query", limit=1000),
             date_from=_optional_string(arguments.get("date_from"), name="date_from", limit=10),
@@ -172,7 +233,9 @@ def build_tools(repository: EventsEvidenceRepository) -> tuple[ToolSpec, ...]:
             ]
         }
 
-    async def event_get(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    async def event_get(
+        arguments: Mapping[str, Any], _context: ToolCallContext
+    ) -> dict[str, Any]:
         event_id = arguments.get("event_id")
         if isinstance(event_id, bool):
             raise InvalidArgumentsError("event_id must be an integer")
@@ -183,7 +246,9 @@ def build_tools(repository: EventsEvidenceRepository) -> tuple[ToolSpec, ...]:
         document = await repository.get_event(parsed)
         return document.as_fetch_result()
 
-    async def incidents_search(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    async def incidents_search(
+        arguments: Mapping[str, Any], _context: ToolCallContext
+    ) -> dict[str, Any]:
         query = _string(arguments.get("query"), name="query", required=True, limit=1000)
         hits = await repository.search_incidents(
             query,
@@ -203,11 +268,15 @@ def build_tools(repository: EventsEvidenceRepository) -> tuple[ToolSpec, ...]:
             ]
         }
 
-    async def incident_get(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    async def incident_get(
+        arguments: Mapping[str, Any], _context: ToolCallContext
+    ) -> dict[str, Any]:
         document_id = _string(arguments.get("id"), name="id", required=True, limit=220)
         return (await repository.get_incident(document_id)).as_fetch_result()
 
-    async def operations_snapshot(_arguments: Mapping[str, Any]) -> dict[str, Any]:
+    async def operations_snapshot(
+        _arguments: Mapping[str, Any], _context: ToolCallContext
+    ) -> dict[str, Any]:
         return await repository.operations_snapshot()
 
     common_search_properties = {

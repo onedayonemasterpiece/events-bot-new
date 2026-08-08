@@ -4,6 +4,20 @@
 
 ### Added
 
+- Added lazy generic-text Telegram and VK transports for the private Events MCP:
+  a dedicated role-scoped Telethon human session handles serialized channel
+  reads and plain-text sends, while a fixed `main.vk_api` wrapper permits only
+  bounded `wall.get` and idempotency-guided `wall.post` calls. Provider
+  credentials stay unparsed while MCP is disabled and provider failures are
+  returned only through a redacted generic adapter error.
+
+- Added a provider-neutral private MCP social core for explicitly allowlisted
+  Telegram/VK aliases: scope- and resource-filtered discovery, redacted
+  untrusted text reads, one-use text-publication tickets, durable idempotency,
+  append-only redacted action audit, and a persistent per-target daily attempt
+  budget. ChatGPT and Codex now have distinct MCP resources; Codex remains
+  limited to the seven existing read tools and can never discover social tools.
+
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke
   tooling, and an explicit no-provider-call acceptance gate. Its HTTP transport
@@ -13,6 +27,10 @@
   startup a strict no-op, covers incident documents and generic/provider tokens
   in recursive redaction, binds rate limits across OAuth refresh rotation, and
   applies request/concurrency and SQLite VM budgets to token and schema work.
+  OAuth now also supports a distinct static public Codex client without dynamic
+  registration or a client secret, restricted to exact IPv4 loopback callback,
+  PKCE, resource, client and redirect bindings while preserving the existing
+  confidential ChatGPT flow.
 
 ### Fixed
 
@@ -45,6 +63,30 @@
   bootstrap after corpus invalidation only when the same journey subsequently
   proves a served cache hit with zero embedding/vector/LLM attempts; strict
   scheduled and post-deploy release canaries still reject the initial miss.
+- Hardened private MCP social actions: strict runtime argument schemas, scoped
+  provider discovery, denied-action audit, atomic prepare-time daily quotas,
+  bounded 90-day idempotency retention, Telegram bot-token redaction, and an
+  explicit non-retryable `outcome_unknown` result for publication timeouts.
+  Generated ChatGPT profiles now remain read-only unless social scopes are
+  explicitly enabled by the operator.
+
+- Kept the private MCP overlay installer and CI gate aligned with the enabled-
+  only Telegram/VK adapter injection, including compilation of the provider
+  boundary and the canonical application module.
+
+- Fully redacted private MCP VK failure logs, including draft message, owner,
+  GUID, provider error/captcha values and all credential fragments, while
+  preserving existing non-MCP VK diagnostics.
+
+- Bounded private MCP social audit retention to 90 days while keeping retained
+  rows immutable, and centralized denial auditing for schema, malformed input,
+  scope, policy, ticket and budget failures before any provider call.
+
+- Hardened private Events MCP OAuth credential handling: generator and smoke
+  receipts no longer print the private endpoint path, generated bundles start
+  in a fresh `0700` directory with atomic `0600` files, Codex callback dot
+  segments are rejected, omitted scopes no longer imply `offline_access`, and
+  refresh tokens are issued only while that scope remains granted.
 
 - Fixed the production-root prelaunch registration contract without changing its visual, background or SEO/GEO surface: first and repeat RPC receipts are now distinct, the final normalized-email insert is race-safe, and the browser keeps permanent success/reload state while retaining input on errors and locking duplicate submits. Added exact-main release, metadata-preserving rollback and incident regression gates.
 

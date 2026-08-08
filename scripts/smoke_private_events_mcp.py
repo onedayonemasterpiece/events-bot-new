@@ -23,15 +23,26 @@ def fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:12]
 
 
-async def run(credentials_path: Path) -> dict:
+def sanitized_endpoint_receipt(endpoint: str) -> dict[str, str]:
+    parsed = urlsplit(endpoint)
+    suffix = "/codex/mcp" if parsed.path.endswith("/codex/mcp") else "/mcp"
+    return {
+        "public_origin": f"{parsed.scheme}://{parsed.netloc}",
+        "mcp_path": f"/_private/<redacted>{suffix}",
+        "endpoint_fingerprint": fingerprint(endpoint),
+    }
+
+
+async def run(credentials_path: Path, *, client_kind: str = "chatgpt") -> dict:
     payload = json.loads(credentials_path.read_text(encoding="utf-8"))
-    app = payload["chatgpt"]
+    app = payload[client_kind]
     endpoint = app["mcp_url"]
     client_id = app["oauth_client_id"]
-    client_secret = app["oauth_client_secret"]
+    client_secret = app.get("oauth_client_secret")
     operator_token = app["bootstrap_operator_token"]
     resource = endpoint
-    base_prefix = endpoint.rsplit("/mcp", 1)[0]
+    endpoint_suffix = "/codex/mcp" if endpoint.endswith("/codex/mcp") else "/mcp"
+    base_prefix = endpoint[: -len(endpoint_suffix)]
     authorize = base_prefix + "/oauth/authorize"
     token_endpoint = base_prefix + "/oauth/token"
     endpoint_parts = urlsplit(endpoint)
@@ -39,7 +50,11 @@ async def run(credentials_path: Path) -> dict:
         f"{endpoint_parts.scheme}://{endpoint_parts.netloc}"
         f"/.well-known/oauth-protected-resource{endpoint_parts.path}"
     )
-    callback = "https://chatgpt.com/connector/oauth/private-events-smoke"
+    callback = (
+        "https://chatgpt.com/connector/oauth/private-events-smoke"
+        if client_kind == "chatgpt"
+        else app["smoke_redirect_uri"]
+    )
     verifier = b64url(secrets.token_bytes(48))
     challenge = b64url(hashlib.sha256(verifier.encode("ascii")).digest())
     state = secrets.token_urlsafe(24)
@@ -78,17 +93,25 @@ async def run(credentials_path: Path) -> dict:
         assert redirect_query.get("state") == [state]
         code = redirect_query["code"][0]
 
-        basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+        token_data = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": callback,
+            "resource": resource,
+            "code_verifier": verifier,
+        }
+        token_headers = {}
+        if client_kind == "chatgpt":
+            assert isinstance(client_secret, str) and client_secret
+            basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+            token_headers["Authorization"] = "Basic " + basic
+        else:
+            assert app.get("token_endpoint_auth_method") == "none"
+            token_data["client_id"] = client_id
         async with session.post(
             token_endpoint,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": callback,
-                "resource": resource,
-                "code_verifier": verifier,
-            },
-            headers={"Authorization": "Basic " + basic},
+            data=token_data,
+            headers=token_headers,
         ) as response:
             tokens = await response.json()
             assert response.status == 200, tokens
@@ -124,7 +147,8 @@ async def run(credentials_path: Path) -> dict:
 
     return {
         "ok": True,
-        "endpoint": endpoint,
+        "oauth_client": client_kind,
+        **sanitized_endpoint_receipt(endpoint),
         "protocol": initialized["result"]["protocolVersion"],
         "tools": [tool["name"] for tool in listed["result"]["tools"]],
         "event_result_count": len(event_search["result"]["structuredContent"]["events"]),
@@ -139,8 +163,9 @@ async def run(credentials_path: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a non-interactive OAuth + MCP production smoke.")
     parser.add_argument("--credentials", required=True, type=Path)
+    parser.add_argument("--client", choices=("chatgpt", "codex"), default="chatgpt")
     args = parser.parse_args()
-    result = asyncio.run(run(args.credentials))
+    result = asyncio.run(run(args.credentials, client_kind=args.client))
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

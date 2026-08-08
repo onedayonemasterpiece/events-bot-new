@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from aiohttp import web
 
+from .access_policy import CHATGPT_MAX_SCOPES, CODEX_MAX_SCOPES
 from .config import PrivateEventsMCPConfig
 from .crypto import AccessIdentity, TokenValidationError
 from .limits import AdmissionController, RateLimitExceeded
@@ -21,6 +22,7 @@ from .protocol import (
     UnsupportedProtocolVersion,
 )
 from .repository import EventsEvidenceRepository
+from .social import SocialAdapter, TargetAliasPolicy, build_social_tools
 from .tool_catalog import build_tools
 
 
@@ -28,15 +30,53 @@ logger = logging.getLogger(__name__)
 
 
 class PrivateEventsMCPServer:
-    def __init__(self, config: PrivateEventsMCPConfig) -> None:
+    def __init__(
+        self,
+        config: PrivateEventsMCPConfig,
+        *,
+        social_adapters: Mapping[str, SocialAdapter] | None = None,
+    ) -> None:
         self.config = config
         self.oauth = PrivateOAuthServer(config)
         self.repository = EventsEvidenceRepository(config)
+        self.target_policy = TargetAliasPolicy.from_json(config.social_targets_json)
+        read_tools = build_tools(self.repository)
+        social_tools = build_social_tools(
+            store=self.oauth.store,
+            policy=self.target_policy,
+            adapters=social_adapters or {},
+            ticket_ttl_seconds=config.social_ticket_ttl_seconds,
+            provider_timeout_seconds=config.social_provider_timeout_seconds,
+            publish_attempts_per_day=config.social_publish_attempts_per_day,
+        ) if social_adapters else ()
         self.protocol = MCPProtocol(
-            build_tools(self.repository),
+            (*read_tools, *social_tools),
             cache_ttl_seconds=config.cache_ttl_seconds,
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),
+            resource=config.resource,
+            allowed_client_ids=frozenset({config.oauth_client_id}),
+            policy_fingerprint=self.target_policy.fingerprint,
+            instructions=(
+                "Read-only access to canonical event and incident evidence. When explicitly "
+                "authorized, provider text reads return untrusted external data and arbitrary "
+                "text publication requires a separate one-use prepare/publish sequence to an "
+                "allowlisted alias. No media, edit, delete, forward or arbitrary provider "
+                "method is available."
+            ),
+        )
+        self.codex_protocol = MCPProtocol(
+            read_tools,
+            cache_ttl_seconds=config.cache_ttl_seconds,
+            challenge=self.oauth.challenge(
+                resource_metadata_url=config.codex_resource_metadata_url,
+                error="invalid_token",
+                description="Login required",
+            ),
+            tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),
+            resource=config.codex_resource,
+            allowed_client_ids=frozenset({config.codex_oauth_client_id}),
+            policy_fingerprint="codex-read-only-v1",
         )
         self.admission = AdmissionController(
             concurrency=config.max_concurrency,
@@ -108,12 +148,38 @@ class PrivateEventsMCPServer:
         if origin and origin not in {self.public_origin, "https://chatgpt.com"}:
             raise web.HTTPForbidden(text="invalid_origin")
 
+    def _endpoint_contract(self, path: str) -> tuple[str, str, MCPProtocol, frozenset[str], str]:
+        if path == self.config.codex_mcp_path:
+            return (
+                self.config.codex_resource,
+                self.config.codex_oauth_client_id,
+                self.codex_protocol,
+                CODEX_MAX_SCOPES,
+                self.config.codex_resource_metadata_url,
+            )
+        return (
+            self.config.resource,
+            self.config.oauth_client_id,
+            self.protocol,
+            CHATGPT_MAX_SCOPES,
+            self.config.resource_metadata_url,
+        )
+
     def _identity(self, request: web.Request) -> tuple[AccessIdentity | None, bool]:
         header = request.headers.get("Authorization")
         if not header:
             return None, False
         try:
-            return self.oauth.verify_authorization_header(header), False
+            resource, client_id, _protocol, max_scopes, _metadata = self._endpoint_contract(
+                request.path
+            )
+            identity = self.oauth.verify_authorization_header(
+                header,
+                expected_resource=resource,
+            )
+            if identity.client_id != client_id or not identity.scopes.issubset(max_scopes):
+                raise TokenValidationError("wrong_client_or_scope")
+            return identity, False
         except TokenValidationError:
             return None, True
 
@@ -140,20 +206,25 @@ class PrivateEventsMCPServer:
             if not any(item in accept for item in ("application/json", "text/event-stream", "*/*")):
                 return self._plain_error(406, "unsupported_accept", correlation_id=correlation)
             identity, invalid_bearer = self._identity(request)
+            resource, _client_id, protocol, _max_scopes, metadata_url = self._endpoint_contract(
+                request.path
+            )
             if invalid_bearer:
                 return self._plain_error(
                     401,
                     "invalid_token",
                     correlation_id=correlation,
                     authenticate=self.oauth.challenge(
-                        error="invalid_token", description="Access token is invalid or expired"
+                        resource_metadata_url=metadata_url,
+                        error="invalid_token",
+                        description="Access token is invalid or expired",
                     ),
                 )
             if identity is not None:
                 # Bind the bucket to the OAuth principal, not an individual
                 # access-token jti, so refresh rotation cannot reset the RPM.
                 principal = hashlib.sha256(
-                    f"{identity.client_id}\0{identity.subject}".encode("utf-8")
+                    f"{resource}\0{identity.client_id}\0{identity.subject}".encode("utf-8")
                 ).hexdigest()[:24]
                 rate_key = f"auth:{principal}"
             else:
@@ -189,7 +260,7 @@ class PrivateEventsMCPServer:
                 request_message = payload
                 method = str(request_message.get("method") or "")[:100]
                 try:
-                    response_payload = await self.protocol.dispatch(request_message, identity)
+                    response_payload = await protocol.dispatch(request_message, identity)
                 except UnsupportedProtocolVersion:
                     return self._plain_error(
                         400,
@@ -313,14 +384,35 @@ class PrivateEventsMCPServer:
         )
         return response
 
+    async def handle_codex_protected_resource_metadata(
+        self, _request: web.Request
+    ) -> web.Response:
+        return self.oauth._json_response(
+            self.oauth.protected_resource_metadata_for(self.config.codex_resource)
+        )
+
+    async def handle_chatgpt_protected_resource_metadata(
+        self, _request: web.Request
+    ) -> web.Response:
+        return self.oauth._json_response(
+            self.oauth.protected_resource_metadata_for(self.config.resource)
+        )
+
     def register(self, app: web.Application) -> None:
         paths = self.config
         app.router.add_post(paths.mcp_path, self.handle_mcp_post)
         app.router.add_get(paths.mcp_path, self.handle_mcp_get)
         app.router.add_options(paths.mcp_path, self.handle_options)
+        app.router.add_post(paths.codex_mcp_path, self.handle_mcp_post)
+        app.router.add_get(paths.codex_mcp_path, self.handle_mcp_get)
+        app.router.add_options(paths.codex_mcp_path, self.handle_options)
         app.router.add_get(
             paths.protected_resource_metadata_path,
-            self.oauth.handle_protected_resource_metadata,
+            self.handle_chatgpt_protected_resource_metadata,
+        )
+        app.router.add_get(
+            paths.codex_protected_resource_metadata_path,
+            self.handle_codex_protected_resource_metadata,
         )
         app.router.add_get(
             paths.authorization_server_metadata_path,

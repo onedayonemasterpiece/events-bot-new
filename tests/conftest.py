@@ -300,6 +300,7 @@ def config(tmp_path: Path, repo_root: Path, event_db: Path) -> PrivateEventsMCPC
         auth_database_path=str(tmp_path / "oauth.sqlite"),
         oauth_client_id="chatgpt-events-test-client",
         oauth_client_secret="client_" + "s" * 48,
+        codex_oauth_client_id="codex-events-test-client",
         operator_token="operator_" + "o" * 48,
         signing_key="signing_" + "k" * 64,
         repository_root=str(repo_root),

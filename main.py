@@ -3543,6 +3543,11 @@ def _vk_user_token() -> str | None:
 
 async def vk_api(method: str, **params: Any) -> Any:
     """Simple VK API GET request with token and version."""
+    # Internal transport marker used only by the private MCP's fixed-method
+    # adapter. Remove it before constructing provider parameters and, on an
+    # error, suppress every caller/provider value rather than logging draft
+    # publication text, owner IDs, GUIDs or credential fragments.
+    private_mcp_log_boundary = params.pop("_private_events_mcp_log_boundary", False) is True
     service_allowed = method in VK_SERVICE_READ_METHODS or any(
         method.startswith(prefix) for prefix in VK_SERVICE_READ_PREFIXES
     )
@@ -3580,23 +3585,34 @@ async def vk_api(method: str, **params: Any) -> Any:
     data = resp.json()
     if "error" in data:
         err = data["error"]
+        logged_params = (
+            {key: "<redacted>" for key in call_params}
+            if private_mcp_log_boundary
+            else redact_params(call_params)
+        )
+        logged_message = (
+            "<redacted-provider-error>"
+            if private_mcp_log_boundary
+            else err.get("error_msg")
+        )
+        logged_token = "<redacted>" if private_mcp_log_boundary else redacted_token
         logging.error(
             "VK API error: method=%s code=%s msg=%s params=%s actor=%s token=%s",
             method,
             err.get("error_code"),
-            err.get("error_msg"),
-            redact_params(call_params),
+            logged_message,
+            logged_params,
             kind,
-            redacted_token,
+            logged_token,
         )
         raise VKAPIError(
             err.get("error_code"),
-            err.get("error_msg", ""),
-            err.get("captcha_sid"),
-            err.get("captcha_img"),
+            logged_message if private_mcp_log_boundary else err.get("error_msg", ""),
+            None if private_mcp_log_boundary else err.get("captcha_sid"),
+            None if private_mcp_log_boundary else err.get("captcha_img"),
             method,
             actor=kind,
-            token=redacted_token,
+            token=logged_token,
         )
     return data.get("response")
 

@@ -57,11 +57,16 @@ class PrivateEventsMCPConfig:
     auth_database_path: str
     oauth_client_id: str
     oauth_client_secret: str
+    codex_oauth_client_id: str
     operator_token: str
     signing_key: str
     repository_root: str
     repository_slug: str
     repository_sha_file: str
+    social_targets_json: str = ""
+    social_ticket_ttl_seconds: int = 300
+    social_provider_timeout_seconds: int = 12
+    social_publish_attempts_per_day: int = 10
     access_ttl_seconds: int = 900
     refresh_ttl_seconds: int = 30 * 24 * 3600
     authorization_code_ttl_seconds: int = 300
@@ -100,6 +105,9 @@ class PrivateEventsMCPConfig:
             oauth_client_secret=(
                 os.getenv("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET") or ""
             ).strip(),
+            codex_oauth_client_id=(
+                os.getenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID") or ""
+            ).strip(),
             operator_token=(os.getenv("PRIVATE_EVENTS_MCP_OPERATOR_TOKEN") or "").strip(),
             signing_key=(os.getenv("PRIVATE_EVENTS_MCP_SIGNING_KEY") or "").strip(),
             repository_root=(os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_ROOT") or "/app").strip(),
@@ -111,6 +119,27 @@ class PrivateEventsMCPConfig:
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE")
                 or "/app/.static-site-repo-sha"
             ).strip(),
+            social_targets_json=(
+                os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON") or ""
+            ).strip(),
+            social_ticket_ttl_seconds=_int(
+                "PRIVATE_EVENTS_MCP_SOCIAL_TICKET_TTL_SECONDS",
+                300,
+                low=60,
+                high=900,
+            ),
+            social_provider_timeout_seconds=_int(
+                "PRIVATE_EVENTS_MCP_SOCIAL_PROVIDER_TIMEOUT_SECONDS",
+                12,
+                low=3,
+                high=30,
+            ),
+            social_publish_attempts_per_day=_int(
+                "PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY",
+                10,
+                low=1,
+                high=100,
+            ),
             access_ttl_seconds=_int(
                 "PRIVATE_EVENTS_MCP_ACCESS_TTL_SECONDS", 900, low=300, high=3600
             ),
@@ -188,6 +217,10 @@ class PrivateEventsMCPConfig:
             raise ValueError("PRIVATE_EVENTS_MCP_PATH_SECRET must be 24+ URL-safe characters")
         if not _CLIENT_ID_RE.fullmatch(self.oauth_client_id):
             raise ValueError("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID is invalid")
+        if not _CLIENT_ID_RE.fullmatch(self.codex_oauth_client_id):
+            raise ValueError("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID is invalid")
+        if self.codex_oauth_client_id == self.oauth_client_id:
+            raise ValueError("ChatGPT and Codex OAuth client IDs must be distinct")
         for name, value, minimum in (
             ("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET", self.oauth_client_secret, 32),
             ("PRIVATE_EVENTS_MCP_OPERATOR_TOKEN", self.operator_token, 32),
@@ -201,6 +234,11 @@ class PrivateEventsMCPConfig:
             raise ValueError("OAuth state must use a separate SQLite file")
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repository_slug):
             raise ValueError("PRIVATE_EVENTS_MCP_REPOSITORY_SLUG must be owner/repository")
+        # Local import keeps disabled startup inert while making an enabled
+        # malformed alias policy fail before any route is attached.
+        from .social import TargetAliasPolicy
+
+        TargetAliasPolicy.from_json(self.social_targets_json)
 
     @property
     def private_prefix(self) -> str:
@@ -209,6 +247,10 @@ class PrivateEventsMCPConfig:
     @property
     def mcp_path(self) -> str:
         return f"{self.private_prefix}/mcp"
+
+    @property
+    def codex_mcp_path(self) -> str:
+        return f"{self.private_prefix}/codex/mcp"
 
     @property
     def oauth_authorize_path(self) -> str:
@@ -228,6 +270,10 @@ class PrivateEventsMCPConfig:
         return f"/.well-known/oauth-protected-resource{self.mcp_path}"
 
     @property
+    def codex_protected_resource_metadata_path(self) -> str:
+        return f"/.well-known/oauth-protected-resource{self.codex_mcp_path}"
+
+    @property
     def authorization_server_metadata_path(self) -> str:
         # RFC 8414 path-scoped metadata for an issuer that includes private_prefix.
         return f"/.well-known/oauth-authorization-server{self.private_prefix}"
@@ -235,6 +281,10 @@ class PrivateEventsMCPConfig:
     @property
     def resource(self) -> str:
         return f"{self.public_base_url}{self.mcp_path}"
+
+    @property
+    def codex_resource(self) -> str:
+        return f"{self.public_base_url}{self.codex_mcp_path}"
 
     @property
     def issuer(self) -> str:
@@ -253,6 +303,23 @@ class PrivateEventsMCPConfig:
     @property
     def resource_metadata_url(self) -> str:
         return f"{self.public_base_url}{self.protected_resource_metadata_path}"
+
+    @property
+    def codex_resource_metadata_url(self) -> str:
+        return f"{self.public_base_url}{self.codex_protected_resource_metadata_path}"
+
+    @property
+    def oauth_client_ids(self) -> frozenset[str]:
+        """Static bearer-client registry; dynamic registration is unsupported."""
+
+        return frozenset((self.oauth_client_id, self.codex_oauth_client_id))
+
+    def resource_for_client(self, client_id: str) -> str:
+        if client_id == self.oauth_client_id:
+            return self.resource
+        if client_id == self.codex_oauth_client_id:
+            return self.codex_resource
+        raise ValueError("Unknown OAuth client")
 
     @property
     def documentation_url(self) -> str:
