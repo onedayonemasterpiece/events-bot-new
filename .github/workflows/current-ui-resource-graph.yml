@@ -130,10 +130,10 @@ jobs:
       CURRENT_UI_GRAPH_ROOT_HTML_SHA256: ${{ inputs.root_html_sha256 }}
       CURRENT_UI_GRAPH_CANDIDATE_BASE_URL: ${{ secrets.CURRENT_UI_GRAPH_CANDIDATE_BASE_URL }}
       GRAPH_OUTPUT: artifacts/current-ui-resource-graph/dispatch-rejected
-      CANDIDATE_WORKTREE: ${{ runner.temp }}/current-ui-graph-candidate-source
-      ROOT_WORKTREE: ${{ runner.temp }}/current-ui-graph-public-root-source
-      DISPATCH_VALIDATION_MARKER: ${{ runner.temp }}/current-ui-graph-dispatch-ok
-      GRAPH_VALIDATION_MARKER: ${{ runner.temp }}/current-ui-graph-validation-ok
+      CANDIDATE_WORKTREE: ${{ github.workspace }}/../current-ui-graph-candidate-source
+      ROOT_WORKTREE: ${{ github.workspace }}/../current-ui-graph-public-root-source
+      DISPATCH_VALIDATION_MARKER: ${{ github.workspace }}/../current-ui-graph-dispatch-ok
+      GRAPH_VALIDATION_MARKER: ${{ github.workspace }}/../current-ui-graph-validation-ok
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:

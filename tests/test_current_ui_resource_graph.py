@@ -619,6 +619,9 @@ def test_workflow_uses_validated_env_inputs_and_honest_validation_receipt():
     )
     assert len(input_entries) == 19
     assert all("        type: string\n" in body for _, body in input_entries)
+    job_env = workflow.split("    env:\n", 1)[1].split("    steps:\n", 1)[0]
+    assert "${{ runner." not in job_env
+    assert job_env.count("${{ github.workspace }}") == 4
     run_blocks = []
     lines = workflow.splitlines()
     for index, line in enumerate(lines):

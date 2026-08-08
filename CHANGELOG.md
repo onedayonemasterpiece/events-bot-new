@@ -45,7 +45,9 @@
   Chromium pixels remain explicitly noncanonical visual evidence checked by an
   equal cross-run perceptual fingerprint. The manual-dispatch schema now gives
   every required input an explicit `type: string`, preventing GitHub from
-  rejecting the workflow before job creation; focused tests pin this contract.
+  rejecting the workflow before job creation; job-level worktree/marker paths
+  use the context-valid workspace root instead of step-only `runner.temp`, and
+  focused tests pin both contracts.
 
 - Added the disabled-by-default private Events MCP: path-scoped OAuth with
   PKCE, bounded read-only event and incident evidence tools, production smoke

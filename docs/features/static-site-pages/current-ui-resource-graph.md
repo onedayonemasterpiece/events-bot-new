@@ -159,7 +159,8 @@ snapshot allowlist before they can form a path or Git/decoder argument; no raw
 dispatch expression is interpolated into shell. Every manual-dispatch input
 declares the required GitHub Actions `type: string` schema field, so GitHub can
 validate and schedule the workflow rather than rejecting it before job
-creation. The workflow materializes the
+creation. Job-level environment paths use the allowed `github.workspace`
+context rather than the step-only `runner` context. The workflow materializes the
 exact candidate and public-root SHAs in separate detached worktrees, installs
 the candidate-pinned site dependencies and Playwright Chromium, and reads the
 bearer candidate base only from repository secret
