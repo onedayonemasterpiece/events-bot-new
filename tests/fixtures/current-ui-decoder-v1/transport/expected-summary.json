@@ -1,0 +1,27 @@
+{
+  "schema_version": "current_ui_component_decoder_v1",
+  "state_record_count": 26,
+  "specimen_plan_count": 20,
+  "state_counts": {
+    "transport.rail": 8,
+    "transport.bus": 4,
+    "transport.kaup": 14
+  },
+  "specimen_counts": {
+    "transport.rail": 8,
+    "transport.bus": 4,
+    "transport.kaup": 8
+  },
+  "qa_specimen_count": 3,
+  "source_only_experiment_count": 6,
+  "real_route_ids": [6939, 6976, 6710, 6365, 5374],
+  "pinned": {
+    "corpus_event_count": 288,
+    "rail_suggestions": 26,
+    "rail_explicit": 2,
+    "rail_forecast": 0,
+    "rail_schedule_cutoff": 24,
+    "bus_suggestions": 2,
+    "kaup_suggestions": 1
+  }
+}

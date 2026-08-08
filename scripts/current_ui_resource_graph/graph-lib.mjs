@@ -8,6 +8,8 @@ import { once } from 'node:events';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { extractAstroStateFacts, extractStateAwareFacts, inlineScriptImports } from './v1/source-state.mjs';
+import { captureComponentScopedEvidence } from './v1/evidence.mjs';
 
 export const SCHEMA = 'current_ui_resource_graph_v0';
 const MAX_SCREENSHOT_BYTES = 192 * 1024;
@@ -47,6 +49,10 @@ export const DEFAULT_IDENTITIES = Object.freeze({
     release_id: 'prelaunch-main-31263560430-1',
     actions_run_id: '31263560430',
     artifact_id: '9023507736',
+    artifact_name: 'prelaunch-root-release-31263560430',
+    artifact_digest: 'sha256:d9d6ec1e5c5e291a598dfdcef6ca90ce049196f3f3484d0d89351d04bc2bb855',
+    artifact_bytes: 6076603,
+    artifact_expires_at: '2026-09-07T15:09:03Z',
     published_at: '2026-08-08T15:09:02Z',
     runtime_url: 'https://kenigevents.ru/',
     html_sha256: '1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e',
@@ -217,6 +223,7 @@ export function hashSourceTree(root) {
 
 function nodeName(path) { return basename(path, extname(path)); }
 function componentType(rel) {
+  if (extname(rel) === '.css') return 'stylesheet';
   if (rel.includes('/pages/') && extname(rel) === '.astro') return 'page';
   if (rel.includes('/layouts/')) return 'layout';
   if (rel.includes('/components/')) return 'component';
@@ -231,8 +238,9 @@ export async function loadParsers(siteRoot) {
   const postcss = requireFromSite('postcss');
   const htmlparser2 = requireFromSite('htmlparser2');
   const esm = requireFromSite('es-module-lexer');
+  const babel = requireFromSite('@babel/parser');
   await esm.init;
-  return { astro, postcss, htmlparser2, esm };
+  return { astro, postcss, htmlparser2, esm, babel };
 }
 
 function astWalk(node, visit) {
@@ -253,7 +261,7 @@ function extractFrontmatterFacts(frontmatter, esm) {
 }
 
 export async function inventorySource(sourceRoot, parsers, { plane = 'latest_checked_kaggle_candidate' } = {}) {
-  const files = walk(sourceRoot, (path) => ['.astro', '.ts', '.js', '.mjs'].includes(extname(path)) && !/\.(?:test|spec)\.[^.]+$/u.test(path));
+  const files = walk(sourceRoot, (path) => ['.astro', '.ts', '.js', '.mjs', '.css'].includes(extname(path)) && !/\.(?:test|spec)\.[^.]+$/u.test(path));
   const records = [];
   for (const path of files) {
     const rel = relative(dirname(sourceRoot), path).split(sep).join('/');
@@ -261,12 +269,15 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
     const hash = sha256(source);
     const type = componentType(`/${rel}`);
     let imports = [], exports = [], children = [], props = [], slots = [], conditions = [], data = [], css = [], clientDirectives = [], parser = 'es_module_lexer', parserStatus = 'parsed';
+    let sourceState = { parser: '@babel/parser', parser_status: 'not_attempted' };
     if (extname(path) === '.astro') {
       try {
         const parsed = await parsers.astro.parse(source, { position: true });
         const frontmatter = parsed.ast.children.find((child) => child.type === 'frontmatter')?.value || '';
         const facts = extractFrontmatterFacts(frontmatter, parsers.esm);
         ({ imports, props, data, css } = facts);
+        imports = [...new Set([...imports, ...inlineScriptImports(source, parsers.esm)])].sort();
+        sourceState = extractStateAwareFacts(frontmatter, parsers.babel);
         astWalk(parsed.ast, (node) => {
           if (node.type === 'component') children.push({ name: node.name, line: node.position?.start?.line ?? null });
           for (const attribute of node.attributes || []) if (attribute.name?.startsWith('client:')) clientDirectives.push(`${node.name || node.type}:${attribute.name}`);
@@ -277,16 +288,31 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
           if (node.type === 'expression') conditions.push({ kind: 'template_expression', line: node.position?.start?.line ?? null });
           if (node.type === 'element' && node.name === 'style') css.push('inline:style');
         });
+        sourceState = extractAstroStateFacts(source, sourceState, parsed.ast, parsers.babel);
         parser = '@astrojs/compiler';
       } catch (error) {
         parserStatus = 'parse_failed';
         conditions = [{ kind: 'unknown', reason_hash: sha256(error.message) }];
+      }
+    } else if (extname(path) === '.css') {
+      try {
+        const root = parsers.postcss.parse(source, { from: rel });
+        const declarations = []; const atRules = []; const selectors = [];
+        root.walkDecls((decl) => declarations.push({ property: decl.prop, value_hash: sha256(decl.value), line: decl.source?.start?.line ?? null, custom_property: decl.prop.startsWith('--') }));
+        root.walkAtRules((rule) => atRules.push({ name: rule.name, params_hash: sha256(rule.params || ''), line: rule.source?.start?.line ?? null }));
+        root.walkRules((rule) => selectors.push({ selector_hash: sha256(rule.selector || ''), line: rule.source?.start?.line ?? null, pseudo_state: /:(?:hover|focus|focus-visible|active|disabled|checked|open|has)\b/u.test(rule.selector || '') }));
+        imports = root.nodes.filter((node) => node.type === 'atrule' && node.name === 'import').map((node) => node.params.replace(/^['"]|['"].*$/gu, '')).filter(Boolean).sort();
+        sourceState = { parser: 'postcss', parser_status: declarations.length || atRules.length || selectors.length ? 'parsed' : 'empty', declarations, at_rules: atRules, selectors };
+        parser = 'postcss';
+      } catch (error) {
+        parserStatus = 'parse_failed'; sourceState = { parser: 'postcss', parser_status: 'parse_failed', reason_hash: sha256(error.message) };
       }
     } else {
       try {
         const parsedModule = parsers.esm.parse(source);
         imports = parsedModule[0].map((entry) => source.slice(entry.s, entry.e)).filter(Boolean).sort();
         exports = parsedModule[1].map((entry) => entry.n).filter(Boolean).sort();
+        sourceState = extractStateAwareFacts(source, parsers.babel);
       }
       catch { parserStatus = 'parse_failed'; }
       data = imports.filter((item) => /(?:data|api|client|server|supabase|json)/iu.test(item));
@@ -305,8 +331,9 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
       conditions, data_dependencies: [...new Set(data)].sort(), css_dependencies: [...new Set(css)].sort(),
       client_dependencies: [...new Set([...imports.filter((item) => /(?:client|browser|supabase)/iu.test(item)), ...clientDirectives])].sort(),
       content_sha256: hash, status: parserStatus === 'parsed' ? 'observed' : 'unknown',
-      confidence: parserStatus === 'parsed' ? (extname(path) === '.astro' ? 'high' : 'medium') : 'low',
+      confidence: parserStatus === 'parsed' ? (['.astro', '.css'].includes(extname(path)) ? 'high' : 'medium') : 'low',
       evidence: { parser, parser_status: parserStatus, source_line_count: source.split('\n').length },
+      source_state: sourceState,
     });
   }
   for (const consumer of records) {
@@ -315,7 +342,7 @@ export async function inventorySource(sourceRoot, parsers, { plane = 'latest_che
       const base = resolve(dirname(join(dirname(sourceRoot), consumer.path)), imported);
       const target = records.find((candidate) => {
         const absolute = join(dirname(sourceRoot), candidate.path);
-        return absolute === base || absolute === `${base}.astro` || absolute === `${base}.ts` || absolute === `${base}.js` || absolute === join(base, 'index.astro');
+        return absolute === base || absolute === `${base}.astro` || absolute === `${base}.ts` || absolute === `${base}.js` || absolute === `${base}.css` || absolute === join(base, 'index.astro');
       });
       if (target) target.consumers.push(consumer.id);
     }
@@ -525,6 +552,7 @@ export function structuralScan(html, htmlparser2) {
   const tags = new Map(); const regions = new Map(); const features = runtimeFeatures(); const tokens = [];
   const surfaceMarkers = new Set();
   const eventResourceMarkers = new Map();
+  const componentStateAttributes = new Map();
   const desktopFamilies = new Map(); const actionFamilies = new Map(); const actionLayouts = new Map(); const presentationReasons = new Map(); const presentationFallbacks = new Map();
   const countValue = (target, value, { maxValues = 32, maxLength = 96 } = {}) => {
     if (typeof value !== 'string' || !value || value.length > maxLength) return;
@@ -539,6 +567,16 @@ export function structuralScan(html, htmlparser2) {
     'data-companion-preview-item': 'editorial_companion_photo_preview_small',
     'data-desktop-action-panel': 'desktop_action_panel',
   });
+  const exactStateAttributes = Object.freeze([
+    'data-event-transport-schedule', 'data-event-city', 'data-outbound-count', 'data-return-count', 'data-event-end-basis',
+    'data-return-schedule-cutoff', 'data-last-same-day-return',
+    'data-event-bus-schedule', 'data-bus-route', 'data-bus-outbound', 'data-bus-return',
+    'data-kaup-transport', 'data-kaup-compact', 'data-kaup-official-transfer', 'data-kaup-public-bus', 'data-transport-treatment',
+    'data-medallion-layout', 'data-main-medallion-slug', 'data-top-slot-enabled', 'data-medallion-slot',
+    'data-medallion-role', 'data-medallion-category', 'data-identity-resolution', 'data-identity-conflict',
+    'data-focus-egg-artifact', 'data-egg-state', 'data-artifact-collection', 'data-artifact-slot',
+    'data-artifact-state', 'data-artifact-collection-unavailable', 'data-amber-artifact', 'aria-pressed',
+  ]);
   let elementCount = 0, maxDepth = 0, depth = 0;
   const parser = new htmlparser2.Parser({
     onopentag(name, attributes) {
@@ -556,12 +594,18 @@ export function structuralScan(html, htmlparser2) {
       for (const [attribute, resource] of Object.entries(resourceAttributes)) {
         if (Object.hasOwn(attributes, attribute)) countValue(eventResourceMarkers, resource);
       }
+      for (const attribute of exactStateAttributes) if (Object.hasOwn(attributes, attribute)) {
+        if (!componentStateAttributes.has(attribute)) componentStateAttributes.set(attribute, new Map());
+        const raw = attributes[attribute];
+        const value = raw === '' ? 'present' : raw;
+        if (/^(?:present|true|false|explicit|forecast|schedule_cutoff|inline|desktop-slots|top|main|secondary|organizer|source|program|pushkin|badge|pill|resolved|conflicting_source_identity|ambiguous_venue_identity|locked|eligible|found|unavailable|empty|tail|departure_board_v1|route_strips_v1|next_departure_queue_v1|[0-9]{1,3}|[a-z0-9_-]{1,48})$/u.test(value)) countValue(componentStateAttributes.get(attribute), value, { maxValues: 24, maxLength: 64 });
+      }
       if (/^(header|main|nav|aside|footer|section)$/u.test(name)) regions.set(name, (regions.get(name) || 0) + 1);
       if (/^(a|button|input|select|textarea)$/u.test(name) || /button|cta|action/u.test(marker)) features.actionLike += 1;
       if (/event|sobyt/u.test(marker)) features.eventLike += 1;
       if (/^(ul|ol)$/u.test(name) || /list|listing|feed/u.test(marker)) features.listLike += 1;
       if (/^(img|picture|video|figure)$/u.test(name) || /media|gallery|poster|hero/u.test(marker)) features.mediaLike += 1;
-      if (/medallion/u.test(marker)) features.medallionLike += 1;
+      if (/medallion|event-token-layout|data-medallion-layout/u.test(marker)) features.medallionLike += 1;
       if (name === 'time' || /date|calendar|occurrence/u.test(marker)) features.timeLike += 1;
       if (/transport|bus|rail/u.test(marker)) features.transportLike += 1;
       if (name === 'nav' || /navigation|header|footer/u.test(marker)) features.navLike += 1;
@@ -587,6 +631,7 @@ export function structuralScan(html, htmlparser2) {
       presentation_fallbacks: Object.fromEntries([...presentationFallbacks].sort(([a], [b]) => a.localeCompare(b))),
       markers: Object.fromEntries([...eventResourceMarkers].sort(([a], [b]) => a.localeCompare(b))),
     },
+    component_states: Object.fromEntries([...componentStateAttributes].sort(([a], [b]) => a.localeCompare(b)).map(([attribute, values]) => [attribute, Object.fromEntries([...values].sort(([a], [b]) => a.localeCompare(b)))])),
   };
 }
 
@@ -725,6 +770,7 @@ function runtimeRecord(route, scan, bytes, contentHash, { plane, relativePath })
     structure_hash: scan.structure_hash, element_count: scan.element_count, max_depth: scan.max_depth,
     major_regions: scan.major_regions, tag_counts: scan.tag_counts, feature_counts: scan.features,
     surface_hypotheses: hypotheses, surface_markers: scan.surface_markers, event_resources: scan.event_resources,
+    component_states: scan.component_states,
     evidence: ['exact_manifest_file', 'streaming_structural_parse'],
   };
 }
@@ -775,7 +821,9 @@ function appendCssDeclarations(result, root, { sourceId, sourcePath, plane, bloc
     result.push({
       id: `style.${plane}.${sha256(`${sourcePath}\0${blockIndex}\0${declarationIndex}\0${decl.source?.start?.line}\0${decl.source?.start?.column}\0${decl.prop}`).slice(0, 16)}`,
       plane, source_id: sourceId, source_path: sourcePath, kind: 'source_literal_usage', property: decl.prop,
-      value: decl.value, selector_sha256: selector ? sha256(selector) : null,
+      value: decl.value, selector: selector.slice(0, 512), selector_sha256: selector ? sha256(selector) : null,
+      pseudo_states: [...selector.matchAll(/:(hover|focus|focus-visible|active|disabled|checked|open|has)\b/gu)].map((match) => match[1]),
+      custom_property_dependencies: [...new Set([...decl.value.matchAll(/var\(\s*(--[A-Za-z0-9_-]+)/gu)].map((match) => match[1]))].sort(),
       semantic_cohorts: semanticCohorts(selector, decl.prop), at_rule_context: contexts.reverse(), style_block_index: blockIndex,
       style_block_start_line: blockStartLine, line_in_style_block: decl.source?.start?.line ?? null,
       source_divergence: 'literal_usage_only', computed_inconsistency: 'unknown', confidence: 'high', evidence: ['postcss_ast'], recommendation: 'unresolved',
@@ -806,7 +854,8 @@ export async function styleObservations(sourceRoots, sourceRecords, parsers) {
       const rel = relative(dirname(sourceRoot), path).split(sep).join('/');
       let root;
       try { root = parsers.postcss.parse(readFileSync(path, 'utf8'), { from: rel }); } catch { continue; }
-      appendCssDeclarations(result, root, { sourceId: null, sourcePath: rel, plane, blockIndex: 0, blockStartLine: 1 });
+      const stylesheet = sourceRecords.find((record) => record.plane === plane && record.path === rel && record.type === 'stylesheet');
+      appendCssDeclarations(result, root, { sourceId: stylesheet?.id || null, sourcePath: rel, plane, blockIndex: 0, blockStartLine: 1 });
     }
   }
   const cohorts = new Map();
@@ -1123,7 +1172,7 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
   const { selected, uncaptured } = selectScreenshotPages(byFamily, maxPages);
   const screenshotDir = join(outputDir, 'screenshots'); mkdirSync(screenshotDir, { recursive: true });
   const browser = await chromium.launch({ headless: true });
-  const viewportEvidence = []; const screenshots = [];
+  const viewportEvidence = []; const screenshots = []; const componentEvidence = [];
   try {
     for (const selectedPage of selected) {
       for (const viewport of [{ width: 390, height: 844 }, { width: 1728, height: 900 }]) {
@@ -1231,7 +1280,6 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         }
         if (!stableScreenshot) throw new Error(`Browser pixels did not stabilize: ${selectedPage.observation.route_hash.slice(0, 12)}`);
         writeFileSync(path, stableScreenshot);
-        await page.close();
         const size = statSync(path).size;
         if (size > MAX_SCREENSHOT_BYTES) throw new Error(`Screenshot exceeds deterministic byte reservation: ${filename}`);
         budget.claim(MAX_SCREENSHOT_BYTES, `screenshots/${filename}`);
@@ -1241,12 +1289,17 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         const perceptualDhash = BigInt(`0b${dhashBits}`).toString(16).padStart(16, '0');
         const relativePath = `screenshots/${filename}`;
         screenshots.push({ id: `screenshot.${sha256(`${selectedPage.observation.route_hash}\0${viewport.width}`).slice(0, 16)}`, page_family: selectedPage.pageFamily, selection: selectedPage.selection, route_hash: selectedPage.observation.route_hash, screenshot_path: relativePath, viewport, perceptual_dhash_64: perceptualDhash, pixel_stability: 'two_consecutive_exact_buffers', raw_raster_role: 'noncanonical_visual_evidence', source: 'exact_candidate_browser' });
+        componentEvidence.push(...await captureComponentScopedEvidence({
+          page, pageFamily: selectedPage.pageFamily, routeHash: selectedPage.observation.route_hash,
+          viewport, outputDir, budget, plane: 'latest_checked_kaggle_candidate',
+        }));
         const uiFamilies = families.filter((item) => item.runtime_observations.includes(selectedPage.observation.id)).map((item) => item.id).sort();
         viewportEvidence.push({ page_family: selectedPage.pageFamily, ui_families: uiFamilies, route_hash: selectedPage.observation.route_hash, viewport, structure: computed.structure_hash, computed, screenshot_path: relativePath, selection: selectedPage.selection });
+        await page.close();
       }
     }
   } finally { await browser.close(); }
-  return { screenshots: [...screenshots, ...uncaptured], viewportEvidence };
+  return { screenshots: [...screenshots, ...uncaptured], viewportEvidence, componentEvidence };
 }
 
 export function coverageRows(sourceRecords, runtimeObservations, pageFamilies) {

@@ -1,4 +1,4 @@
-# Current UI Resource Graph v0
+# Current UI Decoder v1 (with Resource Graph v0 compatibility)
 
 ## Purpose and boundary
 
@@ -7,9 +7,18 @@ machine-readable inventory of the UI that exists in the pinned Astro source and
 the exact immutable candidate artifact. It is an observation decoder, not a
 design-system generator.
 
+Version 1 retains every v0 file for existing consumers and additionally emits
+the compact handoff tree under
+`catalog/component-decoder/<snapshot-id>/`. A successful decoder process is
+not automatically a design-system handoff: `receipt.json` independently says
+`handoff_status: GO|NO_GO`, and the canonical workflow accepts only `GO` with no
+open gate. A `complete / partial / NO_GO` receipt means the evidence snapshot
+was written successfully but is not ready for defragmentation.
+
 The decoder does **not** merge, normalize or defragment implementations; create
-component contracts, tokens, variants or patterns; mutate Penpot; or change the
-Astro source/CSS/runtime. Every fragmentation and candidate-graph record keeps
+normative TO-BE component contracts, tokens, variants or patterns; mutate
+Penpot; or change the Astro source/CSS/runtime. It does create explicitly
+non-normative `candidate/as-is` evidence contracts. Every fragmentation and candidate-graph record keeps
 `decision: NOT_MERGED` and `recommendation: unresolved`.
 
 ## Two independent identity planes
@@ -42,6 +51,9 @@ The default identity is pinned and fail-closed:
    `https://kenigevents.ru/`. The separately fetched public root HTML must hash
    exactly to
    `1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e`.
+   Canonical reruns download this HTML from pinned Actions artifact
+   `9023507736`, verify both artifact ZIP and HTML hashes, and do not depend on
+   the mutable live-root response.
 
 Neither plane is inferred from the other. The workflow materializes both Git
 commits into separate detached worktrees, and the decoder inventories and maps
@@ -56,9 +68,50 @@ implementation; content drift at that path is recorded separately.
 
 The source pass uses the parser versions installed by the pinned `site`
 lockfile: `@astrojs/compiler` for Astro structure, `es-module-lexer` for module
-imports and PostCSS for declarations/at-rule context. Approximate fields carry
+imports, `@babel/parser` for bounded TypeScript/JavaScript state facts, and
+PostCSS for declarations/at-rule context. Inline Astro `<script>` imports enter
+the same dependency graph as frontmatter imports; this is required for the
+`ClubCatalogKeyboard.astro` → `clubCatalogNavigation.mjs` consumer edge.
+Approximate fields carry
 lower confidence or `unknown`; a filename/class similarity is never promoted to
 a component identity.
+
+The state-aware layer records, without retaining source text:
+
+- `Props` optionality, literal unions and destructuring defaults;
+- bounded conditional/switch/logical branches, derived state and feature flags;
+- `data-*`, `hidden`, `open`, `expanded` and `disabled` markers;
+- media crop/fallback declarations, `@media` and `@container` queries;
+- local `style` / `class:list` override sites.
+
+String literals are bounded. URL-, credential- and bearer-shaped values are
+replaced with SHA-256/length records. Parse failures carry only a reason hash
+and block the relevant state evidence gate.
+
+## Logical component classification (107/107)
+
+The canonical union contains 107 logical component paths: 106 paths shared by
+the candidate and public-root source planes plus the root-only
+`PrelaunchPage.astro`. Every path receives one closed disposition and one
+closed reachability value, with a written basis and per-plane bindings.
+
+Disposition counts are fixed for the pinned snapshot: 51 `production-ui`, 20
+`composition-layout`, 20 `lab-only`, 4 `experiment-only`, 1 `support-data`, 8
+`nonvisual`, 3 `dead-unreachable`, and 0 `needs-verification`. Reachability is
+one of `production-observed`, `production-reachable-not-observed`,
+`controlled-specimen-only`, `lab-only`, `experiment-off`, `source-only`, or
+`dead-or-unreachable`.
+
+The labels are AS-IS evidence, not target architecture. In particular:
+
+- all Focus prototype components remain `lab-only`;
+- the three timetable treatments and their experiment wrapper remain
+  `experiment-only / experiment-off`, never production variants;
+- `PopularCategoryFilter`, `WeekendTimeMatrix`, and `MobileSearchBottomNav`
+  are `dead-unreachable` in the pinned AS-IS baseline. For Mobile Search the
+  decoder also retains a mismatch against the older surface contract: the
+  exhaustive pinned consumer/runtime scan found no binding, but this is not a
+  deletion or normalization decision.
 
 Every HTML file listed by the exact candidate manifest is fetched and parsed
 one at a time. Keys must be unique, relative and traversal/control-character
@@ -73,7 +126,8 @@ than disappearing or becoming a literal route. Event Detail, Day, Weekend and
 Popular keep distinct page-family IDs; none is clustered into another.
 
 Styles distinguish PostCSS-parsed inline and standalone CSS literal usage
-(including media/at-rule context and conservative selector/property semantic
+(including source file/line, bounded selector, pseudo-state, custom-property
+dependency edges, media/at-rule context and conservative selector/property semantic
 cohorts) from computed inconsistency; a computed result that was not measured
 is `unknown`. Fragmentation evidence reports separate source-AST, exact mapped
 runtime, source-style and composition channels rather than treating a name as
@@ -192,6 +246,19 @@ raw-byte visual-comparison model.
 Manifest, HTML and browser navigation retries are bounded to three attempts;
 retry configuration itself is capped.
 
+In addition to page rasters, v1 captures a bounded component-scoped evidence
+set. Each record has an element raster, safe DOM attribute summary, geometry,
+computed typography/color/layout, CSS custom properties, accessibility and
+focus/expanded/hidden state, loaded font face/weight/status, viewport context
+and bounded matched CSSOM rule provenance. Where a compiled rule cannot be
+mapped to one source line, that limitation is explicit rather than replaced by
+a guessed override owner. It never
+contains full HTML or raw navigation/media URLs. Evidence labels distinguish
+the exact candidate, public root and controlled specimens; candidate presence
+cannot be relabelled as production observation. Component breakpoint contexts
+are explicitly registered at widths 390, 420, 540, 700, 720 and 1728; an
+uncaptured context stays a plan requirement rather than an inferred result.
+
 Required snapshot files are:
 
 - `manifest.json`, `receipt.json`, `summary.md`;
@@ -202,6 +269,63 @@ Required snapshot files are:
   `fragmentation-report.jsonl`, `candidate-component-graph.jsonl`;
 - `unresolved-questions.md`, `coverage-report.md`,
   `screenshots-index.jsonl`.
+
+The additional compact v1 handoff tree is:
+
+```text
+catalog/component-decoder/<snapshot-id>/
+├── manifest.json
+├── receipt.json
+├── summary.md
+├── artifact-index.json
+├── source-files.jsonl
+├── source-bindings.jsonl
+├── component-families.jsonl
+├── components/*.json
+├── composition-edges.jsonl
+├── consumers.jsonl
+├── route-families.jsonl
+├── page-state-signatures.jsonl
+├── specimen-plan.jsonl
+├── specimen-observations.jsonl
+├── page-verification.jsonl
+├── candidate-contracts/*.contract.json
+├── mismatches.jsonl
+├── unresolved.jsonl
+├── conformance-capsules/**
+└── penpot-materialization-candidates.json
+```
+
+Heavy page/element screenshots and component evidence stay in the Actions
+artifact and are referenced by `artifact-index.json`; the compact tree is the
+Git handoff. Candidate contracts are explicitly AS-IS and non-normative.
+`penpot-materialization-candidates.json` remains `not-materialized` in this
+phase.
+
+### Controlled specimens and human review
+
+The canonical capture run materializes a disposable Astro 6.4.8 harness from a
+reflink/copy of the exact candidate `site/src`; it never edits the pinned tree.
+The bounded registry has 19 controlled cases and 20 capture steps, plus 26
+exact real-route bindings across 49 viewport contexts. Rail, Kaup and medallions receive real
+`PreviewEvent` fixtures and render the real component definitions. The bus
+`no-groups` branch has no valid exact-data fixture and is therefore recorded as
+`source-model-only`, not fabricated through data-module replacement.
+
+Every controlled capture retains two stable PNG buffers, SHA-256 and dHash,
+bounded DOM/ARIA/computed/cascade/font/geometry evidence, focus/open/hidden
+state, media facts, console/network counts, source paths and capsule IDs. The
+workflow intentionally finishes this first stage as a partial `NO_GO` pending
+human visual review.
+
+`v1/review-materialize.mjs` is the separate deterministic second stage. It
+accepts a human review ledger only after every raster under `screenshots/` and
+`component-screenshots/` has been inspected and hash-bound. The ledger must
+cover all six capsules, every controlled observation, every raster-backed page
+verification, the Actions run/artifact/digest/expiry, and permanent-storage
+URI/version/digest. Only then may it emit the narrow verdict
+`GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION`; all component/capsule decisions remain
+`NOT_MERGED`.
 
 JSONL is stable-sorted and written incrementally. Deterministic snapshot time,
 per-file SHA-256 receipts, per-route input limits and a total output byte budget
@@ -265,6 +389,22 @@ A bounded local fixture run supplies `--runtime-root`, `--runtime-manifest`,
 This mode exists for deterministic tests only and cannot be presented as the
 current candidate graph.
 
-The only next-step wording emitted by the summary is:
+## Evidence-completion gate and STOP
 
-> Proceed to normalization workshop
+The v1 handoff remains `NO_GO` unless all 107 paths are classified, state facts
+are present, controlled specimens and component evidence are bound, candidate
+AS-IS contracts exist, at least six reconciliation capsules exist, and a
+source → specimen → representative real-page trace is complete. Missing
+evidence is listed as a blocker; it is never converted into a guessed contract.
+The deep validator recomputes compact hashes and rejects `GO` without reviewed
+specimen traces, six reviewed capsules, durable Actions metadata, permanent
+evidence provenance, and a hash-bound human review ledger.
+
+`labs-preview-special` is an intentional desktop-only lab surface excluded from
+the production baseline. Editorial Collections, Legal pages and page-end
+Hero-talk are absent AS-IS future requirements and are not synthesized.
+
+Even `GO` authorizes only the immutable evidence handoff. It does **not**
+authorize merge, split, normalization, tokenization, Penpot materialization, or
+Astro/CSS mutation. Those decisions start only in a separately approved
+defragmentation phase.

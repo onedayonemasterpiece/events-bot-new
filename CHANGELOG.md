@@ -25,6 +25,27 @@
   activation is rejected until a real authenticated byte-bound upload/storage
   path exists; generated client profiles do not request story scopes.
 
+- Added the real-component Current UI Decoder specimen and review pipeline:
+  19 bounded disposable Astro wrappers (20 interaction captures), exact
+  `PreviewEvent` transport/medallion fixtures, 26 real-route bindings across
+  49 contexts,
+  element PNG/DOM/ARIA/computed/cascade/font evidence, and a fail-closed human
+  review materializer that requires every raster, all six capsules, Actions
+  provenance and permanent-storage hashes before the narrow
+  `GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION` verdict. No runtime Astro/CSS,
+  normalization, token or Penpot output is changed.
+
+- Added the fail-closed Current UI Decoder v1 evidence layer while preserving
+  every v0 graph output: the pinned 107 logical component paths now receive
+  closed AS-IS disposition/reachability classifications with per-plane source
+  bindings, Babel-backed prop/default/union/branch/state extraction, inline
+  Astro-script import edges, bounded component-scoped browser evidence, and a
+  compact immutable `catalog/component-decoder/<snapshot-id>/` handoff tree.
+  The independent v1 receipt remains `NO_GO` until specimens, candidate AS-IS
+  contracts, six reconciliation capsules and source-to-real-page traces are
+  complete, and it explicitly forbids normalization, tokenization, Penpot and
+  Astro/CSS mutation.
+
 - Added lazy legacy generic-text Telegram and VK transports for the private
   Events MCP compatibility mode:
   a dedicated role-scoped Telethon human session handles serialized channel

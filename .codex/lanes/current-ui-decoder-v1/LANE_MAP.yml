@@ -1,0 +1,141 @@
+mode: full_fanout
+repo: /home/dev/projects/events-bot-new
+base_ref: origin/main
+base_sha: c4b0209ed72d92b162678ad2b40502d891598e12
+base_branch: main
+integration_branch: integration/current-ui-decoder-v1
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-decoder-v1-integration
+global_constraints:
+  - STOP before merge/split/normalization/tokenization
+  - no site/src, Astro, CSS, runtime UI, Penpot, token or component-package mutation
+  - keep candidate/current-root identity planes separate
+  - source-only and experiment-off never become production-observed
+  - no synthetic missing Editorial Collections, Legal or Hero-talk page-end components
+  - no full HTML or bearer URLs in artifacts
+verification_owner: root integrator plus final acceptance reviewer
+stop_conditions:
+  - source/build/runtime identity mismatch
+  - secret redaction failure
+  - unexplained component disposition
+  - specimen claimed production-observed without route or controlled evidence
+  - candidate contract presented as normative TO-BE
+requirements:
+  R01: Freeze a compact immutable AS-IS snapshot and verifiable design-system handoff.
+  R02: Classify all 107 logical component paths with disposition and reachability status.
+  R03: Add state-aware source extraction for visual-contract defaults, unions, branches, flags, state markers, style contexts and overrides.
+  R04-T: Build bounded transport state records and controlled specimens.
+  R04-M: Build bounded medallion state records and controlled specimens.
+  R04-A: Build bounded artifacts/easter-egg state records and controlled specimens.
+  R05: Capture component-scoped DOM, computed style, geometry, CSS-variable, accessibility, focus and breakpoint evidence.
+  R06: Emit candidate AS-IS contracts without TO-BE decisions.
+  R07: Emit reconciliation capsules linking source, specimen, consumer, styles, screenshots, mismatches and conclusion.
+  R08: Classify known exceptions, improve evidence provenance, emit Go/No-Go and preserve the normalization STOP.
+lanes:
+  - id: decoder_core
+    role: worker
+    requirement_ids: [R01, R02, R03, R05, R08]
+    target: Decoder schema, classification, source state extraction, component evidence and compact snapshot outputs.
+    depends_on: [decoder_mapper, classification_mapper, handoff_mapper]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-decoder-v1/core
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-decoder-v1-core
+    writable_files:
+      - scripts/current_ui_resource_graph/decode.mjs
+      - scripts/current_ui_resource_graph/graph-lib.mjs
+      - scripts/current_ui_resource_graph/v1/**
+      - tests/test_current_ui_resource_graph.py
+      - .github/workflows/current-ui-resource-graph.yml
+      - docs/features/static-site-pages/current-ui-resource-graph.md
+      - CHANGELOG.md
+      - .codex/lanes/current-ui-decoder-v1-core/RESULTS.md
+    forbidden_files: [site/src/**, site/public/**, '**/*.astro', '**/*.css']
+    expected_output: committed decoder v1 core and deterministic tests
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: transport
+    role: worker
+    requirement_ids: [R04-T]
+    target: Transport state model, specimen plan/fixtures and candidate evidence records.
+    depends_on: [transport_mapper, decoder_core]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-decoder-v1/transport
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-decoder-v1-transport
+    writable_files:
+      - scripts/current_ui_resource_graph/v1/transport.mjs
+      - tests/fixtures/current-ui-decoder-v1/transport/**
+      - tests/test_current_ui_decoder_v1_transport.py
+      - .codex/lanes/current-ui-decoder-v1-transport/RESULTS.md
+    forbidden_files: [site/src/**, site/public/**, '**/*.astro', '**/*.css']
+    expected_output: committed bounded transport decoder lane
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: medallions
+    role: worker
+    requirement_ids: [R04-M]
+    target: Medallion state model, specimen plan/fixtures and candidate evidence records.
+    depends_on: [medallion_mapper, decoder_core]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-decoder-v1/medallions
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-decoder-v1-medallions
+    writable_files:
+      - scripts/current_ui_resource_graph/v1/medallions.mjs
+      - tests/fixtures/current-ui-decoder-v1/medallions/**
+      - tests/test_current_ui_decoder_v1_medallions.py
+      - .codex/lanes/current-ui-decoder-v1-medallions/RESULTS.md
+    forbidden_files: [site/src/**, site/public/**, '**/*.astro', '**/*.css']
+    expected_output: committed bounded medallion decoder lane
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: artifacts
+    role: worker
+    requirement_ids: [R04-A]
+    target: Artifact/easter-egg state model, specimen plan/fixtures and candidate evidence records.
+    depends_on: [artifacts_mapper, decoder_core]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-decoder-v1/artifacts
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-decoder-v1-artifacts
+    writable_files:
+      - scripts/current_ui_resource_graph/v1/artifacts.mjs
+      - tests/fixtures/current-ui-decoder-v1/artifacts/**
+      - tests/test_current_ui_decoder_v1_artifacts.py
+      - .codex/lanes/current-ui-decoder-v1-artifacts/RESULTS.md
+    forbidden_files: [site/src/**, site/public/**, '**/*.astro', '**/*.css']
+    expected_output: committed bounded artifacts decoder lane
+    verification_scope: targeted
+    effort: high
+    status: planned
+  - id: contracts_capsules
+    role: worker
+    requirement_ids: [R06, R07]
+    target: Candidate AS-IS contracts, mismatch register, unresolved register and six reconciliation capsules.
+    depends_on: [decoder_core, transport, medallions, artifacts, handoff_mapper]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-decoder-v1/contracts
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-decoder-v1-contracts
+    writable_files:
+      - scripts/current_ui_resource_graph/v1/contracts.mjs
+      - scripts/current_ui_resource_graph/v1/capsules.mjs
+      - tests/test_current_ui_decoder_v1_contracts.py
+      - .codex/lanes/current-ui-decoder-v1-contracts/RESULTS.md
+    forbidden_files: [site/src/**, site/public/**, '**/*.astro', '**/*.css']
+    expected_output: committed candidate contracts/capsules lane
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: final_review
+    role: reviewer
+    requirement_ids: []
+    target: Requirement-by-requirement acceptance and no-normalization audit.
+    depends_on: [decoder_core, transport, medallions, artifacts, contracts_capsules]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['**']
+    expected_output: read-only acceptance matrix
+    verification_scope: inspection_only
+    effort: high
+    status: planned

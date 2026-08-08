@@ -1,0 +1,55 @@
+{
+  "schema_version": "current_ui_component_decoder_v1_artifacts",
+  "system_ids": [
+    "artifact-system.focus-egg-prototype-v1",
+    "artifact-system.amber-research-collectible-v1"
+  ],
+  "state_counts": {
+    "focus": 4,
+    "amber_rail": 4,
+    "amber_collection": 3
+  },
+  "focus_catalog_counts": {
+    "found": 2,
+    "eligible_state": 4,
+    "locked": 5,
+    "unavailable": 1,
+    "progress_found": 2,
+    "progress_denominator": 11
+  },
+  "boundary_probe_widths": [
+    419,
+    421,
+    429,
+    431,
+    679,
+    681,
+    719,
+    721,
+    759,
+    761,
+    849,
+    851,
+    919,
+    921
+  ],
+  "required_mismatch_ids": [
+    "mismatch.artifacts.focus-saved-transition-glyph",
+    "mismatch.artifacts.focus-catalog-mark",
+    "mismatch.artifacts.focus-unavailable-found-count",
+    "mismatch.artifacts.focus-no-storage-listener",
+    "mismatch.artifacts.amber-false-transport-family",
+    "mismatch.artifacts.amber-page-evidence-state-gap"
+  ],
+  "transition_ids": [
+    "artifact-transition.focus.saved-threshold",
+    "artifact-transition.focus.eligible-to-found",
+    "artifact-transition.focus.catalog-storage-override",
+    "artifact-transition.amber.idle-to-awake",
+    "artifact-transition.amber.awake-to-collected",
+    "artifact-transition.amber.collected-to-detail",
+    "artifact-transition.amber.collection-empty-to-found",
+    "artifact-transition.amber.found-to-dialog-open"
+  ],
+  "maximum_specimen_count": 16
+}

@@ -1,4 +1,4 @@
-name: Current UI Resource Graph v0
+name: Current UI Decoder v1 evidence completion
 
 on:
   workflow_dispatch:
@@ -101,6 +101,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   decode:
@@ -113,6 +114,7 @@ jobs:
       CURRENT_UI_GRAPH_CANDIDATE_BUILD_ID: ${{ inputs.candidate_build_id }}
       CURRENT_UI_GRAPH_CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
       CURRENT_UI_GRAPH_SNAPSHOT_ID: ${{ inputs.snapshot_id }}
+      CURRENT_UI_GRAPH_V1_SNAPSHOT_ID: decoder-v1-snapshot-20260808T124842-4786ac53bc
       CURRENT_UI_GRAPH_SNAPSHOT_TIME: ${{ inputs.snapshot_time }}
       CURRENT_UI_GRAPH_CANDIDATE_MANIFEST_SHA256: ${{ inputs.candidate_manifest_sha256 }}
       CURRENT_UI_GRAPH_CANDIDATE_GENERATED_AT: ${{ inputs.candidate_generated_at }}
@@ -129,6 +131,7 @@ jobs:
       CURRENT_UI_GRAPH_ROOT_RUNTIME_URL: ${{ inputs.root_runtime_url }}
       CURRENT_UI_GRAPH_ROOT_HTML_SHA256: ${{ inputs.root_html_sha256 }}
       CURRENT_UI_GRAPH_CANDIDATE_BASE_URL: ${{ secrets.CURRENT_UI_GRAPH_CANDIDATE_BASE_URL }}
+      GH_TOKEN: ${{ github.token }}
       GRAPH_OUTPUT: artifacts/current-ui-resource-graph/dispatch-rejected
       CANDIDATE_WORKTREE: ${{ github.workspace }}/../current-ui-graph-candidate-source
       ROOT_WORKTREE: ${{ github.workspace }}/../current-ui-graph-public-root-source
@@ -202,6 +205,18 @@ jobs:
           npm ci --ignore-scripts
           npx playwright install --with-deps chromium
 
+      - name: Materialize immutable public-root observation from pinned artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          root_zip="$RUNNER_TEMP/prelaunch-root-$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID.zip"
+          root_html="$RUNNER_TEMP/prelaunch-root-$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID.html"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID/zip" > "$root_zip"
+          printf '%s  %s\n' d9d6ec1e5c5e291a598dfdcef6ca90ce049196f3f3484d0d89351d04bc2bb855 "$root_zip" | sha256sum --check --strict
+          unzip -p "$root_zip" live-root.html > "$root_html"
+          printf '%s  %s\n' "$CURRENT_UI_GRAPH_ROOT_HTML_SHA256" "$root_html" | sha256sum --check --strict
+          printf 'CURRENT_UI_GRAPH_ROOT_RUNTIME_FILE=%s\n' "$root_html" >> "$GITHUB_ENV"
+
       - name: Decode exact current resource graph
         id: decode
         shell: bash
@@ -217,6 +232,7 @@ jobs:
             --candidate-run-id "$CURRENT_UI_GRAPH_CANDIDATE_RUN_ID" \
             --candidate-snapshot-id "$CURRENT_UI_GRAPH_SNAPSHOT_ID" \
             --snapshot-id "$CURRENT_UI_GRAPH_SNAPSHOT_ID" \
+            --v1-snapshot-id "$CURRENT_UI_GRAPH_V1_SNAPSHOT_ID" \
             --snapshot-time "$CURRENT_UI_GRAPH_SNAPSHOT_TIME" \
             --candidate-manifest-sha256 "$CURRENT_UI_GRAPH_CANDIDATE_MANIFEST_SHA256" \
             --candidate-generated-at "$CURRENT_UI_GRAPH_CANDIDATE_GENERATED_AT" \
@@ -231,11 +247,15 @@ jobs:
             --root-artifact-id "$CURRENT_UI_GRAPH_ROOT_ARTIFACT_ID" \
             --root-published-at "$CURRENT_UI_GRAPH_ROOT_PUBLISHED_AT" \
             --root-runtime-url "$CURRENT_UI_GRAPH_ROOT_RUNTIME_URL" \
+            --root-runtime-file "$CURRENT_UI_GRAPH_ROOT_RUNTIME_FILE" \
             --root-html-sha256 "$CURRENT_UI_GRAPH_ROOT_HTML_SHA256" \
             --candidate-base-url-env CURRENT_UI_GRAPH_CANDIDATE_BASE_URL \
             --browser-observations true \
             --browser-max-pages 23 \
-            --output-byte-budget 94371840 \
+            --specimen-observations true \
+            --specimen-harness-root "$RUNNER_TEMP/current-ui-decoder-specimens" \
+            --specimen-node-modules "$CANDIDATE_WORKTREE/site/node_modules" \
+            --output-byte-budget 134217728 \
             --verify-production-identity true \
             --output "$GRAPH_OUTPUT"
 
@@ -247,6 +267,29 @@ jobs:
           for file in "${required[@]}"; do test -s "$GRAPH_OUTPUT/$file"; done
           for file in "$GRAPH_OUTPUT"/*.jsonl; do test -s "$file"; jq -c . "$file" >/dev/null; done
           jq -e '.status == "complete"' "$GRAPH_OUTPUT/receipt.json" >/dev/null
+          v1_root="$GRAPH_OUTPUT/catalog/component-decoder/$CURRENT_UI_GRAPH_V1_SNAPSHOT_ID"
+          v1_required=(manifest.json receipt.json summary.md artifact-index.json source-files.jsonl source-bindings.jsonl component-families.jsonl composition-edges.jsonl consumers.jsonl route-families.jsonl page-state-signatures.jsonl specimen-plan.jsonl specimen-observations.jsonl page-verification.jsonl mismatches.jsonl unresolved.jsonl penpot-materialization-candidates.json)
+          for file in "${v1_required[@]}"; do test -e "$v1_root/$file"; done
+          test "$(find "$v1_root/components" -maxdepth 1 -type f -name 'component.*.json' | wc -l)" -eq 107
+          test "$(wc -l < "$v1_root/specimen-observations.jsonl")" -eq 20
+          test "$(find "$GRAPH_OUTPUT/component-screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)" -ge 20
+          jq -e -s 'length == 20 and all(.[]; .evidence_status == "captured-not-reviewed" and .review_status == "pending-human-visual-review" and .production_state_claimed == false and .screenshot.exact_stable == true and .screenshot.perceptually_stable == true)' "$v1_root/specimen-observations.jsonl" >/dev/null
+          jq -e -s 'map(select(.route_binding_id != null) | .route_binding_id) | unique | length == 26' "$v1_root/page-verification.jsonl" >/dev/null
+          jq -e '.status == "complete" and .evidence_completion == "partial" and .handoff_status == "NO_GO" and (.blockers | index("capsule_human_visual_review")) != null' "$v1_root/receipt.json" >/dev/null
+          jq -e '
+            .schema_version == "current_ui_component_decoder_v1"
+            and .classification.total == 107
+            and .go_no_go.status == "NO_GO"
+            and (.go_no_go.blockers | index("capsule_human_visual_review")) != null
+            and (.constraints.as_is_only == true)
+            and (.constraints.candidate_contracts_are_not_normative == true)
+            and (.constraints.merge == false)
+            and (.constraints.split == false)
+            and (.constraints.normalization == false)
+            and (.constraints.tokenization == false)
+            and (.constraints.penpot_mutation == false)
+            and (.constraints.astro_css_mutation == false)
+          ' "$v1_root/manifest.json" >/dev/null
           jq -e '
             .identity_invariant == "candidate_is_not_production_root"
             and (.constraints.automatic_merge == false)
@@ -259,7 +302,7 @@ jobs:
             and (.runtime_manifest.production_tree_sha256 == "47df3798686dfbdde43589ba6a6498effd82f6fd091de6883a4899b7b4e57769")
             and (.runtime_planes.current_root_prelaunch.verification == "exact_sha256_match")
             and (.runtime_planes.current_root_prelaunch.html_sha256 == "1c31504d10d9ec66c7fa84ad52c94e6019a741f0ee01826f219578963e0ea21e")
-            and (.output_byte_budget == 94371840)
+            and (.output_byte_budget == 134217728)
             and (.output_bytes_before_manifest < .output_byte_budget)
           ' "$GRAPH_OUTPUT/manifest.json" >/dev/null
           if jq -e 'select(.decision != "NOT_MERGED" or .recommendation != "unresolved")' "$GRAPH_OUTPUT/fragmentation-report.jsonl" >/dev/null; then exit 1; fi
@@ -276,7 +319,15 @@ jobs:
             and (map(select(.id == "event-format.media.editorial-large-poster-companion" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
             and (map(select(.id == "event-format.media.editorial-small-companion-previews" and .status == "observed" and (.screenshot_evidence | length) >= 2)) | length) == 1
           ' "$GRAPH_OUTPUT/event-presentation-formats.jsonl" >/dev/null
-          grep -Fx 'Proceed to normalization workshop' "$GRAPH_OUTPUT/summary.md" >/dev/null
+          test "$(find "$v1_root/conformance-capsules" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 6
+          for capsule in "$v1_root"/conformance-capsules/*; do
+            for file in capsule.json source-facts.jsonl candidate-contract-ref.json specimen-observation-refs.jsonl real-page-verification-refs.jsonl state-token-dependency-map.json override-findings.jsonl mismatch-refs.jsonl unresolved-refs.jsonl evidence-index.json REVIEW.md; do
+              test -e "$capsule/$file"
+            done
+          done
+          node scripts/current_ui_resource_graph/v1/validate-snapshot.mjs "$v1_root"
+          grep -F 'does not authorize merge, split, normalization, tokenization, Penpot mutation, or Astro/CSS changes' "$v1_root/summary.md" >/dev/null
+          ! grep -R -F 'Proceed to normalization workshop' "$v1_root"
           ! grep -R -F "$CURRENT_UI_GRAPH_CANDIDATE_BASE_URL" "$GRAPH_OUTPUT"
           touch "$GRAPH_VALIDATION_MARKER"
 
@@ -313,4 +364,4 @@ jobs:
           name: current-ui-resource-graph-snapshot-20260808T124842-4786ac53bc
           path: artifacts/current-ui-resource-graph/
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
