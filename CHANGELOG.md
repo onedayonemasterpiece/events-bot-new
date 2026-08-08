@@ -68,6 +68,13 @@
 
 ### Fixed
 
+- Fixed iOS Search failing after successful auth and vector results when Mobile
+  Safari/XCUITest rejected `hideKeyboard` with its exact unsupported-command
+  response. The shared mobile helper now matches OTP's best-effort iOS boundary
+  for only that response; all other driver errors remain fatal and real scroll
+  delta/final-card assertions are still mandatory. Search mobile evidence now
+  records precise input/submit/terminal/keyboard-dismiss/scroll lifecycle stages.
+
 - Reused the accepted OTP pre-side-effect restart boundary for iOS Search:
   a timed-out Appium session creation may get exactly one fresh WebDriver
   attempt only when sanitized evidence proves the auth callback and Search

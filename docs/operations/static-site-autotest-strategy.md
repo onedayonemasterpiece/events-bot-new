@@ -839,7 +839,11 @@ WebView и измеряется реальный `scrollY`. Нативный sho
 `mobile: scrollGesture` не применяется к Chrome page content: он предназначен
 для нативных scrollable controls и может успешно ответить без движения DOM.
 Перед scroll baseline общий helper закрывает открытую IME, чтобы finger path не
-попал в клавиатуру вместо browser viewport.
+попал в клавиатуру вместо browser viewport. Mobile Safari/XCUITest иногда
+возвращает exact `Did not know how to dismiss the keyboard` уже после Return;
+только iOS допускает этот конкретный unsupported response как best-effort,
+тогда как положительный DOM `scrollY` и видимость финальной карточки остаются
+обязательным доказательством. Остальные driver errors не подавляются.
 При отказе публикуется только allowlisted numeric/boolean receipt: native
 viewport, start/end/duration, число жестов, `scrollY` delta и видимость финальной
 карточки; hierarchy, screenshot, URL и текст страницы в него не входят.

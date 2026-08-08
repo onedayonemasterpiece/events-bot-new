@@ -5,7 +5,8 @@ import { parse } from 'yaml';
 
 import { extractDriverNetworkEvents } from '../../e2e/focus-email/adapters/appium-ui.mjs';
 import { buildAppiumCapabilities, classifyActiveIosApp, inspectSafariNativeUiProtocol,
-  dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard, performNativeTouchSwipe,
+  dismissNativeKeyboard, focusIosSafariWebInput, isUnsupportedIosKeyboardDismissError,
+  observeNativeKeyboard, performNativeTouchSwipe,
   prepareIosSafariWebContext, summarizeKnownSafariNativeSource } from '../../e2e/mobile-web/appium-browser.mjs';
 
 test('Appium capability builder pins real mobile browsers and iOS keyboard ownership', () => {
@@ -151,6 +152,35 @@ test('shared keyboard dismissal checks and hides the IME only in native context'
   assert.deepEqual(calls.map((item) => item[0]), ['context', 'shown', 'hide', 'context']);
 });
 
+test('shared keyboard dismissal may tolerate XCUITest Safari unsupported command only when explicit', async () => {
+  const calls = [];
+  let context = 'WEBVIEW_safari';
+  const driver = {
+    getContext: async () => context,
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_safari'],
+    switchContext: async (next) => { context = next; calls.push(['context', next]); },
+    isKeyboardShown: async () => true,
+    hideKeyboard: async () => { calls.push(['hide']); throw new Error('Did not know how to dismiss the keyboard'); },
+  };
+  await assert.rejects(() => dismissNativeKeyboard(driver), /Did not know how/u);
+  assert.equal(context, 'WEBVIEW_safari');
+  assert.equal(await dismissNativeKeyboard(driver, { allowUnsupported: true }), true);
+  assert.equal(context, 'WEBVIEW_safari');
+  assert.equal(calls.filter((item) => item[0] === 'hide').length, 2);
+  for (const message of [
+    'session corrupted: Did not know how to dismiss the keyboard',
+    'Did not know how to dismiss the keyboard; transport closed',
+    'did not know how to dismiss the keyboard',
+  ]) {
+    assert.equal(isUnsupportedIosKeyboardDismissError(new Error(message)), false);
+  }
+  assert.equal(isUnsupportedIosKeyboardDismissError(new Error('Did not know how to dismiss the keyboard')), true);
+  const description = 'Did not know how to dismiss the keyboard. Try to dismiss it in the way supported by your application under test.';
+  assert.equal(isUnsupportedIosKeyboardDismissError(new Error(
+    `WebDriverError: Error Domain=com.facebook.WebDriverAgent Code=1 "${description}" UserInfo={NSLocalizedDescription=${description}} when running "appium/device/hide_keyboard" with method "POST"`,
+  )), true);
+});
+
 test('adapter confines diagnostic native source capture before candidate navigation and sensitive input', async () => {
   const source = await readFile(new URL('../../e2e/focus-email/adapters/appium-ui.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /input\.value\s*=\s*value|osascript|Cmd-K|Toggle Software Keyboard/u);
@@ -161,6 +191,8 @@ test('adapter confines diagnostic native source capture before candidate navigat
   assert.ok(openInvite.indexOf('ensureSafariSystemUiStable()') < openInvite.indexOf('driver.url(target.href)'));
   const shared = await readFile(new URL('../../e2e/mobile-web/appium-browser.mjs', import.meta.url), 'utf8');
   assert.ok(shared.indexOf('stabilizeSafariSystemUi') < shared.indexOf('driver.switchContext(selected)'));
+  assert.match(source, /dismissNativeKeyboard/u);
+  assert.doesNotMatch(source, /driver\.hideKeyboard\(\)\.catch/u);
 });
 
 test('transient native source reduces to known element/container counters and owner enum', () => {
