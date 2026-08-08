@@ -87,6 +87,12 @@ Open. Current evidence supports multiple contributing roots:
 5. Static release barrier проверял только event subset из request payload до
    создания immutable snapshot. Unrelated full-catalog drift поэтому проходил
    precheck и обнаруживался лишь после дорогого remote Astro build.
+6. Первый unattended GitHub Search canary 2026-08-08 прошёл GitHub OIDC и
+   atomic issuance claim, но broker вернул `503`: он вызывал raw GoTrue Admin
+   REST с supabase-js-shaped `options.redirectTo` и ожидал SDK wrapper
+   `properties.*`. Реальный endpoint вернул `200` с плоскими `email_otp` и
+   `action_link`, поэтому успешная no-mail выдача ошибочно трактовалась как
+   invalid issuer response.
 
 ## Contributing Factors
 
@@ -149,6 +155,10 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-08 release hardening: Search receipt теперь snapshot-scoped,
   hash-receipted и сверяется с exact full exported catalog до remote launch;
   replacement mutable receipt после precheck не влияет на handoff.
+- 2026-08-08 auth broker recovery: raw GoTrue request использует
+  `redirect_to`, плоский ответ проверяется напрямую, а SDK-wrapped shape остаётся
+  совместимым fallback. Regression test фиксирует точные request fields и не
+  допускает возврат к `options.redirectTo` на raw endpoint.
 
 ## Follow-up Actions
 

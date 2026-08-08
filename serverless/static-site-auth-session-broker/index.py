@@ -20,7 +20,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 GITHUB_ISSUER = "https://token.actions.githubusercontent.com"
 GITHUB_JWKS_URL = f"{GITHUB_ISSUER}/.well-known/jwks"
@@ -358,20 +358,28 @@ def process(
         _audit(audit_sink, policy, outcome="limit_rejected", claims=claims, persona=persona, redirect=redirect)
         raise BrokerError("issuance_limit_reached", status=409)
 
+    # This calls the raw GoTrue REST endpoint rather than supabase-js.  Its
+    # request/response contract is snake_case and flat; the SDK alone wraps
+    # these fields below ``data.properties``.
     issued = _json_call("/auth/v1/admin/generate_link", {
-        "type": "magiclink", "email": policy.personas[persona], "options": {"redirectTo": redirect},
+        "type": "magiclink", "email": policy.personas[persona], "redirect_to": redirect,
     }, policy=policy, transport=transport)
     properties = issued.get("properties") if isinstance(issued, Mapping) else None
     if not isinstance(properties, Mapping) and isinstance(issued, Mapping) and isinstance(issued.get("data"), Mapping):
         properties = issued["data"].get("properties")
+    if not isinstance(properties, Mapping) and isinstance(issued, Mapping):
+        properties = issued
     email_otp = str(properties.get("email_otp") if isinstance(properties, Mapping) else "")
     if not _OTP_RE.fullmatch(email_otp):
         raise BrokerError("issuer_response_invalid", status=503)
     action_link = str(properties.get("action_link") if isinstance(properties, Mapping) else "")
     action = urlsplit(action_link)
+    action_query = parse_qs(action.query, keep_blank_values=True)
+    issued_redirect = str(properties.get("redirect_to") if isinstance(properties, Mapping) else "")
     expected_auth_origin = urlsplit(policy.supabase_url)
     if action.scheme != "https" or action.netloc != expected_auth_origin.netloc \
-            or action.path != "/auth/v1/verify" or not action.query or action.fragment:
+            or action.path != "/auth/v1/verify" or action.fragment \
+            or issued_redirect != redirect or action_query.get("redirect_to") != [redirect]:
         raise BrokerError("issuer_response_invalid", status=503)
     _audit(audit_sink, policy, outcome="issued", claims=claims, persona=persona, redirect=redirect)
     return {
