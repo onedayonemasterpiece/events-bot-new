@@ -35,9 +35,12 @@ node --check scripts/current_ui_resource_graph/graph-lib.mjs     PASS
 workflow YAML parse                                              PASS
 git diff --check                                                 PASS
 uv run --with-requirements requirements.txt \
-  pytest -q tests/test_current_ui_resource_graph.py               16 passed
+  pytest -q tests/test_current_ui_resource_graph.py               17 passed
 ```
 
-The private 1,266-route candidate/browser run is intentionally performed only
-after integration, using the repository secret/file boundary; no bearer URL is
-stored in committed files or command-line arguments.
+The integrated decoder completed the exact private corpus run with 1,266
+candidate routes plus one separately identified public-root observation. The
+complete receipt covers 492 dual-plane source records, 24 page families, 34,985
+style observations and 40 bounded browser screenshots. Every screenshot's
+physical dimensions and SHA-256 matched its index, and a byte scan found no
+candidate bearer URL in any output.
