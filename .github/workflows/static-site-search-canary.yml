@@ -111,6 +111,7 @@ jobs:
         with:
           name: search-live-browser-${{ matrix.variant }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/search-live-browser-${{ matrix.variant }}-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 
@@ -167,6 +168,7 @@ jobs:
         with:
           name: search-live-android-${{ github.run_id }}-${{ github.run_attempt }}
           path: site/artifacts/search-live-android-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 
@@ -225,6 +227,7 @@ jobs:
         with:
           name: search-live-ios-${{ github.run_id }}-${{ github.run_attempt }}
           path: site/artifacts/search-live-ios-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 14
 

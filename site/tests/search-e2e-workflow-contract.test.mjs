@@ -32,6 +32,10 @@ test('Search workflow has independent no-mail schedules, L2 jobs and blocking po
   assert.match(source, /environment: \{ name: search-e2e \}/u);
   assert.match(source, /exit 1/u);
   assert.doesNotMatch(source, /focus-email|E2E_MAIL|IMAP|POSTBOX|real.?mail/iu);
+  for (const jobName of ['browser', 'android', 'ios']) {
+    const upload = parsed.jobs[jobName].steps.find((step) => String(step.name).startsWith('Upload sanitized'));
+    assert.equal(upload?.with?.['include-hidden-files'], true, `${jobName} must upload .redaction-ok`);
+  }
 });
 
 test('registry freezes exact Search variants and platform-scoped personas', async () => {

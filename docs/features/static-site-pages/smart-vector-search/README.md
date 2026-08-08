@@ -700,6 +700,11 @@ Root-level GitHub wrapper привязывает package resolution к `site/pac
 в `site/node_modules`, а bare ESM import ищет зависимости относительно файла
 caller, не относительно shell working directory.
 
+Каждый Search upload явно включает hidden-файлы, поэтому локально проверенный
+маркер `.redaction-ok` сохраняется внутри GitHub artifact. Артефакт без этого
+маркера не является допустимым sanitized evidence, даже если upload-step был
+разрешён локальной проверкой `hashFiles`.
+
 Перед remote launch static builder делает online SQLite snapshot, одним чтением
 копирует v2 Search receipt в snapshot-scoped immutable файл и тем же canonical
 export contract вычисляет полный `catalog_revision` snapshot. Несовпадение
