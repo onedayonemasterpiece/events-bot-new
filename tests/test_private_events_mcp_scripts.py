@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from scripts.generate_private_events_mcp_credentials import write_private_text
+from scripts.smoke_private_events_mcp import sanitized_endpoint_receipt
+
+
+def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
+    repo = Path(__file__).resolve().parents[1]
+    output = tmp_path / "generated"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(repo / "scripts/generate_private_events_mcp_credentials.py"),
+            "--base-url",
+            "https://events.example",
+            "--output-dir",
+            str(output),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    receipt = json.loads(completed.stdout)
+    generated = json.loads(
+        (output / "chatgpt-private-app-credentials.json").read_text(encoding="utf-8")
+    )
+    private_url = generated["chatgpt"]["mcp_url"]
+    path_secret = generated["deploy"]["PRIVATE_EVENTS_MCP_PATH_SECRET"]
+    assert private_url not in completed.stdout
+    assert path_secret not in completed.stdout
+    assert receipt["public_origin"] == "https://events.example"
+    assert receipt["mcp_path"] == "/_private/<redacted>/mcp"
+    assert len(receipt["endpoint_fingerprint"]) == 12
+
+
+def test_smoke_receipt_redacts_private_endpoint() -> None:
+    endpoint = "https://events.example/_private/mcp_super_secret_value/mcp"
+    receipt = sanitized_endpoint_receipt(endpoint)
+    encoded = json.dumps(receipt)
+    assert endpoint not in encoded
+    assert "mcp_super_secret_value" not in encoded
+    assert receipt["public_origin"] == "https://events.example"
+    assert receipt["mcp_path"] == "/_private/<redacted>/mcp"
+
+
+def test_private_artifact_is_created_exclusively_with_mode_0600(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls: list[tuple[int, int]] = []
+    real_open = os.open
+
+    def tracked_open(path, flags, mode=0o777):
+        calls.append((flags, mode))
+        return real_open(path, flags, mode)
+
+    monkeypatch.setattr("scripts.generate_private_events_mcp_credentials.os.open", tracked_open)
+    target = tmp_path / "secret.json"
+    write_private_text(target, '{"secret":"value"}\n')
+    assert target.stat().st_mode & 0o777 == 0o600
+    assert len(calls) == 1
+    flags, mode = calls[0]
+    assert flags & os.O_CREAT
+    assert flags & os.O_EXCL
+    assert mode == 0o600
+    with pytest.raises(FileExistsError):
+        write_private_text(target, "replacement forbidden")

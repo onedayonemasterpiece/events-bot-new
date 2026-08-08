@@ -149,6 +149,21 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
         )
         assert replay.status == 400
         assert (await replay.json())["error"] == "invalid_grant"
+
+        narrowed = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": replacement["refresh_token"],
+                "resource": config.resource,
+                "scope": "events:read",
+            },
+            headers={"Authorization": f"Basic {basic}"},
+        )
+        assert narrowed.status == 200
+        narrowed_tokens = await narrowed.json()
+        assert narrowed_tokens["scope"] == "events:read"
+        assert "refresh_token" not in narrowed_tokens
     finally:
         await client.close()
 
@@ -243,6 +258,10 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
         "http://127.0.0.1:01455/callback/opaque",
         "http://127.0.0.1:1455/callback",
         "http://127.0.0.1:1455/callback/opaque/extra",
+        "http://127.0.0.1:1455/callback/.",
+        "http://127.0.0.1:1455/callback/..",
+        "http://127.0.0.1:1455/callback/%2e",
+        "http://127.0.0.1:1455/callback/%2e%2e",
         "http://127.0.0.1:1455/callback/opaque?query=1",
         "http://127.0.0.1:1455/callback/opaque#fragment",
     ],
@@ -340,6 +359,46 @@ async def test_public_client_rejects_secret_downgrade_and_cross_client_code(conf
             },
         )
         assert valid.status == 200
+        valid_tokens = await valid.json()
+        assert valid_tokens["scope"] == "events:read"
+        assert "refresh_token" not in valid_tokens
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_omitted_scope_uses_read_only_registered_default(config) -> None:
+    app = web.Application()
+    server = attach_private_events_mcp(app, config)
+    assert server is not None
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.get(
+            config.oauth_authorize_path
+            + "?"
+            + urlencode(
+                {
+                    "response_type": "code",
+                    "client_id": config.codex_oauth_client_id,
+                    "redirect_uri": "http://127.0.0.1:9000/callback/default-scope",
+                    "state": "state",
+                    "resource": config.resource,
+                    "code_challenge": pkce_s256("d" * 64),
+                    "code_challenge_method": "S256",
+                }
+            )
+        )
+        assert response.status == 200
+        sealed = re.search(
+            r'name="authorization_request" value="([^"]+)"', await response.text()
+        )
+        assert sealed
+        parsed = server.oauth._unseal_authorization_request(sealed.group(1))
+        assert parsed.scopes == frozenset(
+            {"events:read", "incidents:read", "operations:read"}
+        )
+        assert "offline_access" not in parsed.scopes
     finally:
         await client.close()
 

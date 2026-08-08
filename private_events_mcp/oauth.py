@@ -32,10 +32,13 @@ from .limits import SlidingWindowLimiter
 logger = logging.getLogger(__name__)
 
 ALL_SCOPES = frozenset({"events:read", "incidents:read", "operations:read", "offline_access"})
+DEFAULT_SCOPES = ALL_SCOPES - {"offline_access"}
 SUBJECT = "events-bot-owner"
 _PKCE_CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _PKCE_VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
-_CODEX_CALLBACK_PATH_RE = re.compile(r"^/callback/[A-Za-z0-9._~-]{1,160}$")
+_CODEX_CALLBACK_PATH_RE = re.compile(
+    r"^/callback/(?!\.{1,2}$)[A-Za-z0-9._~-]{1,160}$"
+)
 
 
 class OAuthHTTPError(ValueError):
@@ -63,6 +66,8 @@ class OAuthClient:
     client_id: str
     token_endpoint_auth_method: str
     allowed_resources: frozenset[str]
+    allowed_scopes: frozenset[str]
+    default_scopes: frozenset[str]
 
 
 class PrivateOAuthServer:
@@ -94,10 +99,22 @@ class PrivateOAuthServer:
         return response
 
     def protected_resource_metadata(self) -> dict[str, Any]:
+        return self.protected_resource_metadata_for(self.config.resource)
+
+    def protected_resource_metadata_for(self, resource: str) -> dict[str, Any]:
+        clients = tuple(
+            client
+            for client_id in self.config.oauth_client_ids
+            if resource in (client := self._client(client_id)).allowed_resources
+        )
+        if not clients:
+            raise ValueError("unregistered_oauth_resource")
         return {
-            "resource": self.config.resource,
+            "resource": resource,
             "authorization_servers": [self.config.issuer],
-            "scopes_supported": sorted(ALL_SCOPES),
+            "scopes_supported": sorted(
+                frozenset().union(*(client.allowed_scopes for client in clients))
+            ),
             "resource_documentation": self.config.documentation_url,
             "bearer_methods_supported": ["header"],
         }
@@ -127,21 +144,31 @@ class PrivateOAuthServer:
         return self._json_response(self.authorization_server_metadata())
 
     @staticmethod
-    def _parse_scopes(raw: str | None) -> frozenset[str]:
+    def _parse_scopes(raw: str | None, client: OAuthClient) -> frozenset[str]:
         if not raw:
-            return ALL_SCOPES
+            return client.default_scopes
         scopes = frozenset(item for item in raw.split() if item)
-        if not scopes or not scopes.issubset(ALL_SCOPES):
+        if not scopes or not scopes.issubset(client.allowed_scopes):
             raise OAuthHTTPError("invalid_scope", "Requested scope is not available")
         return scopes
 
     def _client(self, client_id: str) -> OAuthClient:
         if constant_time_equal(client_id, self.config.oauth_client_id):
             return OAuthClient(
-                client_id, "client_secret_basic", frozenset({self.config.resource})
+                client_id,
+                "client_secret_basic",
+                frozenset({self.config.resource}),
+                ALL_SCOPES,
+                DEFAULT_SCOPES,
             )
         if constant_time_equal(client_id, self.config.codex_oauth_client_id):
-            return OAuthClient(client_id, "none", frozenset({self.config.resource}))
+            return OAuthClient(
+                client_id,
+                "none",
+                frozenset({getattr(self.config, "codex_resource", self.config.resource)}),
+                ALL_SCOPES,
+                DEFAULT_SCOPES,
+            )
         raise OAuthHTTPError("unauthorized_client", "Unknown OAuth client")
 
     @staticmethod
@@ -219,7 +246,7 @@ class PrivateOAuthServer:
             raise OAuthHTTPError("invalid_request", "State is required")
         if method != "S256" or not _PKCE_CHALLENGE_RE.fullmatch(code_challenge):
             raise OAuthHTTPError("invalid_request", "PKCE S256 is required")
-        scopes = self._parse_scopes(params.get("scope"))
+        scopes = self._parse_scopes(params.get("scope"), client)
         return AuthorizationRequest(
             response_type=response_type,
             client_id=client_id,
@@ -476,23 +503,24 @@ class PrivateOAuthServer:
                     )
                 except OAuthStoreError as exc:
                     raise OAuthHTTPError(str(exc), "Authorization code is invalid") from exc
-                refresh_token = random_token(48)
-                await asyncio.to_thread(
-                    self.store.create_refresh_token,
-                    token=refresh_token,
-                    subject=grant.subject,
-                    client_id=grant.client_id,
-                    resource=grant.resource,
-                    scopes=grant.scopes,
-                    expires_at=now + self.config.refresh_ttl_seconds,
-                )
                 payload = self._token_payload(
                     subject=grant.subject,
                     client_id=grant.client_id,
                     resource=grant.resource,
                     scopes=grant.scopes,
                 )
-                payload["refresh_token"] = refresh_token
+                if "offline_access" in grant.scopes:
+                    refresh_token = random_token(48)
+                    await asyncio.to_thread(
+                        self.store.create_refresh_token,
+                        token=refresh_token,
+                        subject=grant.subject,
+                        client_id=grant.client_id,
+                        resource=grant.resource,
+                        scopes=grant.scopes,
+                        expires_at=now + self.config.refresh_ttl_seconds,
+                    )
+                    payload["refresh_token"] = refresh_token
                 await asyncio.to_thread(
                     self.store.audit,
                     action="token",
@@ -507,7 +535,7 @@ class PrivateOAuthServer:
                 if not old_token:
                     raise OAuthHTTPError("invalid_request", "Refresh token is required")
                 requested_raw = str(form.get("scope") or "").strip()
-                requested = self._parse_scopes(requested_raw) if requested_raw else None
+                requested = self._parse_scopes(requested_raw, client) if requested_raw else None
                 new_refresh = random_token(48)
                 try:
                     grant = await asyncio.to_thread(
@@ -528,7 +556,8 @@ class PrivateOAuthServer:
                     resource=grant.resource,
                     scopes=grant.scopes,
                 )
-                payload["refresh_token"] = new_refresh
+                if "offline_access" in grant.scopes:
+                    payload["refresh_token"] = new_refresh
                 await asyncio.to_thread(
                     self.store.audit,
                     action="token",
@@ -548,26 +577,43 @@ class PrivateOAuthServer:
                 response.headers["WWW-Authenticate"] = 'Basic realm="private-events-mcp"'
             return response
 
-    def verify_authorization_header(self, header: str | None) -> AccessIdentity:
+    def verify_authorization_header(
+        self,
+        header: str | None,
+        *,
+        expected_resource: str | None = None,
+    ) -> AccessIdentity:
         if not header or not header.startswith("Bearer "):
             raise TokenValidationError("missing_token")
         token = header[7:].strip()
         if not token:
             raise TokenValidationError("missing_token")
+        resource = expected_resource or self.config.resource
         identity = validate_access_token(
             token,
             signing_key=self.config.signing_key,
             issuer=self.config.issuer,
-            audience=self.config.resource,
+            audience=resource,
         )
-        if identity.client_id not in self.config.oauth_client_ids:
+        try:
+            client = self._client(identity.client_id)
+        except OAuthHTTPError as exc:
+            raise TokenValidationError("wrong_client") from exc
+        if resource not in client.allowed_resources:
             raise TokenValidationError("wrong_client")
         return identity
 
-    def challenge(self, *, error: str = "invalid_token", description: str = "Login required") -> str:
+    def challenge(
+        self,
+        *,
+        error: str = "invalid_token",
+        description: str = "Login required",
+        resource_metadata_url: str | None = None,
+    ) -> str:
         safe_description = description.replace('"', "'")[:180]
+        metadata_url = resource_metadata_url or self.config.resource_metadata_url
         return (
-            f'Bearer resource_metadata="{self.config.resource_metadata_url}", '
+            f'Bearer resource_metadata="{metadata_url}", '
             f'error="{error}", error_description="{safe_description}"'
         )
 

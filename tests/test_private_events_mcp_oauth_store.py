@@ -68,6 +68,21 @@ def test_refresh_token_rotation_rejects_replay(tmp_path) -> None:
         expires_at=5_000,
         now=1_000,
     )
+    for overrides in (
+        {"client_id": "other-client"},
+        {"resource": "https://other.example/mcp"},
+    ):
+        rotation = {
+            "old_token": "refresh-one",
+            "new_token": "must-not-be-persisted",
+            "client_id": "client",
+            "resource": "https://resource.example/mcp",
+            "new_expires_at": 6_000,
+            "now": 1_001,
+        }
+        rotation.update(overrides)
+        with pytest.raises(OAuthStoreError, match="invalid_grant"):
+            store.rotate_refresh_token(**rotation)
     grant = store.rotate_refresh_token(
         old_token="refresh-one",
         new_token="refresh-two",

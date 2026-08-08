@@ -255,7 +255,6 @@ class OAuthStateStore:
     ) -> RefreshGrant:
         current = int(time.time()) if now is None else int(now)
         old_hash = secret_hash(old_token)
-        new_hash = secret_hash(new_token)
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
@@ -276,6 +275,10 @@ class OAuthStateStore:
                     if not requested.issubset(original_scopes):
                         raise OAuthStoreError("invalid_scope")
                     scopes = requested
+                # A refresh token is meaningful only while offline_access is
+                # retained. Narrowing it away revokes the old token without
+                # persisting an unreachable replacement.
+                new_hash = secret_hash(new_token) if "offline_access" in scopes else None
                 updated = conn.execute(
                     """
                     UPDATE oauth_refresh_token
@@ -286,23 +289,24 @@ class OAuthStateStore:
                 ).rowcount
                 if updated != 1:
                     raise OAuthStoreError("invalid_grant")
-                conn.execute(
-                    """
-                    INSERT INTO oauth_refresh_token(
-                        token_hash, subject, client_id, resource, scopes,
-                        expires_at, created_at
-                    ) VALUES(?,?,?,?,?,?,?)
-                    """,
-                    (
-                        new_hash,
-                        row["subject"],
-                        row["client_id"],
-                        row["resource"],
-                        self._scopes_to_text(scopes),
-                        int(new_expires_at),
-                        current,
-                    ),
-                )
+                if new_hash is not None:
+                    conn.execute(
+                        """
+                        INSERT INTO oauth_refresh_token(
+                            token_hash, subject, client_id, resource, scopes,
+                            expires_at, created_at
+                        ) VALUES(?,?,?,?,?,?,?)
+                        """,
+                        (
+                            new_hash,
+                            row["subject"],
+                            row["client_id"],
+                            row["resource"],
+                            self._scopes_to_text(scopes),
+                            int(new_expires_at),
+                            current,
+                        ),
+                    )
                 conn.execute("COMMIT")
                 return RefreshGrant(
                     subject=row["subject"],

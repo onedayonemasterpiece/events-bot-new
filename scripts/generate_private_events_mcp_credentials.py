@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import secrets
@@ -19,6 +20,22 @@ def validate_base_url(value: str) -> str:
     if parsed.scheme != "https" or not parsed.netloc or parsed.path not in {"", "/"}:
         raise argparse.ArgumentTypeError("base URL must be an HTTPS origin without a path")
     return value
+
+
+def write_private_text(path: Path, content: str) -> None:
+    """Create a new credential artifact with mode 0600 from its first inode."""
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            fd = -1
+            stream.write(content)
+    finally:
+        if fd >= 0:
+            os.close(fd)
 
 
 def main() -> int:
@@ -95,37 +112,39 @@ def main() -> int:
     }
 
     credentials_path = output / "chatgpt-private-app-credentials.json"
-    credentials_path.write_text(
+    write_private_text(
+        credentials_path,
         json.dumps(
             {"chatgpt": chatgpt, "codex": codex, "deploy": deploy},
             ensure_ascii=False,
             indent=2,
         )
         + "\n",
-        encoding="utf-8",
     )
     env_path = output / "fly-secrets.env"
-    env_path.write_text(
+    write_private_text(
+        env_path,
         "\n".join(f"{key}={value}" for key, value in deploy.items()) + "\n",
-        encoding="utf-8",
     )
     config_path = output / "chatgpt-private-app-config.json"
-    config_path.write_text(
-        json.dumps(chatgpt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    write_private_text(
+        config_path,
+        json.dumps(chatgpt, ensure_ascii=False, indent=2) + "\n",
     )
     codex_config_path = output / "codex-private-mcp-config.json"
-    codex_config_path.write_text(
-        json.dumps(codex, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    write_private_text(
+        codex_config_path,
+        json.dumps(codex, ensure_ascii=False, indent=2) + "\n",
     )
-    for path in (credentials_path, env_path, config_path, codex_config_path):
-        os.chmod(path, 0o600)
 
     print(json.dumps({
         "credentials_file": str(credentials_path),
         "deploy_env_file": str(env_path),
         "chatgpt_config_file": str(config_path),
         "codex_config_file": str(codex_config_path),
-        "mcp_url": endpoint,
+        "public_origin": args.base_url,
+        "mcp_path": "/_private/<redacted>/mcp",
+        "endpoint_fingerprint": hashlib.sha256(endpoint.encode()).hexdigest()[:12],
     }, ensure_ascii=False))
     return 0
 

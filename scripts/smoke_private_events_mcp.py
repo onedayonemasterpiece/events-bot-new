@@ -23,6 +23,15 @@ def fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()[:12]
 
 
+def sanitized_endpoint_receipt(endpoint: str) -> dict[str, str]:
+    parsed = urlsplit(endpoint)
+    return {
+        "public_origin": f"{parsed.scheme}://{parsed.netloc}",
+        "mcp_path": "/_private/<redacted>/mcp",
+        "endpoint_fingerprint": fingerprint(endpoint),
+    }
+
+
 async def run(credentials_path: Path, *, client_kind: str = "chatgpt") -> dict:
     payload = json.loads(credentials_path.read_text(encoding="utf-8"))
     app = payload[client_kind]
@@ -137,7 +146,7 @@ async def run(credentials_path: Path, *, client_kind: str = "chatgpt") -> dict:
     return {
         "ok": True,
         "oauth_client": client_kind,
-        "endpoint": endpoint,
+        **sanitized_endpoint_receipt(endpoint),
         "protocol": initialized["result"]["protocolVersion"],
         "tools": [tool["name"] for tool in listed["result"]["tools"]],
         "event_result_count": len(event_search["result"]["structuredContent"]["events"]),
