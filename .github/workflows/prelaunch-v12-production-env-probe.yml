@@ -44,3 +44,13 @@ jobs:
             exit 1
           fi
           echo 'required_configuration=present'
+
+      - name: Print production secret and variable names only
+        shell: bash
+        env:
+          SECRET_NAMES_JSON: ${{ toJSON(secrets) }}
+          VARIABLE_NAMES_JSON: ${{ toJSON(vars) }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SECRET_NAMES_JSON" | jq -r 'keys[] | "SECRET_NAME=" + .'
+          printf '%s' "$VARIABLE_NAMES_JSON" | jq -r 'keys[] | "VARIABLE_NAME=" + .'
