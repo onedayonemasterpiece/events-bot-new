@@ -180,6 +180,9 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-08 iOS L2 correction: the shared exact-target resolver no longer uses
   Bash-4-only `mapfile`, so a macOS Bash 3.2 runner reaches session issuance and
   Safari/Appium instead of failing before the Search journey.
+- 2026-08-08 mobile transport correction: Android/iOS capabilities force
+  WebDriver Classic, preventing WebdriverIO from selecting Appium's incomplete
+  BiDi surface and failing on `script.addPreloadScript` before UI acceptance.
 
 ## Follow-up Actions
 

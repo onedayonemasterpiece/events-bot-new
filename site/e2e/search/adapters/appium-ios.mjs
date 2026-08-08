@@ -6,6 +6,7 @@ export function createIosSearchAdapter(options = {}) {
   const capabilities = options.capabilities || {
     platformName: 'iOS',
     browserName: 'Safari',
+    'wdio:enforceWebDriverClassic': true,
     'appium:automationName': 'XCUITest',
     'appium:deviceName': options.deviceName || process.env.E2E_DEVICE_NAME || 'iPhone Simulator',
     ...(options.platformVersion || process.env.E2E_PLATFORM_VERSION
