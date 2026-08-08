@@ -83,6 +83,24 @@ lanes:
     verification_scope: targeted
     effort: high
     status: planned
+  - id: L0b-social-oauth-policy
+    role: worker
+    requirement_ids: [R07, R08]
+    target: ChatGPT-only granular scope registry, least-privilege grants and exact Codex isolation
+    depends_on: [L0-core-contract]
+    execution_mode: parallel_with_provider_adapters
+    branch: agent/mcp-universal-social/oauth-policy
+    worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-oauth
+    writable_files:
+      - private_events_mcp/access_policy.py
+      - private_events_mcp/config.py
+      - private_events_mcp/oauth.py
+      - tests/test_private_events_mcp_social_oauth_policy.py
+    forbidden_files: [private_events_mcp/social_workspace.py, private_events_mcp/auth_store.py, private_events_mcp/server.py, private_events_mcp/social.py, main_part2.py, docs, CHANGELOG.md]
+    expected_output: committed scope/client policy and cross-client OAuth tests; no runtime catalog or provider calls
+    verification_scope: targeted
+    effort: high
+    status: planned
   - id: L2-vk-workspace
     role: worker
     requirement_ids: [R04, R05, R06]
@@ -103,7 +121,7 @@ lanes:
     role: worker
     requirement_ids: [R09]
     target: cross-client acceptance matrix, fake provider journeys and CI gate
-    depends_on: [L0-core-contract, L1-telegram-workspace, L2-vk-workspace]
+    depends_on: [L0-core-contract, L0b-social-oauth-policy, L1-telegram-workspace, L2-vk-workspace]
     execution_mode: serial_after_dependency
     branch: agent/mcp-universal-social/tests-ci
     worktree: /home/dev/.codex/worktrees/events-bot-new/mcp-universal-social-tests
