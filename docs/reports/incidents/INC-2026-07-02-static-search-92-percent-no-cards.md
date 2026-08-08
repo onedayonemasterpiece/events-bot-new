@@ -68,6 +68,13 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   Safari `hideKeyboard` as best-effort; the shared helper had accidentally made
   Search stricter. The shared helper now tolerates only that exact iOS response,
   while real scroll delta/final-card acceptance still fails closed.
+- 2026-08-08 iOS run `31277104640` passed WDA/session startup, browser callback,
+  same-storage auth, Search input/submit and the corrected keyboard-dismiss
+  boundary, then failed only at `search_real_scroll_missing`. Twenty-four
+  successful XCUITest `mobile: scroll` calls left Safari DOM `scrollY`
+  unchanged and the final card invisible. The command is a native table/control
+  shortcut, not browser-document evidence; iOS Search now uses the same
+  native-viewport W3C touch path already live-proven by Android.
 
 - 2026-08-08 exact-main degraded browser journey полностью прошёл UI/Search
   контракт для трёх запросов, но GitHub job завершился красным после journey:
@@ -276,6 +283,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   scroll phases separately; an unsupported hide command cannot itself pass the
   scenario because the following native scroll must still move the DOM and
   reveal the final card.
+- 2026-08-08 cross-platform browser-scroll correction: Android Chrome and iOS
+  Safari now share `performNativeTouchSwipe`; both resolve geometry in
+  `NATIVE_APP`, dispatch W3C touch actions, restore WebView and require positive
+  DOM movement plus final-card visibility. Neither UiAutomator2
+  `mobile: scrollGesture` nor XCUITest `mobile: scroll` can satisfy Search page
+  acceptance.
 
 ## Follow-up Actions
 
@@ -299,6 +312,6 @@ Keep this record as the regression contract for static smart-search perceived ha
 For mobile Search, terminal acceptance additionally requires that input and
 scroll evidence cross the native/WebView boundary through
 `site/e2e/mobile-web/appium-browser.mjs`: exact native iOS input match + keyboard
-observation and Android native W3C finger swipe + restored WebView `scrollY`.
-Feature-local copies and `mobile: scrollGesture` for Chrome document content are
-regressions.
+observation and a shared Android/iOS native W3C finger swipe + restored WebView
+`scrollY`. Feature-local copies, `mobile: scrollGesture` for Chrome document
+content, and `mobile: scroll` for Safari document content are regressions.

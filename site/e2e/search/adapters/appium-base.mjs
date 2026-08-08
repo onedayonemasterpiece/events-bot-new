@@ -188,12 +188,10 @@ export async function createAppiumSearchAdapter(options = {}) {
       lifecycle.failure_stage = 'search_scroll';
       return runRealTouchScroll({
         readScrollY: () => driver.execute(() => scrollY),
-        gesture: () => platform === 'android'
-          ? performNativeTouchSwipe(driver, {
-            startXRatio: 0.5, startYRatio: 0.72,
-            endXRatio: 0.5, endYRatio: 0.28, duration: 450,
-          })
-          : driver.execute('mobile: scroll', { direction: 'down' }),
+        gesture: () => performNativeTouchSwipe(driver, {
+          startXRatio: 0.5, startYRatio: 0.72,
+          endXRatio: 0.5, endYRatio: 0.28, duration: 450,
+        }),
         wait: () => driver.pause(150),
         lastCardVisible: () => driver.execute(() => {
           const cards = document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]');
