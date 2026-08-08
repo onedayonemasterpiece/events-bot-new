@@ -7,7 +7,7 @@ import re
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
-from aiohttp import web
+from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestClient, TestServer
 
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
@@ -169,16 +169,49 @@ async def test_invalid_bearer_is_http_401_with_resource_metadata(
     finally:
         await client.close()
 
-    caplog.clear()
+    access_app = web.Application()
+    attach_private_events_mcp(access_app, config)
+    runner = web.AppRunner(
+        access_app,
+        access_log_format='AUTH=%{Authorization}i REQUEST="%r"',
+    )
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = site._server.sockets[0].getsockname()[1]
+    basic_value = base64.b64encode(
+        f"{config.oauth_client_id}:{config.oauth_client_secret}".encode()
+    ).decode()
+    bearer_value = "access-token-that-must-never-log-1234567890"
     with caplog.at_level(logging.INFO, logger="aiohttp.access"):
+        async with ClientSession() as session:
+            for authorization in (f"Basic {basic_value}", f"Bearer {bearer_value}"):
+                response = await session.post(
+                    f"http://127.0.0.1:{port}{config.mcp_path}",
+                    json={"jsonrpc": "2.0", "id": 2, "method": "ping", "params": {}},
+                    headers={"Authorization": authorization},
+                )
+                assert response.status == 401
+                await response.read()
         logging.getLogger("aiohttp.access").info(
-            'request="POST %s" operator=%s',
+            'request="POST %s" operator=%s signing=%s',
             config.mcp_path,
             config.operator_token,
+            config.signing_key,
         )
-    assert config.path_secret not in caplog.text
-    assert config.operator_token not in caplog.text
-    assert caplog.text.count("<redacted>") == 2
+    await runner.cleanup()
+    for forbidden in (
+        config.path_secret,
+        config.oauth_client_secret,
+        config.operator_token,
+        config.signing_key,
+        basic_value,
+        bearer_value,
+    ):
+        assert forbidden not in caplog.text
+    assert "Basic <redacted>" in caplog.text
+    assert "Bearer <redacted>" in caplog.text
+    assert "/_private/<redacted>/mcp" in caplog.text
 
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_ENABLED", "0")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", "not-an-absolute-url")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -15,13 +16,19 @@ from .server import (
 
 
 logger = logging.getLogger(__name__)
+_AUTHORIZATION_VALUE_RE = re.compile(
+    r"(?i)\b(Basic|Bearer)\s+[A-Za-z0-9._~+/=-]+"
+)
 
 
 def _redact_log_value(value: Any, secrets: tuple[str, ...]) -> Any:
     if isinstance(value, str):
         for secret in secrets:
             value = value.replace(secret, "<redacted>")
-        return value
+        return _AUTHORIZATION_VALUE_RE.sub(
+            lambda match: f"{match.group(1)} <redacted>",
+            value,
+        )
     if isinstance(value, tuple):
         return tuple(_redact_log_value(item, secrets) for item in value)
     if isinstance(value, list):
