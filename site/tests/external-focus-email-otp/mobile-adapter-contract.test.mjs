@@ -119,15 +119,18 @@ test('shared native touch swipe runs on device coordinates and restores the web 
     getContext: async () => context,
     getContexts: async () => ['NATIVE_APP', 'WEBVIEW_chrome'],
     switchContext: async (next) => { context = next; calls.push(['context', next]); },
+    getWindowSize: async () => { calls.push(['size']); return { width: 1080, height: 2400 }; },
     performActions: async (actions) => calls.push(['actions', actions]),
     releaseActions: async () => calls.push(['release']),
   };
   const receipt = await performNativeTouchSwipe(driver, {
-    startX: 540, startY: 1700, endX: 540, endY: 600, duration: 450,
+    startXRatio: 0.5, startYRatio: 0.72, endXRatio: 0.5, endYRatio: 0.28, duration: 450,
   });
-  assert.deepEqual(receipt, { route: 'w3c_native_touch', delta_x: 0, delta_y: -1100, duration_ms: 450 });
-  assert.deepEqual(calls.map((item) => item[0]), ['context', 'actions', 'release', 'context']);
-  const pointer = calls[1][1][0];
+  assert.deepEqual(receipt, { route: 'w3c_native_touch', native_viewport_width: 1080,
+    native_viewport_height: 2400, start_x: 540, start_y: 1728, end_x: 540,
+    end_y: 672, delta_x: 0, delta_y: -1056, duration_ms: 450 });
+  assert.deepEqual(calls.map((item) => item[0]), ['context', 'size', 'actions', 'release', 'context']);
+  const pointer = calls[2][1][0];
   assert.equal(pointer.parameters.pointerType, 'touch');
   assert.deepEqual(pointer.actions.map((item) => item.type),
     ['pointerMove', 'pointerDown', 'pause', 'pointerMove', 'pointerUp']);

@@ -34,7 +34,7 @@ Run `rg -n "appium|UiAutomator2|XCUITest|Mobile Safari|webviewConnect" site/e2e 
 - iOS: launch `com.apple.mobilesafari` natively, exact allowlisted first-run dialog handling, then attach WebKit; do not start with `browserName: Safari` on a clean simulator.
 - iOS WebView discovery uses the shared bounded 60-second connection window and retry profile; do not fall back to XCUITest's five-second default.
 - Focus a critical iOS web input through shared `focusIosSafariWebInput`: an exact allowlisted native accessibility match followed by a native tap and `observeNativeKeyboard`. A WebKit `click()` plus a web-context `isKeyboardShown()` is not keyboard evidence.
-- Scroll an Android Chrome document through shared `performNativeTouchSwipe` in `NATIVE_APP`, restoring the original web context before reading `scrollY`. `mobile: scrollGesture` is a native scrollable-control shortcut and is not accepted as proof for Chrome page content.
+- Scroll an Android Chrome document through shared `performNativeTouchSwipe` in `NATIVE_APP`, resolving viewport dimensions only after that context switch and restoring the original web context before reading `scrollY`. Web-context/CSS dimensions are not native touch coordinates. `mobile: scrollGesture` is a native scrollable-control shortcut and is not accepted as proof for Chrome page content.
 - Dismiss an observed software keyboard through the shared native-context helper before measuring the scrolling baseline; never let a swipe land inside an open IME.
 - Use one bounded WebDriver session creation attempt. Workflow-level retry is allowed only before product side effects and must create a fresh, unambiguous run attempt/session.
 - For authenticated scenarios, use a fresh persona-scoped credential/session per device, complete callback in the device browser, wait for the authorized UI, then reload the exact target to prove same-storage persistence.
@@ -44,7 +44,7 @@ Run `rg -n "appium|UiAutomator2|XCUITest|Mobile Safari|webviewConnect" site/e2e 
 
 Require real native keyboard observation and real touch scrolling. Native/web context switching must use the shared restore-on-finally helpers. Preserve feature-specific assertions such as request counts, terminal state, rendered IDs, pagination and duplicate checks.
 
-Artifacts must be sanitized and allowlisted. Never upload raw Appium logs, page source/native hierarchy after sensitive input, action links, target bearer paths, tokens, email, OTP, storage state, screenshots containing credentials, HAR, trace or video. A `.redaction-ok` marker is required before upload.
+Artifacts must be sanitized and allowlisted. A failed gesture may retain only route, native viewport/start/end/duration numbers, gesture count, DOM `scrollY` delta and booleans. Never upload raw Appium logs, page source/native hierarchy after sensitive input, action links, target bearer paths, tokens, email, OTP, storage state, screenshots containing credentials, HAR, trace or video. A `.redaction-ok` marker is required before upload.
 
 ## Debug workflow
 

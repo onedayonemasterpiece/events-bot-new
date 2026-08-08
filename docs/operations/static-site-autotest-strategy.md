@@ -825,12 +825,17 @@ WebKit. Общий профиль задаёт `appium:webviewConnectTimeout=600
 Критический iOS web input фокусируется общей функцией через один exact native
 accessibility match и native tap; WebKit `click()` с `isKeyboardShown()` в web
 context не считается доказательством software keyboard. Android Chrome
-документ прокручивается общей W3C touch sequence в `NATIVE_APP`, после чего
-возвращается исходный WebView и измеряется реальный `scrollY`. Нативный shortcut
+документ прокручивается общей W3C touch sequence в `NATIVE_APP`; размеры
+viewport тоже читаются только после этого switch, потому что WebView/CSS
+геометрия не является native touch geometry. Затем возвращается исходный
+WebView и измеряется реальный `scrollY`. Нативный shortcut
 `mobile: scrollGesture` не применяется к Chrome page content: он предназначен
 для нативных scrollable controls и может успешно ответить без движения DOM.
 Перед scroll baseline общий helper закрывает открытую IME, чтобы finger path не
 попал в клавиатуру вместо browser viewport.
+При отказе публикуется только allowlisted numeric/boolean receipt: native
+viewport, start/end/duration, число жестов, `scrollY` delta и видимость финальной
+карточки; hierarchy, screenshot, URL и текст страницы в него не входят.
 
 Для любой новой или ремонтируемой Android/iOS web-проверки обязателен проектный
 skill `.codex/skills/mobile-web-e2e/SKILL.md`: сначала найти terminal receipts и

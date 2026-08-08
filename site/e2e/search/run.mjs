@@ -126,6 +126,7 @@ try {
     target_path: safeTarget ? sanitizedTargetPath(safeTarget.pathname) : null,
     target_repo_sha: targetRepoSha,
     counters: lastJourney?.counters || {}, query_cases: lastJourney?.query_cases || [], error_code: errorCode(error),
+    ...(error?.searchReceipt ? { failure_receipt: error.searchReceipt } : {}),
   };
   await writeSearchEvidence(evidenceDirectory, result).catch(() => undefined);
   process.stderr.write(`search-live FAIL code=${result.error_code}\n`);

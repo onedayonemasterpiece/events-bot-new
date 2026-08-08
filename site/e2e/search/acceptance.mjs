@@ -187,7 +187,22 @@ export function assertSearchRevisionPolicy(journey, identity, policy = 'release_
 
 export function assertRealScroll(receipt) {
   if (!receipt?.performed || asCount(Math.abs(receipt.delta_y)) < 1 || !receipt.card_visible_after) {
-    throw new Error('search_real_scroll_missing');
+    const error = new Error('search_real_scroll_missing');
+    const gesture = receipt?.last_gesture && typeof receipt.last_gesture === 'object' ? receipt.last_gesture : {};
+    const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+    error.searchReceipt = {
+      performed: receipt?.performed === true,
+      delta_y: numeric(receipt?.delta_y),
+      card_visible_after: receipt?.card_visible_after === true,
+      gesture_count: asCount(receipt?.gesture_count),
+      route: gesture.route === 'w3c_native_touch' ? gesture.route : 'unreported',
+      native_viewport_width: numeric(gesture.native_viewport_width),
+      native_viewport_height: numeric(gesture.native_viewport_height),
+      start_x: numeric(gesture.start_x), start_y: numeric(gesture.start_y),
+      end_x: numeric(gesture.end_x), end_y: numeric(gesture.end_y),
+      duration_ms: numeric(gesture.duration_ms),
+    };
+    throw error;
   }
 }
 

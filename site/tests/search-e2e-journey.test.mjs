@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import { SEARCH_CANARY_VARIANTS } from '../e2e/search/canary-manifest.mjs';
+import { assertRealScroll } from '../e2e/search/acceptance.mjs';
 import { runSearchJourney } from '../e2e/search/journey.mjs';
 import { runRealWheelScroll } from '../e2e/search/adapters/playwright.mjs';
 import { runRealTouchScroll } from '../e2e/search/adapters/appium-base.mjs';
@@ -89,6 +90,25 @@ test('mobile touch scrolling reaches a production-length final card beyond one g
   assert.equal(receipt.card_visible_after, true);
   assert.equal(receipt.delta_y >= 3600, true);
   assert.equal(gestures > 5, true);
+  assert.equal(receipt.gesture_count, gestures);
+});
+
+test('failed mobile scroll retains only a numeric/boolean gesture receipt for sanitized diagnosis', () => {
+  assert.throws(() => assertRealScroll({
+    performed: true, delta_y: 0, card_visible_after: false, gesture_count: 24,
+    last_gesture: { route: 'w3c_native_touch', native_viewport_width: 1080,
+      native_viewport_height: 2400, start_x: 540, start_y: 1728,
+      end_x: 540, end_y: 672, duration_ms: 450 },
+  }), (error) => {
+    assert.equal(error.message, 'search_real_scroll_missing');
+    assert.deepEqual(error.searchReceipt, {
+      performed: true, delta_y: 0, card_visible_after: false, gesture_count: 24,
+      route: 'w3c_native_touch', native_viewport_width: 1080,
+      native_viewport_height: 2400, start_x: 540, start_y: 1728,
+      end_x: 540, end_y: 672, duration_ms: 450,
+    });
+    return true;
+  });
 });
 
 test('semantic journey proves three varied queries, pagination, cache and zero-post validation', async () => {
@@ -161,6 +181,7 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   assert.match(mobile, /focusIosSafariWebInput/u);
   assert.match(mobile, /performNativeTouchSwipe/u);
   assert.doesNotMatch(mobile, /mobile: scrollGesture/u);
+  assert.doesNotMatch(mobile, /const size = await driver\.getWindowSize\(\)/u);
   assert.match(mobile, /mobile: scroll/u);
   assert.match(mobile, /connectionRetryTimeout: Number\(options\.connectionRetryTimeout \|\| 300_000\)/u);
   assert.match(mobile, /connectionRetryCount: 0/u);

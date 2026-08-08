@@ -32,14 +32,18 @@ export async function runRealTouchScroll({ readScrollY, lastCardVisible, gesture
   const before = Number(await readScrollY());
   let cardVisible = false;
   let gestures = 0;
+  let lastGesture = null;
   while (gestures < maxGestures && !cardVisible) {
-    await gesture();
+    const receipt = await gesture();
+    if (receipt && typeof receipt === 'object') lastGesture = receipt;
     gestures += 1;
     await wait();
     cardVisible = await lastCardVisible();
   }
   const after = Number(await readScrollY());
-  return { performed: gestures > 0, delta_y: after - before, card_visible_after: cardVisible === true };
+  return { performed: gestures > 0, delta_y: after - before,
+    card_visible_after: cardVisible === true, gesture_count: gestures,
+    ...(lastGesture ? { last_gesture: lastGesture } : {}) };
 }
 
 export async function createAppiumSearchAdapter(options = {}) {
@@ -137,13 +141,12 @@ export async function createAppiumSearchAdapter(options = {}) {
     async snapshotResults() { return driver.execute(pageResultSnapshot); },
     async realScrollResults() {
       await dismissNativeKeyboard(driver);
-      const size = await driver.getWindowSize();
       return runRealTouchScroll({
         readScrollY: () => driver.execute(() => scrollY),
         gesture: () => platform === 'android'
           ? performNativeTouchSwipe(driver, {
-            startX: Math.floor(size.width * 0.5), startY: Math.floor(size.height * 0.72),
-            endX: Math.floor(size.width * 0.5), endY: Math.floor(size.height * 0.28), duration: 450,
+            startXRatio: 0.5, startYRatio: 0.72,
+            endXRatio: 0.5, endYRatio: 0.28, duration: 450,
           })
           : driver.execute('mobile: scroll', { direction: 'down' }),
         wait: () => driver.pause(150),
