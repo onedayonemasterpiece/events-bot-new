@@ -1,0 +1,228 @@
+name: Prelaunch subscription Fly private audit 20260808
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/prelaunch-subscription-fly-audit-20260808.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-subscription-fly-private-audit
+  cancel-in-progress: false
+
+jobs:
+  read-through-production-runtime:
+    if: ${{ github.event.pull_request.head.ref == 'automation/prelaunch-control-20260804' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN || secrets.FLY_ACCESS_TOKEN || secrets.FLY_DEPLOY_TOKEN }}
+    steps:
+      - name: Set up flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Query protected table and persist only RSA-encrypted rows
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+
+          app='events-bot-new-wngqia'
+          artifact_dir='artifacts/prelaunch-subscription-fly-audit'
+          work_dir="${RUNNER_TEMP}/prelaunch-subscription-fly-audit"
+          remote_path="/tmp/prelaunch-subscription-audit-${GITHUB_RUN_ID}.py"
+          raw="$work_dir/raw.json"
+          public_key="$work_dir/public.pem"
+          mkdir -p "$artifact_dir" "$work_dir"
+
+          cat > "$public_key" <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAnSCzxb3KdzCPDhXCPcZF
+          P3udCUUU5u3wL7oTKBp6xdJRE3SCowM8qYPdSAolsBO/c9Q5MzocHh7+q1Uk9ff4
+          M6jzMpmnr9KdCZ8il8Ris5eg0Z5z5CoGzXSjYT4VuHSBLlyJbsqJ6Y0fjZsjO8/e
+          EpOdiIVdcFvxoQ83+1my/nWxP3B1TQ5qrwcLdFf3uJXorFJFL2yOYPHa2yYvxOjj
+          Oh7yQ3Ya+YnMs9aOG6Im4ffYeH65ZwivfuMnzRlwUYU+s/ZxvAn/rF7FWxQ4ENVl
+          QVGuJCHKvWftzu6G1p4oVsavmr9KjCxGnI4/49VoI6eXi1jyIZoPOXIKL5X7msap
+          syPUmMP8tHx2h6SEQlQK0TRpRB8X17bzZbI+3OfXDW9Skhw8mcBkj7wPLEZRPd76
+          2H+iLUHFsx7ETqHTLJ6Xsql7sZIz4oZK1NpxMOW4xXkAUEmwKBa3d6UxP6/aiukU
+          Vt5ymGRWYdjg1OxK6kT6qbyv2P5M+0rkkTavr301ODSmwRd3PakEACk8HAhUnWIa
+          reMzHWFkxBOANePXuOVX3ytIu58/4/lt1eJc7i6ewnSSqB3gjbcI4OczHdLD9vGK
+          sH2lLRujyUjyXuyXI9dt0I/nwl/MF/DLWrZsIP4xa5cdPwwPpTTffWj/+H2LgUDu
+          qX++cTcYiS3Aamnwuhv80osCAwEAAQ==
+          -----END PUBLIC KEY-----
+          PEM
+          sed -i 's/^          //' "$public_key"
+
+          cat > "$work_dir/query.py" <<'REMOTE_PY'
+          import json
+          import os
+          import sys
+          import urllib.parse
+          import urllib.request
+
+          fields = "email,first_requested_at,last_requested_at,request_count,delivery_status"
+          urls, keys, attempts = [], [], []
+          for name, value in os.environ.items():
+              value = value.strip()
+              upper = name.upper()
+              if "SUPABASE" in upper and value.startswith("https://"):
+                  urls.append((name, value.rstrip("/")))
+              if (
+                  "SUPABASE" in upper and value
+                  and not value.startswith(("https://", "postgres://", "postgresql://"))
+                  and any(word in upper for word in ("SERVICE", "SECRET", "KEY", "TOKEN"))
+                  and "PUBLISHABLE" not in upper and "ANON" not in upper
+              ):
+                  keys.append((name, value))
+
+          query = urllib.parse.urlencode({
+              "select": fields,
+              "source": "eq.prelaunch_home",
+              "last_requested_at": "gte.2026-08-08T05:29:00Z",
+              "order": "last_requested_at.desc",
+              "limit": "20",
+          }, safe=".,")
+
+          for url_name, base in urls:
+              for key_name, key in keys:
+                  request = urllib.request.Request(
+                      f"{base}/rest/v1/prelaunch_launch_subscription?{query}",
+                      headers={
+                          "apikey": key,
+                          "Authorization": f"Bearer {key}",
+                          "Accept": "application/json",
+                          "Accept-Profile": "personalization",
+                      },
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=20) as response:
+                          rows = json.loads(response.read().decode("utf-8"))
+                      if isinstance(rows, list):
+                          print(json.dumps({
+                              "query_success": True,
+                              "method": "postgrest",
+                              "url_env": url_name,
+                              "key_env": key_name,
+                              "rows": rows,
+                              "attempts": attempts,
+                          }, separators=(",", ":")))
+                          sys.exit(0)
+                  except Exception as exc:
+                      attempts.append({
+                          "url_env": url_name,
+                          "key_env": key_name,
+                          "result": type(exc).__name__,
+                      })
+
+          print(json.dumps({
+              "query_success": False,
+              "method": "none",
+              "rows": [],
+              "available_url_envs": [name for name, _ in urls],
+              "available_key_envs": [name for name, _ in keys],
+              "attempts": attempts,
+          }, separators=(",", ":")))
+          REMOTE_PY
+          sed -i 's/^          //' "$work_dir/query.py"
+
+          token_present=false
+          machine_access=false
+          if [[ -n "${FLY_API_TOKEN:-}" ]]; then
+            token_present=true
+            set +e
+            machine_id="$(flyctl machine list --app "$app" --json 2>"$work_dir/list.stderr" | jq -r '[.[] | select(.state == "started")][0].id // empty')"
+            list_rc=$?
+            set -e
+            if [[ $list_rc -eq 0 && -n "$machine_id" ]]; then
+              set +e
+              flyctl ssh sftp put "$work_dir/query.py" "$remote_path" \
+                --app "$app" --machine "$machine_id" --mode 0600 --quiet \
+                >"$work_dir/put.stdout" 2>"$work_dir/put.stderr"
+              put_rc=$?
+              if [[ $put_rc -eq 0 ]]; then
+                flyctl ssh console --app "$app" --machine "$machine_id" \
+                  --command "python3 '$remote_path'; rc=\$?; rm -f '$remote_path'; exit \$rc" \
+                  >"$raw" 2>"$work_dir/ssh.stderr"
+                ssh_rc=$?
+              else
+                ssh_rc=1
+              fi
+              set -e
+              if [[ $put_rc -eq 0 && $ssh_rc -eq 0 ]] && jq -e '.rows | type == "array"' "$raw" >/dev/null 2>&1; then
+                machine_access=true
+              fi
+            fi
+          fi
+
+          if [[ "$machine_access" != true ]]; then
+            jq -n --argjson token_present "$token_present" \
+              '{query_success:false,method:"none",rows:[],token_present:$token_present,error:"Fly runtime query unavailable"}' \
+              > "$raw"
+          fi
+
+          RAW_PATH="$raw" OUTPUT_DIR="$work_dir/plain" META_PATH="$artifact_dir/meta.json" node --input-type=module <<'NODE'
+          import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          const raw = JSON.parse(readFileSync(process.env.RAW_PATH, 'utf8'));
+          mkdirSync(process.env.OUTPUT_DIR, { recursive: true, mode: 0o700 });
+          const rows = Array.isArray(raw.rows) ? raw.rows : [];
+          rows.forEach((row, index) => {
+            const compact = {
+              email: String(row.email || ''),
+              first_requested_at: row.first_requested_at || null,
+              last_requested_at: row.last_requested_at || null,
+              request_count: Number(row.request_count || 0),
+              delivery_status: row.delivery_status || null,
+            };
+            const value = JSON.stringify(compact);
+            if (Buffer.byteLength(value) > 430) throw new Error('row exceeds RSA-OAEP payload bound');
+            writeFileSync(`${process.env.OUTPUT_DIR}/row-${String(index + 1).padStart(3, '0')}.json`, value, { mode: 0o600 });
+          });
+          writeFileSync(process.env.META_PATH, `${JSON.stringify({
+            schema_version: 'prelaunch_subscription_private_audit_v3',
+            queried_at: new Date().toISOString(),
+            since: '2026-08-08T05:29:00Z',
+            query_success: raw.query_success === true,
+            method: raw.method || 'none',
+            row_count: rows.length,
+            diagnostics: {
+              url_env: raw.url_env || null,
+              key_env: raw.key_env || null,
+              available_url_envs: raw.available_url_envs || [],
+              available_key_envs: raw.available_key_envs || [],
+              attempts: raw.attempts || [],
+              error: raw.error || null,
+            },
+          }, null, 2)}\n`);
+          NODE
+
+          shopt -s nullglob
+          for row in "$work_dir/plain"/*.json; do
+            name="$(basename "$row" .json)"
+            openssl pkeyutl -encrypt -pubin -inkey "$public_key" \
+              -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+              -in "$row" -out "$artifact_dir/${name}.rsa"
+          done
+          rm -rf "$work_dir/plain" "$raw" "$public_key" "$work_dir/query.py"
+
+          query_success="$(jq -r '.query_success' "$artifact_dir/meta.json")"
+          row_count="$(jq -r '.row_count' "$artifact_dir/meta.json")"
+          method="$(jq -r '.method' "$artifact_dir/meta.json")"
+          echo "fly_token_present=${token_present}"
+          echo "fly_machine_access=${machine_access}"
+          echo "query_success=${query_success}"
+          echo "query_method=${method}"
+          echo "recent_rows=${row_count}"
+          test "$query_success" = true
+
+      - name: Upload encrypted private audit result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prelaunch-subscription-fly-audit-${{ github.run_id }}
+          path: artifacts/prelaunch-subscription-fly-audit
+          if-no-files-found: error
+          retention-days: 1
