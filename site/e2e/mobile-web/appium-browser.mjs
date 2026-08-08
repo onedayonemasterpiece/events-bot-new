@@ -43,7 +43,11 @@ export function isUnsupportedIosKeyboardDismissError(error) {
   return value === body || value === `WebDriverError: ${body}`;
 }
 
-export async function dismissNativeKeyboard(driver, { allowUnsupported = false } = {}) {
+export async function dismissNativeKeyboard(driver, {
+  allowUnsupported = false, fallbackTapLabels = [],
+} = {}) {
+  const safeTapLabels = [...new Set((fallbackTapLabels || [])
+    .map((value) => String(value).trim()).filter(Boolean))];
   return withNativeAppContext(driver, async () => {
     let shown = false;
     try {
@@ -58,10 +62,32 @@ export async function dismissNativeKeyboard(driver, { allowUnsupported = false }
       const unsupported = isUnsupportedIosKeyboardDismissError(error);
       if (!allowUnsupported || !unsupported) throw error;
       // XCUITest documents that iPhone keyboards without a dismiss button must
-      // be closed with the same gesture a user would make. Swipe down on the
-      // active Safari application, then prove the IME is actually gone before
-      // a subsequent document swipe is allowed.
-      await driver.executeScript('mobile: swipe', [{ direction: 'down' }]);
+      // be closed with the same gesture a user would make. Prefer a caller-
+      // declared, exact non-actionable static label outside the field; unlike a
+      // generic coordinate, it cannot silently land on submit/resend UI.
+      if (safeTapLabels.length > 0) {
+        const labelPredicate = safeTapLabels.map((value) => {
+          const literal = iosPredicateLiteral(value);
+          return `(name == '${literal}' OR label == '${literal}')`;
+        }).join(' OR ');
+        const matches = await driver.findElements('-ios predicate string',
+          `visible == 1 AND type == 'XCUIElementTypeStaticText' AND (${labelPredicate})`);
+        if (!Array.isArray(matches) || matches.length !== 1) {
+          throw new Error(`mobile_keyboard_dismiss_target_count:${Array.isArray(matches) ? matches.length : 'invalid'}`);
+        }
+        const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;
+        if (!elementId) throw new Error('mobile_keyboard_dismiss_target_id_missing');
+        const rect = await driver.getElementRect(elementId);
+        if (!(rect?.width > 0 && rect?.height > 0)) {
+          throw new Error('mobile_keyboard_dismiss_target_rect_invalid');
+        }
+        await driver.executeScript('mobile: tap', [{
+          x: Math.round(rect.x + rect.width / 2),
+          y: Math.round(rect.y + rect.height / 2),
+        }]);
+      } else {
+        await driver.executeScript('mobile: swipe', [{ direction: 'down' }]);
+      }
     }
     let hidden = false;
     await driver.waitUntil(async () => {

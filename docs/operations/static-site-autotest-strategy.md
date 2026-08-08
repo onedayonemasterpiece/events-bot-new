@@ -844,8 +844,11 @@ UiAutomator2 `mobile: scrollGesture` и XCUITest `mobile: scroll` не прим�
 Перед scroll baseline общий helper закрывает открытую IME, чтобы finger path не
 попал в клавиатуру вместо browser viewport. Mobile Safari/XCUITest иногда
 возвращает exact `Did not know how to dismiss the keyboard`; только этот iOS
-ответ разрешает один документированный user-equivalent `mobile: swipe` вниз.
-После штатного hide или fallback helper обязан повторно увидеть
+ответ разрешает один документированный user-equivalent fallback. Search
+находит ровно один caller-allowlisted non-actionable static heading вне поля и
+тапает центр его native rect; произвольная координата, submit или текст
+карточки запрещены. Сценарий без безопасного static target может использовать
+application swipe вниз. После штатного hide или fallback helper обязан увидеть
 `isKeyboardShown() == false`; иначе он завершает сценарий как
 `mobile_keyboard_dismiss_unconfirmed` до document scroll. Остальные driver
 errors не подавляются.
