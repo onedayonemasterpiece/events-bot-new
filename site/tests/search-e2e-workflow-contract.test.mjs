@@ -9,6 +9,7 @@ const registryUrl = new URL('../../docs/testing/static-site-autotest-scenarios.v
 const productionBuildUrl = new URL('../scripts/build-production.mjs', import.meta.url);
 const candidateBuildUrl = new URL('../scripts/build-secret-candidate.mjs', import.meta.url);
 const exporterUrl = new URL('../scripts/export-production-preview-data.py', import.meta.url);
+const browserRunnerUrl = new URL('../../.github/scripts/run-browser-static-search.mjs', import.meta.url);
 
 test('Search workflow has independent no-mail schedules, L2 jobs and blocking post-deploy trigger', async () => {
   const source = await readFile(workflowUrl, 'utf8');
@@ -54,4 +55,11 @@ test('immutable candidate binds the authoritative complete Search projection rev
   assert.match(production, /Search corpus\/catalog revision mismatch/u);
   assert.match(candidate, /Authorized Search candidate requires complete catalog\/corpus revisions/u);
   assert.match(candidate, /search_revisions: productionManifest\.search_revisions/u);
+});
+
+test('browser fixture sends its issued session through the owner RLS probe', async () => {
+  const source = await readFile(browserRunnerUrl, 'utf8');
+  assert.match(source, /protectedOwnerProbe\(\{ fetchImpl, userId, supabaseUrl, accessToken, publishableKey \}\)/u);
+  assert.match(source, /apikey: publishableKey/u);
+  assert.match(source, /authorization: `Bearer \$\{accessToken\}`/u);
 });

@@ -41,12 +41,19 @@ async function oidcToken() {
   return token;
 }
 
-async function protectedOwnerProbe({ fetchImpl, userId, supabaseUrl }) {
+async function protectedOwnerProbe({ fetchImpl, userId, supabaseUrl, accessToken, publishableKey }) {
   const url = new URL('/rest/v1/user_saved_event', supabaseUrl);
   url.searchParams.set('select', 'user_id');
   url.searchParams.set('user_id', `eq.${userId}`);
   url.searchParams.set('limit', '1');
-  const response = await fetchImpl(url, { method: 'GET', headers: { accept: 'application/json' } });
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      apikey: publishableKey,
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
   if (!response.ok) return false;
   const rows = await response.json();
   return Array.isArray(rows) && rows.every((row) => String(row?.user_id || '') === userId);
