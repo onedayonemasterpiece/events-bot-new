@@ -2,10 +2,11 @@
 
 This note indexes the two deep-research inputs used for the LoveKGD synthesis and records their provenance. The raw uploads are preserved in the originating ChatGPT research session; the repository stores the reviewed project synthesis rather than treating either raw report as a normative contract.
 
-## Canonical synthesis and worked example
+## Canonical synthesis, clarification and worked example
 
 - [`ui-gap-visual-exploration-synthesis-2026-08-08.md`](ui-gap-visual-exploration-synthesis-2026-08-08.md) — evidence-led synthesis, corrected for the accepted two-plugin boundary and optimized for a single operator.
-- [`ui-gap-synthetic-penpot-example-2026-08-08.md`](ui-gap-synthetic-penpot-example-2026-08-08.md) — synthetic gap-page matrix, automatic `05 — Recent changes` component timeline, sample change manifest and operator flow.
+- [`ui-gap-composition-archetype-boundary-2026-08-08.md`](ui-gap-composition-archetype-boundary-2026-08-08.md) — explicit boundary between exploratory page composition and an accepted reusable page archetype; defines five possible composition outcomes and the promotion path into Resource Graph.
+- [`ui-gap-synthetic-penpot-example-2026-08-08.md`](ui-gap-synthetic-penpot-example-2026-08-08.md) — synthetic gap-page matrix, automatic `05 — Recent changes` component/archetype timeline, sample change manifest and operator flow.
 
 ## Source inputs
 
@@ -29,6 +30,18 @@ Design System plugin + Resource Graph / UI Exploration files
 
 `UI Exploration` is a separate Penpot file **inside the Design System solution**, not a third independent system or plugin. Product Atlas supplies `ui_gap_id`, product context and decision linkage; the Design System contour owns visual alternatives, local candidates, design references and runtime closure.
 
+The terminology is now explicit:
+
+```text
+page composition
+= exploratory concrete assembly of a page/state
+
+page archetype
+= accepted reusable contract for a page family
+```
+
+A selected composition may revise an existing archetype, add an archetype variant, create a new archetype candidate, remain route-local or leave the archetype unchanged.
+
 ## Preservation rule
 
 The repository preserves reviewed synthesis, worked examples, decisions and provenance. It does not copy every intermediate chat message as normative documentation. New accepted conclusions must move from research into an explicit ADR or operational contract under `docs/features/static-site-pages/design-system/`.
@@ -38,11 +51,11 @@ The repository preserves reviewed synthesis, worked examples, decisions and prov
 ```text
 external research
 → reviewed synthesis
-→ synthetic example
+→ terminology clarification and synthetic example
 → small UI Exploration pilot
 → owner decision / ADR
 → plugin and repository implementation
 → runtime evidence
 ```
 
-The synthesis and synthetic example are proposed pilot contracts. Accepted implementation decisions belong in `docs/features/static-site-pages/design-system/`.
+The synthesis, clarification and synthetic example are proposed pilot contracts. Accepted implementation decisions belong in `docs/features/static-site-pages/design-system/`.
