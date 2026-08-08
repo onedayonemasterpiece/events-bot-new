@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { classifySafariInspection, SafariFirstRunUiError, stabilizeSafariSystemUi } from '../../e2e/focus-email/helpers/safari-system-ui.mjs';
+import { classifySafariInspection, SafariFirstRunUiError, stabilizeSafariSystemUi } from '../../e2e/mobile-web/safari-system-ui.mjs';
 
 function clock() {
   let value = 0;

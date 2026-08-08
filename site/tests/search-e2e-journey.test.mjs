@@ -163,8 +163,10 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
   assert.match(mobile, /connectionRetryTimeout: Number\(options\.connectionRetryTimeout \|\| 300_000\)/u);
   assert.match(mobile, /connectionRetryCount: 0/u);
   assert.doesNotMatch(mobile, /screenshot|pageSource|getPageSource|\bhar\b|trace|video/iu);
-  assert.match(android, /'wdio:enforceWebDriverClassic': true/u);
-  assert.match(ios, /'wdio:enforceWebDriverClassic': true/u);
+  assert.match(android, /buildAppiumCapabilities/u);
+  assert.match(ios, /buildAppiumCapabilities/u);
+  assert.match(mobile, /prepareIosSafariWebContext/u);
+  assert.doesNotMatch(ios, /webviewConnectTimeout|webviewConnectRetries|browserName:\s*'Safari'/u);
 });
 
 test('runner is fail-closed on exact secret target SHA and carries three incident queries', async () => {

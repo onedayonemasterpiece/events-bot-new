@@ -34,6 +34,13 @@
 
 ### Fixed
 
+- Replaced Search-local Android/iOS Appium capabilities with the accepted
+  neutral mobile-web profile already used by OTP acceptance. Search now starts
+  iOS Safari natively, clears only the exact allowlisted first-run dialog, and
+  uses the shared 60-second/120-probe WebView attachment contract instead of
+  XCUITest's five-second default. Added the `mobile-web-e2e` project skill so
+  future mobile web scenarios must discover and reuse this transport.
+
 - Mobile Search auth callback now waits for the returned `/poisk/` UI to become
   authorized before the persistence reload, preventing the adapter from
   stripping the one-shot callback while Supabase was still storing the session.
