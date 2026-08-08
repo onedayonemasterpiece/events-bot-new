@@ -1,0 +1,54 @@
+name: Prelaunch production root release
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Full origin/main SHA to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-production-root-release
+  cancel-in-progress: false
+
+jobs:
+  publish-root:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    env:
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+      KENIGEVENTS_SITE_YC_BUCKET: ${{ secrets.KENIGEVENTS_SITE_YC_BUCKET || vars.KENIGEVENTS_SITE_YC_BUCKET }}
+      KENIGEVENTS_SITE_YC_ACCESS_KEY_ID: ${{ secrets.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID || vars.KENIGEVENTS_SITE_YC_ACCESS_KEY_ID }}
+      KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY: ${{ secrets.KENIGEVENTS_SITE_YC_SECRET_ACCESS_KEY }}
+      KENIGEVENTS_SITE_YC_ENDPOINT: ${{ secrets.KENIGEVENTS_SITE_YC_ENDPOINT || vars.KENIGEVENTS_SITE_YC_ENDPOINT || 'https://storage.yandexcloud.net' }}
+      KENIGEVENTS_SITE_YC_REGION: ${{ secrets.KENIGEVENTS_SITE_YC_REGION || vars.KENIGEVENTS_SITE_YC_REGION || 'ru-central1' }}
+      PUBLIC_PERSONALIZATION_SUPABASE_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_URL }}
+      PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY || vars.PUBLIC_PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY }}
+      PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL: ${{ secrets.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL || vars.PUBLIC_PERSONALIZATION_SUPABASE_RELAY_URL }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci --prefix site --no-audit --no-fund
+      - run: cd site && npx playwright install --with-deps chromium
+      - name: Publish exact main root with rollback
+        run: .github/scripts/publish-prelaunch-root-main.sh
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prelaunch-root-release-${{ github.run_id }}
+          path: artifacts/prelaunch-root-release
+          if-no-files-found: warn
+          retention-days: 30

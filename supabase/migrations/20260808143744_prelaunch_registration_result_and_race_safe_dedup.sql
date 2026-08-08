@@ -1,11 +1,8 @@
 -- Make the public receipt distinguish a new registration from a repeat, while
 -- retaining the existing normalized-email contract and closed table boundary.
--- The named index is intentionally created even when the v1 inline UNIQUE
--- constraint already exists: older production-shaped databases may have been
--- bootstrapped with CREATE TABLE IF NOT EXISTS before that constraint existed.
-
-create unique index if not exists prelaunch_launch_subscription_email_dedup_uidx
-  on personalization.prelaunch_launch_subscription (email);
+-- Production verification before this migration confirmed the v1 UNIQUE(email)
+-- constraint. ON CONFLICT below infers that existing contract; do not create a
+-- redundant second unique index.
 
 create or replace function public.register_prelaunch_notification_v1(
   p_email text,

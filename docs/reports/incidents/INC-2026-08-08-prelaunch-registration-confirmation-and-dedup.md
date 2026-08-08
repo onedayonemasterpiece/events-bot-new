@@ -36,24 +36,29 @@ Related docs: `docs/features/static-site-pages/prelaunch.md`, `docs/operations/r
 - 2026-08-08 — получен отчёт и включён incident workflow.
 - 2026-08-08 — production source SHA зафиксирован как
   `9d8fc9203a69f385407a57e23310bb47f2db4e2d`.
+- 2026-08-08 — production reproduction: реальный POST RPC вернул HTTP 400 / PostgreSQL `22023` / `invalid_prelaunch_consent`; защищённый `pg_get_functiondef` показал только `launch-2026-09-01-v1`, а migration history не содержала v2.
+- 2026-08-08 — существующая v2 migration применена транзакционно; тот же реальный form call вернул HTTP 200, показал first-success, а reload — registered.
 - 2026-08-08 — подготовлена main-based reconciliation формы и v3 RPC contract.
 - post-deploy timestamps и GitHub Actions run добавляются при closure.
 
 ## Root Cause
 
-1. Production prelaunch root был опубликован из side-branch SHA и отсутствовал
-   в `origin/main`, поэтому обычный main-only release path не мог исправить и
-   регрессионно проверить форму.
-2. RPC v2 возвращал `status='registered'` и для первой, и для повторной заявки;
-   браузер не мог показать server-truth «Вы уже записаны».
-3. Финальная вставка RPC была обычным `INSERT`: уникальность таблицы защищала
-   строку, но concurrent conflict не превращался явно в успешный повторный
-   receipt `already_registered`.
-4. Closure gate не требовал одним browser scenario доказать постоянный success,
-   reload, reset, retention on error и повторный submit lock.
-
-Production reproduction evidence определяет точную причину исходного исчезновения
-confirmation; этот record нельзя закрывать только по статическому анализу.
+1. Опубликованный browser bundle отправлял consent
+   `prelaunch-updates-2026-v1`, но production RPC оставался на v1-контракте
+   `launch-2026-09-01-v1`. Каждый реальный submit доходил до backend и получал
+   HTTP 400 / `22023 invalid_prelaunch_consent`; client корректно возвращал
+   форму в error state вместо ложного success.
+2. Production migration history не содержала существующую repo migration v2,
+   поэтому source/runtime и database function contract разошлись.
+3. Production prelaunch root и обе prelaunch migrations находились только в
+   side-branch lineage, а не в `origin/main`; steady-state main release не мог
+   воспроизвести, проверить или исправить drift.
+4. RPC v2 возвращал `status='registered'` и для первой, и для повторной заявки,
+   поэтому даже после восстановления consent contract браузер не получал
+   server-truth repeat receipt.
+5. Финальная вставка RPC была обычным `INSERT`: verified `UNIQUE(email)` не
+   допускал две строки, но concurrent conflict не превращался явно в успешный
+   `already_registered` receipt.
 
 ## Contributing Factors
 

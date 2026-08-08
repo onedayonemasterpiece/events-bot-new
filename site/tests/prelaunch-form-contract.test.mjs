@@ -35,8 +35,10 @@ test('prelaunch RPC is replay-safe in the resilient transport catalog', () => {
 });
 
 test('v3 RPC returns server truth and closes the final insert race', () => {
+  const v1 = source('supabase/migrations/20260803113000_prelaunch_launch_notifications_v1.sql');
   const migration = source('supabase/migrations/20260808143744_prelaunch_registration_result_and_race_safe_dedup.sql');
-  assert.match(migration, /create unique index if not exists[\s\S]*\(email\)/u);
+  assert.match(v1, /email text not null unique/u);
+  assert.doesNotMatch(migration, /create unique index/u);
   assert.match(migration, /on conflict \(email\) do nothing[\s\S]*returning true into v_inserted/u);
   assert.match(migration, /if not coalesce\(v_inserted, false\)[\s\S]*update personalization\.prelaunch_launch_subscription/u);
   assert.match(migration, /'status', 'registered'/u);

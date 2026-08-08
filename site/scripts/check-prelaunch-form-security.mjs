@@ -244,6 +244,9 @@ async function openScenario(name, behavior) {
       });
     }
 
+    // Screenshots are public CI evidence. Retention was asserted above; redact
+    // the field only after the assertion so no email enters an artifact.
+    await email.evaluate((node) => { node.value = '[redacted]'; });
     const screenshotPath = resolve(artifactDir, `${name}.png`);
     await page.screenshot({ path: screenshotPath, fullPage: false, animations: 'disabled' });
     const publicCalls = calls.map(({ route, path, method }) => ({ route, path, method }));
