@@ -213,10 +213,16 @@ class MCPProtocol:
             return self._response(request_id, result=self._auth_result("login is required"))
         if not self._identity_allowed(identity):
             return self._response(request_id, result=self._auth_result("token target is invalid"))
+        context = ToolCallContext(
+            identity=identity,
+            resource=self.resource or identity.audience,
+        )
         try:
             tool.validate_arguments(arguments)
             required_scopes = tool.required_scopes(arguments)
         except (InvalidArgumentsError, ValueError) as exc:
+            if tool.denial_handler is not None:
+                await tool.denial_handler(arguments, context, "invalid_arguments")
             return self._response(
                 request_id,
                 result={
@@ -225,6 +231,8 @@ class MCPProtocol:
                 },
             )
         if not required_scopes.issubset(identity.scopes):
+            if tool.denial_handler is not None:
+                await tool.denial_handler(arguments, context, "insufficient_scope")
             return self._response(
                 request_id,
                 result=self._auth_result("the access token lacks required scopes", insufficient_scope=True),
@@ -252,10 +260,7 @@ class MCPProtocol:
             structured = await asyncio.wait_for(
                 tool.handler(
                     arguments,
-                    ToolCallContext(
-                        identity=identity,
-                        resource=self.resource or identity.audience,
-                    ),
+                    context,
                 ),
                 timeout=(
                     self.tool_timeout_seconds
@@ -268,6 +273,8 @@ class MCPProtocol:
                 self.cache.set(cache_key, result)
             return self._response(request_id, result=result)
         except (InvalidArgumentsError, ValueError) as exc:
+            if tool.denial_handler is not None:
+                await tool.denial_handler(arguments, context, "invalid_arguments")
             return self._response(
                 request_id,
                 result={

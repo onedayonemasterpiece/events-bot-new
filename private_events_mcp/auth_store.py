@@ -173,10 +173,12 @@ class OAuthStateStore:
                 BEGIN
                     SELECT RAISE(ABORT, 'social_action_audit is append-only');
                 END;
-                CREATE TRIGGER IF NOT EXISTS social_action_audit_no_delete
+                DROP TRIGGER IF EXISTS social_action_audit_no_delete;
+                CREATE TRIGGER social_action_audit_no_delete
                 BEFORE DELETE ON social_action_audit
+                WHEN OLD.created_at >= CAST(strftime('%s', 'now') AS INTEGER) - 7776000
                 BEGIN
-                    SELECT RAISE(ABORT, 'social_action_audit is append-only');
+                    SELECT RAISE(ABORT, 'social_action_audit is immutable during retention');
                 END;
                 """
             )
@@ -199,6 +201,10 @@ class OAuthStateStore:
             (now - 86400, now - 30 * 86400),
         )
         conn.execute("DELETE FROM oauth_audit WHERE created_at < ?", (now - 90 * 86400,))
+        conn.execute(
+            "DELETE FROM social_action_audit WHERE created_at < ?",
+            (now - 90 * 86400,),
+        )
         # Preparation rows double as a bounded idempotency ledger. The daily
         # reservation cap bounds growth; a 90-day replay window is far longer
         # than the five-minute ticket lifetime while keeping the auth DB finite.
@@ -586,6 +592,7 @@ class OAuthStateStore:
         current = int(time.time()) if now is None else int(now)
         fingerprint = lambda value: secret_hash(value)[:16] if value else None
         with self._lock, self._connect() as conn:
+            self._cleanup(conn, current)
             conn.execute(
                 """
                 INSERT INTO social_action_audit(

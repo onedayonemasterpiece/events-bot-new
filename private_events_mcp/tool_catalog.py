@@ -16,6 +16,7 @@ class ToolCallContext:
 
 
 ToolHandler = Callable[[Mapping[str, Any], ToolCallContext], Awaitable[dict[str, Any]]]
+DenialHandler = Callable[[Mapping[str, Any], ToolCallContext, str], Awaitable[None]]
 ScopeSelector = Callable[[Mapping[str, Any]], frozenset[str]]
 
 
@@ -28,6 +29,7 @@ class ToolSpec:
     output_schema: Mapping[str, Any]
     scopes: frozenset[str]
     handler: ToolHandler
+    denial_handler: DenialHandler | None = None
     scope_options: tuple[frozenset[str], ...] = ()
     scope_selector: ScopeSelector | None = None
     read_only: bool = True

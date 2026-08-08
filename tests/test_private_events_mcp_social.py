@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+import time
 from dataclasses import replace
 
 import pytest
@@ -386,22 +387,54 @@ async def test_prepare_publish_binding_replay_and_redacted_append_only_audit(con
         text.encode(),
         idempotency.encode(),
         ticket.encode(),
+        b"-100999",
         b"-1002331532485",
         b"provider-receipt-sensitive-987654",
     ):
         assert forbidden not in db_bytes
     with sqlite3.connect(configured.auth_database_path) as conn:
+        prepare_rows = conn.execute(
+            "SELECT outcome, target_alias FROM social_action_audit "
+            "WHERE action='prepare_text_publication' ORDER BY id"
+        ).fetchall()
+        assert prepare_rows == [
+            ("denied_invalid_arguments", "kenigevents"),
+            ("prepared", "kenigevents"),
+        ]
         rows = conn.execute(
             "SELECT outcome, target_alias, length(text_hash) FROM social_action_audit "
             "WHERE action='publish_prepared_text' ORDER BY id"
         ).fetchall()
         assert rows == [
-            ("denied", "kenigevents", 64),
+            ("denied_invalid_arguments", "kenigevents", 64),
             ("succeeded", "kenigevents", 64),
-            ("denied", "kenigevents", 64),
+            ("denied_invalid_arguments", "kenigevents", 64),
         ]
-        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        with pytest.raises(sqlite3.IntegrityError, match="immutable during retention"):
             conn.execute("DELETE FROM social_action_audit")
+
+    now = int(time.time())
+    store = OAuthStateStore(configured.auth_database_path)
+    store.audit_social_action(
+        action="retention_old",
+        outcome="synthetic",
+        client_id="client",
+        subject="subject",
+        resource="resource",
+        now=now - 91 * 86400,
+    )
+    store.audit_social_action(
+        action="retention_current",
+        outcome="synthetic",
+        client_id="client",
+        subject="subject",
+        resource="resource",
+        now=now,
+    )
+    with sqlite3.connect(configured.auth_database_path) as conn:
+        assert conn.execute(
+            "SELECT count(*) FROM social_action_audit WHERE action='retention_old'"
+        ).fetchone() == (0,)
 
 
 def test_ticket_expiry_and_every_binding_dimension(tmp_path) -> None:
@@ -511,7 +544,7 @@ async def test_publish_timeout_consumes_ticket_and_records_unknown_outcome(confi
             "SELECT outcome FROM social_action_audit "
             "WHERE action='publish_prepared_text' ORDER BY id"
         ).fetchall()
-    assert outcomes == [("outcome_unknown",), ("denied",)]
+    assert outcomes == [("outcome_unknown",), ("denied_invalid_arguments",)]
 
 
 @pytest.mark.asyncio
@@ -708,15 +741,41 @@ async def test_empty_target_policy_denies_every_alias(config) -> None:
             },
         )
         assert denied_publish["result"]["isError"] is True
+        _response, malformed = await _rpc(
+            client,
+            empty.mcp_path,
+            token,
+            "tools/call",
+            {
+                "name": "prepare_text_publication",
+                "arguments": {
+                    **publication,
+                    "target_alias": "https://t.me/raw-target",
+                    "idempotency_key": "denied-key-malformed",
+                },
+            },
+        )
+        assert malformed["result"]["isError"] is True
+        read_only_token = _token(empty, scopes={"events:read"})
+        _response, insufficient = await _rpc(
+            client,
+            empty.mcp_path,
+            read_only_token,
+            "tools/call",
+            {"name": "prepare_text_publication", "arguments": publication},
+        )
+        assert insufficient["result"]["isError"] is True
     finally:
         await client.close()
 
     with sqlite3.connect(empty.auth_database_path) as conn:
         assert conn.execute(
-            "SELECT action, outcome FROM social_action_audit "
+            "SELECT action, outcome, target_alias FROM social_action_audit "
             "WHERE action LIKE '%publication%' OR action='publish_prepared_text' "
             "ORDER BY id"
         ).fetchall() == [
-            ("prepare_text_publication", "denied"),
-            ("publish_prepared_text", "denied"),
+            ("prepare_text_publication", "denied_invalid_arguments", "kenigevents"),
+            ("publish_prepared_text", "denied_invalid_arguments", "kenigevents"),
+            ("prepare_text_publication", "denied_invalid_arguments", "invalid"),
+            ("prepare_text_publication", "denied_insufficient_scope", "kenigevents"),
         ]

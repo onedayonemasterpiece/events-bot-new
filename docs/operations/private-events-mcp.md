@@ -149,9 +149,14 @@ is reserved atomically when a unique preparation ticket is created, and
 survives access-token refresh and process restart. A provider timeout is
 reported as `outcome=unknown`, `retry_safe=false`; the caller must not retry
 with a new idempotency key because the original publication may have succeeded.
-The separate append-only action audit stores only fixed-shape hashes/fingerprints
+The separate action audit is immutable during its bounded 90-day retention and
+stores only fixed-shape hashes/fingerprints
 and public aliases—never message text, provider target, ticket, idempotency key,
 receipt, credential, or provider error.
+Every rejected publication call is audited before returning, including
+undeclared fields, malformed aliases/arguments, insufficient scopes, policy
+denials and ticket/budget failures; invalid caller values are represented only
+by fixed `invalid` markers and hashes.
 
 Each streamable-HTTP `POST` accepts exactly one JSON-RPC object. JSON-RPC
 batches are rejected with HTTP `400`, so a caller cannot multiply SQLite work

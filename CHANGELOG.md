@@ -78,6 +78,10 @@
   GUID, provider error/captcha values and all credential fragments, while
   preserving existing non-MCP VK diagnostics.
 
+- Bounded private MCP social audit retention to 90 days while keeping retained
+  rows immutable, and centralized denial auditing for schema, malformed input,
+  scope, policy, ticket and budget failures before any provider call.
+
 - Hardened private Events MCP OAuth credential handling: generator and smoke
   receipts no longer print the private endpoint path, generated bundles start
   in a fresh `0700` directory with atomic `0600` files, Codex callback dot

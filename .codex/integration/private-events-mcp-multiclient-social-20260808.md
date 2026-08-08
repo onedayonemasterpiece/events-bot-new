@@ -53,7 +53,7 @@ fixed VK adapter. Both returned two recent records; no text or credential was
 logged and no publication was attempted. The sanitized untracked receipt is at
 `artifacts/codex/private-mcp-live-read-probe/receipt.json`.
 
-An independent review found and reproduced a VK provider-error log leak in the pre-final head; the runtime boundary was then hardened to suppress publication text, owner, GUID, provider message/captcha data and every token fragment, with a real `main.vk_api` regression test. Final exact-head re-review is required.
+An independent review found and reproduced a VK provider-error log leak in the pre-final head; the runtime boundary was then hardened to suppress publication text, owner, GUID, provider message/captcha data and every token fragment, with a real `main.vk_api` regression test. A follow-up review also required bounded social-audit retention and audit coverage for pre-handler denials; both are now closed with a 90-day immutable window and a centralized denial hook covering schema, malformed input, insufficient scope, policy, ticket and budget failures. Final exact-head re-review is required.
 
 Tracked activation/credential files: 0. Legacy `prod_ops_mcp`, `PROD_OPS_MCP_*`
 and static-bearer paths in this diff: 0.

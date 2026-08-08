@@ -222,6 +222,58 @@ def build_social_tools(
             raise InvalidArgumentsError("Social platform transport is unavailable")
         return adapter
 
+    async def audit_publication_denial(
+        action: str,
+        arguments: Mapping[str, Any],
+        context: ToolCallContext,
+        reason: str,
+    ) -> None:
+        raw_platform = arguments.get("platform")
+        platform = raw_platform if raw_platform in SOCIAL_PLATFORMS else "invalid"
+        raw_alias = arguments.get("target_alias")
+        alias = (
+            raw_alias
+            if isinstance(raw_alias, str) and _ALIAS_RE.fullmatch(raw_alias)
+            else "invalid"
+        )
+        raw_text = arguments.get("text")
+        text_hash = (
+            hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
+            if isinstance(raw_text, str)
+            else None
+        )
+        idempotency_key = arguments.get("idempotency_key")
+        ticket = arguments.get("preparation_ticket")
+        await asyncio.to_thread(
+            store.audit_social_action,
+            action=action,
+            outcome=f"denied_{reason}"[:40],
+            client_id=context.identity.client_id,
+            subject=context.identity.subject,
+            resource=context.resource,
+            platform=platform,
+            target_alias=alias,
+            text_hash=text_hash,
+            ticket=ticket if isinstance(ticket, str) else None,
+            idempotency_key=(
+                idempotency_key if isinstance(idempotency_key, str) else None
+            ),
+        )
+
+    async def audit_prepare_denial(
+        arguments: Mapping[str, Any], context: ToolCallContext, reason: str
+    ) -> None:
+        await audit_publication_denial(
+            "prepare_text_publication", arguments, context, reason
+        )
+
+    async def audit_publish_denial(
+        arguments: Mapping[str, Any], context: ToolCallContext, reason: str
+    ) -> None:
+        await audit_publication_denial(
+            "publish_prepared_text", arguments, context, reason
+        )
+
     async def read_platform(
         platform: str,
         arguments: Mapping[str, Any],
@@ -340,23 +392,8 @@ def build_social_tools(
         text = _text(arguments)
         idempotency_key = _idempotency_key(arguments)
         text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        try:
-            policy.resolve(platform, alias, action="publish")
-            adapter_for(platform)
-        except (InvalidArgumentsError, ValueError):
-            await asyncio.to_thread(
-                store.audit_social_action,
-                action="prepare_text_publication",
-                outcome="denied",
-                client_id=context.identity.client_id,
-                subject=context.identity.subject,
-                resource=context.resource,
-                platform=platform,
-                target_alias=alias,
-                text_hash=text_hash,
-                idempotency_key=idempotency_key,
-            )
-            raise
+        policy.resolve(platform, alias, action="publish")
+        adapter_for(platform)
         ticket = random_token(48)
         now = int(time.time())
         expires_at = now + max(60, min(int(ticket_ttl_seconds), 900))
@@ -376,19 +413,6 @@ def build_social_tools(
                 now=now,
             )
         except (SocialTicketError, SocialPublishBudgetError) as exc:
-            await asyncio.to_thread(
-                store.audit_social_action,
-                action="prepare_text_publication",
-                outcome="denied",
-                client_id=context.identity.client_id,
-                subject=context.identity.subject,
-                resource=context.resource,
-                platform=platform,
-                target_alias=alias,
-                text_hash=text_hash,
-                idempotency_key=idempotency_key,
-                now=now,
-            )
             raise InvalidArgumentsError(str(exc)) from exc
         await asyncio.to_thread(
             store.audit_social_action,
@@ -421,24 +445,8 @@ def build_social_tools(
         idempotency_key = _idempotency_key(arguments)
         ticket = _ticket(arguments)
         text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        try:
-            target = policy.resolve(platform, alias, action="publish")
-            adapter = adapter_for(platform)
-        except (InvalidArgumentsError, ValueError):
-            await asyncio.to_thread(
-                store.audit_social_action,
-                action="publish_prepared_text",
-                outcome="denied",
-                client_id=context.identity.client_id,
-                subject=context.identity.subject,
-                resource=context.resource,
-                platform=platform,
-                target_alias=alias,
-                text_hash=text_hash,
-                ticket=ticket,
-                idempotency_key=idempotency_key,
-            )
-            raise
+        target = policy.resolve(platform, alias, action="publish")
+        adapter = adapter_for(platform)
         try:
             await asyncio.to_thread(
                 store.consume_preparation_ticket,
@@ -452,19 +460,6 @@ def build_social_tools(
                 idempotency_key=idempotency_key,
             )
         except SocialTicketError as exc:
-            await asyncio.to_thread(
-                store.audit_social_action,
-                action="publish_prepared_text",
-                outcome="denied",
-                client_id=context.identity.client_id,
-                subject=context.identity.subject,
-                resource=context.resource,
-                platform=platform,
-                target_alias=alias,
-                text_hash=text_hash,
-                ticket=ticket,
-                idempotency_key=idempotency_key,
-            )
             raise InvalidArgumentsError(str(exc)) from exc
         try:
             receipt = await adapter.publish_text(
@@ -618,6 +613,7 @@ def build_social_tools(
             scope_options=publish_options,
             scope_selector=_publish_scope,
             handler=prepare,
+            denial_handler=audit_prepare_denial,
             read_only=False,
             idempotent=False,
             cacheable=False,
@@ -645,6 +641,7 @@ def build_social_tools(
             scope_options=publish_options,
             scope_selector=_publish_scope,
             handler=publish,
+            denial_handler=audit_publish_denial,
             read_only=False,
             destructive=True,
             idempotent=False,
