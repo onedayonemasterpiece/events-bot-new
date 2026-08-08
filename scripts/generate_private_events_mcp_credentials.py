@@ -23,7 +23,7 @@ def validate_base_url(value: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate deploy and ChatGPT credentials for the private events MCP."
+        description="Generate deploy, ChatGPT and Codex credentials for the private events MCP."
     )
     parser.add_argument("--base-url", required=True, type=validate_base_url)
     parser.add_argument("--output-dir", required=True, type=Path)
@@ -34,11 +34,12 @@ def main() -> int:
     path_secret = token("mcp_", 32)
     client_id = token("chatgpt-events-", 18)
     client_secret = token("client_", 48)
+    codex_client_id = token("codex-events-", 18)
     operator_token = token("operator_", 48)
     signing_key = token("signing_", 64)
     endpoint = f"{args.base_url}/_private/{path_secret}/mcp"
 
-    public = {
+    chatgpt = {
         "name": "Events Bot — private production evidence",
         "description": "Read-only event, incident and operations analysis",
         "mcp_url": endpoint,
@@ -58,12 +59,33 @@ def main() -> int:
             "Rotate PRIVATE_EVENTS_MCP_OPERATOR_TOKEN after the first successful connection.",
         ],
     }
+    codex = {
+        "name": "Events Bot — private production evidence",
+        "mcp_url": endpoint,
+        "oauth_client_id": codex_client_id,
+        "token_endpoint_auth_method": "none",
+        "redirect_uri_contract": "http://127.0.0.1:<explicit-port>/callback/<opaque>",
+        "smoke_redirect_uri": "http://127.0.0.1:1455/callback/private-events-smoke",
+        "bootstrap_operator_token": operator_token,
+        "oauth_scopes": [
+            "events:read",
+            "incidents:read",
+            "operations:read",
+            "offline_access",
+        ],
+        "notes": [
+            "Codex is a static public OAuth client: do not configure or send a client secret.",
+            "Authorization-code and refresh exchanges send oauth_client_id in the form body.",
+            "The bootstrap operator token is entered only on the authorization browser page.",
+        ],
+    }
     deploy = {
         "PRIVATE_EVENTS_MCP_ENABLED": "1",
         "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL": args.base_url,
         "PRIVATE_EVENTS_MCP_PATH_SECRET": path_secret,
         "PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID": client_id,
         "PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET": client_secret,
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID": codex_client_id,
         "PRIVATE_EVENTS_MCP_OPERATOR_TOKEN": operator_token,
         "PRIVATE_EVENTS_MCP_SIGNING_KEY": signing_key,
         "PRIVATE_EVENTS_MCP_AUTH_DB_PATH": "/data/private-events-mcp-auth.sqlite",
@@ -74,7 +96,12 @@ def main() -> int:
 
     credentials_path = output / "chatgpt-private-app-credentials.json"
     credentials_path.write_text(
-        json.dumps({"chatgpt": public, "deploy": deploy}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            {"chatgpt": chatgpt, "codex": codex, "deploy": deploy},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
     env_path = output / "fly-secrets.env"
@@ -83,14 +110,21 @@ def main() -> int:
         encoding="utf-8",
     )
     config_path = output / "chatgpt-private-app-config.json"
-    config_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    for path in (credentials_path, env_path, config_path):
+    config_path.write_text(
+        json.dumps(chatgpt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    codex_config_path = output / "codex-private-mcp-config.json"
+    codex_config_path.write_text(
+        json.dumps(codex, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    for path in (credentials_path, env_path, config_path, codex_config_path):
         os.chmod(path, 0o600)
 
     print(json.dumps({
         "credentials_file": str(credentials_path),
         "deploy_env_file": str(env_path),
         "chatgpt_config_file": str(config_path),
+        "codex_config_file": str(codex_config_path),
         "mcp_url": endpoint,
     }, ensure_ascii=False))
     return 0

@@ -1,4 +1,4 @@
-# Private Events MCP for ChatGPT
+# Private Events MCP for ChatGPT and Codex
 
 Status: implementation-ready, disabled by default until an explicit production activation.
 
@@ -18,7 +18,7 @@ This is not an administration API, SQL console, crawler, or publication gateway.
 The package attaches routes to the existing `aiohttp.web.Application`. It creates no additional Fly process, machine, listener, scheduler, poller or persistent provider connection.
 
 ```text
-ChatGPT private app
+ChatGPT private app or Codex
   -> HTTPS + OAuth authorization code + PKCE S256
   -> existing events-bot aiohttp process
   -> bounded MCP JSON-RPC dispatcher
@@ -43,8 +43,13 @@ The bundled single-operator authorization server provides:
 - OAuth authorization-code grant;
 - mandatory PKCE S256;
 - exact `resource` binding to the MCP URL;
-- a predefined ChatGPT client ID and secret;
-- redirect allowlisting to ChatGPT OAuth callback paths only;
+- a predefined confidential ChatGPT client ID and secret;
+- a distinct predefined public Codex client ID using
+  `token_endpoint_auth_method=none` (no Codex client secret);
+- client-specific redirect allowlisting: existing ChatGPT OAuth callback paths,
+  or for Codex only the literal
+  `http://127.0.0.1:<explicit-port>/callback/<opaque>` form with a single
+  URL-safe opaque segment and no query, fragment or userinfo;
 - 15-minute HMAC-signed access tokens;
 - durable rotating refresh tokens in `/data/private-events-mcp-auth.sqlite`;
 - refresh-token replay rejection;
@@ -52,7 +57,11 @@ The bundled single-operator authorization server provides:
 - path-scoped OAuth authorization-server metadata;
 - MCP `mcp/www_authenticate` challenges.
 
-The operator enters the bootstrap token on the authorization page. Rotate `PRIVATE_EVENTS_MCP_OPERATOR_TOKEN` after the first successful ChatGPT connection.
+Authorization codes and refresh tokens are bound to the exact static client and
+resource; authorization codes are additionally bound to the exact redirect URI
+and PKCE S256 verifier. Dynamic client registration is not exposed. The
+operator enters the bootstrap token on the authorization page. Rotate
+`PRIVATE_EVENTS_MCP_OPERATOR_TOKEN` after the first successful connection.
 
 ## Tools
 
@@ -130,6 +139,7 @@ PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL=https://events-bot-new-wngqia.fly.dev
 PRIVATE_EVENTS_MCP_PATH_SECRET=<generated>
 PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID=<generated>
 PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET=<generated>
+PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID=<generated-non-secret-static-id>
 PRIVATE_EVENTS_MCP_OPERATOR_TOKEN=<generated>
 PRIVATE_EVENTS_MCP_SIGNING_KEY=<generated>
 PRIVATE_EVENTS_MCP_AUTH_DB_PATH=/data/private-events-mcp-auth.sqlite
@@ -141,6 +151,10 @@ PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE=/app/.static-site-repo-sha
 When `PRIVATE_EVENTS_MCP_ENABLED` is false, malformed or stale MCP-only
 configuration is not parsed and no MCP route is attached; existing startup,
 webhook, scheduler and health behavior therefore remains unchanged.
+
+When enabled, both distinct static client IDs are required. The existing
+`PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID` and secret remain the confidential
+ChatGPT registration; the Codex ID must never be paired with a client secret.
 
 No provider credential is passed specifically to the MCP code.
 
@@ -173,9 +187,18 @@ After an exact-SHA deployment:
 ```bash
 python scripts/smoke_private_events_mcp.py \
   --credentials /secure/path/chatgpt-private-app-credentials.json
+
+python scripts/smoke_private_events_mcp.py \
+  --credentials /secure/path/chatgpt-private-app-credentials.json \
+  --client codex
 ```
 
-The smoke performs protected-resource discovery, authorization code + PKCE, token exchange, authenticated MCP initialize, tool discovery, one event query, one incident query and an operations snapshot. It prints token fingerprints only.
+The smoke defaults to the confidential ChatGPT registration; `--client codex`
+uses the public-client contract without Basic authentication or a client
+secret. Both modes perform protected-resource discovery, authorization code +
+PKCE, token exchange, authenticated MCP initialize, tool discovery, one event
+query, one incident query and an operations snapshot. They print token
+fingerprints only.
 
 ## Production acceptance gate
 

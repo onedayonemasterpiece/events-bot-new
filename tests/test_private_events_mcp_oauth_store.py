@@ -20,6 +20,23 @@ def test_authorization_code_is_pkce_bound_and_single_use(tmp_path) -> None:
         expires_at=2_000,
         now=1_000,
     )
+    for overrides in (
+        {"client_id": "other-client"},
+        {"redirect_uri": "https://chatgpt.com/connector/oauth/other"},
+        {"resource": "https://other.example/mcp"},
+        {"code_verifier": "b" * 64},
+    ):
+        exchange = {
+            "code": "code-one",
+            "client_id": "client",
+            "redirect_uri": "https://chatgpt.com/connector/oauth/callback",
+            "resource": "https://resource.example/mcp",
+            "code_verifier": verifier,
+            "now": 1_001,
+        }
+        exchange.update(overrides)
+        with pytest.raises(OAuthStoreError, match="invalid_grant"):
+            store.consume_authorization_code(**exchange)
     grant = store.consume_authorization_code(
         code="code-one",
         client_id="client",

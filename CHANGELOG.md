@@ -13,6 +13,10 @@
   startup a strict no-op, covers incident documents and generic/provider tokens
   in recursive redaction, binds rate limits across OAuth refresh rotation, and
   applies request/concurrency and SQLite VM budgets to token and schema work.
+  OAuth now also supports a distinct static public Codex client without dynamic
+  registration or a client secret, restricted to exact IPv4 loopback callback,
+  PKCE, resource, client and redirect bindings while preserving the existing
+  confidential ChatGPT flow.
 
 ### Fixed
 

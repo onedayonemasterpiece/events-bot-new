@@ -31,7 +31,10 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
 
         authorization_metadata = await client.get(config.authorization_server_metadata_path)
         assert authorization_metadata.status == 200
-        assert (await authorization_metadata.json())["issuer"] == config.issuer
+        authorization_payload = await authorization_metadata.json()
+        assert authorization_payload["issuer"] == config.issuer
+        assert "none" in authorization_payload["token_endpoint_auth_methods_supported"]
+        assert "registration_endpoint" not in authorization_payload
 
         initialize = await client.post(
             config.mcp_path,
@@ -146,6 +149,197 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
         )
         assert replay.status == 400
         assert (await replay.json())["error"] == "invalid_grant"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    verifier = "c" * 64
+    callback = "http://127.0.0.1:1455/callback/codex-cli-opaque_123"
+    try:
+        query = {
+            "response_type": "code",
+            "client_id": config.codex_oauth_client_id,
+            "redirect_uri": callback,
+            "state": "codex-state",
+            "resource": config.resource,
+            "scope": "events:read incidents:read operations:read offline_access",
+            "code_challenge": pkce_s256(verifier),
+            "code_challenge_method": "S256",
+        }
+        page = await client.get(config.oauth_authorize_path + "?" + urlencode(query))
+        assert page.status == 200
+        sealed = re.search(
+            r'name="authorization_request" value="([^"]+)",?', await page.text()
+        )
+        assert sealed
+        granted = await client.post(
+            config.oauth_authorize_path,
+            data={
+                "authorization_request": sealed.group(1),
+                "operator_token": config.operator_token,
+            },
+            allow_redirects=False,
+        )
+        assert granted.status == 302
+        redirect = urlsplit(granted.headers["Location"])
+        assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == callback
+        code = parse_qs(redirect.query)["code"][0]
+
+        token_response = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": config.codex_oauth_client_id,
+                "code": code,
+                "redirect_uri": callback,
+                "resource": config.resource,
+                "code_verifier": verifier,
+            },
+        )
+        assert token_response.status == 200
+        tokens = await token_response.json()
+
+        listed = await client.post(
+            config.mcp_path,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert listed.status == 200
+        names = {tool["name"] for tool in (await listed.json())["result"]["tools"]}
+        assert names == {
+            "search", "fetch", "events_search", "event_get",
+            "incidents_search", "incident_get", "operations_snapshot",
+        }
+
+        refreshed = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "refresh_token",
+                "client_id": config.codex_oauth_client_id,
+                "refresh_token": tokens["refresh_token"],
+                "resource": config.resource,
+            },
+        )
+        assert refreshed.status == 200
+        assert (await refreshed.json())["refresh_token"] != tokens["refresh_token"]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "redirect_uri",
+    [
+        "http://localhost:1455/callback/opaque",
+        "http://127.0.0.1/callback/opaque",
+        "https://127.0.0.1:1455/callback/opaque",
+        "http://user@127.0.0.1:1455/callback/opaque",
+        "http://127.0.0.1:01455/callback/opaque",
+        "http://127.0.0.1:1455/callback",
+        "http://127.0.0.1:1455/callback/opaque/extra",
+        "http://127.0.0.1:1455/callback/opaque?query=1",
+        "http://127.0.0.1:1455/callback/opaque#fragment",
+    ],
+)
+async def test_codex_redirect_contract_rejects_non_literal_variants(
+    config, redirect_uri
+) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.get(
+            config.oauth_authorize_path
+            + "?"
+            + urlencode(
+                {
+                    "response_type": "code",
+                    "client_id": config.codex_oauth_client_id,
+                    "redirect_uri": redirect_uri,
+                    "state": "state",
+                    "resource": config.resource,
+                    "code_challenge": pkce_s256("v" * 64),
+                    "code_challenge_method": "S256",
+                }
+            )
+        )
+        assert response.status == 400
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_public_client_rejects_secret_downgrade_and_cross_client_code(config) -> None:
+    app = web.Application()
+    server = attach_private_events_mcp(app, config)
+    assert server is not None
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    callback = "http://127.0.0.1:8123/callback/cross-client"
+    verifier = "x" * 64
+    code = "cross-client-code"
+    server.oauth.store.create_authorization_code(
+        code=code,
+        subject="events-bot-owner",
+        client_id=config.codex_oauth_client_id,
+        redirect_uri=callback,
+        resource=config.resource,
+        scopes={"events:read"},
+        code_challenge=pkce_s256(verifier),
+        expires_at=2**31,
+    )
+    try:
+        downgraded = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": config.codex_oauth_client_id,
+                "client_secret": config.oauth_client_secret,
+                "code": code,
+                "redirect_uri": callback,
+                "resource": config.resource,
+                "code_verifier": verifier,
+            },
+        )
+        assert downgraded.status == 401
+        assert (await downgraded.json())["error"] == "invalid_client"
+
+        basic = base64.b64encode(
+            f"{config.oauth_client_id}:{config.oauth_client_secret}".encode()
+        ).decode()
+        crossed = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": "https://chatgpt.com/connector/oauth/cross-client",
+                "resource": config.resource,
+                "code_verifier": verifier,
+            },
+            headers={"Authorization": f"Basic {basic}"},
+        )
+        assert crossed.status == 400
+        assert (await crossed.json())["error"] == "invalid_grant"
+
+        valid = await client.post(
+            config.oauth_token_path,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": config.codex_oauth_client_id,
+                "code": code,
+                "redirect_uri": callback,
+                "resource": config.resource,
+                "code_verifier": verifier,
+            },
+        )
+        assert valid.status == 200
     finally:
         await client.close()
 

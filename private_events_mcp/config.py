@@ -57,6 +57,7 @@ class PrivateEventsMCPConfig:
     auth_database_path: str
     oauth_client_id: str
     oauth_client_secret: str
+    codex_oauth_client_id: str
     operator_token: str
     signing_key: str
     repository_root: str
@@ -99,6 +100,9 @@ class PrivateEventsMCPConfig:
             oauth_client_id=(os.getenv("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID") or "").strip(),
             oauth_client_secret=(
                 os.getenv("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET") or ""
+            ).strip(),
+            codex_oauth_client_id=(
+                os.getenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID") or ""
             ).strip(),
             operator_token=(os.getenv("PRIVATE_EVENTS_MCP_OPERATOR_TOKEN") or "").strip(),
             signing_key=(os.getenv("PRIVATE_EVENTS_MCP_SIGNING_KEY") or "").strip(),
@@ -188,6 +192,10 @@ class PrivateEventsMCPConfig:
             raise ValueError("PRIVATE_EVENTS_MCP_PATH_SECRET must be 24+ URL-safe characters")
         if not _CLIENT_ID_RE.fullmatch(self.oauth_client_id):
             raise ValueError("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID is invalid")
+        if not _CLIENT_ID_RE.fullmatch(self.codex_oauth_client_id):
+            raise ValueError("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID is invalid")
+        if self.codex_oauth_client_id == self.oauth_client_id:
+            raise ValueError("ChatGPT and Codex OAuth client IDs must be distinct")
         for name, value, minimum in (
             ("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET", self.oauth_client_secret, 32),
             ("PRIVATE_EVENTS_MCP_OPERATOR_TOKEN", self.operator_token, 32),
@@ -253,6 +261,12 @@ class PrivateEventsMCPConfig:
     @property
     def resource_metadata_url(self) -> str:
         return f"{self.public_base_url}{self.protected_resource_metadata_path}"
+
+    @property
+    def oauth_client_ids(self) -> frozenset[str]:
+        """Static bearer-client registry; dynamic registration is unsupported."""
+
+        return frozenset((self.oauth_client_id, self.codex_oauth_client_id))
 
     @property
     def documentation_url(self) -> str:
