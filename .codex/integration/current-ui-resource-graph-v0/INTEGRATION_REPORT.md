@@ -110,3 +110,67 @@ The decoder landed on the default branch and completed in GitHub Actions:
 Earlier failed runs uploaded honest failed receipts while exposing workflow
 schema/path defects; they are not accepted graph artifacts. The successful run
 above supersedes them and closes the durable-artifact delivery gate.
+
+## Event-presentation format follow-up
+
+The follow-up merged in PR
+[`#400`](https://github.com/onedayonemasterpiece/events-bot-new/pull/400) and
+the bounded-evidence correction in PR
+[`#402`](https://github.com/onedayonemasterpiece/events-bot-new/pull/402).
+It adds `event-presentation-formats.jsonl` without changing `site/src`, Astro,
+CSS, UI, Penpot, tokens, contracts or normalization decisions.
+
+The exact 1,096 Event Detail documents now retain these structural facts:
+
+- desktop family and CTA layout: 96 editorial/stacked versus 1,000
+  split/inline;
+- explicit split portrait state: 69 (57 portrait-or-square plus 12
+  low-resolution portrait viewer);
+- no-image split fallback: 63;
+- primary large media frame: 1,096;
+- split small-photo rail: 217; editorial small hero rail: 29;
+- large editorial poster companion: 11; large poster plus adjacent small photo
+  previews: 8.
+
+Eleven format records preserve layout, CTA and media resources. CTA entries
+map to real `DesktopEventActionPanel` family variants. The media frame, rails,
+poster companion and small previews remain honestly classified as
+`internal_conditional_resource` boundaries inside `DesktopEventPage`; the
+decoder does not invent new Astro components. Every record remains
+`NOT_MERGED / unresolved`.
+
+The accepted follow-up artifact is:
+
+- successful Actions run
+  [`31278123911`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31278123911),
+  head `63e411b390489d2a4bbe509622335d00f303416b`;
+- artifact ID `9027776108`, digest
+  `sha256:2ebb59d1a14ec4134c192c86aad8a8295f77577990398543cfef38f570f75b6c`,
+  compressed size 8,897,580 bytes;
+- receipt `complete`, manifest SHA-256
+  `8f7de76208e2505aae39ebcfa258d55ef2a59bc76fbb7bf584ae99a05cec383c`;
+- 15 required canonical files; 83,577,401 receipt output bytes under the
+  explicit 90 MiB cap;
+- 47 screenshot-index rows: 46 captures and one explicit uncaptured
+  source-only row; physical dimensions are 23 at `390x844` and 23 at
+  `1728x900`;
+- all declared output hashes and byte counts verify; the candidate bearer and
+  authorization scan is clean.
+
+Human review covered all 46 captures through labelled contact sheets and the
+five new Event Detail pairs at original size. It visibly confirmed the split
+poster/content layout with inline CTA, editorial landscape hero with separate
+stacked CTA, explicit portrait state, no-image fallback, and the editorial
+companion board containing one large poster plus smaller remaining-photo
+previews. No production-family representative showed a 404, browser error,
+wrong viewport or wholly blank main content. The known lab-only mobile shell
+versus full desktop observation remains unresolved.
+
+Source inventory and conflict language remain deliberately conservative. The
+artifact contains 213 plane-qualified component rows covering 107 logical
+component paths; the heuristic UI-family cohorts cover 80 paths while 27
+remain present but unclassified. There are 16 fragmentation candidates and 809
+style divergence candidates, but no component/token conflict has been
+normalized or confirmed as an equivalence decision. Color and typography
+remain raw plane-scoped PostCSS/computed observations, not palette or type
+tokens.
