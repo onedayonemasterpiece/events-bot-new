@@ -94,6 +94,7 @@ aws_cmd(){ aws --endpoint-url "$ENDPOINT" "$@"; }
 manifest="$EVIDENCE/deployment-manifest.json"
 release="prelaunch-main-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}"
 stage="_static/prelaunch-root-releases/$release/root"
+backup="_static/prelaunch-root-releases/$release/backup"
 
 # Stage and verify immutable copies before touching live keys.
 while IFS=$'\t' read -r key path type cache sha; do
@@ -101,17 +102,18 @@ while IFS=$'\t' read -r key path type cache sha; do
   test "$(aws_cmd s3 cp "s3://$BUCKET/$stage/$key" - --no-progress | sha256sum | cut -d' ' -f1)" = "$sha"
 done < <(jq -r '.files[]|[.key,.path,.content_type,.cache_control,.sha256]|@tsv' "$manifest")
 
-# Backup every target and restore it automatically if promotion/live proof fails.
+# Backup every target server-side with its original object metadata. Restoring
+# extensionless local byte copies would otherwise lose Content-Type and
+# Cache-Control and could leave the rolled-back root non-renderable.
 : > "$EVIDENCE/backup/inventory.tsv"
 while IFS= read -r key; do
-  safe=$(printf %s "$key"|sha256sum|cut -d' ' -f1)
   if aws_cmd s3api head-object --bucket "$BUCKET" --key "$key" >/dev/null 2>&1; then
-    aws_cmd s3 cp "s3://$BUCKET/$key" "$EVIDENCE/backup/$safe" --no-progress
-    printf '1\t%s\t%s\n' "$key" "$safe" >> "$EVIDENCE/backup/inventory.tsv"
-  else printf '0\t%s\t-\n' "$key" >> "$EVIDENCE/backup/inventory.tsv"; fi
+    aws_cmd s3 cp "s3://$BUCKET/$key" "s3://$BUCKET/$backup/$key" --metadata-directive COPY --no-progress
+    printf '1\t%s\n' "$key" >> "$EVIDENCE/backup/inventory.tsv"
+  else printf '0\t%s\n' "$key" >> "$EVIDENCE/backup/inventory.tsv"; fi
 done < <(jq -r '.files[].key' "$manifest")
 rollback=1
-rollback_live(){ status=$?; if [[ "$rollback" = 1 ]]; then while IFS=$'\t' read -r existed key safe; do if [[ "$existed" = 1 ]]; then aws_cmd s3 cp "$EVIDENCE/backup/$safe" "s3://$BUCKET/$key" --no-progress; else aws_cmd s3 rm "s3://$BUCKET/$key" --no-progress || true; fi; done < "$EVIDENCE/backup/inventory.tsv"; fi; exit "$status"; }
+rollback_live(){ status=$?; if [[ "$rollback" = 1 ]]; then while IFS=$'\t' read -r existed key; do if [[ "$existed" = 1 ]]; then aws_cmd s3 cp "s3://$BUCKET/$backup/$key" "s3://$BUCKET/$key" --metadata-directive COPY --no-progress; else aws_cmd s3 rm "s3://$BUCKET/$key" --no-progress || true; fi; done < "$EVIDENCE/backup/inventory.tsv"; fi; exit "$status"; }
 trap rollback_live ERR INT TERM
 
 # Root HTML is promoted last.
