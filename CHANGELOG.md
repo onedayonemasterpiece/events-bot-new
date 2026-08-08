@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Fixed the root-level GitHub Search wrapper to resolve Playwright from the
+  `site` package where CI installs it. Node ESM no longer searches for a
+  nonexistent repository-root `node_modules` tree before fixture acceptance.
+
 - Fixed the GitHub Search target resolver to invoke the production image's
   shipped `python3` runtime instead of a nonexistent `.venv/bin/python`, so the
   canary reaches exact-target auth and Search rather than failing in Fly SSH.

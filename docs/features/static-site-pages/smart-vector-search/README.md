@@ -695,6 +695,10 @@ prefix, сверяет exact target SHA и использует `auth.session_fi
 credential и callback в том же platform browser. Ни один job не читает mailbox.
 Resolver запускает в Fly image только доступный `python3`; checkout-local
 `.venv` не является частью production container contract.
+Root-level GitHub wrapper привязывает package resolution к `site/package.json`,
+поскольку `npm --prefix site ci` устанавливает Playwright и Supabase JS только
+в `site/node_modules`, а bare ESM import ищет зависимости относительно файла
+caller, не относительно shell working directory.
 
 Перед remote launch static builder делает online SQLite snapshot, одним чтением
 копирует v2 Search receipt в snapshot-scoped immutable файл и тем же canonical

@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 
-import { chromium } from 'playwright';
+const siteRequire = createRequire(new URL('../../site/package.json', import.meta.url));
+const { chromium } = siteRequire('playwright');
 
 import { runExactTargetBrowserAcceptance } from '../../site/e2e/auth-session-fixture/acceptance.mjs';
 import {
