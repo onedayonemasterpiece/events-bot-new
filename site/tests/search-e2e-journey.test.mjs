@@ -155,6 +155,8 @@ test('journey is mechanics-neutral and mobile adapters own native keyboard/touch
     readFile(new URL('../e2e/search/adapters/appium-ios.mjs', import.meta.url), 'utf8'),
   ]);
   assert.match(mobile, /isKeyboardShown/u);
+  assert.match(mobile, /search_auth_callback_session_not_restored/u);
+  assert.match(mobile, /data-authorized-search.*is-authorized/su);
   assert.match(mobile, /driver\.keys\('\\uE007'\)/u);
   assert.match(mobile, /mobile: scrollGesture/u);
   assert.match(mobile, /mobile: scroll/u);

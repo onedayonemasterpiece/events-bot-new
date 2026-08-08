@@ -16,6 +16,10 @@
 
 ### Fixed
 
+- Mobile Search auth callback now waits for the returned `/poisk/` UI to become
+  authorized before the persistence reload, preventing the adapter from
+  stripping the one-shot callback while Supabase was still storing the session.
+
 - Mobile Search L2 now performs bounded repeated native touch gestures until
   the final rendered card is actually visible, rather than issuing one gesture
   and failing every production-length eight-card result set.
