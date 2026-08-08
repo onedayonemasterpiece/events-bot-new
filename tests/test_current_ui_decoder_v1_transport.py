@@ -87,6 +87,23 @@ console.log(JSON.stringify(Object.fromEntries(cases.map(([name, axes]) => {
         assert result[name] != "accepted"
 
 
+def test_closed_axis_and_invalid_combination_catalog_is_explicit_and_not_merged():
+    result = _node(
+        _module_import("TRANSPORT_AXIS_DEFINITIONS, TRANSPORT_INVALID_COMBINATIONS")
+        + "console.log(JSON.stringify({axes:TRANSPORT_AXIS_DEFINITIONS, invalid:TRANSPORT_INVALID_COMBINATIONS}));"
+    )
+    assert result["axes"]["rail"]["event_end_basis"] == ["explicit", "forecast", "schedule_cutoff"]
+    assert result["axes"]["kaup"]["experiment_mode"] == ["off", "qa", "focus_group", "live"]
+    assert result["axes"]["kaup"]["treatment"] == [
+        "departure_board_v1", "route_strips_v1", "next_departure_queue_v1"
+    ]
+    assert len(result["invalid"]) == 13
+    assert {row["family"] for row in result["invalid"]} == {
+        "transport.rail", "transport.bus", "transport.kaup"
+    }
+    assert all(row["decision"] == "NOT_MERGED" for row in result["invalid"])
+
+
 def test_kaup_off_and_qa_treatments_are_separated_fail_closed():
     result = _node(
         _module_import("buildTransportStateRecords, validateKaupState")

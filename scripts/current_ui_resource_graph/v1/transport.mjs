@@ -81,6 +81,42 @@ const EXPERIMENT_MODES = Object.freeze(['off', 'qa', 'focus_group', 'live']);
 const TREATMENTS = Object.freeze(['departure_board_v1', 'route_strips_v1', 'next_departure_queue_v1']);
 const ALLOWED_REACHABILITY = Object.freeze(['production-reachable-not-observed', 'controlled-specimen-only', 'experiment-off', 'source-only']);
 
+export const TRANSPORT_AXIS_DEFINITIONS = Object.freeze({
+  rail: Object.freeze({
+    event_end_basis: RAIL_END_BASIS,
+    outbound_present: Object.freeze([false, true]), return_present: Object.freeze([false, true]),
+    event_end_present: Object.freeze([false, true]), estimated_end: Object.freeze([false, true]),
+    next_day_return: Object.freeze([false, true]), warning: Object.freeze([false, true]),
+  }),
+  bus: Object.freeze({
+    outbound_present: Object.freeze([false, true]), return_present: Object.freeze([false, true]),
+    boarding_estimated: Object.freeze([false, true]),
+  }),
+  kaup: Object.freeze({
+    compact: Object.freeze([false, true]), outbound_present: Object.freeze([false, true]),
+    departure_estimated: Object.freeze([false, true]), tight: Object.freeze([false, true]),
+    public_return_available: Object.freeze([false, true]), transfer_details_open: Object.freeze([false, true]),
+    experiment_host_present: Object.freeze([false, true]), initial_hidden: Object.freeze([false, true]),
+    experiment_mode: EXPERIMENT_MODES, treatment: TREATMENTS,
+  }),
+});
+
+export const TRANSPORT_INVALID_COMBINATIONS = Object.freeze([
+  Object.freeze({ id: 'transport-invalid.rail.cutoff-with-known-end', family: 'transport.rail', rule: 'schedule_cutoff => !event_end_present', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.rail.cutoff-with-proposed-return', family: 'transport.rail', rule: 'schedule_cutoff => !return_present && !next_day_return', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.rail.forecast-without-estimate', family: 'transport.rail', rule: 'forecast => event_end_present && estimated_end', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.rail.forecast-next-day', family: 'transport.rail', rule: 'forecast => !next_day_return', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.rail.explicit-estimated', family: 'transport.rail', rule: 'explicit => event_end_present && !estimated_end', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.rail.next-day-without-return', family: 'transport.rail', rule: 'next_day_return => return_present', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.rail.warning-with-return', family: 'transport.rail', rule: 'warning => !return_present && event_end_basis != schedule_cutoff', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.bus.non-boolean-presence', family: 'transport.bus', rule: 'presence and estimate axes are boolean', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.kaup.no-trip-with-departure-state', family: 'transport.kaup', rule: '!outbound_present => !departure_estimated && !tight', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.kaup.off-alternative', family: 'transport.kaup', rule: 'experiment_mode == off => treatment == departure_board_v1', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.kaup.off-with-host', family: 'transport.kaup', rule: 'experiment_mode == off => !experiment_host_present && !initial_hidden', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.kaup.enabled-without-host', family: 'transport.kaup', rule: 'experiment_mode != off => experiment_host_present', decision: 'NOT_MERGED' }),
+  Object.freeze({ id: 'transport-invalid.kaup.alternative-visible-in-source', family: 'transport.kaup', rule: 'enabled alternative treatment => initial_hidden', decision: 'NOT_MERGED' }),
+]);
+
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
@@ -334,6 +370,8 @@ export function buildTransportDecoderLane() {
     families: ['transport.rail', 'transport.bus', 'transport.kaup'],
     rejected_legacy_families: ['family.transport'],
     source_paths: TRANSPORT_SOURCE_PATHS,
+    axis_definitions: TRANSPORT_AXIS_DEFINITIONS,
+    invalid_combinations: TRANSPORT_INVALID_COMBINATIONS,
     exact_marker_allowlist: TRANSPORT_EXACT_MARKER_ALLOWLIST,
     forbidden_evidence_markers: TRANSPORT_FORBIDDEN_EVIDENCE_MARKERS,
     breakpoint_contexts: TRANSPORT_BREAKPOINT_CONTEXTS,

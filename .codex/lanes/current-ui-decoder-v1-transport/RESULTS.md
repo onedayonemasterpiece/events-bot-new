@@ -10,7 +10,8 @@ Penpot, token, merge/split, or normalization change was made.
 
 - Separate reviewed surfaces for rail, bus, and Kaup; the legacy broad
   `family.transport` classification is rejected.
-- Closed rail axes for outbound/return presence, `explicit`, `forecast`, and
+- Closed axis definitions plus explicit invalid-combination records. Rail
+  covers outbound/return presence, `explicit`, `forecast`, and
   `schedule_cutoff`, estimated end, next-day return, and warning states.
 - Closed bus axes for outbound/return group presence and estimated boarding.
 - Closed Kaup axes for compact/regular, trip/no-trip, estimated/tight,
@@ -40,7 +41,7 @@ Penpot, token, merge/split, or normalization change was made.
 ```text
 uv run --with pytest==8.1.1 pytest -q --confcutdir=tests/fixtures \
   tests/test_current_ui_decoder_v1_transport.py
-9 passed
+10 passed
 
 node --check scripts/current_ui_resource_graph/v1/transport.mjs
 git diff --check
