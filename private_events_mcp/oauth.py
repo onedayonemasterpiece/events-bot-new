@@ -20,6 +20,9 @@ from .access_policy import (
     CHATGPT_MAX_SCOPES,
     CODEX_DEFAULT_SCOPES,
     CODEX_MAX_SCOPES,
+    GRANULAR_SOCIAL_SCOPES,
+    LEGACY_PUBLISH_SCOPES,
+    LEGACY_SOCIAL_SCOPES,
     SOCIAL_SCOPES,
 )
 from .auth_store import OAuthStateStore, OAuthStoreError
@@ -359,16 +362,34 @@ class PrivateOAuthServer:
         )
         social_warning = ""
         if social:
-            capability_text += (
-                " Дополнительно запрошены перечисленные ниже granular social "
-                "capabilities для явно разрешённых Telegram/VK targets."
-            )
+            granular = social & GRANULAR_SOCIAL_SCOPES
+            legacy = social & LEGACY_SOCIAL_SCOPES
+            if granular:
+                capability_text += (
+                    " Дополнительно запрошены перечисленные ниже granular social "
+                    "capabilities для Telegram/VK."
+                )
+            if legacy:
+                capability_text += (
+                    " Также запрошены совместимые legacy social scopes для старых "
+                    "allowlist-инструментов."
+                )
+            warnings: list[str] = []
             if social & APPROVAL_REQUIRED_SOCIAL_SCOPES:
+                warnings.append(
+                    "Новые granular mutation-scopes выполняются только после отдельного "
+                    "внешнего подтверждения оператора и prepare/commit шага."
+                )
+            if social & LEGACY_PUBLISH_SCOPES:
+                warnings.append(
+                    "Legacy publish-scopes используют только старый одноразовый "
+                    "prepare/commit ticket; отдельного внешнего подтверждения у них нет."
+                )
+            if warnings:
                 social_warning = (
-                    '<p><strong>Внимание:</strong> mutation-scopes разрешают изменяющие '
-                    "операции только после отдельного external action approval и "
-                    "prepare/commit "
-                    "шага.</p>"
+                    '<p><strong>Внимание:</strong> '
+                    + " ".join(warnings)
+                    + "</p>"
                 )
         body = f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

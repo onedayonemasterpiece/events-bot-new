@@ -15,6 +15,7 @@ from private_events_mcp.access_policy import (
     CODEX_DEFAULT_SCOPES,
     CODEX_MAX_SCOPES,
     GRANULAR_SOCIAL_SCOPES,
+    LEGACY_PUBLISH_SCOPES,
     LEGACY_SOCIAL_SCOPES,
     READ_SCOPES,
 )
@@ -193,7 +194,7 @@ async def test_granular_social_authorization_is_chatgpt_only_and_ui_is_exact(con
         assert accepted.status == 200
         body = await accepted.text()
         assert "Scopes: <code>telegram:delete, vk:story:read</code>" in body
-        assert "external action approval" in body
+        assert "внешнего подтверждения оператора" in body
         assert "telegram:edit" not in body
 
         codex_query, _, _ = _authorization_query(
@@ -263,7 +264,9 @@ async def test_legacy_coarse_scopes_are_not_granular_power_aliases(config) -> No
         assert "telegram:delete" not in body
         assert "telegram:dm:send" not in body
         assert "telegram:story:write" not in body
-        assert "external action approval" in body
+        assert "Legacy publish-scopes" in body
+        assert "отдельного внешнего подтверждения у них нет" in body
+        assert not (LEGACY_PUBLISH_SCOPES & APPROVAL_REQUIRED_SOCIAL_SCOPES)
     finally:
         await client.close()
 

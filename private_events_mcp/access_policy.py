@@ -29,9 +29,12 @@ SOCIAL_MUTATION_SCOPES = frozenset(
         "story:write",
     }
 )
-APPROVAL_REQUIRED_SOCIAL_SCOPES = (
-    SOCIAL_MUTATION_SCOPES | {"telegram:publish", "vk:publish"}
-)
+# Only the new granular workspace mutations are protected by the external
+# operator-approval flow.  The two coarse legacy publish scopes intentionally
+# retain their older one-use prepare/commit semantics until the legacy tools are
+# retired; they must never be described as externally approved.
+APPROVAL_REQUIRED_SOCIAL_SCOPES = SOCIAL_MUTATION_SCOPES
+LEGACY_PUBLISH_SCOPES = frozenset({"telegram:publish", "vk:publish"})
 
 CHATGPT_DEFAULT_SCOPES = READ_SCOPES
 CODEX_DEFAULT_SCOPES = READ_SCOPES
