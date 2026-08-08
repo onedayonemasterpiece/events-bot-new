@@ -186,6 +186,9 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-08 iOS cold-start correction: the single Appium new-session request
   has a five-minute client budget and no ambiguous automatic retry, instead of
   WebdriverIO aborting a valid cold simulator/WDA launch at 120 seconds.
+- 2026-08-08 mobile scroll correction: L2 uses a bounded sequence of real
+  Appium touch gestures until the final rendered card intersects the viewport;
+  a single gesture is no longer treated as sufficient for an eight-card page.
 
 ## Follow-up Actions
 

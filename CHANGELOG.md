@@ -16,6 +16,10 @@
 
 ### Fixed
 
+- Mobile Search L2 now performs bounded repeated native touch gestures until
+  the final rendered card is actually visible, rather than issuing one gesture
+  and failing every production-length eight-card result set.
+
 - Increased the one-shot Appium session-start request budget from WebdriverIO's
   120-second default to five minutes, with ambiguous automatic session retries
   disabled, so a cold iOS simulator/WDA launch can complete without creating a

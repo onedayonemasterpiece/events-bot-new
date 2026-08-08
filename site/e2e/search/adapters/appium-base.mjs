@@ -19,6 +19,20 @@ function pageResultSnapshot() {
     card_renderer_unavailable: Boolean(results?.querySelector('[data-search-card-render-unavailable]')) };
 }
 
+export async function runRealTouchScroll({ readScrollY, lastCardVisible, gesture, wait, maxGestures = 24 }) {
+  const before = Number(await readScrollY());
+  let cardVisible = false;
+  let gestures = 0;
+  while (gestures < maxGestures && !cardVisible) {
+    await gesture();
+    gestures += 1;
+    await wait();
+    cardVisible = await lastCardVisible();
+  }
+  const after = Number(await readScrollY());
+  return { performed: gestures > 0, delta_y: after - before, card_visible_after: cardVisible === true };
+}
+
 export async function createAppiumSearchAdapter(options = {}) {
   const platform = options.platform;
   if (!['android', 'ios'].includes(platform)) throw new Error(`search_mobile_platform:${platform}`);
@@ -98,22 +112,20 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async snapshotResults() { return driver.execute(pageResultSnapshot); },
     async realScrollResults() {
-      const before = await driver.execute(() => scrollY);
       const size = await driver.getWindowSize();
-      if (platform === 'android') {
-        await driver.execute('mobile: scrollGesture', { left: 0, top: Math.floor(size.height * 0.15), width: size.width,
-          height: Math.floor(size.height * 0.7), direction: 'down', percent: 0.8 });
-      } else {
-        await driver.execute('mobile: scroll', { direction: 'down' });
-      }
-      await driver.pause(150);
-      const after = await driver.execute(() => scrollY);
-      const cardVisible = await driver.execute(() => {
-        const cards = document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]');
-        const card = cards[cards.length - 1]; if (!card) return false; const rect = card.getBoundingClientRect();
-        return rect.top < innerHeight && rect.bottom > 0;
+      return runRealTouchScroll({
+        readScrollY: () => driver.execute(() => scrollY),
+        gesture: () => platform === 'android'
+          ? driver.execute('mobile: scrollGesture', { left: 0, top: Math.floor(size.height * 0.15), width: size.width,
+            height: Math.floor(size.height * 0.7), direction: 'down', percent: 0.8 })
+          : driver.execute('mobile: scroll', { direction: 'down' }),
+        wait: () => driver.pause(150),
+        lastCardVisible: () => driver.execute(() => {
+          const cards = document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]');
+          const card = cards[cards.length - 1]; if (!card) return false; const rect = card.getBoundingClientRect();
+          return rect.top < innerHeight && rect.bottom > 0;
+        }),
       });
-      return { performed: true, delta_y: Number(after) - Number(before), card_visible_after: cardVisible === true };
     },
     async showMoreState() {
       return driver.execute(() => { const node = document.querySelector('[data-search-more]');
