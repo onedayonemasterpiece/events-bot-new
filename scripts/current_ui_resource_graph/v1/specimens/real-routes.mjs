@@ -201,6 +201,7 @@ export async function captureExactRealRoutes({
           dom: { tag: facts.tag, classes: facts.classes, attributes: facts.attributes, redacted_attribute_names: facts.redacted_attribute_names, child_count: facts.child_count, text_length: facts.text_length, text_sha256: facts.text_sha256, full_html_retained: false },
           accessibility: { aria_snapshot: aria, ...facts.state }, computed: facts.computed, geometry: facts.geometry,
           css_variables: facts.css_variables, pseudo: facts.pseudo, media: facts.media, media_queries: facts.media_queries,
+          cascade: facts.cascade, loaded_fonts: facts.loaded_fonts,
           screenshot: { path: `component-screenshots/${name}`, ...screenshot },
           console: { counts: telemetry.console_counts, message_text_retained: false, message_hashes: telemetry.console_hashes.slice(0, 20) },
           network: { counts_by_resource_type: telemetry.resource_counts, response_status_counts: telemetry.status_counts, failed_count: telemetry.failed_count, raw_urls_retained: false },
@@ -241,12 +242,21 @@ export function adaptEvidenceForSnapshot({
       id: `page-verification.${sha(row.id).slice(0, 16)}`, page_family: row.page_family, route_hash: row.route_hash,
       route_relative_key: row.relative_key, viewport: row.context?.viewport || null, context_name: row.context?.name || 'not-applicable',
       screenshot_path: row.screenshot?.path || null, evidence_kind: row.evidence_kind,
+      screenshot: row.screenshot ? structuredClone(row.screenshot) : null,
+      element_evidence: row.evidence_kind === 'element-capture' ? {
+        dom: row.dom, accessibility: row.accessibility, computed: row.computed, geometry: row.geometry,
+        css_variables: row.css_variables, pseudo: row.pseudo, media: row.media,
+        media_queries: row.media_queries, cascade: row.cascade, loaded_fonts: row.loaded_fonts,
+        console: row.console, network: row.network,
+      } : row.evidence_kind === 'expected-absence' ? { selector: row.selector, observed_count: row.observed_count } : null,
       status: row.evidence_kind === 'expected-absence' ? 'expected-absence-confirmed-unreviewed'
         : row.evidence_kind === 'explicit-unreachable' ? 'explicit-unreachable' : 'component-captured-unreviewed',
-      route_binding_ref: row.route_binding_id, runtime_observation_ref: row.runtime_observation_id,
+      route_binding_id: row.route_binding_id, route_binding_ref: row.route_binding_id, runtime_observation_ref: row.runtime_observation_id,
+      capsule_ids: [...binding.capsule_ids],
       source_refs: sourceRefs(binding.source_paths), evidence_record_ref: row.id,
       proof_label: row.proof_label, production_state_claimed: false, production_equivalence_claimed: false,
-      human_review_status: 'pending', normalization_allowed: false,
+      evidence_status: row.evidence_kind === 'element-capture' ? 'captured-not-reviewed' : row.evidence_kind,
+      review_status: 'pending-human-visual-review', human_review_status: 'pending', normalization_allowed: false,
     };
   });
   validateTraceIntegrity(registry, canonicalSpecimens, pageVerifications, { requireComplete });

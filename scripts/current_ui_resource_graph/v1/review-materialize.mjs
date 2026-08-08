@@ -39,7 +39,7 @@ function verifyRaster(outputRoot, screenshot) {
   if (sha(readFileSync(path)) !== screenshot.sha256) throw new Error(`Reviewed raster hash mismatch: ${screenshot.path}`);
 }
 
-function assertLedger(ledger, snapshotId, observations, pageVerifications, bindings, outputRoot) {
+export function assertHumanReviewLedger(ledger, snapshotId, observations, pageVerifications, bindings, outputRoot) {
   if (ledger.schema_version !== SCHEMA || ledger.snapshot_id !== snapshotId) throw new Error('Review ledger identity mismatch');
   if (!ledger.reviewer || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(ledger.reviewed_at || '')) throw new Error('Review ledger reviewer/time missing');
   assertDigest(ledger.actions_artifact?.artifact_digest, 'Actions artifact digest');
@@ -48,9 +48,11 @@ function assertLedger(ledger, snapshotId, observations, pageVerifications, bindi
   if (!ledger.permanent_storage?.uri || !ledger.permanent_storage?.object_version || !ledger.permanent_storage?.bytes) throw new Error('Permanent evidence provenance incomplete');
   const capsuleIds = ledger.capsules?.map((item) => item.id).sort() || [];
   if (JSON.stringify(capsuleIds) !== JSON.stringify([...CAPSULES].sort())) throw new Error('Review ledger must cover exactly six capsules');
+  const knownEvidenceIds = new Set([...observations, ...pageVerifications].map((item) => item.id));
   for (const row of ledger.capsules) {
     if (row.review_status !== 'reviewed' || !['high', 'medium', 'low'].includes(row.confidence) || !row.conclusion || !Array.isArray(row.evidence_ids) || !row.evidence_ids.length) throw new Error(`Incomplete capsule review: ${row.id}`);
     if (!Array.isArray(row.alternatives_considered)) throw new Error(`Capsule alternatives missing: ${row.id}`);
+    if (row.evidence_ids.some((id) => !knownEvidenceIds.has(id))) throw new Error(`Capsule review has a dangling evidence ref: ${row.id}`);
   }
   const bindingIds = new Set(bindings.map((item) => item.id));
   const observationMap = new Map(ledger.observations?.map((item) => [item.id, item]) || []);
@@ -82,6 +84,7 @@ function assertLedger(ledger, snapshotId, observations, pageVerifications, bindi
     const review = rasterMap.get(path); const bytes = readFileSync(join(outputRoot, path));
     if (review.review_status !== 'reviewed' || !review.visual_result || review.sha256 !== sha(bytes)) throw new Error(`Invalid raster review: ${path}`);
   }
+  return true;
 }
 
 function rewriteCapsule(root, capsuleReview, observations, pageVerifications) {
@@ -130,7 +133,7 @@ export function materializeReviewedHandoff({ snapshotRoot, reviewLedgerPath }) {
   const observations = readJsonl(join(root, 'specimen-observations.jsonl'));
   const pageVerifications = readJsonl(join(root, 'page-verification.jsonl'));
   const bindings = readJsonl(join(root, 'source-bindings.jsonl'));
-  assertLedger(ledger, manifest.snapshot_id, observations, pageVerifications, bindings, outputRoot);
+  assertHumanReviewLedger(ledger, manifest.snapshot_id, observations, pageVerifications, bindings, outputRoot);
   const reviews = new Map(ledger.observations.map((item) => [item.id, item]));
   const reviewedObservations = observations.map((item) => ({ ...item, ...reviews.get(item.id),
     screenshot_sha256: item.screenshot.sha256, evidence_status: 'reviewed', review_status: 'reviewed', production_state_claimed: false }));

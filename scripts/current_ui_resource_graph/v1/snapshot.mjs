@@ -144,6 +144,7 @@ function pageVerification(screenshots, componentEvidence) {
   for (const item of componentEvidence) rows.push({
     id: `page-verification.${sha(item.id).slice(0, 16)}`, page_family: item.page_family, route_hash: item.route_hash,
     viewport: item.viewport, screenshot_path: item.screenshot_path, component_evidence_id: item.id,
+    screenshot_sha256: item.screenshot_sha256 || null,
     status: item.component_binding ? 'component-captured-and-bound' : 'component-captured-binding-unresolved', proof_label: item.proof_label,
   });
   return rows.sort((a, b) => a.id.localeCompare(b.id));
@@ -311,6 +312,12 @@ export function writeV1Snapshot({
   indexed.push(existsSync(componentEvidencePath)
     ? { logical_path: 'component-evidence.jsonl', storage: 'actions-heavy-artifact', status: 'present', bytes: statSync(componentEvidencePath).size, sha256: sha(readFileSync(componentEvidencePath)) }
     : { logical_path: 'component-evidence.jsonl', storage: 'actions-heavy-artifact', status: 'not-captured' });
+  for (const name of ['specimen-observations.jsonl', 'real-route-observations.jsonl']) {
+    const path = join(output, name);
+    indexed.push(existsSync(path)
+      ? { logical_path: name, storage: 'actions-heavy-artifact', status: 'present', bytes: statSync(path).size, sha256: sha(readFileSync(path)) }
+      : { logical_path: name, storage: 'actions-heavy-artifact', status: 'not-captured' });
+  }
   const actions = {
     backend: 'github-actions', repository: process.env.GITHUB_REPOSITORY || null,
     run_id: process.env.GITHUB_RUN_ID || null, run_attempt: process.env.GITHUB_RUN_ATTEMPT || null,

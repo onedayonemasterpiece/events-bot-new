@@ -143,7 +143,7 @@ def _fixture(tmp_path: Path):
             encoding="utf-8",
         )
     (styles / "global.css").write_text(
-        ".event-card { padding: 8px; }\n"
+        ".event-card { padding: 8px; color: var(--card-color, #123456); }\n"
         ".event-card { padding: 12px; }\n"
         ".primary-button { border-radius: 4px; }\n",
         encoding="utf-8",
@@ -340,6 +340,34 @@ def test_v1_deep_validator_recomputes_hashes_and_rejects_tampering(decoded, tmp_
     invalid = subprocess.run(["node", str(validator), str(corrupted)], cwd=REPO, text=True, capture_output=True)
     assert invalid.returncode != 0
     assert "mismatch" in invalid.stderr.lower()
+
+
+def test_human_review_ledger_requires_every_raster_and_durable_provenance(tmp_path):
+    output = tmp_path / "output"
+    (output / "screenshots").mkdir(parents=True)
+    raster = output / "screenshots/page.jpg"
+    raster.write_bytes(b"reviewed-raster")
+    digest = _sha(raster.read_bytes())
+    script = f"""
+      import {{ assertHumanReviewLedger }} from './scripts/current_ui_resource_graph/v1/review-materialize.mjs';
+      const capsules = {json.dumps([
+          "capsule.01-event-presentation-states", "capsule.02-button-cta",
+          "capsule.03-media-heavy", "capsule.04-transport",
+          "capsule.05-medallions", "capsule.06-artifacts",
+      ])}.map((id) => ({{ id, review_status:'reviewed', confidence:'high', conclusion:'AS-IS evidence reconciled', evidence_ids:['evidence.1'], alternatives_considered:[] }}));
+      const base = {{ schema_version:'current_ui_decoder_human_review_v1', snapshot_id:'snapshot-test', reviewer:'Codex visual review', reviewed_at:'2026-08-08T23:59:59Z',
+        actions_artifact:{{run_id:'1',artifact_id:'2',artifact_digest:'sha256:{'a' * 64}',expires_at:'2026-11-06T00:00:00Z'}},
+        permanent_storage:{{uri:'https://github.example/release',object_version:'v1',sha256:'sha256:{'b' * 64}',bytes:1}}, capsules,
+        observations:[], page_verifications:[], raster_reviews:[{{path:'screenshots/page.jpg',sha256:'{digest}',review_status:'reviewed',visual_result:'match'}}] }};
+      const pageFacts = [{{id:'evidence.1'}}];
+      const valid = assertHumanReviewLedger(base, 'snapshot-test', [], pageFacts, [], {json.dumps(str(output))});
+      let missingRejected = false; try {{ assertHumanReviewLedger({{...base,raster_reviews:[]}}, 'snapshot-test', [], pageFacts, [], {json.dumps(str(output))}); }} catch {{ missingRejected = true; }}
+      let digestRejected = false; try {{ assertHumanReviewLedger({{...base,actions_artifact:{{...base.actions_artifact,artifact_digest:'bad'}}}}, 'snapshot-test', [], pageFacts, [], {json.dumps(str(output))}); }} catch {{ digestRejected = true; }}
+      process.stdout.write(JSON.stringify({{valid,missingRejected,digestRejected}}));
+    """
+    result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"valid": True, "missingRejected": True, "digestRejected": True}
 
 
 def test_state_aware_ast_facts_and_inline_script_import_edges(decoded):
@@ -690,6 +718,14 @@ def test_standalone_css_semantic_cohorts_and_fragmentation_channels(decoded):
         and row.get("source_divergence") == "distinct_literals_observed"
         for row in styles
     )
+    custom_property_use = next(
+        row for row in styles
+        if row.get("source_path", "").endswith("styles/global.css")
+        and row.get("property") == "color"
+    )
+    assert custom_property_use["selector"] == ".event-card"
+    assert custom_property_use["custom_property_dependencies"] == ["--card-color"]
+    assert custom_property_use["line_in_style_block"] == 1
     fragmentation = {
         row["family"]: row
         for row in map(

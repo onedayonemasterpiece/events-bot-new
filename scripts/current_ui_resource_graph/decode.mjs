@@ -18,7 +18,10 @@ import {
   materializeSpecimenHarness,
   buildSpecimenHarness,
   captureWithExactPlaywright,
-  validateTraceIntegrity,
+  loadPreviewEventCatalog,
+  resolveExactRealRouteBindings,
+  captureExactRealRoutes,
+  adaptEvidenceForSnapshot,
 } from './v1/specimens/index.mjs';
 
 function bool(value, fallback = false) {
@@ -261,13 +264,35 @@ async function run(argv) {
       materializeSpecimenHarness({ candidateSite: siteRoot, harnessRoot, nodeModules, registry: specimenRegistry });
       const harnessBuild = buildSpecimenHarness({ harnessRoot });
       if (!harnessBuild.ok) throw new Error(`Controlled specimen harness build failed: ${harnessBuild.stderr_tail}`);
-      specimenObservations = await captureWithExactPlaywright({
+      const controlledObservations = await captureWithExactPlaywright({
         nodeModules,
         dist: harnessBuild.dist,
-        outputDir: join(output, 'component-screenshots'),
+        outputDir: output,
         registry: specimenRegistry,
       });
-      validateTraceIntegrity(specimenRegistry, specimenObservations, realPageVerifications);
+      const resolvedRealRoutes = resolveExactRealRouteBindings({
+        registry: specimenRegistry,
+        manifest: runtimeManifest,
+        runtimeObservations: candidateRuntime,
+        catalog: loadPreviewEventCatalog(siteRoot),
+      });
+      const exactRequire = createRequire(join(siteRoot, 'package.json'));
+      const { chromium } = exactRequire('playwright');
+      const realRouteBrowser = await chromium.launch({ headless: true });
+      let rawRealRouteObservations;
+      try {
+        rawRealRouteObservations = await captureExactRealRoutes({
+          browser: realRouteBrowser, candidateBase, resolvedBindings: resolvedRealRoutes, outputDir: output,
+        });
+      } finally { await realRouteBrowser.close(); }
+      const adapted = adaptEvidenceForSnapshot({
+        registry: specimenRegistry,
+        specimenObservations: controlledObservations,
+        realRouteObservations: rawRealRouteObservations,
+        requireComplete: true,
+      });
+      specimenObservations = adapted.specimen_observations;
+      realPageVerifications = adapted.page_verifications;
     }
     const registryPlanRows = [
       ...specimenRegistry.controlled_specimens.map((row) => ({

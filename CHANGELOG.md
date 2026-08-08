@@ -27,7 +27,8 @@
 
 - Added the real-component Current UI Decoder specimen and review pipeline:
   19 bounded disposable Astro wrappers (20 interaction captures), exact
-  `PreviewEvent` transport/medallion fixtures, 25 real-route bindings,
+  `PreviewEvent` transport/medallion fixtures, 26 real-route bindings across
+  49 contexts,
   element PNG/DOM/ARIA/computed/cascade/font evidence, and a fail-closed human
   review materializer that requires every raster, all six capsules, Actions
   provenance and permanent-storage hashes before the narrow

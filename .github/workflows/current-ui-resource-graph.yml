@@ -272,8 +272,9 @@ jobs:
           for file in "${v1_required[@]}"; do test -e "$v1_root/$file"; done
           test "$(find "$v1_root/components" -maxdepth 1 -type f -name 'component.*.json' | wc -l)" -eq 107
           test "$(wc -l < "$v1_root/specimen-observations.jsonl")" -eq 20
-          test "$(find "$GRAPH_OUTPUT/component-screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 20
+          test "$(find "$GRAPH_OUTPUT/component-screenshots" -maxdepth 1 -type f -name '*.png' | wc -l)" -ge 20
           jq -e -s 'length == 20 and all(.[]; .evidence_status == "captured-not-reviewed" and .review_status == "pending-human-visual-review" and .production_state_claimed == false and .screenshot.exact_stable == true and .screenshot.perceptually_stable == true)' "$v1_root/specimen-observations.jsonl" >/dev/null
+          jq -e -s 'map(select(.route_binding_id != null) | .route_binding_id) | unique | length == 26' "$v1_root/page-verification.jsonl" >/dev/null
           jq -e '.status == "complete" and .evidence_completion == "partial" and .handoff_status == "NO_GO" and (.blockers | index("capsule_human_visual_review")) != null' "$v1_root/receipt.json" >/dev/null
           jq -e '
             .schema_version == "current_ui_component_decoder_v1"

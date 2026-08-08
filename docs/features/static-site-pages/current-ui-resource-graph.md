@@ -306,8 +306,8 @@ phase.
 
 The canonical capture run materializes a disposable Astro 6.4.8 harness from a
 reflink/copy of the exact candidate `site/src`; it never edits the pinned tree.
-The bounded registry has 19 controlled cases and 20 capture steps, plus 25
-exact real-route bindings. Rail, Kaup and medallions receive real
+The bounded registry has 19 controlled cases and 20 capture steps, plus 26
+exact real-route bindings across 49 viewport contexts. Rail, Kaup and medallions receive real
 `PreviewEvent` fixtures and render the real component definitions. The bus
 `no-groups` branch has no valid exact-data fixture and is therefore recorded as
 `source-model-only`, not fabricated through data-module replacement.
