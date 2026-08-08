@@ -21,9 +21,43 @@ export function classifySafariInspection({ titleCount = 0, scopedActions = [], t
   };
 }
 
+function boundedCurrentAlertAction(state, expectedAction) {
+  const probe = state?.contract_probe;
+  if (!probe || typeof probe !== 'object') return null;
+  const isSingleUnknownCurrentAlert = Number(state?.known_dialog_count || 0) === 0
+    && Number(state?.continue_button_count || 0) === 0
+    && Number(state?.blocking_dialog_count || 0) === 1
+    && Number(state?.unknown_blocking_dialog_count || 0) === 1
+    && probe.current_alert_present === true;
+  const hasExactButtonPair = Number(probe.alert_button_count || 0) === 2
+    && Number(probe.exact_continue_button_count || 0) === 1
+    && Number(probe.exact_settings_button_count || 0) === 1;
+  if (!isSingleUnknownCurrentAlert || !hasExactButtonPair) return null;
+  const titleSignals = [
+    probe.exact_visible_static_text_count,
+    probe.exact_static_text_count,
+    probe.containing_static_text_count,
+    probe.exact_any_element_count,
+    probe.exact_title_line_count,
+    probe.title_substring_count,
+  ].map((value) => Number(value || 0));
+  return {
+    token: expectedAction,
+    route: titleSignals.some((value) => value === 1)
+      ? 'current_alert_exact_action_with_title_signal'
+      : 'current_alert_exact_button_pair',
+  };
+}
+
 /**
  * Stabilize Safari native UI without accepting arbitrary alerts.
  * inspect() returns counts only; no native labels or hierarchy enter evidence.
+ *
+ * Safari-owned first-run sheets can be visible through WDA's current-alert API
+ * while global predicate lookup returns no title element. In that bounded case,
+ * exactly one current alert with exactly the two expected buttons may receive
+ * one exact-label action. Completion still requires repeated proof that the
+ * blocking alert disappeared.
  */
 export async function stabilizeSafariSystemUi({
   inspect,
@@ -34,6 +68,8 @@ export async function stabilizeSafariSystemUi({
   dismissalTimeoutMs = 5_000,
   intervalMs = 250,
   stableAbsentSamples = 3,
+  stableFallbackSamples = 2,
+  expectedFallbackAction = 'Продолжить',
 } = {}) {
   if (typeof inspect !== 'function' || typeof dismissKnownDialog !== 'function') {
     throw new TypeError('safari_system_ui_adapter_missing');
@@ -99,45 +135,71 @@ export async function stabilizeSafariSystemUi({
       }
     }
   };
+  const ambiguous = (state) => Number(state?.known_dialog_count || 0) > 1
+    || Number(state?.continue_button_count || 0) > 1
+    || Number(state?.blocking_dialog_count || 0) > 1
+    || Number(state?.unknown_blocking_dialog_count || 0) > 1
+    || (Number(state?.known_dialog_count || 0) > 0 && Number(state?.unknown_blocking_dialog_count || 0) > 0);
 
-  let known = null;
+  let candidate = null;
+  let fallbackSamples = 0;
   while (now() - started <= discoveryTimeoutMs) {
     const state = await inspect();
     recordInspection(state);
-    if (Number(state?.unknown_blocking_dialog_count || 0) > 0) reject('unexpected_blocking_modal');
-    if (Number(state?.known_dialog_count || 0) > 1 || Number(state?.continue_button_count || 0) > 1) {
-      reject('ambiguous_search_choice_dialog');
-    }
+    if (ambiguous(state)) reject('ambiguous_search_choice_dialog');
     if (Number(state?.known_dialog_count || 0) === 1) {
       if (Number(state?.continue_button_count || 0) !== 1 || !state?.action_token) {
         reject('search_choice_action_missing');
       }
-      known = state;
+      candidate = { actionToken: state.action_token, route: 'classified_current_alert' };
       break;
+    }
+    const fallback = boundedCurrentAlertAction(state, expectedFallbackAction);
+    if (fallback) {
+      fallbackSamples += 1;
+      if (fallbackSamples >= stableFallbackSamples) {
+        candidate = { actionToken: fallback.token, route: fallback.route };
+        break;
+      }
+    } else {
+      fallbackSamples = 0;
+      if (Number(state?.unknown_blocking_dialog_count || 0) > 0) reject('unexpected_blocking_modal');
     }
     await wait(intervalMs);
   }
 
-  if (!known) {
+  if (!candidate) {
     evidence.obstruction_free = true;
     return finish('no_blocking_modal_observed');
   }
 
   evidence.seen = true;
   evidence.attempts = 1;
-  evidence.transitions.push('search_choice_observed', 'dismissal_requested');
-  await dismissKnownDialog(known.action_token);
+  evidence.discovery_route = candidate.route;
+  evidence.transitions.push(
+    candidate.route === 'classified_current_alert' ? 'search_choice_observed' : 'bounded_current_alert_observed',
+    'dismissal_requested',
+  );
+  try {
+    await dismissKnownDialog(candidate.actionToken);
+  } catch {
+    reject(candidate.route === 'classified_current_alert'
+      ? 'search_choice_dismissal_failed'
+      : 'bounded_current_alert_exact_action_failed');
+  }
 
   const dismissalStarted = now();
   let absentSamples = 0;
   while (now() - dismissalStarted <= dismissalTimeoutMs) {
     const state = await inspect();
     recordInspection(state);
-    if (Number(state?.unknown_blocking_dialog_count || 0) > 0) reject('unexpected_blocking_modal_after_dismissal');
-    if (Number(state?.known_dialog_count || 0) > 1 || Number(state?.continue_button_count || 0) > 1) {
-      reject('ambiguous_search_choice_dialog_after_dismissal');
-    }
-    if (Number(state?.known_dialog_count || 0) === 0 && Number(state?.blocking_dialog_count || 0) === 0) {
+    if (ambiguous(state)) reject('ambiguous_search_choice_dialog_after_dismissal');
+    const stillSameBoundedAlert = Boolean(boundedCurrentAlertAction(state, expectedFallbackAction));
+    const noBlockingUi = Number(state?.known_dialog_count || 0) === 0
+      && Number(state?.continue_button_count || 0) === 0
+      && Number(state?.blocking_dialog_count || 0) === 0
+      && Number(state?.unknown_blocking_dialog_count || 0) === 0;
+    if (noBlockingUi) {
       absentSamples += 1;
       if (absentSamples >= stableAbsentSamples) {
         evidence.dismissed = true;
@@ -146,8 +208,13 @@ export async function stabilizeSafariSystemUi({
       }
     } else {
       absentSamples = 0;
+      if (Number(state?.unknown_blocking_dialog_count || 0) > 0 && !stillSameBoundedAlert) {
+        reject('unexpected_blocking_modal_after_dismissal');
+      }
     }
     await wait(intervalMs);
   }
-  reject('search_choice_dialog_stuck');
+  reject(candidate.route === 'classified_current_alert'
+    ? 'search_choice_dialog_stuck'
+    : 'bounded_current_alert_dialog_stuck');
 }
