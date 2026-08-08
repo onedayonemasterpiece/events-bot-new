@@ -1,25 +1,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator, ValidationError, validate
 
 from private_events_mcp.access_policy import CODEX_MAX_SCOPES
 from private_events_mcp.social_workspace import (
-    ApprovalContext,
-    ApprovalGrant,
-    AuditAppendResult,
-    ContentFeature,
-    DurableIdempotencyReservation,
-    EditorialSampleState,
-    ExecutionSafetyHooks,
-    GateDecision,
-    RecursiveRedactionResult,
-    SafetyAuditEvent,
     SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA,
@@ -46,11 +37,18 @@ from private_events_mcp.social_workspace import (
     SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA,
     SOCIAL_WORKSPACE_TARGET_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
+    ApprovalContext,
+    ApprovalGrant,
+    AuditAppendResult,
+    ContentFeature,
+    DurableIdempotencyReservation,
+    EditorialSampleState,
+    ExecutionSafetyHooks,
+    GateDecision,
+    RecursiveRedactionResult,
+    SafetyAuditEvent,
     SocialAction,
     SocialActionStatus,
-    SocialCapabilities,
-    SocialPlatform,
-    SocialReadOperation,
     SocialReadPurpose,
     SocialTargetKind,
     SocialWorkspaceValidationError,
@@ -60,9 +58,9 @@ from private_events_mcp.social_workspace import (
     enforce_execution_safety,
     required_scope_for_action,
     required_scope_for_read,
+    validate_action_status_response,
     validate_asset_stage_request,
     validate_asset_status_request,
-    validate_action_status_response,
     validate_capabilities,
     validate_commit_request,
     validate_editorial_sample_response,
@@ -73,7 +71,6 @@ from private_events_mcp.social_workspace import (
     validate_send_message_receipt,
     validate_status_request,
 )
-
 
 TARGET_REF = "tgt_abcdefghijklmnop"
 OTHER_TARGET_REF = "tgt_ponmlkjihgfedcba"

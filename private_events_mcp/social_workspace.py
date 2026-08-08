@@ -10,10 +10,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 from urllib.parse import urlsplit
 
 
@@ -717,9 +718,14 @@ def validate_editorial_sample_response(
         raise SocialWorkspaceValidationError("editorial cumulative_count is incoherent")
     remaining = request.total_limit - cumulative
     next_cursor = data.get("next_cursor")
-    if next_cursor is not None:
-        if remaining <= 0 or not isinstance(next_cursor, str) or not _CURSOR_RE.fullmatch(next_cursor):
-            raise SocialWorkspaceValidationError("next_cursor exists without remaining sample budget")
+    if next_cursor is not None and (
+        remaining <= 0
+        or not isinstance(next_cursor, str)
+        or not _CURSOR_RE.fullmatch(next_cursor)
+    ):
+        raise SocialWorkspaceValidationError(
+            "next_cursor exists without remaining sample budget"
+        )
     return cumulative
 
 
@@ -734,7 +740,7 @@ def _validate_target_locator(value: Any, platform: SocialPlatform) -> TargetLoca
     raw = _optional_text(data.get("value"), "target locator value", maximum=512, required=True)
     assert raw is not None
     if kind is TargetLocatorKind.USERNAME:
-        normalized = raw[1:] if raw.startswith("@") else raw
+        normalized = raw.removeprefix("@")
         if not re.fullmatch(r"[A-Za-z0-9_.-]{2,128}", normalized):
             raise SocialWorkspaceValidationError("target username is invalid")
         raw = normalized
@@ -765,7 +771,7 @@ def _validate_iso_date(value: Any, field: str) -> str:
     clean = _optional_text(value, field, maximum=10, required=True)
     assert clean is not None
     try:
-        datetime.strptime(clean, "%Y-%m-%d")
+        datetime.strptime(clean, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except ValueError as exc:
         raise SocialWorkspaceValidationError(f"{field} must be YYYY-MM-DD") from exc
     return clean
@@ -1078,12 +1084,29 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
     }
     if action in required_content and content is None:
         raise SocialWorkspaceValidationError("content is required for this action")
-    if action in {SocialAction.SEND_MESSAGE, SocialAction.PUBLISH, SocialAction.SCHEDULE, SocialAction.STORY}:
-        if target_ref is None:
-            raise SocialWorkspaceValidationError("target_ref is required for this action")
-    if action in {SocialAction.EDIT, SocialAction.DELETE, SocialAction.REACTION, SocialAction.COMMENT, SocialAction.FORWARD}:
-        if item_ref is None:
-            raise SocialWorkspaceValidationError("item_ref is required for this action")
+    if (
+        action
+        in {
+            SocialAction.SEND_MESSAGE,
+            SocialAction.PUBLISH,
+            SocialAction.SCHEDULE,
+            SocialAction.STORY,
+        }
+        and target_ref is None
+    ):
+        raise SocialWorkspaceValidationError("target_ref is required for this action")
+    if (
+        action
+        in {
+            SocialAction.EDIT,
+            SocialAction.DELETE,
+            SocialAction.REACTION,
+            SocialAction.COMMENT,
+            SocialAction.FORWARD,
+        }
+        and item_ref is None
+    ):
+        raise SocialWorkspaceValidationError("item_ref is required for this action")
     if action is SocialAction.FORWARD and destination_ref is None:
         raise SocialWorkspaceValidationError("destination_target_ref is required for forward")
     if action is SocialAction.REACTION and reaction is None:
@@ -1540,7 +1563,7 @@ def enforce_execution_safety(
         assert action_digest is not None
         try:
             reservation = hooks.durable_idempotency(request, action_digest)
-        except Exception:
+        except Exception:  # noqa: BLE001 - fail closed on caller-supplied hook errors
             deny("idempotency_hook_failed", "durable idempotency reservation denied")
         if (
             not isinstance(reservation, DurableIdempotencyReservation)
@@ -1552,7 +1575,7 @@ def enforce_execution_safety(
             deny("idempotency_denied", "durable idempotency reservation denied")
     try:
         redaction = hooks.recursive_redaction(response)
-    except Exception:
+    except Exception:  # noqa: BLE001 - fail closed on caller-supplied hook errors
         deny("redaction_hook_failed", "recursive redaction did not complete")
     if not isinstance(redaction, RecursiveRedactionResult) or redaction.recursive is not True:
         deny("redaction_incomplete", "recursive redaction did not complete")
@@ -1584,7 +1607,7 @@ def enforce_execution_safety(
     ):
         try:
             decision = hook(context)
-        except Exception:
+        except Exception:  # noqa: BLE001 - fail closed on caller-supplied hook errors
             deny(f"{name}_hook_failed", f"{name} denied: hook_failed")
         if not isinstance(decision, GateDecision) or not decision.allowed:
             code = decision.code if isinstance(decision, GateDecision) else "invalid_decision"
@@ -2241,28 +2264,6 @@ SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
 
 
 __all__ = [
-    "ActionGateHook",
-    "ApprovalConsumeHook",
-    "ApprovalContext",
-    "ApprovalGrant",
-    "AssetLifecycleStatus",
-    "AssetStageRequest",
-    "AuditAppendResult",
-    "BudgetHook",
-    "CapabilityHook",
-    "ContentFeature",
-    "DurableIdempotencyReservation",
-    "EditorialSampleState",
-    "EditorialSampleStateHook",
-    "ExecutionSafetyHooks",
-    "GateDecision",
-    "MediaAttachment",
-    "MediaRole",
-    "ReadGateHook",
-    "RecursiveRedactionResult",
-    "RichContent",
-    "RichEntity",
-    "RichEntityKind",
     "SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA",
     "SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA",
@@ -2289,8 +2290,30 @@ __all__ = [
     "SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA",
     "SOCIAL_WORKSPACE_TARGET_SEARCH_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA",
-    "SafetyExecutionContext",
+    "ActionGateHook",
+    "ApprovalConsumeHook",
+    "ApprovalContext",
+    "ApprovalGrant",
+    "AssetLifecycleStatus",
+    "AssetStageRequest",
+    "AuditAppendResult",
+    "BudgetHook",
+    "CapabilityHook",
+    "ContentFeature",
+    "DurableIdempotencyReservation",
+    "EditorialSampleState",
+    "EditorialSampleStateHook",
+    "ExecutionSafetyHooks",
+    "GateDecision",
+    "MediaAttachment",
+    "MediaRole",
+    "ReadGateHook",
+    "RecursiveRedactionResult",
+    "RichContent",
+    "RichEntity",
+    "RichEntityKind",
     "SafetyAuditEvent",
+    "SafetyExecutionContext",
     "SocialAction",
     "SocialActionIntent",
     "SocialActionStatus",
@@ -2312,9 +2335,9 @@ __all__ = [
     "enforce_execution_safety",
     "required_scope_for_action",
     "required_scope_for_read",
+    "validate_action_status_response",
     "validate_asset_stage_request",
     "validate_asset_status_request",
-    "validate_action_status_response",
     "validate_capabilities",
     "validate_commit_request",
     "validate_editorial_sample_response",
