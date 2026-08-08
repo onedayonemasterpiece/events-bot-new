@@ -34,6 +34,11 @@
 
 ### Fixed
 
+- Fixed Private Events MCP browser authorization being accepted server-side
+  but appearing inert in Chrome: the authorization CSP now permits form
+  navigation only to `'self'` and the exact origin of the already validated
+  ChatGPT or Codex callback, with regression coverage for both clients.
+
 - Mobile Search now converts the broker's Supabase admin confirmation URL into
   the static site's supported `token_hash/type` callback before opening it in
   Chrome/Safari. Verification therefore runs inside the device browser and

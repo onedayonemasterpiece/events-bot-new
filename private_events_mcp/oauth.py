@@ -331,6 +331,8 @@ class PrivateOAuthServer:
         except OAuthHTTPError as exc:
             return self._error_page(exc)
         sealed = self._seal_authorization_request(auth_request)
+        callback = urlsplit(auth_request.redirect_uri)
+        callback_origin = f"{callback.scheme}://{callback.netloc}"
         scopes = ", ".join(sorted(auth_request.scopes))
         client_name = (
             "ChatGPT"
@@ -374,7 +376,11 @@ class PrivateOAuthServer:
                 "Pragma": "no-cache",
                 "Referrer-Policy": "no-referrer",
                 "X-Content-Type-Options": "nosniff",
-                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+                "Content-Security-Policy": (
+                    "default-src 'none'; style-src 'unsafe-inline'; "
+                    f"form-action 'self' {callback_origin}; "
+                    "base-uri 'none'; frame-ancestors 'none'"
+                ),
             },
         )
 

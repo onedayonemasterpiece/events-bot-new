@@ -73,6 +73,8 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
         }
         page = await client.get(config.oauth_authorize_path + "?" + urlencode(authorize_query))
         assert page.status == 200
+        csp = page.headers["Content-Security-Policy"]
+        assert "form-action 'self' https://chatgpt.com" in csp
         html = await page.text()
         sealed = re.search(r'name="authorization_request" value="([^"]+)"', html)
         assert sealed
@@ -189,6 +191,8 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
         }
         page = await client.get(config.oauth_authorize_path + "?" + urlencode(query))
         assert page.status == 200
+        csp = page.headers["Content-Security-Policy"]
+        assert "form-action 'self' http://127.0.0.1:1455" in csp
         sealed = re.search(
             r'name="authorization_request" value="([^"]+)",?', await page.text()
         )
