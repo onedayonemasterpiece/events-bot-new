@@ -33,7 +33,7 @@ The final lane head additionally contains only this updated results receipt.
 - `git diff --cached --check`
 
 ## Tests / verification
-- Focused contract suite: `30 passed in 1.58s`.
+- Focused contract suite: `30 passed`.
 - Compileall: passed.
 - Diff checks: passed.
 - Every exported JSON Schema passes Draft 2020-12 meta-validation and is closed at the tool boundary.
