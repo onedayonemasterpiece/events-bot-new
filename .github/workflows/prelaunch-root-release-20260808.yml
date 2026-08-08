@@ -46,6 +46,23 @@ jobs:
           test "$(sha256sum "$source_script" | cut -d' ' -f1)" = 'df673401c03713ce400541ba27b0593894dd7b546598b6f538f9e4b699fb1375'
           cp "$source_script" "$publish_script"
           test "$(sha256sum "$publish_script" | cut -d' ' -f1)" = 'df673401c03713ce400541ba27b0593894dd7b546598b6f538f9e4b699fb1375'
+
+          # The production honeypot RPC deliberately returns only the public
+          # acceptance envelope. It does not echo consent_version and does not
+          # return a row identifier or email because no subscriber row is stored.
+          PUBLISH_SCRIPT="$publish_script" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['PUBLISH_SCRIPT'])
+          source = path.read_text(encoding='utf-8')
+          old = '''jq -e '\n  .accepted == true\n  and .status == "registered"\n  and .launch_date == "2026-09-01"\n  and .consent_version == "prelaunch-updates-2026-v1"\n' "$EVIDENCE_ROOT/transport-direct.json" >/dev/null'''
+          new = '''jq -e '\n  .accepted == true\n  and .status == "registered"\n  and .launch_date == "2026-09-01"\n  and (has("id") | not)\n  and (has("email") | not)\n' "$EVIDENCE_ROOT/transport-direct.json" >/dev/null'''
+          if source.count(old) != 1:
+              raise SystemExit('Expected exactly one pinned direct honeypot assertion')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+
           bash -n "$publish_script"
           chmod 700 "$publish_script"
           echo "PUBLISH_SCRIPT=$publish_script" >> "$GITHUB_ENV"
