@@ -1,5 +1,109 @@
 import { classifySafariInspection, stabilizeSafariSystemUi } from './safari-system-ui.mjs';
 
+const IOS_WEB_INPUT_TYPES = Object.freeze([
+  'XCUIElementTypeTextField',
+  'XCUIElementTypeTextView',
+  'XCUIElementTypeSearchField',
+]);
+
+function iosPredicateLiteral(value) {
+  return String(value).replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+}
+
+export async function withNativeAppContext(driver, fn) {
+  if (!driver || typeof fn !== 'function') throw new TypeError('mobile_native_context_adapter_missing');
+  const originalContext = await driver.getContext();
+  const contexts = await driver.getContexts();
+  const nativeContext = contexts.find((value) => String(value).toUpperCase() === 'NATIVE_APP');
+  if (!nativeContext) throw new Error('fail_browser_context:native_context_missing');
+  if (String(originalContext).toUpperCase() !== 'NATIVE_APP') await driver.switchContext(nativeContext);
+  try {
+    return await fn();
+  } finally {
+    if (String(originalContext).toUpperCase() !== 'NATIVE_APP') await driver.switchContext(originalContext);
+  }
+}
+
+export async function observeNativeKeyboard(driver, { timeout = 3_000, interval = 200 } = {}) {
+  let shown = false;
+  await driver.waitUntil(async () => {
+    shown = await driver.isKeyboardShown().catch(() => false);
+    return shown;
+  }, { timeout, interval }).catch(() => undefined);
+  return shown;
+}
+
+export async function dismissNativeKeyboard(driver) {
+  return withNativeAppContext(driver, async () => {
+    const shown = await driver.isKeyboardShown().catch(() => false);
+    if (!shown) return false;
+    await driver.hideKeyboard();
+    return true;
+  });
+}
+
+/**
+ * Focus a Safari web input through the exact native accessibility bridge.
+ * WebKit click acknowledgement alone does not prove that the simulator opened
+ * its software keyboard. Candidate names are closed, caller-owned UI strings;
+ * no page source, input value or surrounding hierarchy is inspected.
+ */
+export async function focusIosSafariWebInput(driver, { labels, types = IOS_WEB_INPUT_TYPES } = {}) {
+  const allowedLabels = [...new Set((labels || []).map((value) => String(value).trim()).filter(Boolean))];
+  const allowedTypes = [...new Set((types || []).map((value) => String(value).trim()).filter(Boolean))];
+  if (allowedLabels.length === 0 || allowedTypes.length === 0) throw new TypeError('ios_web_input_allowlist_missing');
+  return withNativeAppContext(driver, async () => {
+    const typePredicate = allowedTypes.map((value) => `type == '${iosPredicateLiteral(value)}'`).join(' OR ');
+    const labelPredicate = allowedLabels.map((value) => {
+      const literal = iosPredicateLiteral(value);
+      return `(name == '${literal}' OR label == '${literal}' OR placeholderValue == '${literal}')`;
+    }).join(' OR ');
+    const predicate = `visible == 1 AND (${typePredicate}) AND (${labelPredicate})`;
+    const matches = await driver.findElements('-ios predicate string', predicate);
+    if (!Array.isArray(matches) || matches.length !== 1) {
+      throw new Error(`fail_browser_context:native_input_match_count:${Array.isArray(matches) ? matches.length : 'invalid'}`);
+    }
+    const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;
+    if (!elementId) throw new Error('fail_browser_context:native_input_id_missing');
+    const rect = await driver.getElementRect(elementId);
+    if (!(rect?.width > 0 && rect?.height > 0)) throw new Error('fail_browser_context:native_input_rect_invalid');
+    await driver.executeScript('mobile: tap', [{
+      x: Math.round(rect.x + rect.width / 2),
+      y: Math.round(rect.y + rect.height / 2),
+    }]);
+    const shown = await observeNativeKeyboard(driver);
+    return { route: 'xcuitest_exact_accessibility_field', match_count: 1,
+      outcome: 'tap_dispatched', keyboard_shown: shown };
+  });
+}
+
+/** Execute an absolute-coordinate finger swipe in NATIVE_APP, never through Chromedriver. */
+export async function performNativeTouchSwipe(driver, { startX, startY, endX, endY, duration = 450 } = {}) {
+  const coordinates = [startX, startY, endX, endY].map(Number);
+  const durationMs = Number(duration);
+  if (coordinates.some((value) => !Number.isFinite(value)) || !Number.isFinite(durationMs) || durationMs < 1) {
+    throw new TypeError('mobile_touch_swipe_geometry_invalid');
+  }
+  const [fromX, fromY, toX, toY] = coordinates.map(Math.round);
+  await withNativeAppContext(driver, async () => {
+    try {
+      await driver.performActions([{
+        type: 'pointer', id: 'mobile-web-finger', parameters: { pointerType: 'touch' }, actions: [
+          { type: 'pointerMove', duration: 0, origin: 'viewport', x: fromX, y: fromY },
+          { type: 'pointerDown', button: 0 },
+          { type: 'pause', duration: 100 },
+          { type: 'pointerMove', duration: Math.round(durationMs), origin: 'viewport', x: toX, y: toY },
+          { type: 'pointerUp', button: 0 },
+        ],
+      }]);
+    } finally {
+      await driver.releaseActions().catch(() => undefined);
+    }
+  });
+  return { route: 'w3c_native_touch', delta_x: toX - fromX, delta_y: toY - fromY,
+    duration_ms: Math.round(durationMs) };
+}
+
 export function buildAppiumCapabilities(platform, config, env = process.env) {
   return platform === 'android' ? {
     platformName: 'Android', browserName: 'Chrome',

@@ -5,7 +5,8 @@ import { observedRepoSha } from '../helpers/release-identity.mjs';
 import { classifyKeyboardAcceptance, keyboardFailureClass, validateMobileConfig } from '../helpers/platform.mjs';
 import { sanitizedFailureClass } from '../helpers/runtime-diagnostics.mjs';
 import { buildAppiumCapabilities, classifyActiveIosApp, inspectSafariNativeUiProtocol,
-  prepareIosSafariWebContext, summarizeKnownSafariNativeSource } from '../../mobile-web/appium-browser.mjs';
+  focusIosSafariWebInput, observeNativeKeyboard, prepareIosSafariWebContext,
+  summarizeKnownSafariNativeSource, withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
 
 const SELECTORS = Object.freeze({
   install: '[data-intake-stage="install"]:not([hidden])', skip: '[data-focus-install-skip]',
@@ -93,15 +94,6 @@ async function waitText(driver, pattern, timeout = 30_000) {
   await driver.waitUntil(async () => pattern.test(await (await driver.$(SELECTORS.done)).getText()), {
     timeout, timeoutMsg: 'membership_state_timeout', interval: 350,
   });
-}
-
-export async function observeNativeKeyboard(driver, { timeout = 3_000, interval = 200 } = {}) {
-  let shown = false;
-  await driver.waitUntil(async () => {
-    shown = await driver.isKeyboardShown().catch(() => false);
-    return shown;
-  }, { timeout, interval }).catch(() => undefined);
-  return shown;
 }
 
 export async function createAppiumUi({ platform, target, expectedRepoSha, expectedFaultProfile = 'normal', evidenceRoot, directHost, relayHost, secrets = [], env = process.env }) {
@@ -252,12 +244,7 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, expect
   }
 
   async function withNativeContext(fn) {
-    const originalContext = await driver.getContext();
-    const contexts = await driver.getContexts();
-    const nativeContext = contexts.find((value) => String(value).toUpperCase() === 'NATIVE_APP');
-    if (!nativeContext) throw new Error('fail_browser_context:native_context_missing');
-    await driver.switchContext(nativeContext);
-    try { return await fn(); } finally { await driver.switchContext(originalContext); }
+    return withNativeAppContext(driver, fn);
   }
 
   async function ensureSafariSystemUiStable() {
@@ -319,22 +306,11 @@ export async function createAppiumUi({ platform, target, expectedRepoSha, expect
       nativeKeyboardAtTap[kind] = shown;
       attempts.at(-1).keyboard_shown = shown;
     } else {
-      await withNativeContext(async () => {
-        const escapedLabel = label.replaceAll("'", "\\'");
-        const predicate = `type == 'XCUIElementTypeTextField' AND visible == 1 AND (name == '${escapedLabel}' OR label == '${escapedLabel}')`;
-        const matches = await driver.findElements('-ios predicate string', predicate);
-        attempts.push({ route: 'xcuitest_exact_accessibility_field', match_count: matches.length });
-        if (matches.length !== 1) throw new Error(`fail_browser_context:native_input_match_count:${kind}:${matches.length}`);
-        const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;
-        if (!elementId) throw new Error(`fail_browser_context:native_input_id_missing:${kind}`);
-        const rect = await driver.getElementRect(elementId);
-        if (!(rect.width > 0 && rect.height > 0)) throw new Error(`fail_browser_context:native_input_rect_invalid:${kind}`);
-        await driver.executeScript('mobile: tap', [{ x: Math.round(rect.x + rect.width / 2), y: Math.round(rect.y + rect.height / 2) }]);
-        attempts.at(-1).outcome = 'tap_dispatched';
-        const shown = await observeNativeKeyboard(driver);
-        nativeKeyboardAtTap[kind] = shown;
-        attempts.at(-1).keyboard_shown = shown;
+      const attempt = await focusIosSafariWebInput(driver, {
+        labels: [label], types: ['XCUIElementTypeTextField'],
       });
+      attempts.push(attempt);
+      nativeKeyboardAtTap[kind] = attempt.keyboard_shown;
     }
     keyboard[kind] = { activation_attempts: attempts };
     return keyboardEvidence(kind, selector, baseline);

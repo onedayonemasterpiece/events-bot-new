@@ -1,5 +1,13 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime-probe.mjs';
-import { prepareIosSafariWebContext } from '../../mobile-web/appium-browser.mjs';
+import { dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard,
+  performNativeTouchSwipe, prepareIosSafariWebContext,
+  withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
+
+const IOS_SEARCH_INPUT_LABELS = Object.freeze([
+  'Что хочется сделать?',
+  'Например: послушать хор или сходить с детьми бесплатно',
+  'Например: джаз на выходных',
+]);
 
 function pageResultSnapshot() {
   const results = document.querySelector('[data-search-results]');
@@ -53,6 +61,7 @@ export async function createAppiumSearchAdapter(options = {}) {
   }
   if (platform === 'ios') await prepareIosSafariWebContext(driver);
   let configuredPolicy = {};
+  let nativeKeyboardObserved = false;
 
   const adapter = {
     async bootstrapSession(actionLink, returnTarget) {
@@ -88,16 +97,26 @@ export async function createAppiumSearchAdapter(options = {}) {
     async activity() { return driver.execute(snapshotSearchRuntimeProbe); },
     async typeQuery(value) {
       const input = await driver.$('[data-search-input]');
-      await input.click();
-      const keyboardShown = await driver.isKeyboardShown().catch(() => false);
+      let keyboardShown = false;
+      if (platform === 'ios') {
+        await driver.execute(() => document.querySelector('[data-search-input]')?.scrollIntoView({ block: 'center', inline: 'center' }));
+        await driver.pause(200);
+        const attempt = await focusIosSafariWebInput(driver, { labels: IOS_SEARCH_INPUT_LABELS });
+        keyboardShown = attempt.keyboard_shown;
+      } else {
+        await input.click();
+        keyboardShown = await withNativeAppContext(driver, () => observeNativeKeyboard(driver));
+      }
       if (!keyboardShown) throw new Error(`search_native_keyboard_missing:${platform}`);
+      nativeKeyboardObserved = true;
       await input.setValue(value);
     },
     async clearQuery() { await (await driver.$('[data-search-input]')).clearValue(); },
     async readQueryState() { return driver.execute(() => ({ length: document.querySelector('[data-search-input]')?.value?.length || 0 })); },
     async submitWithSearchIntent() {
-      if (!await driver.isKeyboardShown().catch(() => false)) throw new Error(`search_native_keyboard_hidden:${platform}`);
+      if (!nativeKeyboardObserved) throw new Error(`search_native_keyboard_hidden:${platform}`);
       await driver.keys('\uE007');
+      nativeKeyboardObserved = false;
     },
     async waitForTerminal({ minimumResponseCount = 1, minimumCardCount = 1 } = {}) {
       let state = null;
@@ -117,12 +136,15 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async snapshotResults() { return driver.execute(pageResultSnapshot); },
     async realScrollResults() {
+      await dismissNativeKeyboard(driver);
       const size = await driver.getWindowSize();
       return runRealTouchScroll({
         readScrollY: () => driver.execute(() => scrollY),
         gesture: () => platform === 'android'
-          ? driver.execute('mobile: scrollGesture', { left: 0, top: Math.floor(size.height * 0.15), width: size.width,
-            height: Math.floor(size.height * 0.7), direction: 'down', percent: 0.8 })
+          ? performNativeTouchSwipe(driver, {
+            startX: Math.floor(size.width * 0.5), startY: Math.floor(size.height * 0.72),
+            endX: Math.floor(size.width * 0.5), endY: Math.floor(size.height * 0.28), duration: 450,
+          })
           : driver.execute('mobile: scroll', { direction: 'down' }),
         wait: () => driver.pause(150),
         lastCardVisible: () => driver.execute(() => {

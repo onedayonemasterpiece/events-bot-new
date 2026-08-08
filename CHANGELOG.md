@@ -34,6 +34,12 @@
 
 ### Fixed
 
+- Unified the remaining Search/OTP mobile input primitives: iOS Search now
+  focuses its web field through one exact native Safari accessibility match and
+  proves the software keyboard in `NATIVE_APP`; Android Chrome scroll now uses
+  a real absolute-coordinate W3C finger swipe with restored WebView `scrollY`
+  instead of a UiAutomator2 native-scrollable shortcut that could no-op.
+
 - Fixed Private Events MCP browser authorization being accepted server-side
   but appearing inert in Chrome: the authorization CSP now permits form
   navigation only to `'self'` and the exact origin of the already validated
