@@ -140,24 +140,32 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
   if (eventRoute?.same_origin !== true || Number(eventRoute?.http_status) !== 200) {
     throw new Error('search_health_event_route_invalid');
   }
-  const diagnosticsFinal = await adapter.healthDiagnostics();
-  assertNoSearchErrors(diagnosticsBefore, diagnosticsFinal);
-  if (finiteDelta(diagnosticsFinal, diagnosticsBefore, 'storage_requests') !== 0) {
-    throw new Error('search_health_storage_forbidden');
+  // Navigation replaces the Search document (and therefore its in-page probe).
+  // The adapter captures the last Search-page snapshot before the click and
+  // independently observes network traffic from that boundary through the
+  // completed event navigation.
+  const finalActivity = eventRoute.search_page_activity_before_navigation;
+  if (!finalActivity || typeof finalActivity !== 'object') {
+    throw new Error('search_health_pre_navigation_activity_missing');
   }
-  // Re-sample the authoritative transport after scroll and event navigation;
-  // the one-POST proof covers the complete platform cell, not only submit.
-  const finalActivity = await adapter.activity();
   const finalDelta = activityDelta(before, finalActivity);
   assertOneSubmitOnePost(finalDelta, 'production_health');
   const finalSearchRequests = finalDelta.requests.filter((item) => (
     item.method === 'POST' && item.path === '/functions/v1/event-search'
   ));
   if (finalSearchRequests.length !== 1) throw new Error('search_health_request_count_invalid');
+  if (!Number.isSafeInteger(eventRoute.post_navigation_search_post_count)
+    || eventRoute.post_navigation_search_post_count !== 0) {
+    throw new Error('search_health_post_navigation_search_forbidden');
+  }
   if (finalActivity.meter?.hard_limit_exceeded === true) {
     throw new Error('search_health_supabase_hard_limit_exceeded');
   }
-
+  const diagnosticsFinal = await adapter.healthDiagnostics();
+  assertNoSearchErrors(diagnosticsBefore, diagnosticsFinal);
+  if (finiteDelta(diagnosticsFinal, diagnosticsBefore, 'storage_requests') !== 0) {
+    throw new Error('search_health_storage_forbidden');
+  }
   return Object.freeze({
     schema_version: 'search_production_health_journey_v1',
     status: 'PASS',

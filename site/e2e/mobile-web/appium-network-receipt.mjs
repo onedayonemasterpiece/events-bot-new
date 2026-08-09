@@ -38,6 +38,40 @@ export function extractSanitizedNavigationResponses(logs) {
   return responses;
 }
 
+/** Count unique physical event-search POSTs without retaining URL or body data. */
+export function countEventSearchPostRequests(logs, seenRequestIds = new Set()) {
+  let count = 0;
+  const visited = new WeakSet();
+  const visit = (value, depth = 0) => {
+    if (depth > 10 || value == null) return;
+    if (typeof value === 'string') {
+      const text = value.trim();
+      if (!text.startsWith('{') && !text.startsWith('[')) return;
+      try { visit(JSON.parse(text), depth + 1); } catch { /* non-protocol log */ }
+      return;
+    }
+    if (typeof value !== 'object' || visited.has(value)) return;
+    visited.add(value);
+    if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
+    if (String(value.method || '') === 'Network.requestWillBeSent') {
+      const params = value.params && typeof value.params === 'object' ? value.params : {};
+      const request = params.request && typeof params.request === 'object' ? params.request : {};
+      const url = safeUrl(request.url);
+      if (String(request.method || '').toUpperCase() === 'POST'
+        && url?.pathname === '/functions/v1/event-search') {
+        const identity = String(params.requestId || '');
+        if (!identity || !seenRequestIds.has(identity)) {
+          if (identity) seenRequestIds.add(identity);
+          count += 1;
+        }
+      }
+    }
+    Object.values(value).forEach((child) => visit(child, depth + 1));
+  };
+  visit(logs);
+  return count;
+}
+
 export function buildSameOriginNavigationReceipt({ beforeUrl, expectedUrl, finalUrl,
   responses, networkSource } = {}) {
   const before = safeUrl(beforeUrl);
@@ -78,12 +112,16 @@ export function buildExactTargetNavigationReceipt({ expectedUrl, finalUrl, respo
   const final = safeUrl(finalUrl);
   if (!expected || !final || final.href !== expected.href) throw new Error('search_target_redirected');
   const observed = Array.isArray(responses) ? responses : [];
-  if (observed.some((item) => Number(item?.status) >= 300 && Number(item?.status) < 400)) {
+  const documentResponses = observed.filter((item) => !item?.resource_type || item.resource_type === 'document');
+  if (documentResponses.some((item) => Number(item?.status) >= 300 && Number(item?.status) < 400)) {
     throw new Error('search_target_redirected');
   }
-  const matching = observed.filter((item) => item?.origin === expected.origin
+  if (documentResponses.some((item) => item?.origin && item.origin !== expected.origin)) {
+    throw new Error('search_target_cross_origin');
+  }
+  const matching = documentResponses.filter((item) => item?.origin === expected.origin
     && item?.pathname === expected.pathname
-    && (!item.resource_type || item.resource_type === 'document'));
+  );
   if (!matching.some((item) => Number(item.status) >= 200 && Number(item.status) < 300)) {
     throw new Error('search_target_http_invalid');
   }

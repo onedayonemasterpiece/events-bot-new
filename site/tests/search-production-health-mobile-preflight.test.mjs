@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
+  countEventSearchPostRequests,
   extractSanitizedNavigationResponses } from '../e2e/mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt, isSafeMobilePreflightRetryReceipt,
   runAppiumTransportPreflight } from '../e2e/mobile-web/appium-preflight.mjs';
@@ -250,6 +251,24 @@ test('first-card navigation receipt proves same-origin HTTP 200 without retainin
   assert.doesNotMatch(JSON.stringify(receipt), /example|private|token|kenigevents/iu);
 });
 
+test('mobile protocol receipt counts unique event-search POSTs without retaining request data', () => {
+  const seen = new Set();
+  const request = { message: JSON.stringify({ message: {
+    method: 'Network.requestWillBeSent', params: { requestId: 'search-1', request: {
+      method: 'POST', url: 'https://project.supabase.co/functions/v1/event-search?secret=no',
+      postData: '{"query":"must not survive"}',
+    } },
+  } }) };
+  assert.equal(countEventSearchPostRequests([request], seen), 1);
+  assert.equal(countEventSearchPostRequests([request], seen), 0);
+  assert.equal(countEventSearchPostRequests([{ message: JSON.stringify({ message: {
+    method: 'Network.requestWillBeSent', params: { requestId: 'other-1', request: {
+      method: 'GET', url: 'https://project.supabase.co/functions/v1/event-search',
+    } },
+  } }) }], seen), 0);
+  assert.deepEqual([...seen], ['search-1']);
+});
+
 test('adapter opens the captured first result and binds the browser navigation to driver network logs', async () => {
   let currentUrl = 'https://kenigevents.ru/search';
   let logReads = 0;
@@ -281,10 +300,14 @@ test('adapter opens the captured first result and binds the browser navigation t
   };
   const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
   const receipt = await adapter.openFirstResult();
-  assert.deepEqual(receipt, {
-    schema_version: 'mobile-card-open-v1', same_origin: true, http_status: 200,
-    destination_class: 'event_detail', network_source: 'performance', raw_url_retained: false,
-  });
+  assert.equal(receipt.schema_version, 'mobile-card-open-v1');
+  assert.equal(receipt.same_origin, true);
+  assert.equal(receipt.http_status, 200);
+  assert.equal(receipt.destination_class, 'event_detail');
+  assert.equal(receipt.network_source, 'performance');
+  assert.equal(receipt.raw_url_retained, false);
+  assert.equal(receipt.post_navigation_search_post_count, 0);
+  assert.ok(receipt.search_page_activity_before_navigation);
   assert.equal((await adapter.healthDiagnostics()).storage_requests, 1);
 });
 
@@ -320,6 +343,20 @@ test('mobile pinned target receipt rejects redirect and requires exact 2xx docum
     expectedUrl: target, finalUrl: target,
     responses: [{ origin: 'https://kenigevents.ru', pathname: '/other', status: 302, resource_type: 'document' }],
   }), /search_target_redirected/u);
+  assert.equal(buildExactTargetNavigationReceipt({
+    expectedUrl: target, finalUrl: target,
+    responses: [
+      { origin: 'https://cdn.example', pathname: '/font.woff2', status: 302, resource_type: 'font' },
+      { origin: 'https://kenigevents.ru', pathname: '/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/', status: 200, resource_type: 'document' },
+    ],
+  }).redirect_count, 0);
+  assert.throws(() => buildExactTargetNavigationReceipt({
+    expectedUrl: target, finalUrl: target,
+    responses: [
+      { origin: 'https://evil.example', pathname: '/poisk/', status: 200, resource_type: 'document' },
+      { origin: 'https://kenigevents.ru', pathname: '/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/', status: 200, resource_type: 'document' },
+    ],
+  }), /cross_origin/u);
 });
 
 test('mobile Auth callback response bytes join explicit getUser/RLS meter without retaining URL', async () => {

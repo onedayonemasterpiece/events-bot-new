@@ -51,6 +51,7 @@ const meter = (bytes = 1024) => ({
 function fakeJourneyAdapter(overrides = {}) {
   let typed = '';
   let policy = null;
+  let activityCalls = 0;
   const state = {
     requests: [], responses: [], routes: [],
     network: { storage_requests: 0, receipt_rpc_requests: 0, failed_requests: 0 },
@@ -71,10 +72,11 @@ function fakeJourneyAdapter(overrides = {}) {
   };
   return {
     get typed() { return typed; }, get policy() { return policy; },
+    get activityCalls() { return activityCalls; },
     async configureRequestPolicy(value) { policy = value; },
     async open() {},
     async inspectSurface() { return { enabled: true, authorized: true, input_tag: 'textarea', enter_key_hint: 'search' }; },
-    async activity() { return structuredClone(state); },
+    async activity() { activityCalls += 1; return structuredClone(state); },
     async healthDiagnostics() { return { ...diagnostics, ...(overrides.diagnostics || {}) }; },
     async typeQuery(value) { typed = value; },
     async submitWithSearchIntent() {
@@ -102,10 +104,20 @@ function fakeJourneyAdapter(overrides = {}) {
     },
     async realScrollResults() { return { performed: true, delta_y: 640, card_visible_after: true, gesture_count: 1 }; },
     async openFirstResult() {
+      const searchPageActivity = structuredClone(state);
       if (overrides.postAfterOpen) {
         state.requests.push({ method: 'POST', path: '/functions/v1/event-search', body_contract: {} });
       }
-      return overrides.eventRoute || { same_origin: true, http_status: 200, destination_class: 'event_detail', network_source: 'fake' };
+      if (overrides.resetActivityOnOpen) {
+        state.requests.length = 0;
+        state.responses.length = 0;
+        state.routes.length = 0;
+      }
+      return overrides.eventRoute || {
+        same_origin: true, http_status: 200, destination_class: 'event_detail', network_source: 'fake',
+        search_page_activity_before_navigation: searchPageActivity,
+        post_navigation_search_post_count: overrides.postAfterOpen ? 1 : 0,
+      };
     },
   };
 }
@@ -154,6 +166,17 @@ test('normal vector health accepts a cache hit reported as actual cached_vector'
   });
   assert.equal(result.cache_state, 'hit');
   assert.equal(result.search_post_count, 1);
+});
+
+test('event navigation may reset the page probe after preserving the final Search-page activity', async () => {
+  const adapter = fakeJourneyAdapter({ resetActivityOnOpen: true });
+  const result = await runProductionHealthJourney({
+    adapter,
+    targetUrl: 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/',
+  });
+  assert.equal(result.search_post_count, 1);
+  assert.equal(result.event_route.http_status, 200);
+  assert.equal(adapter.activityCalls, 2);
 });
 
 test('transport instrumentation records one physical Search once when its raw fetch was wrapped first', async () => {
@@ -404,7 +427,7 @@ test('one physical Search POST is enforced through scroll and event navigation',
   await assert.rejects(() => runProductionHealthJourney({
     adapter: fakeJourneyAdapter({ postAfterOpen: true }),
     targetUrl: 'https://kenigevents.ru/',
-  }), /one_post|request_count|duplicate_post/u);
+  }), /post_navigation_search_forbidden/u);
 });
 
 test('callback/session attach failure is Auth integration, not broker infrastructure', async () => {
@@ -648,4 +671,58 @@ test('Playwright target open rejects an otherwise same-final-URL redirect chain'
     () => adapter.open('https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/'),
     /search_target_redirected/u,
   );
+});
+
+test('Playwright card open preserves Search activity and independently counts later Search POSTs', async () => {
+  let currentUrl = 'https://kenigevents.ru/poisk/';
+  const listeners = new Map();
+  const searchActivity = {
+    requests: [{ method: 'POST', path: '/functions/v1/event-search' }],
+    responses: [{}], routes: [{}], meter: meter(),
+  };
+  const link = {
+    first() { return this; },
+    async count() { return 1; },
+    async click() {
+      for (const listener of listeners.get('request') || []) {
+        listener({
+          method: () => 'POST',
+          url: () => 'https://project.supabase.co/functions/v1/event-search?not-retained=yes',
+        });
+      }
+      currentUrl = 'https://kenigevents.ru/events/42';
+    },
+  };
+  const first = {
+    first() { return this; }, async waitFor() {},
+    locator() { return link; },
+  };
+  const page = {
+    on(name, listener) {
+      const values = listeners.get(name) || new Set();
+      values.add(listener);
+      listeners.set(name, values);
+    },
+    off(name, listener) { listeners.get(name)?.delete(listener); },
+    viewportSize: () => ({ width: 1280, height: 720 }),
+    url: () => currentUrl,
+    locator: () => first,
+    async evaluate() { return structuredClone(searchActivity); },
+    async waitForNavigation() {
+      return {
+        status: () => 200,
+        request: () => ({
+          url: () => 'https://kenigevents.ru/events/42', redirectedFrom: () => null,
+        }),
+      };
+    },
+  };
+  const adapter = await createPlaywrightSearchAdapter({ page, productionHealth: true });
+  const receipt = await adapter.openFirstResult();
+  assert.deepEqual(receipt.search_page_activity_before_navigation, searchActivity);
+  assert.equal(receipt.post_navigation_search_post_count, 1);
+  assert.equal(receipt.same_origin, true);
+  assert.equal(receipt.http_status, 200);
+  assert.equal(listeners.get('request')?.size || 0, 0);
+  assert.doesNotMatch(JSON.stringify(receipt), /not-retained/u);
 });

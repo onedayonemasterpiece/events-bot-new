@@ -187,21 +187,38 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       const link = first.locator('a[href]').first();
       if (await link.count() !== 1) throw new Error('search_first_card_link_missing');
       const beforeOrigin = new URL(page.url()).origin;
-      const [navigation] = await Promise.all([
-        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeoutMs }),
-        link.click(),
-      ]);
-      const afterOrigin = new URL(page.url()).origin;
-      const httpStatus = Number(navigation?.status() || 0);
-      let request = navigation?.request?.() || null;
-      while (request) {
-        if (new URL(request.url()).origin !== beforeOrigin) throw new Error('search_card_route_cross_origin');
-        request = request.redirectedFrom?.() || null;
-      }
-      return {
-        schema_version: 'browser-card-open-v1', same_origin: beforeOrigin === afterOrigin,
-        http_status: httpStatus, destination_class: 'event_detail', network_source: 'playwright_navigation_response',
+      let postNavigationSearchPostCount = 0;
+      const observeRequest = (request) => {
+        try {
+          if (request.method() === 'POST'
+            && new URL(request.url()).pathname === '/functions/v1/event-search') {
+            postNavigationSearchPostCount += 1;
+          }
+        } catch { /* malformed request metadata fails via the authoritative probe */ }
       };
+      page.on('request', observeRequest);
+      try {
+        const searchPageActivity = await page.evaluate(snapshotSearchRuntimeProbe);
+        const [navigation] = await Promise.all([
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeoutMs }),
+          link.click(),
+        ]);
+        const afterOrigin = new URL(page.url()).origin;
+        const httpStatus = Number(navigation?.status() || 0);
+        let request = navigation?.request?.() || null;
+        while (request) {
+          if (new URL(request.url()).origin !== beforeOrigin) throw new Error('search_card_route_cross_origin');
+          request = request.redirectedFrom?.() || null;
+        }
+        return {
+          schema_version: 'browser-card-open-v1', same_origin: beforeOrigin === afterOrigin,
+          http_status: httpStatus, destination_class: 'event_detail', network_source: 'playwright_navigation_response',
+          search_page_activity_before_navigation: searchPageActivity,
+          post_navigation_search_post_count: postNavigationSearchPostCount,
+        };
+      } finally {
+        page.off('request', observeRequest);
+      }
     },
     async showMoreState() {
       const more = page.locator('[data-search-more]');

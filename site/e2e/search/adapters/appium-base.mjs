@@ -2,7 +2,7 @@ import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe,
   verifyAuthenticatedOwnerRuntimeProbe } from './runtime-probe.mjs';
 import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
 import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
-  extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
+  countEventSearchPostRequests, extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt,
   runAppiumTransportPreflight } from '../../mobile-web/appium-preflight.mjs';
 import { dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard,
@@ -425,6 +425,9 @@ export async function createAppiumSearchAdapter(options = {}) {
       const initialLogs = await driver.getLogs(logType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_navigation_network_log_unavailable');
       accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
+      const searchPageActivity = await driver.execute(snapshotSearchRuntimeProbe);
+      const postNavigationSearchRequestIds = new Set();
+      let postNavigationSearchPostCount = 0;
       lifecycle.first_card_captured = true;
       lifecycle.failure_stage = 'search_first_card_open';
       await (await driver.$('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]')).click();
@@ -437,6 +440,9 @@ export async function createAppiumSearchAdapter(options = {}) {
         const logs = await driver.getLogs(logType).catch(() => null);
         if (!Array.isArray(logs)) return false;
         accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
+        postNavigationSearchPostCount += countEventSearchPostRequests(
+          logs, postNavigationSearchRequestIds,
+        );
         responses.push(...extractSanitizedNavigationResponses(logs));
         return responses.some((item) => item.origin === expectedUrl.origin
           && item.pathname === expectedUrl.pathname && item.status === 200
@@ -448,7 +454,11 @@ export async function createAppiumSearchAdapter(options = {}) {
       });
       lifecycle.first_card_opened = true;
       lifecycle.failure_stage = 'search_first_card_opened';
-      return receipt;
+      return Object.freeze({
+        ...receipt,
+        search_page_activity_before_navigation: searchPageActivity,
+        post_navigation_search_post_count: postNavigationSearchPostCount,
+      });
     },
     async showMoreState() {
       return driver.execute(() => { const node = document.querySelector('[data-search-more]');
