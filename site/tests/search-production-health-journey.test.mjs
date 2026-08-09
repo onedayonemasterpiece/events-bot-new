@@ -16,7 +16,10 @@ import {
   SupabaseClientObservedByteMeter,
   mergeSupabaseClientByteSnapshots,
 } from '../e2e/search/production-health-meter.mjs';
-import { runProductionHealthCell } from '../e2e/search/production-health-run.mjs';
+import {
+  resolveExpectedAcceptedTarget,
+  runProductionHealthCell,
+} from '../e2e/search/production-health-run.mjs';
 import { createBuiltInMobileHooks } from '../e2e/search/production-health-run.mjs';
 import { verifyAuthenticatedOwnerRuntimeProbe } from '../e2e/search/adapters/runtime-probe.mjs';
 import {
@@ -239,6 +242,77 @@ test('release gate blocks before adapter/Auth/Search', async () => {
   assert.equal(adapters, 0);
   assert.equal(result.execution_status, 'BLOCKED');
   assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
+});
+
+test('explicit release wait is bounded and performs only target reads before Auth/Search', async () => {
+  let reads = 0;
+  let sleeps = 0;
+  const expected = 'f'.repeat(40);
+  const matched = await resolveExpectedAcceptedTarget({
+    resolver: async () => {
+      reads += 1;
+      const sha = reads < 3 ? 'a'.repeat(40) : expected;
+      return normalizeAcceptedTargetResolverResult(targetRow('A'.repeat(43), {
+        target_repo_sha: sha, repo_sha: sha,
+      }));
+    },
+    expectedSiteSha: expected,
+    maxAttempts: 4,
+    delayMs: 1,
+    sleep: async () => { sleeps += 1; },
+  });
+  assert.equal(matched.active, true);
+  assert.equal(matched.attempts, 3);
+  assert.equal(sleeps, 2);
+
+  reads = 0;
+  const blocked = await resolveExpectedAcceptedTarget({
+    resolver: async () => { reads += 1; return normalizeAcceptedTargetResolverResult(targetRow()); },
+    expectedSiteSha: expected,
+    maxAttempts: 2,
+    delayMs: 0,
+    sleep: async () => {},
+  });
+  assert.equal(blocked.active, false);
+  assert.equal(reads, 2);
+});
+
+test('explicit backend deployment mismatch blocks after the single Search without retry', async () => {
+  const adapter = fakeJourneyAdapter();
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    expectedSearchBackendRevision: 'expected-v2',
+    createAdapter: async () => adapter,
+    issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+  });
+  assert.equal(result.execution_status, 'BLOCKED');
+  assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
+  assert.equal(result.search.physical_post_count, 1);
+});
+
+test('Auth traffic over the hard cap stops before the single Search and stays unconfirmed', async () => {
+  let opened = 0;
+  const adapter = fakeJourneyAdapter();
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const originalOpen = adapter.open;
+  adapter.open = async (...args) => { opened += 1; return originalOpen(...args); };
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => adapter,
+    issueSession: async () => ({
+      authReceipt,
+      meter: meter(SUPABASE_CLIENT_BYTE_HARD_LIMIT + 1),
+      attach: async () => {}, cleanup: async () => {},
+    }),
+  });
+  assert.equal(opened, 0);
+  assert.equal(result.product_health, 'UNCONFIRMED');
+  assert.equal(result.execution_status, 'FAILED');
+  assert.equal(result.failure_class, 'COST_GUARD_FAILED');
+  assert.equal(result.search.physical_post_count, 0);
 });
 
 test('target normalizer keeps secret navigation private and exposes exact immutable evidence only', () => {

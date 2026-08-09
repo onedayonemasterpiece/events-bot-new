@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFile as execFileCallback } from 'node:child_process';
+import { appendFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
@@ -27,6 +28,14 @@ import { runProductionHealthJourney } from './production-health-journey.mjs';
 
 const execFile = promisify(execFileCallback);
 const platforms = new Set(['browser', 'android', 'ios']);
+
+async function emitFailureClassOutput(env, failureClass) {
+  const path = String(env.GITHUB_OUTPUT || '').trim();
+  if (!path) return;
+  const value = String(failureClass || '');
+  if (value && !PRODUCTION_HEALTH_RESULTS[value]) throw new Error('search_health_output_failure_class_invalid');
+  await appendFile(path, `failure_class=${value}\n`, { encoding: 'utf8' });
+}
 
 const emptyMeter = () => mergeSupabaseClientByteSnapshots();
 const required = (env, name) => {
@@ -80,6 +89,14 @@ const infraFailure = (platform) => ({
   ios: PRODUCTION_HEALTH_RESULTS.UNKNOWN_IOS_INFRA,
 })[platform];
 
+const combinedObservedMeter = (issued, journey) => {
+  if (issued?.meter_cumulative_with_journey === true && journey?.meter) return journey.meter;
+  const authMeter = typeof issued?.meterSnapshot === 'function' ? issued.meterSnapshot() : issued?.meter;
+  return Promise.resolve(authMeter).then((value) => (
+    mergeSupabaseClientByteSnapshots(value || emptyMeter(), journey?.meter || emptyMeter())
+  ));
+};
+
 function journeyFailure(error) {
   const code = String(error?.message || '').split(':')[0];
   if (/surface|input|enter_key/u.test(code)) return PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_SURFACE;
@@ -107,6 +124,7 @@ export async function runProductionHealthCell(options = {}) {
   }
 
   const target = await options.targetRun.pin();
+  const testedAt = new Date(typeof options.now === 'function' ? options.now() : Date.now()).toISOString();
   const targetImmutable = acceptedTargetImmutableEvidence(target);
   const releaseActive = typeof options.releaseGate === 'function'
     ? await options.releaseGate(target) : true;
@@ -139,10 +157,18 @@ export async function runProductionHealthCell(options = {}) {
         auth = issued?.authReceipt || issued?.receipt || {};
       }
       assertProductionHealthAuthReceipt(auth);
+      const preSearchMeter = typeof issued?.meterSnapshot === 'function'
+        ? await issued.meterSnapshot() : issued?.meter;
+      if (preSearchMeter?.hard_limit_exceeded === true) {
+        throw new Error('search_health_supabase_hard_limit_exceeded');
+      }
       phase = 'journey';
       journey = await runProductionHealthJourney({ adapter, targetUrl: target.navigationUrl() });
-      const authMeter = typeof issued?.meterSnapshot === 'function' ? await issued.meterSnapshot() : issued?.meter;
-      meter = mergeSupabaseClientByteSnapshots(authMeter || emptyMeter(), journey.meter || emptyMeter());
+      if (options.expectedSearchBackendRevision
+        && journey.response_telemetry?.search_contract_version !== options.expectedSearchBackendRevision) {
+        failureClass = PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
+      }
+      meter = await combinedObservedMeter(issued, journey);
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
       phase = 'pointer_reread';
       const supersession = await options.targetRun.observeSupersession();
@@ -156,8 +182,7 @@ export async function runProductionHealthCell(options = {}) {
     else failureClass = journeyFailure(error);
     try {
       const runtime = await adapter?.activity?.();
-      const authMeter = typeof issued?.meterSnapshot === 'function' ? await issued.meterSnapshot() : issued?.meter;
-      meter = mergeSupabaseClientByteSnapshots(authMeter || emptyMeter(), runtime?.meter || emptyMeter());
+      meter = await combinedObservedMeter(issued, { meter: runtime?.meter });
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
     } catch { /* the closed failure class is sufficient */ }
   } finally {
@@ -167,8 +192,7 @@ export async function runProductionHealthCell(options = {}) {
     } catch { cleanupStatus = 'FAIL'; }
     if (cleanupStatus !== 'FAIL') cleanupStatus = 'PASS';
     try {
-      const authMeter = typeof issued?.meterSnapshot === 'function' ? await issued.meterSnapshot() : issued?.meter;
-      meter = mergeSupabaseClientByteSnapshots(authMeter || emptyMeter(), journey.meter || emptyMeter());
+      meter = await combinedObservedMeter(issued, journey);
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
     } catch { /* keep the earlier closed meter/failure result */ }
   }
@@ -179,6 +203,8 @@ export async function runProductionHealthCell(options = {}) {
     const value = {
       platform, ...outcome, target_immutable: targetImmutable, target_superseded: targetSuperseded,
       preflight, auth, journey, meter, cleanup_status: cleanupStatus,
+      workflow_run_id: options.workflowRunId,
+      tested_at: testedAt,
     };
     if (options.evidenceDirectory) {
       const written = await writeProductionHealthEvidence(options.evidenceDirectory, value);
@@ -203,6 +229,39 @@ export async function resolveCurrentAcceptedTargetFromFly(env = process.env) {
   if (!current) throw new Error('search_health_current_review_resolver_invalid');
   return normalizeAcceptedTargetResolverResult(currentReviewCliResultToAcceptedTargetInput(current));
 }
+
+/** Bounded pre-Auth/Search wait for an explicitly deployed site runtime. */
+export async function resolveExpectedAcceptedTarget({
+  resolver,
+  expectedSiteSha = '',
+  maxAttempts = 6,
+  delayMs = 10_000,
+  sleep = (milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)),
+} = {}) {
+  if (typeof resolver !== 'function') throw new Error('search_health_target_resolver_missing');
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 12) {
+    throw new Error('search_health_release_wait_attempts_invalid');
+  }
+  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 30_000) {
+    throw new Error('search_health_release_wait_delay_invalid');
+  }
+  let target;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    target = await resolver();
+    if (!expectedSiteSha || target.target_repo_sha === expectedSiteSha) {
+      return Object.freeze({ target, active: true, attempts: attempt });
+    }
+    if (attempt < maxAttempts) await sleep(delayMs);
+  }
+  return Object.freeze({ target, active: false, attempts: maxAttempts });
+}
+
+const acceptedTargetInput = (normalized) => ({
+  source: normalized.source,
+  target_url: normalized.navigationUrl(),
+  target_repo_sha: normalized.target_repo_sha,
+  ...normalized.immutable_identity,
+});
 
 async function githubOidcToken(env, fetchImpl) {
   const endpoint = new URL(required(env, 'ACTIONS_ID_TOKEN_REQUEST_URL'));
@@ -313,6 +372,7 @@ export async function createBuiltInMobileHooks(env, platform, dependencies = {})
       credential.actionLink = '';
       const issued = {
         actionLink: callback,
+        meter_cumulative_with_journey: true,
         async verifyAuth(adapter) {
           if (typeof adapter?.verifyAuthenticatedOwner !== 'function') {
             throw new Error('search_health_authenticated_owner_probe_missing');
@@ -332,12 +392,25 @@ export async function createBuiltInMobileHooks(env, platform, dependencies = {})
 export async function runProductionHealthCli(env = process.env) {
   const platform = String(env.E2E_SEARCH_PLATFORM || 'browser').toLowerCase();
   if (!platforms.has(platform)) throw new Error('search_health_platform_unknown');
+  const expectedSiteSha = String(env.E2E_EXPECTED_SITE_RUNTIME_SHA || '').trim().toLowerCase();
+  if (expectedSiteSha && !/^[0-9a-f]{40}$/u.test(expectedSiteSha)) {
+    throw new Error('search_health_expected_site_runtime_sha_invalid');
+  }
+  const expectedBackendRevision = String(env.E2E_EXPECTED_SEARCH_BACKEND_REVISION || '').trim();
+  if (expectedBackendRevision && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(expectedBackendRevision)) {
+    throw new Error('search_health_expected_backend_revision_invalid');
+  }
+  const initialResolution = await resolveExpectedAcceptedTarget({
+    resolver: () => resolveCurrentAcceptedTargetFromFly(env),
+    expectedSiteSha,
+  });
+  let firstRead = true;
   const targetRun = createAcceptedTargetRun(async () => {
-    const normalized = await resolveCurrentAcceptedTargetFromFly(env);
-    return {
-      source: normalized.source, target_url: normalized.navigationUrl(), target_repo_sha: normalized.target_repo_sha,
-      ...normalized.immutable_identity,
-    };
+    if (firstRead) {
+      firstRead = false;
+      return acceptedTargetInput(initialResolution.target);
+    }
+    return acceptedTargetInput(await resolveCurrentAcceptedTargetFromFly(env));
   });
   const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: [required(env, 'PERSONALIZATION_SUPABASE_URL')] });
   const hooks = platform === 'browser'
@@ -345,15 +418,14 @@ export async function runProductionHealthCli(env = process.env) {
     : env.E2E_SEARCH_PLATFORM_HOOK_MODULE
       ? await externalPlatformHooks(env, platform, meter)
       : await createBuiltInMobileHooks(env, platform);
-  const expectedSiteSha = String(env.E2E_EXPECTED_SITE_RUNTIME_SHA || '').trim().toLowerCase();
-  if (expectedSiteSha && !/^[0-9a-f]{40}$/u.test(expectedSiteSha)) {
-    throw new Error('search_health_expected_site_runtime_sha_invalid');
-  }
   const result = await runProductionHealthCell({
     platform, targetRun, createAdapter: hooks.createAdapter, issueSession: hooks.issueSession,
     releaseGate: (target) => !expectedSiteSha || target.target_repo_sha === expectedSiteSha,
+    expectedSearchBackendRevision: expectedBackendRevision || null,
     evidenceDirectory: required(env, 'E2E_EVIDENCE_DIR'),
+    workflowRunId: required(env, 'GITHUB_RUN_ID'),
   });
+  await emitFailureClassOutput(env, result.failure_class);
   process.stdout.write(`${JSON.stringify({
     schema_version: 'search_production_health_cli_v1', platform: result.platform,
     product_health: result.product_health, execution_status: result.execution_status,
@@ -368,8 +440,13 @@ export async function runProductionHealthCli(env = process.env) {
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (isMain) {
-  runProductionHealthCli().then((code) => { process.exitCode = code; }).catch((error) => {
+  runProductionHealthCli().then((code) => { process.exitCode = code; }).catch(async (error) => {
     const code = String(error?.message || 'search_health_runner_failed').split(':')[0];
+    const platform = String(process.env.E2E_SEARCH_PLATFORM || 'browser').toLowerCase();
+    const failureClass = code.startsWith('search_evidence_')
+      ? PRODUCTION_HEALTH_RESULTS.EVIDENCE_REDACTION_FAILED
+      : infraFailure(platform) || PRODUCTION_HEALTH_RESULTS.UNKNOWN_RUNNER_BROWSER;
+    await emitFailureClassOutput(process.env, failureClass).catch(() => {});
     process.stderr.write(`${/^[a-z0-9_.-]{3,96}$/iu.test(code) ? code : 'search_health_runner_failed'}\n`);
     process.exitCode = 1;
   });

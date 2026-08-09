@@ -185,6 +185,7 @@ export function acceptedTargetImmutableEvidence(target) {
     source: target.source,
     accepted_release_id: target.accepted_release_id,
     target_repo_sha: target.target_repo_sha,
+    target_url_sha256: createHash('sha256').update(target.navigationUrl(), 'utf8').digest('hex'),
     immutable_identity: Object.freeze({ ...target.immutable_identity }),
   });
 }

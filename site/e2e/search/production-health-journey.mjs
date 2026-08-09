@@ -92,7 +92,7 @@ function assertNoSearchErrors(before, after) {
  * One bounded product-health UI journey.  The mechanics adapter owns browser
  * or native input/scroll/navigation; this sequencer never imports either.
  */
-export async function runProductionHealthJourney({ adapter, targetUrl }) {
+export async function runProductionHealthJourney({ adapter, targetUrl, now = () => performance.now() }) {
   assertAdapter(adapter);
   await adapter.configureRequestPolicy(PRODUCTION_HEALTH_REQUEST_POLICY);
   await adapter.open(targetUrl);
@@ -104,8 +104,10 @@ export async function runProductionHealthJourney({ adapter, targetUrl }) {
   const before = await adapter.activity();
   const diagnosticsBefore = await adapter.healthDiagnostics();
   await adapter.typeQuery(PRODUCTION_HEALTH_UI_QUERY);
+  const searchStartedAt = Number(now());
   await adapter.submitWithSearchIntent();
   await adapter.waitForTerminal({ minimumResponseCount: before.responses.length + 1, minimumCardCount: 1 });
+  const searchLatencyMs = Math.max(0, Math.round(Number(now()) - searchStartedAt));
   const after = await adapter.activity();
   const delta = activityDelta(before, after);
   assertOneSubmitOnePost(delta, 'production_health');
@@ -137,16 +139,31 @@ export async function runProductionHealthJourney({ adapter, targetUrl }) {
   if (eventRoute?.same_origin !== true || Number(eventRoute?.http_status) !== 200) {
     throw new Error('search_health_event_route_invalid');
   }
+  const diagnosticsFinal = await adapter.healthDiagnostics();
+  assertNoSearchErrors(diagnosticsBefore, diagnosticsFinal);
+  if (finiteDelta(diagnosticsFinal, diagnosticsBefore, 'storage_requests') !== 0) {
+    throw new Error('search_health_storage_forbidden');
+  }
 
   return Object.freeze({
     schema_version: 'search_production_health_journey_v1',
     status: 'PASS',
+    latency_ms: searchLatencyMs,
     search_post_count: 1,
     request_contract: Object.freeze({
       limit: 5, offset: 0, use_llm_verifier: false,
       allow_llm_fallback: false, explicit_execution_mode: false,
     }),
     cache_state: response.result_cache_status,
+    response_telemetry: Object.freeze({
+      request_id: response.request_id,
+      http_status: response.http_status,
+      route: response.route,
+      search_contract_version: response.search_contract_version,
+      catalog_revision: response.catalog_revision,
+      corpus_revision: response.corpus_revision,
+      search_document_revision: response.search_document_revision,
+    }),
     provider_attempts: Object.freeze({ ...response.provider_attempts }),
     response_ids: Object.freeze([...response.response_ids]),
     rendered_ids: Object.freeze([...state.rendered_ids]),

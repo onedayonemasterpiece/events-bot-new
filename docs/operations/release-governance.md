@@ -16,6 +16,15 @@
   сам выполняет fetch/clean/SHA gates и передаёт этот SHA в Docker build;
   прямой `flyctl deploy` запрещён, потому что он может собрать актуальный код
   с устаревшей mutable-меткой версии для StaticSiteBuilder.
+- Search validation marker у этого скрипта по умолчанию `none`. Только явные
+  `--search-validation-profile standard|full` после успешного Fly deploy
+  отправляют один `search-runtime-deployed` payload с exact site SHA, bounded
+  backend revision, deployment id и telemetry-only changed surfaces. Эти
+  аргументы не передаются `flyctl`; static/data/Kaggle publication marker не
+  создаёт. `full` дополнительно может запросить одну selective qualification.
+  Пока provider не публикует отдельный non-secret Edge deploy SHA,
+  `search_backend_revision` — точное ожидаемое значение response
+  `search_contract_version`; выдумывать byte SHA запрещено.
 - GitHub Actions deploy не используется и не является допустимым release path. Если в репозитории появляется workflow, который деплоит Fly app на push/workflow_dispatch, это process drift: его нужно удалить или отключить до следующего production-bound task.
 - Emergency deploy из отдельной ветки допустим только для быстрого восстановления production, если одновременно выполняются все условия:
   - ветка создана от актуального `origin/main`;

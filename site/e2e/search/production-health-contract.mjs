@@ -40,7 +40,7 @@ export const PRODUCTION_HEALTH_FAILURE_CLASSES = Object.freeze(
   RESULT_VALUES.filter((value) => !['HEALTHY', 'DEGRADED'].includes(value)),
 );
 
-export const ACCEPTED_HEALTH_CACHE_STATES = Object.freeze(['hit', 'miss', 'stored', 'bypass']);
+export const ACCEPTED_HEALTH_CACHE_STATES = Object.freeze(['hit', 'miss', 'stored']);
 
 const frozenHealthPlan = {
   schema_version: 'search_production_health_plan_v1',

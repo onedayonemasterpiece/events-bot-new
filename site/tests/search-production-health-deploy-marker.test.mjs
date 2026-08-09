@@ -59,10 +59,11 @@ test('canonical Fly deploy consumes marker arguments and dispatches exactly once
   assert.ok(source.includes('FLY_ARGS+=("$1")'));
   assert.equal((source.match(/"\$GH_BIN" api --method POST/gu) || []).length, 1);
   assert.equal((source.match(/scripts\/search-runtime-deploy-dispatch\.mjs/gu) || []).length, 1);
+  const preflightAt = source.indexOf('"$GH_BIN" auth status');
   const deployAt = source.indexOf('"$FLYCTL" deploy');
   const noneAt = source.indexOf('if [[ "$SEARCH_VALIDATION_PROFILE" == none ]]');
   const dispatchAt = source.indexOf('"$GH_BIN" api --method POST');
-  assert.ok(deployAt > 0 && noneAt > deployAt && dispatchAt > noneAt,
+  assert.ok(preflightAt > 0 && deployAt > preflightAt && noneAt > deployAt && dispatchAt > noneAt,
     'Fly success must precede none exit and the only dispatch');
   assert.doesNotMatch(source.slice(deployAt, noneAt), /search-runtime-deployed/u);
 });
@@ -117,7 +118,8 @@ test('default none and failed Fly deploy emit zero dispatches; successful standa
     '--search-changed-surface', 'site_runtime',
   ], { cwd: fixture.root, env: { ...fixture.env, FLY_DEPLOY_EXIT: '42' } }));
   calls = await readFile(fixture.callLog, 'utf8');
-  assert.equal((calls.match(/^gh:/gmu) || []).length, 0);
+  assert.equal((calls.match(/^gh:api --method POST/gmu) || []).length, 0);
+  assert.match(calls, /^gh:auth status$/mu);
 
   await writeFile(fixture.callLog, '');
   await execFileAsync('bash', [script,
@@ -127,7 +129,7 @@ test('default none and failed Fly deploy emit zero dispatches; successful standa
     '--search-changed-surface', 'site_runtime',
   ], { cwd: fixture.root, env: fixture.env });
   calls = await readFile(fixture.callLog, 'utf8');
-  assert.equal((calls.match(/^gh:/gmu) || []).length, 1);
+  assert.equal((calls.match(/^gh:api --method POST/gmu) || []).length, 1);
   assert.match(calls, /"event_type":"search-runtime-deployed"/u);
   assert.match(calls, /"validation_profile":"standard"/u);
 });

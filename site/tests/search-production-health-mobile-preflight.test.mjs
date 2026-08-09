@@ -117,6 +117,27 @@ test('adapter continues the same successful session and purges local auth before
   assert.ok(driver.events.indexOf('cookies-purge') < driver.events.indexOf('deleteSession'));
 });
 
+test('mobile owner proof returns only closed Auth/RLS receipt and waits for zero pending bytes', async () => {
+  const driver = preflightDriver('android');
+  driver.execute = async (fn) => {
+    if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
+      get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+      product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+      real_mail_fallback: 'forbidden',
+    };
+    if (fn?.name === 'snapshotSearchRuntimeProbe') return {
+      meter: { schema_version: 'supabase_client_observed_bytes_v1', pending_measurements: 0, total_bytes: 123 },
+    };
+    return true;
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  const verified = await adapter.verifyAuthenticatedOwner();
+  assert.equal(verified.receipt.get_user_verified, true);
+  assert.equal(verified.receipt.protected_probe_request_count, 1);
+  assert.equal(verified.meter.pending_measurements, 0);
+  assert.doesNotMatch(JSON.stringify(verified), /access_token|email|user_id|authorization/iu);
+});
+
 test('first-card navigation receipt proves same-origin HTTP 200 without retaining URL or query', async () => {
   const rawLogs = [{ message: JSON.stringify({ message: {
     method: 'Network.responseReceived', params: { type: 'Document', response: {

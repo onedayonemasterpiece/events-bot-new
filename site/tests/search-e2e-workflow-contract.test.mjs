@@ -77,6 +77,7 @@ test('production health has only the two bounded schedules, manual profiles and 
     ['browser', 'browser_android', 'browser_ios', 'all']);
   assert.deepEqual(parsed.on.repository_dispatch.types, ['search-runtime-deployed']);
   assert.deepEqual(parsed.concurrency, { group: 'search-production-health', 'cancel-in-progress': false });
+  assert.match(String(parsed.jobs.plan.if), /workflow_dispatch.*SEARCH_PRODUCTION_HEALTH_ENABLED/u);
   for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
   assert.equal(parsed.on.workflow_run, undefined);
   assert.equal(parsed.on.workflow_call, undefined);
@@ -102,6 +103,15 @@ test('platform jobs invoke only the unified one-session runner and qualification
   assert.match(YAML.stringify(health.jobs.terminal), /production-health-report-plan-cli\.mjs/u);
   assert.equal(qualification.on.schedule, undefined);
   assert.match(qualificationSource, /production-health-run\.mjs/u);
+  assert.deepEqual(qualification.on.workflow_dispatch.inputs.profile.options, ['browser', 'full']);
+  assert.match(qualificationSource, /\["cold_vector_llm","degraded_vector_fallback"\]/u);
+  assert.match(qualificationSource, /one no-mail session/u);
+  assert.match(qualificationSource, /E2E_SEARCH_REVISION_POLICY: release_exact/u);
+  assert.match(healthSource, /-f profile=full/u);
+  for (const platform of ['browser', 'android', 'ios']) {
+    assert.match(String(health.jobs['request-release-qualification'].if),
+      new RegExp(`needs\\.${platform}\\.result == 'success'`, 'u'));
+  }
 });
 
 test('default pull-request CI runs the deterministic Search production-health suite without secrets', async () => {

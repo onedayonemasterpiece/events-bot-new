@@ -527,7 +527,7 @@ scenarios:
 
   search.production_health:
     title: Current accepted Search target returns real cards through one bounded UI request
-    status: stage1_deterministic_contract_live_activation_pending
+    status: stage2_implemented_live_acceptance_pending
     contract: docs/features/static-site-pages/smart-vector-search/README.md
     handoff: docs/features/static-site-pages/smart-vector-search/stage-2-production-health-handoff.md
     layers: [L0, L1, L2]
@@ -542,11 +542,11 @@ scenarios:
     evidence: typed_current_target_one_post_cards_native_or_wheel_scroll_route_http_200_and_client_observed_bytes
     blocking:
       pull_request: deterministic_contract_only
-      release: false_until_stage2_live_activation
+      release: live_evidence_required
 
   search.release_qualification:
     title: Selective Search release candidate qualification owns cold LLM degraded mobile and transport depth
-    status: stage1_manual_dry_planner_live_connection_pending
+    status: stage2_manual_browser_and_full_llm_degraded_connected_mobile_depth_selective
     contract: docs/features/static-site-pages/smart-vector-search/README.md
     handoff: docs/features/static-site-pages/smart-vector-search/stage-2-production-health-handoff.md
     layers: [L0, L1, L2]
@@ -634,7 +634,7 @@ scenarios:
 
   search.live_cold_journey:
     title: Legacy manual cold Search runner retained for selective release qualification
-    status: implemented_manual_runner_stage2_connection_pending
+    status: implemented_manual_runner_full_qualification_llm_degraded_connected
     contract: docs/features/static-site-pages/smart-vector-search/README.md
     auth_contract: docs/testing/static-site-auth-session-fixture.md
     layers: [L1]

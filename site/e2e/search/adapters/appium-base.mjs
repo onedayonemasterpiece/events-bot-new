@@ -1,4 +1,5 @@
-import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime-probe.mjs';
+import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe,
+  verifyAuthenticatedOwnerRuntimeProbe } from './runtime-probe.mjs';
 import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
 import { buildSameOriginNavigationReceipt,
   extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
@@ -204,6 +205,12 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.execute(installSearchRuntimeProbe, configuredPolicy);
     },
     async activity() { return driver.execute(snapshotSearchRuntimeProbe); },
+    async verifyAuthenticatedOwner() {
+      await driver.execute(installSearchRuntimeProbe, { ...configuredPolicy, production_health: true });
+      const receipt = await driver.execute(verifyAuthenticatedOwnerRuntimeProbe);
+      const snapshot = await driver.execute(snapshotSearchRuntimeProbe);
+      return { receipt, meter: snapshot.meter };
+    },
     async typeQuery(value) {
       lifecycle.failure_stage = 'search_input_focus';
       const input = await driver.$('[data-search-input]');
@@ -242,7 +249,8 @@ export async function createAppiumSearchAdapter(options = {}) {
           const probe = globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__; const status = document.querySelector('[data-search-status]');
           const submit = document.querySelector('[data-search-submit]'); const more = document.querySelector('[data-search-more]');
           const cards = document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]');
-          return { done: (probe?.responses?.length || 0) >= responseCount && cards.length >= cardCount
+          return { done: (probe?.responses?.length || 0) >= responseCount
+            && (probe?.meter?.pending || 0) === 0 && cards.length >= cardCount
             && submit?.getAttribute('aria-busy') !== 'true' && more?.getAttribute('aria-busy') !== 'true',
           error: status?.getAttribute('role') === 'alert' };
         }, minimumResponseCount, minimumCardCount);

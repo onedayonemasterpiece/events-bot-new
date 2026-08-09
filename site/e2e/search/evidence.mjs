@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
@@ -96,10 +97,13 @@ export function productionHealthEvidenceRecord(input = {}) {
     execution_status: closedText(input.execution_status, /^(?:PASS|FAILED|BLOCKED)$/u, 'FAILED'),
     failure_class: input.failure_class == null
       ? null : closedText(input.failure_class, /^[A-Z][A-Z0-9_]{2,63}$/u, 'EVIDENCE_REDACTION_FAILED'),
+    workflow_run_id: closedText(input.workflow_run_id, /^[1-9][0-9]{0,19}$/u),
+    tested_at: closedText(input.tested_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u),
     target: {
       source: closedText(target.source, /^current_accepted_pointer$/u, 'current_accepted_pointer'),
       accepted_release_id: closedText(target.accepted_release_id, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/u),
       target_repo_sha: closedText(target.target_repo_sha, /^[0-9a-f]{40}$/u),
+      target_url_sha256: closedText(target.target_url_sha256, /^[0-9a-f]{64}$/u),
       immutable_identity: {
         build_id: closedText(immutable.build_id, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/u),
         run_id: closedText(immutable.run_id, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/u),
@@ -143,9 +147,22 @@ export function productionHealthEvidenceRecord(input = {}) {
         vector: safeCount(journey.provider_attempts?.vector),
         llm: safeCount(journey.provider_attempts?.llm),
       },
-      response_ids: Array.isArray(journey.response_ids) ? journey.response_ids.map(String) : [],
-      rendered_ids: Array.isArray(journey.rendered_ids) ? journey.rendered_ids.map(String) : [],
+      response: {
+        request_id: closedText(journey.response_telemetry?.request_id, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
+        http_status: safeCount(journey.response_telemetry?.http_status),
+        route: closedText(journey.response_telemetry?.route, /^(?:direct|relay)$/u, 'direct'),
+        search_contract_version: closedText(journey.response_telemetry?.search_contract_version, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
+        catalog_revision: closedText(journey.response_telemetry?.catalog_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
+        corpus_revision: closedText(journey.response_telemetry?.corpus_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
+        search_document_revision: closedText(journey.response_telemetry?.search_document_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
+      },
+      response_id_count: safeCount(journey.response_ids?.length),
+      rendered_id_count: safeCount(journey.rendered_ids?.length),
+      response_rendered_ids_match: Array.isArray(journey.response_ids)
+        && Array.isArray(journey.rendered_ids)
+        && JSON.stringify(journey.response_ids.map(String)) === JSON.stringify(journey.rendered_ids.map(String)),
       card_count: safeCount(journey.card_count), terminal_ui: journey.terminal_ui === true,
+      latency_ms: safeCount(journey.latency_ms),
       real_scroll: {
         performed: journey.real_scroll?.performed === true,
         card_visible_after: journey.real_scroll?.card_visible_after === true,
@@ -190,15 +207,33 @@ export async function writeProductionHealthEvidence(directory, input) {
   const root = resolve(directory);
   await mkdir(root, { recursive: true, mode: 0o700 });
   await writeFile(join(root, 'result.json'), `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
+  const runtimeFingerprint = createHash('sha256').update(JSON.stringify({
+    repo_sha: record.target.target_repo_sha,
+    search_contract_version: record.search.response.search_contract_version,
+  }), 'utf8').digest('hex');
   const summary = {
-    schema_version: 'search_production_health_summary_v1', platform: record.platform,
+    schema_version: 'search_production_health_evidence_summary_v1', platform: record.platform,
     product_health: record.product_health, execution_status: record.execution_status,
-    failure_class: record.failure_class, target_repo_sha: record.target.target_repo_sha,
+    failure_class: record.failure_class,
+    tested_at: record.tested_at,
+    target_url_sha256: record.target.target_url_sha256,
     target_superseded: record.target.target_superseded,
-    physical_post_count: record.search.physical_post_count, card_count: record.search.card_count,
-    llm_calls: record.search.provider_attempts.llm,
-    observed_supabase_bytes: record.supabase_observed_bytes.total_bytes,
-    redaction_status: 'PASS',
+    site_runtime_sha: record.target.target_repo_sha,
+    search_backend_revision: record.search.response.search_contract_version,
+    content_generation_id: record.search.response.catalog_revision,
+    search_index_generation_id: record.search.response.corpus_revision,
+    search_contract_version: record.search.response.search_contract_version,
+    request_id: record.search.response.request_id,
+    search_post_count: record.search.physical_post_count,
+    result_count: record.search.response_id_count,
+    rendered_card_count: record.search.card_count,
+    opened_route_status: record.search.event_route.http_status,
+    latency_ms: record.search.latency_ms,
+    cache_status: record.search.cache_state,
+    provider_attempt_counts: record.search.provider_attempts,
+    client_observed_supabase_bytes: record.supabase_observed_bytes.total_bytes,
+    target_fingerprint: record.target.target_url_sha256,
+    runtime_fingerprint: runtimeFingerprint,
   };
   assertSanitizedSearchEvidence(summary);
   await writeFile(join(root, 'qa-summary.json'), `${JSON.stringify(summary, null, 2)}\n`, { mode: 0o600 });

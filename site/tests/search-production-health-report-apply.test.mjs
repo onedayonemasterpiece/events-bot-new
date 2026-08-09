@@ -96,7 +96,11 @@ test('open plan creates one issue when no exact fingerprint exists', async () =>
   const calls = [];
   const fetchImpl = async (url, options) => {
     calls.push({ url, options });
-    return options.method === 'GET' ? responseJson([]) : responseJson({ number: 91 }, 201);
+    if (options.method === 'GET' && url.includes('/issues?')) return responseJson([]);
+    if (options.method === 'GET' && url.includes('/labels?')) {
+      return responseJson(plan.operation.labels.map((name) => ({ name })));
+    }
+    return responseJson({ number: 91 }, 201);
   };
 
   const result = await applySearchHealthReportPlan(plan, {
@@ -104,12 +108,30 @@ test('open plan creates one issue when no exact fingerprint exists', async () =>
   });
   assert.equal(result.action, 'create');
   assert.deepEqual(result.issue_numbers, [91]);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1].options.method, 'POST');
-  assert.match(calls[1].url, /\/repos\/owner\/repo\/issues$/u);
-  assert.deepEqual(JSON.parse(calls[1].options.body).labels, [
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].options.method, 'POST');
+  assert.match(calls[2].url, /\/repos\/owner\/repo\/issues$/u);
+  assert.deepEqual(JSON.parse(calls[2].options.body).labels, [
     'search-production-health', 'search-health:product', 'search-platform:ios',
   ]);
+});
+
+test('first incident creates missing managed labels before creating the issue', async () => {
+  const plan = brokenPlan('browser', 'BROKEN_NO_RESULTS');
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    if (options.method === 'GET' && url.includes('/issues?')) return responseJson([]);
+    if (options.method === 'GET' && url.includes('/labels?')) return responseJson([{ name: 'bug' }]);
+    if (url.endsWith('/labels')) return responseJson({ name: JSON.parse(options.body).name }, 201);
+    return responseJson({ number: 92 }, 201);
+  };
+  const result = await applySearchHealthReportPlan(plan, {
+    fetchImpl, token: 't', repository: 'owner/repo',
+  });
+  assert.equal(result.action, 'create');
+  assert.deepEqual(calls.slice(2, 5).map((call) => JSON.parse(call.options.body).name), plan.operation.labels);
+  assert.match(calls.at(-1).url, /\/issues$/u);
 });
 
 test('duplicate exact fingerprints fail closed before mutation', async () => {

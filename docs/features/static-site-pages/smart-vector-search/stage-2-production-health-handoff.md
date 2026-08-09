@@ -2,10 +2,10 @@
 
 Канонический архитектурный контракт: [README, §16](README.md#16-search-production-health-архитектурная-коррекция-этап-1).
 
-Стартовое состояние:
+Текущее состояние после реализации кода, до live acceptance:
 
 ```text
-ARCHITECTURE_READY_FOR_LIVE_VALIDATION
+STAGE2_IMPLEMENTED_LIVE_ACCEPTANCE_PENDING
 PRODUCT_HEALTH_UNCONFIRMED
 ```
 
@@ -36,8 +36,24 @@ pagination или полный scheduled mobile/release matrix в production-hea
    `≤48 KiB`, hard `≤96 KiB`, LLM/pagination/receipt-RPC/Storage-images `0`.
 6. После journey повторно прочитать только pointer. При смене target записать
    `target_superseded=true`; Search не повторять и product incident не создавать.
-7. Лишь после двух ограниченных live доказательств включить triggers и typed
-   reporter. Release qualification подключать отдельно и оставлять manual/selective.
+7. Typed reporter уже подключён, но automatic schedule/repository dispatch
+   закрыты variable `SEARCH_PRODUCTION_HEALTH_ENABLED`. Установить `true` лишь
+   после двух ограниченных live доказательств. Release qualification не имеет
+   schedule/direct repository trigger; только explicit `full` marker может
+   запросить её один раз после standard platform PASS.
+
+## Что уже реализовано
+
+- единый `production-health-run.mjs` с current accepted target pin/reread;
+- Playwright и real Appium Android/iOS preflight в той же session;
+- platform-bound OIDC broker claim и admission до трёх разных platform personas;
+- one-query/one-POST vector-only journey, card ID parity, scroll и route 200;
+- Auth getUser + один owner RLS proof, 48/96 KiB meter и strict evidence;
+- exact deployment marker `none|standard|full` и platform issue disposition.
+
+Перед live остаются только production gates: применить broker migration,
+добавить новый workflow_ref в broker allowlist, deploy exact merged main,
+выполнить два manual workflows и затем включить automatic variable.
 
 ## Production environment/secrets
 
@@ -48,9 +64,10 @@ pagination или полный scheduled mobile/release matrix в production-hea
 - `SEARCH_E2E_AUTH_BROKER_URL` и OIDC audience
   `kenigevents-static-search-broker`;
 - `SEARCH_E2E_SUPABASE_URL` и `SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY`;
-- три отдельные no-mail health personas: browser, Android и iOS. Одна mutable
-  session/account не разделяется между platform jobs, manual legacy или
-  qualification run.
+- три отдельные no-mail platform personas: browser, Android и iOS. Одна
+  mutable session не передаётся между jobs; health, legacy и qualification
+  сериализованы общей concurrency group, а full qualification повторно
+  использует browser session только внутри одного job.
 
 Secrets не выводятся в job output/artifacts. Opaque target URL маскируется до
 первого log; evidence хранит только redacted path/fingerprint и typed counters.

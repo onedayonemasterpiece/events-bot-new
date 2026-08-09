@@ -84,6 +84,33 @@ for arg in "${FLY_ARGS[@]}"; do
   esac
 done
 
+GH_BIN=''
+dispatch_file=''
+if [[ "$SEARCH_VALIDATION_PROFILE" != none ]]; then
+  if command -v gh >/dev/null 2>&1; then
+    GH_BIN="$(command -v gh)"
+  elif [[ -x "$HOME/.local/bin/gh" ]]; then
+    GH_BIN="$HOME/.local/bin/gh"
+  else
+    echo 'gh is required before a Search validation deployment.' >&2
+    exit 2
+  fi
+  "$GH_BIN" auth status >/dev/null
+  dispatch_file="$(mktemp)"
+  cleanup_dispatch() { rm -f "$dispatch_file"; }
+  trap cleanup_dispatch EXIT
+  dispatch_args=(
+    --site-runtime-sha "$HEAD_SHA"
+    --search-backend-revision "$SEARCH_BACKEND_REVISION"
+    --validation-profile "$SEARCH_VALIDATION_PROFILE"
+    --deployment-run-id "$SEARCH_DEPLOYMENT_RUN_ID"
+  )
+  for surface in "${SEARCH_CHANGED_SURFACES[@]}"; do
+    dispatch_args+=(--changed-surface "$surface")
+  done
+  node scripts/search-runtime-deploy-dispatch.mjs "${dispatch_args[@]}" >"$dispatch_file"
+fi
+
 if [[ -f /home/dev/.config/fly/release.env ]]; then
   # shellcheck disable=SC1091
   set -a
@@ -111,29 +138,6 @@ if [[ "$SEARCH_VALIDATION_PROFILE" == none ]]; then
   echo 'Fly deploy succeeded; Search validation marker disabled (none).'
   exit 0
 fi
-
-if command -v gh >/dev/null 2>&1; then
-  GH_BIN="$(command -v gh)"
-elif [[ -x "$HOME/.local/bin/gh" ]]; then
-  GH_BIN="$HOME/.local/bin/gh"
-else
-  echo 'Fly deploy succeeded, but gh is required to emit the requested Search validation marker.' >&2
-  exit 3
-fi
-
-dispatch_file="$(mktemp)"
-cleanup_dispatch() { rm -f "$dispatch_file"; }
-trap cleanup_dispatch EXIT
-dispatch_args=(
-  --site-runtime-sha "$HEAD_SHA"
-  --search-backend-revision "$SEARCH_BACKEND_REVISION"
-  --validation-profile "$SEARCH_VALIDATION_PROFILE"
-  --deployment-run-id "$SEARCH_DEPLOYMENT_RUN_ID"
-)
-for surface in "${SEARCH_CHANGED_SURFACES[@]}"; do
-  dispatch_args+=(--changed-surface "$surface")
-done
-node scripts/search-runtime-deploy-dispatch.mjs "${dispatch_args[@]}" >"$dispatch_file"
 
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-onedayonemasterpiece/events-bot-new}"
 "$GH_BIN" api --method POST "repos/$GITHUB_REPOSITORY/dispatches" --input "$dispatch_file"

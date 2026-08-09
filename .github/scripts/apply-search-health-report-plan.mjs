@@ -12,6 +12,7 @@ import {
 const API_VERSION = '2022-11-28';
 const HEALTH_LABEL = 'search-production-health';
 const MAX_ISSUE_PAGES = 10;
+const LABEL_COLOR = '1d76db';
 const PRODUCT_FINGERPRINT_PATTERN = /^search-product:(browser|android|ios):BROKEN_[A-Z_]+$/u;
 
 const fail = (reason) => {
@@ -107,6 +108,29 @@ const exactFingerprintMatches = (issues, fingerprint) => issues.filter(
   (issue) => markerFingerprint(issue.body) === fingerprint,
 );
 
+const ensureOperationLabels = async ({ labels, context }) => {
+  const existing = await apiRequest({
+    ...context,
+    url: `${context.apiBase}/repos/${context.repository}/labels?per_page=100`,
+  });
+  if (!Array.isArray(existing)) fail('labels_response');
+  const names = new Set(existing.map((item) => String(item?.name || '')));
+  for (const label of labels) {
+    if (names.has(label)) continue;
+    await apiRequest({
+      ...context,
+      method: 'POST',
+      url: `${context.apiBase}/repos/${context.repository}/labels`,
+      body: {
+        name: label,
+        color: LABEL_COLOR,
+        description: 'Managed by the Search production-health reporter',
+      },
+    });
+    names.add(label);
+  }
+};
+
 const openOrUpdate = async ({ plan, issues, context, dryRun }) => {
   const { operation } = plan;
   const matches = exactFingerprintMatches(issues, operation.fingerprint);
@@ -119,6 +143,7 @@ const openOrUpdate = async ({ plan, issues, context, dryRun }) => {
   if (matches.length === 0) {
     let issueNumbers = [];
     if (!dryRun) {
+      await ensureOperationLabels({ labels: operation.labels, context });
       const created = await apiRequest({
         ...context,
         method: 'POST',

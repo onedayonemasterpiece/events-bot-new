@@ -855,6 +855,11 @@ target repo SHA и сам по себе не является failure. Отсу�
 Edge SHA остаётся честно отмеченным gap этапа 2; новая release-система для этого
 не вводится.
 
+В текущем marker contract `search_backend_revision` обязан быть точным
+ожидаемым `search_contract_version`, потому что только это значение доступно в
+одном разрешённом product Search response. `policy_versions` сохраняются как
+telemetry; отдельный Edge byte/SHA нельзя подменять придуманной metadata.
+
 ### 16.3 Три тестовых контура
 
 **A. Deterministic Search CI.** Offline suite на PR проверяет planner/trigger
@@ -863,13 +868,13 @@ revision drift, LLM/pagination zero, failure taxonomy, retry policy, redaction �
 48/96 KiB cost guard. Secrets, production target, Supabase, Kaggle, browser
 device labs и providers не используются.
 
-**B. Search production health.** После активации на этапе 2: manual, дважды в
-сутки и после реального Search runtime deployment. Утренний профиль проверяет
+**B. Search production health.** Реализован на этапе 2: manual, дважды в сутки
+и после явного реального Search runtime deployment marker. Утренний профиль проверяет
 browser + Android Emulator, вечерний — browser + iOS Simulator; каждая platform
 cell получает отдельную no-mail session. В каждой cell выполняются один
 vector-only UI query, ровно один Search POST с limit ≤5, 1–5 карточек, реальный
-wheel/touch scroll и открытие одной карточки с HTTP 200. Cache `hit`, `miss`,
-`stored` и `bypass` допустимы. Второго запроса, pagination, LLM, receipt RPC,
+wheel/touch scroll и открытие одной карточки с HTTP 200. Cache `hit`, `miss` и
+`stored` допустимы; canary-only `bypass` не относится к health. Второго запроса, pagination, LLM, receipt RPC,
 Storage image и real-mail OTP нет.
 
 **C. Search release qualification.** Только manual/selective. Здесь остаются
@@ -877,6 +882,9 @@ cold vector, bounded LLM, degraded fallback и расширенные pagination
 mobile matrices сверх минимального health journey. `release_exact` применяется
 лишь к свежему immutable candidate как promotion gate. Candidate mismatch
 блокирует квалификацию, но не объявляет текущий production Search сломанным.
+Профиль `full` после успешного standard health ровно один раз запускает в одной
+no-mail browser session существующие `cold_vector_llm` и
+`degraded_vector_fallback`; прямого schedule у qualification нет.
 
 Существующий `site/e2e/search/` остаётся единственным harness. Stage-1 planner
 и contracts добавлены рядом с ним; auth fixture и `site/e2e/mobile-web/` не
@@ -902,8 +910,9 @@ mobile matrices сверх минимального health journey. `release_exa
 5. Pre-dispatch resolver retry разрешён только при доказанных нулевых side
    effects. После Search dispatch retry запрещён.
 
-Этап 1 содержит pure interface и fake-resolver tests; production resolver не
-вызывается.
+Этап 2 подключает этот interface к production resolver. Он читает pointer до
+session/Search и ровно один раз после journey; секретный URL не попадает в
+output/artifact, evidence хранит только его SHA-256.
 
 ### 16.5 Trigger matrix
 
@@ -918,8 +927,12 @@ mobile matrices сверх минимального health journey. `release_exa
 | corpus/index/catalog refresh | при contract diff | **нет** | только по решению release owner |
 | latest Kaggle job change | нет | нет | нет |
 
-На этапе 1 новые workflows имеют только `workflow_dispatch` и dry planner.
-Schedule и repository dispatch production-health ещё не включены.
+Production-health workflow принимает только две указанные cron-записи,
+закрытые manual profiles и `repository_dispatch: search-runtime-deployed` с
+явным `standard|full`. Smart Update, snapshot, Kaggle, corpus и index paths не
+эмитят этот event. До двух terminal live proofs автоматические schedule/dispatch
+fail-closed выключены repository variable `SEARCH_PRODUCTION_HEALTH_ENABLED`;
+manual profiles остаются доступными для этих двух acceptance runs.
 
 ### 16.6 Failure taxonomy
 
@@ -953,14 +966,14 @@ candidate mismatch и `target_superseded` не являются product failure.
 Product incident создаётся только для typed `BROKEN_*` в контуре current-target
 production health. CI, release qualification, manual legacy debug,
 `UNKNOWN_*`, `BLOCKED_*`, cost/redaction guard и superseded result не создают и
-не закрывают product issue. Старый generic issue reporter удалён. Stage 2 может
-добавить отдельный reporter только с ключом purpose + target runtime identity +
-typed result и принятой consecutive-failure policy; ручной success не закрывает
-автоматический incident.
+не закрывают product issue. Новый reporter ключует product issue по platform +
+typed `BROKEN_*`; HEALTHY закрывает только product issue той же platform.
+Одинаковый `UNKNOWN_*` создаёт infrastructure issue только на третьем подряд
+terminal результате своей platform; cost/evidence имеют отдельные fingerprints.
 
 ### 16.8 Egress budget и byte meter
 
-Future health contract:
+Действующий health contract:
 
 - Search POST `1`, result limit `≤5`;
 - LLM attempts `0`, pagination `0`, receipt RPC `0`, Storage images `0`;
@@ -978,13 +991,17 @@ Storage/CDN и не-Supabase origins исключаются. В evidence поп�
 
 - `static-site-search-canary.yml` — только ручной legacy/debug; прежние четыре
   cron и post-deploy repository dispatch удалены; generic issue mutation нет.
-- `search-production-health.yml` — только `workflow_dispatch` + deterministic
-  planner, без secrets/live target/schedule.
-- `search-release-qualification.yml` — только manual dry planner; live off.
+- `search-production-health.yml` — две bounded schedule, explicit manual profile
+  и закрытый runtime-deploy marker; каждая platform job вызывает единый runner.
+- `search-release-qualification.yml` — manual/selective browser qualification;
+  `full` marker может запросить её ровно один раз после health terminal PASS и
+  выполняет bounded LLM + deterministic degraded fallback в одной ephemeral
+  browser session.
 - default PR CI запускает deterministic Search architecture suite.
 
-После merge этапа 1 ни один Search workflow автоматически не обращается к
-production. Data-only generation не имеет Search workflow trigger.
+Data-only generation по-прежнему не имеет Search workflow trigger. Legacy
+cached/cold/LLM/mobile harness остаётся только manual debug и сериализован с
+health по общей session-fixture concurrency group.
 
 ### 16.10 Ограниченный вывод по PR #436
 
@@ -1011,17 +1028,13 @@ guard, а не доказанный двунаправленный atomic mutex.
 - этот канонический контракт и отдельный
   [`stage-2-production-health-handoff.md`](stage-2-production-health-handoff.md).
 
-### 16.12 Что намеренно оставлено этапу 2
+### 16.12 Что реализовано на этапе 2 и что осталось
 
-- подключение pure target interface к production resolver и one-run secret;
-- browser mechanics для минимального one-query journey и HTTP-200 card open;
-- сбор client-observed bytes из real Auth/Edge/REST responses;
-- установка точного Search backend deployment identity, если stage-2 audit не
-  найдёт уже существующий provider receipt;
-- два ограниченных live browser runs;
-- включение twice-daily и real Search-runtime-deploy triggers;
-- typed reporter/alert policy после live validation;
-- selective connection release qualification к существующему live runner.
-
-До этих действий нельзя утверждать `HEALTHY` или закрывать regression contract
-инцидента только на основании stage-1 tests.
+Реализованы production resolver/pointer reread, one-query browser/Appium
+journey, real scroll + HTTP-200 card open, client-observed byte meter, platform
+broker identity/admission, explicit deploy marker, две schedule, manual profiles
+и typed reporter. Перед первым live run migration broker claims должна быть
+применена, Fly broker — задеплоен из exact `origin/main`, а новый workflow ref —
+добавлен в broker allowlist. Затем допускаются максимум два полных workflow:
+browser+Android и browser+iOS. До их terminal evidence состояние остаётся
+`PRODUCT_HEALTH_UNCONFIRMED`.
