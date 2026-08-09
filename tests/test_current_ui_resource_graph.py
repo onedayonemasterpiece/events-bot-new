@@ -358,8 +358,8 @@ def test_human_review_ledger_requires_every_raster_and_durable_provenance(tmp_pa
       const base = {{ schema_version:'current_ui_decoder_human_review_v1', snapshot_id:'snapshot-test', reviewer:'Codex visual review', reviewed_at:'2026-08-08T23:59:59Z',
         actions_artifact:{{run_id:'1',artifact_id:'2',artifact_digest:'sha256:{'a' * 64}',expires_at:'2026-11-06T00:00:00Z'}},
         permanent_storage:{{uri:'https://github.example/release',object_version:'v1',sha256:'sha256:{'b' * 64}',bytes:1}}, capsules,
-        observations:[], page_verifications:[], raster_reviews:[{{path:'screenshots/page.jpg',sha256:'{digest}',review_status:'reviewed',visual_result:'match'}}] }};
-      const pageFacts = [{{id:'evidence.1'}}];
+        observations:[], page_verifications:[{{id:'evidence.1',review_status:'reviewed',visual_result:'match'}}], raster_reviews:[{{path:'screenshots/page.jpg',sha256:'{digest}',review_status:'reviewed',visual_result:'match'}}] }};
+      const pageFacts = [{{id:'evidence.1',screenshot_path:'screenshots/page.jpg'}}];
       const valid = assertHumanReviewLedger(base, 'snapshot-test', [], pageFacts, [], {json.dumps(str(output))});
       let missingRejected = false; try {{ assertHumanReviewLedger({{...base,raster_reviews:[]}}, 'snapshot-test', [], pageFacts, [], {json.dumps(str(output))}); }} catch {{ missingRejected = true; }}
       let digestRejected = false; try {{ assertHumanReviewLedger({{...base,actions_artifact:{{...base.actions_artifact,artifact_digest:'bad'}}}}, 'snapshot-test', [], pageFacts, [], {json.dumps(str(output))}); }} catch {{ digestRejected = true; }}
@@ -1111,17 +1111,33 @@ def test_playwright_stable_pair_preserves_capture_label_on_locator_failure():
 
 def test_review_materializer_matches_capsule_ids_across_serialized_forms():
     script = """
-      import { capsuleEvidenceMatches } from './scripts/current_ui_resource_graph/v1/review-materialize.mjs';
+      import { capsuleEvidenceMatches, capsuleEvidenceSelected } from './scripts/current_ui_resource_graph/v1/review-materialize.mjs';
       const rows = [
         { capsule_ids: ['04-transport'] },
         { capsule_ids: ['capsule.04-transport'] },
         { capsule_ids: ['05-medallions'] },
       ];
-      process.stdout.write(JSON.stringify(rows.map((row) => capsuleEvidenceMatches(row, 'capsule.04-transport'))));
+      process.stdout.write(JSON.stringify({
+        matched: rows.map((row) => capsuleEvidenceMatches(row, 'capsule.04-transport')),
+        explicitlySelected: capsuleEvidenceSelected(
+          { id:'page-verification.reviewed-full-page', capsule_ids:[] },
+          'capsule.04-transport',
+          ['page-verification.reviewed-full-page'],
+        ),
+        notSelected: capsuleEvidenceSelected(
+          { id:'page-verification.other', capsule_ids:[] },
+          'capsule.04-transport',
+          ['page-verification.reviewed-full-page'],
+        ),
+      }));
     """
     result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == [True, True, False]
+    assert json.loads(result.stdout) == {
+        "matched": [True, True, False],
+        "explicitlySelected": True,
+        "notSelected": False,
+    }
 
     source = (REPO / "scripts/current_ui_resource_graph/v1/review-materialize.mjs").read_text(encoding="utf-8")
     assert "source-to-specimen-with-real-route-binding-reviewed" in source

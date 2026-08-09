@@ -385,7 +385,14 @@ For a reviewed `GO`, each capsule must contain non-empty local
 their IDs must resolve to the global shards and must cover every evidence ID in
 the capsule review. Capsule IDs are canonicalized across the serialized
 `capsule.<id>` and `<id>` forms. Empty, dangling or prefix-mismatched local
-indexes fail closed.
+indexes fail closed. Full-page evidence explicitly selected in the human
+review ledger is also copied into that capsule's local reference index even
+when the capture-time page record has no `capsule_ids`; the human selection is
+therefore hash-bound instead of silently discarded.
+Every page record with a screenshot path is treated as raster-backed even when
+the capture-time row omits a duplicate SHA field; the materializer hashes the
+actual file, requires its ledger review, and writes an explicit reviewed page
+status.
 
 The review ledger and reviewed capsule overlay are authoritative for completed
 visual reconciliation. Capture-time `pending` fields can remain inside

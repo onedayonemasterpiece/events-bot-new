@@ -39,6 +39,15 @@ function verifyRaster(outputRoot, screenshot) {
   if (sha(readFileSync(path)) !== screenshot.sha256) throw new Error(`Reviewed raster hash mismatch: ${screenshot.path}`);
 }
 
+function pageScreenshot(outputRoot, page) {
+  if (page.screenshot?.path && page.screenshot?.sha256) return page.screenshot;
+  if (!page.screenshot_path) return null;
+  if (!/^[a-z0-9._/-]+$/iu.test(page.screenshot_path) || page.screenshot_path.includes('..')) throw new Error('Unsafe reviewed page raster path');
+  const path = resolve(outputRoot, page.screenshot_path);
+  if (!path.startsWith(`${resolve(outputRoot)}/`) || !existsSync(path)) throw new Error(`Reviewed page raster missing: ${page.screenshot_path}`);
+  return { path: page.screenshot_path, sha256: page.screenshot_sha256 || sha(readFileSync(path)) };
+}
+
 export function assertHumanReviewLedger(ledger, snapshotId, observations, pageVerifications, bindings, outputRoot) {
   if (ledger.schema_version !== SCHEMA || ledger.snapshot_id !== snapshotId) throw new Error('Review ledger identity mismatch');
   if (!ledger.reviewer || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(ledger.reviewed_at || '')) throw new Error('Review ledger reviewer/time missing');
@@ -65,11 +74,10 @@ export function assertHumanReviewLedger(ledger, snapshotId, observations, pageVe
     if (review.trace_kind !== 'lab-source-only' && !verificationIds.has(review.page_verification_id)) throw new Error(`Reviewed specimen lacks a real-page trace: ${observation.id}`);
     if (review.trace_kind === 'state-equivalent' && review.visual_result !== 'match') throw new Error(`State-equivalent trace is not a visual match: ${observation.id}`);
   }
-  const capturedPages = pageVerifications.filter((item) => item.screenshot?.sha256 || item.screenshot_sha256);
+  const capturedPages = pageVerifications.map((item) => ({ item, screenshot: pageScreenshot(outputRoot, item) })).filter(({ screenshot }) => screenshot);
   const pageMap = new Map(ledger.page_verifications?.map((item) => [item.id, item]) || []);
   if (pageMap.size !== capturedPages.length) throw new Error('Every raster-backed real-page verification must be reviewed exactly once');
-  for (const page of capturedPages) {
-    const screenshot = page.screenshot || { path: page.screenshot_path, sha256: page.screenshot_sha256 };
+  for (const { item: page, screenshot } of capturedPages) {
     verifyRaster(outputRoot, screenshot);
     const review = pageMap.get(page.id);
     if (!review || review.review_status !== 'reviewed' || !review.visual_result) throw new Error(`Incomplete page visual review: ${page.id}`);
@@ -92,6 +100,10 @@ export function capsuleEvidenceMatches(item, capsuleId) {
   return (item?.capsule_ids || []).some((id) => String(id || '').replace(/^capsule\./u, '') === canonical);
 }
 
+export function capsuleEvidenceSelected(item, capsuleId, reviewEvidenceIds = []) {
+  return capsuleEvidenceMatches(item, capsuleId) || new Set(reviewEvidenceIds).has(item?.id);
+}
+
 function rewriteCapsule(root, capsuleReview, observations, pageVerifications) {
   const directory = capsuleReview.id.replace(/^capsule\./u, '');
   const capsuleRoot = join(root, 'conformance-capsules', directory);
@@ -105,13 +117,13 @@ function rewriteCapsule(root, capsuleReview, observations, pageVerifications) {
     decision: 'NOT_MERGED', recommendation: 'unresolved', normalization_allowed: false,
   });
   writeFileSync(capsulePath, json(capsule, true));
-  const specimenRefs = observations.filter((item) => capsuleEvidenceMatches(item, capsuleReview.id)).map((item) => ({
+  const specimenRefs = observations.filter((item) => capsuleEvidenceSelected(item, capsuleReview.id, capsuleReview.evidence_ids)).map((item) => ({
     id: `capsule-ref.${item.id}`, observation_id: item.id, specimen_id: item.specimen_id,
     screenshot_sha256: item.screenshot.sha256, review_status: 'reviewed', observation_attached: true,
     production_state_claimed: false, decision: 'NOT_MERGED', normalization_allowed: false,
   }));
   writeJsonl(join(capsuleRoot, 'specimen-observation-refs.jsonl'), specimenRefs);
-  const pageRefs = pageVerifications.filter((item) => capsuleEvidenceMatches(item, capsuleReview.id)).map((item) => ({
+  const pageRefs = pageVerifications.filter((item) => capsuleEvidenceSelected(item, capsuleReview.id, capsuleReview.evidence_ids)).map((item) => ({
     id: `capsule-ref.${item.id}`, verification_id: item.id, route_binding_id: item.route_binding_id,
     screenshot_sha256: item.screenshot?.sha256 || item.screenshot_sha256 || null,
     review_status: item.review_status, production_observed_by_capsule: item.production_state_claimed === true,
