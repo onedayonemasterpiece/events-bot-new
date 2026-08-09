@@ -29,6 +29,7 @@ export function createSanitizedNavigationResponseTracker() {
   const seenRequestIds = new Set();
   const responseByRequestId = new Map();
   const terminalBytesByRequestId = new Map();
+  const receivedBytesByRequestId = new Map();
   const untrackedTerminalRecords = [];
   const appendRequestStart = (request, resourceType, requestId) => {
     const url = safeUrl(request?.url);
@@ -117,6 +118,25 @@ export function createSanitizedNavigationResponseTracker() {
       if (identity && Number.isSafeInteger(encodedBytes) && encodedBytes >= 0) {
         terminalBytesByRequestId.set(identity, encodedBytes);
         applyTerminalBytes(responseByRequestId.get(identity), encodedBytes);
+      }
+    }
+    if (method === 'Network.dataReceived') {
+      const identity = String(params.requestId || '');
+      const encodedBytes = Number(params.encodedDataLength);
+      if (identity && Number.isSafeInteger(encodedBytes) && encodedBytes >= 0) {
+        receivedBytesByRequestId.set(identity,
+          Number(receivedBytesByRequestId.get(identity) || 0) + encodedBytes);
+      }
+    }
+    if (method === 'Network.loadingFailed') {
+      const identity = String(params.requestId || '');
+      if (identity) {
+        // A failed/cancelled request has no loadingFinished event. The CDP
+        // dataReceived total is the exact body traffic already observed by the
+        // client, so close the private request record without retaining the
+        // request id, URL or raw failure text.
+        applyTerminalBytes(responseByRequestId.get(identity),
+          Number(receivedBytesByRequestId.get(identity) || 0));
       }
     }
       Object.values(value).forEach((child) => visit(child, depth + 1));

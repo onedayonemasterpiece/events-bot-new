@@ -1060,6 +1060,12 @@ command factory pinned `webdriver@9.30.0`. Отсутствие/ошибка buc
 даёт platform `UNKNOWN_*` до product verdict. Browser failure evidence отдельно
 считает document, Auth, Edge, REST и RPC failure classes, не сохраняя URL или
 текст ошибки.
+Android performance receipt сохраняет request id только внутри замыкания. Для
+успешно завершённого ответа authoritative terminal event —
+`Network.loadingFinished`; для отменённого/failed фонового Auth request —
+`Network.loadingFailed`. Во втором случае учитывается только сумма фактически
+полученных `Network.dataReceived.encodedDataLength`, после чего request считается
+закрытым. Raw URL, request id, response body и `errorText` наружу не выходят.
 
 ### 16.9 Migration from current workflow
 

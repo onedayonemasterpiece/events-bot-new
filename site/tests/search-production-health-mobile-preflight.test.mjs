@@ -467,6 +467,30 @@ test('CDP request start remains pending across drains until response terminal by
   assert.doesNotMatch(JSON.stringify(tracker.responses()), /cross-drain|secret/u);
 });
 
+test('CDP loadingFailed closes an observed response with only actually received data bytes', () => {
+  const tracker = createSanitizedNavigationResponseTracker();
+  tracker.consume([{ message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+    requestId: 'auth-cancelled', type: 'Fetch', request: {
+      method: 'GET', url: 'https://project.supabase.co/auth/v1/user?secret=no',
+    },
+  } }) }, { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+    requestId: 'auth-cancelled', type: 'Fetch', response: {
+      status: 200, url: 'https://project.supabase.co/auth/v1/user?secret=no',
+      headers: {}, encodedDataLength: 64,
+    },
+  } }) }, { message: JSON.stringify({ method: 'Network.dataReceived', params: {
+    requestId: 'auth-cancelled', encodedDataLength: 1536,
+  } }) }]);
+  assert.equal(tracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }), 1);
+
+  tracker.consume([{ message: JSON.stringify({ method: 'Network.loadingFailed', params: {
+    requestId: 'auth-cancelled', type: 'Fetch', errorText: 'net::ERR_ABORTED', canceled: true,
+  } }) }]);
+  assert.equal(tracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }), 0);
+  assert.equal(tracker.responses()[0].encoded_bytes, 1536);
+  assert.doesNotMatch(JSON.stringify(tracker.responses()), /cancelled|secret|ERR_ABORTED/u);
+});
+
 test('mobile protocol receipt counts unique event-search POSTs without retaining request data', () => {
   const seen = new Set();
   const request = { message: JSON.stringify({ message: {
@@ -764,4 +788,62 @@ test('mobile Auth callback waits across log drains for terminal bytes before own
   assert.equal(verified.meter.categories.auth, 2148);
   assert.equal(verified.meter.total_bytes, 2148);
   assert.doesNotMatch(JSON.stringify(verified), /project|verify|token|secret/u);
+});
+
+test('mobile Auth callback closes an authorised background Auth cancellation without timing out', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  let logs = 0;
+  const driver = {
+    capabilities: {},
+    async getLogs() {
+      logs += 1;
+      if (logs === 2) return [
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'auth-verify', type: 'Fetch', response: { status: 200,
+            url: 'https://project.supabase.co/auth/v1/verify?token=secret',
+            headers: { 'content-length': '2048' } },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+          requestId: 'auth-background', type: 'Fetch', request: { method: 'GET',
+            url: 'https://project.supabase.co/auth/v1/user?secret=no' },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'auth-background', type: 'Fetch', response: { status: 200,
+            url: 'https://project.supabase.co/auth/v1/user?secret=no', encodedDataLength: 64 },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.dataReceived', params: {
+          requestId: 'auth-background', encodedDataLength: 512,
+        } }) },
+      ];
+      if (logs === 3) return [{ message: JSON.stringify({ method: 'Network.loadingFailed', params: {
+        requestId: 'auth-background', type: 'Fetch', errorText: 'net::ERR_ABORTED', canceled: true,
+      } }) }];
+      return [];
+    },
+    async url() {}, async getUrl() { return target; },
+    async waitUntil(predicate, options = {}) {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        if (await predicate()) return;
+      }
+      throw new Error(options.timeoutMsg || 'wait_failed');
+    },
+    async execute(fn) {
+      if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
+        get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+        product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+        real_mail_fallback: 'forbidden',
+      };
+      if (fn?.name === 'snapshotSearchRuntimeProbe') return {
+        meter: { total_bytes: 100, target_bytes: 48 * 1024, hard_limit_bytes: 96 * 1024,
+          categories: { auth: 100, edge: 0, direct_rest: 0, direct_rpc: 0 } },
+      };
+      return true;
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  await adapter.bootstrapSession(`${target}?token_hash=bridge-secret&type=magiclink`, target);
+  const verified = await adapter.verifyAuthenticatedOwner();
+  assert.equal(verified.meter.categories.auth, 2660);
+  assert.equal(verified.meter.total_bytes, 2660);
+  assert.doesNotMatch(JSON.stringify(verified), /background|project|verify|token|secret|ERR_ABORTED/u);
 });
