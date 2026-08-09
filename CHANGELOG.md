@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Aligned every Private Events MCP media byte/store/TTL/download/dimension
+  budget with its documented `PRIVATE_EVENTS_MCP_MEDIA_*` environment name
+  and made invalid media-budget values fail closed instead of being silently
+  clamped, so production activation applies the operator's exact limits.
+
 - Preserved the original Private Events MCP ChatGPT endpoint/client identity
   across routine bootstrap-token rotation and made the four original Telegram/
   VK read/publish scopes stable same-provider compatibility families for later

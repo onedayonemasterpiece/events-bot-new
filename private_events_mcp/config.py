@@ -52,6 +52,21 @@ def _int(name: str, default: int, *, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
+def _strict_int(name: str, default: int, *, low: int, high: int) -> int:
+    """Parse a security budget without silently changing operator intent."""
+
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not low <= value <= high:
+        raise ValueError(f"{name} must be between {low} and {high}")
+    return value
+
+
 def _hosts(name: str) -> tuple[str, ...]:
     raw = (os.getenv(name) or "").strip()
     if not raw:
@@ -300,38 +315,38 @@ class PrivateEventsMCPConfig:
                 if media_story_enabled
                 else ()
             ),
-            max_asset_bytes=_int(
-                "PRIVATE_EVENTS_MCP_MAX_ASSET_BYTES",
+            max_asset_bytes=_strict_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES",
                 30 * 1024 * 1024,
                 low=1,
                 high=64 * 1024 * 1024,
             ),
-            max_store_bytes=_int(
-                "PRIVATE_EVENTS_MCP_MAX_STORE_BYTES",
+            max_store_bytes=_strict_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES",
                 128 * 1024 * 1024,
                 low=1,
                 high=1024 * 1024 * 1024,
             ),
-            asset_ttl_seconds=_int(
-                "PRIVATE_EVENTS_MCP_ASSET_TTL_SECONDS",
+            asset_ttl_seconds=_strict_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS",
                 3600,
                 low=60,
                 high=86400,
             ),
-            download_timeout_seconds=_int(
-                "PRIVATE_EVENTS_MCP_DOWNLOAD_TIMEOUT_SECONDS",
+            download_timeout_seconds=_strict_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS",
                 20,
                 low=1,
                 high=120,
             ),
-            max_width=_int(
-                "PRIVATE_EVENTS_MCP_MAX_WIDTH", 8192, low=1, high=8192
+            max_width=_strict_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH", 8192, low=1, high=8192
             ),
-            max_height=_int(
-                "PRIVATE_EVENTS_MCP_MAX_HEIGHT", 8192, low=1, high=8192
+            max_height=_strict_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT", 8192, low=1, high=8192
             ),
-            max_pixels=_int(
-                "PRIVATE_EVENTS_MCP_MAX_PIXELS",
+            max_pixels=_strict_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS",
                 40_000_000,
                 low=1,
                 high=40_000_000,
@@ -459,7 +474,8 @@ class PrivateEventsMCPConfig:
         if self.universal_social_media_story_enabled:
             if self.max_store_bytes < self.max_asset_bytes:
                 raise ValueError(
-                    "PRIVATE_EVENTS_MCP_MAX_STORE_BYTES must cover MAX_ASSET_BYTES"
+                    "PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES must cover "
+                    "PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES"
                 )
             if not self.media_root or not Path(self.media_root).is_absolute():
                 raise ValueError("PRIVATE_EVENTS_MCP_MEDIA_ROOT must be an absolute path")

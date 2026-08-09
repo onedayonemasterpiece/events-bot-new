@@ -19,6 +19,20 @@ def _enabled_env(monkeypatch) -> None:
         monkeypatch.setenv(key, value)
 
 
+def _media_enabled_env(monkeypatch) -> None:
+    _enabled_env(monkeypatch)
+    values = {
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID": "codex-public-client",
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED": "1",
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED": "1",
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED": "1",
+        "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN": "approval_" + "a" * 48,
+        "PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS": "files.example",
+    }
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+
+
 def test_enabled_config_requires_distinct_static_codex_client(monkeypatch) -> None:
     _enabled_env(monkeypatch)
     with pytest.raises(ValueError, match="CODEX_OAUTH_CLIENT_ID"):
@@ -37,6 +51,68 @@ def test_disabled_config_does_not_parse_mcp_only_client_values(monkeypatch) -> N
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_ENABLED", "0")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "invalid id")
     assert PrivateEventsMCPConfig.from_env().enabled is False
+
+
+def test_media_limits_use_the_canonical_documented_environment_names(
+    monkeypatch,
+) -> None:
+    _media_enabled_env(monkeypatch)
+    documented = {
+        "PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES": "1048576",
+        "PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES": "2097152",
+        "PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS": "600",
+        "PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS": "7",
+        "PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH": "1024",
+        "PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT": "2048",
+        "PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS": "1500000",
+    }
+    for key, value in documented.items():
+        monkeypatch.setenv(key, value)
+
+    # Historical, undocumented names must not shadow the canonical contract.
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MAX_ASSET_BYTES", "17")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MAX_STORE_BYTES", "19")
+    config = PrivateEventsMCPConfig.from_env()
+
+    assert config.max_asset_bytes == 1_048_576
+    assert config.max_store_bytes == 2_097_152
+    assert config.asset_ttl_seconds == 600
+    assert config.download_timeout_seconds == 7
+    assert config.max_width == 1024
+    assert config.max_height == 2048
+    assert config.max_pixels == 1_500_000
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES", "0"),
+        ("PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES", "0"),
+        ("PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS", "59"),
+        ("PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS", "0"),
+        ("PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH", "8193"),
+        ("PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT", "0"),
+        ("PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS", "40000001"),
+        ("PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS", "forty-million"),
+    ],
+)
+def test_media_limit_bounds_report_the_canonical_environment_name(
+    monkeypatch, name: str, value: str
+) -> None:
+    _media_enabled_env(monkeypatch)
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValueError, match=name):
+        PrivateEventsMCPConfig.from_env()
+
+
+def test_media_store_budget_must_cover_the_asset_budget(monkeypatch) -> None:
+    _media_enabled_env(monkeypatch)
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES", "2097152")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES", "1048576")
+
+    with pytest.raises(ValueError, match="MEDIA_MAX_STORE_BYTES"):
+        PrivateEventsMCPConfig.from_env()
 
 
 @pytest.mark.parametrize(
