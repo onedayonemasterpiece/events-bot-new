@@ -568,3 +568,45 @@ The only permitted completed supplement status is
 `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not authorize component
 merges, normalisation, semantic tokens, production Astro/CSS/JS changes,
 Penpot mutation, experiment winner selection or an automatic next stage.
+
+### Two-stage behavioral evidence gate
+
+The capture implementation is intentionally split from acceptance:
+
+1. `.github/workflows/current-ui-behavioral-decoder-v1-1.yml` checks out the
+   exact source SHA `ef7aa62e45c60f7a12da6160f490719c0721ec03`, validates the
+   immutable Decoder v1 tree and manifest, builds a disposable reflink/copy
+   harness, and captures the closed 50-packet matrix. The Actions receipt must
+   remain `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`.
+2. The review materializer may emit
+   `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after all 99 raster files
+   have been opened and reviewed individually at full resolution, every review
+   is bound one-to-one to the observation path and SHA-256, the independent
+   audit passes, and both the Actions artifact and permanent Release asset have
+   complete immutable provenance.
+
+The matrix has 45 executable packets and five exact blockers. Blocked states
+are recorded as blockers rather than replaced by fake wrappers: source-only
+PopularCategoryFilter, the unconsumed ListingPersonalFilter v1, unavailable
+zero/one-item mobile rail fixtures, and the PersonalFeed unavailable branch
+that the pinned real corpus cannot reach honestly.
+
+Captured evidence remains plane-qualified as controlled exact-source runtime.
+It includes mobile menu/disclosure/focus-return behavior, rail edges and
+keyboard alternatives, sticky/fixed collisions, separate Editorial stacked
+and Split inline CTA anatomy, all three unresolved transport treatments,
+consumer-specific media behavior (including separate real `4:5` EventCard and
+`5:4` rail/search evidence), the large primary/poster plus smaller remaining
+photo previews, and Search/Favorites/PersonalFeed loading and recovery flows.
+The capture harness freezes clock, timezone and randomness and uses only
+test-local network fixtures; it does not contact Supabase or mutate the pinned
+`site/src` tree.
+
+Deep validation re-hashes every compact output, checks the receipt-to-manifest
+chain, verifies plan/phase/observation/action-packet referential integrity, and
+binds each indexed heavy raster to its observation checksum. An outer manifest
+rewrite therefore cannot conceal a corrupted compact entry. The retained final
+raster always has an exact SHA-256; repeated-frame stability follows the pinned
+Playwright pixel/perceptual comparator rather than requiring byte-identical PNG
+encoding. Neither the file hash nor the comparator result is accepted as a
+substitute for the mandatory human visual review.

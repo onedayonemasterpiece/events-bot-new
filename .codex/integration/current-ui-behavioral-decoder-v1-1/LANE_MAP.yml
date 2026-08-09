@@ -27,7 +27,7 @@ lanes:
     expected_output: evidence map with paths, branches, selectors, breakpoints, capture states
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: interaction_loading_map
     role: mapper
     requirement_ids: [R03, R06, R07]
@@ -41,7 +41,7 @@ lanes:
     expected_output: state-machine and selection/overlay/recovery evidence map
     verification_scope: inspection_only
     effort: medium
-    status: spawned
+    status: completed
   - id: experiment_cta_history_map
     role: mapper
     requirement_ids: [R08, R09, R10]
@@ -55,7 +55,7 @@ lanes:
     expected_output: experiment registry candidates and CTA provenance chain
     verification_scope: inspection_only
     effort: high
-    status: spawned
+    status: completed
   - id: supplement_core
     role: worker
     requirement_ids: [R11]
@@ -69,7 +69,7 @@ lanes:
     expected_output: committed supplement implementation and bounded capture plan
     verification_scope: full_local
     effort: high
-    status: planned
+    status: merged
   - id: evidence_capture_review
     role: worker
     requirement_ids: [R12]
@@ -83,7 +83,7 @@ lanes:
     expected_output: reviewed capture evidence and receipt
     verification_scope: ci_only
     effort: high
-    status: planned
+    status: in_progress
   - id: final_audit
     role: reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12]

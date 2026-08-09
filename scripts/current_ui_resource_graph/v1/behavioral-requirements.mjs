@@ -6,6 +6,11 @@ import { dirname, join, relative, resolve } from 'node:path';
 const sha = (value) => createHash('sha256').update(String(value)).digest('hex');
 const lineNumber = (source, offset) => source.slice(0, offset).split('\n').length;
 const bounded = (value, limit = 480) => String(value).replace(/\s+/gu, ' ').trim().slice(0, limit);
+const evidenceLine = (value, limit = 480) => bounded(String(value)
+  .replace(/((?:[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|URL|URI|ENDPOINT|AUTHORIZATION)[A-Z0-9_]*)\s*=\s*)([^\s\\]+)/giu,
+    (_match, prefix, sensitive) => `${prefix}<redacted:${sha(sensitive).slice(0,16)}:${String(sensitive).length}>`)
+  .replace(/\bsb_(?:secret|publishable)[A-Za-z0-9_.-]*/giu,
+    (sensitive) => `<redacted:${sha(sensitive).slice(0,16)}:${sensitive.length}>`), limit);
 
 export const REQUIREMENT_STATUS = Object.freeze([
   'accepted-current', 'implemented-current', 'accepted-not-implemented',
@@ -159,7 +164,7 @@ export function buildRequirementsProvenance({ sourceRoot }) {
       rows.push({
         id: `requirement.${sha(`${path}\0${index + 1}\0${line}`).slice(0, 18)}`,
         source_path: path, section, line: index + 1, ...git, surface, component: null,
-        rule: bounded(line), status, evidence_kind: 'pinned-requirement-document',
+        rule: evidenceLine(line), status, evidence_kind: 'pinned-requirement-document',
         current_authority_claimed: status === 'accepted-current', decision: 'NOT_MERGED',
       });
     }
@@ -193,7 +198,7 @@ export function buildRequirementsProvenance({ sourceRoot }) {
         id: `requirement.${sha(`${path}\0${match.index}\0${match[0]}`).slice(0, 18)}`,
         source_path: path, section: null, line: lineNumber(content, match.index), ...git,
         surface: DYNAMIC_REGIONS.find((item) => item.path === path)?.id || 'runtime', component: path.split('/').at(-1),
-        rule: bounded(match[0]), status: 'implemented-current', evidence_kind: 'pinned-source-implementation',
+        rule: evidenceLine(match[0]), status: 'implemented-current', evidence_kind: 'pinned-source-implementation',
         current_authority_claimed: false, decision: 'NOT_MERGED',
       });
     }

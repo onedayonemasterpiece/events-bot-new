@@ -165,6 +165,28 @@ export async function captureStableLocatorPng({ locator, path, imageComparator, 
   };
 }
 
+export async function captureStablePagePng({ page, path, imageComparator, label = 'Viewport screenshot' }) {
+  if (typeof imageComparator !== 'function') throw new Error('PNG capture requires the pinned Playwright image comparator');
+  await page.evaluate(async () => {
+    await document.fonts?.ready;
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  });
+  const viewport = page.viewportSize();
+  if (!viewport?.width || !viewport?.height) throw new Error(`${label} has no fixed viewport`);
+  const options = { type:'png', animations:'disabled', caret:'hide', scale:'css', fullPage:false };
+  const stablePair = await capturePlaywrightStablePair({
+    capture:() => page.screenshot(options), comparator:imageComparator, label,
+  });
+  const first=stablePair.first; const second=stablePair.accepted;
+  mkdirSync(dirname(resolve(path)),{recursive:true}); writeFileSync(path,second);
+  return {
+    bytes:second.length,sha256:sha(second),dhash:pngDifferenceHash(second),
+    first_sha256:sha(first),first_dhash:pngDifferenceHash(first),
+    width:viewport.width,height:viewport.height,exact_stable:first.equals(second),
+    perceptually_stable:true,stability_attempts:stablePair.attempts,comparator:stablePair.comparator,
+  };
+}
+
 async function applyAction(page, action) {
   if (action.kind === 'focus') await page.locator(action.selector).focus();
   else if (action.kind === 'click') await page.locator(action.selector).click();
