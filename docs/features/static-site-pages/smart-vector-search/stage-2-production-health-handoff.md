@@ -83,6 +83,8 @@ Actions нельзя использовать как цикл проб и оши
 
 - broker lease `409` / OIDC недоступен → `UNKNOWN_AUTH_BROKER`, без product issue;
 - Playwright/runner/browser start failure → `UNKNOWN_RUNNER_BROWSER`;
+- Android emulator/Appium failure → `UNKNOWN_ANDROID_INFRA`;
+- iOS simulator/WDA/Appium failure → `UNKNOWN_IOS_INFRA`;
 - current accepted receipt отсутствует или не активен →
   `BLOCKED_RELEASE_NOT_ACTIVE`;
 - pointer сменился → `target_superseded=true`, без retry;

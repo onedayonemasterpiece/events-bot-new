@@ -18,11 +18,11 @@
 | runtime discovery | AS-IS build/target identities | read-only | agent evidence map | accepted |
 | workflow discovery | triggers/CI/issue reporter | read-only | agent evidence map | accepted |
 | risk discovery | PR #436, issue #431, taxonomy/egress | read-only | agent evidence map | accepted |
-| workflow policy | `.github/workflows`, workflow contract tests | `6b3a792a3` | `6471bdf48` | merged |
-| core contracts | `site/e2e/search/production-health-*`, focused tests | `2d195957f` | `a40dd7e4f` | merged |
-| integration/docs | canonical architecture, registry, handoff, package script, integration corrections | `960effec8` | this report | merged |
-| premerge source binding | Fly image SHA to exact Kaggle source bytes and recovery fence | `c72589bf3` | `ef4b69131` | merged |
-| premerge mobile contract | morning/evening platform plans and split typed status | `d22078d8f` | lane receipt | merged |
+| workflow policy | `.github/workflows`, workflow contract tests | `f810696dd` | `0e1c8c17a` | merged |
+| core contracts | `site/e2e/search/production-health-*`, focused tests | `a237c43da` | `9d948a5b0` | merged |
+| integration/docs | canonical architecture, registry, handoff, package script, integration corrections | `26a4cddf7` | this report | merged |
+| premerge source binding | Fly image SHA to exact Kaggle source bytes and recovery fence | `8415d8dea` | `fba906853` | merged |
+| premerge mobile contract | morning/evening platform plans and split typed status | `1bea054ce` | lane receipt | merged |
 
 No worker change was dropped. Integration tightened the core target pin from a
 synthetic release label to the repository's existing immutable candidate tuple
@@ -39,7 +39,7 @@ auth fixture, shared mobile transport, registry and canonical Search docs.
 | R03 three testing contours | Done | README §16.3; workflows/registry split |
 | R04 disable automatic Search traffic/noise | Done | legacy workflow manual-only; 4 cron + repository dispatch + issue reporter removed |
 | R05 resolver/pinning/superseded contract | Done for Stage 1 | pure interface/tests; live adapter deferred |
-| R06 typed failure/incident/retry policy | Done | exact 13-result enum; only `BROKEN_*` product incident |
+| R06 typed failure/incident/retry policy | Done | exact 15-result enum; only `BROKEN_*` product incident |
 | R07 egress contract | Done for Stage 1 | Auth/Edge/REST/RPC byte-meter; 48/96 KiB tests; live wiring deferred |
 | R08 workflows/default PR CI | Done | two manual dry workflows; deterministic CI step |
 | R09 bounded PR #436 decision | Done | README §16.10; useful preclaim guard, not merged/deployed/dependency |
