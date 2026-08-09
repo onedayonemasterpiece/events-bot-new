@@ -877,8 +877,10 @@ Android и iOS, а `release_exact` применяется лишь к свеже
 
 1. I/O adapter читает только canonical current accepted receipt.
 2. Opaque URL маскируется до первого display/log/evidence; полный URL живёт
-   только в памяти live adapter. Публичный `https://kenigevents.ru/poisk/` не
-   является fallback, пока это не реально выпущенная поверхность.
+   только в памяти live adapter. Target обязан иметь exact origin
+   `https://kenigevents.ru` без credentials, нестандартного port, query или
+   fragment. Публичный `https://kenigevents.ru/poisk/` не является fallback,
+   пока это не реально выпущенная поверхность.
 3. Полный immutable tuple фиксируется один раз до journey. Checkout SHA с ним
    не сравнивается. `content_generation_id` и `search_index_generation_id`
    записываются как telemetry. Canonical `--show-current-review` adapter

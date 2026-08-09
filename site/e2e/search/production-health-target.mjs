@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 const ACCEPTED_SOURCE = 'current_accepted_pointer';
+const TRUSTED_TARGET_ORIGIN = 'https://kenigevents.ru';
 const SECRET_REVIEW_ROOT_PATH = /^\/_review\/([A-Za-z0-9_-]{43})\/$/u;
 const SECRET_REVIEW_SEARCH_PATH = /^\/_review\/([A-Za-z0-9_-]{43})\/poisk\/$/u;
 const SHA40 = /^[0-9a-f]{40}$/u;
@@ -30,7 +31,8 @@ export function currentReviewCliResultToAcceptedTargetInput(input) {
     throw new Error('search_health_current_review_url_invalid');
   }
   if (
-    root.protocol !== 'https:'
+    root.origin !== TRUSTED_TARGET_ORIGIN
+    || root.protocol !== 'https:'
     || root.username || root.password || root.search || root.hash
     || !SECRET_REVIEW_ROOT_PATH.test(root.pathname)
   ) {
@@ -50,7 +52,11 @@ export function redactAcceptedTargetUrl(value) {
   } catch {
     throw new Error('search_health_target_url_invalid');
   }
-  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) {
+  if (
+    parsed.origin !== TRUSTED_TARGET_ORIGIN
+    || parsed.protocol !== 'https:'
+    || parsed.username || parsed.password || parsed.search || parsed.hash
+  ) {
     throw new Error('search_health_target_url_invalid');
   }
   if (!SECRET_REVIEW_SEARCH_PATH.test(parsed.pathname)) throw new Error('search_health_target_not_current_accepted');
@@ -136,7 +142,8 @@ export function normalizeAcceptedTargetResolverResult(input) {
     throw new Error('search_health_target_url_invalid');
   }
   if (
-    parsed.protocol !== 'https:'
+    parsed.origin !== TRUSTED_TARGET_ORIGIN
+    || parsed.protocol !== 'https:'
     || parsed.username || parsed.password || parsed.search || parsed.hash
     || !SECRET_REVIEW_SEARCH_PATH.test(parsed.pathname)
   ) {

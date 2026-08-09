@@ -17,7 +17,8 @@
   automatic production Search traffic or classify runner/broker/revision drift
   as product incidents. The deterministic current-target adapter now consumes
   the canonical resolver's full immutable tuple, including `input_fingerprint`,
-  and verifies the opaque review token against its accepted receipt hash.
+  requires the exact trusted production origin, and verifies the opaque review
+  token against its accepted receipt hash.
 
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,

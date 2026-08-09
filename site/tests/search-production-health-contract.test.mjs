@@ -198,6 +198,24 @@ test('accepted target normalizes, redacts for display and does not couple checko
     status: 'current_review_unavailable',
     release_channel: 'secret_preview',
   }), /current_review_not_ready/u);
+  for (const public_url of [
+    `https://evil.example/_review/${cliToken}/`,
+    `https://preview.kenigevents.ru/_review/${cliToken}/`,
+    `https://kenigevents.ru:444/_review/${cliToken}/`,
+    `https://user:pass@kenigevents.ru/_review/${cliToken}/`,
+    `https://kenigevents.ru/_review/${cliToken}/?leak=1`,
+    `https://kenigevents.ru/_review/${cliToken}/#fragment`,
+  ]) {
+    assert.throws(() => currentReviewCliResultToAcceptedTargetInput({
+      ok: true,
+      status: 'current_review_ready',
+      release_channel: 'secret_preview',
+      public_url,
+    }), /current_review_url_invalid/u, public_url);
+  }
+  assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
+    target_url: `https://evil.example/_review/${cliToken}/poisk/`,
+  })), /target_url_invalid/u);
   assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
     target_url: 'https://kenigevents.ru/poisk/',
   })), /target_url_invalid/u);
