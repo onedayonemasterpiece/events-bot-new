@@ -21,9 +21,10 @@ that failed scenario; no message was sent.
 
 ## User / Business Impact
 
-- Production image staging now succeeds, but the deployed runtime still cannot
-  complete the intended no-second-prompt Saved Messages workflow until this
-  follow-up hotfix is merged and deployed.
+- Production image staging succeeds and Fly release v1957 now accepts a fresh
+  explicitly requested outbound preparation without a second browser prompt.
+  The stopped pre-hotfix preparation remains inert; the final live Saved
+  Messages read-back intentionally waits for a new operator request.
 - Text/social read capabilities remain available and healthy.
 - No provider write, media upload or Telegram mutation occurred.
 
@@ -66,6 +67,11 @@ that failed scenario; no message was sent.
   `awaiting_human_approval` plus an approval URL for Telegram Saved Messages.
   An immediate commit was denied. The operator explicitly stopped the scenario;
   the preparation was not approved or committed and Telegram was not called.
+- 2026-08-09T13:27Z — exact merged-main SHA
+  `d2b7993b41187660efa13d6d9070fda0c0d5a6cd` was deployed as Fly release
+  v1957. Post-deploy inspection confirmed that the stopped preparation still
+  has status `awaiting_human_approval` and has zero operation rows; it was not
+  upgraded, committed or sent.
 
 ## Root Cause
 
@@ -177,10 +183,21 @@ request after the hotfix is deployed.
 ## Release And Closure Evidence
 
 - ingress deployed SHA / release: `150358ed88b5239753bf3669a1f1e311bf3f63cc` / v1956
-- no-second-prompt hotfix SHA / release: pending
+- no-second-prompt hotfix SHA / release:
+  `d2b7993b41187660efa13d6d9070fda0c0d5a6cd` / v1957
 - deploy path: `scripts/deploy_fly_main.sh` from clean exact `origin/main`
-- regression checks: pending
-- post-deploy verification: pending
+- regression checks: `372 passed`, compileall, Ruff, diff-check and both GitHub
+  PR checks passed before merge; Codex remains the exact seven evidence tools
+- post-deploy verification: in-container SHA matched; public `/healthz` returned
+  `ok=true`, `ready=true`, `db=ok`, no issues; Fly machine check passed;
+  Telegram webhook remained configured with zero pending updates and its one
+  deploy-window 5xx timestamp did not recur; both SQLite databases returned
+  `quick_check=ok`, the MCP auth DB mode was `0600`, runtime log mirror was
+  present with no recent traceback/disk-full/MCP error, and the stopped
+  preparation had zero provider-operation rows
+- remaining closure gate: one fresh operator-requested ChatGPT PNG -> `ast_*`
+  -> direct approved preparation -> commit -> Saved Messages read-back; the
+  stopped preparation must never be reused
 
 ## Prevention
 
