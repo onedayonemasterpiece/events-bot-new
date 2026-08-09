@@ -96,11 +96,12 @@ class PrivateEventsMCPServer:
                         "universal social media/story requires storage and host policy"
                     )
                 if any(
-                    not callable(getattr(adapters[name], "stage_asset", None))
+                    not callable(getattr(adapters[name], method, None))
                     for name in expected
+                    for method in ("stage_asset", "read_asset")
                 ):
                     raise ValueError(
-                        "universal social media/story requires provider asset staging"
+                        "universal social media/story requires provider asset staging and preview"
                     )
             self.social_workspace = SocialWorkspaceRuntime(
                 store=self.oauth.store,

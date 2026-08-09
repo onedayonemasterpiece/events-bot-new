@@ -134,6 +134,9 @@ class FakeAdapter:
         self.staged.append((asset, role))
         return "provider-asset-handle"
 
+    async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+        return b"not-used-by-ingress-tests"
+
 
 @pytest.fixture
 def asset_runtime(tmp_path: Path):
@@ -473,6 +476,14 @@ def test_server_media_attach_requires_ingestor_and_keeps_codex_evidence_only(
         PrivateEventsMCPServer(
             replace(enabled, media_root="relative/path"),
             social_workspace_adapters={"telegram": adapter},
+            asset_ingestor=FakeIngestor(),
+        )
+    missing_preview = FakeAdapter()
+    missing_preview.read_asset = None
+    with pytest.raises(ValueError, match="staging and preview"):
+        PrivateEventsMCPServer(
+            enabled,
+            social_workspace_adapters={"telegram": missing_preview},
             asset_ingestor=FakeIngestor(),
         )
     server = PrivateEventsMCPServer(
