@@ -31,6 +31,13 @@
       "negative_prefix": "unusual.hard_negative.",
       "minimum_positive_similarity": 0.42,
       "minimum_margin": 0.02,
+      "policy_version": "unusual-event-selection-v1-provisional",
+      "target_count": 20,
+      "minimum_publish_count": 12,
+      "maximum_per_family": 6,
+      "maximum_per_venue": 4,
+      "maximum_per_event_type": 8,
+      "near_threshold_count": 20,
       "publication": "blocked"
     },
     "science": {

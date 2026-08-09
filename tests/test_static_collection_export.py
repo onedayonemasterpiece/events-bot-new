@@ -328,3 +328,120 @@ def test_collection_cache_loader_allows_event_reuse_after_prototype_change(tmp_p
     )
     assert second["metadata"]["encoded_event_count"] == 0
     assert second["metadata"]["encoded_prototype_count"] == 1
+
+
+def test_unusual_collection_head_emits_family_and_neutral_evidence_without_encoder():
+    policy = collections.load_object(collections.DEFAULT_POLICY_PATH)
+    policy["_prototype_rows"] = [
+        {"id": "positive.open.1", "kind": "positive", "family": "open_dialogue"},
+        {"id": "positive.rare.1", "kind": "positive", "family": "rare_practice"},
+        {"id": "hard_negative.open.1", "kind": "hard_negative", "family": "open_dialogue"},
+        {"id": "neutral.1", "kind": "neutral", "family": None},
+    ]
+    artifact = {
+        "event_vectors": {"7": {"text_hash": "a" * 64, "vector": [1.0, 0.0]}},
+        "prototype_vectors": {
+            "unusual.positive.open.1": {"vector": [0.9, 0.1]},
+            "unusual.positive.rare.1": {"vector": [0.8, 0.2]},
+            "unusual.hard_negative.open.1": {"vector": [0.2, 0.8]},
+            "unusual.neutral.1": {"vector": [0.1, 0.9]},
+        },
+    }
+
+    result = collections.score_semantic_candidates(artifact, policy)["unusual"]
+
+    assert result["item_ids"] == [7]
+    assert result["scores"][7]["family"] == "open_dialogue"
+    assert result["scores"][7]["family_top3"] == [
+        {"id": "open_dialogue", "score": 0.9},
+        {"id": "rare_practice", "score": 0.8},
+    ]
+    assert result["scores"][7]["positive_neutral_margin"] == 0.8
+    assert result["scores"][7]["top_hard_negative_prototype_id"] == (
+        "unusual.hard_negative.open.1"
+    )
+
+
+def test_unusual_shadow_is_valid_blocked_evidence_and_excludes_incident_hash():
+    events = [
+        {
+            "id": 1,
+            "slug": "odd-one",
+            "title": "Ночное участие",
+            "event_type": "экскурсия",
+            "venue_name": "Башня",
+            "city": "Калининград",
+            "start_date": "2026-08-10",
+            "end_date": None,
+            "lifecycle_status": "active",
+            "ticket": {},
+            "image_assets": [],
+            "topics": [],
+        },
+        {
+            "id": 2,
+            "slug": "ordinary",
+            "title": "Обычная выставка",
+            "event_type": "выставка",
+            "venue_name": "Архив",
+            "city": "Калининград",
+            "start_date": "2026-08-11",
+            "end_date": None,
+            "lifecycle_status": "active",
+            "ticket": {},
+            "image_assets": [],
+            "topics": [],
+        },
+    ]
+    artifact = {
+        "metadata": {
+            "model_id": "BAAI/bge-m3",
+            "model_revision": "1" * 40,
+            "embedding_dim": 1024,
+            "document_kind": "collection_semantics_v1",
+            "document_version": "collection-semantics-doc-v1",
+            "prototype_bank_sha256": "2" * 64,
+            "classifier_sha256": "3" * 64,
+        },
+        "event_vectors": {
+            "1": {"text_hash": "a" * 64, "vector": []},
+            "2": {"text_hash": "b" * 64, "vector": []},
+        },
+    }
+    manifest = collections.unusual_shadow_manifest(
+        events=events,
+        candidate_ids=[1, 2],
+        candidate_scores={
+            1: {"positive": 0.8, "negative": 0.2, "margin": 0.6, "family": "after_hours"},
+            2: {"positive": 0.9, "negative": 0.1, "margin": 0.8, "family": "restricted_access"},
+        },
+        incident_regressions={
+            "taxonomy_version": "unusual-event-taxonomy-v1",
+            "cases": [
+                {"document_text_sha256": "b" * 64, "reason_code": "incident_hard_negative"}
+            ],
+        },
+        selection_policy={"target_count": 20, "minimum_publish_count": 12},
+        generated_at="2026-08-09T20:00:00Z",
+        build_metadata={
+            "build_id": "production-test",
+            "run_id": "run-test",
+            "repo_sha": "4" * 40,
+            "source_snapshot_id": "snapshot-test",
+            "source_snapshot_hash": "5" * 64,
+        },
+        artifact=artifact,
+    )
+
+    assert manifest["quality_gate"]["status"] == "blocked"
+    assert manifest["quality_gate"]["reason"] == "independent_acceptance_holdout_missing"
+    assert manifest["selected_event_ids"] == []
+    assert manifest["selected_count"] == 0
+    assert manifest["review_shortlist_event_ids"] == [1]
+    assert manifest["review_shortlist_count"] == 1
+    assert manifest["quality_gate"]["metrics"]["incident_regression_count"] == 1
+    assert manifest["decisions"][0]["event_id"] == 2
+    assert manifest["decisions"][0]["include"] is False
+    assert manifest["decisions"][0]["reason_codes"] == ["incident_hard_negative"]
+    assert manifest["doc_kind"] == "collection_semantics_v1"
+    assert manifest["classifier_hash"] == "3" * 64

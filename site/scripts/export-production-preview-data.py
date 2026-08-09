@@ -6064,7 +6064,9 @@ def build_collection_semantic_outputs(
             + "; ".join(physical_validation.get("errors") or [])
         )
 
-    candidates = collection_module.score_semantic_candidates(artifact, policy)
+    scoring_policy = dict(policy)
+    scoring_policy["_prototype_rows"] = list(unusual_bank.get("prototypes") or [])
+    candidates = collection_module.score_semantic_candidates(artifact, scoring_policy)
     catalog_hash = collection_module.stable_hash(catalog_ledger)
     batch = collection_module.build_collection_batch_payload(
         events=events,
@@ -6098,10 +6100,17 @@ def build_collection_semantic_outputs(
         batch,
     )
 
-    unusual_candidates = (candidates.get("unusual") or {}).get("item_ids") or []
+    unusual_result = candidates.get("unusual") or {}
+    unusual_candidates = unusual_result.get("item_ids") or []
+    incident_regressions = collection_module.load_object(
+        collection_module.DEFAULT_UNUSUAL_INCIDENT_REGRESSIONS_PATH
+    )
     unusual_manifest = collection_module.unusual_shadow_manifest(
         events=events,
         candidate_ids=unusual_candidates,
+        candidate_scores=unusual_result.get("scores") or {},
+        incident_regressions=incident_regressions,
+        selection_policy=(policy.get("labels") or {}).get("unusual") or {},
         generated_at=str(build_metadata.get("generated_at") or ""),
         build_metadata=build_metadata,
         artifact=artifact,
@@ -6111,14 +6120,41 @@ def build_collection_semantic_outputs(
     unusual_cache = {
         "schema_version": "unusual-event-score-cache-v1",
         "status": "blocked",
-        "reason": "collection_document_recalibration_required",
+        "reason": "independent_acceptance_holdout_missing",
         "model_revision": (artifact.get("metadata") or {}).get("model_revision"),
         "prototype_bank_hash": (artifact.get("metadata") or {}).get("prototype_bank_sha256"),
         "input_fingerprint": build_metadata.get("input_fingerprint"),
         "candidate_event_ids": sorted(int(value) for value in unusual_candidates),
+        "selected_event_ids": list(unusual_manifest.get("selected_event_ids") or []),
+        "selected_concept_ids": list(unusual_manifest.get("selected_concept_ids") or []),
+        "review_shortlist_event_ids": list(unusual_manifest.get("review_shortlist_event_ids") or []),
+        "review_shortlist_concept_ids": list(unusual_manifest.get("review_shortlist_concept_ids") or []),
+        "candidate_count": int(unusual_manifest.get("candidate_count") or 0),
+        "selected_count": int(unusual_manifest.get("selected_count") or 0),
+        "review_shortlist_count": int(unusual_manifest.get("review_shortlist_count") or 0),
+        "target_count": int(unusual_manifest.get("target_count") or 0),
+        "minimum_publish_count": int(unusual_manifest.get("minimum_publish_count") or 0),
+        "decisions": list(unusual_manifest.get("decisions") or []),
         "provider_calls": 0,
     }
     _atomic_write_json(unusual_cache_path, unusual_cache)
+    unusual_candidates_path = out_dir / "unusual-events-candidates.json"
+    _atomic_write_json(
+        unusual_candidates_path,
+        {
+            "schema_version": "unusual-events-candidates-v1",
+            "run_id": build_metadata.get("run_id"),
+            "build_id": build_metadata.get("build_id"),
+            "repo_sha": build_metadata.get("repo_sha"),
+            "input_fingerprint": build_metadata.get("input_fingerprint"),
+            "generated_at": build_metadata.get("generated_at"),
+            "candidate_count": unusual_manifest.get("candidate_count"),
+            "selected_count": unusual_manifest.get("selected_count"),
+            "review_shortlist_count": unusual_manifest.get("review_shortlist_count"),
+            "review_shortlist_event_ids": unusual_manifest.get("review_shortlist_event_ids") or [],
+            "decisions": unusual_manifest.get("decisions") or [],
+        },
+    )
     metadata = artifact.get("metadata") or {}
     encoded_events = int(metadata.get("encoded_event_count") or 0)
     encoded_prototypes = int(metadata.get("encoded_prototype_count") or 0)
@@ -6138,6 +6174,12 @@ def build_collection_semantic_outputs(
         "encoded_event_count": encoded_events,
         "encoded_prototype_count": encoded_prototypes,
         "manifest_sha256": hashlib.sha256(unusual_path.read_bytes()).hexdigest(),
+        "candidate_count": int(unusual_manifest.get("candidate_count") or 0),
+        "selected_count": int(unusual_manifest.get("selected_count") or 0),
+        "review_shortlist_count": int(unusual_manifest.get("review_shortlist_count") or 0),
+        "target_count": int(unusual_manifest.get("target_count") or 0),
+        "minimum_publish_count": int(unusual_manifest.get("minimum_publish_count") or 0),
+        "candidates_sha256": hashlib.sha256(unusual_candidates_path.read_bytes()).hexdigest(),
         "vector_cache_sha256": hashlib.sha256(vector_cache_path.read_bytes()).hexdigest(),
         "vector_receipt_sha256": hashlib.sha256(vector_receipt_path.read_bytes()).hexdigest(),
         "unusual_cache_sha256": hashlib.sha256(unusual_cache_path.read_bytes()).hexdigest(),

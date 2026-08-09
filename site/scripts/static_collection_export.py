@@ -24,6 +24,9 @@ from static_place_org_registry import registry_hash, resolve_event_memberships
 HERE = Path(__file__).resolve().parent
 DEFAULT_POLICY_PATH = HERE / "static_collection_policy.v1.json"
 DEFAULT_PROTOTYPES_PATH = HERE / "static_collection_prototypes.v1.json"
+DEFAULT_UNUSUAL_INCIDENT_REGRESSIONS_PATH = (
+    HERE / "unusual_event_incident_regressions.v1.json"
+)
 
 
 def load_object(path: str | Path) -> dict[str, Any]:
@@ -111,12 +114,12 @@ def score_semantic_candidates(
         positive_prefix = str(config.get("positive_prefix") or "")
         negative_prefix = str(config.get("negative_prefix") or "")
         positive = [
-            row["vector"]
+            (str(prototype_id), row["vector"])
             for prototype_id, row in prototypes.items()
             if str(prototype_id).startswith(positive_prefix) and isinstance(row, Mapping)
         ]
         negative = [
-            row["vector"]
+            (str(prototype_id), row["vector"])
             for prototype_id, row in prototypes.items()
             if str(prototype_id).startswith(negative_prefix) and isinstance(row, Mapping)
         ]
@@ -129,7 +132,22 @@ def score_semantic_candidates(
             continue
         minimum = float(config.get("minimum_positive_similarity") or 0.0)
         margin_minimum = float(config.get("minimum_margin") or 0.0)
-        scores: dict[int, dict[str, float]] = {}
+        bank_by_id = {
+            str(row.get("id") or ""): row
+            for row in (policy.get("_prototype_rows") or [])
+            if isinstance(row, Mapping)
+        }
+        # ``merged_prototype_bank`` namespaces the canonical Unusual anchors.
+        # The optional rows are injected by the caller so this adapter can
+        # expose explainable family evidence without ever invoking an encoder.
+        neutral = [
+            (str(prototype_id), row["vector"])
+            for prototype_id, row in prototypes.items()
+            if str(prototype_id).startswith("unusual.neutral.")
+            and isinstance(row, Mapping)
+        ] if str(label) == "unusual" else []
+        scores: dict[int, dict[str, Any]] = {}
+        all_scores: dict[int, dict[str, Any]] = {}
         for raw_event_id, row in events.items():
             if not isinstance(row, Mapping):
                 continue
@@ -140,18 +158,62 @@ def score_semantic_candidates(
             vector = row.get("vector")
             if not isinstance(vector, list):
                 continue
-            positive_score = max(_dot(vector, candidate) for candidate in positive)
-            negative_score = max(_dot(vector, candidate) for candidate in negative)
+            positive_ranked = sorted(
+                ((_dot(vector, candidate), prototype_id) for prototype_id, candidate in positive),
+                key=lambda item: (-item[0], item[1]),
+            )
+            negative_ranked = sorted(
+                ((_dot(vector, candidate), prototype_id) for prototype_id, candidate in negative),
+                key=lambda item: (-item[0], item[1]),
+            )
+            positive_score, positive_id = positive_ranked[0]
+            negative_score, negative_id = negative_ranked[0]
             margin = positive_score - negative_score
+            row_score: dict[str, Any] = {
+                "positive": round(positive_score, 6),
+                "negative": round(negative_score, 6),
+                "margin": round(margin, 6),
+                "top_positive_prototype_id": positive_id,
+                "top_hard_negative_prototype_id": negative_id,
+            }
+            if neutral:
+                neutral_ranked = sorted(
+                    ((_dot(vector, candidate), prototype_id) for prototype_id, candidate in neutral),
+                    key=lambda item: (-item[0], item[1]),
+                )
+                neutral_score, neutral_id = neutral_ranked[0]
+                row_score.update(
+                    {
+                        "neutral": round(neutral_score, 6),
+                        "positive_neutral_margin": round(positive_score - neutral_score, 6),
+                        "top_neutral_prototype_id": neutral_id,
+                    }
+                )
+                family_scores: dict[str, float] = {}
+                for score, prototype_id in positive_ranked:
+                    original_id = prototype_id.removeprefix("unusual.")
+                    prototype = bank_by_id.get(original_id) or {}
+                    family = str(prototype.get("family") or "").strip()
+                    if family:
+                        family_scores[family] = max(family_scores.get(family, -1.0), score)
+                family_top3 = sorted(
+                    family_scores.items(), key=lambda item: (-item[1], item[0])
+                )[:3]
+                row_score["family"] = family_top3[0][0] if family_top3 else "unknown"
+                row_score["family_margin"] = round(
+                    family_top3[0][1] - family_top3[1][1], 6
+                ) if len(family_top3) >= 2 else None
+                row_score["family_top3"] = [
+                    {"id": family, "score": round(score, 6)}
+                    for family, score in family_top3
+                ]
+            all_scores[event_id] = row_score
             if positive_score >= minimum and margin >= margin_minimum:
-                scores[event_id] = {
-                    "positive": round(positive_score, 6),
-                    "negative": round(negative_score, 6),
-                    "margin": round(margin, 6),
-                }
+                scores[event_id] = row_score
         result[str(label)] = {
             "item_ids": sorted(scores),
             "scores": scores,
+            "all_scores": all_scores,
             "failure_codes": [],
         }
     return result
@@ -457,20 +519,166 @@ def unusual_shadow_manifest(
     *,
     events: Sequence[Mapping[str, Any]],
     candidate_ids: Iterable[int],
+    candidate_scores: Mapping[int, Mapping[str, Any]] | None = None,
+    incident_regressions: Mapping[str, Any] | None = None,
+    selection_policy: Mapping[str, Any] | None = None,
     generated_at: str,
     build_metadata: Mapping[str, Any],
     artifact: Mapping[str, Any],
 ) -> dict[str, Any]:
     by_id = {int(event["id"]): event for event in events}
     metadata = artifact.get("metadata") if isinstance(artifact.get("metadata"), Mapping) else {}
+    scores = candidate_scores or {}
+    selection = dict(selection_policy or {})
+    target_count = int(selection.get("target_count") or 20)
+    minimum_publish_count = int(selection.get("minimum_publish_count") or 12)
+    family_cap = int(selection.get("maximum_per_family") or 6)
+    venue_cap = int(selection.get("maximum_per_venue") or 4)
+    type_cap = int(selection.get("maximum_per_event_type") or 8)
+    incident_hashes = {
+        str(row.get("document_text_sha256") or ""): str(row.get("reason_code") or "incident_regression")
+        for row in ((incident_regressions or {}).get("cases") or [])
+        if isinstance(row, Mapping) and str(row.get("document_text_sha256") or "")
+    }
+
+    def normalise(value: Any) -> str:
+        return " ".join(re.findall(r"[\w]+", str(value or "").casefold(), flags=re.UNICODE))
+
+    def concept(event: Mapping[str, Any]) -> tuple[str, str]:
+        curated = str(event.get("canonical_concept_id") or "").strip()
+        root = str(event.get("canonical_root_event_id") or event.get("root_event_id") or "").strip()
+        series = str(event.get("series_id") or event.get("event_series_id") or event.get("occurrence_family_id") or "").strip()
+        if curated:
+            return f"curated:{stable_hash(curated)[:20]}", "canonical_concept_id"
+        if root:
+            return f"root:{stable_hash(root)[:20]}", "canonical_root_event_id"
+        if series:
+            return f"series:{stable_hash(series)[:20]}", "series_id"
+        identity = {
+            "title": normalise(event.get("title")),
+            "event_type": normalise(event.get("event_type")),
+            "venue": normalise(event.get("venue_name") or event.get("location_name")),
+            "city": normalise(event.get("city")),
+        }
+        return f"concept:{stable_hash(identity)[:24]}", "stable_presentation_identity"
+
+    ranked_ids = sorted(
+        ({int(value) for value in candidate_ids} & set(by_id)),
+        key=lambda event_id: (
+            -float((scores.get(event_id) or scores.get(str(event_id)) or {}).get("margin") or -1.0),
+            -float((scores.get(event_id) or scores.get(str(event_id)) or {}).get("positive") or -1.0),
+            str(by_id[event_id].get("start_date") or ""),
+            event_id,
+        ),
+    )
+    selected: list[dict[str, Any]] = []
+    decisions: list[dict[str, Any]] = []
+    seen_concepts: set[str] = set()
+    family_counts: Counter[str] = Counter()
+    venue_counts: Counter[str] = Counter()
+    type_counts: Counter[str] = Counter()
+    duplicate_concept_count = 0
+    incident_regression_count = 0
+    event_vectors = artifact.get("event_vectors") if isinstance(artifact.get("event_vectors"), Mapping) else {}
+    for event_id in ranked_ids:
+        event = by_id[event_id]
+        score = dict(scores.get(event_id) or scores.get(str(event_id)) or {})
+        concept_id, concept_rule = concept(event)
+        family = str(score.get("family") or "unknown")
+        venue = normalise(event.get("venue_name") or event.get("location_name")) or "unknown"
+        event_type = normalise(event.get("event_type")) or "unknown"
+        vector_row = event_vectors.get(str(event_id)) if isinstance(event_vectors, Mapping) else None
+        text_hash = str((vector_row or {}).get("text_hash") or "") if isinstance(vector_row, Mapping) else ""
+        reasons = ["semantic_candidate", "positive_over_hard_negative"]
+        excluded_reason: str | None = None
+        if text_hash in incident_hashes:
+            excluded_reason = incident_hashes[text_hash]
+            incident_regression_count += 1
+        elif concept_id in seen_concepts:
+            excluded_reason = "duplicate_concept"
+            duplicate_concept_count += 1
+        elif family_counts[family] >= family_cap:
+            excluded_reason = "family_cap"
+        elif venue_counts[venue] >= venue_cap:
+            excluded_reason = "venue_cap"
+        elif type_counts[event_type] >= type_cap:
+            excluded_reason = "event_type_cap"
+        elif len(selected) >= target_count:
+            excluded_reason = "target_filled"
+        include = excluded_reason is None
+        decision = {
+            "event_id": event_id,
+            "concept_id": concept_id,
+            "concept_rule": concept_rule,
+            "title": str(event.get("title") or "")[:300],
+            "date": str(event.get("start_date") or ""),
+            "end_date": str(event.get("end_date") or event.get("start_date") or ""),
+            "path": f"/events/{event.get('slug')}/" if event.get("slug") else None,
+            "score": score.get("positive"),
+            "hard_negative_score": score.get("negative"),
+            "margin": score.get("margin"),
+            "neutral_score": score.get("neutral"),
+            "family": family,
+            "family_margin": score.get("family_margin"),
+            "family_top3": list(score.get("family_top3") or [])[:3],
+            "include": include,
+            "reason_codes": reasons if include else [excluded_reason],
+            "content_hash": text_hash or stable_hash({"event_id": event_id, "title": event.get("title"), "date": event.get("start_date")}),
+        }
+        decisions.append(decision)
+        if include:
+            seen_concepts.add(concept_id)
+            family_counts[family] += 1
+            venue_counts[venue] += 1
+            type_counts[event_type] += 1
+            selected.append(decision)
+
     shadow = [
         {
-            "event_id": event_id,
-            "event_snapshot": by_id[event_id],
+            "event_id": row["event_id"],
+            "concept_id": row["concept_id"],
+            "representative_event_id": row["event_id"],
+            "tier": "shadow_candidate",
+            "unusual_score": max(0.0, min(1.0, float(row.get("score") or 0.0))),
+            "confidence": max(0.0, min(1.0, float(row.get("score") or 0.0))),
+            "families": [entry.get("id") for entry in row.get("family_top3") or [] if entry.get("id")],
+            "reason_codes": row["reason_codes"],
+            "prototype_evidence": [],
             "notify_eligible": False,
+            "content_hash": row["content_hash"],
+            "date": row["date"],
+            "lifecycle": "active",
+            "event_snapshot": by_id[row["event_id"]],
         }
-        for event_id in sorted({int(value) for value in candidate_ids})
-        if event_id in by_id
+        for row in selected
+    ]
+    included_review = [row for row in decisions if row["include"]]
+    excluded_review = [row for row in decisions if not row["include"]][:20]
+    mandatory_review = [
+        row
+        for row in decisions
+        if any(
+            str(reason).startswith("incident_hard_negative")
+            or reason == "duplicate_concept"
+            for reason in row.get("reason_codes") or []
+        )
+    ]
+    family_disputes = sorted(
+        (
+            row
+            for row in decisions
+            if isinstance(row.get("family_margin"), (int, float))
+            and len(row.get("family_top3") or []) >= 2
+        ),
+        key=lambda row: (abs(float(row["family_margin"])), int(row["event_id"])),
+    )[:20]
+    review_by_event: dict[int, dict[str, Any]] = {}
+    for row in [*included_review, *excluded_review, *mandatory_review, *family_disputes]:
+        review_by_event[int(row["event_id"])] = row
+    review_decisions = [
+        review_by_event[int(row["event_id"])]
+        for row in decisions
+        if int(row["event_id"]) in review_by_event
     ]
     return {
         "schema_version": "static_unusual_events_v1",
@@ -479,14 +687,38 @@ def unusual_shadow_manifest(
         "delivery_status": "blocked",
         "quality_gate": {
             "status": "blocked",
-            "reason": "collection_document_recalibration_required",
+            "reason": "independent_acceptance_holdout_missing",
+            "metrics": {
+                "candidate_count": len(ranked_ids),
+                "selected_count": 0,
+                "review_shortlist_count": len(selected),
+                "target_count": target_count,
+                "minimum_publish_count": minimum_publish_count,
+                "duplicate_concept_count": duplicate_concept_count,
+                "incident_regression_count": incident_regression_count,
+            },
         },
+        "taxonomy_version": str((incident_regressions or {}).get("taxonomy_version") or "unusual-event-taxonomy-v1"),
+        "policy_version": str(selection.get("policy_version") or "unusual-event-selection-v1-provisional"),
         "embedding_model": metadata.get("model_id"),
         "embedding_revision": metadata.get("model_revision"),
+        "embedding_dim": metadata.get("embedding_dim"),
+        "doc_kind": metadata.get("document_kind"),
         "document_version": metadata.get("document_version"),
         "prototype_bank_hash": metadata.get("prototype_bank_sha256"),
+        "classifier_hash": metadata.get("classifier_sha256"),
         "provider_calls": 0,
         "migration": {"enabled": False, "notify": False},
         "items": [],
         "shadow_items": shadow,
+        "candidate_count": len(ranked_ids),
+        "selected_count": 0,
+        "review_shortlist_count": len(selected),
+        "target_count": target_count,
+        "minimum_publish_count": minimum_publish_count,
+        "selected_event_ids": [],
+        "selected_concept_ids": [],
+        "review_shortlist_event_ids": [row["event_id"] for row in selected],
+        "review_shortlist_concept_ids": [row["concept_id"] for row in selected],
+        "decisions": review_decisions,
     }

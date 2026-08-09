@@ -1,0 +1,23 @@
+{
+  "schema_version": "unusual-event-incident-regressions-v1",
+  "taxonomy_version": "unusual-event-taxonomy-v1",
+  "document_kind": "collection_semantics_v1",
+  "document_version": "collection-semantics-doc-v1",
+  "purpose": "Production fail-closed semantic regressions. Rows are matched by immutable collection-document hash, never by a manually curated publication ID list.",
+  "cases": [
+    {
+      "case_id": "INC-2026-08-01:ordinary-civic-commemorative-action",
+      "event_id_evidence": 5376,
+      "document_text_sha256": "d5df510490060e205e4270e691b5611ab9777b604c782c61fb7705476b34df42",
+      "expected_decision": "exclude",
+      "reason_code": "incident_hard_negative_ordinary_civic_program"
+    },
+    {
+      "case_id": "INC-2026-08-01:ordinary-archival-exhibition",
+      "event_id_evidence": 4327,
+      "document_text_sha256": "b23e62479f501390d26596fc04bbdb94893742b4a8c4bac1db6c0b62d7d9239b",
+      "expected_decision": "exclude",
+      "reason_code": "incident_hard_negative_ordinary_exhibition"
+    }
+  ]
+}
