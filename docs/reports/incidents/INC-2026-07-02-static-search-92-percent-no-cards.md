@@ -30,6 +30,22 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 merged-main browser+iOS workflow
+  [`31340311566`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31340311566)
+  proved that the common OTP pre-side-effect recovery is now active in Search:
+  attempt 1 reproduced the 300-second WebDriver session timeout, emitted zero
+  broker/Auth/Search traffic and automatically restarted Appium once; attempt 2
+  passed Safari/WebKit preflight and callback authorization. It then failed
+  before Search because XCUITest reported `Timed out waiting for asynchronous
+  script result after 1 ms` for the Search-only `getUser`/owner-RLS callback.
+  WebdriverIO's official contract requires an explicit session script timeout
+  before `executeAsync`; the adapter now sets a bounded 15 seconds and reduces
+  timeout/config/command errors to typed `UNKNOWN_IOS_INFRA`. The old run's
+  `BROKEN_AUTH_INTEGRATION` label was therefore classification noise, not proof
+  of a Search defect. Browser remained `HEALTHY/PASS`, iOS made zero Search
+  POSTs, acceptance remains `1/2`, and automation remains disabled pending a
+  fresh merged-SHA proof.
+
 - 2026-08-09 browser+iOS workflow
   [`31338952963`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31338952963)
   crossed the native-sheet fix but exposed two independent iOS infrastructure

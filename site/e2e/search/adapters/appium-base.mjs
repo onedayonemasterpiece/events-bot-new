@@ -730,14 +730,32 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async verifyAuthenticatedOwner() {
       await driver.execute(installSearchRuntimeProbe, { ...configuredPolicy, production_health: true });
-      if (typeof driver.executeAsync !== 'function') {
+      if (typeof driver.executeAsync !== 'function' || typeof driver.setTimeout !== 'function') {
         throw new Error('mobile_auth_async_script_unavailable');
       }
       // XCUITest/Safari can JSON-clone a pending Promise from Execute Script as
       // an empty object even though Chromium awaits it. Use the WebDriver
       // callback command for this two-request Auth/RLS probe; OTP and Search
       // still share the same browser session and neutral mobile transport.
-      const outcome = await driver.executeAsync(verifyAuthenticatedOwnerRuntimeProbe);
+      // WebDriver's async-script timeout is a session setting. XCUITest created
+      // this Safari session with an effective 1 ms value in live run
+      // 31340311566, so the callback could never settle despite correct probe
+      // code. Set the bounded value explicitly as required by WebdriverIO's
+      // executeAsync contract; do not increase the whole cell/WebDriver timeout.
+      try {
+        await driver.setTimeout({ script: 15_000 });
+      } catch {
+        throw new Error('mobile_auth_async_script_timeout_config_failed');
+      }
+      let outcome;
+      try {
+        outcome = await driver.executeAsync(verifyAuthenticatedOwnerRuntimeProbe);
+      } catch (error) {
+        if (/timed out waiting for asynchronous script|script timeout/iu.test(String(error?.message || error))) {
+          throw new Error('mobile_auth_async_script_timeout');
+        }
+        throw new Error('mobile_auth_async_script_command_failed');
+      }
       if (outcome?.status === 'failed') throw new Error(outcome.failure_code);
       if (outcome?.status !== 'pass' || !outcome.receipt) {
         throw new Error('mobile_auth_async_script_result_invalid');

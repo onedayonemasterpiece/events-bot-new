@@ -49,6 +49,14 @@
 
 ### Fixed
 
+- Fixed the iOS WebDriver async-script timeout exposed by merged-main live run
+  `31340311566`. The shared OTP startup retry correctly recovered a 300-second
+  first-session timeout with zero side effects, but the second Safari session
+  aborted the Search-only `getUser`/owner-RLS callback after an effective 1 ms.
+  The adapter now explicitly sets the documented bounded 15-second session
+  script timeout before `executeAsync`; WebDriver timeout/config/command
+  failures are typed iOS infrastructure, never Search product breakage.
+
 - Reused the proven iOS OTP transport in Search production health after run
   `31338952963`. The production workflow now performs the same single
   pre-side-effect Appium/WDA restart only when the closed startup receipt proves
