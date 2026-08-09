@@ -85,6 +85,12 @@ alert or one exact native sheet; a fresh merged-SHA browser+iOS workflow is the
 remaining live gate. `SEARCH_PRODUCTION_HEALTH_ENABLED` stays absent until that
 proof matches the first run's immutable product identity.
 
+Follow-up run `31338416105` proved the native-sheet action but exhausted its
+five-second stable-dismissal window by re-reading the multi-second XCTest source
+for every absence sample. The shared helper now reuses the OTP pattern: one
+clean source snapshot plus fresh exact element queries. No broker/Auth/Search
+traffic occurred, so acceptance remains `1/2` pending one new iOS proof.
+
 Steps 1–5 were completed from exact merged `main`: the v2 broker migration and
 minute cleanup are active, broker event/workflow allowlists and distinct
 personas were verified, Edge HEAD exposes

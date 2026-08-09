@@ -30,6 +30,18 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 merged-SHA browser+iOS run `31338416105` crossed the former
+  `search_choice_action_missing` boundary. The exact native sheet was
+  recognized and the final closed inspection after its single action reported
+  zero sheet/title/action, but preflight ended as the now-specific
+  `safari_first_run_ui_search_choice_dialog_stuck`. The default shared helper
+  re-read the full XCTest hierarchy on every post-dismissal sample; four such
+  reads could not supply three stable absence samples inside the five-second
+  bound. Search still made zero broker/Auth/Search operations. The common
+  OTP/Search transport now captures the clean-simulator source once, as the
+  proven OTP adapter already did, while all post-click decisions use fresh
+  exact element queries. A fresh merged-SHA iOS run remains required.
+
 - 2026-08-09 workflow `31337041139` is the first accepted Stage-2 proof:
   browser and Android both completed `HEALTHY/PASS` against the same immutable
   target/runtime/backend/catalog/corpus identity. Each platform made exactly

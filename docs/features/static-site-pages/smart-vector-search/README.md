@@ -1194,3 +1194,15 @@ native sheet. Исправление находится только в нейт
 closed counters/error code. Отдельный Search workaround запрещён. Acceptance
 остаётся `1/2`; schedule variable не включается до нового merged-SHA iOS PASS и
 равенства immutable identity с первым proof.
+
+Merged-SHA run
+[`31338416105`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31338416105)
+перешёл прежний `action_missing`: exact native sheet была распознана и после
+единственного click финальная closed inspection уже показывала `0` sheet/title/
+action. Но default helper перечитывал полный XCTest source для каждой из трёх
+absence samples; четыре hierarchy reads заняли больше bounded пяти секунд, и
+результат стал точным `safari_first_run_ui_search_choice_dialog_stuck`. Это всё
+ещё side-effect-free: `0` broker/Auth/Search. Общий helper теперь, как уже
+проверенный OTP adapter, получает clean-simulator source один раз, а после click
+проверяет исчезновение повторными live exact element queries. Следующий iOS
+live run остаётся обязательным; acceptance всё ещё `1/2`.
