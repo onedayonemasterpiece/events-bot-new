@@ -37,6 +37,15 @@
 
 ### Fixed
 
+- Fixed two follow-ups exposed by live Search health run `31331011185`.
+  `android-emulator-runner` executes every multiline `script` line separately
+  through POSIX `sh`, so Android now calls one checked-in strict-Bash wrapper
+  instead of embedding Bash syntax in the action input. A completed broker
+  claim now keeps its encrypted lost-response replay and persona admission for
+  the same two-minute window rather than blocking a different serialized run
+  for the original 20-minute crash lease; an in-flight/too-early run still
+  fails closed as `persona_busy`.
+
 - Fixed the first merged Search production-health live run: the Android
   emulator action now enters Bash before enabling `pipefail` (the action
   invokes its script through POSIX `sh`), and browser diagnostics count failed

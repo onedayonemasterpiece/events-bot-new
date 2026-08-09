@@ -50,6 +50,14 @@
   их target fingerprint/immutable tuple, site runtime SHA, backend revision и
   content/index generation ids; это fail-closed проверка «продукт между
   прогонами не менялся».
+- Broker schema/RPC changes are applied only from merged exact `origin/main` in
+  migration order. After the platform/replay migration
+  `20260809143602_static_site_auth_broker_platform_claims.sql`, follow-up
+  `20260809191607_static_site_auth_broker_short_active_claim.sql` shortens only
+  a successfully completed claim to the two-minute replay TTL; applying it
+  needs no Fly restart because the deployed broker calls the same v2 RPC.
+  Verify `persona_busy` before expiry and `new` after expiry in the ephemeral
+  SQL contract before production apply.
 - GitHub Actions deploy не используется и не является допустимым release path. Если в репозитории появляется workflow, который деплоит Fly app на push/workflow_dispatch, это process drift: его нужно удалить или отключить до следующего production-bound task.
 - Emergency deploy из отдельной ветки допустим только для быстрого восстановления production, если одновременно выполняются все условия:
   - ветка создана от актуального `origin/main`;

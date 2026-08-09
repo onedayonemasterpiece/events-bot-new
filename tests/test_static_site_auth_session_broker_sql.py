@@ -12,6 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 V1 = ROOT / "supabase/migrations/20260808094500_static_site_auth_session_claim_replay.sql"
 V2 = ROOT / "supabase/migrations/20260809143602_static_site_auth_broker_platform_claims.sql"
+V3 = ROOT / "supabase/migrations/20260809191607_static_site_auth_broker_short_active_claim.sql"
 
 
 def _docker(*args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -93,7 +94,7 @@ create table public.static_site_auth_session_issue_claim (
             "exec", "-i", container, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres",
             input_text=bootstrap,
         )
-        for migration in (V1, V2):
+        for migration in (V1, V2, V3):
             _docker(
                 "exec", "-i", container, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres",
                 input_text=migration.read_text(encoding="utf-8"),
@@ -128,6 +129,21 @@ select public.complete_static_site_auth_session_issue_v2(
   'purpose-run', 1, 'browser', 'search-cached-browser', 'owner/repo',
   'owner/repo/.github/workflows/search.yml@refs/heads/main', repeat('a', 80)
 );
+select expires_at = credential_expires_at
+from public.static_site_auth_session_issue_claim
+where run_id = 'purpose-run' and persona_id = 'search-cached-browser';
+select public.claim_static_site_auth_session_issue_v2(
+  'next-run-too-soon', 1, 'browser', 'search-cached-browser', 'owner/repo',
+  'owner/repo/.github/workflows/search.yml@refs/heads/main', 1
+)->>'claim';
+update public.static_site_auth_session_issue_claim
+set expires_at = pg_catalog.now() - interval '1 second',
+    credential_expires_at = pg_catalog.now() - interval '1 second'
+where run_id = 'purpose-run' and persona_id = 'search-cached-browser';
+select public.claim_static_site_auth_session_issue_v2(
+  'next-run-after-replay', 1, 'browser', 'search-cached-browser', 'owner/repo',
+  'owner/repo/.github/workflows/search.yml@refs/heads/main', 1
+)->>'claim';
 select public.claim_static_site_auth_session_issue_v2(
   'purpose-run', 1, 'browser', 'search-cold-browser', 'owner/repo',
   'owner/repo/.github/workflows/search.yml@refs/heads/main', 1
@@ -153,7 +169,8 @@ where jobname = 'static-site-auth-session-credential-cleanup';
 """,
         )
         assert purpose_result.stdout.splitlines() == [
-            "new", "t", "new", "t", "replay", "2", "UPDATE 2", "2", "t",
+            "new", "t", "t", "persona_busy", "UPDATE 1", "new",
+            "new", "t", "replay", "2", "UPDATE 2", "1", "t",
             "* * * * *|select public.cleanup_static_site_auth_session_issue_credentials_v1()",
         ]
 

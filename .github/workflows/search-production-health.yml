@@ -216,34 +216,9 @@ jobs:
           working-directory: site
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
           disable-animations: true
-          script: |
-            bash <<'BASH'
-            set -euo pipefail
-            appium_pid=''
-            cleanup_appium() {
-              if [ -n "${appium_pid:-}" ]; then kill "$appium_pid" || true; wait "$appium_pid" || true; fi
-              rm -f "${RUNNER_TEMP}/appium-search-health-android.log" \
-                "${RUNNER_TEMP}/appium-search-health-log-filters.json"
-            }
-            trap cleanup_appium EXIT
-            adb shell settings put secure show_ime_with_hard_keyboard 1
-            cat > "${RUNNER_TEMP}/appium-search-health-log-filters.json" <<'JSON'
-            [{"pattern":"https?://[^\\s\\\"]+","flags":"i","replacer":"**URL_REDACTED**"}]
-            JSON
-            npx appium --base-path /wd/hub --port 4723 \
-              --log-level error --log-no-colors \
-              --log-filters "${RUNNER_TEMP}/appium-search-health-log-filters.json" \
-              --allow-insecure uiautomator2:chromedriver_autodownload \
-              > "${RUNNER_TEMP}/appium-search-health-android.log" 2>&1 &
-            appium_pid=$!
-            ready=0
-            for n in $(seq 1 60); do
-              if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi
-              sleep 1
-            done
-            test "$ready" = 1
-            node e2e/search/production-health-run.mjs
-            BASH
+          # android-emulator-runner sends each script line through /bin/sh -c;
+          # keep strict Bash/trap/heredoc semantics in one checked-in script.
+          script: bash "$GITHUB_WORKSPACE/.github/scripts/run-search-health-android.sh"
       - name: Upload sanitized Android summary
         if: ${{ always() && hashFiles('site/artifacts/search-production-health-android-*/.redaction-ok') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

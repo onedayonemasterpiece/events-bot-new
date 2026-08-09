@@ -30,6 +30,18 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 follow-up live run `31331011185` confirmed the first Android shell
+  fix was incomplete: `android-emulator-runner` invokes each line separately
+  with `/bin/sh -c`, so an inline Bash heredoc did not group the script. The
+  workflow now calls one checked-in Bash wrapper as a single action command.
+  Browser correctly made zero Search calls because the previous completed run
+  still owned `search-cached-browser` under the 20-minute persona lease and the
+  broker returned typed `UNKNOWN_AUTH_BROKER`; this was admission state, not a
+  Search regression. Completion now shortens that active lease to the same
+  two-minute encrypted replay window while preserving the uncompleted-owner
+  crash bound and global workflow serialization. Run `31331011185` is not an
+  acceptance proof.
+
 - 2026-08-09 first merged Stage-2 live run `31330520373` executed against the
   accepted target after the broker migration, exact Edge deployment and
   exact-main Fly deployment. Browser Auth/getUser/owner-RLS succeeded; its one
