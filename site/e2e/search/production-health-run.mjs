@@ -26,6 +26,7 @@ import {
 } from './evidence.mjs';
 import { runProductionHealthJourney } from './production-health-journey.mjs';
 import { waitForActiveSearchBackend } from './search-backend-release-probe.mjs';
+import { readProductionHealthMobileRetryReceipt } from './production-health-mobile-retry.mjs';
 
 const execFile = promisify(execFileCallback);
 const platforms = new Set(['browser', 'android', 'ios']);
@@ -220,6 +221,7 @@ function closedFailureCode(error, fallback = 'search_health_unclassified_failure
 function isAdapterInfrastructureFailure(error) {
   const message = String(error?.message || '');
   return /^(?:search_browser_(?:crashed|session_lost)(?:_[a-z0-9]+)*|mobile_android_cdp_(?:route_unavailable|script_receipt_missing)|mobile_[a-z0-9_]*(?:network_log_unavailable|diagnostics_unavailable|session_lost)|webdriver_session_error)$/iu.test(message)
+    || /^(?:mobile_auth_async_script_(?:unavailable|result_invalid))$/u.test(message)
     || /(?:mobile_auth_terminal_bytes_timeout(?:_[a-z_]+)?|mobile_post_navigation_(?:terminal_bytes_missing|meter_(?:origin_)?missing)|search_(?:post_navigation_meter_(?:failed|origin_missing|missing)|post_navigation_observation_missing|physical_observation_missing))/iu.test(message)
     || /(?:invalid session id|no such window|target page, context or browser has been closed|browser has been closed|web view not found)/iu.test(message);
 }
@@ -392,7 +394,8 @@ export async function runProductionHealthCell(options = {}) {
       platform, ...outcome, target_immutable: targetImmutable, target_superseded: targetSuperseded,
       expected_search_backend_revision: options.expectedSearchBackendRevision || null,
       failure_code: failureCode,
-      preflight, auth, journey, meter, cleanup_status: cleanupStatus,
+      preflight, prior_startup_receipt: options.priorStartupReceipt || null,
+      auth, journey, meter, cleanup_status: cleanupStatus,
       workflow_run_id: options.workflowRunId,
       tested_at: testedAt,
     };
@@ -663,6 +666,9 @@ export async function runProductionHealthCli(env = process.env) {
       : env.E2E_SEARCH_PLATFORM_HOOK_MODULE
         ? await externalPlatformHooks(env, platform, meter)
         : await createBuiltInMobileHooks(env, platform);
+  const priorStartupReceipt = platform === 'ios'
+    ? await readProductionHealthMobileRetryReceipt(env.E2E_APPIUM_PRIOR_RECEIPT_PATH).catch(() => null)
+    : null;
   const result = await runProductionHealthCell({
     platform, targetRun, createAdapter: hooks.createAdapter, issueSession: hooks.issueSession,
     initialTargetMaxAttempts: initialResolution.target ? 6 : 1,
@@ -673,6 +679,7 @@ export async function runProductionHealthCli(env = process.env) {
     expectedSearchBackendRevision: expectedBackendRevision || null,
     evidenceDirectory: required(env, 'E2E_EVIDENCE_DIR'),
     workflowRunId: required(env, 'GITHUB_RUN_ID'),
+    priorStartupReceipt,
   });
   await emitFailureClassOutput(env, result.failure_class);
   process.stdout.write(`${JSON.stringify({

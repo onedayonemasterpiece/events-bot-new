@@ -12,6 +12,8 @@ import { createAppiumSearchAdapter,
   installAndroidAuthByteProbe,
   installAppiumClassicLogCommands } from '../e2e/search/adapters/appium-base.mjs';
 import { buildAppiumCapabilities } from '../e2e/mobile-web/appium-browser.mjs';
+import { productionHealthMobileRetryReceipt,
+  validateProductionHealthMobileRetryReceipt } from '../e2e/search/production-health-mobile-retry.mjs';
 
 function preflightDriver(platform = 'android') {
   const events = [];
@@ -351,6 +353,39 @@ test('retry requires attempt one, a deleted Appium session and an explicit zero-
   assert.equal(isSafeMobilePreflightRetryReceipt(leaked), false);
 });
 
+test('production health reuses the shared OTP pre-side-effect retry contract exactly once', () => {
+  const preflight = buildMobilePreflightFailureReceipt({
+    platform: 'ios', error: new Error('mobile_preflight_web_context_missing'),
+    attempt: 1, driverSessionCreated: true, driverSessionDeleted: true,
+  });
+  const base = {
+    schema_version: 'search_production_health_evidence_v1',
+    platform: 'ios', product_health: 'UNCONFIRMED', execution_status: 'FAILED',
+    preflight,
+    auth: {
+      product_otp_issue_count: 0, external_mail_send_count: 0,
+      external_mail_receipt_count: 0, protected_probe_request_count: 0,
+    },
+    search: { ui_submission_count: 0, physical_post_count: 0 },
+  };
+  const retained = productionHealthMobileRetryReceipt(base);
+  assert.equal(retained.schema_version, 'search-production-health-mobile-retry-v1');
+  assert.equal(retained.platform, 'ios');
+  assert.equal(retained.startup_attempt, 1);
+  assert.equal(retained.failure_stage, 'mobile_preflight');
+  assert.equal(retained.failure_class, 'web_context_missing');
+  assert.equal(retained.side_effects.broker_session_issued, false);
+  assert.equal(validateProductionHealthMobileRetryReceipt(retained), retained);
+  assert.equal(validateProductionHealthMobileRetryReceipt({ ...retained, raw_error: 'forbidden' }), null);
+  assert.equal(productionHealthMobileRetryReceipt({ ...base,
+    preflight: { ...preflight, startup_attempt: 2 } }), null);
+  assert.equal(productionHealthMobileRetryReceipt({ ...base,
+    search: { ...base.search, physical_post_count: 1 } }), null);
+  assert.equal(productionHealthMobileRetryReceipt({ ...base,
+    auth: { ...base.auth, product_otp_issue_count: 1 } }), null);
+  assert.equal(productionHealthMobileRetryReceipt({ ...base, platform: 'android' }), null);
+});
+
 test('iOS Safari first-run failure keeps its closed reason and allowlisted native counters', () => {
   const error = new Error('safari_first_run_ui:search_choice_action_missing');
   error.evidence = {
@@ -432,12 +467,17 @@ test('adapter continues the same successful session and purges local auth before
 
 test('mobile owner proof returns only closed Auth/RLS receipt and waits for zero pending bytes', async () => {
   const driver = preflightDriver('android');
-  driver.execute = async (fn) => {
-    if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
+  let asyncCalls = 0;
+  driver.executeAsync = async () => {
+    asyncCalls += 1;
+    return { status: 'pass', receipt: {
       get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
       product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
       real_mail_fallback: 'forbidden',
-    };
+    } };
+  };
+  driver.execute = async (fn) => {
+    if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {};
     if (fn?.name === 'snapshotSearchRuntimeProbe') return {
       meter: { schema_version: 'supabase_client_observed_bytes_v1', pending_measurements: 0, total_bytes: 123 },
     };
@@ -447,6 +487,7 @@ test('mobile owner proof returns only closed Auth/RLS receipt and waits for zero
   const verified = await adapter.verifyAuthenticatedOwner();
   assert.equal(verified.receipt.get_user_verified, true);
   assert.equal(verified.receipt.protected_probe_request_count, 1);
+  assert.equal(asyncCalls, 1);
   assert.equal(verified.meter.pending_measurements, 0);
   assert.doesNotMatch(JSON.stringify(verified), /access_token|email|user_id|authorization/iu);
 });
@@ -956,6 +997,13 @@ test('Android Auth callback uses a pre-document byte probe when performance logs
       };
       return true;
     },
+    async executeAsync() {
+      return { status: 'pass', receipt: {
+        get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+        product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+        real_mail_fallback: 'forbidden',
+      } };
+    },
   };
   const adapter = await createAppiumSearchAdapter({ platform: 'android', driver,
     supabaseOrigins: ['https://project.supabase.co'] });
@@ -1010,6 +1058,13 @@ test('mobile Auth callback waits across log drains for terminal bytes before own
           categories: { auth: 100, edge: 0, direct_rest: 0, direct_rpc: 0 } },
       };
       return true;
+    },
+    async executeAsync() {
+      return { status: 'pass', receipt: {
+        get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+        product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+        real_mail_fallback: 'forbidden',
+      } };
     },
   };
   const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
@@ -1068,6 +1123,13 @@ test('mobile Auth callback closes an authorised background Auth cancellation wit
           categories: { auth: 100, edge: 0, direct_rest: 0, direct_rpc: 0 } },
       };
       return true;
+    },
+    async executeAsync() {
+      return { status: 'pass', receipt: {
+        get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+        product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+        real_mail_fallback: 'forbidden',
+      } };
     },
   };
   const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });

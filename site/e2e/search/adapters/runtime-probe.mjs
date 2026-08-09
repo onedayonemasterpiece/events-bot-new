@@ -370,48 +370,60 @@ export function snapshotSearchRuntimeProbe() {
  * exactly one owner-scoped, read-only RLS request through the registered
  * resilient data client. Credentials never leave the page realm.
  */
-export async function verifyAuthenticatedOwnerRuntimeProbe() {
-  const root = document.querySelector('[data-authorized-search]');
-  const supabaseUrl = String(root?.dataset.supabaseUrl || '').replace(/\/+$/u, '');
-  const publishableKey = String(root?.dataset.supabaseKey || '');
-  if (!supabaseUrl || !publishableKey) throw new Error('search_health_authenticated_owner_config_missing');
-  const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
-  let stored;
-  try { stored = JSON.parse(localStorage.getItem(`sb-${projectRef}-auth-token`) || '{}'); }
-  catch { throw new Error('search_health_authenticated_owner_session_invalid'); }
-  const accessToken = String(stored?.access_token || '');
-  if (!accessToken) throw new Error('search_health_authenticated_owner_session_missing');
-  const clients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
-  const client = clients instanceof Map
-    ? [...clients.values()].find((item) => typeof item?.request === 'function' && String(item?.key || '').startsWith(`${supabaseUrl}|`))
-    : null;
-  if (!client) throw new Error('search_health_authenticated_owner_transport_missing');
-  const headers = {
-    accept: 'application/json', apikey: publishableKey, authorization: `Bearer ${accessToken}`,
-  };
-  const identityResponse = await client.request(`${supabaseUrl}/auth/v1/user`, { method: 'GET', headers });
-  if (!identityResponse.ok) throw new Error('search_health_authenticated_owner_get_user_failed');
-  const identity = await identityResponse.json();
-  const userId = String(identity?.id || '');
-  if (!/^[0-9a-f-]{36}$/iu.test(userId)) throw new Error('search_health_authenticated_owner_identity_invalid');
-  const owner = new URL('/rest/v1/user_saved_event', supabaseUrl);
-  owner.searchParams.set('select', 'user_id');
-  owner.searchParams.set('user_id', `eq.${userId}`);
-  owner.searchParams.set('limit', '1');
-  const ownerResponse = await client.request(owner, { method: 'GET', headers });
-  if (!ownerResponse.ok) throw new Error('search_health_authenticated_owner_rls_failed');
-  const rows = await ownerResponse.json();
-  if (!Array.isArray(rows) || !rows.every((row) => String(row?.user_id || '') === userId)) {
-    throw new Error('search_health_authenticated_owner_rls_scope_invalid');
+export async function verifyAuthenticatedOwnerRuntimeProbe(done) {
+  const callback = typeof done === 'function' ? done : null;
+  try {
+    const root = document.querySelector('[data-authorized-search]');
+    const supabaseUrl = String(root?.dataset.supabaseUrl || '').replace(/\/+$/u, '');
+    const publishableKey = String(root?.dataset.supabaseKey || '');
+    if (!supabaseUrl || !publishableKey) throw new Error('search_health_authenticated_owner_config_missing');
+    const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
+    let stored;
+    try { stored = JSON.parse(localStorage.getItem(`sb-${projectRef}-auth-token`) || '{}'); }
+    catch { throw new Error('search_health_authenticated_owner_session_invalid'); }
+    const accessToken = String(stored?.access_token || '');
+    if (!accessToken) throw new Error('search_health_authenticated_owner_session_missing');
+    const clients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+    const client = clients instanceof Map
+      ? [...clients.values()].find((item) => typeof item?.request === 'function' && String(item?.key || '').startsWith(`${supabaseUrl}|`))
+      : null;
+    if (!client) throw new Error('search_health_authenticated_owner_transport_missing');
+    const headers = {
+      accept: 'application/json', apikey: publishableKey, authorization: `Bearer ${accessToken}`,
+    };
+    const identityResponse = await client.request(`${supabaseUrl}/auth/v1/user`, { method: 'GET', headers });
+    if (!identityResponse.ok) throw new Error('search_health_authenticated_owner_get_user_failed');
+    const identity = await identityResponse.json();
+    const userId = String(identity?.id || '');
+    if (!/^[0-9a-f-]{36}$/iu.test(userId)) throw new Error('search_health_authenticated_owner_identity_invalid');
+    const owner = new URL('/rest/v1/user_saved_event', supabaseUrl);
+    owner.searchParams.set('select', 'user_id');
+    owner.searchParams.set('user_id', `eq.${userId}`);
+    owner.searchParams.set('limit', '1');
+    const ownerResponse = await client.request(owner, { method: 'GET', headers });
+    if (!ownerResponse.ok) throw new Error('search_health_authenticated_owner_rls_failed');
+    const rows = await ownerResponse.json();
+    if (!Array.isArray(rows) || !rows.every((row) => String(row?.user_id || '') === userId)) {
+      throw new Error('search_health_authenticated_owner_rls_scope_invalid');
+    }
+    const state = globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    for (let attempt = 0; attempt < 100 && Number(state?.meter?.pending || 0) > 0; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    if (Number(state?.meter?.pending || 0) > 0) throw new Error('search_health_authenticated_owner_meter_pending');
+    const receipt = {
+      get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+      product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+      real_mail_fallback: 'forbidden',
+    };
+    if (callback) callback({ status: 'pass', receipt });
+    return receipt;
+  } catch (error) {
+    if (!callback) throw error;
+    const value = String(error?.message || '');
+    const failureCode = /^search_health_authenticated_owner_[a-z_]+$/u.test(value)
+      ? value : 'search_health_authenticated_owner_probe_failed';
+    callback({ status: 'failed', failure_code: failureCode });
+    return null;
   }
-  const state = globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
-  for (let attempt = 0; attempt < 100 && Number(state?.meter?.pending || 0) > 0; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  if (Number(state?.meter?.pending || 0) > 0) throw new Error('search_health_authenticated_owner_meter_pending');
-  return {
-    get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
-    product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
-    real_mail_fallback: 'forbidden',
-  };
 }

@@ -730,7 +730,19 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async verifyAuthenticatedOwner() {
       await driver.execute(installSearchRuntimeProbe, { ...configuredPolicy, production_health: true });
-      const receipt = await driver.execute(verifyAuthenticatedOwnerRuntimeProbe);
+      if (typeof driver.executeAsync !== 'function') {
+        throw new Error('mobile_auth_async_script_unavailable');
+      }
+      // XCUITest/Safari can JSON-clone a pending Promise from Execute Script as
+      // an empty object even though Chromium awaits it. Use the WebDriver
+      // callback command for this two-request Auth/RLS probe; OTP and Search
+      // still share the same browser session and neutral mobile transport.
+      const outcome = await driver.executeAsync(verifyAuthenticatedOwnerRuntimeProbe);
+      if (outcome?.status === 'failed') throw new Error(outcome.failure_code);
+      if (outcome?.status !== 'pass' || !outcome.receipt) {
+        throw new Error('mobile_auth_async_script_result_invalid');
+      }
+      const receipt = outcome.receipt;
       const snapshot = await driver.execute(snapshotSearchRuntimeProbe);
       return { receipt, meter: meterWithCallbackAuthBytes(snapshot.meter) };
     },

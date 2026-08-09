@@ -299,24 +299,49 @@ jobs:
           cleanup_appium() {
             if [ -n "${appium_pid:-}" ]; then kill "$appium_pid" || true; wait "$appium_pid" || true; fi
             rm -f "${RUNNER_TEMP}/appium-search-health-ios.log" \
-              "${RUNNER_TEMP}/appium-search-health-log-filters.json"
+              "${RUNNER_TEMP}/appium-search-health-log-filters.json" \
+              "${RUNNER_TEMP}/search-health-ios-prior-startup-receipt.json"
           }
           trap cleanup_appium EXIT
+          export E2E_APPIUM_LOG_PATH="${RUNNER_TEMP}/appium-search-health-ios.log"
+          export E2E_APPIUM_PRIOR_RECEIPT_PATH="${RUNNER_TEMP}/search-health-ios-prior-startup-receipt.json"
           cat > "${RUNNER_TEMP}/appium-search-health-log-filters.json" <<'JSON'
           [{"pattern":"https?://[^\\s\\\"]+","flags":"i","replacer":"**URL_REDACTED**"}]
           JSON
-          npx appium --base-path /wd/hub --port 4723 \
-            --log-level error --log-no-colors \
-            --log-filters "${RUNNER_TEMP}/appium-search-health-log-filters.json" \
-            > "${RUNNER_TEMP}/appium-search-health-ios.log" 2>&1 &
-          appium_pid=$!
-          ready=0
-          for n in $(seq 1 120); do
-            if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi
-            sleep 1
+          start_appium() {
+            export E2E_APPIUM_STATUS_READY=0
+            npx appium --base-path /wd/hub --port 4723 \
+              --log-level error --log-no-colors \
+              --log-filters "${RUNNER_TEMP}/appium-search-health-log-filters.json" \
+              > "$E2E_APPIUM_LOG_PATH" 2>&1 &
+            appium_pid=$!
+            ready=0
+            for n in $(seq 1 120); do
+              if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            export E2E_APPIUM_STATUS_READY="$ready"
+            test "$ready" = 1
+          }
+          status=1
+          for attempt in 1 2; do
+            export E2E_APPIUM_STARTUP_ATTEMPT="$attempt"
+            start_appium
+            status=0
+            node e2e/search/production-health-run.mjs || status=$?
+            if [ "$status" -eq 0 ]; then break; fi
+            retryable=0
+            node e2e/search/production-health-mobile-retry.mjs \
+              "$E2E_EVIDENCE_DIR/result.json" "$E2E_APPIUM_PRIOR_RECEIPT_PATH" \
+              && retryable=1 || true
+            if [ "$attempt" -eq 2 ] || [ "$retryable" -ne 1 ]; then break; fi
+            echo 'Retrying one pre-side-effect Appium/WDA infrastructure startup'
+            kill "$appium_pid" || true
+            wait "$appium_pid" || true
+            appium_pid=''
+            find "$E2E_EVIDENCE_DIR" -mindepth 1 -delete
           done
-          test "$ready" = 1
-          node e2e/search/production-health-run.mjs
+          exit "$status"
       - name: Delete simulator
         if: ${{ always() && steps.sim.outputs.udid != '' }}
         run: xcrun simctl shutdown '${{ steps.sim.outputs.udid }}' || true; xcrun simctl delete '${{ steps.sim.outputs.udid }}' || true
@@ -344,7 +369,10 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: search-production-health-*-${{ github.run_id }}-${{ github.run_attempt }}
+          # A safe "rerun failed jobs" keeps successful cells in the earlier
+          # attempt. Download all attempts for this run; the reporter selects
+          # each platform's newest sanitized result by tested_at.
+          pattern: search-production-health-*-${{ github.run_id }}-*
           path: artifacts/search-production-health
       - name: Download bounded prior sanitized summaries for infrastructure streaks
         continue-on-error: true

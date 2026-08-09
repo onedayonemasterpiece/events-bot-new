@@ -89,6 +89,7 @@ export function productionHealthEvidenceRecord(input = {}) {
   const journey = input.journey || {};
   const meter = input.meter || {};
   const preflight = input.preflight || {};
+  const priorStartup = input.prior_startup_receipt || {};
   const auth = input.auth || {};
   const record = {
     schema_version: 'search_production_health_evidence_v1',
@@ -120,6 +121,12 @@ export function productionHealthEvidenceRecord(input = {}) {
       retry_allowed: false,
     },
     preflight: {
+      schema_version: closedText(preflight.schema_version, /^mobile-preflight-failure-v1$/u),
+      platform: closedText(preflight.platform, /^(?:android|ios)$/u),
+      startup_attempt: [1, 2].includes(Number(preflight.startup_attempt))
+        ? Number(preflight.startup_attempt) : 0,
+      cleanup_confirmed: preflight.cleanup_confirmed === true,
+      retry_safe: preflight.retry_safe === true,
       side_effect_free: preflight.side_effect_free === true,
       browser_ready: preflight.browser_ready === true,
       transport_ready: preflight.transport_ready === true,
@@ -132,12 +139,37 @@ export function productionHealthEvidenceRecord(input = {}) {
       appium_server_ready: preflight.appium_server_ready === true,
       elapsed_ms: safeCount(preflight.elapsed_ms),
       log_inspected: preflight.log_inspected === true,
+      log_truncated: preflight.log_truncated === true,
+      simulator_started: preflight.simulator_started === true,
+      wda_install_attempted: preflight.wda_install_attempted === true,
+      wda_start_attempted: preflight.wda_start_attempted === true,
+      wda_start_failed: preflight.wda_start_failed === true,
+      wda_session_attempted: preflight.wda_session_attempted === true,
+      wda_session_started: preflight.wda_session_started === true,
+      wda_session_failed: preflight.wda_session_failed === true,
+      wda_started: preflight.wda_started === true,
       chromedriver_discovery_attempted: preflight.chromedriver_discovery_attempted === true,
       chromedriver_missing: preflight.chromedriver_missing === true,
       chromedriver_download_failed: preflight.chromedriver_download_failed === true,
       chrome_session_failed: preflight.chrome_session_failed === true,
       web_context_failed: preflight.web_context_failed === true,
       uiautomator_server_failed: preflight.uiautomator_server_failed === true,
+      ...(preflight.side_effects?.schema_version === 'mobile-preflight-side-effects-v1' ? {
+        side_effects: {
+          schema_version: 'mobile-preflight-side-effects-v1',
+          startup_attempt: [1, 2].includes(Number(preflight.side_effects.startup_attempt))
+            ? Number(preflight.side_effects.startup_attempt) : 0,
+          broker_session_issued: preflight.side_effects.broker_session_issued === true,
+          auth_callback_started: preflight.side_effects.auth_callback_started === true,
+          navigation_count: safeCount(preflight.side_effects.navigation_count),
+          fetch_count: safeCount(preflight.side_effects.fetch_count),
+          search_post_count: safeCount(preflight.side_effects.search_post_count),
+          webdriver_client_session_created:
+            preflight.side_effects.webdriver_client_session_created === true,
+          webdriver_client_session_deleted:
+            preflight.side_effects.webdriver_client_session_deleted === true,
+        },
+      } : {}),
       ...(preflight.safari_ui && typeof preflight.safari_ui === 'object' ? {
         safari_ui: {
           known_dialog_count: safeCount(preflight.safari_ui.known_dialog_count),
@@ -157,6 +189,29 @@ export function productionHealthEvidenceRecord(input = {}) {
         },
       } : {}),
     },
+    prior_startup_retry: priorStartup.schema_version === 'search-production-health-mobile-retry-v1'
+      ? {
+        schema_version: 'search-production-health-mobile-retry-v1',
+        platform: closedText(priorStartup.platform, /^ios$/u),
+        startup_attempt: priorStartup.startup_attempt === 1 ? 1 : 0,
+        failure_stage: closedText(priorStartup.failure_stage, /^[a-z][a-z0-9_]{2,63}$/u),
+        failure_class: closedText(priorStartup.failure_class, /^[a-z][a-z0-9_]{2,63}$/u),
+        cleanup_confirmed: priorStartup.cleanup_confirmed === true,
+        side_effects: {
+          schema_version: priorStartup.side_effects?.schema_version === 'mobile-preflight-side-effects-v1'
+            ? 'mobile-preflight-side-effects-v1' : null,
+          startup_attempt: priorStartup.side_effects?.startup_attempt === 1 ? 1 : 0,
+          broker_session_issued: priorStartup.side_effects?.broker_session_issued === true,
+          auth_callback_started: priorStartup.side_effects?.auth_callback_started === true,
+          navigation_count: safeCount(priorStartup.side_effects?.navigation_count),
+          fetch_count: safeCount(priorStartup.side_effects?.fetch_count),
+          search_post_count: safeCount(priorStartup.side_effects?.search_post_count),
+          webdriver_client_session_created:
+            priorStartup.side_effects?.webdriver_client_session_created === true,
+          webdriver_client_session_deleted:
+            priorStartup.side_effects?.webdriver_client_session_deleted === true,
+        },
+      } : null,
     auth: {
       no_mail: auth.real_mail_fallback === 'forbidden',
       get_user_verified: auth.get_user_verified === true,

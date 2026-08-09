@@ -987,6 +987,7 @@ test('mobile preflight failure preserves only a closed Appium diagnostic receipt
 test('mobile Safari preflight preserves the exact closed infrastructure code', async () => {
   const receipt = {
     schema_version: 'mobile-preflight-failure-v1',
+    platform: 'ios', startup_attempt: 1,
     failure_class: 'safari_first_run_ui_search_choice_action_missing',
     safari_ui: {
       known_dialog_count: 1, continue_button_count: 0, active_app_owner: 'safari',
@@ -1013,9 +1014,41 @@ test('mobile Safari preflight preserves the exact closed infrastructure code', a
   });
   assert.equal(result.failure_class, 'UNKNOWN_IOS_INFRA');
   assert.equal(result.failure_code, 'safari_first_run_ui_search_choice_action_missing');
+  assert.equal(result.preflight.schema_version, 'mobile-preflight-failure-v1');
+  assert.equal(result.preflight.startup_attempt, 1);
+  assert.equal(result.preflight.cleanup_confirmed, true);
+  assert.equal(result.preflight.retry_safe, true);
+  assert.equal(result.preflight.side_effects.broker_session_issued, false);
+  assert.equal(result.preflight.side_effects.webdriver_client_session_deleted, true);
   assert.equal(result.preflight.failure_class, 'safari_first_run_ui_search_choice_action_missing');
   assert.equal(result.preflight.safari_ui.sheet_container_count, 1);
   assert.doesNotMatch(JSON.stringify(result.preflight), /Выбор|Продолжить|Настройки/u);
+});
+
+test('successful iOS retry evidence retains the closed zero-side-effect first startup receipt', async () => {
+  const adapter = fakeJourneyAdapter();
+  adapter.preflight = async () => preflight;
+  const priorStartupReceipt = {
+    schema_version: 'search-production-health-mobile-retry-v1', platform: 'ios',
+    startup_attempt: 1, failure_stage: 'webdriver_session_create',
+    failure_class: 'webdriver_client_request_timeout', cleanup_confirmed: true,
+    side_effects: {
+      schema_version: 'mobile-preflight-side-effects-v1', startup_attempt: 1,
+      broker_session_issued: false, auth_callback_started: false, navigation_count: 0,
+      fetch_count: 0, search_post_count: 0, webdriver_client_session_created: false,
+      webdriver_client_session_deleted: false,
+    },
+  };
+  const result = await runProductionHealthCell({
+    platform: 'ios', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => adapter, priorStartupReceipt,
+    issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+  });
+  assert.equal(result.prior_startup_retry.schema_version,
+    'search-production-health-mobile-retry-v1');
+  assert.equal(result.prior_startup_retry.failure_class, 'webdriver_client_request_timeout');
+  assert.equal(result.prior_startup_retry.side_effects.broker_session_issued, false);
+  assert.equal(result.prior_startup_retry.side_effects.search_post_count, 0);
 });
 
 test('cleanup failure prevents a healthy PASS and leaves closed failure evidence', async () => {
