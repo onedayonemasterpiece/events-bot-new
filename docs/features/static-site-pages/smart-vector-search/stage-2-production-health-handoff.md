@@ -129,9 +129,12 @@ Actions нельзя использовать как цикл проб и оши
 - evidence содержит secret/URL/query/session → `EVIDENCE_REDACTION_FAILED`;
 - только доказанный current-target `BROKEN_*` может стать product incident.
 
-Gap: repository пока не хранит точный deployed Edge Function byte/SHA. Сначала
-проверить provider/deploy receipts; только при их отсутствии добавить минимальное
-не-секретное поле в существующий deployment receipt, без новой таблицы/сервиса.
+Repository хранит точную Edge identity как deterministic `sha256:<64>` digest
+deployable `supabase/functions/event-search/` source tree. Generated constant
+проверяется CI, публикуется через side-effect-free HEAD и обычный Search
+response; response остаётся authoritative evidence, в том числе при смене Edge
+между HEAD и единственным POST. Это намеренно не объявляется provider byte SHA
+или git SHA и не требует новой таблицы/сервиса.
 
 PR #436 не является зависимостью health activation. Его preclaim guard полезен
 для immutable release qualification, но должен проходить отдельный review и не
