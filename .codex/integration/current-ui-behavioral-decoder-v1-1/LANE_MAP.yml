@@ -12,7 +12,7 @@ verification_owner: /root
 stop_conditions:
   - no component merge/deletion/normalization
   - no experiment winner without decision receipt
-  - final supplement status only READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS
+  - final supplement status only READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS or EVIDENCE_COLLECTION_INCOMPLETE
 lanes:
   - id: media_geometry_rails_map
     role: mapper
@@ -98,3 +98,45 @@ lanes:
     verification_scope: full_local
     effort: high
     status: planned
+  - id: requirements_experiment_fix
+    role: worker
+    requirement_ids: [R01, R03, R08, R09, R10]
+    target: deterministic requirements provenance and curated experiment archaeology
+    depends_on: [supplement_core]
+    execution_mode: corrective_serial
+    branch: agent/current-ui-behavioral-v1-1/requirements-experiment-fix
+    worktree: /home/dev/.codex/worktrees/events-bot-new/requirements-experiment-fix
+    writable_files: [scripts/current_ui_resource_graph/v1/behavioral-requirements.mjs, scripts/current_ui_resource_graph/v1/behavioral-experiments.mjs, scripts/current_ui_resource_graph/v1/behavioral.mjs, tests, docs, CHANGELOG.md]
+    forbidden_files: [site/src, site/public, Penpot]
+    expected_output: 55-path bounded requirements ledger, exact transport experiment decoder, pinned-ancestry and curated semantic history
+    verification_scope: full_local
+    effort: high
+    status: merged
+  - id: packet_semantics_fix
+    role: worker
+    requirement_ids: [R03, R04, R05, R06, R07, R12]
+    target: truthful action packets, dynamic-region coverage and bounded browser capture
+    depends_on: [requirements_experiment_fix]
+    execution_mode: corrective_serial
+    branch: agent/current-ui-behavioral-v1-1/packet-semantics-fix
+    worktree: /home/dev/.codex/worktrees/events-bot-new/packet-semantics-fix
+    writable_files: [scripts/current_ui_resource_graph/v1/behavioral, tests, docs, CHANGELOG.md]
+    forbidden_files: [site/src, site/public, Penpot]
+    expected_output: corrected 67-plan matrix with semantic assertions and exact blockers
+    verification_scope: targeted_browser_and_full_local
+    effort: high
+    status: merged
+  - id: coverage_readiness_integration
+    role: integrator
+    requirement_ids: [R03, R04, R05, R06, R07, R12]
+    target: blocker-preserving materializer, per-row coverage reconciliation, workflow and validators
+    depends_on: [requirements_experiment_fix, packet_semantics_fix]
+    execution_mode: serial_integration
+    branch: integration/current-ui-behavioral-decoder-v1-1
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-behavioral-v1-1
+    writable_files: [scripts/current_ui_resource_graph/v1/behavioral.mjs, scripts/current_ui_resource_graph/v1/behavioral/materialize.mjs, .github/workflows/current-ui-behavioral-decoder-v1-1.yml, tests, docs, CHANGELOG.md]
+    forbidden_files: [site/src, site/public, Penpot]
+    expected_output: no READY while any coverage or interaction blocker remains
+    verification_scope: full_local_and_actions
+    effort: high
+    status: in_progress

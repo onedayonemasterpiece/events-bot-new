@@ -76,7 +76,7 @@ def test_behavior_packet_registry_is_closed_bounded_and_not_merged():
     result = subprocess.run(['node', '--input-type=module', '-e', script], cwd=ROOT, check=True, text=True, capture_output=True)
     payload = json.loads(result.stdout)
     assert payload == {
-        'plans': 50, 'rasters': 99, 'blockers': 5,
+        'plans': 67, 'rasters': 124, 'blockers': 10,
         'treatments': [
             'behavior-packet.transport-departure-board-v1-baseline',
             'behavior-packet.transport-departure-board-v1-disclosure',
@@ -109,6 +109,8 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
     source = tmp_path / 'source'
     capture = tmp_path / 'capture'
     final = tmp_path / 'final'
+    reviewed_final = tmp_path / 'reviewed-final'
+    review_ledger_path = tmp_path / 'visual-review-ledger.jsonl'
     subprocess.run([
         'node', 'scripts/current_ui_resource_graph/behavioral-decode.mjs',
         '--source-root', str(FIXTURE / 'site'), '--base-snapshot-root', str(FIXTURE / 'base'),
@@ -118,8 +120,8 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
       import {createHash} from 'node:crypto';import {mkdirSync,writeFileSync} from 'node:fs';import {join} from 'node:path';
       import {buildBehaviorPacketRegistry} from './scripts/current_ui_resource_graph/v1/behavioral/registry.mjs';
       const root=process.argv[1];mkdirSync(join(root,'behavior-rasters'),{recursive:true});const sha=x=>createHash('sha256').update(x).digest('hex');const observations=[];const blockers=[];
-      for(const plan of buildBehaviorPacketRegistry().plans){if(plan.execution_status==='explicit-blocker'){blockers.push({schema_version:plan.schema_version,id:`behavior-blocker.${sha(plan.id).slice(0,18)}`,plan_id:plan.id,family:plan.family,reason:plan.blocker_reason,source_path:plan.source_path||null,status:'explicit-blocker',production_state_claimed:false,decision:'NOT_MERGED'});continue;}
-        for(let i=0;i<plan.steps.length;i++){const step=plan.steps[i];if(!step.capture)continue;const bytes=Buffer.from(`fake-png:${plan.id}:${step.phase}`);const name=`${sha(plan.id+step.phase).slice(0,18)}.png`;writeFileSync(join(root,'behavior-rasters',name),bytes);observations.push({schema_version:plan.schema_version,id:`behavior-observation.${sha(plan.id+'\\0'+step.phase).slice(0,18)}`,plan_id:plan.id,family:plan.family,phase:step.phase,sequence_index:i,source_sha:plan.source_sha,evidence_plane:plan.evidence_plane,route_hash:sha(plan.route),viewport:plan.viewport,ratios:plan.ratios||[],screenshot:{path:`behavior-rasters/${name}`,bytes:bytes.length,sha256:sha(bytes),dhash:'0000000000000000'},dom:{full_html_retained:false},network:{raw_urls_retained:false},evidence_status:'captured-not-reviewed',review_status:'pending-human-full-resolution-review',production_state_claimed:false,normalization_allowed:false,decision:'NOT_MERGED'});}}
+      for(const plan of buildBehaviorPacketRegistry().plans){if(plan.execution_status==='explicit-blocker'){blockers.push({schema_version:plan.schema_version,id:`behavior-blocker.${sha(plan.id).slice(0,18)}`,plan_id:plan.id,family:plan.family,reason:plan.blocker_reason,source_path:plan.source_path||null,reachability:plan.reachability,dynamic_region_ids:plan.dynamic_region_ids||[],breakpoint_probe_ids:plan.breakpoint_probe_ids||[],coverage_refs:plan.coverage_refs||[],blocked_states:plan.blocked_states||[],blocks_ready:plan.blocks_ready===true,status:'explicit-blocker',production_state_claimed:false,decision:'NOT_MERGED'});continue;}
+        for(let i=0;i<plan.steps.length;i++){const step=plan.steps[i];if(!step.capture)continue;const bytes=Buffer.from(`fake-png:${plan.id}:${step.phase}`);const name=`${sha(plan.id+step.phase).slice(0,18)}.png`;writeFileSync(join(root,'behavior-rasters',name),bytes);observations.push({schema_version:plan.schema_version,id:`behavior-observation.${sha(plan.id+'\\0'+step.phase).slice(0,18)}`,plan_id:plan.id,family:plan.family,phase:step.phase,sequence_index:i,source_sha:plan.source_sha,evidence_plane:plan.evidence_plane,reachability:plan.reachability,dynamic_region_ids:plan.dynamic_region_ids||[],breakpoint_probe_ids:plan.breakpoint_probe_ids||[],coverage_refs:plan.coverage_refs||[],route_hash:sha(plan.route),viewport:plan.viewport,container:{planned_width:plan.container_width||null,actual_width:100,actual_height:100},ratios:plan.ratios||[],media_provenance:plan.media_provenance||null,action_receipts:step.actions.map((action)=>({kind:action.kind,target:{status:'resolved'},result:'applied'})),transition:{assertions_passed:true},font_settle:{status:'ready'},screenshot:{path:`behavior-rasters/${name}`,bytes:bytes.length,sha256:sha(bytes),dhash:'0000000000000000'},dom:{full_html_retained:false},network:{raw_urls_retained:false},evidence_status:'captured-not-reviewed',review_status:'pending-human-full-resolution-review',production_state_claimed:false,normalization_allowed:false,decision:'NOT_MERGED'});}}
       writeFileSync(join(root,'behavior-specimen-observations.jsonl'),observations.map(JSON.stringify).join('\n')+'\n');writeFileSync(join(root,'behavior-capture-blockers.jsonl'),blockers.map(JSON.stringify).join('\n')+'\n');
     """
     subprocess.run(['node', '--input-type=module', '-e', generator, str(capture)], cwd=ROOT, check=True)
@@ -129,17 +131,85 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
     ], cwd=ROOT, check=True, capture_output=True)
     receipt = json.loads((final / 'receipt.json').read_text())
     assert receipt['final_status'] == 'EVIDENCE_COLLECTION_INCOMPLETE'
-    assert receipt['counts'] == {'explicit_blockers': 5, 'observations': 99, 'plans': 50, 'rasters': 99, 'reviews': 0}
+    assert receipt['counts'] == {'explicit_blockers': 10, 'observations': 124, 'plans': 67, 'rasters': 124, 'reviews': 0}
     plans = [json.loads(line) for line in (final / 'behavior-specimen-plan.jsonl').read_text().splitlines()]
-    assert sum(row['capture_status'] == 'captured-not-reviewed' for row in plans) == 45
-    assert sum(row['capture_status'] == 'explicit-blocker' for row in plans) == 5
+    assert sum(row['capture_status'] == 'captured-not-reviewed' for row in plans) == 57
+    assert sum(row['capture_status'] == 'explicit-blocker' for row in plans) == 10
+    assert sum(row.get('blocks_ready') is True for row in plans) == 2
     reviews = [json.loads(line) for line in (final / 'visual-review-ledger.jsonl').read_text().splitlines()]
-    assert len(reviews) == 99
+    assert len(reviews) == 124
     assert all(row['review_status'] == 'pending-human-full-resolution-review' for row in reviews)
     portable_base_path = '../decoder-v1-snapshot-20260808T124842-4786ac53bc'
     assert json.loads((final / 'manifest.json').read_text())['base_snapshot']['path'] == portable_base_path
     assert json.loads((final / 'artifact-index.json').read_text())['base_snapshot']['path'] == portable_base_path
     assert json.loads((final / 'artifact-receipt.json').read_text())['base_snapshot']['path'] == portable_base_path
+    dynamic_rows = [
+        json.loads(line)
+        for line in (final / 'dynamic-region-loading-matrix.jsonl').read_text().splitlines()
+    ]
+    assert len(dynamic_rows) == 13
+    assert all(
+        row['runtime_packet_ids'] or row['explicit_blocker_packet_ids']
+        for row in dynamic_rows
+    )
+    assert all(row['runtime_evidence_status'] != 'coverage-missing' for row in dynamic_rows)
+
+    # A complete file-level review is necessary but cannot erase exact
+    # blocks_ready findings.  The materializer must remain fail-closed without
+    # demanding READY-only Actions/Release/audit metadata.
+    observations = [
+        json.loads(line)
+        for line in (capture / 'behavior-specimen-observations.jsonl').read_text().splitlines()
+    ]
+    review_rows = [
+        {
+            'schema_version': 'current_ui_behavioral_visual_review_v1_1',
+            'id': f"behavior-review.{hashlib.sha256(row['id'].encode()).hexdigest()[:18]}",
+            'observation_id': row['id'],
+            'plan_id': row['plan_id'],
+            'path': row['screenshot']['path'],
+            'sha256': row['screenshot']['sha256'],
+            'media_type': 'image/png',
+            'review_status': 'reviewed-full-resolution',
+            'full_resolution_opened': True,
+            'visual_result': 'fixture-raster-opened-for-fail-closed-test',
+            'reviewer': 'test-reviewer',
+            'reviewed_at': '2026-08-09T00:00:00Z',
+            'decision': 'NOT_MERGED',
+        }
+        for row in observations
+    ]
+    review_ledger_path.write_text(
+        ''.join(json.dumps(row, sort_keys=True) + '\n' for row in review_rows)
+    )
+    subprocess.run([
+        'node', 'scripts/current_ui_resource_graph/v1/behavioral/materialize.mjs',
+        '--source-supplement', str(source), '--capture-root', str(capture),
+        '--review-ledger', str(review_ledger_path), '--output', str(reviewed_final),
+    ], cwd=ROOT, check=True, capture_output=True)
+    reviewed_receipt = json.loads((reviewed_final / 'receipt.json').read_text())
+    reviewed_manifest = json.loads((reviewed_final / 'manifest.json').read_text())
+    assert reviewed_receipt['final_status'] == 'EVIDENCE_COLLECTION_INCOMPLETE'
+    assert reviewed_receipt['status'] == 'partial'
+    assert reviewed_receipt['counts']['reviews'] == 124
+    reviewed_unresolved = [
+        json.loads(line)
+        for line in (reviewed_final / 'unresolved.jsonl').read_text().splitlines()
+    ]
+    blocking_plan_ids = {
+        row.get('plan_id')
+        for row in reviewed_unresolved
+        if row.get('blocks_ready') is True
+    }
+    assert {
+        'behavior-packet.rail-keyboard-home-end',
+        'behavior-packet.breakpoint-container-runtime-coverage-gap',
+    } <= blocking_plan_ids
+    assert len(reviewed_receipt['blockers']) >= 2
+    assert reviewed_manifest['human_visual_review']['completed'] is True
+    assert reviewed_manifest['human_visual_review']['reviewed_raster_count'] == 124
+    assert reviewed_manifest['blockers'] == reviewed_receipt['blockers']
+    assert json.loads((reviewed_final / 'artifact-receipt.json').read_text())['status'] == 'review-complete-evidence-incomplete'
 
     # The deep validator must reject a tampered compact entry even when an
     # attacker also refreshes the outer manifest/receipt hash chain.

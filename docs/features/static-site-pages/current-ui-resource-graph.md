@@ -554,8 +554,12 @@ sibling path to the immutable Decoder v1 snapshot; runner-local checkout paths
 are forbidden in the cross-repository handoff.
 
 The supplement records source-qualified media/loading/geometry/positioning,
-rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, CTA Git
-history and the `transport_timetable_layout` treatment registry. The
+rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, bounded
+CTA/variant history and the `transport_timetable_layout` treatment registry.
+Generic commit-subject history is pinned only to `ef7aa62` ancestry and remains
+semantically unclassified; explicit PR/run/non-ancestor branch evidence is a
+curated supplement with its own scope, never a claim of exhaustive coverage of
+every mutable remote ref, tag, release or artifact. The
 requirements-aware pass additionally writes a line/commit/PR provenance
 ledger, a complete consumer-scoped media matrix (including `4:5`, `5:4`,
 `3:2`, intrinsic `2:3`, `1:1` and extra ratios), and an explicit dynamic-region
@@ -566,6 +570,40 @@ only and is not a human-review substitute. The three transport arms
 `departure_board_v1`, `route_strips_v1` and `next_departure_queue_v1` have
 separate planned evidence packets and remain `NOT_MERGED`, unaccepted until
 receipt-backed archaeology and capture/review are available.
+
+Requirements archaeology deliberately uses two separately pinned planes. UI
+implementation is still decoded only from exact source
+`ef7aa62e45c60f7a12da6160f490719c0721ec03`; the requirements ledger is read
+from the decoder commit so it can include later accepted source maps without
+pretending they existed at `ef7aa62`. The required corpus now explicitly
+includes the page-archetype source map, schedule user requirements, rail and
+multimodal directory, image/EventCard/Event Detail desktop and mobile records,
+listing V14/V15 through V28 supersession chain, mobile shell, canonical Search
+plus its replaced source brief, owner personalization requirements, target and
+implementation contracts, Personal Feed architecture, and loading/skeleton
+documents. Extraction is deterministic and bounded to 256 matched lines per
+document. A historical, proposal or mixed/conflict document cannot be promoted
+to current authority by a line-level keyword; retained rules are reconciled in
+explicit curated records. Missing required documents and missing pinned dynamic
+region sources stay fail-closed evidence. In particular, the pinned dynamic
+source is
+`site/src/components/listings/PopularPersonalizedRow.astro`, not the obsolete
+non-`listings` path.
+
+`transport_timetable_layout` is decoded from the hash-checked `ef7aa62` source
+family (`transportExperiment.ts`, client/controller, Astro consumer and both
+build entry points), rather than from placeholder registry prose. The record
+preserves modes `off`, `qa`, `focus_group`, `live`; the three 3333/3333/3334
+bucket arms; browser-subject `SHA-256` first-u32-big-endian assignment;
+1–20-departure/future-after-10-minute-reserve eligibility; consent, automation,
+QA and valid-exposure telemetry gates; the five qualified action names; and the
+three-cell SRM threshold. Production build is forced `off`, QA/focus-group are
+secret-candidate modes, and `live` has no approved pinned build path. The source
+defines a qualified-action predicate but the pinned click-ingest path does not
+call it, while the SRM evaluator has tests but no runtime consumer; both are
+recorded as bounded archaeology findings, not silently accepted contracts. No
+winner/acceptance receipt is present, so every row remains
+`experiment-unresolved`, `NOT_MERGED`, and forbidden from normalization.
 
 The only permitted completed supplement status is
 `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not authorize component
@@ -580,28 +618,79 @@ The capture implementation is intentionally split from acceptance:
    exact source SHA `ef7aa62e45c60f7a12da6160f490719c0721ec03`, validates the
    immutable Decoder v1 tree and manifest, builds a disposable reflink/copy
    harness without copying the installed `node_modules` tree, links the single
-   pinned dependency installation, and captures the closed 50-packet matrix. The Actions receipt must
+   pinned dependency installation, and captures the corrected closed 67-packet matrix. The Actions receipt must
    remain `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`.
 2. The review materializer may emit
-   `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after all 99 raster files
+   `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after all 124 raster files
    have been opened and reviewed individually at full resolution, every review
    is bound one-to-one to the observation path and SHA-256, the independent
    audit passes, and both the Actions artifact and permanent Release asset have
-   complete immutable provenance.
+   complete immutable provenance. Those review/provenance gates are necessary
+   but not sufficient: any packet or per-probe reconciliation row with
+   `blocks_ready:true` keeps the final receipt
+   `EVIDENCE_COLLECTION_INCOMPLETE`.
 
-The matrix has 45 executable packets and five exact blockers. Blocked states
+The corrected registry has 57 executable packets and ten exact blockers. Blocked states
 are recorded as blockers rather than replaced by fake wrappers: source-only
 PopularCategoryFilter, the unconsumed ListingPersonalFilter v1, unavailable
-zero/one-item mobile rail fixtures, and the PersonalFeed unavailable branch
-that the pinned real corpus cannot reach honestly.
+zero/one-item mobile rail fixtures, the PersonalFeed unavailable branch that
+the pinned real corpus cannot reach honestly, hidden auth/personalization
+runtime modes, an intentionally unchanged discovery error fallback, and the
+native rail `End`/`Home` accessibility gap. Chromium leaves the exact focusable
+horizontal rail at `scrollLeft=0`; this blocks readiness instead of being
+replaced by a programmatic scroll. The unreconciled per-probe runtime evidence
+for the complete 293-row breakpoint/container matrix also has
+`blocks_ready:true`. Carrying every exact probe ID on that blocker is a
+fail-closed reconciliation receipt, not a claim that a family screenshot
+captured 293 transitions.
 
 Captured evidence remains plane-qualified as controlled exact-source runtime.
-It includes mobile menu/disclosure/focus-return behavior, rail edges and
-keyboard alternatives, sticky/fixed collisions, separate Editorial stacked
+The short-viewport Reference4 packet scrolls the actual
+`.mobile-discovery-menu__panel` by its observed 56px range; the fixed-height
+inner list is not misreported as a scroll surface. It includes mobile
+menu/disclosure/focus-return behavior, rail edges and the
+exact observed absence of a working native `End`/`Home` alternative,
+sticky/fixed collisions, separate Editorial stacked
 and Split inline CTA anatomy, all three unresolved transport treatments,
 consumer-specific media behavior (including separate real `4:5` EventCard and
 `5:4` rail/search evidence), the large primary/poster plus smaller remaining
 photo previews, and Search/Favorites/PersonalFeed loading and recovery flows.
+The bounded dynamic closure now references every one of the 13 source matrix
+regions: Search, Favorites, PersonalFeed, discovery rerank, home local rerank,
+the popular personalized shelf, Weather, Exhibitions gallery, EventCard,
+ListingEventCard and mobile-listing media, auth runtime and personalization
+runtime. Each is bound to an executable packet or an exact explicit blocker;
+a source test is never relabelled as runtime capture. Materialization joins the
+source `dynamic-region.<id>` namespace to the packet's compact `<id>` form
+explicitly; an unbound row is `coverage-missing`, never an implicit family hit.
+Semantic transition checks include bounded standard descendant
+`aria-checked`, `aria-pressed`, `aria-expanded`, `aria-selected`, `aria-busy`,
+`open`, and `hidden` state, so equal-length radio/state replacements still
+produce an evidence-bearing transition without retaining full HTML.
+Font settling is probed and recorded for at most four seconds before each
+packet raster. If it times out, Playwright's internal unbounded second font
+wait is disabled and the actually rendered fallback is captured with
+`font_settle.status=timed-out-continued`; it is not relabelled as a loaded-font
+render.
+
+Transport disclosure packets use real exact treatment components with a
+controlled `PreviewEvent` fixture assembled only from distinct trips returned
+by the exact Kaup resolver across bounded start-time variants. This yields six
+real resolver rows for each treatment, makes closed/open geometry observably
+different, preserves `NOT_MERGED`, and selects no winner. The weekend sticky
+packet targets the visible desktop implementation at `1280×800`; hidden
+attached mobile/desktop duplicates are rejected. Interaction phases require a
+resolved visible target (or an explicit not-applicable contract), a real
+DOM/geometry/scroll/focus delta, and nonzero geometry where declared. Plans and
+observations carry reachability plus dynamic, breakpoint and coverage refs.
+
+Capture is bounded and diagnosable: each plan logs start/completion/failure and
+elapsed time; font settle is capped at four seconds, controlled routes at 20
+seconds, and screenshots at 30 seconds. Deferred media routes hold image
+requests only, so the previous `media-broken` deadlock cannot also hold fonts.
+OCR/photo packets retain their exact event/classification provenance. The
+time-nav popover clipping and mobile-menu post-close bottom-nav disappearance
+remain recorded visual conflicts rather than silently repaired behavior.
 The capture harness freezes clock, timezone and randomness and uses only
 test-local network fixtures; it does not contact Supabase or mutate the pinned
 `site/src` tree.

@@ -4,6 +4,49 @@
 
 ### Fixed
 
+- Completed the Behavioral Decoder v1.1 requirements/experiment source pass:
+  the bounded provenance corpus now includes page archetypes, schedule,
+  multimodal rail, listing V14/V15–V28 supersession, mobile, Search,
+  personalization contracts and Personal Feed/loading evidence without
+  promoting historical mixed documents by keyword. Corrected the pinned
+  `PopularPersonalizedRow` source path and replaced placeholder transport
+  experiment fields with hash-checked `ef7aa62` modes, browser-subject bucket
+  assignment, eligibility, analytics/qualified-action and SRM evidence. Generic
+  history is now deterministic `ef7aa62` ancestry rather than mutable
+  `git log --all`; curated CTA, transport, selection, rail/menu and mobile-media
+  records retain exact PR/commit/Actions/replacement scope without claiming an
+  exhaustive remote-ref crawl. Credential/env/URL-bearing requirement lines are
+  represented only by a bounded hash/presence marker. All
+  transport treatments remain `experiment-unresolved` / `NOT_MERGED`; no
+  winner, production UI or normalization decision was introduced.
+
+- Corrected Current UI behavioral packet semantics: transport disclosures now
+  expose real resolver-derived departures; action phases require visible
+  targets and observable deltas; sticky, focus, resize, Weather, Exhibitions
+  and media states have bounded runtime evidence; all 13 dynamic regions and
+  293 breakpoint/container probes carry explicit coverage refs. Native rail
+  keyboard scrolling and unreconciled per-probe breakpoint runtime evidence
+  now block readiness instead of producing duplicate or zero-geometry claims,
+  and font/route/screenshot waits plus per-plan progress are bounded.
+
+- Made Behavioral Decoder v1.1 review materialization preserve readiness
+  blockers instead of erasing them after a complete raster ledger. Final
+  breakpoint/container and dynamic-region rows now bind their executable
+  packet observations or exact blocker IDs one by one; plan/action/page records
+  retain reachability and coverage refs. Manifest and receipt counts are
+  evidence-derived, while the corrected 67/57/10/124 Actions contract and
+  value-oriented secret scan remain fail-closed. The short-viewport Reference4
+  packet now scrolls the actual menu panel rather than the fixed, clipped list
+  plane, so its top/bottom phases carry a real 56px scroll transition. Runtime
+  transition signatures now include bounded standard descendant ARIA/open/
+  hidden state, preventing equal-length sibling radio changes from being
+  misclassified as no-ops. `scroll-to-selector` actions are now contractually
+  page-scoped, matching their actual executor and the mobile V23 group targets.
+  Screenshot capture uses Playwright's documented no-second-font-wait switch
+  only after the decoder's own bounded `document.fonts.ready` probe; a timeout
+  remains explicit in each packet while the rendered fallback stays capturable.
+  Dynamic-region materialization canonicalizes the `dynamic-region.` namespace
+  before joining plan IDs, closing all 13 per-row runtime/blocker references.
 - Removed the redundant second browser confirmation for newly prepared social
   outbound actions that ChatGPT invokes from the user's explicit request.
   Send/publish/forward/reaction/comment/schedule/story preparations now return

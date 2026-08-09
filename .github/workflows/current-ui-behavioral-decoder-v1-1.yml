@@ -81,19 +81,21 @@ jobs:
           set -euo pipefail
           supplement="$BEHAVIOR_OUTPUT/supplement"
           capture="$BEHAVIOR_OUTPUT/capture"
-          jq -e '.status == "CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW" and .counts.behavior_packets == 50 and .counts.executable_packets == 45 and .counts.explicit_blockers == 5 and .counts.observations == 99 and .counts.rasters == 99 and .production_ui_mutated == false and .immutable_v1_modified == false and .normalization_allowed == false' "$BEHAVIOR_OUTPUT/capture-run-receipt.json" >/dev/null
-          jq -e '.status == "partial" and .final_status == "EVIDENCE_COLLECTION_INCOMPLETE" and .counts.plans == 50 and .counts.observations == 99 and .counts.rasters == 99 and .counts.explicit_blockers == 5' "$supplement/receipt.json" >/dev/null
-          jq -e -s 'length == 50 and (map(select(.capture_status == "explicit-blocker")) | length) == 5 and all(.[]; .decision == "NOT_MERGED" and .normalization_allowed == false)' "$supplement/behavior-specimen-plan.jsonl" >/dev/null
-          jq -e -s 'length == 99 and all(.[]; .capture_status == "captured" and .review_status == "pending-human-full-resolution-review" and .production_state_claimed == false and .normalization_allowed == false and .decision == "NOT_MERGED" and .screenshot.perceptually_stable == true)' "$supplement/behavior-specimen-observations.jsonl" >/dev/null
+          jq -e '.status == "CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW" and .counts.behavior_packets == 67 and .counts.executable_packets == 57 and .counts.explicit_blockers == 10 and .counts.observations == 124 and .counts.rasters == 124 and .production_ui_mutated == false and .immutable_v1_modified == false and .normalization_allowed == false' "$BEHAVIOR_OUTPUT/capture-run-receipt.json" >/dev/null
+          jq -e '.status == "partial" and .final_status == "EVIDENCE_COLLECTION_INCOMPLETE" and .counts.plans == 67 and .counts.observations == 124 and .counts.rasters == 124 and .counts.explicit_blockers == 10 and (.blockers | length) >= 2' "$supplement/receipt.json" >/dev/null
+          jq -e -s 'length == 67 and (map(select(.capture_status == "explicit-blocker")) | length) == 10 and (map(select(.blocks_ready == true)) | map(.id) | sort) == ["behavior-packet.breakpoint-container-runtime-coverage-gap","behavior-packet.rail-keyboard-home-end"] and all(.[]; .decision == "NOT_MERGED" and .normalization_allowed == false and (.reachability | length) > 0)' "$supplement/behavior-specimen-plan.jsonl" >/dev/null
+          jq -e -s 'length == 124 and all(.[]; .capture_status == "captured" and .review_status == "pending-human-full-resolution-review" and .production_state_claimed == false and .normalization_allowed == false and .decision == "NOT_MERGED" and .screenshot.perceptually_stable == true and .transition.assertions_passed == true and (.reachability | length) > 0)' "$supplement/behavior-specimen-observations.jsonl" >/dev/null
           jq -e -s '(map(select(.ratios | index("4:5"))) | length) == 1 and (map(select(.ratios | index("5:4"))) | length) == 4' "$supplement/behavior-specimen-observations.jsonl" >/dev/null
-          test "$(find "$capture/behavior-rasters" -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 99
+          jq -e -s 'length == 13 and all(.[]; (.runtime_packet_ids | length) > 0 or (.explicit_blocker_packet_ids | length) > 0)' "$supplement/dynamic-region-loading-matrix.jsonl" >/dev/null
+          jq -e -s 'length == 293 and all(.[]; .coverage_status != "coverage-missing")' "$supplement/breakpoint-and-container-matrix.jsonl" >/dev/null
+          test "$(find "$capture/behavior-rasters" -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 124
           while IFS= read -r row; do
             path="$(jq -r '.screenshot.path' <<<"$row")"
             expected="$(jq -r '.screenshot.sha256' <<<"$row")"
             test "$(sha256sum "$capture/$path" | cut -d' ' -f1)" = "$expected"
           done < "$supplement/behavior-specimen-observations.jsonl"
           node --input-type=module -e "import {assertBehavioralSupplement} from './scripts/current_ui_resource_graph/v1/behavioral.mjs'; assertBehavioralSupplement(process.argv[1],{allowIncomplete:true});" "$supplement"
-          if grep -R -E --include='*.json' --include='*.jsonl' --include='*.md' 'decoder-fixture-public-value|example\.supabase\.co|sb_(secret|publishable)|access_token|refresh_token|authorization["=:]|/_review/' "$BEHAVIOR_OUTPUT"; then
+          if grep -R -E --include='*.json' --include='*.jsonl' --include='*.md' 'decoder-fixture-public-value|example\.supabase\.co|sb_(secret|publishable)_[A-Za-z0-9_-]{12,}|Authorization[[:space:]]*:[[:space:]]*Bearer[[:space:]]+[^[:space:]]+|/_review/[A-Za-z0-9_-]{12,}' "$BEHAVIOR_OUTPUT"; then
             echo 'Sensitive or fixture credential material survived behavioral evidence redaction' >&2
             exit 1
           fi
