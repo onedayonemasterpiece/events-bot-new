@@ -43,7 +43,7 @@ auth fixture, shared mobile transport, registry and canonical Search docs.
 | R09 bounded PR #436 decision | Done | README §16.10; useful preclaim guard, not merged/deployed/dependency |
 | R10 canonical docs + Stage 2 handoff | Done | README §16 and `stage-2-production-health-handoff.md` |
 | R11 deterministic acceptance/zero live | Done | 25/25 architecture + 29/29 existing harness; safety counters above |
-| R12 clean pushed PR | Pending publisher step | branch is clean; push/PR follows final audit |
+| R12 clean pushed PR | Done | draft PR [#441](https://github.com/onedayonemasterpiece/events-bot-new/pull/441) from the clean integration branch |
 
 ## Deterministic validation
 
