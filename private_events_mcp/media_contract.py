@@ -8,7 +8,7 @@ server-owned opaque storage reference plus measured metadata.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
@@ -32,8 +32,8 @@ class VerifiedAsset:
     cannot be replayed across OAuth principals/resources.
     """
 
-    storage_ref: str
-    owner_binding: str
+    storage_ref: str = field(repr=False)
+    owner_binding: str = field(repr=False)
     content_digest: str
     mime_type: str
     byte_length: int

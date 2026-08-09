@@ -253,6 +253,8 @@ async def test_verified_ingress_is_owner_bound_and_never_leaks_file_fields(
     adapter_payload = repr(adapter.staged[0])
     assert FILE_VALUE["download_url"] not in adapter_payload
     assert FILE_VALUE["file_id"] not in adapter_payload
+    assert adapter.staged[0][0].storage_ref not in adapter_payload
+    assert owner not in adapter_payload
 
     status = await runtime.asset_status(result["asset_ref"], _context())
     assert status == {
