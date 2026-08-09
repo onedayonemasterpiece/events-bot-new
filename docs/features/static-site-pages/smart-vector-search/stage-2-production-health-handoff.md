@@ -55,7 +55,9 @@ pagination или полный scheduled mobile/release matrix в production-hea
   lost-response; plaintext credential, filesystem/cache/artifact escrow нет;
 - one-query/one-POST vector-only journey, card ID parity, обязательный реальный
   scroll и exact candidate `/sobytiya/<slug>/` route 200;
-- Auth getUser + один owner RLS proof, 48/96 KiB meter и strict evidence;
+- Auth getUser + один owner RLS proof; iOS выполняет этот Search-only proof в
+  общей OTP/Search Safari session через WebDriver async callback с explicit
+  bounded 15-second script timeout; 48/96 KiB meter и strict evidence;
 - exact deployment marker `none|standard|full`, side-effect-free backend HEAD
   contract proof и pre-Search active release
   receipt и platform issue disposition, suppressing issue mutation when the

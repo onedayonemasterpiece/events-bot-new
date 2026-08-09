@@ -1224,3 +1224,16 @@ owner-RLS теперь выполняется через WebDriver async callbac
 mobile session; отдельного iOS Search adapter, OTP fallback или второй
 credential нет. Fresh merged-SHA browser+iOS live evidence всё ещё обязательно,
 поэтому acceptance остаётся `1/2`, а automation — default-off.
+
+Merged-main run
+[`31340311566`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31340311566)
+затем доказал работу общего OTP retry boundary: первый WebDriver session снова
+истёк через 300 секунд без side effects, а workflow автоматически перезапустил
+Appium ровно один раз; вторая session прошла native Safari/WebKit preflight и
+callback authorization. Новый blocker оказался отдельным session timeout:
+XCUITest завершил Search-only async `getUser`/owner-RLS callback через 1 ms.
+Согласно WebdriverIO contract, adapter теперь явно устанавливает bounded
+`script: 15000` перед `executeAsync`; timeout/config/command failure остаётся
+`UNKNOWN_IOS_INFRA`, а не `BROKEN_AUTH_INTEGRATION`. В этом run iOS сделал ноль
+Search POST, browser остался `HEALTHY/PASS`; следующий merged-SHA iOS proof всё
+ещё обязателен.

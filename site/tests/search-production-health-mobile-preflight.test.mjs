@@ -31,6 +31,7 @@ function preflightDriver(platform = 'android') {
     async getContexts() { events.push('getContexts'); return ['NATIVE_APP', platform === 'android' ? 'CHROMIUM' : 'WEBVIEW_1']; },
     async switchContext(value) { events.push(`switch:${value}`); current = value; },
     async getWindowSize() { events.push('viewport'); return { width: 390, height: 844 }; },
+    async setTimeout(value) { events.push(`script-timeout:${value?.script}`); },
     async execute() { events.push('storage-purge'); return true; },
     async deleteCookies() { events.push('cookies-purge'); },
     async deleteSession() { events.push('deleteSession'); },
@@ -488,8 +489,21 @@ test('mobile owner proof returns only closed Auth/RLS receipt and waits for zero
   assert.equal(verified.receipt.get_user_verified, true);
   assert.equal(verified.receipt.protected_probe_request_count, 1);
   assert.equal(asyncCalls, 1);
+  assert.equal(driver.events.includes('script-timeout:15000'), true);
   assert.equal(verified.meter.pending_measurements, 0);
   assert.doesNotMatch(JSON.stringify(verified), /access_token|email|user_id|authorization/iu);
+});
+
+test('mobile owner proof closes an async-script timeout as infrastructure', async () => {
+  const driver = preflightDriver('ios');
+  driver.execute = async () => true;
+  driver.executeAsync = async () => {
+    throw new Error('Timed out waiting for asynchronous script result after 1 ms');
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'ios', driver });
+  await assert.rejects(() => adapter.verifyAuthenticatedOwner(),
+    /mobile_auth_async_script_timeout/u);
+  assert.equal(driver.events.includes('script-timeout:15000'), true);
 });
 
 test('first-card navigation receipt proves same-origin HTTP 200 without retaining URL or query', async () => {
@@ -974,6 +988,7 @@ test('Android Auth callback uses a pre-document byte probe when performance logs
       return command === 'Page.addScriptToEvaluateOnNewDocument' ? { identifier: 'script-1' } : {};
     },
     async url() {}, async getUrl() { return target; },
+    async setTimeout() {},
     async waitUntil(predicate, options = {}) {
       if (!await predicate()) throw new Error(options.timeoutMsg || 'wait_failed');
     },
@@ -1041,6 +1056,7 @@ test('mobile Auth callback waits across log drains for terminal bytes before own
       return [];
     },
     async url() {}, async getUrl() { return target; },
+    async setTimeout() {},
     async waitUntil(predicate, options = {}) {
       for (let attempt = 0; attempt < 5; attempt += 1) {
         if (await predicate()) return;
@@ -1106,6 +1122,7 @@ test('mobile Auth callback closes an authorised background Auth cancellation wit
       return [];
     },
     async url() {}, async getUrl() { return target; },
+    async setTimeout() {},
     async waitUntil(predicate, options = {}) {
       for (let attempt = 0; attempt < 5; attempt += 1) {
         if (await predicate()) return;

@@ -15,6 +15,11 @@
   stopped during side-effect-free WebDriver session creation and its safe rerun
   passed Safari/callback but exposed the iOS synchronous Promise-return boundary
   in the Search-only owner proof, still before any Search POST.
+  Merged-main run `31340311566` proved the newly wired one-time recovery itself:
+  the first 300-second session timeout restarted Appium once with zero side
+  effects and the second session passed Safari/callback. It then exposed an
+  effective 1 ms XCUITest async-script timeout before the owner proof could
+  settle; the adapter now explicitly sets the documented bounded 15 seconds.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -36,7 +41,7 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **150/150 PASS** after the shared
+- Search production-health aggregate suite: **151/151 PASS** after the shared
   OTP/Search Safari native-sheet, pre-side-effect retry, async owner-proof and
   closed failure-evidence regressions;
 - legacy Search harness: **32/32 PASS**;
@@ -106,6 +111,15 @@ probe now uses WebDriver's asynchronous callback inside the same shared session.
 It does not issue a second credential, product OTP or mail. Acceptance remains
 `1/2` until a fresh merged-SHA browser+iOS workflow passes and matches the first
 proof's immutable identity.
+
+Merged-main run `31340311566` subsequently exercised that retry in one workflow:
+attempt 1 stopped during side-effect-free session creation, the shared retry
+restarted Appium once, and attempt 2 crossed Safari/WebKit plus callback. Its
+Search-only async owner proof then failed with an observed 1 ms session script
+timeout. The adapter now sets `script: 15000` immediately before that callback
+and classifies WebDriver timeout/config/command failures as iOS infrastructure.
+The run made zero iOS Search POSTs, so it is diagnostic evidence rather than the
+second acceptance proof.
 
 Steps 1–5 were completed from exact merged `main`: the v2 broker migration and
 minute cleanup are active, broker event/workflow allowlists and distinct
