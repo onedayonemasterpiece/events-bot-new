@@ -1,10 +1,10 @@
 # INC-2026-08-09 Private MCP missing bearer returned HTTP 200
 
-Status: open
+Status: closed
 Severity: sev3
 Service: Private Events MCP protected-resource transport
 Opened: 2026-08-09
-Closed: —
+Closed: 2026-08-09
 Owners: events-bot production / Private Events MCP
 Related incidents: `INC-2026-08-08-private-mcp-oauth-csp-redirect`
 Related docs: `docs/operations/private-events-mcp.md`, `docs/operations/release-governance.md`
@@ -45,6 +45,15 @@ challenge.
   release gate was stopped before social activation.
 - 2026-08-09T00:05Z — a failing aiohttp regression test isolated the missing
   server transport boundary.
+- 2026-08-09T00:11Z — reviewed hotfix PR #412 merged as `6836c1c0…`; the
+  missing-bearer regression and complete Private Events MCP suite passed.
+- 2026-08-09T00:20Z — fresh credentials were installed and the authorized
+  Telegram Saved Messages canary completed prepare, browser approval, commit
+  and read-after-write verification for the exact text `Привет мир`.
+- 2026-08-09T00:35Z — the hotfix remained reachable from current
+  `origin/main` `2992573d…`, which was deployed as Fly release v1941. Both
+  ChatGPT and Codex protected resources returned the required HTTP 401
+  challenge, and the post-deploy `/start` UI smoke completed in 587 ms.
 
 ## Root Cause
 
@@ -110,15 +119,48 @@ evidence access stayed available while the narrow transport hotfix was prepared.
 
 ## Follow-up Actions
 
-- [ ] Complete exact-main production negative smoke for both resources.
-- [ ] Continue Telegram/VK activation only after this incident is closed.
+- [x] Complete exact-main production negative smoke for both resources.
+- [x] Continue Telegram activation only after this incident is closed; VK and
+  media/story capabilities remain disabled pending their separate credential
+  and upload-boundary gates.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: `scripts/deploy_fly_main.sh`
-- regression checks: pending full suite and independent review
-- post-deploy verification: pending
+- hotfix PR: [#412](https://github.com/onedayonemasterpiece/events-bot-new/pull/412),
+  independently approved exact head `7d9fb87ef3d35e2e52661b5da28e0257b6352607`;
+  merged hotfix commit `6836c1c000105fb7cce956aa673416b99368f755`.
+- final deployed `origin/main`: `2992573dd40b0a7256a7f306fab6a127b8169d24`,
+  which contains the merged hotfix; clean exact-main deploy path
+  `scripts/deploy_fly_main.sh`.
+- Fly release: v1941, release id `l8w0PB4QQoOwMT9gb5yLnM9ML`, image
+  `deployment-01KZHZ0A20JA6M19A4WGF5RQF6`; in-container SHA exactly matched
+  the final deployed main SHA.
+- validation: compileall and `git diff --check` passed; the complete targeted
+  suite reported `207 passed` with only three existing aiohttp AppKey warnings;
+  the PR's required GitHub checks were green.
+- transport regression: missing bearer on `tools/call` returned HTTP 401,
+  `authentication_required`, and an endpoint-specific Bearer
+  `resource_metadata` challenge for both ChatGPT and Codex. Anonymous
+  `initialize` remained public; authenticated OAuth/PKCE smokes passed.
+- protocol regression: refresh rotation passed, replay of the spent refresh
+  token returned `400 invalid_grant`, JSON-RPC batch returned 400, and an
+  unsupported MCP protocol version returned 400.
+- data safety: `PRAGMA quick_check=ok`; event DB SHA, page count and event row
+  count were unchanged across the evidence read suite; the repository reported
+  `database_mode=read_only` and `provider_calls=0`.
+- social canary: the one authorized Telegram Saved Messages mutation reached
+  `succeeded`, its read-after-write receipt was verified, and a post-restart MCP
+  read returned the exact text `Привет мир`; no blind retry or duplicate commit
+  was performed.
+- runtime safety: auth DB mode was 0600; scans of current/rotated runtime logs
+  found zero literal occurrences of the MCP path, client secret, bootstrap
+  token, social approval token or signing key, and no MCP HTTP 5xx.
+- availability: public `/healthz` returned `ok=true`, `ready=true`, `db=ok`,
+  `issues=[]`; scheduler/watchdog/outbox checks were green. A live Telegram
+  `/start` returned a button-bearing UI response in 587 ms, and the runtime
+  mirror recorded three webhook POSTs, all HTTP 200 and none 5xx. The deployed
+  Fly check is `GET /healthz` at 15-second interval, 5-second timeout and
+  1-minute grace period.
 
 ## Prevention
 
