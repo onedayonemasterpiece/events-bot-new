@@ -340,7 +340,10 @@ Record all of the following without secrets:
 2. public/internal `/healthz` remains ready, DB check is healthy and
    `PRAGMA quick_check` is `ok`;
 3. ChatGPT confidential and Codex public OAuth/PKCE flows, exact resource
-   metadata, access expiry and refresh rotation pass;
+   metadata, access expiry and refresh rotation pass; an unauthenticated
+   `tools/call` returns HTTP 401 with the exact endpoint-specific
+   `WWW-Authenticate` resource-metadata challenge (public initialization and
+   catalogue discovery remain available);
 4. Codex `tools/list` is exactly the seven evidence tools and direct social calls
    fail; ChatGPT lists only granted and enabled workspace tools;
 5. real event `search -> fetch`, `events_search -> event_get`, incident evidence

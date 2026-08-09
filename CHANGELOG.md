@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the Private Events MCP protected-resource transport so an
+  unauthenticated `tools/call` now returns HTTP 401 with the exact ChatGPT or
+  Codex resource-metadata challenge instead of wrapping the authentication
+  denial in an HTTP 200 JSON-RPC result; public initialize/catalogue discovery
+  and authenticated tool behavior are unchanged.
+
 ### Added
 
 - Added a granular, provider-neutral ChatGPT social workspace to Private Events

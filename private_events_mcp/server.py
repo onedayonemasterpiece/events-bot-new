@@ -539,6 +539,22 @@ class PrivateEventsMCPServer:
                     return self._plain_error(400, "jsonrpc_object_required", correlation_id=correlation)
                 request_message = payload
                 method = str(request_message.get("method") or "")[:100]
+                # Discovery/initialization remain public so OAuth-capable MCP
+                # clients can learn the protected tool surface.  Executing a
+                # tool is a protected-resource request, however, and RFC 9728
+                # discovery starts from an HTTP 401 challenge rather than a
+                # successful JSON-RPC envelope containing an auth error.
+                if identity is None and method == "tools/call":
+                    return self._plain_error(
+                        401,
+                        "authentication_required",
+                        correlation_id=correlation,
+                        authenticate=self.oauth.challenge(
+                            resource_metadata_url=metadata_url,
+                            error="invalid_token",
+                            description="Authentication is required",
+                        ),
+                    )
                 try:
                     response_payload = await protocol.dispatch(request_message, identity)
                 except UnsupportedProtocolVersion:

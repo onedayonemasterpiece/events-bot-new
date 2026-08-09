@@ -236,8 +236,10 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
                 "params": {"name": "search", "arguments": {"query": "архитектура"}},
             },
         )
-        challenge = (await unauthenticated.json())["result"]["_meta"]["mcp/www_authenticate"]
-        assert challenge
+        assert unauthenticated.status == 401
+        challenge = unauthenticated.headers["WWW-Authenticate"]
+        assert challenge.startswith("Bearer ")
+        assert "resource_metadata" in challenge
 
         verifier = "z" * 64
         callback = "https://chatgpt.com/connector/oauth/test-callback-id"
@@ -709,6 +711,40 @@ async def test_invalid_bearer_is_http_401_with_resource_metadata(
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", "not-an-absolute-url")
     disabled_app = web.Application()
     assert attach_private_events_mcp(disabled_app) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("endpoint_attr", "metadata_url_attr"),
+    (
+        ("mcp_path", "resource_metadata_url"),
+        ("codex_mcp_path", "codex_resource_metadata_url"),
+    ),
+)
+async def test_missing_bearer_tool_call_is_http_401_with_exact_resource_metadata(
+    config, endpoint_attr: str, metadata_url_attr: str
+) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.post(
+            getattr(config, endpoint_attr),
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "operations_snapshot", "arguments": {}},
+            },
+        )
+        assert response.status == 401
+        challenge = response.headers["WWW-Authenticate"]
+        assert challenge.startswith("Bearer ")
+        assert f'resource_metadata="{getattr(config, metadata_url_attr)}"' in challenge
+        assert (await response.json())["error"] == "authentication_required"
+    finally:
+        await client.close()
 
 
 @pytest.mark.asyncio
