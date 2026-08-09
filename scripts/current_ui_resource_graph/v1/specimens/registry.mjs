@@ -161,12 +161,19 @@ export const REAL_ROUTE_VERIFICATIONS = Object.freeze([
   })),
   ...[6939, 6976, 6710, 6365, 5374].map((eventId) => realRoute({
     id: `transport-${eventId}`, capsule_ids: ['04-transport'], event_id: eventId, route_template: '/sobytiya/{slug}/',
-    selectors: ['[data-event-transport-schedule],[data-event-bus-schedule],[data-kaup-transport]', '.mobile-event-production'],
+    selectors: ['[data-event-transport-schedule],[data-event-bus-schedule],[data-kaup-transport]'],
     source_paths: ['src/pages/sobytiya/[slug].astro', 'src/components/EventTransportSchedule.astro', 'src/components/EventBusTransportSchedule.astro', 'src/components/KaupTransportSchedule.astro'],
   })),
   ...[2601, 5336, 6856, 6994, 6591, 698, 7040, 6562, 6990, 5829, 5278].map((eventId) => realRoute({
     id: `medallions-${eventId}`, capsule_ids: ['05-medallions'], event_id: eventId, route_template: '/sobytiya/{slug}/',
-    selectors: eventId === 2601 ? ['[data-medallion-layout]'] : ['[data-medallion-layout]', '.mobile-event-production'],
+    // The desktop layout root deliberately uses display:contents in the exact
+    // component consumer. Capture its independently rendered top/inline
+    // sections instead of treating the whole mobile page as a fallback
+    // "component" or asking Playwright to rasterize a box-less element.
+    selectors: eventId === 2601 ? ['[data-medallion-layout]'] : [
+      '.event-token-section[data-medallion-slot="top"]',
+      '.event-token-section[data-medallion-slot="inline"]',
+    ],
     expected_absent_selectors: eventId === 2601 ? ['[data-medallion-layout]'] : [],
     source_paths: ['src/pages/sobytiya/[slug].astro', 'src/components/EventTokenMedallions.astro'],
   })),

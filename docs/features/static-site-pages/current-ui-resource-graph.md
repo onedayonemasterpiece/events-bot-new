@@ -261,6 +261,18 @@ for five animation frames, and then receives the same bounded consecutive-frame
 comparison. Exact-route pages additionally wait for network idle and fonts and
 disable motion before element capture.
 
+Exact-route component selection never substitutes a complete responsive page
+surface for transport or medallion evidence. Transport verification captures
+only the rail, bus or KAUP component roots. The desktop medallion consumer
+deliberately gives its logical layout root `display: contents`, so browser
+evidence is taken from the independently rendered `top` and `inline` slot
+sections that own actual visual boxes; the mobile consumer yields its visible
+`inline` section. The visibility predicate stays in the Playwright locator so
+each screenshot attempt re-resolves the currently visible responsive element,
+rather than retaining a positional locator that can move to a hidden sibling.
+Capture failures retain the exact route/context/component label in the failed
+receipt.
+
 An absence-only real-route binding (for example event `2601`, whose exact
 resolver emits no medallion root) is complete only after every declared absent
 selector is measured at count zero. The decoder does not demand a visible root

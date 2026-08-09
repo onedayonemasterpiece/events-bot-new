@@ -149,6 +149,13 @@
   visible component or raster. Its specimen registry no longer mixes that
   absent component root with an unrelated mobile page-wrapper fallback.
 
+- Fixed exact real-route transport and medallion evidence boundaries: transport
+  captures no longer include the complete mobile event page, while desktop
+  medallions capture their rendered `top`/`inline` slot sections instead of the
+  box-less `display: contents` layout root. Visible locators are now re-resolved
+  through Playwright's visibility filter for every action, and failed capture
+  receipts retain the exact route/context label.
+
 - Fixed the production candidate's legacy preview gate after the dated real
   `Море внутри` rail canary expired. The gate still checks its rendered row
   while that date route exists, then falls back to immutable OCR-containment
