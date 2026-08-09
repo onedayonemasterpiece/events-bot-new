@@ -27,20 +27,6 @@ function assertManualOnly(parsed, label) {
   assert.deepEqual(Object.keys(parsed?.on || {}), ['workflow_dispatch'], `${label} must be manual-only`);
 }
 
-function assertDryPlannerWorkflow(source, parsed, { plane }) {
-  assertManualOnly(parsed, plane);
-  assert.deepEqual(parsed.permissions, { contents: 'read' });
-  assert.deepEqual(Object.keys(parsed.jobs || {}), ['plan']);
-  assert.equal(parsed.jobs.plan.environment, undefined);
-  assert.equal(parsed.jobs.plan.env, undefined);
-  assert.match(
-    source,
-    new RegExp(`node site/e2e/search/production-health-plan-cli\\.mjs --plane ${plane} --trigger workflow_dispatch`, 'u'),
-  );
-  assert.doesNotMatch(source, /\$\{\{\s*(?:secrets|vars)\.|id-token|environment\s*:|\b(?:curl|wget|playwright|appium|flyctl|supabase|broker)\b|https?:\/\//iu);
-  assert.doesNotMatch(source, /e2e:search-live|run-browser-static-search|resolve-static-search-target|issue-static-search-session/iu);
-}
-
 test('legacy Search canary is manual-only live debug and never reports product incidents', async () => {
   const source = await readFile(legacyWorkflowUrl, 'utf8');
   const parsed = YAML.parse(source);
@@ -48,6 +34,7 @@ test('legacy Search canary is manual-only live debug and never reports product i
   assert.deepEqual(parsed?.on?.workflow_dispatch?.inputs?.revision_policy?.options, ['release_exact', 'live_consistent']);
   assert.equal(parsed?.permissions?.['id-token'], 'write');
   assert.equal(parsed?.permissions?.issues, undefined);
+  assert.deepEqual(parsed.concurrency, { group: 'search-production-health', 'cancel-in-progress': false });
   for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
   for (const job of ['browser', 'android', 'ios', 'terminal']) assert.ok(parsed?.jobs?.[job]);
   assert.match(source, /environment: \{ name: search-e2e \}/u);
@@ -77,47 +64,83 @@ test('legacy Search canary is manual-only live debug and never reports product i
   assert.equal((source.match(/issue-static-search-session\.mjs/gu) || []).length, 2,
     'one broker issuance step per Android/iOS job; iOS retry must reuse the unconsumed callback');
   for (const jobName of ['browser', 'android', 'ios']) {
+    assert.equal(parsed.jobs[jobName].env.E2E_SEARCH_SESSION_PURPOSE, 'legacy_debug');
     const upload = parsed.jobs[jobName].steps.find((step) => String(step.name).startsWith('Upload sanitized'));
     assert.equal(upload?.with?.['include-hidden-files'], true, `${jobName} must upload .redaction-ok`);
   }
 });
 
-test('all former Search cron and content/data build triggers are disabled', async () => {
-  const entries = await Promise.all([
-    legacyWorkflowUrl,
-    productionHealthWorkflowUrl,
-    releaseQualificationWorkflowUrl,
-  ].map(async (url) => {
-    const source = await readFile(url, 'utf8');
-    return { source, parsed: YAML.parse(source) };
-  }));
-  for (const { source, parsed } of entries) {
-    assertManualOnly(parsed, 'Search workflow');
-    for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
-    assert.equal(parsed.on.repository_dispatch, undefined);
-    assert.equal(parsed.on.workflow_run, undefined);
-    assert.equal(parsed.on.workflow_call, undefined);
-    assert.equal(parsed.on.push, undefined);
-  }
-});
-
-test('production health is a secretless deterministic dry planner', async () => {
+test('production health has only the two bounded schedules, manual profiles and runtime marker', async () => {
   const source = await readFile(productionHealthWorkflowUrl, 'utf8');
-  assertDryPlannerWorkflow(source, YAML.parse(source), { plane: 'production_health' });
-  assert.doesNotMatch(source, /execute_live|\blive\b/iu);
+  const parsed = YAML.parse(source);
+  assert.deepEqual(parsed.on.schedule, [{ cron: '17 6 * * *' }, { cron: '17 18 * * *' }]);
+  assert.deepEqual(parsed.on.workflow_dispatch.inputs.profile.options,
+    ['browser', 'browser_android', 'browser_ios', 'all']);
+  assert.deepEqual(parsed.on.repository_dispatch.types, ['search-runtime-deployed']);
+  assert.deepEqual(parsed.concurrency, { group: 'search-production-health', 'cancel-in-progress': false });
+  assert.match(String(parsed.jobs.plan.if), /workflow_dispatch.*SEARCH_PRODUCTION_HEALTH_ENABLED/u);
+  assert.match(source, /driver install uiautomator2@8\.2\.2/u);
+  assert.match(source, /driver install xcuitest@12\.1\.4/u);
+  assert.match(source, /E2E_APPIUM_DRIVER_VERSION: 8\.2\.2/u);
+  assert.match(source, /E2E_APPIUM_DRIVER_VERSION: 12\.1\.4/u);
+  assert.equal(parsed.jobs.android.env.APPIUM_HOME, undefined);
+  assert.equal(parsed.jobs.android.env.npm_config_prefix, undefined);
+  assert.equal(parsed.jobs.ios.env.APPIUM_HOME, undefined);
+  assert.equal(parsed.jobs.ios.env.npm_config_prefix, undefined);
+  assert.match(source, /APPIUM_HOME=\$RUNNER_TEMP\/appium-home-search-health-android/u);
+  assert.match(source, /npm_config_prefix=\$RUNNER_TEMP\/appium-npm-search-health-android/u);
+  assert.match(source, /APPIUM_HOME=\$RUNNER_TEMP\/appium-home-search-health-ios/u);
+  assert.match(source, /npm_config_prefix=\$RUNNER_TEMP\/appium-npm-search-health-ios/u);
+  assert.equal((source.match(/--log-level error --log-no-colors\s+\\?\s*--log-filters/gu) || []).length, 2,
+    'both Appium servers must suppress command bodies and apply URL filters');
+  assert.equal((source.match(/appium-search-health-log-filters\.json/gu) || []).length >= 4, true);
+  assert.doesNotMatch(source, /npx appium[^\n]*(?:--log-level (?:debug|info)|--show-debug-info)/u);
+  for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
+  assert.equal(parsed.on.workflow_run, undefined);
+  assert.equal(parsed.on.workflow_call, undefined);
+  assert.equal(parsed.on.push, undefined);
+  assert.doesNotMatch(source, /smart.update|snapshot.generation|corpus.movement|index.movement/iu);
 });
 
-test('release qualification keeps live execution disconnected and default-off', async () => {
-  const source = await readFile(releaseQualificationWorkflowUrl, 'utf8');
-  const parsed = YAML.parse(source);
-  assertDryPlannerWorkflow(source, parsed, { plane: 'release_qualification' });
-  assert.deepEqual(parsed.on.workflow_dispatch.inputs.execute_live, {
-    description: 'Reserved for a later stage; Stage 1 always emits a deterministic dry plan',
-    required: false,
-    default: false,
-    type: 'boolean',
-  });
-  assert.doesNotMatch(YAML.stringify(parsed.jobs), /inputs\.execute_live|e2e:search-live/iu);
+test('platform jobs invoke only the unified one-session runner and qualification is never scheduled', async () => {
+  const [healthSource, qualificationSource] = await Promise.all([
+    readFile(productionHealthWorkflowUrl, 'utf8'), readFile(releaseQualificationWorkflowUrl, 'utf8'),
+  ]);
+  const health = YAML.parse(healthSource);
+  const qualification = YAML.parse(qualificationSource);
+  assert.deepEqual(Object.keys(qualification.on).sort(), ['workflow_call', 'workflow_dispatch']);
+  for (const platform of ['browser', 'android', 'ios']) {
+    assert.ok(health.jobs[platform], platform);
+    assert.match(YAML.stringify(health.jobs[platform]), /production-health-run\.mjs/u);
+    assert.doesNotMatch(YAML.stringify(health.jobs[platform]), /issue-static-search-session|production-health-mobile-preflight/iu);
+  }
+  assert.equal((healthSource.match(/production-health-run\.mjs/gu) || []).length, 3);
+  assert.equal(health.jobs['request-release-qualification'].uses, './.github/workflows/search-release-qualification.yml');
+  assert.equal(health.jobs['request-release-qualification'].with.profile, 'full');
+  assert.equal(health.jobs['request-release-qualification'].secrets, 'inherit');
+  assert.doesNotMatch(healthSource, /gh workflow run search-release-qualification\.yml/u);
+  assert.doesNotMatch(healthSource, /\bgh issue (?:create|comment|close|list)\b/iu);
+  assert.match(YAML.stringify(health.jobs.terminal), /production-health-report-plan-cli\.mjs/u);
+  assert.equal(qualification.on.schedule, undefined);
+  assert.match(qualificationSource, /production-health-run\.mjs/u);
+  assert.deepEqual(qualification.on.workflow_dispatch.inputs.profile.options, ['browser', 'full']);
+  assert.match(qualificationSource, /\["cold_vector_llm","degraded_vector_fallback"\]/u);
+  assert.match(qualificationSource, /one no-mail session/u);
+  assert.equal(qualification.jobs.browser.env.E2E_SEARCH_SESSION_PURPOSE, 'release_qualification');
+  assert.equal(qualification.jobs['full-browser'].env.E2E_SEARCH_SESSION_PURPOSE, 'release_qualification');
+  assert.equal(qualification.jobs.browser.env.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER,
+    '${{ secrets.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER }}');
+  assert.equal(qualification.jobs['full-browser'].env.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER,
+    '${{ secrets.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER }}');
+  assert.equal(qualificationSource.includes('SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER'), false);
+  assert.match(qualificationSource, /E2E_SEARCH_REVISION_POLICY: release_exact/u);
+  assert.equal((qualificationSource.match(/search-backend-release-probe-cli\.mjs/gu) || []).length, 2);
+  assert.match(qualificationSource, /before Auth\/Search/u);
+  assert.equal(qualification.on.workflow_call.inputs.profile.type, 'string');
+  for (const platform of ['browser', 'android', 'ios']) {
+    assert.match(String(health.jobs['request-release-qualification'].if),
+      new RegExp(`needs\\.${platform}\\.result == 'success'`, 'u'));
+  }
 });
 
 test('default pull-request CI runs the deterministic Search production-health suite without secrets', async () => {
@@ -127,11 +150,20 @@ test('default pull-request CI runs the deterministic Search production-health su
   const steps = parsed.jobs['static-browser-release-gate'].steps;
   const searchStep = steps.find((step) => step.name === 'Run deterministic Search production-health contracts');
   assert.equal(searchStep?.run, 'npm run test:search-production-health');
+  const backendRevisionStep = steps.find((step) => step.name === 'Verify exact Search backend source revision');
+  assert.match(backendRevisionStep?.run || '', /generate_event_search_revision\.mjs --check/u);
+  assert.match(backendRevisionStep?.run || '', /event-search\/canary-contract\.test\.mjs/u);
   assert.equal(searchStep?.env, undefined);
+  assert.equal(steps.find((step) => step.name === 'Run existing Search harness contracts')?.run,
+    'npm run test:search-e2e-harness');
+  assert.match(source, /tests\/test_static_site_auth_session_broker\.py/u);
+  assert.match(source, /tests\/test_static_site_auth_session_broker_http\.py/u);
+  assert.match(source, /tests\/test_static_site_auth_session_broker_sql\.py/u);
+  assert.match(source, /tests\/test_supabase_security_hardening\.py/u);
   assert.doesNotMatch(source, /\$\{\{\s*secrets\./u);
 });
 
-test('all Stage-1 Search and default CI workflow YAML parses', async () => {
+test('all Search and default CI workflow YAML parses', async () => {
   for (const url of [legacyWorkflowUrl, productionHealthWorkflowUrl, releaseQualificationWorkflowUrl, ciWorkflowUrl]) {
     const source = await readFile(url, 'utf8');
     assert.doesNotThrow(() => YAML.parse(source), url.pathname);
@@ -186,9 +218,11 @@ test('browser fixture sends its issued session through the owner RLS probe', asy
   assert.match(source, /createRequire\(new URL\('\.\.\/\.\.\/site\/package\.json'/u);
   assert.match(source, /siteRequire\('playwright'\)/u);
   assert.doesNotMatch(source, /from 'playwright'/u);
-  for (const persona of ['search-cached-browser', 'search-cold-browser', 'search-degraded-browser']) {
-    assert.ok(source.includes(persona), persona);
-  }
+  assert.match(source, /id: 'search-cached-browser'/u);
+  assert.match(source, /id: 'search-cold-browser'/u);
+  assert.match(source, /purpose === 'release_qualification'/u);
+  assert.match(source, /platform: 'browser'/u);
+  assert.doesNotMatch(source, /id: 'search-degraded-browser'/u);
   assert.match(source, /protectedOwnerProbe\(\{ fetchImpl, userId, supabaseUrl, accessToken, publishableKey \}\)/u);
   assert.match(source, /apikey: publishableKey/u);
   assert.match(source, /authorization: `Bearer \$\{accessToken\}`/u);

@@ -78,6 +78,23 @@ test('Playwright wheel scrolling reaches a production-length final card beyond f
   assert.equal(positiveWheels > 5, true);
 });
 
+test('Playwright one-card result still dispatches one truthful physical wheel input', async () => {
+  let wheelInputs = 0;
+  const receipt = await runRealWheelScroll({
+    readScrollY: async () => 0,
+    lastCardVisible: async () => true,
+    wheel: async () => { wheelInputs += 1; },
+    wait: async () => {},
+    step: 576,
+  });
+  assert.equal(wheelInputs, 1);
+  assert.equal(receipt.performed, true);
+  assert.equal(receipt.input_kind, 'wheel');
+  assert.equal(receipt.input_count, 1);
+  assert.equal(receipt.delta_y, 0);
+  assert.doesNotThrow(() => assertRealScroll(receipt));
+});
+
 test('mobile touch scrolling reaches a production-length final card beyond one gesture', async () => {
   let scrollY = 0;
   let gestures = 0;

@@ -2,10 +2,10 @@
 
 Канонический архитектурный контракт: [README, §16](README.md#16-search-production-health-архитектурная-коррекция-этап-1).
 
-Стартовое состояние:
+Текущее состояние после реализации кода, до live acceptance:
 
 ```text
-ARCHITECTURE_READY_FOR_LIVE_VALIDATION
+STAGE2_IMPLEMENTED_LIVE_ACCEPTANCE_PENDING
 PRODUCT_HEALTH_UNCONFIRMED
 ```
 
@@ -36,8 +36,34 @@ pagination или полный scheduled mobile/release matrix в production-hea
    `≤48 KiB`, hard `≤96 KiB`, LLM/pagination/receipt-RPC/Storage-images `0`.
 6. После journey повторно прочитать только pointer. При смене target записать
    `target_superseded=true`; Search не повторять и product incident не создавать.
-7. Лишь после двух ограниченных live доказательств включить triggers и typed
-   reporter. Release qualification подключать отдельно и оставлять manual/selective.
+7. Typed reporter уже подключён, но automatic schedule/repository dispatch
+   закрыты variable `SEARCH_PRODUCTION_HEALTH_ENABLED`. Установить `true` лишь
+   после двух ограниченных live доказательств. Release qualification не имеет
+   schedule/direct repository trigger; только explicit `full` marker может
+   запросить её один раз после standard platform PASS.
+
+## Что уже реализовано
+
+- единый `production-health-run.mjs` с current accepted target pin/reread;
+- Playwright и real Appium Android/iOS preflight в той же session;
+- platform-bound OIDC broker claim и admission до трёх разных platform personas;
+- overlapping issue coalescing, 30-second memory replay и одинаковый
+  encrypted durable result с двухминутным TTL для process/restart
+  lost-response; plaintext credential, filesystem/cache/artifact escrow нет;
+- one-query/one-POST vector-only journey, card ID parity, обязательный реальный
+  scroll и exact candidate `/sobytiya/<slug>/` route 200;
+- Auth getUser + один owner RLS proof, 48/96 KiB meter и strict evidence;
+- exact deployment marker `none|standard|full`, side-effect-free backend HEAD
+  contract proof и pre-Search active release
+  receipt и platform issue disposition, suppressing issue mutation when the
+  pinned target was superseded.
+
+Перед live остаются только production gates: применить broker migration,
+добавить новые workflow refs и exact events
+`workflow_dispatch,schedule,repository_dispatch` в broker allowlist, отдельно
+deploy `supabase/functions/event-search` из exact merged main и подтвердить его
+side-effect-free HEAD receipt, затем deploy Fly exact merged main,
+выполнить два manual workflows и затем включить automatic variable.
 
 ## Production environment/secrets
 
@@ -48,12 +74,16 @@ pagination или полный scheduled mobile/release matrix в production-hea
 - `SEARCH_E2E_AUTH_BROKER_URL` и OIDC audience
   `kenigevents-static-search-broker`;
 - `SEARCH_E2E_SUPABASE_URL` и `SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY`;
-- три отдельные no-mail health personas: browser, Android и iOS. Одна mutable
-  session/account не разделяется между platform jobs, manual legacy или
-  qualification run.
+- три отдельные no-mail health personas: browser, Android и iOS, плюс отдельная
+  `search-cold-browser` persona для release qualification. Одна mutable session
+  не передаётся между jobs. Health и legacy сериализованы общей concurrency
+  group; qualification имеет отдельную group и всегда получает новую cold
+  browser session, даже если вызвана из того же `full` GitHub run.
 
 Secrets не выводятся в job output/artifacts. Opaque target URL маскируется до
-первого log; evidence хранит только redacted path/fingerprint и typed counters.
+первого log; iOS Safari network/console остаются только в driver buckets, а
+Appium stdout работает на error-level с URL filter. Evidence хранит только
+fingerprint и typed counters.
 
 ## Triggers, которые надо включить после live acceptance
 
@@ -75,6 +105,13 @@ Release qualification остаётся manual/selective; никакого schedu
 2. **Browser + iOS:** новые отдельные sessions и ровно один Search POST на
    каждую cell; browser wheel и iOS XCUITest swipe должны пройти.
 
+До включения repository variable необходимо машинно сравнить sanitized
+receipts обоих успешных workflows: `target_url_sha256`, полный immutable target
+tuple, `site_runtime_sha`, `search_backend_revision`, `content_generation_id`
+и `search_index_generation_id` должны быть попарно равны. Любое отличие
+означает, что продукт между proofs изменился; variable остаётся выключенной и
+Stage 2 остаётся `PRODUCT_HEALTH_UNCONFIRMED`.
+
 За одну итерацию запрещено выполнять больше двух live Search runs. При failure
 сначала анализировать sanitized evidence и deterministic fixtures; GitHub
 Actions нельзя использовать как цикл проб и ошибок.
@@ -92,9 +129,12 @@ Actions нельзя использовать как цикл проб и оши
 - evidence содержит secret/URL/query/session → `EVIDENCE_REDACTION_FAILED`;
 - только доказанный current-target `BROKEN_*` может стать product incident.
 
-Gap: repository пока не хранит точный deployed Edge Function byte/SHA. Сначала
-проверить provider/deploy receipts; только при их отсутствии добавить минимальное
-не-секретное поле в существующий deployment receipt, без новой таблицы/сервиса.
+Repository хранит точную Edge identity как deterministic `sha256:<64>` digest
+deployable `supabase/functions/event-search/` source tree. Generated constant
+проверяется CI, публикуется через side-effect-free HEAD и обычный Search
+response; response остаётся authoritative evidence, в том числе при смене Edge
+между HEAD и единственным POST. Это намеренно не объявляется provider byte SHA
+или git SHA и не требует новой таблицы/сервиса.
 
 PR #436 не является зависимостью health activation. Его preclaim guard полезен
 для immutable release qualification, но должен проходить отдельный review и не

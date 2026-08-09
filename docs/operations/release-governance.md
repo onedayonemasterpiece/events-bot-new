@@ -16,6 +16,40 @@
   сам выполняет fetch/clean/SHA gates и передаёт этот SHA в Docker build;
   прямой `flyctl deploy` запрещён, потому что он может собрать актуальный код
   с устаревшей mutable-меткой версии для StaticSiteBuilder.
+- Search validation marker у этого скрипта по умолчанию `none`. Только явные
+  `--search-validation-profile standard|full` после успешного Fly deploy
+  отправляют один `search-runtime-deployed` payload с exact site SHA, bounded
+  backend revision, deployment id и telemetry-only changed surfaces. Эти
+  аргументы не передаются `flyctl`; static/data/Kaggle publication marker не
+  создаёт. `full` дополнительно может запросить одну selective qualification.
+  `search_backend_revision` — точный `sha256:<64>` digest deployable
+  `supabase/functions/event-search/` source tree, а не contract version, git SHA
+  или придуманный provider deploy SHA.
+- Изменения `supabase/functions/event-search/` не доставляются Fly deploy. Их
+  governed release выполняется отдельно из того же clean exact `origin/main`
+  через pinned local Supabase CLI и project ref:
+  `supabase functions deploy event-search --project-ref <ref> --no-verify-jwt --use-api`.
+  Перед deploy обязательны
+  `node scripts/generate_event_search_revision.mjs` и повторный
+  `node scripts/generate_event_search_revision.mjs --check`; generated constant
+  входит в deploy, но исключён из собственного deterministic digest.
+  После deploy обязательны side-effect-free `HEAD /functions/v1/event-search`
+  с publishable `apikey`, exact `X-KenigEvents-Search-Revision`, совместимый
+  `X-KenigEvents-Search-Contract` и нулём Auth/Search POST. Только затем
+  deploy/health marker может ссылаться на эту backend revision. Обычный Search
+  response также возвращает exact `search_backend_revision`; именно observed
+  response revision попадает в health evidence даже для manual/schedule run без
+  marker. Только другой валидный digest после ранее успешного HEAD блокирует
+  qualification без повторного Search и без product incident; missing/malformed
+  revision в error response остаётся Search failure. Edge failure не
+  компенсируется повторным Fly deploy.
+- Перед активацией Search production-health broker policy должна одновременно
+  разрешать exact main refs legacy/health/qualification workflows и event
+  classes `workflow_dispatch,schedule,repository_dispatch`. После двух manual
+  HEALTHY/PASS proofs repository variable включается только при точном равенстве
+  их target fingerprint/immutable tuple, site runtime SHA, backend revision и
+  content/index generation ids; это fail-closed проверка «продукт между
+  прогонами не менялся».
 - GitHub Actions deploy не используется и не является допустимым release path. Если в репозитории появляется workflow, который деплоит Fly app на push/workflow_dispatch, это process drift: его нужно удалить или отключить до следующего production-bound task.
 - Emergency deploy из отдельной ветки допустим только для быстрого восстановления production, если одновременно выполняются все условия:
   - ветка создана от актуального `origin/main`;

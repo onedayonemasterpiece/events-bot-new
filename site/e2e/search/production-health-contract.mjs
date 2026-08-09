@@ -40,7 +40,7 @@ export const PRODUCTION_HEALTH_FAILURE_CLASSES = Object.freeze(
   RESULT_VALUES.filter((value) => !['HEALTHY', 'DEGRADED'].includes(value)),
 );
 
-export const ACCEPTED_HEALTH_CACHE_STATES = Object.freeze(['hit', 'miss', 'stored', 'bypass']);
+export const ACCEPTED_HEALTH_CACHE_STATES = Object.freeze(['hit', 'miss', 'stored']);
 
 const frozenHealthPlan = {
   schema_version: 'search_production_health_plan_v1',
@@ -58,7 +58,7 @@ const frozenHealthPlan = {
     card_http_200_count: 1,
   },
   accepted_variability: {
-    cache_states: ACCEPTED_HEALTH_CACHE_STATES,
+    cache_status: 'telemetry_only',
     content_drift: true,
     index_drift: true,
   },
@@ -234,7 +234,6 @@ export function evaluateProductionHealthObservation(observation = {}) {
     || paginationRequests !== 0
     || receiptRpcCalls !== 0
     || storageImageRequests !== 0
-    || !ACCEPTED_HEALTH_CACHE_STATES.includes(String(observation.cache_state || '').toLowerCase())
   ) {
     return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_REQUEST);
   }

@@ -13,8 +13,11 @@ import binascii
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
+import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
@@ -31,6 +34,25 @@ _RUN_RE = re.compile(r"^[1-9][0-9]{0,19}$")
 _PERSONA_RE = re.compile(r"^[a-z][a-z0-9-]{1,63}$")
 _OTP_RE = re.compile(r"^[0-9]{6,10}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+PLATFORMS = ("browser", "android", "ios")
+PURPOSES = ("production_health", "release_qualification", "legacy_debug")
+PURPOSE_PLATFORM_PERSONA_IDS = {
+    "production_health": {
+        "browser": "search-cached-browser",
+        "android": "search-cached-android",
+        "ios": "search-cached-ios",
+    },
+    "release_qualification": {
+        "browser": "search-cold-browser",
+    },
+    # The legacy workflow shares a concurrency group with production health,
+    # so these compatibility paths cannot overlap their cached personas.
+    "legacy_debug": {
+        "browser": "search-cached-browser",
+        "android": "search-cached-android",
+        "ios": "search-cached-ios",
+    },
+}
 
 Transport = Callable[[str, str, Mapping[str, str], bytes | None, float], tuple[int, bytes]]
 Verifier = Callable[[str, Mapping[str, str]], Mapping[str, Any]]
@@ -38,10 +60,29 @@ AuditSink = Callable[[Mapping[str, Any]], None]
 
 
 class BrokerError(RuntimeError):
-    def __init__(self, code: str, *, status: int = 403):
+    def __init__(self, code: str, *, status: int = 403, claim: str | None = None):
         super().__init__(code)
         self.code = code
         self.status = status
+        self.claim = claim
+
+    def public_payload(self) -> dict[str, str]:
+        code = "unauthorized" if self.status in {401, 403} else self.code
+        payload = {"error": code}
+        if self.claim:
+            payload.update({
+                "claim": self.claim,
+                "product_health": "UNKNOWN",
+                "execution_status": "BLOCKED",
+                "failure_class": "UNKNOWN",
+            })
+        return payload
+
+
+@dataclass(frozen=True)
+class Persona:
+    persona_id: str
+    email: str
 
 
 @dataclass(frozen=True)
@@ -53,12 +94,79 @@ class Policy:
     environments: frozenset[str]
     events: frozenset[str]
     runs: frozenset[str]
-    personas: Mapping[str, str]
+    purpose_platform_personas: Mapping[tuple[str, str], Persona]
     redirects: tuple[str, ...]
     per_run_persona_limit: int
     audit_key: str
     supabase_url: str
     supabase_service_role_key: str
+
+
+@dataclass(frozen=True)
+class AuthorizedIssue:
+    repository: str
+    workflow_ref: str
+    run_id: str
+    run_attempt: int
+    purpose: str
+    platform: str
+    persona: Persona
+    redirect: str
+
+    @property
+    def identity(self) -> tuple[str, str, str, int, str, str]:
+        # Repository/workflow/run fields come from verified GitHub OIDC. The
+        # platform/persona pair comes from the server's closed purpose mapping;
+        # no caller-supplied persona or mirrored OIDC identity is trusted.
+        return (
+            self.repository,
+            self.workflow_ref,
+            self.run_id,
+            self.run_attempt,
+            self.platform,
+            self.persona.persona_id,
+        )
+
+
+@dataclass
+class _IssueFlight:
+    ready: threading.Event
+    result: dict[str, Any] | None = None
+    error: BrokerError | None = None
+
+
+@dataclass
+class _IssueReplay:
+    result: dict[str, Any]
+    expires_at: float
+    remaining_replays: int = 1
+
+
+_ISSUE_FLIGHTS: dict[tuple[str, str, str, int, str, str], _IssueFlight] = {}
+_ISSUE_FLIGHTS_LOCK = threading.Lock()
+_ISSUE_REPLAYS: dict[tuple[str, str, str, int, str, str], _IssueReplay] = {}
+_ISSUE_REPLAY_TTL_SECONDS = 30.0
+_ISSUE_REPLAY_MAX_ENTRIES = 12
+_SUPABASE_CALL_TIMEOUT_SECONDS = 5.0
+_DURABLE_REPLAY_POLL_SECONDS = 0.25
+_DURABLE_REPLAY_POLL_MARGIN_SECONDS = 2.0
+# A competing process may observe the row immediately after the owner's claim
+# starts. Cover the complete claim + generate_link + completion RPC budget and
+# an explicit scheduler/network margin before returning duplicate_inflight.
+_DURABLE_REPLAY_POLL_WINDOW_SECONDS = (
+    3 * _SUPABASE_CALL_TIMEOUT_SECONDS + _DURABLE_REPLAY_POLL_MARGIN_SECONDS
+)
+_DURABLE_REPLAY_POLL_ATTEMPTS = (
+    math.ceil(_DURABLE_REPLAY_POLL_WINDOW_SECONDS / _DURABLE_REPLAY_POLL_SECONDS) + 1
+)
+_COALESCED_ISSUE_WAIT_SECONDS = _DURABLE_REPLAY_POLL_WINDOW_SECONDS
+
+
+def reset_transient_issue_state_for_tests() -> None:
+    with _ISSUE_FLIGHTS_LOCK:
+        _ISSUE_FLIGHTS.clear()
+        _ISSUE_REPLAYS.clear()
+
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -143,6 +251,21 @@ def policy_from_env(env: Mapping[str, str]) -> Policy:
                 or any(char in email for char in "\r\n\x00"):
             raise BrokerError("personas_invalid", status=500)
         personas[persona] = email
+    required_personas = {
+        persona_id
+        for platform_map in PURPOSE_PLATFORM_PERSONA_IDS.values()
+        for persona_id in platform_map.values()
+    }
+    if not required_personas.issubset(personas):
+        raise BrokerError("platform_personas_invalid", status=500)
+    purpose_platform_personas = {
+        (purpose, platform): Persona(persona_id=persona_id, email=personas[persona_id])
+        for purpose, platform_map in PURPOSE_PLATFORM_PERSONA_IDS.items()
+        for platform, persona_id in platform_map.items()
+    }
+    platform_emails = [personas[persona_id] for persona_id in sorted(required_personas)]
+    if len(set(platform_emails)) != len(platform_emails):
+        raise BrokerError("platform_personas_not_unique", status=500)
 
     redirects = tuple(item.strip() for item in re.split(
         r"[,\n]", _required(env, "AUTH_SESSION_BROKER_ALLOWED_REDIRECTS")
@@ -175,7 +298,7 @@ def policy_from_env(env: Mapping[str, str]) -> Policy:
         environments=_allowlist(env, "AUTH_SESSION_BROKER_ALLOWED_ENVIRONMENTS"),
         events=_allowlist(env, "AUTH_SESSION_BROKER_ALLOWED_EVENTS"),
         runs=runs,
-        personas=personas,
+        purpose_platform_personas=purpose_platform_personas,
         redirects=redirects,
         per_run_persona_limit=limit,
         audit_key=audit_key,
@@ -234,7 +357,9 @@ def _redirect_allowed(value: str, allowlist: tuple[str, ...]) -> bool:
     return False
 
 
-def authorize_request(request: Mapping[str, Any], claims: Mapping[str, Any], policy: Policy) -> tuple[str, str, str]:
+def authorize_request(
+    request: Mapping[str, Any], claims: Mapping[str, Any], policy: Policy,
+) -> AuthorizedIssue:
     if _claim(claims, "iss") != GITHUB_ISSUER or _claim(claims, "aud") != policy.audience:
         raise BrokerError("oidc_identity_invalid")
     repository = _claim(claims, "repository")
@@ -243,6 +368,7 @@ def authorize_request(request: Mapping[str, Any], claims: Mapping[str, Any], pol
     environment = _claim(claims, "environment")
     event_name = _claim(claims, "event_name")
     run_id = _claim(claims, "run_id")
+    run_attempt = _claim(claims, "run_attempt")
     if repository not in policy.repositories:
         raise BrokerError("repository_not_allowed")
     if ref not in policy.refs:
@@ -262,17 +388,36 @@ def authorize_request(request: Mapping[str, Any], claims: Mapping[str, Any], pol
         raise BrokerError("subject_not_allowed")
     if not _SHA_RE.fullmatch(_claim(claims, "sha")):
         raise BrokerError("sha_invalid")
+    if not _RUN_RE.fullmatch(run_attempt):
+        raise BrokerError("run_attempt_invalid")
 
-    requested_run = str(request.get("run_id") or "").strip()
-    if requested_run != run_id:
-        raise BrokerError("run_claim_mismatch")
-    persona = str(request.get("persona_id") or "").strip()
-    if persona not in policy.personas:
-        raise BrokerError("persona_not_allowed")
+    # Identity fields are forbidden in the body. They must come exclusively
+    # from the verified OIDC claims above; accepting mirrors would create a
+    # second, spoofable source of truth.
+    if set(request) != {"purpose", "platform", "redirect_to"}:
+        raise BrokerError("request_identity_spoofed")
+    purpose = str(request.get("purpose") or "").strip()
+    if purpose not in PURPOSES:
+        raise BrokerError("purpose_not_allowed")
+    platform = str(request.get("platform") or "").strip()
+    if platform not in PLATFORMS:
+        raise BrokerError("platform_not_allowed")
+    persona = policy.purpose_platform_personas.get((purpose, platform))
+    if persona is None:
+        raise BrokerError("purpose_platform_not_allowed")
     redirect = str(request.get("redirect_to") or "").strip()
     if not _redirect_allowed(redirect, policy.redirects):
         raise BrokerError("redirect_not_allowed")
-    return run_id, persona, redirect
+    return AuthorizedIssue(
+        repository=repository,
+        workflow_ref=workflow_ref,
+        run_id=run_id,
+        run_attempt=int(run_attempt),
+        purpose=purpose,
+        platform=platform,
+        persona=persona,
+        redirect=redirect,
+    )
 
 
 def urllib_transport(method: str, url: str, headers: Mapping[str, str], body: bytes | None, timeout: float) -> tuple[int, bytes]:
@@ -295,10 +440,14 @@ def _headers(policy: Policy) -> dict[str, str]:
     }
 
 
-def _json_call(path: str, payload: Mapping[str, Any], *, policy: Policy, transport: Transport) -> Any:
+def _json_call(
+    path: str, payload: Mapping[str, Any], *, policy: Policy, transport: Transport,
+    timeout_seconds: float = _SUPABASE_CALL_TIMEOUT_SECONDS,
+) -> Any:
     status, raw = transport(
         "POST", f"{policy.supabase_url}{path}", _headers(policy),
-        json.dumps(dict(payload), separators=(",", ":")).encode(), 5.0,
+        json.dumps(dict(payload), separators=(",", ":")).encode(),
+        timeout_seconds,
     )
     if status < 200 or status >= 300:
         raise BrokerError("supabase_request_rejected", status=503)
@@ -308,11 +457,47 @@ def _json_call(path: str, payload: Mapping[str, Any], *, policy: Policy, transpo
         raise BrokerError("supabase_response_invalid", status=503) from exc
 
 
+def _credential_fernet(policy: Policy) -> Any:
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError as exc:  # pragma: no cover - deployment configuration
+        raise BrokerError("credential_cipher_unavailable", status=500) from exc
+    key = hashlib.sha256(
+        b"kenigevents-search-broker-credential-v1\0" + policy.audit_key.encode()
+    ).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+
+def _seal_issued_result(result: Mapping[str, Any], policy: Policy) -> str:
+    raw = json.dumps(dict(result), sort_keys=True, separators=(",", ":")).encode()
+    return _credential_fernet(policy).encrypt(raw).decode()
+
+
+def _unseal_issued_result(ciphertext: str, policy: Policy) -> dict[str, Any]:
+    try:
+        raw = _credential_fernet(policy).decrypt(ciphertext.encode(), ttl=180)
+        result = json.loads(raw)
+    except Exception as exc:
+        raise BrokerError("credential_replay_invalid", status=503) from exc
+    if not isinstance(result, Mapping):
+        raise BrokerError("credential_replay_invalid", status=503)
+    email_otp = str(result.get("email_otp") or "")
+    action_link = str(result.get("action_link") or "")
+    counters = result.get("counters")
+    if result.get("claim") != "new" or not _OTP_RE.fullmatch(email_otp) \
+            or not action_link or not isinstance(counters, Mapping):
+        raise BrokerError("credential_replay_invalid", status=503)
+    return dict(result)
+
+
 def _audit_hash(value: str, key: str) -> str:
     return hmac.new(key.encode(), value.encode(), hashlib.sha256).hexdigest()[:24]
 
 
-def _audit(sink: AuditSink, policy: Policy, *, outcome: str, claims: Mapping[str, Any], persona: str, redirect: str) -> None:
+def _audit(
+    sink: AuditSink, policy: Policy, *, outcome: str, claims: Mapping[str, Any],
+    persona: str, purpose: str, platform: str, redirect: str,
+) -> None:
     # Never include claim values, run ids, redirect paths, email, OTP or JWT.
     sink({
         "schema": "static_site_auth_session_broker_audit.v1",
@@ -323,6 +508,8 @@ def _audit(sink: AuditSink, policy: Policy, *, outcome: str, claims: Mapping[str
         "environment_hash": _audit_hash(_claim(claims, "environment"), policy.audit_key),
         "run_hash": _audit_hash(_claim(claims, "run_id"), policy.audit_key),
         "persona_hash": _audit_hash(persona, policy.audit_key),
+        "purpose": purpose,
+        "platform": platform,
         "redirect_hash": _audit_hash(redirect, policy.audit_key),
     })
 
@@ -331,38 +518,71 @@ def _stdout_audit(row: Mapping[str, Any]) -> None:
     print(json.dumps(dict(row), ensure_ascii=True, sort_keys=True, separators=(",", ":")), flush=True)
 
 
-def process(
-    request: Mapping[str, Any], *, token: str, env: Mapping[str, str] = os.environ,
-    transport: Transport = urllib_transport, verifier: Verifier = verify_github_oidc,
-    audit_sink: AuditSink = _stdout_audit,
+def _issue_authorized(
+    authorized: AuthorizedIssue, *, claims: Mapping[str, Any], policy: Policy,
+    transport: Transport, audit_sink: AuditSink,
 ) -> dict[str, Any]:
-    if not isinstance(request, Mapping):
-        raise BrokerError("request_invalid", status=400)
-    policy = policy_from_env(env)
-    claims = verifier(token, env)
-    run_id, persona, redirect = authorize_request(request, claims, policy)
-    run_attempt = _claim(claims, "run_attempt")
-    if not _RUN_RE.fullmatch(run_attempt):
-        raise BrokerError("run_attempt_invalid")
-
-    admission = _json_call("/rest/v1/rpc/claim_static_site_auth_session_issue_v1", {
-        "p_run_id": run_id,
-        "p_run_attempt": int(run_attempt),
-        "p_persona_id": persona,
-        "p_repository": _claim(claims, "repository"),
-        "p_workflow_ref": _claim(claims, "workflow_ref"),
+    claim_payload = {
+        "p_run_id": authorized.run_id,
+        "p_run_attempt": authorized.run_attempt,
+        "p_platform": authorized.platform,
+        "p_persona_id": authorized.persona.persona_id,
+        "p_repository": authorized.repository,
+        "p_workflow_ref": authorized.workflow_ref,
         "p_limit": policy.per_run_persona_limit,
-    }, policy=policy, transport=transport)
-    admitted = admission is True or (isinstance(admission, Mapping) and admission.get("admitted") is True)
-    if not admitted:
-        _audit(audit_sink, policy, outcome="limit_rejected", claims=claims, persona=persona, redirect=redirect)
-        raise BrokerError("issuance_limit_reached", status=409)
+    }
+    admission = ""
+    replay_ciphertext = ""
+    replay_deadline = time.monotonic() + _DURABLE_REPLAY_POLL_WINDOW_SECONDS
+    for poll in range(_DURABLE_REPLAY_POLL_ATTEMPTS):
+        remaining = replay_deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        raw_admission = _json_call(
+            "/rest/v1/rpc/claim_static_site_auth_session_issue_v2",
+            claim_payload, policy=policy, transport=transport,
+            timeout_seconds=min(_SUPABASE_CALL_TIMEOUT_SECONDS, remaining),
+        )
+        if isinstance(raw_admission, Mapping):
+            admission = str(raw_admission.get("claim") or raw_admission.get("outcome") or "").strip().lower()
+            replay_ciphertext = str(raw_admission.get("credential_ciphertext") or "")
+        else:
+            admission = str(raw_admission or "").strip().lower()
+        if admission != "duplicate_inflight" or poll + 1 >= _DURABLE_REPLAY_POLL_ATTEMPTS:
+            break
+        remaining = replay_deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(_DURABLE_REPLAY_POLL_SECONDS, remaining))
 
-    # This calls the raw GoTrue REST endpoint rather than supabase-js.  Its
-    # request/response contract is snake_case and flat; the SDK alone wraps
-    # these fields below ``data.properties``.
+    if admission == "replay":
+        result = _unseal_issued_result(replay_ciphertext, policy)
+        if result.get("platform") != authorized.platform:
+            raise BrokerError("credential_replay_invalid", status=503)
+        _audit(
+            audit_sink, policy, outcome="replayed_durable", claims=claims,
+            persona=authorized.persona.persona_id, purpose=authorized.purpose,
+            platform=authorized.platform,
+            redirect=authorized.redirect,
+        )
+        return result
+    if admission not in {"new", "duplicate_inflight", "duplicate_consumed", "persona_busy"}:
+        raise BrokerError("admission_response_invalid", status=503)
+    if admission != "new":
+        _audit(
+            audit_sink, policy, outcome=admission, claims=claims,
+            persona=authorized.persona.persona_id, purpose=authorized.purpose,
+            platform=authorized.platform,
+            redirect=authorized.redirect,
+        )
+        status = 423 if admission == "persona_busy" else 409
+        raise BrokerError(admission, status=status, claim=admission)
+
+    # This calls the raw GoTrue REST endpoint rather than supabase-js. Its
+    # request/response contract is snake_case and flat.
     issued = _json_call("/auth/v1/admin/generate_link", {
-        "type": "magiclink", "email": policy.personas[persona], "redirect_to": redirect,
+        "type": "magiclink", "email": authorized.persona.email,
+        "redirect_to": authorized.redirect,
     }, policy=policy, transport=transport)
     properties = issued.get("properties") if isinstance(issued, Mapping) else None
     if not isinstance(properties, Mapping) and isinstance(issued, Mapping) and isinstance(issued.get("data"), Mapping):
@@ -379,20 +599,120 @@ def process(
     expected_auth_origin = urlsplit(policy.supabase_url)
     if action.scheme != "https" or action.netloc != expected_auth_origin.netloc \
             or action.path != "/auth/v1/verify" or action.fragment \
-            or issued_redirect != redirect or action_query.get("redirect_to") != [redirect]:
+            or issued_redirect != authorized.redirect \
+            or action_query.get("redirect_to") != [authorized.redirect]:
         raise BrokerError("issuer_response_invalid", status=503)
-    _audit(audit_sink, policy, outcome="issued", claims=claims, persona=persona, redirect=redirect)
-    return {
+    result = {
+        "claim": "new",
+        "platform": authorized.platform,
         "email_otp": email_otp,
-        # This is returned only to the authenticated caller and is never
-        # included in audit. Mobile adapters may open it in the platform
-        # browser so Supabase completes the callback in that browser's storage.
         "action_link": action_link,
         "counters": {
             "admin_credential_count": 1, "product_otp_issue_count": 0,
             "external_mail_send_count": 0, "external_mail_receipt_count": 0,
         },
     }
+    completed = _json_call(
+        "/rest/v1/rpc/complete_static_site_auth_session_issue_v2",
+        {**{key: value for key, value in claim_payload.items() if key != "p_limit"},
+         "p_credential_ciphertext": _seal_issued_result(result, policy)},
+        policy=policy, transport=transport,
+    )
+    if completed is not True:
+        raise BrokerError("credential_replay_completion_rejected", status=503)
+    _audit(
+        audit_sink, policy, outcome="issued", claims=claims,
+        persona=authorized.persona.persona_id, purpose=authorized.purpose,
+        platform=authorized.platform,
+        redirect=authorized.redirect,
+    )
+    return result
+
+
+def _coalesced_issue(
+    authorized: AuthorizedIssue, *, claims: Mapping[str, Any], policy: Policy,
+    transport: Transport, audit_sink: AuditSink,
+) -> dict[str, Any]:
+    """Coalesce overlap and allow one bounded lost-response replay.
+
+    One replay exists in broker process memory for at most 30 seconds. The SQL
+    claim ledger also holds a short-lived encrypted credential so a retry after
+    process loss can return the same issue instead of generating another one.
+    Plaintext credentials are never written to a file, log, or job artifact.
+    """
+    now = time.monotonic()
+    replayed: dict[str, Any] | None = None
+    with _ISSUE_FLIGHTS_LOCK:
+        for identity, replay in list(_ISSUE_REPLAYS.items()):
+            if replay.expires_at <= now or replay.remaining_replays < 1:
+                del _ISSUE_REPLAYS[identity]
+        replay = _ISSUE_REPLAYS.get(authorized.identity)
+        if replay is not None:
+            replayed = dict(replay.result)
+            replay.remaining_replays -= 1
+            if replay.remaining_replays < 1:
+                del _ISSUE_REPLAYS[authorized.identity]
+        flight = _ISSUE_FLIGHTS.get(authorized.identity)
+        owner = flight is None
+        if replayed is None and owner:
+            flight = _IssueFlight(ready=threading.Event())
+            _ISSUE_FLIGHTS[authorized.identity] = flight
+    if replayed is not None:
+        _audit(
+            audit_sink, policy, outcome="replayed", claims=claims,
+            persona=authorized.persona.persona_id, purpose=authorized.purpose,
+            platform=authorized.platform,
+            redirect=authorized.redirect,
+        )
+        return replayed
+    assert flight is not None
+    if not owner:
+        flight.ready.wait(timeout=_COALESCED_ISSUE_WAIT_SECONDS)
+        if not flight.ready.is_set():
+            raise BrokerError("coalesced_issue_timeout", status=503, claim="duplicate_inflight")
+        if flight.error:
+            raise BrokerError(flight.error.code, status=flight.error.status, claim=flight.error.claim)
+        if not flight.result:
+            raise BrokerError("coalesced_issue_invalid", status=503)
+        return dict(flight.result)
+
+    try:
+        flight.result = _issue_authorized(
+            authorized, claims=claims, policy=policy,
+            transport=transport, audit_sink=audit_sink,
+        )
+        with _ISSUE_FLIGHTS_LOCK:
+            if len(_ISSUE_REPLAYS) >= _ISSUE_REPLAY_MAX_ENTRIES:
+                oldest = min(_ISSUE_REPLAYS, key=lambda key: _ISSUE_REPLAYS[key].expires_at)
+                del _ISSUE_REPLAYS[oldest]
+            _ISSUE_REPLAYS[authorized.identity] = _IssueReplay(
+                result=dict(flight.result), expires_at=time.monotonic() + _ISSUE_REPLAY_TTL_SECONDS,
+            )
+        return dict(flight.result)
+    except BrokerError as exc:
+        flight.error = exc
+        raise
+    finally:
+        flight.ready.set()
+        with _ISSUE_FLIGHTS_LOCK:
+            if _ISSUE_FLIGHTS.get(authorized.identity) is flight:
+                del _ISSUE_FLIGHTS[authorized.identity]
+
+
+def process(
+    request: Mapping[str, Any], *, token: str, env: Mapping[str, str] = os.environ,
+    transport: Transport = urllib_transport, verifier: Verifier = verify_github_oidc,
+    audit_sink: AuditSink = _stdout_audit,
+) -> dict[str, Any]:
+    if not isinstance(request, Mapping):
+        raise BrokerError("request_invalid", status=400)
+    policy = policy_from_env(env)
+    claims = verifier(token, env)
+    authorized = authorize_request(request, claims, policy)
+    return _coalesced_issue(
+        authorized, claims=claims, policy=policy,
+        transport=transport, audit_sink=audit_sink,
+    )
 
 
 def _header(headers: Mapping[str, Any], name: str) -> str:
@@ -427,5 +747,4 @@ def handler(event: Mapping[str, Any], _context: Any) -> dict[str, Any]:
     except (binascii.Error, json.JSONDecodeError, UnicodeError):
         return _response(400, {"error": "request_invalid"})
     except BrokerError as exc:
-        public = "unauthorized" if exc.status in {401, 403} else exc.code
-        return _response(exc.status, {"error": public})
+        return _response(exc.status, exc.public_payload())

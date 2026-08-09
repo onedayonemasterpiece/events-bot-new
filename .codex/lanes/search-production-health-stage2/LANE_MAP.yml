@@ -1,0 +1,26 @@
+task: search-production-health-stage2
+base: origin/main@dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66
+integration_branch: integration/search-production-health-stage2-20260809
+requirements:
+  R01: production health workflow triggers and platform selection
+  R02: explicit deployment validation marker none standard full
+  R03: one-query one-POST browser journey and exact target pin
+  R04: Android/iOS preflight and true mobile journey
+  R05: platform-scoped broker admission and identity
+  R06: response egress meter 48KiB target 96KiB hard
+  R07: independent product execution failure status and incidents
+  R08: sanitized evidence and retry boundary
+  R09: deterministic gates and canonical docs
+  R10: two bounded live workflow proofs and incident supersession
+lanes:
+  workflow_release: {mode: worktree_worker, owns: [R01, R02]}
+  journey_evidence: {mode: worktree_worker, owns: [R03, R06, R08]}
+  mobile_transport: {mode: worktree_worker, owns: [R04]}
+  broker: {mode: worktree_worker, owns: [R05]}
+  incident_reporter: {mode: worktree_worker, owns: [R07]}
+  integration: {mode: serial_integration, owns: [R09, R10, docs, CHANGELOG, PR, live]}
+constraints:
+  full_live_workflows_max: 2
+  search_posts_per_platform: 1
+  live_before_deterministic_green: false
+  pr436_merge: false

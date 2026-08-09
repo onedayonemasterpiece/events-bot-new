@@ -764,12 +764,14 @@ personalization добавляются вместе с реализацией/au
 
 ### M9 — Search live plane
 
-Реализованный `site/e2e/search` сохранён, но orchestration разделена на
-deterministic CI, будущий current-target production health и manual/selective
-release qualification. Старые automatic cached/cold/LLM/mobile schedules,
-static-build post-deploy dispatch и generic issue reporter отключены. На этапе
-1 новые health/qualification workflows являются только manual dry planners;
-`static-site-search-canary.yml` — ручной legacy debugger. Полный контракт,
+Реализованный `site/e2e/search` сохранён, а orchestration разделена на
+deterministic CI, current-target production health и manual/selective release
+qualification. Старые automatic cached/cold/LLM/mobile schedules,
+static-build post-deploy dispatch и generic issue reporter отключены.
+Stage 2 добавляет только две bounded schedule, explicit
+`search-runtime-deployed` marker и platform-scoped reporter; automatic entry
+points закрыты `SEARCH_PRODUCTION_HEALTH_ENABLED` до двух terminal live proofs.
+`static-site-search-canary.yml` остаётся ручным legacy debugger. Полный контракт,
 trigger matrix и stage-2 activation принадлежат единственному каноническому
 разделу [`smart-vector-search/README.md#16`](../features/static-site-pages/smart-vector-search/README.md#16-search-production-health-архитектурная-коррекция-этап-1).
 

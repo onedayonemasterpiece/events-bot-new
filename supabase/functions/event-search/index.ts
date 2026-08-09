@@ -17,12 +17,15 @@ import {
   SharedGoogleQuotaError,
   withSharedGoogleQuotaAttempt,
 } from "./google-quota.ts";
+import { SEARCH_BACKEND_REVISION } from "./search-backend-revision.generated.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-client-request-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Expose-Headers":
+    "X-KenigEvents-Search-Contract, X-KenigEvents-Search-Revision",
 };
 
 const DEFAULT_LIMIT = 12;
@@ -1961,6 +1964,7 @@ function receiptContractFields(
 ): Record<string, unknown> {
   return {
     search_contract_version: SEARCH_CONTRACT_VERSION,
+    search_backend_revision: SEARCH_BACKEND_REVISION,
     requested_execution_mode: requestedMode,
     actual_execution_mode: actualMode,
     catalog_revision: revisions.catalog_revision,
@@ -2875,6 +2879,19 @@ Deno.serve(async (request) => {
   const requestStartedAt = performance.now();
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
+  }
+  // Side-effect-free release probe. It performs no Auth, quota, database,
+  // provider or product Search work and exposes only the public contract id.
+  if (request.method === "HEAD") {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        ...CORS_HEADERS,
+        "Cache-Control": "no-store",
+        "X-KenigEvents-Search-Contract": SEARCH_CONTRACT_VERSION,
+        "X-KenigEvents-Search-Revision": SEARCH_BACKEND_REVISION,
+      },
+    });
   }
   if (request.method !== "POST") {
     return jsonResponse(

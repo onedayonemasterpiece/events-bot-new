@@ -54,3 +54,22 @@ test("cold canary LLM attempts reserve database budget before provider send", ()
   assert.match(source, /reserve_event_search_canary_llm_budget_internal_v1/);
   assert.match(source, /degraded:canary_daily_budget_exhausted/);
 });
+
+test("HEAD exposes only the side-effect-free active contract receipt", () => {
+  const head = source.slice(source.indexOf('if (request.method === "HEAD")'),
+    source.indexOf('if (request.method !== "POST")'));
+  assert.match(head, /X-KenigEvents-Search-Contract/);
+  assert.match(head, /SEARCH_CONTRACT_VERSION/);
+  assert.match(head, /X-KenigEvents-Search-Revision/);
+  assert.match(head, /SEARCH_BACKEND_REVISION/);
+  assert.match(head, /status: 200/);
+  assert.doesNotMatch(head, /runEventSearch|auth|getUser|rpc|fetch/u);
+});
+
+test("response keeps contract compatibility separate from exact source revision", () => {
+  assert.match(source, /import \{ SEARCH_BACKEND_REVISION \} from "\.\/search-backend-revision\.generated\.ts"/u);
+  const receipt = source.slice(source.indexOf("function receiptContractFields"),
+    source.indexOf("async function", source.indexOf("function receiptContractFields")));
+  assert.match(receipt, /search_contract_version: SEARCH_CONTRACT_VERSION/u);
+  assert.match(receipt, /search_backend_revision: SEARCH_BACKEND_REVISION/u);
+});

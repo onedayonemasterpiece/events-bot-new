@@ -203,7 +203,7 @@ test('mobile infrastructure is classified before Auth/Search and never as a prod
 });
 
 test('future health contract is one bounded UI vector request and contains no release coupling', () => {
-  assert.deepEqual(ACCEPTED_HEALTH_CACHE_STATES, ['hit', 'miss', 'stored', 'bypass']);
+  assert.deepEqual(ACCEPTED_HEALTH_CACHE_STATES, ['hit', 'miss', 'stored']);
   assert.deepEqual(FUTURE_PRODUCTION_HEALTH_PLAN.query, {
     count: 1,
     dispatch: 'ui',
@@ -225,8 +225,8 @@ test('future health contract is one bounded UI vector request and contains no re
   assert.equal(JSON.stringify(FUTURE_PRODUCTION_HEALTH_PLAN).includes('release_exact'), false);
 });
 
-test('cache hit/miss/stored/bypass and content or index drift are healthy', () => {
-  for (const cache_state of ACCEPTED_HEALTH_CACHE_STATES) {
+test('cache status is telemetry-only while content or index drift remains healthy', () => {
+  for (const cache_state of [...ACCEPTED_HEALTH_CACHE_STATES, 'store_failed', 'skipped', 'other_bounded_status']) {
     const result = evaluateProductionHealthObservation(healthyObservation({
       cache_state,
       catalog_revision_changed: true,

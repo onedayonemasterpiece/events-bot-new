@@ -179,6 +179,17 @@ export function normalizeAcceptedTargetResolverResult(input) {
   });
 }
 
+export function acceptedTargetImmutableEvidence(target) {
+  if (!(target instanceof NormalizedAcceptedTarget)) throw new Error('search_health_target_not_normalized');
+  return Object.freeze({
+    source: target.source,
+    accepted_release_id: target.accepted_release_id,
+    target_repo_sha: target.target_repo_sha,
+    target_url_sha256: createHash('sha256').update(target.navigationUrl(), 'utf8').digest('hex'),
+    immutable_identity: Object.freeze({ ...target.immutable_identity }),
+  });
+}
+
 const samePinnedTarget = (left, right) => (
   left.navigationUrl() === right.navigationUrl()
   && JSON.stringify(left.immutable_identity) === JSON.stringify(right.immutable_identity)
@@ -214,7 +225,15 @@ export function createAcceptedTargetRun(resolver) {
 
   return Object.freeze({
     pin() {
-      pinnedPromise ??= resolveNormalized();
+      if (!pinnedPromise) {
+        const pending = resolveNormalized();
+        pinnedPromise = pending;
+        // An unavailable/unready pointer is retryable only before a target is
+        // pinned. A successfully normalized target remains immutable.
+        pending.catch(() => {
+          if (pinnedPromise === pending) pinnedPromise = undefined;
+        });
+      }
       return pinnedPromise;
     },
     async observeSupersession() {

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 
@@ -19,14 +19,14 @@ function required(name) {
   return value;
 }
 
-function persona(variant) {
-  if (variant === 'cached_vector') {
+function persona(purpose) {
+  if (purpose === 'release_qualification') {
+    return { id: 'search-cold-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER') };
+  }
+  if (purpose === 'legacy_debug') {
     return { id: 'search-cached-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER') };
   }
-  if (variant === 'degraded_vector_fallback') {
-    return { id: 'search-degraded-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_DEGRADED_BROWSER') };
-  }
-  return { id: 'search-cold-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER') };
+  throw new Error('search_session_purpose_invalid');
 }
 
 async function oidcToken() {
@@ -95,11 +95,29 @@ async function acceptanceAdapter(storageStatePath, targetUrl) {
   };
 }
 
-function runSearchChild(statePath) {
+function selectedVariants() {
+  if (!process.env.E2E_SEARCH_VARIANTS_JSON) return [required('E2E_SEARCH_VARIANT')];
+  let value;
+  try { value = JSON.parse(process.env.E2E_SEARCH_VARIANTS_JSON); } catch { throw new Error('search_variants_json_invalid'); }
+  if (!Array.isArray(value) || value.length < 1 || value.length > 2
+    || new Set(value).size !== value.length
+    || value.some((item) => !['cached_vector', 'cold_vector', 'cold_vector_llm', 'degraded_vector_fallback'].includes(item))) {
+    throw new Error('search_variants_json_invalid');
+  }
+  return value;
+}
+
+function runSearchChild(statePath, variant, evidenceDirectory) {
   return new Promise((resolveChild, rejectChild) => {
     const child = spawn(process.execPath, ['site/e2e/search/run.mjs'], {
       cwd: resolve('.'), stdio: 'inherit',
-      env: { ...process.env, E2E_AUTH_STATE_PATH: statePath, E2E_SEARCH_PLATFORM: 'browser' },
+      env: {
+        ...process.env,
+        E2E_AUTH_STATE_PATH: statePath,
+        E2E_SEARCH_PLATFORM: 'browser',
+        E2E_SEARCH_VARIANT: variant,
+        E2E_EVIDENCE_DIR: evidenceDirectory,
+      },
     });
     child.once('error', rejectChild);
     child.once('exit', (code, signal) => resolveChild(code ?? (signal ? 1 : 0)));
@@ -162,9 +180,10 @@ async function verifyOwnerReceipts({ evidenceDir, accessToken, supabaseUrl, publ
 }
 
 async function main() {
-  const variant = required('E2E_SEARCH_VARIANT');
+  const variants = selectedVariants();
   const targetUrl = required('E2E_SEARCH_TARGET_URL');
-  const selectedPersona = persona(variant);
+  const purpose = required('E2E_SEARCH_SESSION_PURPOSE');
+  const selectedPersona = persona(purpose);
   const issuer = createAuthSessionBrokerIssuer({
     endpoint: required('AUTH_SESSION_BROKER_URL'),
     oidcToken: await oidcToken(),
@@ -182,7 +201,8 @@ async function main() {
       publishableKey: required('PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'),
       targetUrl, allowedOrigins: ['https://kenigevents.ru'],
       personaId: selectedPersona.id, personas: { [selectedPersona.id]: { email: selectedPersona.email } },
-      scopeKind: 'job', scopeId: `search-${variant}`, runId: required('GITHUB_RUN_ID'),
+      purpose, platform: 'browser',
+      scopeKind: 'job', scopeId: `search-${variants.join('-')}`, runId: required('GITHUB_RUN_ID'),
       protectedProbe: protectedOwnerProbe,
     });
     adapter = await acceptanceAdapter(fixture.storageStatePath, targetUrl);
@@ -193,10 +213,20 @@ async function main() {
     await adapter.close();
     adapter = null;
     accessToken = await accessTokenFromState(fixture.storageStatePath);
-    childCode = await runSearchChild(fixture.storageStatePath);
-    if (childCode === 0) {
-      ownerReceiptCount = await verifyOwnerReceipts({
-        evidenceDir: resolve(required('E2E_EVIDENCE_DIR')), accessToken,
+    const evidenceRoot = resolve(required('E2E_EVIDENCE_DIR'));
+    childCode = 0;
+    for (const variant of variants) {
+      const variantStatePath = join(dirname(fixture.storageStatePath), `qualification-${variant}.json`);
+      const evidenceDir = variants.length === 1 ? evidenceRoot : join(evidenceRoot, variant);
+      await copyFile(fixture.storageStatePath, variantStatePath);
+      try {
+        childCode = await runSearchChild(variantStatePath, variant, evidenceDir);
+      } finally {
+        await rm(variantStatePath, { force: true });
+      }
+      if (childCode !== 0) break;
+      ownerReceiptCount += await verifyOwnerReceipts({
+        evidenceDir, accessToken,
         supabaseUrl: required('PERSONALIZATION_SUPABASE_URL'),
         publishableKey: required('PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'),
       });

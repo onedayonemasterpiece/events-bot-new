@@ -37,6 +37,60 @@
 
 ### Fixed
 
+- Fixed the production-health workflow definition so Appium's temporary npm
+  and driver homes are exported from `RUNNER_TEMP` at step runtime instead of
+  using the unavailable `runner` context in job-level `env`; GitHub can now
+  validate and schedule the workflow while Android/iOS installations remain
+  isolated and ephemeral.
+
+- Separated the Smart Search Edge compatibility contract from its exact
+  backend identity: a CI-verified deterministic source-tree digest now ships in
+  the function, is exposed by the side-effect-free HEAD probe and Search
+  response, is compared exactly to deploy markers before Auth/Search, and is
+  recorded from the observed response even for manual or scheduled health runs.
+  Only a valid differing response digest is release drift; missing or malformed
+  revision metadata on an Edge error remains a Search product failure.
+
+- Implemented bounded Search production health as a separate current-target
+  contour: 06:17 UTC runs browser+Android, 18:17 UTC runs browser+iOS, manual
+  profiles are explicit, and only a validated `search-runtime-deployed`
+  standard/full marker can request deploy validation. Every platform uses a
+  fresh OIDC broker session after a zero-side-effect real browser/device
+  preflight and an active-backend HEAD contract probe, performs one vector-only
+  UI POST with at most five cards, real
+  wheel/native scroll and an exact candidate `/sobytiya/<slug>/` event HTTP
+  200, and records only
+  sanitized target/revision/counter/48–96 KiB evidence. Platform-bound broker
+  claims, three-way admission, a distinct cold-browser qualification persona,
+  an encrypted two-minute durable idempotency
+  lost-response replay, fail-closed retry, typed product/infra/cost/
+  evidence dispositions, terminal empty/render classification, whole-journey
+  byte accounting and exact-platform issue handling replace the old
+  shared-persona and generic-incident behavior. Static/data/index generation
+  still cannot trigger Search. A `full` marker requests the existing bounded
+  LLM plus deterministic degraded qualification exactly once in one ephemeral
+  browser session after standard health passes; qualification remains
+  unscheduled/selective. Existing Search harness and broker admission/security
+  regressions now also run in default PR CI. Automatic schedules and deploy
+  dispatch remain default-off until the two bounded live acceptance workflows
+  pass after merge, migration and exact-main deployment; PR #436 remains
+  separate.
+  Mobile Safari network/console events remain in private driver buckets rather
+  than Appium stdout; Appium runs at error level with URL filters, and exact
+  target/callback values are runner-masked before navigation. Activation also
+  requires the exact workflow/event broker allowlists and equality of runtime,
+  target, backend and content/index identities across the two live proofs.
+  The byte/side-effect observer spans pre-Auth navigation through the event
+  route, counts direct/relay probes and discarded retries exactly once, merges
+  mobile Auth/RLS bytes, waits for pending measurements before Search and
+  blocks pre-submit Search/Storage/receipt activity. The Edge HEAD contract is
+  deployed separately from Fly, and broker replay uses the full
+  repository/workflow/run/platform/persona identity with a completion-safe wait
+  and minute ciphertext erasure.
+  The deterministic suite explicitly enables Node's type stripping so its real
+  TypeScript transport boundary runs identically on the pinned CI Node 22.12.0
+  and newer Node 22 patch releases.
+
 - Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
   by promoting its 30 lazy card images to eager loading only inside the
   disposable capture page, waiting for bounded load/error plus decode

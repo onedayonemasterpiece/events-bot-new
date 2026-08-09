@@ -30,6 +30,15 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 PR #441 merged as
+  `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`. Stage 2 is implemented in
+  PR #451 with two bounded schedules, one-query browser/Android/iOS journeys,
+  platform-bound broker admission, byte/redaction gates and typed reporting.
+  Deterministic regression suites are green, but no Stage-2 production-health
+  workflow has run yet. The incident therefore remains open and
+  `PRODUCT_HEALTH_UNCONFIRMED`; exact live run IDs and platform metrics must be
+  appended before closure.
+
 - 2026-08-09 production-health architecture stage 1 separated deterministic
   CI, current-target product health and selective release qualification. The
   noisy automatic cached/cold/LLM/mobile schedules and generic issue reporter

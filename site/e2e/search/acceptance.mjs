@@ -1,5 +1,7 @@
 const SEARCH_PATH = '/functions/v1/event-search';
 
+import { searchProviderCounters } from './provider-counters.mjs';
+
 const boundedString = (value, max = 96) => String(value ?? '').slice(0, max);
 const asCount = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : 0;
 const stableId = (value) => {
@@ -37,13 +39,14 @@ function visibleItems(payload) {
 export function summarizeSearchPayload(payload, extras = {}) {
   if (!payload || typeof payload !== 'object') return null;
   const visible = visibleItems(payload);
-  const attempts = payload.provider_attempt_counters ?? payload.provider_attempts ?? {};
+  const attempts = searchProviderCounters(payload);
   const llm = payload.llm_verifier && typeof payload.llm_verifier === 'object' ? payload.llm_verifier : {};
   const requestedMode = payload.requested_execution_mode ?? payload.requested_mode ?? '';
   const actualMode = payload.actual_execution_mode ?? payload.execution_mode ?? '';
   return {
     schema_version: boundedString(payload.schema_version ?? payload.search_contract_version, 80),
     search_contract_version: boundedString(payload.search_contract_version ?? payload.schema_version, 80),
+    search_backend_revision: boundedString(payload.search_backend_revision, 96),
     request_id: stableId(payload.request_id),
     receipt_id: stableId(payload.receipt_id),
     response_ids: visible.map(eventId),
@@ -62,14 +65,12 @@ export function summarizeSearchPayload(payload, extras = {}) {
       ? Object.fromEntries(Object.entries(payload.policy_versions).filter(([key, value]) => /^[a-z0-9_.-]+$/iu.test(key) && typeof value === 'string').map(([key, value]) => [key, boundedString(value, 96)]))
       : {},
     provider_attempts: {
-      embedding: asCount(attempts.embedding ?? attempts.embedding_provider ?? payload.embedding_provider_attempts),
-      vector: asCount(attempts.vector ?? attempts.vector_rpc ?? payload.vector_attempts),
-      llm: asCount(attempts.llm ?? attempts.verifier ?? payload.llm_provider_attempts),
+      embedding: attempts.embedding,
+      vector: attempts.vector,
+      llm: attempts.llm,
     },
-    provider_attempts_present: Boolean(
-      (attempts && typeof attempts === 'object' && Object.keys(attempts).length > 0)
-      || payload.embedding_provider_attempts != null || payload.vector_attempts != null || payload.llm_provider_attempts != null,
-    ),
+    provider_attempts_present: attempts.present,
+    provider_attempts_source: attempts.source,
     llm: {
       requested: llm.requested === true,
       used: llm.used === true,
@@ -186,7 +187,8 @@ export function assertSearchRevisionPolicy(journey, identity, policy = 'release_
 }
 
 export function assertRealScroll(receipt) {
-  if (!receipt?.performed || asCount(Math.abs(receipt.delta_y)) < 1 || !receipt.card_visible_after) {
+  const wheelProven = receipt?.input_kind === 'wheel' && asCount(receipt?.input_count) >= 1;
+  if (!receipt?.performed || (!wheelProven && asCount(Math.abs(receipt.delta_y)) < 1) || !receipt.card_visible_after) {
     const error = new Error('search_real_scroll_missing');
     const gesture = receipt?.last_gesture && typeof receipt.last_gesture === 'object' ? receipt.last_gesture : {};
     const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;

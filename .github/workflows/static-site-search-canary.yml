@@ -27,7 +27,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: static-site-search-manual-${{ inputs.platform }}
+  group: search-production-health
   cancel-in-progress: false
 
 jobs:
@@ -75,6 +75,7 @@ jobs:
       SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER: ${{ secrets.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER }}
       SEARCH_E2E_PERSONA_EMAIL_DEGRADED_BROWSER: ${{ secrets.SEARCH_E2E_PERSONA_EMAIL_DEGRADED_BROWSER }}
       E2E_SEARCH_PLATFORM: browser
+      E2E_SEARCH_SESSION_PURPOSE: legacy_debug
       E2E_SEARCH_VARIANT: ${{ matrix.variant }}
       E2E_SEARCH_REVISION_POLICY: ${{ needs.plan.outputs.revision_policy }}
       E2E_EVIDENCE_DIR: artifacts/search-live-browser-${{ matrix.variant }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -116,6 +117,7 @@ jobs:
       AUTH_SESSION_BROKER_URL: ${{ secrets.SEARCH_E2E_AUTH_BROKER_URL }}
       AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
       E2E_SEARCH_PLATFORM: android
+      E2E_SEARCH_SESSION_PURPOSE: legacy_debug
       E2E_SEARCH_VARIANT: cached_vector
       E2E_SEARCH_REVISION_POLICY: ${{ needs.plan.outputs.revision_policy }}
       E2E_DEVICE_NAME: Pixel 7
@@ -175,6 +177,7 @@ jobs:
       AUTH_SESSION_BROKER_URL: ${{ secrets.SEARCH_E2E_AUTH_BROKER_URL }}
       AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
       E2E_SEARCH_PLATFORM: ios
+      E2E_SEARCH_SESSION_PURPOSE: legacy_debug
       E2E_SEARCH_VARIANT: cached_vector
       E2E_SEARCH_REVISION_POLICY: ${{ needs.plan.outputs.revision_policy }}
       E2E_DEVICE_NAME: iPhone 16
