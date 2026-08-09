@@ -50,7 +50,18 @@ function pageResultSnapshot() {
 
 const closedLogLevelError = (value) => ['SEVERE', 'ERROR'].includes(String(value || '').toUpperCase());
 
-function accumulateClosedDriverDiagnostics(logs, diagnostics, seen) {
+function accumulateClosedDriverDiagnostics(logs, diagnostics, seen,
+  requestMetadata = new Map(), criticalOrigins = []) {
+  const allowedOrigins = new Set(criticalOrigins);
+  const disposablePath = (path) => path === '/auth/v1/health'
+    || path === '/rest/v1/rpc/transport_probe_v1'
+    || path === '/functions/v1/transport-probe';
+  const criticalRequest = (metadata) => {
+    if (metadata?.resource_type === 'document') return true;
+    return allowedOrigins.has(metadata?.origin)
+      && /^\/(?:auth|functions|rest)\/v1(?:\/|$)/u.test(String(metadata?.pathname || ''))
+      && !disposablePath(metadata.pathname);
+  };
   const visited = new WeakSet();
   const record = (kind, identity) => {
     const key = `${kind}:${String(identity || '')}`;
@@ -73,18 +84,28 @@ function accumulateClosedDriverDiagnostics(logs, diagnostics, seen) {
     const method = String(value.method || '');
     const params = value.params && typeof value.params === 'object' ? value.params : {};
     const requestId = String(params.requestId || params.timestamp || value.timestamp || 'unidentified');
-    if (method === 'Network.loadingFailed') record('failed_requests', requestId);
     if (method === 'Network.requestWillBeSent' || method === 'Network.responseReceived') {
       const rawUrl = method === 'Network.requestWillBeSent'
         ? params.request?.url : params.response?.url;
       let path = '';
-      try { path = new URL(String(rawUrl)).pathname; } catch { /* malformed URL is ignored */ }
+      let origin = '';
+      try { const parsed = new URL(String(rawUrl)); path = parsed.pathname; origin = parsed.origin; } catch { /* malformed URL is ignored */ }
+      if (method === 'Network.requestWillBeSent') {
+        requestMetadata.set(requestId, { origin, pathname: path,
+          resource_type: String(params.type || '').toLowerCase() });
+      }
       if (/^\/storage\/v1(?:\/|$)/u.test(path)) record('storage_requests', requestId);
       const status = Number(params.response?.status || 0);
+      const responseMetadata = { origin, pathname: path,
+        resource_type: String(params.type || '').toLowerCase() };
       if (method === 'Network.responseReceived' && status >= 400
-        && /^\/(?:auth|functions|rest)\/v1(?:\/|$)/u.test(path)) {
+        && criticalRequest(responseMetadata)) {
         record('error_responses', requestId);
       }
+    }
+    if (method === 'Network.loadingFailed'
+      && criticalRequest(requestMetadata.get(requestId))) {
+      record('failed_requests', requestId);
     }
     if ((method === 'Runtime.consoleAPICalled' && String(params.type).toLowerCase() === 'error')
       || (method === 'Log.entryAdded' && closedLogLevelError(params.entry?.level))) {
@@ -305,6 +326,7 @@ export async function createAppiumSearchAdapter(options = {}) {
     console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0,
   };
   const driverDiagnosticIds = new Set();
+  const driverDiagnosticRequests = new Map();
   let postBoundarySearchPostCount = null;
   let postBoundarySearchObservationActive = false;
   const postBoundarySearchRequestIds = new Set();
@@ -402,8 +424,10 @@ export async function createAppiumSearchAdapter(options = {}) {
       throw new Error('mobile_health_diagnostics_unavailable');
     }
     observePostBoundarySearch(networkLogs);
-    accumulateClosedDriverDiagnostics(networkLogs, driverDiagnostics, driverDiagnosticIds);
-    accumulateClosedDriverDiagnostics(consoleLogs, driverDiagnostics, driverDiagnosticIds);
+    accumulateClosedDriverDiagnostics(networkLogs, driverDiagnostics, driverDiagnosticIds,
+      driverDiagnosticRequests, wholeCellOrigins);
+    accumulateClosedDriverDiagnostics(consoleLogs, driverDiagnostics, driverDiagnosticIds,
+      driverDiagnosticRequests, wholeCellOrigins);
   };
 
   const meterWithCallbackAuthBytes = (meter = {}) => {
@@ -574,7 +598,8 @@ export async function createAppiumSearchAdapter(options = {}) {
       const initialLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_target_network_log_unavailable');
       observePostBoundarySearch(initialLogs);
-      accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
+      accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds,
+        driverDiagnosticRequests, wholeCellOrigins);
       await driver.url(targetUrl);
       await driver.waitUntil(async () => (await driver.getUrl()) === targetUrl,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_target_redirected' });
@@ -583,7 +608,8 @@ export async function createAppiumSearchAdapter(options = {}) {
         const logs = await driver.getLogs(networkType).catch(() => null);
         if (!Array.isArray(logs)) return false;
         observePostBoundarySearch(logs);
-        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
+        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds,
+          driverDiagnosticRequests, wholeCellOrigins);
         responses.push(...extractSanitizedNavigationResponses(logs));
         try {
           lifecycle.target_navigation_receipt = buildExactTargetNavigationReceipt({
@@ -642,7 +668,8 @@ export async function createAppiumSearchAdapter(options = {}) {
         const logs = await driver.getLogs?.(networkType).catch(() => null);
         if (!Array.isArray(logs)) throw new Error('search_physical_observation_missing');
         observePostBoundarySearch(logs);
-        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
+        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds,
+          driverDiagnosticRequests, wholeCellOrigins);
         if (androidObserverActive) {
           const snapshot = await snapshotAndroidPhysical({ required: true });
           if (snapshot.failed_count > 0) throw new Error('mobile_android_physical_observer_failed');
@@ -808,7 +835,8 @@ export async function createAppiumSearchAdapter(options = {}) {
       const logType = platform === 'android' ? 'performance' : 'safariNetwork';
       const initialLogs = await driver.getLogs(logType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_navigation_network_log_unavailable');
-      accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
+      accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds,
+        driverDiagnosticRequests, wholeCellOrigins);
       const searchPageActivity = await driver.execute(snapshotSearchRuntimeProbe);
       preNavigationSearchActivity = searchPageActivity;
       preNavigationResultState = await driver.execute(pageResultSnapshot);
@@ -830,7 +858,8 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.waitUntil(async () => {
         const logs = await driver.getLogs(logType).catch(() => null);
         if (!Array.isArray(logs)) return false;
-        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
+        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds,
+          driverDiagnosticRequests, wholeCellOrigins);
         observePostBoundarySearch(logs);
         responses.push(...extractSanitizedNavigationResponses(logs));
         return responses.some((item) => item.origin === expectedUrl.origin

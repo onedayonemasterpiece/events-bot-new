@@ -192,15 +192,29 @@ test('Appium health diagnostics expose only cumulative closed runtime and driver
       { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
         requestId: 'storage-1', request: { url: 'https://example.test/storage/v1/object/private/raw', method: 'GET' },
       } }) },
+      { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+        requestId: 'decorative-failed', type: 'Image', request: { url: 'https://decorative.test/image.webp', method: 'GET' },
+      } }) },
+      { message: JSON.stringify({ method: 'Network.loadingFailed', params: {
+        requestId: 'decorative-failed', errorText: 'raw decorative secret',
+      } }) },
+      { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+        requestId: 'failed-1', type: 'Fetch', request: {
+          url: 'https://project.supabase.co/functions/v1/event-search?raw=yes', method: 'POST',
+        },
+      } }) },
       { message: JSON.stringify({ method: 'Network.responseReceived', params: {
-        requestId: 'fn-1', response: { url: 'https://example.test/functions/v1/event-search?raw=yes', status: 503 },
+        requestId: 'fn-1', type: 'Fetch', response: {
+          url: 'https://project.supabase.co/functions/v1/event-search?raw=yes', status: 503,
+        },
       } }) },
       { message: JSON.stringify({ method: 'Network.loadingFailed', params: {
         requestId: 'failed-1', errorText: 'raw network secret',
       } }) },
     ];
   };
-  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver,
+    supabaseOrigins: ['https://project.supabase.co'] });
   const first = await adapter.healthDiagnostics();
   assert.deepEqual(first, {
     console_errors: 1, failed_requests: 1, error_responses: 1, storage_requests: 1,
@@ -217,9 +231,14 @@ test('Appium target-open log drains remain in cumulative closed diagnostics', as
     async getLogs(type) {
       if (type === 'browser') return [];
       reads += 1;
-      if (reads === 1) return [{ message: JSON.stringify({ method: 'Network.loadingFailed', params: {
-        requestId: 'target-failed', errorText: 'must not survive',
-      } }) }];
+      if (reads === 1) return [
+        { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+          requestId: 'target-failed', type: 'Document', request: { url: target, method: 'GET' },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.loadingFailed', params: {
+          requestId: 'target-failed', errorText: 'must not survive',
+        } }) },
+      ];
       if (reads === 2) return [
         { message: JSON.stringify({ method: 'Network.responseReceived', params: {
           requestId: 'target-doc', type: 'Document', response: { url: target, status: 200,
@@ -240,11 +259,12 @@ test('Appium target-open log drains remain in cumulative closed diagnostics', as
       return true;
     },
   };
-  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver,
+    supabaseOrigins: ['https://project.supabase.co'] });
   await adapter.open(target);
   const diagnostics = await adapter.healthDiagnostics();
   assert.equal(diagnostics.failed_requests, 1);
-  assert.equal(diagnostics.error_responses, 1);
+  assert.equal(diagnostics.error_responses, 0);
   assert.doesNotMatch(JSON.stringify(diagnostics), /target|probe|survive/u);
 });
 
