@@ -1,0 +1,9 @@
+{
+  "schema_version": "unusual-events-health-policy-v1",
+  "status": "provisional",
+  "target_count": 20,
+  "minimum_publish_count": 12,
+  "absolute_maximum_count": 30,
+  "maximum_support_rows_per_group": 20,
+  "closure_consecutive_healthy_ready_runs": 2
+}

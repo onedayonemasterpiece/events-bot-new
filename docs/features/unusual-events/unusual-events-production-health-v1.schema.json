@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kenigevents:unusual-events-health-v1",
+  "title": "Bounded Unusual events production health",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "generated_at", "health_status", "content_readiness", "repo_sha", "run_id", "as_of_date",
+    "source", "bge", "contracts", "publication", "quality", "feed",
+    "findings", "closure"
+  ],
+  "properties": {
+    "schema_version": {"const": "unusual-events-health-v1"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "health_status": {"enum": ["HEALTHY", "WATCH", "INCIDENT"]},
+    "content_readiness": {"enum": ["READY", "NOT_READY", "BLOCKED"]},
+    "repo_sha": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "run_id": {"type": ["string", "null"], "maxLength": 240},
+    "as_of_date": {"type": ["string", "null"], "maxLength": 32},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["builder_receipt_schema", "repo_sha", "run_id", "build_id", "snapshot_id", "snapshot_sha256", "input_fingerprint", "as_of_date"],
+      "properties": {
+        "builder_receipt_schema": {"type": ["string", "null"], "enum": ["static_site_build_result_v2", "static_site_success_receipt_v2", null]},
+        "repo_sha": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "run_id": {"type": ["string", "null"], "maxLength": 240},
+        "build_id": {"type": ["string", "null"], "maxLength": 240},
+        "snapshot_id": {"type": ["string", "null"], "maxLength": 240},
+        "snapshot_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "input_fingerprint": {"$ref": "#/$defs/nullableSha256"},
+        "as_of_date": {"type": ["string", "null"], "maxLength": 32}
+      }
+    },
+    "bge": {
+      "type": "object", "additionalProperties": false,
+      "required": ["receipt_schema", "model_id", "model_revision", "embedding_dim", "encoder_contract", "document_kind", "document_version", "artifact_sha256", "npz_sha256", "provider_calls", "event_count", "encoded_event_count", "reused_event_count", "prototype_count", "build_mode", "single_vector_contract", "coverage_complete"],
+      "properties": {
+        "receipt_schema": {"type": ["string", "null"], "enum": ["static-collection-bge-cache-receipt-v1", null]},
+        "model_id": {"type": ["string", "null"], "maxLength": 120},
+        "model_revision": {"type": ["string", "null"], "maxLength": 80},
+        "embedding_dim": {"type": ["integer", "null"], "minimum": 1},
+        "encoder_contract": {"type": ["string", "null"], "maxLength": 120},
+        "document_kind": {"type": ["string", "null"], "maxLength": 120},
+        "document_version": {"type": ["string", "null"], "maxLength": 120},
+        "artifact_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "npz_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "provider_calls": {"type": ["integer", "null"], "minimum": 0},
+        "event_count": {"type": ["integer", "null"], "minimum": 1},
+        "encoded_event_count": {"type": ["integer", "null"], "minimum": 0},
+        "reused_event_count": {"type": ["integer", "null"], "minimum": 0},
+        "prototype_count": {"type": ["integer", "null"], "minimum": 0},
+        "build_mode": {"type": ["string", "null"], "enum": ["warm", "cold", null]},
+        "single_vector_contract": {"type": "boolean"},
+        "coverage_complete": {"type": "boolean"}
+      }
+    },
+    "contracts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["collection_prototype_bank_sha256", "collection_head_sha256", "unusual_prototype_bank_sha256", "unusual_classifier_sha256", "document_contract_sha256", "visible_output_sha256"],
+      "properties": {
+        "collection_prototype_bank_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "collection_head_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "unusual_prototype_bank_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "unusual_classifier_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "document_contract_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "visible_output_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["manifest_schema", "manifest_sha256", "cache_schema", "cache_sha256", "delivery_status", "migration", "last_good_fallback", "builder_published", "expected", "indexable", "canonical_path"],
+      "properties": {
+        "manifest_schema": {"type": ["string", "null"], "enum": ["static_unusual_events_v1", "unusual-event-manifest-v1", null]},
+        "manifest_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "cache_schema": {"type": ["string", "null"], "enum": ["unusual-event-score-cache-v1", null]},
+        "cache_sha256": {"$ref": "#/$defs/nullableSha256"},
+        "delivery_status": {"type": "string", "maxLength": 120},
+        "migration": {"type": "boolean"},
+        "last_good_fallback": {"type": "boolean"},
+        "builder_published": {"type": "boolean"}
+        ,"expected": {"type": "boolean"}
+        ,"indexable": {"type": "boolean"}
+        ,"canonical_path": {"const": "/neobychnoe/"}
+      }
+    },
+    "quality": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "evidence_kind", "metrics"],
+      "properties": {
+        "status": {"type": "string", "maxLength": 120},
+        "evidence_kind": {"type": ["string", "null"], "maxLength": 120},
+        "metrics": {
+          "type": "object", "maxProperties": 32,
+          "additionalProperties": {"type": ["number", "string", "boolean", "null"], "maxLength": 120}
+        }
+      }
+    },
+    "feed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["selected_count", "target_count", "minimum_publish_count", "ordered_visible_event_ids", "ordered_visible_concept_ids", "visible_event_ids", "visible_concept_ids", "selected", "candidate_count", "near_threshold", "exclusions", "duplicates", "expired", "visible_output_sha256"],
+      "properties": {
+        "selected_count": {"type": "integer", "minimum": 0, "maximum": 30},
+        "target_count": {"type": "integer", "minimum": 1, "maximum": 30},
+        "minimum_publish_count": {"type": "integer", "minimum": 1, "maximum": 30},
+        "ordered_visible_event_ids": {"type": "array", "maxItems": 30, "uniqueItems": true, "items": {"type": ["integer", "null"], "minimum": 1}},
+        "ordered_visible_concept_ids": {"type": "array", "maxItems": 30, "uniqueItems": true, "items": {"type": ["string", "null"], "maxLength": 160}},
+        "visible_event_ids": {"type": "array", "maxItems": 30, "uniqueItems": true, "items": {"type": ["integer", "null"], "minimum": 1}},
+        "visible_concept_ids": {"type": "array", "maxItems": 30, "uniqueItems": true, "items": {"type": ["string", "null"], "maxLength": 160}},
+        "selected": {"type": "array", "maxItems": 30, "items": {"$ref": "#/$defs/selected"}},
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "near_threshold": {"$ref": "#/$defs/supportRows"},
+        "exclusions": {"$ref": "#/$defs/supportRows"},
+        "duplicates": {"$ref": "#/$defs/supportRows"},
+        "expired": {"$ref": "#/$defs/supportRows"},
+        "visible_output_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "findings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["errors", "warnings"],
+      "properties": {
+        "errors": {"type": "array", "maxItems": 80, "uniqueItems": true, "items": {"$ref": "#/$defs/finding"}},
+        "warnings": {"type": "array", "maxItems": 80, "uniqueItems": true, "items": {"$ref": "#/$defs/finding"}}
+      }
+    },
+    "closure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required_consecutive_runs", "consecutive_healthy_ready_runs", "eligible_to_close"],
+      "properties": {
+        "required_consecutive_runs": {"const": 2},
+        "consecutive_healthy_ready_runs": {"type": "integer", "minimum": 0},
+        "eligible_to_close": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {"code": {"type": "string", "minLength": 1, "maxLength": 120}, "message": {"type": "string", "minLength": 1, "maxLength": 240}}
+    },
+    "support": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event_id", "concept_id", "family", "score", "reason"],
+      "properties": {
+        "event_id": {"type": ["integer", "null"], "minimum": 1},
+        "concept_id": {"type": ["string", "null"], "maxLength": 160},
+        "family": {"type": ["string", "null"], "maxLength": 80},
+        "score": {"type": ["number", "null"]},
+        "reason": {"type": ["string", "null"], "maxLength": 120}
+      }
+    },
+    "supportRows": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/support"}},
+    "selected": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event_id", "concept_id", "title", "path", "date", "start_date", "end_date", "family", "score", "reasons", "image_policy", "image_required"],
+      "properties": {
+        "event_id": {"type": ["integer", "null"], "minimum": 1},
+        "concept_id": {"type": ["string", "null"], "maxLength": 160},
+        "title": {"type": ["string", "null"], "maxLength": 180},
+        "path": {"type": ["string", "null"], "pattern": "^/(?!/)(?!.*://).*$", "maxLength": 240},
+        "date": {"type": ["string", "null"], "maxLength": 32},
+        "start_date": {"type": ["string", "null"], "maxLength": 32},
+        "end_date": {"type": ["string", "null"], "maxLength": 32},
+        "family": {"type": ["string", "null"], "maxLength": 80},
+        "score": {"type": ["number", "null"]},
+        "reasons": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 100}},
+        "image_policy": {
+          "type": "object", "additionalProperties": false,
+          "required": ["has_image", "status"],
+          "properties": {"has_image": {"type": "boolean"}, "status": {"type": ["string", "null"], "maxLength": 80}}
+        },
+        "image_required": {"type": "boolean"}
+      }
+    }
+  }
+}
