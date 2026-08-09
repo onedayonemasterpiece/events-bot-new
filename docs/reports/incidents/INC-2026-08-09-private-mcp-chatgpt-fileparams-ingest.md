@@ -51,18 +51,20 @@ capabilities, but no `ast_*` asset was created and no message was sent.
   download hostnames outside that assumed suffix. No bytes/provider calls were
   made. The next diagnostic records only one-way full/two-label/three-label
   fingerprints so the stable DNS policy boundary can be identified safely.
+- 2026-08-09 — the next real retry produced full/two-label/three-label hashes
+  which identify the stable boundary as a rotating
+  `<storage-account>.blob.core.windows.net` host. The full hostname remained
+  undisclosed; no bytes, asset or provider call were created.
 
 ## Root Cause
 
-The historical code collapsed every media-ingress exception into one public
-message and one exception-class audit reason, so the exact sub-branch of the
-five already-completed calls is irretrievable. The timing and persisted state
-prove that descriptor parsing, workspace dispatch, role/size configuration and
-principal derivation completed, while network streaming and Telegram provider
-staging did not begin. The leading remaining hypothesis is an exact temporary
-download-host/allowlist mismatch; a safe coded diagnostic deploy and one real
-ChatGPT retry are required to distinguish that from DNS/fetch policy without
-logging the URL.
+The original allowlist assumed that ChatGPT conversation files would use one
+exact OpenAI-controlled hostname. Real fileParams requests instead rotate
+between Azure Blob storage accounts. An exact-host or guessed OpenAI suffix
+policy therefore rejected the correctly rewritten file object before DNS and
+download. The repair allows the explicitly configured Azure Blob suffix only
+when the temporary URL carries a current blob-scoped read-only SAS; generic,
+unsigned or write-enabled Azure URLs remain denied before network I/O.
 
 ## Contributing Factors
 
@@ -126,6 +128,10 @@ provider send until staging and approval succeed.
 - After diagnostic deploy, repeat the same current-conversation stage once and
   correct only the exact observed ingress policy before the approved Saved
   Messages publication acceptance.
+- Keep OpenCode/local-client upload transport separate from ChatGPT fileParams:
+  a future local bridge streams bytes to an authenticated bounded upload
+  endpoint and receives the same opaque `ast_*`; server filesystem paths are
+  never accepted as media identities.
 
 ## Follow-up Actions
 

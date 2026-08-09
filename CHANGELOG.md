@@ -13,6 +13,10 @@
   Dynamic denied hosts now fingerprint both the full hostname and stable DNS
   suffixes, allowing an exact policy repair without storing a signed URL or
   disclosing the temporary provider hostname.
+  Rotating ChatGPT Azure Blob storage accounts are now accepted through an
+  explicit suffix policy only when the URL contains a current blob-scoped
+  read-only SAS; unsigned, write-enabled, expired and duplicate-field URLs are
+  still rejected before DNS/fetch.
 
 - Fixed the behavioral decoder Actions harness to exclude the exact-source
   `node_modules` directory from its disposable reflink/copy before attaching
