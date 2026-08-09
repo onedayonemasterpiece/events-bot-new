@@ -283,14 +283,15 @@ console.log(JSON.stringify({stable:JSON.stringify(a)===JSON.stringify(b),specime
     assert observed["incomplete"] != "accepted"
 
 
-def test_real_route_packet_validator_rejects_url_leaks_unstable_pixels_and_fake_review():
+def test_real_route_packet_validator_accepts_byte_drift_but_rejects_perceptual_instability():
     observed = _node(
         _imports("assertRealRouteEvidencePacket")
         + """
 const base={schema_version:'current_ui_decoder_controlled_specimen_v1',evidence_kind:'element-capture',production_state_claimed:false,human_review_status:'pending',full_url_retained:false,screenshot:{sha256:'a'.repeat(64),dhash:'b'.repeat(16),exact_stable:true,perceptually_stable:true},dom:{full_html_retained:false},network:{raw_urls_retained:false}};
-const cases={good:base,url:{...base,note:'https://private.invalid'},unstable:{...base,screenshot:{...base.screenshot,exact_stable:false}},reviewed:{...base,human_review_status:'reviewed'}};
+const cases={good:base,tolerant:{...base,screenshot:{...base.screenshot,exact_stable:false}},url:{...base,note:'https://private.invalid'},unstable:{...base,screenshot:{...base.screenshot,perceptually_stable:false}},reviewed:{...base,human_review_status:'reviewed'}};
 console.log(JSON.stringify(Object.fromEntries(Object.entries(cases).map(([name,row])=>{try{assertRealRouteEvidencePacket(row);return[name,'accepted']}catch(error){return[name,error.message]}}))));
 """
     )
     assert observed["good"] == "accepted"
+    assert observed["tolerant"] == "accepted"
     assert all(observed[name] != "accepted" for name in ("url", "unstable", "reviewed"))

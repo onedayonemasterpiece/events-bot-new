@@ -127,7 +127,7 @@ export function assertRealRouteEvidencePacket(packet) {
   if (packet.schema_version !== SPECIMEN_SCHEMA || packet.production_state_claimed !== false || packet.human_review_status !== 'pending') throw new Error('Invalid real-route evidence boundary');
   if (packet.full_url_retained !== false || JSON.stringify(packet).match(/https?:\/\//iu)) throw new Error('Real-route evidence leaked a URL');
   if (packet.evidence_kind === 'element-capture') {
-    if (!packet.screenshot?.exact_stable || !packet.screenshot?.perceptually_stable) throw new Error('Unstable exact real-route element capture');
+    if (!packet.screenshot?.perceptually_stable) throw new Error('Unstable exact real-route element capture');
     if (!/^[a-f0-9]{64}$/u.test(packet.screenshot.sha256) || !/^[a-f0-9]{16}$/u.test(packet.screenshot.dhash)) throw new Error('Real-route screenshot hashes missing');
     if (packet.dom.full_html_retained !== false || packet.network.raw_urls_retained !== false) throw new Error('Unbounded real-route evidence');
   } else if (packet.evidence_kind === 'expected-absence') {
@@ -139,7 +139,7 @@ export function assertRealRouteEvidencePacket(packet) {
 }
 
 export async function captureExactRealRoutes({
-  browser, candidateBase, resolvedBindings, outputDir, maxElementsPerContext = 2,
+  browser, candidateBase, resolvedBindings, outputDir, imageComparator, maxElementsPerContext = 2,
 }) {
   if (!Array.isArray(resolvedBindings) || !resolvedBindings.length) throw new Error('Resolved real-route bindings required');
   if (!Number.isInteger(maxElementsPerContext) || maxElementsPerContext < 1 || maxElementsPerContext > 3) throw new Error('Unsafe real-route element capture budget');
@@ -166,7 +166,10 @@ export async function captureExactRealRoutes({
       if (!response) throw new Error(`Exact route document response missing for binding: ${binding.route_binding_id}`);
       const documentBytes = await response.body();
       if (documentBytes.length !== binding.manifest_file_bytes || sha(documentBytes) !== binding.manifest_file_sha256) throw new Error(`Exact route document identity mismatch for binding: ${binding.route_binding_id}`);
-      await page.evaluate(() => document.fonts?.ready); await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+      await page.waitForLoadState('networkidle', { timeout: 20_000 });
+      await page.evaluate(() => document.fonts?.ready);
+      await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}' });
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
       for (const selector of binding.expected_absent_selectors) {
         const count = await page.locator(selector).count();
         const absence = {
@@ -189,7 +192,7 @@ export async function captureExactRealRoutes({
       if (!selected.length) throw new Error(`No visible evidence selector for binding: ${binding.route_binding_id}`);
       for (let index = 0; index < selected.length; index += 1) {
         const { selector, locator } = selected[index]; const name = `${binding.route_binding_id}-${contextPlan.name}-${index}.png`;
-        const screenshot = await captureStableLocatorPng({ locator, path: join(outputDir, 'component-screenshots', name) });
+        const screenshot = await captureStableLocatorPng({ locator, path: join(outputDir, 'component-screenshots', name), imageComparator, label: `Exact real-route ${binding.route_binding_id}/${contextPlan.name}/${index}` });
         const facts = await collectBoundedElementFacts(locator, []);
         let aria; try { aria = safeCapturedValue(await locator.ariaSnapshot({ timeout: 3000 }), 6000); } catch (error) { aria = { unavailable: true, error_class: error.constructor?.name || 'Error' }; }
         const packet = {

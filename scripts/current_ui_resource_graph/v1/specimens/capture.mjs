@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
@@ -6,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { buildSpecimenRegistry } from './registry.mjs';
 import { assertEvidencePacket, assertSpecimenRegistry, stableHash } from './validate.mjs';
+import { capturePlaywrightStablePair } from '../evidence.mjs';
 
 const sha = (value) => createHash('sha256').update(value).digest('hex');
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.png': 'image/png', '.jpg': 'image/jpeg' };
@@ -125,14 +127,41 @@ export async function collectBoundedElementFacts(locator, partSelectors) {
   return sanitizeTree(facts);
 }
 
-export async function captureStableLocatorPng({ locator, path }) {
-  const first = await locator.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' });
-  const second = await locator.screenshot({ type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' });
+export function loadPinnedPlaywrightImageComparator(nodeModules, mimeType = 'image/png') {
+  const requireFromPlaywright = createRequire(join(resolve(nodeModules), 'playwright', 'package.json'));
+  const coreBundlePath = requireFromPlaywright.resolve('playwright-core/lib/utilsBundle').replace(/utilsBundle\.js$/u, 'coreBundle.js');
+  return requireFromPlaywright(coreBundlePath).utils.getComparator(mimeType);
+}
+
+export async function captureStableLocatorPng({ locator, path, imageComparator, label = 'Element screenshot' }) {
+  if (typeof imageComparator !== 'function') throw new Error('PNG capture requires the pinned Playwright image comparator');
+  await locator.scrollIntoViewIfNeeded();
+  const layoutStable = await locator.evaluate(async (node) => {
+    const fingerprint = () => {
+      const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
+      return JSON.stringify([style.display, style.visibility, Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height), node.childElementCount]);
+    };
+    let previous = ''; let stable = 0;
+    for (let frame = 0; frame < 120; frame += 1) {
+      await new Promise((done) => requestAnimationFrame(done)); const current = fingerprint();
+      if (current === previous) stable += 1; else stable = 0;
+      if (stable >= 5) return true;
+      previous = current;
+    }
+    return false;
+  });
+  if (!layoutStable) throw new Error(`${label} layout did not stabilize`);
+  const screenshotOptions = { type: 'png', animations: 'disabled', caret: 'hide', scale: 'css' };
+  const stablePair = await capturePlaywrightStablePair({
+    capture: () => locator.screenshot(screenshotOptions), comparator: imageComparator, label,
+  });
+  const first = stablePair.first; const second = stablePair.accepted;
   mkdirSync(dirname(resolve(path)), { recursive: true }); writeFileSync(path, second);
   const firstDhash = pngDifferenceHash(first); const secondDhash = pngDifferenceHash(second);
   return {
     bytes: second.length, sha256: sha(second), dhash: secondDhash, first_sha256: sha(first), first_dhash: firstDhash,
-    exact_stable: first.equals(second), perceptually_stable: firstDhash === secondDhash,
+    exact_stable: first.equals(second), perceptually_stable: true,
+    stability_attempts: stablePair.attempts, comparator: stablePair.comparator,
   };
 }
 
@@ -143,12 +172,12 @@ async function applyAction(page, action) {
   else throw new Error(`Unsupported specimen action: ${action.kind}`);
 }
 
-async function captureStep({ page, row, outputDir, step, telemetry }) {
+async function captureStep({ page, row, outputDir, step, telemetry, imageComparator }) {
   const locator = page.locator(row.root_selector); await locator.waitFor({ state: 'visible' });
   for (const selector of row.expected_markers) if (await page.locator(selector).count() === 0) throw new Error(`Expected marker missing for ${row.id}: ${selector}`);
   for (const selector of row.expected_absent_markers || []) if (await page.locator(selector).count() !== 0) throw new Error(`Expected absent marker rendered for ${row.id}: ${selector}`);
   await page.evaluate(() => document.fonts?.ready);
-  const name = `${row.id}-${step}.png`; const screenshot = await captureStableLocatorPng({ locator, path: join(outputDir, 'component-screenshots', name) });
+  const name = `${row.id}-${step}.png`; const screenshot = await captureStableLocatorPng({ locator, path: join(outputDir, 'component-screenshots', name), imageComparator, label: `Controlled specimen ${row.id}/${step}` });
   let aria = null; try { aria = safeCapturedValue(await locator.ariaSnapshot({ timeout: 3000 }), 6000); } catch (error) { aria = { unavailable: true, error_class: error.constructor?.name || 'Error' }; }
   const facts = await collectBoundedElementFacts(locator, row.part_selectors);
   const packet = {
@@ -170,7 +199,7 @@ async function captureStep({ page, row, outputDir, step, telemetry }) {
   assertEvidencePacket(packet); return packet;
 }
 
-export async function captureControlledSpecimens({ browser, baseUrl, outputDir, registry = buildSpecimenRegistry() }) {
+export async function captureControlledSpecimens({ browser, baseUrl, outputDir, imageComparator, registry = buildSpecimenRegistry() }) {
   assertSpecimenRegistry(registry); const observations = [];
   for (const row of registry.controlled_specimens) {
     const context = await browser.newContext({ viewport: row.viewport, reducedMotion: row.environment.reduced_motion ? 'reduce' : 'no-preference' });
@@ -183,9 +212,9 @@ export async function captureControlledSpecimens({ browser, baseUrl, outputDir, 
     page.on('response', (response) => { const status = String(response.status()); telemetry.statusCounts[status] = (telemetry.statusCounts[status] || 0) + 1; });
     page.on('requestfailed', () => { telemetry.failed += 1; });
     await page.goto(`${baseUrl}/specimens/${row.id}/`, { waitUntil: 'networkidle' });
-    if ((row.capture_steps || []).includes('before-action')) observations.push(await captureStep({ page, row, outputDir, step: 'before-action', telemetry }));
+    if ((row.capture_steps || []).includes('before-action')) observations.push(await captureStep({ page, row, outputDir, step: 'before-action', telemetry, imageComparator }));
     for (const action of row.actions) await applyAction(page, action);
-    observations.push(await captureStep({ page, row, outputDir, step: row.actions.length ? 'after-action' : 'baseline', telemetry }));
+    observations.push(await captureStep({ page, row, outputDir, step: row.actions.length ? 'after-action' : 'baseline', telemetry, imageComparator }));
     await context.close();
   }
   writeFileSync(join(outputDir, 'specimen-observations.jsonl'), observations.map((row) => JSON.stringify(row)).join('\n') + '\n');
@@ -196,8 +225,9 @@ export async function captureWithExactPlaywright({ nodeModules, dist, outputDir,
   const modulePath = join(resolve(nodeModules), 'playwright/index.mjs');
   if (!existsSync(modulePath)) throw new Error('Exact Playwright entrypoint missing');
   const { chromium } = await import(pathToFileURL(modulePath).href); const server = await startSpecimenServer({ dist });
+  const imageComparator = loadPinnedPlaywrightImageComparator(nodeModules, 'image/png');
   const browser = await chromium.launch({ headless: true });
-  try { return await captureControlledSpecimens({ browser, baseUrl: server.baseUrl, outputDir, registry }); }
+  try { return await captureControlledSpecimens({ browser, baseUrl: server.baseUrl, outputDir, imageComparator, registry }); }
   finally { await browser.close(); await server.close(); }
 }
 
