@@ -22,6 +22,7 @@ import {
   resolveExactRealRouteBindings,
   captureExactRealRoutes,
   adaptEvidenceForSnapshot,
+  loadPinnedPlaywrightImageComparator,
 } from './v1/specimens/index.mjs';
 
 function bool(value, fallback = false) {
@@ -278,11 +279,13 @@ async function run(argv) {
       });
       const exactRequire = createRequire(join(siteRoot, 'package.json'));
       const { chromium } = exactRequire('playwright');
+      const realRouteImageComparator = loadPinnedPlaywrightImageComparator(nodeModules, 'image/png');
       const realRouteBrowser = await chromium.launch({ headless: true });
       let rawRealRouteObservations;
       try {
         rawRealRouteObservations = await captureExactRealRoutes({
           browser: realRouteBrowser, candidateBase, resolvedBindings: resolvedRealRoutes, outputDir: output,
+          imageComparator: realRouteImageComparator,
         });
       } finally { await realRouteBrowser.close(); }
       const adapted = adaptEvidenceForSnapshot({

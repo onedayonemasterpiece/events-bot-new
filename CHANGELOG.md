@@ -131,8 +131,10 @@
   contract: capture now retries a bounded sequence until two consecutive
   frames match the pinned Playwright `pixelmatch` YIQ threshold instead of
   requiring equality of a coarse dHash. Raw SHA-256 values, diagnostic dHashes,
-  attempt counts and exact-equality status remain retained; controlled isolated
-  PNG specimens remain byte-stable. Generic evidence also stops treating the
+  attempt counts and exact-equality status remain retained. Controlled and
+  exact-route element PNGs now use the same bounded Playwright comparator after
+  a stable-geometry gate, instead of treating raw PNG equality as acceptance.
+  Generic evidence also stops treating the
   full `[data-desktop-clean-event]` page surface as a component root. This
   avoids rejecting stable CTA lab pages without weakening human review or the
   perceptual fail-closed gate.

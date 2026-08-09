@@ -253,6 +253,13 @@ is the complete event-page surface, not a component boundary. Event layouts are
 captured through page verification, while actual component roots such as the
 desktop action panel, media frame, transport blocks and medallion layout remain
 eligible for element capture.
+
+The same comparator contract applies to controlled component PNGs and exact
+real-route element PNGs. Their byte-equality and dHash fields are diagnostics,
+not acceptance gates. Each locator is scrolled once, must hold stable geometry
+for five animation frames, and then receives the same bounded consecutive-frame
+comparison. Exact-route pages additionally wait for network idle and fonts and
+disable motion before element capture.
 Manifest, HTML and browser navigation retries are bounded to three attempts;
 retry configuration itself is capped.
 
