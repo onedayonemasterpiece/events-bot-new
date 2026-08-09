@@ -52,6 +52,26 @@ def test_breakpoint_rasters_do_not_wait_unbounded_for_optional_remote_fonts():
     assert node(script).stdout.strip() == '1'
 
 
+def test_converted_closure_plans_clear_stale_blocker_identity():
+    script = r"""
+      import {updatePlans} from './scripts/current_ui_resource_graph/v1/behavioral/closure-materialize.mjs';
+      const ids=['behavior-packet.rail-keyboard-home-end','behavior-packet.breakpoint-container-runtime-coverage-gap'];
+      const rows=ids.map(id=>({id,blocker_id:`stale-${id}`,blocker_reason:'stale',blocked_states:['stale'],blocks_ready:true}));
+      const observations=ids.map((plan_id,index)=>({id:`observation-${index}`,plan_id,phase:`phase-${index}`}));
+      const inputs={terminal:[{}],terminalCounts:{terminal:293,pass:236,mismatch:39,unreachable:18}};
+      console.log(JSON.stringify(updatePlans(rows,observations,inputs,true).map(row=>({id:row.id,blocker_id:row.blocker_id,blocker_reason:row.blocker_reason,blocked_states:row.blocked_states,blocks_ready:row.blocks_ready}))));
+    """
+    payload = json.loads(node(script).stdout)
+    assert {row['id'] for row in payload} == {
+        'behavior-packet.rail-keyboard-home-end',
+        'behavior-packet.breakpoint-container-runtime-coverage-gap',
+    }
+    assert all(row['blocker_id'] is None for row in payload)
+    assert all(row['blocker_reason'] is None for row in payload)
+    assert all(row['blocked_states'] == [] for row in payload)
+    assert all(row['blocks_ready'] is False for row in payload)
+
+
 def test_exact_local_closure_fixture_when_supplied():
     fixture = os.environ.get('CURRENT_UI_BEHAVIORAL_CLOSURE_FIXTURE')
     if not fixture:

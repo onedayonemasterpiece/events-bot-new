@@ -823,3 +823,9 @@ all newly indexed full-resolution reviews, permanent Release provenance, and
 independent audit pass. This status still does not authorize fixing the rail,
 defragmenting components, choosing experiment winners, creating tokens,
 changing Penpot, or starting normalization automatically.
+
+When the rail and aggregate probe evidence gates are converted, their plan and
+action records both clear `blocker_id`, `blocker_reason`, and `blocked_states`.
+The validator rejects any stale blocker identity on those reviewed nonblocking
+plans, so a machine consumer cannot mistake a closed evidence gap for an active
+one.
