@@ -32,14 +32,33 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from runtime_disk import runtime_scratch_health, writable_disk_health
 from static_site_release import (
+    STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA,
+    STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
     resolve_build_clock,
     static_site_artifact_root,
     static_site_scratch_root,
+    validate_static_site_image_source_manifest,
+    validate_static_site_source_identity,
 )
 KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
 SITE_SOURCE_REPO_CONTRACTS = (
     Path('docs/testing/transport-fault-profiles.v1.yml'),
 )
+IMAGE_SOURCE_ROOTS = (
+    Path('site'),
+    Path('google_ai'),
+    Path('kaggle/StaticSiteBuilder'),
+)
+IMAGE_SOURCE_FILES = (
+    Path('scripts/run_static_site_builder_kaggle.py'),
+    Path('scripts/sync_event_search_vectors_to_supabase.py'),
+    Path('scripts/check_static_collections_product_quality.py'),
+    Path('tests/fixtures/unusual_events_golden_v1.json'),
+    *SITE_SOURCE_REPO_CONTRACTS,
+)
+SOURCE_IGNORED_PARTS = {
+    'node_modules', 'dist', '.astro', '.vercel', '__pycache__', 'output',
+}
 SITE_SRC = ROOT / 'site'
 ARTIFACT_ROOT = static_site_artifact_root(ROOT)
 SCRATCH_ROOT = static_site_scratch_root(ARTIFACT_ROOT)
@@ -165,6 +184,142 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _source_file_entries(
+    roots: list[tuple[Path, str]],
+    *,
+    optional_files: list[tuple[Path, str]] | None = None,
+) -> list[tuple[str, Path]]:
+    entries: list[tuple[str, Path]] = []
+    for source_root, logical_root in roots:
+        source_root = source_root.resolve()
+        if not source_root.is_dir():
+            raise FileNotFoundError(source_root)
+        for path in sorted(source_root.rglob('*')):
+            relative = path.relative_to(source_root)
+            if any(part in SOURCE_IGNORED_PARTS for part in relative.parts):
+                continue
+            if path.is_symlink():
+                raise RuntimeError(f'static-site source symlink is refused: {logical_root}/{relative.as_posix()}')
+            if not path.is_file() or path.name.endswith(('.pyc', '.DS_Store')):
+                continue
+            entries.append((f'{logical_root}/{relative.as_posix()}', path))
+    for path, logical_path in optional_files or []:
+        path = path.resolve()
+        if not path.exists():
+            continue
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError(f'static-site source file is not regular: {logical_path}')
+        entries.append((logical_path, path))
+    logical_paths = [logical for logical, _path in entries]
+    if len(set(logical_paths)) != len(logical_paths):
+        raise RuntimeError('static-site source manifest contains duplicate logical paths')
+    return sorted(entries, key=lambda item: item[0])
+
+
+def _source_tree_digest(entries: list[tuple[str, Path]]) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    for logical_path, path in entries:
+        size = path.stat().st_size
+        file_sha256 = sha256_file(path)
+        digest.update(
+            json.dumps(
+                [logical_path, size, file_sha256],
+                ensure_ascii=False,
+                separators=(',', ':'),
+            ).encode('utf-8')
+        )
+        digest.update(b'\n')
+    return digest.hexdigest(), len(entries)
+
+
+def build_image_source_manifest(
+    repo_sha: str,
+    *,
+    root: Path | None = None,
+) -> dict[str, object]:
+    root = (root or ROOT).resolve()
+    clean_sha = resolve_repo_sha(repo_sha)
+    roots = [(root / relative, relative.as_posix()) for relative in IMAGE_SOURCE_ROOTS]
+    files = [
+        (root / relative, relative.as_posix())
+        for relative in IMAGE_SOURCE_FILES
+    ]
+    source_tree_sha256, source_file_count = _source_tree_digest(
+        _source_file_entries(roots, optional_files=files)
+    )
+    return {
+        'schema_version': STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA,
+        'repo_sha': clean_sha,
+        'source_tree_sha256': source_tree_sha256,
+        'source_file_count': source_file_count,
+    }
+
+
+def _manifest_bytes(value: dict[str, object]) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        + '\n'
+    ).encode('utf-8')
+
+
+def write_image_source_manifest(
+    path: Path,
+    *,
+    repo_sha: str,
+    root: Path | None = None,
+) -> dict[str, object]:
+    manifest = build_image_source_manifest(repo_sha, root=root)
+    target = path.resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(_manifest_bytes(manifest))
+    return manifest
+
+
+def resolve_image_source_contract(args: argparse.Namespace) -> dict[str, object]:
+    repo_sha = str(getattr(args, 'repo_sha', '') or '').strip().lower()
+    configured = str(getattr(args, 'image_source_manifest', '') or '').strip()
+    if configured:
+        path = Path(configured).resolve()
+        if not path.is_file() or path.stat().st_size > 64 * 1024:
+            raise RuntimeError('static-site image source manifest is missing or unbounded')
+        raw = path.read_bytes()
+        try:
+            manifest = json.loads(raw)
+        except Exception as exc:
+            raise RuntimeError(f'static-site image source manifest is invalid: {exc}') from exc
+        validated = validate_static_site_image_source_manifest(manifest, repo_sha=repo_sha)
+        actual = build_image_source_manifest(repo_sha)
+        if validated != actual:
+            raise RuntimeError('static-site image source bytes differ from the build-time manifest')
+    else:
+        if os.getenv('FLY_APP_NAME') or os.getenv('FLY_MACHINE_ID'):
+            raise RuntimeError('Fly static-site build requires the baked image source manifest')
+        validated = build_image_source_manifest(repo_sha)
+        raw = _manifest_bytes(validated)
+    manifest_sha256 = hashlib.sha256(raw).hexdigest()
+    expected_sha256 = str(
+        getattr(args, 'expected_image_source_manifest_sha256', '') or ''
+    ).strip().lower()
+    if expected_sha256 and manifest_sha256 != expected_sha256:
+        raise RuntimeError('static-site image source manifest digest mismatch')
+    return {
+        **validated,
+        'manifest_sha256': manifest_sha256,
+    }
+
+
+def payload_source_tree_digest(site_dir: Path) -> str:
+    roots = [(site_dir, 'site')]
+    files = [
+        (ROOT / relative, relative.as_posix())
+        for relative in SITE_SOURCE_REPO_CONTRACTS
+    ]
+    digest, _count = _source_tree_digest(
+        _source_file_entries(roots, optional_files=files)
+    )
+    return digest
 
 
 def validate_search_corpus_receipt(path: Path) -> dict:
@@ -318,6 +473,16 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
             actual = result.get('snapshot', {}).get(key) if key.startswith('snapshot_') else result.get(key)
             if str(actual) != str(value):
                 raise RuntimeError(f'Kaggle result {key} mismatch: {actual!r} != {value!r}')
+        image_source = getattr(args, 'image_source_contract', None) or resolve_image_source_contract(args)
+        try:
+            validate_static_site_source_identity(
+                result.get('source') if isinstance(result.get('source'), dict) else {},
+                repo_sha=args.repo_sha,
+                image_source_manifest_sha256=str(image_source['manifest_sha256']),
+                image_source_tree_sha256=str(image_source['source_tree_sha256']),
+            )
+        except Exception as exc:
+            raise RuntimeError(f'Kaggle result source identity mismatch: {exc}') from exc
         if result.get('input_fingerprint') != args.input_fingerprint:
             raise RuntimeError('Kaggle result input fingerprint mismatch')
         if result.get('build_clock') != args.build_clock:
@@ -862,7 +1027,9 @@ def create_status_dataset_if_configured(
 def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_dir: Path, client, env_user: str) -> tuple[str, str]:
     if not KERNEL_SRC.exists():
         raise FileNotFoundError(KERNEL_SRC)
+    args.repo_sha = resolve_repo_sha(getattr(args, 'repo_sha', ''))
     copy_tree(KERNEL_SRC, staging)
+    image_source = getattr(args, 'image_source_contract', None) or resolve_image_source_contract(args)
     build_id = args.build_id or f"preview-{datetime.now(timezone.utc).strftime('%Y%m%d-static-prod50')}"
     search_receipt_source: Path | None = None
     configured_search_receipt = str(getattr(args, 'search_corpus_receipt', '') or '').strip()
@@ -963,18 +1130,42 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
     for source_value, filename in semantic_inputs:
         if source_value and Path(source_value).is_file():
             shutil.copy2(Path(source_value).resolve(), dataset_dir / filename)
-    (dataset_dir / 'build_config.json').write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     # Deliberately avoid `.tar.gz` filename: Kaggle dataset ingestion auto-extracts
     # archives and may reject/disappear datasets containing Astro dynamic route
     # paths like `[slug].astro`. The file content is gzip tar; only the extension is
     # neutral.
-    tar_site_source(staged_site, dataset_dir / 'site_source.tarball')
+    source_archive = dataset_dir / 'site_source.tarball'
+    payload_tree_sha256 = payload_source_tree_digest(staged_site)
+    tar_site_source(staged_site, source_archive)
+    source_identity = {
+        'schema_version': STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
+        'repo_sha': args.repo_sha,
+        'image_source_manifest_sha256': image_source['manifest_sha256'],
+        'image_source_tree_sha256': image_source['source_tree_sha256'],
+        'payload_tree_sha256': payload_tree_sha256,
+        'payload_archive_sha256': sha256_file(source_archive),
+    }
+    validate_static_site_source_identity(source_identity, repo_sha=args.repo_sha)
+    source_manifest_bytes = _manifest_bytes(source_identity)
+    (dataset_dir / 'static_site_source_manifest.json').write_bytes(
+        source_manifest_bytes
+    )
+    config['source_manifest_sha256'] = hashlib.sha256(
+        source_manifest_bytes
+    ).hexdigest()
+    (dataset_dir / 'build_config.json').write_text(
+        json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8'
+    )
     shutil.rmtree(staged_site)
     run_suffix = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3)}"
     dataset_ref = f'{env_user}/static-site-builder-input-{run_suffix}'
     write_dataset_metadata(dataset_dir, dataset_ref, f'static site builder input {run_suffix}')
     create_input_dataset(client, dataset_dir, dataset_ref)
-    expected = ['site_source.tarball', 'build_config.json']
+    expected = [
+        'site_source.tarball',
+        'build_config.json',
+        'static_site_source_manifest.json',
+    ]
     if args.db and args.export_in_kaggle:
         expected.append('events.sqlite')
         if args.snapshot_manifest:
@@ -1065,6 +1256,16 @@ def main() -> int:
     parser.add_argument('--profile', choices=['preview', 'production-candidate'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
     parser.add_argument('--catalog-mode', choices=['slice', 'full'], default=os.getenv('STATIC_SITE_CATALOG_MODE', 'slice'))
     parser.add_argument('--repo-sha', default=os.getenv('STATIC_SITE_REPO_SHA', ''))
+    parser.add_argument(
+        '--image-source-manifest',
+        default=os.getenv('STATIC_SITE_IMAGE_SOURCE_MANIFEST_FILE', ''),
+        help='Build-time manifest binding the deployed image revision to exact static source bytes.',
+    )
+    parser.add_argument(
+        '--expected-image-source-manifest-sha256',
+        default='',
+        help='Durable manifest digest required when adopting an existing remote run.',
+    )
     parser.add_argument('--run-id', default=os.getenv('STATIC_SITE_RUN_ID', ''))
     parser.add_argument('--candidate-token', default=os.getenv('STATIC_SITE_CANDIDATE_TOKEN', ''))
     parser.add_argument('--limit', type=int, default=int(os.getenv('STATIC_SITE_BUILDER_LIMIT', '50')))
@@ -1226,6 +1427,7 @@ def main() -> int:
     elif args.catalog_mode != 'slice':
         raise SystemExit('preview profile requires --catalog-mode slice')
     args.snapshot_contract = load_snapshot_contract(args)
+    args.image_source_contract = resolve_image_source_contract(args)
 
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     with LOCK_PATH.open('w') as lock_file:

@@ -39,6 +39,8 @@ MAX_EVENT_REVISIONS = 256
 SECRET_CANDIDATE_RESULT_SCHEMA = "static_site_build_result_v2"
 SECRET_CANDIDATE_MANIFEST_SCHEMA = "static_secret_candidate_manifest_v1"
 SECRET_CANDIDATE_TOKEN_RE = r"[A-Za-z0-9_-]{43}"
+STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA = "static_site_image_source_manifest_v1"
+STATIC_SITE_SOURCE_IDENTITY_SCHEMA = "static_site_source_identity_v1"
 STATIC_SITE_TIME_ZONE_NAME = "Europe/Kaliningrad"
 STATIC_SITE_TIME_ZONE = ZoneInfo(STATIC_SITE_TIME_ZONE_NAME)
 STATIC_SITE_FINGERPRINT_SCHEMA = "static_site_input_fingerprint_v1"
@@ -292,6 +294,77 @@ def iso_utc(value: datetime | str | None = None) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def validate_static_site_image_source_manifest(
+    value: Mapping[str, Any],
+    *,
+    repo_sha: str,
+) -> dict[str, Any]:
+    """Validate the build-time receipt binding an image revision to source bytes."""
+
+    if value.get("schema_version") != STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA:
+        raise StaticSitePermanentError("static_site_image_source_manifest_schema_mismatch")
+    if value.get("repo_sha") != repo_sha or not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
+        raise StaticSitePermanentError("static_site_image_source_manifest_repo_sha_mismatch")
+    source_tree_sha256 = str(value.get("source_tree_sha256") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", source_tree_sha256):
+        raise StaticSitePermanentError("static_site_image_source_manifest_tree_invalid")
+    try:
+        source_file_count = int(value.get("source_file_count"))
+    except (TypeError, ValueError) as exc:
+        raise StaticSitePermanentError("static_site_image_source_manifest_count_invalid") from exc
+    if source_file_count <= 0:
+        raise StaticSitePermanentError("static_site_image_source_manifest_count_invalid")
+    return {
+        "schema_version": STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA,
+        "repo_sha": repo_sha,
+        "source_tree_sha256": source_tree_sha256,
+        "source_file_count": source_file_count,
+    }
+
+
+def validate_static_site_source_identity(
+    value: Mapping[str, Any],
+    *,
+    repo_sha: str,
+    image_source_manifest_sha256: str | None = None,
+    image_source_tree_sha256: str | None = None,
+) -> dict[str, str]:
+    """Validate exact source/archive identity returned by the remote builder."""
+
+    if value.get("schema_version") != STATIC_SITE_SOURCE_IDENTITY_SCHEMA:
+        raise StaticSitePermanentError("static_site_source_identity_schema_mismatch")
+    if value.get("repo_sha") != repo_sha or not re.fullmatch(r"[0-9a-f]{40}", repo_sha):
+        raise StaticSitePermanentError("static_site_source_identity_repo_sha_mismatch")
+    digests = {
+        "image_source_manifest_sha256": str(
+            value.get("image_source_manifest_sha256") or ""
+        ),
+        "image_source_tree_sha256": str(value.get("image_source_tree_sha256") or ""),
+        "payload_tree_sha256": str(value.get("payload_tree_sha256") or ""),
+        "payload_archive_sha256": str(value.get("payload_archive_sha256") or ""),
+    }
+    for label, digest in digests.items():
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise StaticSitePermanentError(f"static_site_source_identity_{label}_invalid")
+    if (
+        image_source_manifest_sha256 is not None
+        and digests["image_source_manifest_sha256"] != image_source_manifest_sha256
+    ):
+        raise StaticSitePermanentError(
+            "static_site_source_identity_image_manifest_mismatch"
+        )
+    if (
+        image_source_tree_sha256 is not None
+        and digests["image_source_tree_sha256"] != image_source_tree_sha256
+    ):
+        raise StaticSitePermanentError("static_site_source_identity_image_tree_mismatch")
+    return {
+        "schema_version": STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
+        "repo_sha": repo_sha,
+        **digests,
+    }
 
 
 def _clean_token(value: Any, *, max_len: int = 200) -> str:
@@ -1841,6 +1914,7 @@ def validate_production_candidate_result(
     candidate_token: str,
     input_fingerprint: str | None = None,
     build_clock: StaticSiteBuildClock | None = None,
+    source_identity: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], Path]:
     """Revalidate the bounded Kaggle receipt at the trusted publisher boundary."""
 
@@ -1862,6 +1936,26 @@ def validate_production_candidate_result(
     for key, value in expected.items():
         if result.get(key) != value:
             raise StaticSitePermanentError(f"static_site_result_identity_mismatch:{key}")
+    result_source = result.get("source") if isinstance(result.get("source"), Mapping) else {}
+    if source_identity is not None:
+        expected_manifest_sha256 = str(
+            source_identity.get("image_source_manifest_sha256") or ""
+        )
+        expected_tree_sha256 = str(
+            source_identity.get("image_source_tree_sha256") or ""
+        )
+        if not re.fullmatch(r"[0-9a-f]{64}", expected_manifest_sha256) or not re.fullmatch(
+            r"[0-9a-f]{64}", expected_tree_sha256
+        ):
+            raise StaticSitePermanentError(
+                "static_site_expected_source_identity_invalid"
+            )
+        validate_static_site_source_identity(
+            result_source,
+            repo_sha=repo_sha,
+            image_source_manifest_sha256=expected_manifest_sha256,
+            image_source_tree_sha256=expected_tree_sha256,
+        )
     if input_fingerprint is not None and result.get("input_fingerprint") != input_fingerprint:
         raise StaticSitePermanentError("static_site_result_input_fingerprint_mismatch")
     if build_clock is not None:
@@ -2112,6 +2206,35 @@ def publish_secret_candidate_archive(
         or manifest.get("run_id") != build_result.get("run_id")
     ):
         raise StaticSitePermanentError("secret_candidate_manifest_identity_mismatch")
+    build_source = (
+        build_result.get("source")
+        if isinstance(build_result.get("source"), Mapping)
+        else None
+    )
+    if build_source is not None:
+        expected_source = validate_static_site_source_identity(
+            build_source,
+            repo_sha=str(build_result.get("repo_sha") or ""),
+        )
+        manifest_source = (
+            manifest.get("source") if isinstance(manifest.get("source"), Mapping) else {}
+        )
+        if (
+            validate_static_site_source_identity(
+                manifest_source,
+                repo_sha=expected_source["repo_sha"],
+                image_source_manifest_sha256=expected_source[
+                    "image_source_manifest_sha256"
+                ],
+                image_source_tree_sha256=expected_source[
+                    "image_source_tree_sha256"
+                ],
+            )
+            != expected_source
+        ):
+            raise StaticSitePermanentError(
+                "secret_candidate_manifest_source_identity_mismatch"
+            )
     for check in ("candidate_contract", "catalog_parity", "noindex", "no_referrer", "prefix_containment", "root_isolation", "browser_visual"):
         if (manifest.get("checks") or {}).get(check) != "ok":
             raise StaticSitePermanentError(f"secret_candidate_manifest_unchecked:{check}")

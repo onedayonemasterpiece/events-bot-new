@@ -34,6 +34,170 @@ def test_kaggle_site_source_bundle_includes_repo_level_transport_contract(
         assert b"static_site_transport_fault_profiles.v1" in contract.read()
 
 
+def test_image_source_manifest_detects_bytes_changed_after_image_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts import run_static_site_builder_kaggle as runner
+
+    for relative in runner.IMAGE_SOURCE_ROOTS:
+        directory = tmp_path / relative
+        directory.mkdir(parents=True)
+        (directory / "source.txt").write_text(
+            f"{relative.as_posix()}\n", encoding="utf-8"
+        )
+    manifest_path = tmp_path / ".static-site-source-manifest.json"
+    repo_sha = "a" * 40
+    runner.write_image_source_manifest(
+        manifest_path,
+        repo_sha=repo_sha,
+        root=tmp_path,
+    )
+    monkeypatch.setattr(runner, "ROOT", tmp_path)
+    args = SimpleNamespace(
+        repo_sha=repo_sha,
+        image_source_manifest=str(manifest_path),
+        expected_image_source_manifest_sha256="",
+    )
+
+    contract = runner.resolve_image_source_contract(args)
+    assert contract["repo_sha"] == repo_sha
+
+    (tmp_path / "site" / "source.txt").write_text("mutated\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="source bytes differ"):
+        runner.resolve_image_source_contract(args)
+
+
+def test_kernel_rejects_source_archive_not_bound_by_source_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import hashlib
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "static_site_builder_source_identity_test", kernel_path
+    )
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    archive = input_root / "site_source.tarball"
+    archive.write_bytes(b"unexpected archive bytes")
+    source_identity = {
+        "schema_version": "static_site_source_identity_v1",
+        "repo_sha": "b" * 40,
+        "image_source_manifest_sha256": "c" * 64,
+        "image_source_tree_sha256": "d" * 64,
+        "payload_tree_sha256": "e" * 64,
+        "payload_archive_sha256": "f" * 64,
+    }
+    source_bytes = (
+        json.dumps(source_identity, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    (input_root / "static_site_source_manifest.json").write_bytes(source_bytes)
+    monkeypatch.setattr(kernel, "INPUT_ROOT", input_root)
+
+    with pytest.raises(RuntimeError, match="archive hash mismatch"):
+        kernel.validate_source_identity(
+            {
+                "repo_sha": "b" * 40,
+                "source_manifest_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            },
+            archive,
+        )
+
+
+def test_candidate_manifest_rejects_source_identity_different_from_result(
+    tmp_path: Path,
+) -> None:
+    import hashlib
+
+    from static_site_release import (
+        StaticSitePermanentError,
+        publish_secret_candidate_archive,
+    )
+
+    token = "A" * 43
+    candidate = tmp_path / "candidate" / "_review" / token
+    candidate.mkdir(parents=True)
+    index = b"<!doctype html>"
+    (candidate / "index.html").write_bytes(index)
+    source = {
+        "schema_version": "static_site_source_identity_v1",
+        "repo_sha": "a" * 40,
+        "image_source_manifest_sha256": "b" * 64,
+        "image_source_tree_sha256": "c" * 64,
+        "payload_tree_sha256": "d" * 64,
+        "payload_archive_sha256": "e" * 64,
+    }
+    manifest = {
+        "schema_version": "static_secret_candidate_manifest_v1",
+        "site_mode": "secret_candidate",
+        "publication_mode": "secret_link",
+        "build_id": "production-source-bound",
+        "run_id": "static-site:source-bound",
+        "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+        "source": {**source, "payload_tree_sha256": "f" * 64},
+        "checks": {
+            "candidate_contract": "ok",
+            "catalog_parity": "ok",
+            "noindex": "ok",
+            "no_referrer": "ok",
+            "prefix_containment": "ok",
+            "root_isolation": "ok",
+            "browser_visual": "ok",
+        },
+        "files": [
+            {
+                "key": "index.html",
+                "sha256": hashlib.sha256(index).hexdigest(),
+                "size": len(index),
+                "content_type": "text/html; charset=utf-8",
+                "cache_control": "private, no-store, max-age=0",
+            }
+        ],
+    }
+    (candidate / "secret-candidate-manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    archive = tmp_path / "candidate.tar.gz"
+    with tarfile.open(archive, "w:gz") as bundle:
+        bundle.add(candidate, arcname=f"_review/{token}")
+
+    with pytest.raises(
+        StaticSitePermanentError,
+        match="manifest_source_identity_mismatch",
+    ):
+        publish_secret_candidate_archive(
+            archive,
+            build_result={
+                "build_id": "production-source-bound",
+                "run_id": "static-site:source-bound",
+                "repo_sha": "a" * 40,
+                "snapshot": {"snapshot_id": "snapshot-source-bound"},
+                "candidate": {"token": token},
+                "source": source,
+            },
+            extraction_root=tmp_path / "extract",
+            bucket="bucket",
+            endpoint="https://storage.invalid",
+            region="ru-central1",
+            access_key_id="test",
+            secret_access_key="test",
+            s3_client=object(),
+            list_preflight=lambda _endpoint, _bucket: True,
+            public_probe=lambda _url: None,
+        )
+
+
 def test_kaggle_preview_provenance_uses_runner_bound_full_repo_sha(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -474,6 +638,16 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     runner.stage_kernel_and_dataset(args, staging, dataset, object(), "owner")
 
     config = json.loads((dataset / "build_config.json").read_text(encoding="utf-8"))
+    source_identity = json.loads(
+        (dataset / "static_site_source_manifest.json").read_text(encoding="utf-8")
+    )
+    assert config["source_manifest_sha256"] == runner.sha256_file(
+        dataset / "static_site_source_manifest.json"
+    )
+    assert source_identity["repo_sha"] == runner.resolve_repo_sha("")
+    assert source_identity["payload_archive_sha256"] == runner.sha256_file(
+        dataset / "site_source.tarball"
+    )
     assert config["related_corpus_revision"] == revision
     assert config["secret_candidate_artifact_research"] is True
     assert config["secret_candidate_require_authorized_search"] is True

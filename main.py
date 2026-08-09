@@ -291,6 +291,7 @@ from static_site_release import (
     static_site_artifact_root,
     static_site_result_counts,
     static_site_scratch_root,
+    validate_static_site_image_source_manifest,
     validate_production_candidate_result,
     validate_snapshot,
     validate_vector_barrier,
@@ -23157,14 +23158,53 @@ def _resolve_static_site_repo_sha() -> str:
             )
         return image_sha
 
-    if re.fullmatch(r"[0-9a-f]{40}", legacy_sha):
+    if re.fullmatch(r"[0-9a-f]{40}", legacy_sha) and not (
+        os.getenv("FLY_APP_NAME") or os.getenv("FLY_MACHINE_ID")
+    ):
         logging.warning(
-            "static-site image revision file is absent; using legacy STATIC_SITE_REPO_SHA"
+            "static-site image revision file is absent; using local/dev STATIC_SITE_REPO_SHA"
         )
         return legacy_sha
     raise StaticSitePermanentError(
         "static-site image revision is absent; deploy exact origin/main with the canonical release script"
     )
+
+
+def _resolve_static_site_image_source_identity(repo_sha: str) -> dict[str, str] | None:
+    configured_path = (
+        os.getenv("STATIC_SITE_IMAGE_SOURCE_MANIFEST_FILE") or ""
+    ).strip()
+    manifest_path = (
+        Path(configured_path)
+        if configured_path
+        else Path(__file__).with_name(".static-site-source-manifest.json")
+    )
+    if not manifest_path.is_file():
+        if configured_path or os.getenv("FLY_APP_NAME") or os.getenv("FLY_MACHINE_ID"):
+            raise StaticSitePermanentError(
+                "static-site image source manifest is absent"
+            )
+        return None
+    if manifest_path.stat().st_size > 64 * 1024:
+        raise StaticSitePermanentError(
+            "static-site image source manifest is unbounded"
+        )
+    raw = manifest_path.read_bytes()
+    try:
+        manifest = json.loads(raw)
+    except Exception as exc:
+        raise StaticSitePermanentError(
+            f"static-site image source manifest is invalid:{exc}"
+        ) from exc
+    validated = validate_static_site_image_source_manifest(
+        manifest,
+        repo_sha=repo_sha,
+    )
+    return {
+        "manifest_path": str(manifest_path.resolve()),
+        "image_source_manifest_sha256": hashlib.sha256(raw).hexdigest(),
+        "image_source_tree_sha256": str(validated["source_tree_sha256"]),
+    }
 
 
 def _static_site_build_kaggle_command(
@@ -23187,6 +23227,8 @@ def _static_site_build_kaggle_command(
     expected_dataset_ref: str | None = None,
     related_corpus_revision: str | None = None,
     search_corpus_receipt_path: str | None = None,
+    image_source_manifest_path: str | None = None,
+    image_source_manifest_sha256: str | None = None,
 ) -> list[str]:
     related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
     if related_mode not in {"sparse", "pgvector", "bge"}:
@@ -23305,6 +23347,15 @@ def _static_site_build_kaggle_command(
                 f"--candidate-token={candidate_token}",
             ]
         )
+        if image_source_manifest_path:
+            cmd.extend(["--image-source-manifest", image_source_manifest_path])
+        if image_source_manifest_sha256:
+            cmd.extend(
+                [
+                    "--expected-image-source-manifest-sha256",
+                    image_source_manifest_sha256,
+                ]
+            )
         # Computation and validation are mandatory candidate evidence.  This is
         # intentionally independent of related retrieval and per-page rollout.
         cmd.append("--collection-semantic-compute")
@@ -23623,6 +23674,7 @@ async def _finish_static_site_candidate(
     clock: Any,
     claim_token: str,
     recovered_remote: bool = False,
+    source_identity: Mapping[str, Any] | None = None,
 ) -> bool | str:
     result_path = output_dir / "static_site_build_result.json"
     if not result_path.is_file():
@@ -23638,6 +23690,7 @@ async def _finish_static_site_candidate(
         candidate_token=candidate_token,
         input_fingerprint=input_fingerprint,
         build_clock=clock,
+        source_identity=source_identity,
     )
     result_sha256 = hashlib.sha256(result_path.read_bytes()).hexdigest()
     publication_receipt = None
@@ -23717,6 +23770,7 @@ async def _finish_static_site_candidate(
                 "semantic": result.get("semantic"),
                 "service_share": result.get("service_share"),
                 "input_fingerprint": input_fingerprint,
+                "source": result.get("source"),
                 "publication": (
                     {
                         "status": "published",
@@ -23751,6 +23805,7 @@ async def _finish_static_site_candidate(
         "repo_sha": repo_sha,
         "snapshot_id": snapshot_metadata.snapshot_id,
         "input_fingerprint": input_fingerprint,
+        "source": result.get("source"),
         "effective_date": clock.effective_date,
         "result_sha256": result_sha256,
         "counts": counts,
@@ -23769,6 +23824,7 @@ async def _finish_static_site_candidate(
             "repo_sha": repo_sha,
             "snapshot_id": snapshot_metadata.snapshot_id,
             "input_fingerprint": input_fingerprint,
+            "source": result.get("source"),
             "effective_date": clock.effective_date,
             "result_sha256": result_sha256,
             "manifest_sha256": publication_receipt.manifest_sha256,
@@ -23845,6 +23901,8 @@ async def _recover_previous_static_site_attempt(
     job_id: int,
     request_payload: Mapping[str, Any],
     limit: int,
+    current_repo_sha: str,
+    current_source_identity: Mapping[str, Any] | None,
 ) -> tuple[bool, bool | str | None]:
     """Adopt a surviving Kaggle run before any replacement push is allowed."""
 
@@ -23874,6 +23932,31 @@ async def _recover_previous_static_site_attempt(
         or not claim.dataset_ref
     ):
         raise StaticSitePermanentError("static_site_recovery_handoff_identity_mismatch")
+    if required["repo_sha"] != current_repo_sha:
+        raise StaticSitePermanentError(
+            "static_site_recovery_cross_deploy_repo_sha_mismatch"
+        )
+    handoff_source = (
+        handoff.get("source_identity")
+        if isinstance(handoff.get("source_identity"), Mapping)
+        else None
+    )
+    if current_source_identity is not None:
+        expected_source = {
+            "image_source_manifest_sha256": str(
+                current_source_identity.get("image_source_manifest_sha256") or ""
+            ),
+            "image_source_tree_sha256": str(
+                current_source_identity.get("image_source_tree_sha256") or ""
+            ),
+        }
+        if handoff_source is None or any(
+            str(handoff_source.get(key) or "") != value
+            for key, value in expected_source.items()
+        ):
+            raise StaticSitePermanentError(
+                "static_site_recovery_cross_deploy_source_identity_mismatch"
+            )
     snapshot_metadata = await asyncio.to_thread(
         validate_snapshot, Path(required["snapshot_path"]), Path(required["manifest_path"])
     )
@@ -23900,6 +23983,16 @@ async def _recover_previous_static_site_attempt(
         adopt_existing=True,
         expected_dataset_ref=claim.dataset_ref,
         related_corpus_revision=related_corpus_revision or None,
+        image_source_manifest_path=(
+            str(current_source_identity.get("manifest_path") or "")
+            if current_source_identity is not None
+            else None
+        ),
+        image_source_manifest_sha256=(
+            str(current_source_identity.get("image_source_manifest_sha256") or "")
+            if current_source_identity is not None
+            else None
+        ),
     )
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -23958,6 +24051,7 @@ async def _recover_previous_static_site_attempt(
         clock=clock,
         claim_token=claim.claim_token,
         recovered_remote=True,
+        source_identity=current_source_identity,
     )
     return True, result
 
@@ -24118,12 +24212,15 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     # canaries must opt into a smaller limit explicitly.
     limit = int((os.getenv("STATIC_SITE_BUILDER_LIMIT") or "5000").strip() or "5000")
     repo_sha = _resolve_static_site_repo_sha()
+    image_source_identity = _resolve_static_site_image_source_identity(repo_sha)
     await _reconcile_current_static_site_candidate_status(db)
     recovered, recovered_result = await _recover_previous_static_site_attempt(
         db=db,
         job_id=job_id,
         request_payload=request_payload,
         limit=limit,
+        current_repo_sha=repo_sha,
+        current_source_identity=image_source_identity,
     )
     if recovered:
         previous_snapshot = request_payload.get("snapshot")
@@ -24318,6 +24415,16 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         "secret_candidate_require_authorized_search": _env_flag(
             "STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH"
         ),
+        "image_source_manifest_sha256": (
+            image_source_identity.get("image_source_manifest_sha256")
+            if image_source_identity is not None
+            else None
+        ),
+        "image_source_tree_sha256": (
+            image_source_identity.get("image_source_tree_sha256")
+            if image_source_identity is not None
+            else None
+        ),
     }
     input_fingerprint, fingerprint_evidence = await asyncio.to_thread(
         compute_static_site_input_fingerprint,
@@ -24428,6 +24535,18 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     "build_id": build_id,
                     "run_id": run_id,
                     "repo_sha": repo_sha,
+                    "source_identity": (
+                        {
+                            "image_source_manifest_sha256": image_source_identity[
+                                "image_source_manifest_sha256"
+                            ],
+                            "image_source_tree_sha256": image_source_identity[
+                                "image_source_tree_sha256"
+                            ],
+                        }
+                        if image_source_identity is not None
+                        else None
+                    ),
                     "candidate_token": candidate_token,
                     "snapshot_path": str(snapshot_path),
                     "manifest_path": str(manifest_path),
@@ -24459,6 +24578,16 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             search_corpus_receipt_path=(
                 search_corpus_receipt_path
                 if _env_flag("STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH")
+                else None
+            ),
+            image_source_manifest_path=(
+                image_source_identity.get("manifest_path")
+                if image_source_identity is not None
+                else None
+            ),
+            image_source_manifest_sha256=(
+                image_source_identity.get("image_source_manifest_sha256")
+                if image_source_identity is not None
                 else None
             ),
         )
@@ -24508,6 +24637,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             input_fingerprint=input_fingerprint,
             clock=clock,
             claim_token=claim.claim_token,
+            source_identity=image_source_identity,
         )
         claim_finished = True
         await _delete_terminal_static_site_output(build_id)

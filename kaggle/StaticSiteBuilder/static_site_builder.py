@@ -31,6 +31,13 @@ PLAYWRIGHT_CHROMIUM_INSTALL_COMMAND = (
     '--only-shell',
     'chromium',
 )
+STATIC_SITE_SOURCE_IDENTITY_SCHEMA = 'static_site_source_identity_v1'
+SOURCE_IGNORED_PARTS = {
+    'node_modules', 'dist', '.astro', '.vercel', '__pycache__', 'output',
+}
+SITE_SOURCE_REPO_CONTRACTS = (
+    Path('docs/testing/transport-fault-profiles.v1.yml'),
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -39,6 +46,77 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def payload_source_tree_digest(root: Path) -> str:
+    entries: list[tuple[str, Path]] = []
+    for logical_root in (Path('site'), *SITE_SOURCE_REPO_CONTRACTS):
+        source = root / logical_root
+        if source.is_symlink():
+            raise RuntimeError(f'static-site source symlink is refused: {logical_root}')
+        if source.is_file():
+            entries.append((logical_root.as_posix(), source))
+            continue
+        if not source.is_dir():
+            raise FileNotFoundError(f'static-site source path missing: {logical_root}')
+        for path in sorted(source.rglob('*')):
+            relative = path.relative_to(source)
+            if any(part in SOURCE_IGNORED_PARTS for part in relative.parts):
+                continue
+            if path.is_symlink():
+                raise RuntimeError(
+                    f'static-site source symlink is refused: '
+                    f'{logical_root.as_posix()}/{relative.as_posix()}'
+                )
+            if not path.is_file() or path.name.endswith(('.pyc', '.DS_Store')):
+                continue
+            entries.append(
+                (f'{logical_root.as_posix()}/{relative.as_posix()}', path)
+            )
+    digest = hashlib.sha256()
+    for logical_path, path in sorted(entries, key=lambda item: item[0]):
+        digest.update(
+            json.dumps(
+                [logical_path, path.stat().st_size, sha256_file(path)],
+                ensure_ascii=False,
+                separators=(',', ':'),
+            ).encode('utf-8')
+        )
+        digest.update(b'\n')
+    return digest.hexdigest()
+
+
+def validate_source_identity(config: dict, archive: Path) -> dict[str, str]:
+    manifest_path = find_input_file('static_site_source_manifest.json')
+    if manifest_path is None or manifest_path.stat().st_size > 64 * 1024:
+        raise RuntimeError('static-site source manifest is missing or unbounded')
+    manifest_bytes = manifest_path.read_bytes()
+    expected_manifest_sha256 = str(config.get('source_manifest_sha256') or '')
+    if (
+        not re.fullmatch(r'[0-9a-f]{64}', expected_manifest_sha256)
+        or hashlib.sha256(manifest_bytes).hexdigest() != expected_manifest_sha256
+    ):
+        raise RuntimeError('static-site source manifest digest mismatch')
+    try:
+        source = json.loads(manifest_bytes)
+    except Exception as exc:
+        raise RuntimeError(f'static-site source manifest is invalid: {exc}') from exc
+    if (
+        source.get('schema_version') != STATIC_SITE_SOURCE_IDENTITY_SCHEMA
+        or source.get('repo_sha') != config.get('repo_sha')
+    ):
+        raise RuntimeError('static-site source manifest identity mismatch')
+    for key in (
+        'image_source_manifest_sha256',
+        'image_source_tree_sha256',
+        'payload_tree_sha256',
+        'payload_archive_sha256',
+    ):
+        if not re.fullmatch(r'[0-9a-f]{64}', str(source.get(key) or '')):
+            raise RuntimeError(f'static-site source manifest {key} invalid')
+    if sha256_file(archive) != source['payload_archive_sha256']:
+        raise RuntimeError('mounted static-site source archive hash mismatch')
+    return {str(key): str(value) for key, value in source.items()}
 
 
 def validate_snapshot_input(db_path: Path, config: dict) -> dict:
@@ -249,9 +327,7 @@ def read_config() -> dict:
     return {}
 
 
-def ensure_site_source() -> None:
-    if SITE_DIR.exists():
-        return
+def ensure_site_source(config: dict) -> dict[str, str]:
     # Use a non-archive-looking extension in the Kaggle dataset. Kaggle extracts
     # `.tar.gz` payloads while ingesting datasets; that breaks Astro dynamic route
     # filenames like `[slug].astro` and also hides the original archive from the
@@ -263,10 +339,15 @@ def ensure_site_source() -> None:
         archive.write_bytes(base64.b64decode(EMBEDDED_SITE_SOURCE_B64.encode('ascii')))
     if not archive:
         raise FileNotFoundError(f'site source not staged and site_source.tar.gz not found under {INPUT_ROOT}')
-    print(f'[static-site-builder] extracting {archive} -> {EXTRACT_ROOT}', flush=True)
-    EXTRACT_ROOT.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive, 'r:gz') as tar:
-        tar.extractall(EXTRACT_ROOT)
+    source_identity = validate_source_identity(config, archive)
+    if not SITE_DIR.exists():
+        print(f'[static-site-builder] extracting {archive} -> {EXTRACT_ROOT}', flush=True)
+        EXTRACT_ROOT.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(archive, 'r:gz') as tar:
+            tar.extractall(EXTRACT_ROOT)
+    if payload_source_tree_digest(EXTRACT_ROOT) != source_identity['payload_tree_sha256']:
+        raise RuntimeError('extracted static-site source tree hash mismatch')
+    return source_identity
 
 
 def load_kaggle_secret_to_env(secret_name: str | None) -> None:
@@ -873,7 +954,7 @@ def main() -> int:
         build_clock = validate_build_clock(config)
         build_id = config.get('build_id') or os.environ.get('PREVIEW_BUILD_ID') or 'preview-kaggle-static-site'
         status_event('alive', phase='preflight', status='alive', progress={'phase': 'preflight', 'progress_percent': 5, 'progress_label': 'распаковка сайта', 'build_id': build_id})
-        ensure_site_source()
+        source_identity = ensure_site_source(config)
         if not SITE_DIR.exists():
             raise FileNotFoundError(f"site source not staged: {SITE_DIR}")
         WORKING.mkdir(parents=True, exist_ok=True)
@@ -1026,6 +1107,11 @@ def main() -> int:
                 '--artifact-dir', str(candidate_browser_evidence),
             ], cwd=SITE_DIR, env=env, timeout_seconds=300)
             candidate_manifest = json.loads((candidate_dist / 'secret-candidate-manifest.json').read_text(encoding='utf-8'))
+            candidate_manifest['source'] = source_identity
+            (candidate_dist / 'secret-candidate-manifest.json').write_text(
+                json.dumps(candidate_manifest, ensure_ascii=False, indent=2) + '\n',
+                encoding='utf-8',
+            )
             candidate_archive = WORKING / f'{build_id}-secret-candidate.tar.gz'
             with tarfile.open(candidate_archive, 'w:gz') as tar:
                 tar.add(candidate_dist, arcname=f'_review/{token}')
@@ -1036,6 +1122,7 @@ def main() -> int:
             artifacts.append({'kind': 'browser_evidence', 'filename': browser_evidence_archive.name, 'sha256': sha256_file(browser_evidence_archive), 'size': browser_evidence_archive.stat().st_size})
             result_details = {
                 'repo_sha': repo_sha,
+                'source': source_identity,
                 'run_id': run_id,
                 'snapshot': {
                     'snapshot_id': str((config.get('snapshot') or {}).get('snapshot_id') or ''),
