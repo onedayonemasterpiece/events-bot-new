@@ -19272,6 +19272,7 @@ async def _run_due_jobs_once_locked(
         pause = False
         static_failure = None
         static_deferred = False
+        vector_deferred_at = None
         if not handler:
             status = JobStatus.done
             err = None
@@ -19355,6 +19356,23 @@ async def _run_due_jobs_once_locked(
                     job_id=obj.id,
                     task=obj.task.value,
                     reason="static_site_single_flight",
+                )
+            except EventVectorSyncDeferred as exc:
+                took_ms = (_time.perf_counter() - start) * 1000
+                pause = False
+                err = str(exc)
+                status = JobStatus.pending
+                retry = False
+                vector_deferred_at = exc.retry_at
+                link = None
+                changed = False
+                logline(
+                    "RUN",
+                    obj.event_id,
+                    "deferred",
+                    job_id=obj.id,
+                    task=obj.task.value,
+                    reason="static_site_release_guard",
                 )
             except asyncio.TimeoutError:  # pragma: no cover - depends on slow/external handlers
                 took_ms = (_time.perf_counter() - start) * 1000
@@ -19460,6 +19478,15 @@ async def _run_due_jobs_once_locked(
                     # Preserve the exact follow-up payload and retry after the
                     # current server/remote lease has had time to advance.
                     obj.next_run_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+                    send = False
+                elif vector_deferred_at is not None:
+                    retry_at = vector_deferred_at
+                    if retry_at.tzinfo is None:
+                        retry_at = retry_at.replace(tzinfo=timezone.utc)
+                    obj.next_run_at = max(
+                        retry_at.astimezone(timezone.utc),
+                        datetime.now(timezone.utc) + timedelta(seconds=30),
+                    )
                     send = False
                 elif status == JobStatus.done:
                     cur_res = (
@@ -23049,7 +23076,7 @@ async def festivals_fix_nav(
 festivals_nav_dedup = festivals_fix_nav
 rebuild_festival_pages_nav = festivals_fix_nav
 
-from event_vector_sync import job_event_vector_sync
+from event_vector_sync import EventVectorSyncDeferred, job_event_vector_sync
 
 def _static_site_status_callback_url() -> str:
     explicit = (

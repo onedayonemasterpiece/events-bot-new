@@ -13,11 +13,18 @@
   intake, runtime prepare/commit honors the stable scope families end-to-end,
   and oversized provider cursor state fails closed before persistence.
 
+- Serialized the mutable event-vector projection against an active immutable
+  static-site build and added a 15-minute post-publication exact-test window.
+  Pending vector work is deferred, never dropped, so Search release acceptance
+  can compare one stable catalog/corpus revision before the next projection.
+
 - Raised the mobile Search native-touch ceiling from 24 to 40 bounded gestures
-  after two Android Chrome receipts proved valid W3C swipes and positive DOM
-  movement could still stop before a tall final card. Final-card visibility,
-  positive DOM delta, native coordinates and sanitized gesture evidence remain
-  mandatory; the shared mobile E2E skill now records this accepted boundary.
+  after two Android Chrome receipts showed valid W3C swipes and 5.5–6.1k px of
+  positive DOM movement could exhaust the old bound without observing the
+  final card. Final-card visibility, positive DOM delta, native coordinates and
+  sanitized gesture evidence remain mandatory. A post-change terminal PASS
+  needed only 4/6/9 gestures, so the shared skill records the wider bound as a
+  robustness fix rather than unsupported sole-cause proof.
 
 - Fixed Current UI Decoder reviewed capsule materialization so capsule IDs are
   matched across prefixed and compact serialized forms, and strengthened the

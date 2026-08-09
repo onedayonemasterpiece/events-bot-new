@@ -40,8 +40,11 @@ Run `rg -n "appium|UiAutomator2|XCUITest|Mobile Safari|webviewConnect" site/e2e 
   viewport, with positive DOM `scrollY` movement. The Search helper permits up
   to 40 bounded gestures because live Android receipts `31293896454` and
   `31294660651` moved the document by 5.5–6.1k px yet exhausted the old
-  24-gesture ceiling before reaching a tall final card. Do not replace the
-  final-card predicate with a fixed gesture count or accept movement alone.
+  24-gesture ceiling without observing the final card. Post-change run
+  `31295423796` passed in 4/6/9 gestures, so it proves no regression but does
+  not prove that a >24th gesture was the sole causal fix; retain this as bounded
+  robustness, not permission to replace the final-card predicate with movement
+  or a fixed gesture count.
 - Dismiss an observed software keyboard through the shared native-context helper before measuring the scrolling baseline. XCUITest Safari may return its exact `Did not know how to dismiss the keyboard` response; only that exact iOS response may trigger a user-equivalent fallback. Prefer one caller-declared exact non-actionable `XCUIElementTypeStaticText` outside the field and tap its resolved native rect; use a downward application swipe only when the scenario has no safe static target. Then require `isKeyboardShown() == false`. Never use a generic coordinate that could hit submit/resend UI, treat the error itself as success, swallow other driver errors, or scroll while the IME is visible.
 - If the exact safe target is missing or ambiguous, diagnose the native accessibility bridge only through closed exact-label counts for the allowlisted XCTest types (`StaticText`, `Other`, `Button`, `Link`), split into total and visible counts. Do not upload a hierarchy, labels, page source or nearby text, and do not broaden the actionable type until one live receipt proves the actual mapping.
 - Prefer the product's ordinary submit lifecycle to release a validated mobile search input before its request/result state. A real native Search/Enter key followed by the product's `blur()` is a user-triggered IME transition; it is safer than adapter-only coordinate taps. The harness must still observe the native keyboard absent before accepting document scroll.

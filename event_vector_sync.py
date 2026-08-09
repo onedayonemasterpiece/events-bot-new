@@ -14,7 +14,7 @@ import re
 import sqlite3
 import sys
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -33,6 +33,15 @@ DEFAULT_RECEIPT_PATH = Path("/data/event_vector_sync_receipt.json")
 RECEIPT_SCHEMA_VERSION = "event_vector_sync_receipt_v2"
 
 
+class EventVectorSyncDeferred(RuntimeError):
+    """Keep an outbox projection pending while an exact static release is open."""
+
+    def __init__(self, reason: str, retry_at: datetime) -> None:
+        super().__init__(f"event_vector_sync_release_guard:{reason}")
+        self.reason = reason
+        self.retry_at = retry_at
+
+
 def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
     try:
         return max(minimum, int((os.getenv(name) or str(default)).strip() or default))
@@ -47,6 +56,61 @@ def enabled() -> bool:
         "yes",
         "on",
     }
+
+
+def static_release_guard(db_path: str, *, now: datetime | None = None) -> dict[str, Any] | None:
+    """Hold vector projection stable during a build and its exact-test window.
+
+    The Search API exposes one current projection.  Updating it while an
+    immutable candidate is being built (or immediately after publication)
+    makes an otherwise valid release impossible to accept exactly.  This
+    read-only guard coordinates the two existing durable lanes; it never drops
+    the pending vector request.
+    """
+
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    grace_seconds = min(
+        1800,
+        max(120, _env_int("EVENT_VECTOR_SYNC_POST_STATIC_GRACE_SECONDS", 900)),
+    )
+    try:
+        with sqlite3.connect(f"file:{Path(db_path).resolve()}?mode=ro", uri=True, timeout=30) as con:
+            exists = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='static_site_build_state'"
+            ).fetchone()
+            if not exists:
+                return None
+            row = con.execute(
+                "SELECT active_job_id, last_success_at FROM static_site_build_state "
+                "WHERE release_channel='secret_preview'"
+            ).fetchone()
+    except sqlite3.Error:
+        # Fail open for deployments that do not have the static-site release
+        # schema. The vector sync's own complete-receipt gates still apply.
+        return None
+    if not row:
+        return None
+    if row[0] is not None:
+        return {
+            "reason": "static_build_active",
+            "retry_at": current + timedelta(minutes=5),
+        }
+    raw_success = str(row[1] or "").strip()
+    if not raw_success:
+        return None
+    try:
+        success_at = datetime.fromisoformat(raw_success.replace("Z", "+00:00"))
+        if success_at.tzinfo is None:
+            success_at = success_at.replace(tzinfo=timezone.utc)
+        success_at = success_at.astimezone(timezone.utc)
+    except ValueError:
+        return None
+    retry_at = success_at + timedelta(seconds=grace_seconds)
+    if current < retry_at:
+        return {"reason": "post_static_exact_window", "retry_at": retry_at}
+    return None
 
 
 def _create_sqlite_snapshot(source_path: str, target_path: Path) -> None:
@@ -143,6 +207,19 @@ async def run_event_vector_sync(
     db_path = str(getattr(db, "path", "") or "")
     if not db_path or db_path == ":memory:":
         raise RuntimeError("event vector sync requires a file-backed SQLite DB")
+
+    release_guard = await asyncio.to_thread(static_release_guard, db_path)
+    if release_guard is not None:
+        logger.info(
+            "event_vector_sync deferred reason=%s retry_at=%s",
+            release_guard["reason"],
+            release_guard["retry_at"].isoformat(),
+        )
+        return {
+            "status": "deferred",
+            "reason": release_guard["reason"],
+            "retry_at": release_guard["retry_at"].isoformat(),
+        }
 
     details: dict[str, Any] = {
         "owner_event_id": owner_event_id,
@@ -326,4 +403,9 @@ async def run_event_vector_sync(
 
 async def job_event_vector_sync(event_id: int, db: Any, bot: Any) -> bool:
     result = await run_event_vector_sync(db, trigger="outbox", owner_event_id=event_id)
+    if result.get("status") == "deferred":
+        raise EventVectorSyncDeferred(
+            str(result.get("reason") or "release_guard"),
+            datetime.fromisoformat(str(result["retry_at"])),
+        )
     return result.get("status") == "success"
