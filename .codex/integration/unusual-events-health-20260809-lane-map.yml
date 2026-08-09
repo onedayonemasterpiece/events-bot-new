@@ -1,0 +1,130 @@
+mode: serial_integrator_with_parallel_discovery
+repo: onedayonemasterpiece/events-bot-new
+base_ref: bbc286c906de79f6f58b6315daec4558b508780c
+base_branch: origin/main
+integration_branch: integration/unusual-events-health-20260809
+global_constraints:
+  - preserve the existing production BGE/build path; no second semantic pipeline
+  - no owner approval may be inferred
+  - acceptance holdout must not tune thresholds
+  - no OpenAI image generation
+  - runtime evidence belongs under artifacts/codex and is not committed
+  - code changes require canonical docs and CHANGELOG Unreleased updates
+verification_owner: root integrator
+stop_conditions:
+  - production auth/session reuse would violate project boundaries
+  - evidence proves current catalog cannot be READY without weakening quality gates
+  - GitHub or Kaggle credentials are unavailable after documented bootstrap checks
+lanes:
+  - id: discovery-semantic
+    role: planner
+    requirement_ids: [R01, R03, R04, R07]
+    target: map the canonical unusual selector/BGE/config/fixtures and root-cause candidates
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/unusual-events-health-20260809
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: code map, data flow, working/broken evidence, exact likely fix scope
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: discovery-package
+    role: reviewer
+    requirement_ids: [R01, R02, R05, R06, R07, R08, R09]
+    target: audit the supplied architecture package against origin/main
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/unusual-events-health-20260809
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: adoption matrix, defects, unsafe assumptions, test inventory
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: discovery-ci-builder
+    role: planner
+    requirement_ids: [R02, R05, R06, R09]
+    target: map existing StaticSiteBuilder/Kaggle/GitHub/storage/run-receipt interfaces
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/unusual-events-health-20260809
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: authoritative integration path and release hazards
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: discovery-browser
+    role: planner
+    requirement_ids: [R08]
+    target: map /neobychnoe page markup, manifest identity, deploy URL and existing browser tests
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/unusual-events-health-20260809
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: exact browser contract and runnable verification plan
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: semantics-quality
+    role: worker
+    requirement_ids: [R01, R03, R04, R07]
+    target: one semantic/evaluation implementation after discovery
+    depends_on: [discovery-semantic, discovery-package]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: []
+    expected_output: failing regressions, root-cause fix, real review evidence
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: contract-ops
+    role: worker
+    requirement_ids: [R02, R05, R06, R09]
+    target: builder receipt, evaluator, workflow, issue lifecycle and reports
+    depends_on: [semantics-quality, discovery-ci-builder]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: []
+    expected_output: validated health artifacts and daily workflow
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: browser-e2e
+    role: worker
+    requirement_ids: [R08]
+    target: mobile/desktop manifest parity runner and evidence
+    depends_on: [contract-ops, discovery-browser]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: []
+    expected_output: browser receipt and screenshots
+    verification_scope: full_local
+    effort: high
+    status: planned
+  - id: release-integrator
+    role: merge_reviewer
+    requirement_ids: [R10]
+    target: integrate, run real warm/cold workflows, ready PR, green checks and main merge
+    depends_on: [semantics-quality, contract-ops, browser-e2e]
+    execution_mode: serial_after_dependency
+    branch: integration/unusual-events-health-20260809
+    worktree: /home/dev/.codex/worktrees/events-bot-new/unusual-events-health-20260809
+    writable_files: ['.codex/integration/**', 'docs/reports/incidents/**', 'CHANGELOG.md']
+    forbidden_files: []
+    expected_output: integration report and release evidence
+    verification_scope: full_local
+    effort: high
+    status: planned
