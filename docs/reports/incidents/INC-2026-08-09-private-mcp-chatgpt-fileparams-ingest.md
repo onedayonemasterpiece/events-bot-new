@@ -38,12 +38,25 @@ capabilities, but no `ast_*` asset was created and no message was sent.
   staging failure; target resolution and capability discovery had succeeded.
 - 2026-08-09T11:44Z — incident workflow opened; no retry, approval, commit or
   Telegram send was performed by the production debugging path.
+- 2026-08-09T11:36:18Z–11:38:06Z — five production calls reached
+  `asset_stage` validation and were denied as `mediaingressrejected` in 3–5 ms;
+  no asset row, retained byte or provider call was created.
+- 2026-08-09 — the live tool descriptor was verified against the official
+  ChatGPT file-parameter object. The connector had already rewritten the
+  conversation upload to the required object; the rejection occurred inside
+  media ingress before download.
 
 ## Root Cause
 
-Investigation in progress. The current hypotheses are being tested at the
-ChatGPT fileParams descriptor/payload, server request validation, principal
-binding, media-ingestor policy and temporary download boundaries in that order.
+The historical code collapsed every media-ingress exception into one public
+message and one exception-class audit reason, so the exact sub-branch of the
+five already-completed calls is irretrievable. The timing and persisted state
+prove that descriptor parsing, workspace dispatch, role/size configuration and
+principal derivation completed, while network streaming and Telegram provider
+staging did not begin. The leading remaining hypothesis is an exact temporary
+download-host/allowlist mismatch; a safe coded diagnostic deploy and one real
+ChatGPT retry are required to distinguish that from DNS/fetch policy without
+logging the URL.
 
 ## Contributing Factors
 
@@ -100,12 +113,20 @@ provider send until staging and approval succeed.
 
 ## Corrective Actions
 
-- Pending root-cause confirmation.
+- Return stable bounded MCP error codes for asset-stage failures and retain
+  only a safe reason plus optional one-way host fingerprint in audit.
+- Preserve the official object-to-`ast_*` contract; do not accept raw paths,
+  direct `file_*` values or file objects belonging to another principal.
+- After diagnostic deploy, repeat the same current-conversation stage once and
+  correct only the exact observed ingress policy before the approved Saved
+  Messages publication acceptance.
 
 ## Follow-up Actions
 
-- [ ] Add a permanent real-shape ChatGPT fileParams regression.
-- [ ] Add safe asset-staging error codes and production audit dimensions.
+- [x] Add a permanent real-shape ChatGPT fileParams regression.
+- [x] Add safe asset-staging error codes and production audit dimensions.
+- [ ] Complete one real ChatGPT retry, exact policy correction if required and
+  Saved Messages image read-back.
 
 ## Release And Closure Evidence
 

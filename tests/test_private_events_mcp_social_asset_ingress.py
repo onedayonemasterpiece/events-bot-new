@@ -11,7 +11,7 @@ from private_events_mcp.auth_store import OAuthStateStore
 from private_events_mcp.config import PrivateEventsMCPConfig, _hosts
 from private_events_mcp.crypto import AccessIdentity
 from private_events_mcp.media_contract import ChatGPTFile, VerifiedAsset
-from private_events_mcp.repository import InvalidArgumentsError
+from private_events_mcp.protocol import MCPProtocol
 from private_events_mcp.server import PrivateEventsMCPServer
 from private_events_mcp.social_workspace import (
     SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA,
@@ -26,7 +26,8 @@ from private_events_mcp.social_workspace_runtime import (
     SocialWorkspaceRuntimeError,
 )
 from private_events_mcp.social_workspace_tools import build_social_workspace_tools
-from private_events_mcp.tool_catalog import ToolCallContext
+from private_events_mcp.tool_catalog import ToolCallContext, ToolExecutionError
+from private_events_mcp_media import MediaIngressRejected, SecureMediaAssetStore
 
 FILE_VALUE = {
     "download_url": "https://files.example.test/signed/private-image?signature=secret",
@@ -175,6 +176,33 @@ def _asset_tools(runtime):
     }
 
 
+async def _stage_through_protocol(runtime, file_value):
+    context = _context()
+    protocol = MCPProtocol(
+        tuple(_asset_tools(runtime).values()),
+        cache_ttl_seconds=0,
+        challenge='Bearer error="invalid_token"',
+        resource=context.resource,
+        allowed_client_ids=frozenset({context.identity.client_id}),
+    )
+    return await protocol.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 81,
+            "method": "tools/call",
+            "params": {
+                "name": "social_asset_stage",
+                "arguments": {
+                    "platform": "telegram",
+                    "file": file_value,
+                    "role": "image",
+                },
+            },
+        },
+        context.identity,
+    )
+
+
 def test_official_file_param_descriptor_and_schema_are_exact(asset_runtime) -> None:
     runtime, _ingestor, _adapter, _now = asset_runtime
     stage = _asset_tools(runtime)["social_asset_stage"]
@@ -213,6 +241,82 @@ def test_official_file_param_descriptor_and_schema_are_exact(asset_runtime) -> N
         validate_asset_stage_request(
             {"platform": "telegram", "file": FILE_VALUE, "role": "video"}
         )
+
+
+@pytest.mark.asyncio
+async def test_stage_returns_safe_diagnostic_code_for_unresolved_string_file(
+    asset_runtime,
+) -> None:
+    runtime, ingestor, adapter, _now = asset_runtime
+    response = await _stage_through_protocol(
+        runtime, "sandbox:/mnt/data/symphonic concert.png"
+    )
+    result = response["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"] == {
+        "error_code": "FILE_REF_UNRESOLVED",
+        "retry_safe": False,
+    }
+    assert "sandbox" not in json.dumps(result)
+    assert ingestor.calls == []
+    assert adapter.staged == []
+
+
+@pytest.mark.asyncio
+async def test_stage_preserves_safe_ingress_code_without_leaking_file_fields(
+    asset_runtime,
+) -> None:
+    runtime, _ingestor, adapter, _now = asset_runtime
+
+    class RejectingIngestor:
+        async def ingest(self, file, *, owner_binding, max_bytes, expires_at):
+            raise MediaIngressRejected("download host is not allowlisted")
+
+    runtime.asset_ingestor = RejectingIngestor()
+    response = await _stage_through_protocol(runtime, FILE_VALUE)
+    result = response["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"] == {
+        "error_code": "FILE_HOST_NOT_ALLOWED",
+        "retry_safe": False,
+    }
+    encoded = json.dumps(result)
+    assert FILE_VALUE["download_url"] not in encoded
+    assert FILE_VALUE["file_id"] not in encoded
+    assert adapter.staged == []
+
+
+@pytest.mark.asyncio
+async def test_real_ingestor_host_denial_is_coded_and_audited_without_host(
+    tmp_path: Path,
+) -> None:
+    now = [1_800_000_000]
+    adapter = FakeAdapter()
+    ingestor = SecureMediaAssetStore(
+        tmp_path / "media",
+        allowed_hosts=["files.oaiusercontent.com"],
+        clock=lambda: now[0],
+    )
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="asset-ingress-test-key-long-enough",
+        asset_ingestor=ingestor,
+        clock=lambda: now[0],
+    )
+    response = await _stage_through_protocol(runtime, FILE_VALUE)
+    assert response["result"]["structuredContent"] == {
+        "error_code": "FILE_HOST_NOT_ALLOWED",
+        "retry_safe": False,
+    }
+    with sqlite3.connect(runtime.store.path) as conn:
+        reason = conn.execute(
+            """SELECT reason_code FROM social_workspace_audit
+               WHERE operation='asset_stage' ORDER BY id DESC LIMIT 1"""
+        ).fetchone()[0]
+    assert reason.startswith("file_host_not_allowed_")
+    assert "files.example.test" not in reason
+    assert adapter.staged == []
 
 
 @pytest.mark.asyncio
@@ -286,6 +390,28 @@ async def test_verified_ingress_is_owner_bound_and_never_leaks_file_fields(
 
     with pytest.raises(SocialWorkspaceRuntimeError, match="unknown or not bound"):
         await runtime.asset_status(result["asset_ref"], _context(subject="mallory"))
+
+    mallory = _context(subject="mallory")
+    mallory_principal = RuntimePrincipal.from_context(mallory)
+    mallory_target = runtime._mint_ref(
+        "target", "mallory-native-target", "telegram", mallory_principal
+    )
+    foreign_intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "publish",
+            "idempotency_key": "foreign-asset-denial-123",
+            "target_ref": mallory_target,
+            "content": {
+                "text": "Must not send",
+                "entities": [],
+                "media": [{"asset_ref": result["asset_ref"], "role": "image"}],
+            },
+        }
+    )
+    with pytest.raises(SocialWorkspaceRuntimeError, match="expired or not bound"):
+        await runtime.prepare(foreign_intent, mallory)
+    assert adapter.executions == 0
 
 
 @pytest.mark.asyncio
@@ -454,11 +580,12 @@ async def test_disabled_or_missing_ingestor_fails_closed(tmp_path: Path) -> None
     )
     assert "social_asset_stage" not in {tool.name for tool in tools}
     enabled = _asset_tools(runtime)["social_asset_stage"]
-    with pytest.raises(InvalidArgumentsError, match="request rejected"):
+    with pytest.raises(ToolExecutionError) as caught:
         await enabled.handler(
             {"platform": "telegram", "file": FILE_VALUE, "role": "image"},
             _context(),
         )
+    assert caught.value.error_code == "WORKSPACE_NOT_BOUND"
 
 
 def test_server_media_attach_requires_ingestor_and_keeps_codex_evidence_only(

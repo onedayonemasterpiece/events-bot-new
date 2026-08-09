@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
+  `fileParams` now return bounded structured reason codes for unresolved refs,
+  host/fetch policy, principal binding, workspace configuration, MIME, size,
+  expiry and integrity failures while signed URLs, file IDs/names and provider
+  identifiers remain absent from responses and audit logs. Foreign-principal
+  assets and raw path/`file_*` strings still fail before provider I/O.
+
 - Accepted VK's production video-story CDN under the same strict HTTPS,
   public-DNS, no-redirect media boundary, so a valid story returned from
   `stories.get` is no longer rejected before its opaque media ref is minted.

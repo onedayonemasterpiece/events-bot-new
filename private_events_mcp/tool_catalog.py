@@ -1,12 +1,31 @@
 from __future__ import annotations
 
 import copy
+import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from .crypto import AccessIdentity
 from .repository import EventsEvidenceRepository, InvalidArgumentsError
+
+
+class ToolExecutionError(Exception):
+    """A fail-closed tool failure safe to expose as a bounded code only."""
+
+    def __init__(
+        self,
+        error_code: str,
+        message: str = "Tool request rejected.",
+        *,
+        retry_safe: bool = False,
+    ) -> None:
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", error_code):
+            raise ValueError("invalid public tool error code")
+        super().__init__(message)
+        self.error_code = error_code
+        self.public_message = message
+        self.retry_safe = bool(retry_safe)
 
 
 @dataclass(frozen=True, slots=True)
