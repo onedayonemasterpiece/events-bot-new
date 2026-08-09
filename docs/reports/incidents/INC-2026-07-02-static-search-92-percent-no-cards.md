@@ -68,13 +68,55 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   before changing the already live-proven shared gesture mechanics.
 - 2026-08-09 unchanged Android-only control run `31294660651` reproduced the
   same boundary: 24 accepted absolute-coordinate W3C native-touch swipes moved
-  Chrome DOM by 6162 px, but the final tall card was still below the accepted
+  Chrome DOM by 6162 px, but the final card was not observed in the accepted
   viewport gate. Official UiAutomator2 guidance confirms W3C Actions with valid
   absolute native coordinates are the supported route for complex gestures;
-  the positive DOM delta independently proves delivery. The defect was the
-  feature helper's arbitrary 24-gesture ceiling, not the shared transport. Its
-  bound is now 40, matching the already accepted browser wheel bound while the
-  final-card and positive-DOM predicates remain unchanged.
+  the positive DOM delta independently proves delivery. The only bounded lever
+  supported by those receipts was the feature helper's 24-gesture ceiling, so
+  it is now 40, matching the accepted browser wheel bound while final-card and
+  positive-DOM predicates remain unchanged. The old receipt did not retain a
+  card rect, so it could not distinguish a still-below tall card from transient
+  visibility/layout timing and must not be presented as sole-cause proof.
+- 2026-08-09 post-change Android run `31295423796` is a terminal
+  `cached_vector + live_consistent` PASS on the current candidate: all three
+  query families produced 10/10/10 request/response/route receipts, pagination
+  stayed duplicate-free, every repeat was a cache hit, validation made zero
+  POST and all final-card gates passed through real `w3c_native_touch`. The
+  three scrolls needed only 4/6/9 gestures with positive 4.0–5.1k px DOM
+  deltas; this proves the wider loop did not regress accepted mechanics, but it
+  does not claim that gesture 25+ was required in the successful sample.
+- 2026-08-09 browser run `31295063983` is a terminal bounded
+  `cold_vector_llm + live_consistent` PASS. The workflow intentionally limited
+  the journey to three non-paginated queries; each used exactly one embedding
+  and one LLM provider attempt, returned useful cards in actual mode
+  `cold_vector_llm`, and the immediate repeat was a cache hit. The server daily
+  budget reservation remained authoritative and no unbounded provider lane was
+  introduced.
+- 2026-08-09 browser run `31295732615` is a terminal manual
+  `cached_vector + live_consistent` PASS. Its three initial responses were
+  safely re-stored with zero embedding/vector/LLM attempts after catalog cache
+  invalidation, then all three immediate repeats were cache hits with the same
+  zero provider deltas. The strict scheduled run `31294951925` independently
+  proved all three *initial* responses were cache hits with zero provider
+  attempts, then failed only at the known stale candidate-vs-live revision
+  barrier. Thus the cache behavior is proven while release-exact acceptance
+  remains correctly unclaimed until the next candidate publishes.
+- 2026-08-09 delayed scheduled runs overlapped manual runs using the same
+  persona and were rejected by the broker with `409` while the prior 20-minute
+  issuance claim was active. This is a scheduling/admission collision, not a
+  Search or mailbox failure: waiting for claim expiry produced terminal PASS.
+  These `409` runs must not be counted as product stability PASS and still need
+  a neutral deferred/serialized schedule classification before blocking-mode
+  threshold accounting.
+- 2026-08-09 exact-release attempts `31297004355` and `31302524785`
+  isolated a release-pipeline race rather than a Search failure. Both complete
+  three-query journeys reached useful terminal cards but the mutable vector
+  projection advanced while the immutable candidate was building, so the
+  response receipts correctly rejected the older target revisions. Vector
+  sync now defers while a static build has an active durable owner and for a
+  bounded 15-minute window after candidate publication. The pending request is
+  preserved and resumes after exact-target acceptance; this replaces the
+  one-off operator defer used to prove the race on job `49936`.
 - 2026-08-09 post-deploy run `31293081526` proved the accepted candidate's
   Search UI and server receipts for both `cold_vector` and deterministic
   `degraded_vector_fallback`, including useful vector cards with the verifier
@@ -334,9 +376,11 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-09 Android tall-card correction: the native-touch loop remains
   fail-closed on positive DOM movement plus final-card visibility, but its
   bounded ceiling is 40 rather than 24. Two live receipts proved the accepted
-  W3C gesture moved Chrome 5.5–6.1k px and merely ran out of attempts; a unit
-  regression requires a final card beyond gesture 24 to be reached rather than
-  weakening the viewport predicate.
+  W3C gesture moved Chrome 5.5–6.1k px while exhausting the old bound without a
+  final-card observation; a unit regression requires a synthetic final card
+  beyond gesture 24 to be reached rather than weakening the viewport predicate.
+  Terminal run `31295423796` passed with fewer gestures and therefore validates
+  compatibility, not a stronger causal claim about the prior card position.
 - 2026-08-08 mobile transport correction: Android/iOS capabilities force
   WebDriver Classic, preventing WebdriverIO from selecting Appium's incomplete
   BiDi surface and failing on `script.addPreloadScript` before UI acceptance.

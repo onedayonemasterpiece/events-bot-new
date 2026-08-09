@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +12,53 @@ import pytest
 import event_vector_sync as evs
 from google_ai.exceptions import RateLimitError
 from scripts import sync_event_search_vectors_to_supabase as sync
+
+
+def _release_state(path: Path, *, active_job_id=None, last_success_at=None) -> None:
+    with sqlite3.connect(path) as con:
+        con.execute(
+            "create table static_site_build_state ("
+            "release_channel text primary key, active_job_id integer, last_success_at text)"
+        )
+        con.execute(
+            "insert into static_site_build_state values ('secret_preview', ?, ?)",
+            (active_job_id, last_success_at),
+        )
+
+
+def test_static_release_guard_blocks_active_build_and_recent_publication(monkeypatch, tmp_path):
+    monkeypatch.setenv("EVENT_VECTOR_SYNC_POST_STATIC_GRACE_SECONDS", "900")
+    now = datetime(2026, 8, 9, 8, 0, tzinfo=timezone.utc)
+    active_db = tmp_path / "active.sqlite"
+    _release_state(active_db, active_job_id=50157)
+    active = evs.static_release_guard(str(active_db), now=now)
+    assert active["reason"] == "static_build_active"
+    assert active["retry_at"] == now + timedelta(minutes=5)
+
+    recent_db = tmp_path / "recent.sqlite"
+    _release_state(recent_db, last_success_at="2026-08-09T07:55:00Z")
+    recent = evs.static_release_guard(str(recent_db), now=now)
+    assert recent == {
+        "reason": "post_static_exact_window",
+        "retry_at": datetime(2026, 8, 9, 8, 10, tzinfo=timezone.utc),
+    }
+    assert evs.static_release_guard(
+        str(recent_db), now=datetime(2026, 8, 9, 8, 10, tzinfo=timezone.utc)
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_outbox_vector_sync_preserves_deferred_release_request(monkeypatch, tmp_path):
+    monkeypatch.setenv("ENABLE_EVENT_VECTOR_SYNC", "1")
+    db_path = tmp_path / "active.sqlite"
+    _release_state(db_path, active_job_id=50157)
+    db = SimpleNamespace(path=str(db_path))
+
+    result = await evs.run_event_vector_sync(db, trigger="scheduled")
+    assert result["status"] == "deferred"
+    with pytest.raises(evs.EventVectorSyncDeferred) as caught:
+        await evs.job_event_vector_sync(42, db, None)
+    assert caught.value.reason == "static_build_active"
 
 
 @pytest.mark.asyncio
