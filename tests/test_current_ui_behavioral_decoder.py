@@ -143,6 +143,16 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
     assert json.loads((final / 'manifest.json').read_text())['base_snapshot']['path'] == portable_base_path
     assert json.loads((final / 'artifact-index.json').read_text())['base_snapshot']['path'] == portable_base_path
     assert json.loads((final / 'artifact-receipt.json').read_text())['base_snapshot']['path'] == portable_base_path
+    dynamic_rows = [
+        json.loads(line)
+        for line in (final / 'dynamic-region-loading-matrix.jsonl').read_text().splitlines()
+    ]
+    assert len(dynamic_rows) == 13
+    assert all(
+        row['runtime_packet_ids'] or row['explicit_blocker_packet_ids']
+        for row in dynamic_rows
+    )
+    assert all(row['runtime_evidence_status'] != 'coverage-missing' for row in dynamic_rows)
 
     # A complete file-level review is necessary but cannot erase exact
     # blocks_ready findings.  The materializer must remain fail-closed without

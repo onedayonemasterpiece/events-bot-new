@@ -660,7 +660,9 @@ regions: Search, Favorites, PersonalFeed, discovery rerank, home local rerank,
 the popular personalized shelf, Weather, Exhibitions gallery, EventCard,
 ListingEventCard and mobile-listing media, auth runtime and personalization
 runtime. Each is bound to an executable packet or an exact explicit blocker;
-a source test is never relabelled as runtime capture.
+a source test is never relabelled as runtime capture. Materialization joins the
+source `dynamic-region.<id>` namespace to the packet's compact `<id>` form
+explicitly; an unbound row is `coverage-missing`, never an implicit family hit.
 Semantic transition checks include bounded standard descendant
 `aria-checked`, `aria-pressed`, `aria-expanded`, `aria-selected`, `aria-busy`,
 `open`, and `hidden` state, so equal-length radio/state replacements still

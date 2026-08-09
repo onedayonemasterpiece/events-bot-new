@@ -45,6 +45,8 @@
   Screenshot capture uses Playwright's documented no-second-font-wait switch
   only after the decoder's own bounded `document.fonts.ready` probe; a timeout
   remains explicit in each packet while the rendered fallback stays capturable.
+  Dynamic-region materialization canonicalizes the `dynamic-region.` namespace
+  before joining plan IDs, closing all 13 per-row runtime/blocker references.
 
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
