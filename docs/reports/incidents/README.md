@@ -22,6 +22,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-09-private-mcp-chatgpt-fileparams-ingest.md`
+  - Scope: real ChatGPT conversation fileParams ingestion, principal-bound
+    asset staging and Telegram Saved Messages image publication.
+  - Must not regress: the runtime file object produces a ready opaque `ast_*`
+    for the same OAuth principal, while string/path/file-id-only and foreign
+    principal inputs fail before provider I/O with safe diagnostic codes.
+
 - `INC-2026-08-09-private-mcp-vk-story-cdn-rejected.md`
   - Scope: Private Events MCP VK story list/media-ref projection and the
     provider-owned media hostname boundary.
