@@ -49,6 +49,14 @@
 
 ### Fixed
 
+- Fixed the redundant iOS target navigation exposed by merged-main Search
+  health run `31341154421`. The shared OTP callback had already loaded and
+  authorized the exact private Search document, but the journey navigated to
+  the identical clean URL again; XCUITest treated that as a no-op, emitted no
+  second `safariNetwork` document response, and the HTTP proof timed out before
+  Search. The adapter now reuses the callback landing's sanitized exact-target
+  2xx receipt, with a real reload fallback only when that receipt is absent.
+
 - Fixed the iOS WebDriver async-script timeout exposed by merged-main live run
   `31340311566`. The shared OTP startup retry correctly recovered a 300-second
   first-session timeout with zero side effects, but the second Safari session

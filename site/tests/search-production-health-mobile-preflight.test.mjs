@@ -271,6 +271,50 @@ test('Appium target-open log drains remain in cumulative closed diagnostics', as
   assert.doesNotMatch(JSON.stringify(diagnostics), /target|probe|survive/u);
 });
 
+test('iOS reuses the callback landing document receipt instead of navigating the same target twice', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const actionLink = `${target}?token_hash=bridge-secret&type=magiclink`;
+  const navigations = [];
+  let currentUrl = 'about:blank';
+  let networkReads = 0;
+  const driver = {
+    capabilities: {},
+    async getLogs(type) {
+      if (type !== 'safariNetwork') return [];
+      networkReads += 1;
+      if (networkReads !== 2) return [];
+      return [
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'callback-document', type: 'Document', response: {
+            url: actionLink, status: 200, headers: { 'content-length': '4096' },
+          },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'callback-auth', type: 'Fetch', response: {
+            url: 'https://project.supabase.co/auth/v1/verify', status: 200,
+            headers: { 'content-length': '1024' },
+          },
+        } }) },
+      ];
+    },
+    async url(value) {
+      navigations.push(value);
+      currentUrl = value === actionLink ? target : value;
+    },
+    async getUrl() { return currentUrl; },
+    async waitUntil(predicate, options = {}) {
+      if (!await predicate()) throw new Error(options.timeoutMsg || 'wait_failed');
+    },
+    async execute() { return true; },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'ios', driver,
+    supabaseOrigins: ['https://project.supabase.co'] });
+  await adapter.bootstrapSession(actionLink, target);
+  await adapter.open(target);
+  assert.deepEqual(navigations, [actionLink]);
+  assert.equal((await adapter.diagnostics()).target_navigation_receipt.http_status_class, '2xx');
+});
+
 test('Appium result snapshot counts actual skeleton cards and id-less placeholders', async () => {
   const eventCard = {
     getAttribute(name) { return name === 'data-event-id' ? '42' : ''; },

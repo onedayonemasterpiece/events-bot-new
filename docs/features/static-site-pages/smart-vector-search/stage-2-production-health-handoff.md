@@ -57,7 +57,9 @@ pagination или полный scheduled mobile/release matrix в production-hea
   scroll и exact candidate `/sobytiya/<slug>/` route 200;
 - Auth getUser + один owner RLS proof; iOS выполняет этот Search-only proof в
   общей OTP/Search Safari session через WebDriver async callback с explicit
-  bounded 15-second script timeout; 48/96 KiB meter и strict evidence;
+  bounded 15-second script timeout; callback landing одновременно даёт exact
+  target 2xx receipt и не требует повторного перехода на тот же clean URL;
+  48/96 KiB meter и strict evidence;
 - exact deployment marker `none|standard|full`, side-effect-free backend HEAD
   contract proof и pre-Search active release
   receipt и platform issue disposition, suppressing issue mutation when the
