@@ -29,6 +29,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Any,
@@ -36,7 +37,7 @@ from typing import (
     ClassVar,
     Protocol,
 )
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 
 class MediaStoreError(RuntimeError):
@@ -53,6 +54,9 @@ class MediaIngressRejected(MediaStoreError):
         "invalid download URL": "FILE_REF_UNRESOLVED",
         "numeric download hosts are forbidden": "FILE_REF_UNRESOLVED",
         "download host is not allowlisted": "FILE_HOST_NOT_ALLOWED",
+        "Azure blob URL requires a current read-only SAS": (
+            "FILE_SOURCE_NOT_AUTHORIZED"
+        ),
         "DNS resolution failed": "FILE_FETCH_FAILED",
         "DNS returned an invalid answer": "FILE_FETCH_FAILED",
         "DNS returned a non-public address": "FILE_FETCH_FAILED",
@@ -553,7 +557,65 @@ class SecureMediaAssetStore:
                 "download host is not allowlisted",
                 audit_detail=_host_audit_fingerprint(host),
             )
+        if host.endswith(".blob.core.windows.net"):
+            self._validate_azure_blob_read_sas(parsed, host)
         return host, 443
+
+    def _validate_azure_blob_read_sas(self, parsed: Any, host: str) -> None:
+        """Accept rotating ChatGPT Azure hosts only as signed read-only blobs.
+
+        ChatGPT does not publish a stable storage-account hostname for
+        ``openai/fileParams`` downloads.  Operators may therefore allow the
+        Azure Blob suffix, but the wildcard is deliberately narrower than an
+        ordinary host wildcard: one canonical storage-account label, one blob
+        path, and a current blob-scoped read-only SAS are all mandatory.
+        """
+
+        account = host.removesuffix(".blob.core.windows.net")
+        rejected = MediaIngressRejected(
+            "Azure blob URL requires a current read-only SAS"
+        )
+        if not re.fullmatch(r"[a-z0-9]{3,24}", account):
+            raise rejected
+        path_segments = [segment for segment in parsed.path.split("/") if segment]
+        if len(path_segments) < 2 or any(
+            segment in {".", ".."} for segment in path_segments
+        ):
+            raise rejected
+        if not parsed.query or len(parsed.query) > 8_192:
+            raise rejected
+        try:
+            pairs = parse_qsl(
+                parsed.query,
+                keep_blank_values=True,
+                strict_parsing=True,
+                max_num_fields=32,
+            )
+        except ValueError as exc:
+            raise rejected from exc
+        query: dict[str, str] = {}
+        for key, value in pairs:
+            if key in query or not key or len(key) > 32 or len(value) > 2_048:
+                raise rejected
+            query[key] = value
+        if (
+            query.get("sp") != "r"
+            or query.get("sr") != "b"
+            or not query.get("sv")
+            or not query.get("sig")
+            or not query.get("se")
+            or query.get("spr", "https") != "https"
+        ):
+            raise rejected
+        try:
+            expiry = datetime.fromisoformat(query["se"].replace("Z", "+00:00"))
+            if expiry.tzinfo is None:
+                raise ValueError("SAS expiry lacks timezone")
+            expiry_epoch = expiry.astimezone(timezone.utc).timestamp()
+        except (OverflowError, ValueError) as exc:
+            raise rejected from exc
+        if expiry_epoch <= self._clock():
+            raise rejected
 
     async def _resolve_public(self, host: str, port: int) -> tuple[str, ...]:
         try:

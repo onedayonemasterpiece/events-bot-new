@@ -152,7 +152,7 @@ async def test_social_approval_page_hides_preview_until_operator_auth_and_commit
     identity = AccessIdentity(
         "operator",
         universal.oauth_client_id,
-        frozenset({"telegram:dm:send"}),
+        frozenset({"telegram:edit"}),
         universal.resource,
         "approval-jti",
         2_000_000_000,
@@ -171,14 +171,30 @@ async def test_social_approval_page_hides_preview_until_operator_auth_and_commit
             "display_name": "Saved Messages",
         },
     )
+    item = server.social_workspace._mint_ref(
+        "item", "native-saved-message", "telegram", principal
+    )
+    server.social_workspace._store_item_preview(
+        item,
+        {
+            "item_ref": item,
+            "target_ref": target,
+            "kind": "message",
+            "text": "Исходный текст",
+        },
+    )
     prepared = await server.social_workspace.prepare(
         validate_prepare_request(
             {
                 "platform": "telegram",
-                "action": "send_message",
+                "action": "edit",
                 "idempotency_key": "approval-flow-123",
-                "target_ref": target,
-                "content": {"text": "Привет мир", "entities": [], "media": []},
+                "item_ref": item,
+                "content": {
+                    "text": "Исправленный текст",
+                    "entities": [],
+                    "media": [],
+                },
             }
         ),
         context,
@@ -196,7 +212,7 @@ async def test_social_approval_page_hides_preview_until_operator_auth_and_commit
             },
         )
         page = await response.text()
-        assert response.status == 200 and "Привет мир" not in page
+        assert response.status == 200 and "Исправленный текст" not in page
         assert "form-action 'self'" in response.headers["Content-Security-Policy"]
         state = re.search(r"name=['\"]state['\"] value=['\"]([^'\"]+)['\"]", page).group(1)
 
@@ -205,7 +221,7 @@ async def test_social_approval_page_hides_preview_until_operator_auth_and_commit
             params={"preparation_ref": "invalid", "action_digest": "invalid"},
         )
         invalid_page = await invalid.text()
-        assert invalid.status == 400 and "Привет мир" not in invalid_page
+        assert invalid.status == 400 and "Исправленный текст" not in invalid_page
         assert "form-action 'self'" in invalid.headers["Content-Security-Policy"]
         assert invalid.headers["Cache-Control"] == "no-store"
 
@@ -214,14 +230,14 @@ async def test_social_approval_page_hides_preview_until_operator_auth_and_commit
             data={"phase": "preview", "state": "not-signed", "operator_token": "wrong"},
         )
         assert invalid_state.status == 400
-        assert "Привет мир" not in await invalid_state.text()
+        assert "Исправленный текст" not in await invalid_state.text()
         assert "form-action 'self'" in invalid_state.headers["Content-Security-Policy"]
 
         denied = await client.post(
             universal.social_approval_path,
             data={"phase": "preview", "state": state, "operator_token": "wrong"},
         )
-        assert "Привет мир" not in await denied.text()
+        assert "Исправленный текст" not in await denied.text()
 
         preview = await client.post(
             universal.social_approval_path,
@@ -232,7 +248,7 @@ async def test_social_approval_page_hides_preview_until_operator_auth_and_commit
             },
         )
         preview_page = await preview.text()
-        assert "Привет мир" in preview_page and "Saved Messages" in preview_page
+        assert "Исправленный текст" in preview_page and "Saved Messages" in preview_page
         cookie = preview.headers["Set-Cookie"].split(";", 1)[0]
 
         approved = await client.post(

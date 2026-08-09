@@ -200,6 +200,56 @@ def test_explicit_wildcard_allowlist_matches_only_subdomains(tmp_path):
         ingest(store, File(download_url="https://example.test/x", file_id="two"))
 
 
+def test_rotating_chatgpt_azure_blob_host_accepts_read_only_sas(tmp_path):
+    fetcher = Fetcher(Response([image_bytes()]))
+    store = SecureMediaAssetStore(
+        tmp_path / "media",
+        allowed_hosts=["*.blob.core.windows.net"],
+        resolver=public_resolver,
+        http_fetch=fetcher,
+        clock=lambda: 1_000,
+    )
+    url = (
+        "https://rotatingaccount.blob.core.windows.net/conversation-files/image.png"
+        "?sv=2025-05-05&se=1970-01-01T00%3A20%3A00Z&sr=b&sp=r&spr=https&sig=fake"
+    )
+    asset = ingest(store, File(download_url=url))
+    assert asset.byte_length == len(image_bytes())
+    assert len(fetcher.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "?sv=2025-05-05&se=1970-01-01T00%3A20%3A00Z&sr=b&sp=rw&sig=fake",
+        "?sv=2025-05-05&se=1970-01-01T00%3A20%3A00Z&sr=c&sp=r&sig=fake",
+        "?sv=2025-05-05&se=1970-01-01T00%3A10%3A00Z&sr=b&sp=r&sig=fake",
+        "?sv=2025-05-05&se=1970-01-01T00%3A20%3A00Z&sr=b&sp=r&sp=r&sig=fake",
+    ],
+)
+def test_chatgpt_azure_blob_requires_current_blob_read_sas(tmp_path, query):
+    fetcher = Fetcher(Response([image_bytes()]))
+    store = SecureMediaAssetStore(
+        tmp_path / "media",
+        allowed_hosts=["*.blob.core.windows.net"],
+        resolver=public_resolver,
+        http_fetch=fetcher,
+        clock=lambda: 1_000,
+    )
+    with pytest.raises(MediaIngressRejected) as caught:
+        ingest(
+            store,
+            File(
+                download_url=(
+                    "https://attacker.blob.core.windows.net/files/image.png" + query
+                )
+            ),
+        )
+    assert caught.value.error_code == "FILE_SOURCE_NOT_AUTHORIZED"
+    assert fetcher.calls == []
+
+
 def test_redirect_is_not_followed_and_sensitive_headers_are_never_sent(tmp_path):
     response = Response(
         [], status=302, headers={"Location": "https://media.example.test/next"}

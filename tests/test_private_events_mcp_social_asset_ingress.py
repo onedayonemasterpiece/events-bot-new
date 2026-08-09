@@ -100,6 +100,7 @@ class FakeAdapter:
     def __init__(self) -> None:
         self.staged: list[tuple[VerifiedAsset, object]] = []
         self.executions = 0
+        self.last_intent = None
 
     async def capabilities(self, target_ref):
         return {
@@ -126,7 +127,18 @@ class FakeAdapter:
 
     async def execute(self, intent, *, operation_ref):
         self.executions += 1
-        return {}
+        self.last_intent = intent
+        return {
+            "target_ref": intent.target_ref,
+            "item_ref": "provider-sent-image-99",
+            "status": "succeeded",
+            "retry_safe": False,
+            "read_after_write": {
+                "verified": True,
+                "observed_item_ref": "provider-sent-image-99",
+                "observed_at": "2027-01-15T08:00:00Z",
+            },
+        }
 
     async def reconcile(self, operation_ref):
         return {}
@@ -412,6 +424,62 @@ async def test_verified_ingress_is_owner_bound_and_never_leaks_file_fields(
     with pytest.raises(SocialWorkspaceRuntimeError, match="expired or not bound"):
         await runtime.prepare(foreign_intent, mallory)
     assert adapter.executions == 0
+
+
+@pytest.mark.asyncio
+async def test_chatgpt_png_to_saved_messages_commits_without_second_approval(
+    asset_runtime,
+) -> None:
+    runtime, _ingestor, adapter, _now = asset_runtime
+    staged = await runtime.stage_asset(_request(), _context())
+    status = await runtime.asset_status(staged["asset_ref"], _context())
+    assert status["status"] == "ready"
+
+    principal = RuntimePrincipal.from_context(_context())
+    saved = runtime._mint_ref("target", "native-self", "telegram", principal)
+    runtime._store_target_preview(
+        saved,
+        {
+            "platform": "telegram",
+            "target_ref": saved,
+            "kind": "self",
+            "display_name": "Saved Messages",
+        },
+    )
+    prepared = await runtime.prepare(
+        validate_prepare_request(
+            {
+                "platform": "telegram",
+                "action": "send_message",
+                "idempotency_key": "saved-image-direct-123",
+                "target_ref": saved,
+                "content": {
+                    "text": "Симфонический концерт — дирижёр и оркестр.",
+                    "entities": [],
+                    "media": [
+                        {"asset_ref": staged["asset_ref"], "role": "image"}
+                    ],
+                },
+            }
+        ),
+        _context(),
+    )
+    assert prepared["status"] == "approved"
+    assert "approval_url" not in prepared
+    committed = await runtime.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        _context(),
+    )
+    assert committed["status"] == "succeeded"
+    assert committed["target_ref"] == saved
+    assert committed["item_ref"] == committed["read_after_write"][
+        "observed_item_ref"
+    ]
+    assert adapter.executions == 1
+    assert adapter.last_intent.content.media[0].asset_ref == "provider-asset-handle"
 
 
 @pytest.mark.asyncio

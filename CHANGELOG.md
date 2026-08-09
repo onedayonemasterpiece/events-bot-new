@@ -47,6 +47,13 @@
   remains explicit in each packet while the rendered fallback stays capturable.
   Dynamic-region materialization canonicalizes the `dynamic-region.` namespace
   before joining plan IDs, closing all 13 per-row runtime/blocker references.
+- Removed the redundant second browser confirmation for newly prepared social
+  outbound actions that ChatGPT invokes from the user's explicit request.
+  Send/publish/forward/reaction/comment/schedule/story preparations now return
+  `approved` and can proceed through the existing one-use commit, binding,
+  budget, idempotency and read-back checks; edit/delete still require external
+  approval, and older `awaiting_human_approval` preparations are never upgraded
+  or executed automatically.
 
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
@@ -57,6 +64,10 @@
   Dynamic denied hosts now fingerprint both the full hostname and stable DNS
   suffixes, allowing an exact policy repair without storing a signed URL or
   disclosing the temporary provider hostname.
+  Rotating ChatGPT Azure Blob storage accounts are now accepted through an
+  explicit suffix policy only when the URL contains a current blob-scoped
+  read-only SAS; unsigned, write-enabled, expired and duplicate-field URLs are
+  still rejected before DNS/fetch.
 
 - Fixed the behavioral decoder Actions harness to exclude the exact-source
   `node_modules` directory from its disposable reflink/copy before attaching

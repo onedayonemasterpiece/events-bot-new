@@ -273,8 +273,9 @@ async def test_legacy_coarse_scopes_are_stable_provider_read_write_families(conf
         assert "telegram:dm:send" not in body
         assert "telegram:story:write" not in body
         assert "Стабильные publish-scopes" in body
-        assert "новые типизированные действия" in body
-        assert "внешнего подтверждения оператора" in body
+        assert "новые типизированные исходящие" in body
+        assert "не требуют второго подтверждения" in body
+        assert "edit/delete требуют" in body
         assert not (LEGACY_PUBLISH_SCOPES & APPROVAL_REQUIRED_SOCIAL_SCOPES)
     finally:
         await client.close()

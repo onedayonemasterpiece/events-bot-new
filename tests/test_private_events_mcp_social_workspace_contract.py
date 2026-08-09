@@ -11,6 +11,7 @@ from jsonschema import Draft202012Validator, ValidationError, validate
 
 from private_events_mcp.access_policy import CODEX_MAX_SCOPES
 from private_events_mcp.social_workspace import (
+    DIRECT_USER_AUTHORIZED_ACTIONS,
     SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA,
@@ -569,7 +570,7 @@ def test_rich_send_prepare_and_capability_gates_are_fail_closed() -> None:
         )
 
 
-def test_prepare_output_requires_human_approval_status_and_stable_digest() -> None:
+def test_prepare_output_allows_direct_user_authorization_and_stable_digest() -> None:
     intent = validate_prepare_request(_send_message())
     digest = compute_action_digest(intent)
     assert digest == compute_action_digest(intent) and len(digest) == 64
@@ -584,8 +585,21 @@ def test_prepare_output_requires_human_approval_status_and_stable_digest() -> No
         "required_scopes": ["telegram:dm:send"],
     }
     validate(prepared, SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA)
-    with pytest.raises(ValidationError):
-        validate({**prepared, "status": "approved"}, SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA)
+    validate({**prepared, "status": "approved"}, SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA)
+
+
+def test_direct_user_authorization_is_outbound_only_not_edit_or_delete() -> None:
+    assert DIRECT_USER_AUTHORIZED_ACTIONS == {
+        SocialAction.SEND_MESSAGE,
+        SocialAction.PUBLISH,
+        SocialAction.FORWARD,
+        SocialAction.REACTION,
+        SocialAction.COMMENT,
+        SocialAction.SCHEDULE,
+        SocialAction.STORY,
+    }
+    assert SocialAction.EDIT not in DIRECT_USER_AUTHORIZED_ACTIONS
+    assert SocialAction.DELETE not in DIRECT_USER_AUTHORIZED_ACTIONS
 
 
 def test_commit_requires_external_atomic_one_use_approval_bound_to_identity_and_digest() -> None:
