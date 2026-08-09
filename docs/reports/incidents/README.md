@@ -22,6 +22,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-09-private-mcp-vk-story-cdn-rejected.md`
+  - Scope: Private Events MCP VK story list/media-ref projection and the
+    provider-owned media hostname boundary.
+  - Must not regress: an official `stories.get` response using VK's production
+    `*.okcdn.ru` video CDN must produce a bounded opaque media ref, while
+    look-alike hosts, HTTP, userinfo, redirects and provider URLs remain denied.
+
 - `INC-2026-08-09-private-mcp-missing-bearer-http-200.md`
   - Scope: Private Events MCP protected `tools/call` transport for both the
     ChatGPT and Codex resources.

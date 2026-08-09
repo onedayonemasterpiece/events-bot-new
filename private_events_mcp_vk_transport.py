@@ -18,6 +18,7 @@ from private_events_mcp_vk_upload import (
 )
 
 _VK_SUFFIXES = (
+    ".okcdn.ru",
     ".userapi.com",
     ".vk.com",
     ".vk.me",
