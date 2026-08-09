@@ -2,7 +2,7 @@
 
 ## Base and safety
 
-- Integration base: `origin/main@1f449af36987ad63657da4387e909513c36cd995`;
+- Integration base: `origin/main@1f449af361e586da509d0199cfe059d620fb42d6`;
   it contains merged PR #441 at
   `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`.
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
@@ -25,13 +25,14 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **97/97 PASS**;
+- Search production-health aggregate suite: **101/101 PASS**;
 - legacy Search harness: **30/30 PASS**;
 - broker Python/security **44/44 PASS**, Edge contract **5/5 PASS** and Auth
   Node **16/16 PASS**;
 - static source-binding/release regression: **87/87 PASS**;
 - workflow YAML and shell/node syntax;
-- migration contract and diff check;
+- broker migration plus its canonical SQL replay/expiry contract on ephemeral
+  PostgreSQL 17, and diff check;
 - independent checklist audit and fresh GitHub Actions.
 
 ## Production activation gate
@@ -52,9 +53,12 @@ once, accepts real cache-hit execution, rejects real skeleton/placeholder UI,
 aligns the Appium preflight/diagnostic receipt, preserves failed-journey bytes,
 gates cleanup, rereads pointer on failure, suppresses superseded issue mutation,
 keeps pre-runner UNKNOWN streaks, refuses missing-artifact BROKEN proof, pins
-Appium drivers, makes full qualification synchronous, and permits only one
-bounded encrypted durable broker idempotency replay. It also verifies the
+Appium drivers, makes full qualification synchronous, and provides a bounded
+encrypted durable broker idempotency replay window. It also verifies the
 active Edge contract with a side-effect-free HEAD before Auth/Search, enables
-the iOS Safari console bucket, rejects mobile redirect chains, and resamples
-the complete journey for exactly one Search POST. These are deterministic results;
+the iOS Safari console bucket, rejects mobile redirect chains, and keeps an
+adapter-level physical Search observer alive through final event-page
+diagnostics so the complete journey proves exactly one Search POST. Unknown
+pre-runner cells retain the exact sanitized summary schema with explicit
+closed null/zero values. These are deterministic results;
 live acceptance remains `0 / 2` and no production state has been changed.
