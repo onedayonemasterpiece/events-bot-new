@@ -1,6 +1,5 @@
 const ACCEPTED_SOURCE = 'current_accepted_pointer';
 const SECRET_REVIEW_PATH = /^\/_review\/[A-Za-z0-9_-]{43}\/poisk\/$/u;
-const SECRET_PREVIEW_PATH = /^\/preview-[a-z0-9][a-z0-9-]{5,}\/poisk\/$/iu;
 const SHA40 = /^[0-9a-f]{40}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/u;
@@ -17,10 +16,9 @@ export function redactAcceptedTargetUrl(value) {
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) {
     throw new Error('search_health_target_url_invalid');
   }
+  if (!SECRET_REVIEW_PATH.test(parsed.pathname)) throw new Error('search_health_target_not_current_accepted');
   const redactedPath = parsed.pathname
-    .replace(/^\/_review\/[A-Za-z0-9_-]{43}\//u, '/_review/<redacted>/')
-    .replace(/^\/preview-[a-z0-9][a-z0-9-]{5,}\//iu, '/preview-<redacted>/');
-  if (redactedPath === parsed.pathname) throw new Error('search_health_target_not_secret');
+    .replace(/^\/_review\/[A-Za-z0-9_-]{43}\//u, '/_review/<redacted>/');
   return `${parsed.origin}${redactedPath}`;
 }
 
@@ -103,7 +101,7 @@ export function normalizeAcceptedTargetResolverResult(input) {
   if (
     parsed.protocol !== 'https:'
     || parsed.username || parsed.password || parsed.search || parsed.hash
-    || (!SECRET_REVIEW_PATH.test(parsed.pathname) && !SECRET_PREVIEW_PATH.test(parsed.pathname))
+    || !SECRET_REVIEW_PATH.test(parsed.pathname)
   ) {
     throw new Error('search_health_target_url_invalid');
   }

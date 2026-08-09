@@ -171,6 +171,9 @@ test('accepted target normalizes, redacts for display and does not couple checko
     target_url: 'https://kenigevents.ru/poisk/',
   })), /target_url_invalid/u);
   assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
+    target_url: 'https://kenigevents.ru/preview-public-build/poisk/',
+  })), /target_url_invalid/u);
+  assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
     source: 'latest_kaggle_job',
   })), /target_source_invalid/u);
   assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
