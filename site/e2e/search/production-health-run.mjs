@@ -25,6 +25,7 @@ import {
   writeProductionHealthEvidence,
 } from './evidence.mjs';
 import { runProductionHealthJourney } from './production-health-journey.mjs';
+import { waitForActiveSearchBackend } from './search-backend-release-probe.mjs';
 
 const execFile = promisify(execFileCallback);
 const platforms = new Set(['browser', 'android', 'ios']);
@@ -283,13 +284,14 @@ export async function runProductionHealthCell(options = {}) {
 }
 
 export function hasActiveSearchReleaseReceipt({
-  siteActive, expectedSearchBackendRevision = '', deploymentRunId = '',
+  siteActive, expectedSearchBackendRevision = '', deploymentRunId = '', backendActive = false,
 } = {}) {
   if (siteActive !== true) return false;
   const expected = String(expectedSearchBackendRevision || '').trim();
   if (!expected) return true;
   return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(expected)
-    && SAFE_DEPLOYMENT_RUN_ID.test(String(deploymentRunId || '').trim());
+    && SAFE_DEPLOYMENT_RUN_ID.test(String(deploymentRunId || '').trim())
+    && backendActive === true;
 }
 
 export async function resolveCurrentAcceptedTargetFromFly(env = process.env) {
@@ -488,6 +490,13 @@ export async function runProductionHealthCli(env = process.env) {
     resolver: () => resolveCurrentAcceptedTargetFromFly(env),
     expectedSiteSha,
   });
+  const backendReceipt = expectedBackendRevision
+    ? await waitForActiveSearchBackend({
+      supabaseUrl: required(env, 'PERSONALIZATION_SUPABASE_URL'),
+      publishableKey: required(env, 'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'),
+      expectedRevision: expectedBackendRevision,
+    })
+    : { active: true, product_search_posts: 0, auth_requests: 0 };
   let firstRead = true;
   const targetRun = createAcceptedTargetRun(async () => {
     if (firstRead) {
@@ -506,7 +515,7 @@ export async function runProductionHealthCli(env = process.env) {
     platform, targetRun, createAdapter: hooks.createAdapter, issueSession: hooks.issueSession,
     releaseGate: () => hasActiveSearchReleaseReceipt({
       siteActive: initialResolution.active, expectedSearchBackendRevision: expectedBackendRevision,
-      deploymentRunId,
+      deploymentRunId, backendActive: backendReceipt.active,
     }),
     expectedSearchBackendRevision: expectedBackendRevision || null,
     evidenceDirectory: required(env, 'E2E_EVIDENCE_DIR'),

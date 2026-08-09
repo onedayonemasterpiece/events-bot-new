@@ -736,6 +736,11 @@ as LLM reserve/failover.
 - Edge Function `event-search` is deployed with `--no-verify-jwt` and the
   Lite-first code path; the runtime behavior is controlled by live secrets for
   active/reserve key lists;
+- `HEAD /functions/v1/event-search` is the release-readiness surface: it returns
+  only `X-KenigEvents-Search-Contract` with `Cache-Control: no-store` and does
+  not enter Auth, quota, database, provider or product Search code.
+  Production-health uses this bounded probe before issuing a no-mail session;
+  authenticated POST behavior is unchanged;
 - readiness probe covers auth config, Yandex provider, userinfo adapter and Edge
   OPTIONS; local runtime env contract must show embedding lanes all five keys,
   LLM active lanes `GOOGLE_API_KEY5,GOOGLE_API_KEY4,GOOGLE_API_KEY3,GOOGLE_API_KEY`

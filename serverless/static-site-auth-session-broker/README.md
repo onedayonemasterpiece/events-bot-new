@@ -26,7 +26,10 @@ accounts fail startup validation.
 persona and returns one of:
 
 - `new` — the caller owns the new issuance;
+- `replay` — the identical still-unconsumed identity receives the same durable
+  encrypted credential result;
 - `duplicate_inflight` — the identical active identity already claimed it;
+- `duplicate_consumed` — the bounded durable replay expired;
 - `persona_busy` — another active identity owns that platform persona.
 
 Only `new` can reach `generate_link`. Duplicate, persona-busy, and HTTP overload
@@ -39,12 +42,14 @@ Overlapping identical calls inside one client issuer are coalesced to one
 broker POST. Independently overlapping identical calls reaching one broker
 process are coalesced to one ledger call and one `generate_link`. To close the
 ordinary lost-HTTP-response window, a successful result may be replayed
-**once**, from broker process memory only, for at most 30 seconds. The bounded
-entry is deleted on that read or expiry; at most 12 entries may exist. It is
-never written to the database, filesystem, logs, Actions cache or artifact.
-After a process restart or from another broker process, the durable duplicate
-claim remains fail-closed as `duplicate_inflight`; implementing cross-process
-credential replay would require forbidden credential escrow. The workflow
+once from broker process memory for at most 30 seconds. In addition, the claim
+ledger holds a Fernet-encrypted result for at most two minutes. The key is
+derived in memory from the broker-only audit secret; plaintext OTP/action link
+is never stored. Exact retries from another process or after restart receive
+the same one-time credential during the TTL and never call `generate_link`
+again; after expiry they are `duplicate_consumed`. The database row is
+service-role only and is never an
+evidence artifact, filesystem state or Actions cache. The workflow
 exports the masked one-time browser callback only through the current job's
 `GITHUB_ENV` and clears credential fields after use.
 
@@ -67,7 +72,8 @@ supported. Auth Admin access uses only
 payload role is `service_role`; generic environment key selection and public
 clients are forbidden.
 
-The claim ledger contains identity metadata only. Audit records contain only
-keyed hashes plus the non-sensitive closed platform. OIDC tokens, email
-addresses, OTPs, action links, redirect paths, raw run IDs, cookies, and
-serialized sessions must never be logged or persisted.
+The claim ledger contains identity metadata plus only the bounded encrypted
+idempotency ciphertext. Audit records contain keyed hashes plus the
+non-sensitive closed platform. OIDC tokens, email addresses, plaintext OTPs or
+action links, redirect paths, raw run IDs, cookies, and serialized sessions
+must never be logged or persisted.

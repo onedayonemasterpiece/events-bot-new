@@ -11,10 +11,12 @@
   profiles are explicit, and only a validated `search-runtime-deployed`
   standard/full marker can request deploy validation. Every platform uses a
   fresh OIDC broker session after a zero-side-effect real browser/device
-  preflight, performs one vector-only UI POST with at most five cards, real
+  preflight and an active-backend HEAD contract probe, performs one vector-only
+  UI POST with at most five cards, real
   wheel/native scroll and a same-origin event HTTP 200, and records only
   sanitized target/revision/counter/48–96 KiB evidence. Platform-bound broker
-  claims, three-way admission, fail-closed retry, typed product/infra/cost/
+  claims, three-way admission, an encrypted two-minute durable idempotency
+  lost-response replay, fail-closed retry, typed product/infra/cost/
   evidence dispositions and exact-platform issue handling replace the old
   shared-persona and generic-incident behavior. Static/data/index generation
   still cannot trigger Search. A `full` marker requests the existing bounded

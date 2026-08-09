@@ -107,6 +107,8 @@ class Transport:
                 ),
                 "redirect_to": redirect,
             }).encode()
+        if url.endswith("/rpc/complete_static_site_auth_session_issue_v2"):
+            return 200, b"true"
         raise AssertionError(url)
 
 
@@ -134,7 +136,8 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
         },
     }
     assert [call[1].rsplit("/", 1)[-1] for call in transport.calls] == [
-        "claim_static_site_auth_session_issue_v2", "generate_link"
+        "claim_static_site_auth_session_issue_v2", "generate_link",
+        "complete_static_site_auth_session_issue_v2",
     ]
     expected_key = environment()["AUTH_SESSION_BROKER_SUPABASE_SERVICE_ROLE_KEY"]
     assert transport.calls[0][2]["apikey"] == expected_key
@@ -277,9 +280,11 @@ def test_platform_is_closed_and_spoofable_identity_fields_are_rejected():
 
 @pytest.mark.parametrize(("claim", "status"), [
     ("duplicate_inflight", 409),
+    ("duplicate_consumed", 409),
     ("persona_busy", 423),
 ])
-def test_typed_ledger_rejection_never_generates_another_credential(claim, status):
+def test_typed_ledger_rejection_never_generates_another_credential(claim, status, monkeypatch):
+    monkeypatch.setattr(broker, "_DURABLE_REPLAY_POLL_ATTEMPTS", 1)
     transport = Transport(claim=claim)
     with pytest.raises(broker.BrokerError, match=claim) as caught:
         broker.process(
@@ -396,6 +401,36 @@ def test_identical_concurrent_issue_is_coalesced_to_one_claim_and_generate_link(
         assert first.result(timeout=3) == second.result(timeout=3)
     assert sum(call[1].endswith("/rpc/claim_static_site_auth_session_issue_v2") for call in transport.calls) == 1
     assert sum(call[1].endswith("/auth/v1/admin/generate_link") for call in transport.calls) == 1
+
+
+def test_identical_unconsumed_request_replays_after_process_state_loss_without_second_issue():
+    first_transport = Transport()
+    request = {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
+    first = broker.process(
+        request, token="jwt-a", env=environment(), transport=first_transport,
+        verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
+    )
+    completion = next(call for call in first_transport.calls
+                      if call[1].endswith("/rpc/complete_static_site_auth_session_issue_v2"))
+    ciphertext = json.loads(completion[3])["p_credential_ciphertext"]
+    broker.reset_transient_issue_state_for_tests()
+
+    class DurableReplayTransport(Transport):
+        def __call__(self, method, url, headers, body, timeout):
+            self.calls.append((method, url, dict(headers), body, timeout))
+            if url.endswith("/rpc/claim_static_site_auth_session_issue_v2"):
+                return 200, json.dumps({
+                    "claim": "replay", "credential_ciphertext": ciphertext,
+                }).encode()
+            raise AssertionError(url)
+
+    replay_transport = DurableReplayTransport()
+    replayed = broker.process(
+        request, token="jwt-b", env=environment(), transport=replay_transport,
+        verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
+    )
+    assert replayed == first
+    assert len(replay_transport.calls) == 1
 
 
 def test_http_handler_requires_bearer_token_and_never_echoes_internal_errors():

@@ -857,10 +857,13 @@ Edge SHA остаётся честно отмеченным gap этапа 2; н
 
 В текущем marker contract `search_backend_revision` обязан быть точным
 ожидаемым `search_contract_version`, а непустой `deployment_run_id` служит
-доверенным post-success release receipt. Для deploy-triggered запуска эта пара
-проверяется **до** Auth/Search вместе с active accepted-site receipt; отсутствие
-или невалидность marker даёт `BLOCKED_RELEASE_NOT_ACTIVE` и нулевой product
-traffic. Единственный разрешённый Search response затем сохраняет фактически
+correlation receipt. Для deploy-triggered запуска ожидаемая версия проверяется
+ограниченным `HEAD /functions/v1/event-search`: active Edge Function отвечает
+только публичным contract id и не выполняет Auth, quota, DB, provider или
+product Search. Этот HEAD probe и active accepted-site receipt проходят
+**до** session/Auth/Search; отсутствие или mismatch даёт
+`BLOCKED_RELEASE_NOT_ACTIVE` и нулевой product POST. Единственный разрешённый
+Search response затем сохраняет фактически
 наблюдённый `search_contract_version` и `policy_versions` как telemetry.
 Отдельный Edge byte/SHA нельзя подменять придуманной metadata.
 
@@ -1000,7 +1003,10 @@ Storage/CDN и не-Supabase origins исключаются. В evidence поп�
 body и driver log не сохраняются. Android использует Appium `3.6.0` + pinned
 UiAutomator2 `8.2.2`; iOS — Appium `3.6.0`, Xcode `16.4`, pinned XCUITest
 `12.1.4` и соответствующий downloaded WDA. Workflow устанавливает и проверяет
-точную driver version до side-effect-free preflight.
+точную driver version до side-effect-free preflight. XCUITest capability
+`showSafariConsoleLog=false` включает `safariConsole` bucket без печати raw
+events в Appium stdout; отсутствие capability не считается доказательством
+нулевых console errors.
 
 ### 16.9 Migration from current workflow
 
@@ -1049,7 +1055,8 @@ guard, а не доказанный двунаправленный atomic mutex.
 Реализованы production resolver/pointer reread на success и failure,
 one-query browser/Appium
 journey, real scroll + HTTP-200 card open, client-observed byte meter, platform
-broker identity/admission и bounded one-read in-memory lost-response replay,
+broker identity/admission и bounded encrypted durable lost-response
+replay (сверх in-process coalescing),
 explicit deploy marker, две schedule, manual profiles и typed reporter.
 Automatic schedule/dispatch остаются default-off. Перед первым live run
 migration broker claims должна быть

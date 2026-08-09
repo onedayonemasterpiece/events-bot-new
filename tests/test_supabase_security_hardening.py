@@ -162,8 +162,11 @@ def test_broker_issue_claim_is_service_only_and_pii_free() -> None:
     ).read_text(encoding="utf-8")
     assert "claim_static_site_auth_session_issue_v2" in platform_claim
     assert "p_platform not in ('browser', 'android', 'ios')" in platform_claim
-    for outcome in ("new", "duplicate_inflight", "persona_busy"):
-        assert f"return '{outcome}';" in platform_claim
+    for outcome in ("new", "replay", "duplicate_inflight", "duplicate_consumed", "persona_busy"):
+        assert f"'claim', '{outcome}'" in platform_claim
+    assert "complete_static_site_auth_session_issue_v2" in platform_claim
+    assert "credential_ciphertext = null" in platform_claim
+    assert "credential_expires_at = pg_catalog.now() + interval '2 minutes'" in platform_claim
     assert "security definer" in platform_claim
     assert "set search_path = pg_catalog" in platform_claim
     assert "from public, anon, authenticated" in platform_claim

@@ -54,3 +54,12 @@ test("cold canary LLM attempts reserve database budget before provider send", ()
   assert.match(source, /reserve_event_search_canary_llm_budget_internal_v1/);
   assert.match(source, /degraded:canary_daily_budget_exhausted/);
 });
+
+test("HEAD exposes only the side-effect-free active contract receipt", () => {
+  const head = source.slice(source.indexOf('if (request.method === "HEAD")'),
+    source.indexOf('if (request.method !== "POST")'));
+  assert.match(head, /X-KenigEvents-Search-Contract/);
+  assert.match(head, /SEARCH_CONTRACT_VERSION/);
+  assert.match(head, /status: 200/);
+  assert.doesNotMatch(head, /runEventSearch|auth|getUser|rpc|fetch/u);
+});

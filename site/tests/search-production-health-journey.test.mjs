@@ -36,6 +36,7 @@ import {
   createAcceptedTargetRun,
   normalizeAcceptedTargetResolverResult,
 } from '../e2e/search/production-health-target.mjs';
+import { waitForActiveSearchBackend } from '../e2e/search/search-backend-release-probe.mjs';
 
 const meter = (bytes = 1024) => ({
   schema_version: 'supabase_client_observed_bytes_v1', measurement_basis: 'client_observed_response_bytes',
@@ -100,7 +101,12 @@ function fakeJourneyAdapter(overrides = {}) {
       };
     },
     async realScrollResults() { return { performed: true, delta_y: 640, card_visible_after: true, gesture_count: 1 }; },
-    async openFirstResult() { return overrides.eventRoute || { same_origin: true, http_status: 200, destination_class: 'event_detail', network_source: 'fake' }; },
+    async openFirstResult() {
+      if (overrides.postAfterOpen) {
+        state.requests.push({ method: 'POST', path: '/functions/v1/event-search', body_contract: {} });
+      }
+      return overrides.eventRoute || { same_origin: true, http_status: 200, destination_class: 'event_detail', network_source: 'fake' };
+    },
   };
 }
 
@@ -349,6 +355,7 @@ test('backend deployment marker is a pre-Auth/Search release receipt and missing
   }), false);
   assert.equal(hasActiveSearchReleaseReceipt({
     siteActive: true, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: 'deploy-42.1',
+    backendActive: true,
   }), true);
   assert.equal(hasActiveSearchReleaseReceipt({
     siteActive: false, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: 'deploy-42.1',
@@ -368,6 +375,36 @@ test('backend deployment marker is a pre-Auth/Search release receipt and missing
   assert.equal(result.execution_status, 'BLOCKED');
   assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
   assert.equal(result.search.physical_post_count, 0);
+});
+
+test('backend contract probe is a bounded HEAD-only pre-Auth/Search gate', async () => {
+  const calls = [];
+  let sleeps = 0;
+  const receipt = await waitForActiveSearchBackend({
+    supabaseUrl: 'https://project.supabase.co', publishableKey: 'publishable-test-key',
+    expectedRevision: 'event-search-contract-v2', attempts: 3, delayMs: 1,
+    sleep: async () => { sleeps += 1; },
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return { status: calls.length === 3 ? 200 : 503, headers: new Headers({
+        'x-kenigevents-search-contract': calls.length === 3 ? 'event-search-contract-v2' : 'old',
+      }) };
+    },
+  });
+  assert.equal(receipt.active, true);
+  assert.equal(receipt.product_search_posts, 0);
+  assert.equal(receipt.auth_requests, 0);
+  assert.equal(sleeps, 2);
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every(({ url, init }) => url.endsWith('/functions/v1/event-search')
+    && init.method === 'HEAD' && init.redirect === 'error'));
+});
+
+test('one physical Search POST is enforced through scroll and event navigation', async () => {
+  await assert.rejects(() => runProductionHealthJourney({
+    adapter: fakeJourneyAdapter({ postAfterOpen: true }),
+    targetUrl: 'https://kenigevents.ru/',
+  }), /one_post|request_count|duplicate_post/u);
 });
 
 test('callback/session attach failure is Auth integration, not broker infrastructure', async () => {

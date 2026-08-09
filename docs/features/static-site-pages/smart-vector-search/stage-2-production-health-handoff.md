@@ -47,11 +47,13 @@ pagination или полный scheduled mobile/release matrix в production-hea
 - единый `production-health-run.mjs` с current accepted target pin/reread;
 - Playwright и real Appium Android/iOS preflight в той же session;
 - platform-bound OIDC broker claim и admission до трёх разных platform personas;
-- overlapping issue coalescing и один bounded 30-second in-memory replay для
-  потерянного HTTP response без database/filesystem credential escrow;
+- overlapping issue coalescing, 30-second memory replay и одинаковый
+  encrypted durable result с двухминутным TTL для process/restart
+  lost-response; plaintext credential, filesystem/cache/artifact escrow нет;
 - one-query/one-POST vector-only journey, card ID parity, scroll и route 200;
 - Auth getUser + один owner RLS proof, 48/96 KiB meter и strict evidence;
-- exact deployment marker `none|standard|full`, pre-Search active release
+- exact deployment marker `none|standard|full`, side-effect-free backend HEAD
+  contract proof и pre-Search active release
   receipt и platform issue disposition, suppressing issue mutation when the
   pinned target was superseded.
 

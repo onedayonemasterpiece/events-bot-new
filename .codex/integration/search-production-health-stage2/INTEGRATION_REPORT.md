@@ -25,9 +25,10 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **95/95 PASS**;
+- Search production-health aggregate suite: **97/97 PASS**;
 - legacy Search harness: **30/30 PASS**;
-- broker Python/security **42/42 PASS** and Auth Node **16/16 PASS**;
+- broker Python/security **44/44 PASS**, Edge contract **5/5 PASS** and Auth
+  Node **16/16 PASS**;
 - static source-binding/release regression: **87/87 PASS**;
 - workflow YAML and shell/node syntax;
 - migration contract and diff check;
@@ -52,5 +53,8 @@ aligns the Appium preflight/diagnostic receipt, preserves failed-journey bytes,
 gates cleanup, rereads pointer on failure, suppresses superseded issue mutation,
 keeps pre-runner UNKNOWN streaks, refuses missing-artifact BROKEN proof, pins
 Appium drivers, makes full qualification synchronous, and permits only one
-bounded volatile broker lost-response replay. These are deterministic results;
+bounded encrypted durable broker idempotency replay. It also verifies the
+active Edge contract with a side-effect-free HEAD before Auth/Search, enables
+the iOS Safari console bucket, rejects mobile redirect chains, and resamples
+the complete journey for exactly one Search POST. These are deterministic results;
 live acceptance remains `0 / 2` and no production state has been changed.

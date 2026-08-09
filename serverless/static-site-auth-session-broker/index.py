@@ -130,6 +130,8 @@ _ISSUE_FLIGHTS_LOCK = threading.Lock()
 _ISSUE_REPLAYS: dict[tuple[str, str, str, int, str], _IssueReplay] = {}
 _ISSUE_REPLAY_TTL_SECONDS = 30.0
 _ISSUE_REPLAY_MAX_ENTRIES = 12
+_DURABLE_REPLAY_POLL_ATTEMPTS = 20
+_DURABLE_REPLAY_POLL_SECONDS = 0.25
 
 
 def reset_transient_issue_state_for_tests() -> None:
@@ -411,6 +413,39 @@ def _json_call(path: str, payload: Mapping[str, Any], *, policy: Policy, transpo
         raise BrokerError("supabase_response_invalid", status=503) from exc
 
 
+def _credential_fernet(policy: Policy) -> Any:
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError as exc:  # pragma: no cover - deployment configuration
+        raise BrokerError("credential_cipher_unavailable", status=500) from exc
+    key = hashlib.sha256(
+        b"kenigevents-search-broker-credential-v1\0" + policy.audit_key.encode()
+    ).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+
+def _seal_issued_result(result: Mapping[str, Any], policy: Policy) -> str:
+    raw = json.dumps(dict(result), sort_keys=True, separators=(",", ":")).encode()
+    return _credential_fernet(policy).encrypt(raw).decode()
+
+
+def _unseal_issued_result(ciphertext: str, policy: Policy) -> dict[str, Any]:
+    try:
+        raw = _credential_fernet(policy).decrypt(ciphertext.encode(), ttl=180)
+        result = json.loads(raw)
+    except Exception as exc:
+        raise BrokerError("credential_replay_invalid", status=503) from exc
+    if not isinstance(result, Mapping):
+        raise BrokerError("credential_replay_invalid", status=503)
+    email_otp = str(result.get("email_otp") or "")
+    action_link = str(result.get("action_link") or "")
+    counters = result.get("counters")
+    if result.get("claim") != "new" or not _OTP_RE.fullmatch(email_otp) \
+            or not action_link or not isinstance(counters, Mapping):
+        raise BrokerError("credential_replay_invalid", status=503)
+    return dict(result)
+
+
 def _audit_hash(value: str, key: str) -> str:
     return hmac.new(key.encode(), value.encode(), hashlib.sha256).hexdigest()[:24]
 
@@ -442,7 +477,7 @@ def _issue_authorized(
     authorized: AuthorizedIssue, *, claims: Mapping[str, Any], policy: Policy,
     transport: Transport, audit_sink: AuditSink,
 ) -> dict[str, Any]:
-    admission = _json_call("/rest/v1/rpc/claim_static_site_auth_session_issue_v2", {
+    claim_payload = {
         "p_run_id": authorized.run_id,
         "p_run_attempt": authorized.run_attempt,
         "p_platform": authorized.platform,
@@ -450,11 +485,34 @@ def _issue_authorized(
         "p_repository": authorized.repository,
         "p_workflow_ref": authorized.workflow_ref,
         "p_limit": policy.per_run_persona_limit,
-    }, policy=policy, transport=transport)
-    if isinstance(admission, Mapping):
-        admission = admission.get("claim") or admission.get("outcome")
-    admission = str(admission or "").strip().lower()
-    if admission not in {"new", "duplicate_inflight", "persona_busy"}:
+    }
+    admission = ""
+    replay_ciphertext = ""
+    for poll in range(_DURABLE_REPLAY_POLL_ATTEMPTS):
+        raw_admission = _json_call(
+            "/rest/v1/rpc/claim_static_site_auth_session_issue_v2",
+            claim_payload, policy=policy, transport=transport,
+        )
+        if isinstance(raw_admission, Mapping):
+            admission = str(raw_admission.get("claim") or raw_admission.get("outcome") or "").strip().lower()
+            replay_ciphertext = str(raw_admission.get("credential_ciphertext") or "")
+        else:
+            admission = str(raw_admission or "").strip().lower()
+        if admission != "duplicate_inflight" or poll + 1 >= _DURABLE_REPLAY_POLL_ATTEMPTS:
+            break
+        time.sleep(_DURABLE_REPLAY_POLL_SECONDS)
+
+    if admission == "replay":
+        result = _unseal_issued_result(replay_ciphertext, policy)
+        if result.get("platform") != authorized.platform:
+            raise BrokerError("credential_replay_invalid", status=503)
+        _audit(
+            audit_sink, policy, outcome="replayed_durable", claims=claims,
+            persona=authorized.persona.persona_id, platform=authorized.platform,
+            redirect=authorized.redirect,
+        )
+        return result
+    if admission not in {"new", "duplicate_inflight", "duplicate_consumed", "persona_busy"}:
         raise BrokerError("admission_response_invalid", status=503)
     if admission != "new":
         _audit(
@@ -462,12 +520,11 @@ def _issue_authorized(
             persona=authorized.persona.persona_id, platform=authorized.platform,
             redirect=authorized.redirect,
         )
-        status = 409 if admission == "duplicate_inflight" else 423
+        status = 423 if admission == "persona_busy" else 409
         raise BrokerError(admission, status=status, claim=admission)
 
-    # This calls the raw GoTrue REST endpoint rather than supabase-js.  Its
-    # request/response contract is snake_case and flat; the SDK alone wraps
-    # these fields below ``data.properties``.
+    # This calls the raw GoTrue REST endpoint rather than supabase-js. Its
+    # request/response contract is snake_case and flat.
     issued = _json_call("/auth/v1/admin/generate_link", {
         "type": "magiclink", "email": authorized.persona.email,
         "redirect_to": authorized.redirect,
@@ -490,24 +547,30 @@ def _issue_authorized(
             or issued_redirect != authorized.redirect \
             or action_query.get("redirect_to") != [authorized.redirect]:
         raise BrokerError("issuer_response_invalid", status=503)
-    _audit(
-        audit_sink, policy, outcome="issued", claims=claims,
-        persona=authorized.persona.persona_id, platform=authorized.platform,
-        redirect=authorized.redirect,
-    )
-    return {
+    result = {
         "claim": "new",
         "platform": authorized.platform,
         "email_otp": email_otp,
-        # This is returned only to the authenticated caller and is never
-        # included in audit. Mobile adapters may open it in the platform
-        # browser so Supabase completes the callback in that browser's storage.
         "action_link": action_link,
         "counters": {
             "admin_credential_count": 1, "product_otp_issue_count": 0,
             "external_mail_send_count": 0, "external_mail_receipt_count": 0,
         },
     }
+    completed = _json_call(
+        "/rest/v1/rpc/complete_static_site_auth_session_issue_v2",
+        {**{key: value for key, value in claim_payload.items() if key != "p_limit"},
+         "p_credential_ciphertext": _seal_issued_result(result, policy)},
+        policy=policy, transport=transport,
+    )
+    if completed is not True:
+        raise BrokerError("credential_replay_completion_rejected", status=503)
+    _audit(
+        audit_sink, policy, outcome="issued", claims=claims,
+        persona=authorized.persona.persona_id, platform=authorized.platform,
+        redirect=authorized.redirect,
+    )
+    return result
 
 
 def _coalesced_issue(

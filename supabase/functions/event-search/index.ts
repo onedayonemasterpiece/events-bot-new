@@ -2876,6 +2876,18 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: CORS_HEADERS });
   }
+  // Side-effect-free release probe. It performs no Auth, quota, database,
+  // provider or product Search work and exposes only the public contract id.
+  if (request.method === "HEAD") {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        ...CORS_HEADERS,
+        "Cache-Control": "no-store",
+        "X-KenigEvents-Search-Contract": SEARCH_CONTRACT_VERSION,
+      },
+    });
+  }
   if (request.method !== "POST") {
     return jsonResponse(
       { error: "method_not_allowed", request_id: requestId },

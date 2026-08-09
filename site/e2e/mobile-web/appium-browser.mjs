@@ -248,6 +248,9 @@ export function buildAppiumCapabilities(platform, config, env = process.env) {
     // Official XCUITest setting: select SpringBoard as active while it owns a
     // system alert, then return to Safari after the alert disappears.
     'appium:settings[respectSystemAlerts]': true,
+    // XCUITest >=7.22 collects no Safari console bucket unless this is set.
+    // false keeps raw events out of Appium stdout while enabling getLogs.
+    'appium:showSafariConsoleLog': false,
     'appium:showSafariNetworkLog': true,
     // Keep ordinary navigation in WebKit: blanket nativeWebTap can miss
     // off-screen controls. Critical input focus is routed through an exact

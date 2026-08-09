@@ -6,6 +6,7 @@ import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
 import { buildMobilePreflightFailureReceipt, isSafeMobilePreflightRetryReceipt,
   runAppiumTransportPreflight } from '../e2e/mobile-web/appium-preflight.mjs';
 import { createAppiumSearchAdapter } from '../e2e/search/adapters/appium-base.mjs';
+import { buildAppiumCapabilities } from '../e2e/mobile-web/appium-browser.mjs';
 
 function preflightDriver(platform = 'android') {
   const events = [];
@@ -135,6 +136,11 @@ test('Appium result snapshot counts actual skeleton cards and id-less placeholde
 });
 
 test('iOS preflight uses the Safari preparation hook then proves Mobile Safari/XCUITest/WDA', async () => {
+  const caps = buildAppiumCapabilities('ios', {
+    deviceName: 'iPhone 16', platformVersion: '18.5', udid: 'test-udid',
+  }, {});
+  assert.equal(caps['appium:showSafariConsoleLog'], false);
+  assert.equal(caps['appium:showSafariNetworkLog'], true);
   const driver = preflightDriver('ios');
   let prepared = 0;
   const receipt = await runAppiumTransportPreflight(driver, {
@@ -293,6 +299,14 @@ test('navigation receipt rejects cross-origin and non-200 document evidence', ()
     responses: [{ origin: 'https://kenigevents.ru', pathname: '/events/1', status: 404,
       resource_type: 'document' }],
   }), /http_200_missing/u);
+  assert.throws(() => buildSameOriginNavigationReceipt({
+    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: 'https://kenigevents.ru/events/1',
+    finalUrl: 'https://kenigevents.ru/events/1',
+    responses: [
+      { origin: 'https://evil.example', pathname: '/bounce', status: 302, resource_type: 'document' },
+      { origin: 'https://kenigevents.ru', pathname: '/events/1', status: 200, resource_type: 'document' },
+    ],
+  }), /redirected|cross_origin/u);
 });
 
 

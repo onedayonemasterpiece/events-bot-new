@@ -48,9 +48,16 @@ export function buildSameOriginNavigationReceipt({ beforeUrl, expectedUrl, final
     throw new Error('mobile_card_route_cross_origin');
   }
   if (final.pathname !== expected.pathname) throw new Error('mobile_card_route_changed');
-  const matching = (Array.isArray(responses) ? responses : []).filter((item) => (
+  const observed = Array.isArray(responses) ? responses : [];
+  const documentResponses = observed.filter((item) => !item?.resource_type || item.resource_type === 'document');
+  if (documentResponses.some((item) => Number(item?.status) >= 300 && Number(item?.status) < 400)) {
+    throw new Error('mobile_card_route_redirected');
+  }
+  if (documentResponses.some((item) => item?.origin && item.origin !== expected.origin)) {
+    throw new Error('mobile_card_route_cross_origin');
+  }
+  const matching = documentResponses.filter((item) => (
     item?.origin === expected.origin && item?.pathname === expected.pathname
-      && (!item.resource_type || item.resource_type === 'document')
   ));
   if (!matching.some((item) => item.status === 200)) throw new Error('mobile_card_http_200_missing');
   return Object.freeze({

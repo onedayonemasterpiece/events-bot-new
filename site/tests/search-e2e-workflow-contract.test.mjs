@@ -114,6 +114,8 @@ test('platform jobs invoke only the unified one-session runner and qualification
   assert.match(qualificationSource, /\["cold_vector_llm","degraded_vector_fallback"\]/u);
   assert.match(qualificationSource, /one no-mail session/u);
   assert.match(qualificationSource, /E2E_SEARCH_REVISION_POLICY: release_exact/u);
+  assert.equal((qualificationSource.match(/search-backend-release-probe-cli\.mjs/gu) || []).length, 2);
+  assert.match(qualificationSource, /before Auth\/Search/u);
   assert.equal(qualification.on.workflow_call.inputs.profile.type, 'string');
   for (const platform of ['browser', 'android', 'ios']) {
     assert.match(String(health.jobs['request-release-qualification'].if),

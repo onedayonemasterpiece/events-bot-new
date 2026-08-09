@@ -73,6 +73,9 @@ jobs:
       - run: npm --prefix site ci --no-audit --no-fund
       - working-directory: site
         run: npx playwright install --with-deps chromium
+      - name: Prove expected Search backend contract before Auth/Search
+        if: ${{ inputs.search_backend_revision != '' }}
+        run: node site/e2e/search/search-backend-release-probe-cli.mjs
       - name: Run one-session selective browser qualification
         run: node site/e2e/search/production-health-run.mjs
       - name: Upload sanitized qualification summary
@@ -120,6 +123,9 @@ jobs:
       - name: Fail closed unless the expected runtime is active
         if: ${{ inputs.site_runtime_sha != '' }}
         run: test "$E2E_EXPECTED_REPO_SHA" = "$E2E_EXPECTED_SITE_RUNTIME_SHA"
+      - name: Prove expected Search backend contract before Auth/Search
+        if: ${{ inputs.search_backend_revision != '' }}
+        run: node site/e2e/search/search-backend-release-probe-cli.mjs
       - name: Run bounded LLM and deterministic degraded qualification in one no-mail session
         run: node .github/scripts/run-browser-static-search.mjs
       - name: Upload sanitized full qualification evidence

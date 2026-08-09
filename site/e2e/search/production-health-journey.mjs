@@ -145,6 +145,18 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
   if (finiteDelta(diagnosticsFinal, diagnosticsBefore, 'storage_requests') !== 0) {
     throw new Error('search_health_storage_forbidden');
   }
+  // Re-sample the authoritative transport after scroll and event navigation;
+  // the one-POST proof covers the complete platform cell, not only submit.
+  const finalActivity = await adapter.activity();
+  const finalDelta = activityDelta(before, finalActivity);
+  assertOneSubmitOnePost(finalDelta, 'production_health');
+  const finalSearchRequests = finalDelta.requests.filter((item) => (
+    item.method === 'POST' && item.path === '/functions/v1/event-search'
+  ));
+  if (finalSearchRequests.length !== 1) throw new Error('search_health_request_count_invalid');
+  if (finalActivity.meter?.hard_limit_exceeded === true) {
+    throw new Error('search_health_supabase_hard_limit_exceeded');
+  }
 
   return Object.freeze({
     schema_version: 'search_production_health_journey_v1',
@@ -189,6 +201,6 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
     diagnostics: Object.freeze({
       console_errors: 0, failed_requests: 0, error_responses: 0,
     }),
-    meter: after.meter,
+    meter: finalActivity.meter,
   });
 }
