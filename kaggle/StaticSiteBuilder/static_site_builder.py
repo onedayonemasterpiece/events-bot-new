@@ -38,6 +38,7 @@ SOURCE_IGNORED_PARTS = {
 SITE_SOURCE_REPO_CONTRACTS = (
     Path('docs/testing/transport-fault-profiles.v1.yml'),
 )
+SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
 
 
 def sha256_file(path: Path) -> str:
@@ -154,6 +155,18 @@ def validate_build_clock(config: dict) -> dict:
     if config.get('profile') == 'production-candidate' and not re.fullmatch(r'[0-9a-f]{64}', fingerprint):
         raise RuntimeError('production input fingerprint missing')
     return clock
+
+
+def validate_semantic_cache_contract(config: dict) -> dict[str, object]:
+    mode = str(config.get('semantic_cache_mode') or 'warm').strip().lower()
+    if mode not in SEMANTIC_CACHE_MODES:
+        raise RuntimeError(f'unsupported semantic cache mode: {mode!r}')
+    staged = config.get('semantic_cache_inputs_staged') or []
+    if not isinstance(staged, list) or any(not isinstance(item, str) for item in staged):
+        raise RuntimeError('semantic cache staging evidence is invalid')
+    if mode == 'cold' and staged:
+        raise RuntimeError('cold semantic cache mode must not stage prior semantic inputs')
+    return {'mode': mode, 'inputs_staged': sorted(staged)}
 
 def _load_status_loader(search_roots: list[Path] | None = None):
     """Load the callback helper from the mounted private status dataset.
@@ -487,6 +500,7 @@ def export_preview_data_if_configured(config: dict) -> None:
     cache_path = WORKING / cache_filename
     if input_cache and not cache_path.exists():
         shutil.copy2(input_cache, cache_path)
+    semantic_cache = validate_semantic_cache_contract(config)
     cache_inputs = {
         'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
@@ -497,7 +511,9 @@ def export_preview_data_if_configured(config: dict) -> None:
     semantic_paths: dict[str, Path] = {}
     for config_key, default_name in cache_inputs.items():
         filename = str(config.get(config_key) or default_name).strip()
-        input_path = find_input_file(filename)
+        input_path = (
+            find_input_file(filename) if semantic_cache['mode'] == 'warm' else None
+        )
         working_path = WORKING / filename
         if input_path and not working_path.exists():
             shutil.copy2(input_path, working_path)
@@ -946,6 +962,7 @@ def main() -> int:
         # terminal report instead of leaving a misleading "running" ledger.
         init_status()
         config = read_config()
+        semantic_cache_contract = validate_semantic_cache_contract(config)
         if (
             config.get('profile') == 'production-candidate'
             and not config.get('collection_semantic_compute')
@@ -1171,6 +1188,8 @@ def main() -> int:
             'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
             'event_count': event_count, 'artifacts': artifacts, 'failure_class': None,
             'input_fingerprint': config.get('input_fingerprint'),
+            'semantic_cache_mode': semantic_cache_contract['mode'],
+            'semantic_cache_inputs_staged': semantic_cache_contract['inputs_staged'],
             'build_clock': build_clock,
             **result_details,
         }
@@ -1186,6 +1205,13 @@ def main() -> int:
             'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
             'failure_class': 'permanent_input' if isinstance(exc, (ValueError, FileNotFoundError)) else 'retryable_build',
             'input_fingerprint': locals().get('config', {}).get('input_fingerprint'),
+            'semantic_cache_mode': (
+                locals().get('semantic_cache_contract', {}).get('mode')
+                or str(locals().get('config', {}).get('semantic_cache_mode') or 'warm')
+            ),
+            'semantic_cache_inputs_staged': locals().get(
+                'semantic_cache_contract', {}
+            ).get('inputs_staged', []),
             'build_clock': locals().get('config', {}).get('build_clock'),
             'error_type': exc.__class__.__name__, 'error': str(exc)[:1000],
         }

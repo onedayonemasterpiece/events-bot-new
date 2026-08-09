@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--correlation-id", default="")
     parser.add_argument("--delay-seconds", type=int, default=0)
     parser.add_argument(
+        "--semantic-cache-mode",
+        choices=["warm", "cold"],
+        default="warm",
+        help="Reuse prior semantic caches (warm) or explicitly recompute without them (cold)",
+    )
+    parser.add_argument(
         "--show-current-review",
         action="store_true",
         help="Print the canonical checked immutable preproduction review target without enqueueing",
@@ -75,6 +81,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
             correlation_id=correlation_id,
             delay_seconds=max(0, args.delay_seconds),
             trigger="operator_request",
+            semantic_cache_mode=args.semantic_cache_mode,
         )
     finally:
         await db.close()
@@ -84,6 +91,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
         "release_channel": "secret_preview",
         "correlation_id": correlation_id,
         "event_ids": args.event_id,
+        "semantic_cache_mode": args.semantic_cache_mode,
     }
 
 
