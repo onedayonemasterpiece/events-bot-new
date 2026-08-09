@@ -783,6 +783,13 @@ materializer also updates `breakpoint-and-container-matrix.jsonl`,
 and durable artifact index. Perceptual comparison and dHash remain diagnostic;
 neither replaces human review.
 
+Optional remote font delivery is not allowed to turn a terminal CSSOM probe
+into an unbounded screenshot wait. The breakpoint raster path uses the same
+Playwright 1.61 no-second-font-wait switch as the bounded behavioral capture:
+the evidence records the font actually rendered by Chromium (including a
+fallback when the optional remote face is not ready) rather than changing the
+site, waiting indefinitely, or relabeling the probe result.
+
 The exact rail is a normal horizontally scrollable content list:
 `div.rail-window[tabindex="0"]` has no composite role, roving tabindex, or
 `aria-activedescendant`; its link and Like button are ordinary descendants.

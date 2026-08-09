@@ -12,6 +12,13 @@ const round=(value)=>Math.round(Number(value)*1000)/1000;
 const safeReason=(error)=>String(error?.message||error||'unknown').replace(/https?:\/\/\S+/gu,'[redacted-url]').slice(0,500);
 export const selectBreakpointRasterReason=(record)=>record.terminal_status==='MISMATCH'?'mismatch-terminal':record.selector_cascade_evidence?.cascade_reconciliation==='ambiguous'?'ambiguous-cascade':null;
 
+// The exact source loads optional remote fonts. Playwright 1.61 otherwise
+// waits for document.fonts.ready inside screenshot() after our probe facts are
+// already terminal, which made the first Actions raster time out. Capture the
+// actually rendered fallback font instead, matching the bounded behavioral
+// packet capture policy in ./capture.mjs.
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
+
 async function installDeterministicRuntime(context){
   await context.addInitScript(({fixedNow})=>{
     const NativeDate=Date;class FixedDate extends NativeDate{constructor(...args){super(...(args.length?args:[fixedNow]));}static now(){return fixedNow;}}Object.setPrototypeOf(FixedDate,NativeDate);globalThis.Date=FixedDate;

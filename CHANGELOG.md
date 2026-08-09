@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed breakpoint evidence rasters on clean Actions runners so optional
+  remote fonts cannot make Playwright's internal `document.fonts.ready` wait
+  outlive an already-terminal CSSOM probe. The decoder now records the
+  actually rendered fallback font, matching the existing bounded behavioral
+  packet policy, without changing site font or UI code.
 - Added a fail-closed Behavioral Decoder v1.1 closure pipeline that executes
   all 293 breakpoint/container probes in exact-source Chromium, records only
   `PASS`, `MISMATCH`, or `UNREACHABLE_WITH_REASON`, selects bounded unique

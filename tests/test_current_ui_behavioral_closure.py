@@ -43,6 +43,15 @@ def test_closure_constants_bind_prior_review_and_design_publication():
     assert payload['DESIGN_PUBLICATION']['r07_path'] == 'docs/research/ui-normalization-2026-08/07-cross-research-synthesis-and-adoption.md'
 
 
+def test_breakpoint_rasters_do_not_wait_unbounded_for_optional_remote_fonts():
+    script = r"""
+      delete process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY;
+      await import('./scripts/current_ui_resource_graph/v1/behavioral/breakpoint-runtime.mjs');
+      console.log(process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY || 'missing');
+    """
+    assert node(script).stdout.strip() == '1'
+
+
 def test_exact_local_closure_fixture_when_supplied():
     fixture = os.environ.get('CURRENT_UI_BEHAVIORAL_CLOSURE_FIXTURE')
     if not fixture:
