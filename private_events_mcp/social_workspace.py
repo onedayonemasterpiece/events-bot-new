@@ -64,6 +64,24 @@ class SocialAction(_StringEnum):
     STORY = "story"
 
 
+# Invoking one of these tools is the ChatGPT connector's typed assertion that
+# the current user explicitly requested the exact outbound action.  The
+# durable prepare/commit split still binds payload, target and idempotency, but
+# no second browser confirmation is required.  Mutating existing content
+# (edit/delete) intentionally remains outside this set.
+DIRECT_USER_AUTHORIZED_ACTIONS = frozenset(
+    {
+        SocialAction.SEND_MESSAGE,
+        SocialAction.PUBLISH,
+        SocialAction.FORWARD,
+        SocialAction.REACTION,
+        SocialAction.COMMENT,
+        SocialAction.SCHEDULE,
+        SocialAction.STORY,
+    }
+)
+
+
 class SocialTargetKind(_StringEnum):
     SELF = "self"
     USER = "user"
@@ -1981,7 +1999,13 @@ SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA: Mapping[str, Any] = {
             "type": "string", "pattern": r"^prep_[A-Za-z0-9_-]{24,160}$"
         },
         "action": {"type": "string", "enum": _enum_values(SocialAction)},
-        "status": {"const": SocialActionStatus.AWAITING_HUMAN_APPROVAL.value},
+        "status": {
+            "type": "string",
+            "enum": [
+                SocialActionStatus.AWAITING_HUMAN_APPROVAL.value,
+                SocialActionStatus.APPROVED.value,
+            ],
+        },
         "action_digest": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
         "target_ref": {"$ref": "#/$defs/target_ref"},
         "item_ref": {"$ref": "#/$defs/item_ref"},
@@ -2523,6 +2547,7 @@ SOCIAL_WORKSPACE_ASSET_PREVIEW_OUTPUT_SCHEMA: Mapping[str, Any] = {
 
 
 __all__ = [
+    "DIRECT_USER_AUTHORIZED_ACTIONS",
     "SOCIAL_WORKSPACE_ASSET_PREVIEW_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ASSET_PREVIEW_SCHEMA",
     "SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA",

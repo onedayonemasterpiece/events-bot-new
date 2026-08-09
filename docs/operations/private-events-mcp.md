@@ -68,7 +68,7 @@ vk:notifications:read
 ```
 
 `<provider>` is `telegram` or `vk`. Granting a scope does not bypass a runtime
-kill switch, current provider rights, request budgets, or human approval.
+kill switch, current provider rights, request budgets or reference binding.
 The two `story:*` scopes become usable only when the authenticated media store,
 the media/story switch and the matching provider role are all active. The
 initial production contract accepts images only; a video MIME/role fails closed.
@@ -76,8 +76,11 @@ The original connector scopes `telegram:read|publish` and `vk:read|publish`
 remain stable provider-level compatibility families. On the ChatGPT resource,
 `*:read` authorizes later typed reads for the same provider and `*:publish`
 authorizes later typed mutations for the same provider. The mapping never
-crosses provider or read/write boundaries, and every typed mutation still needs
-the independent server-side preview/approval/commit flow. Codex can never
+crosses provider or read/write boundaries. A typed outbound action invoked from
+the current user's explicit request is prepared as `approved` and can be
+committed immediately without a second browser confirmation. Edit/delete of
+existing content retain the independent server-side preview/approval step.
+Codex can never
 receive these scopes. This lets normal MCP tool evolution preserve the existing
 connector URL, client identity and name; only a genuinely new capability family
 requires new OAuth consent.
@@ -126,8 +129,8 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_asset_stage` | ingest one ChatGPT `fileParams` image into immutable short-lived server storage |
 | `social_asset_status` | return only verified MIME/size/digest/dimensions/expiry and lifecycle state for an opaque asset ref |
 | `social_asset_preview` | render one principal-bound story image as a bounded metadata-free MCP JPEG thumbnail |
-| `social_action_prepare` | freeze exact typed action/content/target/media digest; no provider call |
-| `social_action_commit` | consume server-recorded human approval, then make the sole provider attempt |
+| `social_action_prepare` | freeze exact typed action/content/target/media digest; explicitly requested outbound actions return `approved` with no provider call, while edit/delete wait for external approval |
+| `social_action_commit` | atomically consume the exact preparation authorization, then make the sole provider attempt |
 | `social_action_status` | reconcile durable success/failure/outcome-unknown state |
 
 ### Targeted editorial research
@@ -488,7 +491,8 @@ upgrade. Never run `--new-install` to make these tools appear. A replacement
 identity is reserved for initial installation or a deliberate full-identity
 incident response (for example, a compromised private path/signing identity).
 Refresh is not an activation bypass: scopes, runtime switches, media allowlist,
-provider roles and browser approval remain independently mandatory.
+provider roles and typed preparation binding remain independently mandatory;
+edit/delete additionally retain browser approval.
 
 After the first successful browser connection, rotate only the one-time
 bootstrap operator token from the **full** credentials JSON produced for the
@@ -583,8 +587,9 @@ python scripts/smoke_private_events_mcp_media.py \
 Preparing an image story additionally requires `--allow-write`, explicit
 target/asset refs, an idempotency key and a fresh owner-only receipt path.
 Committing requires `--allow-write` and that owner-only preparation receipt.
-The script never approves: the operator must inspect and confirm the exact
-separate browser page between prepare and commit. It never prints access/refresh
+The script expects an explicitly requested outbound preparation to be directly
+`approved`; it never opens or prints a browser approval URL. Edit/delete are
+outside this smoke and retain the separate approval page. It never prints access/refresh
 tokens, credential values, private URLs, raw provider payloads or the approval
 URL.
 
@@ -614,14 +619,17 @@ Record all of the following without secrets:
 8. targeted editorial canary records its closed authorization basis, reads the
    named target in pages and cannot exceed 100 or replay a cursor against
    another target/access class;
-9. Telegram Saved canary prepares, browser-approves, commits exact text, then
-   reads back the exact provider receipt/message; do not auto-delete it;
+9. a fresh, explicitly requested Telegram Saved canary prepares as `approved`
+   without an `approval_url`, commits exact text/image, then reads back the exact
+   provider receipt/message; do not auto-delete it and never execute an older
+   `awaiting_human_approval` preparation;
 10. one explicitly authorized exact-person reminder canary resolves and previews
     the intended person before any send; no arbitrary/bulk fan-out;
 11. VK public/editorial and any write canary use the explicit configured actor,
     never fallback, and verify the exact receipt/read-back;
 12. mutations fail before provider transport when scope, feature flag, current
-    rights, target/item binding, approval, budget or idempotency is invalid;
+    rights, target/item binding, preparation authorization, budget or idempotency
+    is invalid; edit/delete additionally require external approval;
 13. provider timeout/fence loss remains outcome-unknown and reconciliation does
     not blind-retry; encrypted provider refs/cursors/receipts remain usable
     after a controlled restart, while an interrupted action remains unknown;
@@ -644,10 +652,10 @@ Record all of the following without secrets:
     decompression/pixel bomb, changed digest, expired ref, second file and video
     all fail before provider upload; the initial release accepts only verified
     JPEG/PNG/WebP images;
-19. for Telegram and VK separately, one approved safe-target image story follows
-    `stage -> prepare -> exact browser approval -> commit -> provider read-back`;
-    the approval page shows the exact provider/target/action and immutable asset
-    digest/MIME/size/dimensions/expiry, and no upload occurs before approval;
+19. for Telegram and VK separately, one explicitly requested safe-target image
+    story follows `stage -> prepare(approved) -> commit -> provider read-back`;
+    the preparation binds the exact provider/target/action and immutable asset
+    digest/MIME/size/dimensions/expiry, and no upload occurs before commit;
 20. bounded story list/item/statistics reads return opaque story/media refs and
     aggregate counters; `social_asset_preview` returns one bounded, stripped
     JPEG thumbnail for an image ref while never exposing provider URLs or native

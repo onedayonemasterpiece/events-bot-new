@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- Removed the redundant second browser confirmation for newly prepared social
+  outbound actions that ChatGPT invokes from the user's explicit request.
+  Send/publish/forward/reaction/comment/schedule/story preparations now return
+  `approved` and can proceed through the existing one-use commit, binding,
+  budget, idempotency and read-back checks; edit/delete still require external
+  approval, and older `awaiting_human_approval` preparations are never upgraded
+  or executed automatically.
+
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
   host/fetch policy, principal binding, workspace configuration, MIME, size,
