@@ -31,7 +31,7 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **144/144 PASS** after the current
+- Search production-health aggregate suite: **145/145 PASS** after the current
   Android Auth byte-observer and disposable-probe regressions;
 - legacy Search harness: **32/32 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
@@ -114,6 +114,19 @@ contract registers `/session/:sessionId/goog/cdp/execute`; the adapter now uses
 that route and exposes route/receipt absence only as typed Android
 infrastructure. A fresh main-SHA browser+Android run remains required.
 
+Merged-SHA run `31335563487` confirmed the corrected Chromium CDP route and
+again completed browser `HEALTHY/PASS` (one HTTP-200 Search POST, five matching
+cards, real wheel/event HTTP 200, zero forbidden/network/console activity,
+9,343 bytes). Android completed callback authorization, `getUser` and owner-RLS
+with 3,339 observed bytes and zero Search POSTs, then failed closed as
+`UNKNOWN_ANDROID_INFRA/search_physical_observation_missing`: ChromeDriver again
+provided request starts without response/terminal events, now after Auth. The
+pre-document observer therefore remains installed through every Android
+document and authoritatively accumulates closed Auth/Edge/REST/RPC bytes plus
+Search/Storage/receipt counts. Performance logs remain independent navigation
+and diagnostic evidence, not Android's byte-completion fence. A fresh
+main-SHA browser+Android proof remains required.
+
 Follow-up run `31331011185` then reached neither Search path: browser was
 correctly typed `UNKNOWN_AUTH_BROKER` because the completed prior claim still
 held the original 20-minute persona lease, and the Android action again split
@@ -143,8 +156,9 @@ closed null/zero values. Mobile protocol receipts also ingest CDP
 relay transport probes, discarded retries, Auth/RLS, Search and post-navigation
 traffic are counted exactly once; pending measurements and the hard cap are
 closed before the one Search dispatch. When Android ChromeDriver supplies only
-Auth request starts, a pre-document allowlisted fetch observer closes the
-received-byte measurement inside the page and exports only totals/counters.
+request starts, a pre-document allowlisted physical observer spans callback,
+Search and event documents, closes already-received response bytes inside each
+page and exports only document-delta totals/counters.
 Losing disposable capability-probe aborts are excluded from product errors but
 any received bytes remain metered. These are deterministic results;
 live acceptance remains `0 / 2`; activation changed only the explicitly listed

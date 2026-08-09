@@ -49,6 +49,16 @@
 
 ### Fixed
 
+- Replaced Android production-health's remaining dependency on incomplete
+  ChromeDriver response logs after live run `31335563487`. The exact Appium
+  Chromium CDP route now installs one allowlisted pre-document physical
+  observer for Auth, Edge, REST/RPC and forbidden Storage/receipt traffic in
+  every navigated document. It exports only closed counts and byte totals,
+  preserves exact Search POST proof, waits for pending bodies before the hard
+  cap, and keeps disposable capability-probe aborts non-product. Browser in the
+  same run was fully `HEALTHY/PASS`; Android authorized successfully and made
+  zero Search POSTs before the old request-only idle fence stopped it.
+
 - Corrected the Android pre-document observer transport after live run
   `31335122827`: Appium/UiAutomator2 does not expose ChromeDriver's legacy
   `/chromium/send_command_and_get_result` route at the Appium session. The

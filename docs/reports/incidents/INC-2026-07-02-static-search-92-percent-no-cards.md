@@ -30,6 +30,23 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 merged-SHA run `31335563487` again completed browser
+  `HEALTHY/PASS` with one HTTP-200 Search POST, five response IDs equal to five
+  cards, cache hit, real wheel/event HTTP 200, zero forbidden/network/console
+  activity and 9,343 observed Supabase bytes. Android proved that the corrected
+  Appium `/goog/cdp/execute` route works: it installed the pre-document probe,
+  completed callback authorization plus `getUser`/owner-RLS and accounted
+  3,339 bytes, but made zero Search POSTs. It then stopped as
+  `UNKNOWN_ANDROID_INFRA/search_physical_observation_missing` because the
+  whole-cell idle fence still relied on ChromeDriver response/terminal events
+  after Auth; the same bucket again supplied request starts only. The observer
+  is therefore extended across every Android document and all allowlisted
+  Supabase Auth/Edge/REST/RPC operations, with host-side cumulative counters,
+  exact Search/Storage/receipt counts and closed body bytes. Protocol logs
+  remain navigation/diagnostic evidence, but are no longer the Android byte
+  completion authority. This run is browser proof only; a fresh merged-SHA
+  browser+Android run is still required.
+
 - 2026-08-09 merged-SHA run `31335122827` completed browser
   `HEALTHY/PASS`: one HTTP-200 Search POST, five response IDs equal to five
   cards, real wheel scroll, same-origin event HTTP 200, zero LLM/pagination,
