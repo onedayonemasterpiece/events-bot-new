@@ -186,6 +186,24 @@ export function createSanitizedNavigationResponseTracker() {
       }
       return Object.freeze(summary);
     },
+    closePendingFromExternalMeasurement(filter = {}) {
+      let count = 0;
+      for (const record of responseByRequestId.values()) {
+        if (record.terminal || !matches(record.item, filter)) continue;
+        // A page-level fetch observer can authoritatively close a response
+        // even when ChromeDriver's performance bucket emitted only the CDP
+        // request start. Its bytes are accounted separately by that observer;
+        // this tracker only releases the physical-idle fence.
+        record.terminal = true;
+        count += 1;
+      }
+      for (const record of untrackedTerminalRecords) {
+        if (record.terminal || !matches(record.item, filter)) continue;
+        record.terminal = true;
+        count += 1;
+      }
+      return count;
+    },
   });
   return tracker;
 }

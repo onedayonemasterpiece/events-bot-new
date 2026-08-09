@@ -49,6 +49,20 @@
 
 ### Fixed
 
+- Replaced the unreliable Android Auth callback byte fence exposed by live run
+  `31334260547`. ChromeDriver's performance bucket emitted only sanitized Auth
+  request starts even though the product completed verification, so the
+  adapter now installs a pre-document, allowlisted fetch byte observer through
+  the exact Chromium CDP command before product scripts execute. It retains
+  only request/closed/pending/failure counts and total bytes, closes the
+  performance-log idle fence without retaining a response body, URL, request
+  id or token, and is removed after callback completion. The same run also
+  showed a successful Search rejected by one failed Edge-class and one
+  RPC-class request. Exact disposable Auth/data/functions capability-probe
+  aborts are now excluded from product-network failures while real
+  document/Auth/Search/REST/RPC failures remain fail-closed; the next live run
+  must verify whether those two failures were this expected race path.
+
 - Added a closed Android Auth-terminal diagnostic after run `31333753972`
   reproduced the same pre-Search timeout even with `Network.loadingFailed`
   support. A timeout now distinguishes the allowlisted Auth path class

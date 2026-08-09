@@ -95,7 +95,11 @@ export async function createPlaywrightSearchAdapter(options = {}) {
   const criticalFailedRequestClass = (request) => {
     try {
       if (request.resourceType?.() === 'document') return 'document';
-      const category = classifySupabaseClientUrl(request.url(), { supabaseOrigins: wholeCellOrigins });
+      const requestUrl = new URL(request.url());
+      if (requestUrl.pathname === '/functions/v1/transport-probe'
+        || requestUrl.pathname === '/rest/v1/rpc/transport_probe_v1'
+        || requestUrl.pathname === '/auth/v1/health') return null;
+      const category = classifySupabaseClientUrl(requestUrl, { supabaseOrigins: wholeCellOrigins });
       return ({
         [SUPABASE_CLIENT_BYTE_CLASSES.AUTH]: 'auth',
         [SUPABASE_CLIENT_BYTE_CLASSES.EDGE]: 'edge',

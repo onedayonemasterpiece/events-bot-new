@@ -112,9 +112,12 @@ tuple, `site_runtime_sha`, `search_backend_revision`, `content_generation_id`
 означает, что продукт между proofs изменился; variable остаётся выключенной и
 Stage 2 остаётся `PRODUCT_HEALTH_UNCONFIRMED`.
 
-За одну итерацию запрещено выполнять больше двух live Search runs. При failure
-сначала анализировать sanitized evidence и deterministic fixtures; GitHub
-Actions нельзя использовать как цикл проб и ошибок.
+Автоматических scheduled запусков ровно два в сутки — утренний и вечерний
+профили выше. Это ограничение не запрещает evidence-driven manual debugging до
+достижения качественного результата: после каждого failure сначала читаются
+sanitized evidence и deterministic fixtures, исправление проходит CI, и только
+затем выполняется следующий bounded run. Слепой retry-loop в GitHub Actions
+запрещён; каждый platform cell по-прежнему делает не больше одного Search POST.
 
 ## Возможные блокеры и типизация
 

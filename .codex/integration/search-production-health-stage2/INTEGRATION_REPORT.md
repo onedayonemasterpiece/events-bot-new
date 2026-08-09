@@ -7,8 +7,9 @@
   `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`.
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
 - PR #451 merged to `main` as `ad0a1f3bb12a63805aec65f52489151e3f382b83`.
-- Live acceptance workflows so far: `0 / 2` accepted; one permitted diagnostic
-  run (`31330520373`) completed and exposed two harness false negatives.
+- Live acceptance workflows so far: `0 / 2` accepted; bounded diagnostic runs
+  through `31334260547` supplied browser product proof and isolated the
+  remaining Android evidence boundary without making an Android Search POST.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -30,9 +31,9 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **137/137 PASS** after the first
-  live-run regressions;
-- legacy Search harness: **31/31 PASS**;
+- Search production-health aggregate suite: **144/144 PASS** after the current
+  Android Auth byte-observer and disposable-probe regressions;
+- legacy Search harness: **32/32 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
   security and static source/release regression **135/135 PASS**; Edge contract
   group **26/26 PASS** and Auth
@@ -86,6 +87,24 @@ decorative subresource failures. Android booted but `/bin/sh` rejected
 `pipefail` before Appium or Search. Both causes now have deterministic fixes;
 clean live acceptance is still pending.
 
+Runs `31333074131` and `31333753972` each completed the full browser journey as
+`HEALTHY/PASS` with one HTTP-200 Search POST, five response IDs equal to five
+cards, real scroll, event route HTTP 200, zero LLM/pagination/receipt/storage
+and less than 10 KiB observed Supabase traffic. Their Android cells completed
+transport preflight and product authorization but stopped before Search on an
+unclosed Auth network byte record. Diagnostic run `31334260547` then proved the
+exact ChromeDriver boundary was `mixed_request_only`: response/terminal events
+were absent even though product Auth completed. The Android adapter now uses an
+allowlisted pre-document page observer for received Auth bytes and removes it
+after callback; no body, URL, request id, token or session reaches evidence.
+The same run's browser failure was one Edge-class plus one RPC-class request;
+closed evidence intentionally omitted their paths. Only the three exact losing
+disposable capability-probe paths are now excluded from product-network
+failure, while final operations remain strict. The next live run must prove
+whether this was that expected race. Neither cell from `31334260547` is
+terminal acceptance, so the disposition remains unchanged pending a fresh
+merged-SHA browser+Android proof.
+
 Follow-up run `31331011185` then reached neither Search path: browser was
 correctly typed `UNKNOWN_AUTH_BROKER` because the completed prior claim still
 held the original 20-minute persona lease, and the Android action again split
@@ -114,7 +133,11 @@ closed null/zero values. Mobile protocol receipts also ingest CDP
 `loadingFinished.encodedDataLength` when Content-Length is absent. Direct and
 relay transport probes, discarded retries, Auth/RLS, Search and post-navigation
 traffic are counted exactly once; pending measurements and the hard cap are
-closed before the one Search dispatch. These are deterministic results;
+closed before the one Search dispatch. When Android ChromeDriver supplies only
+Auth request starts, a pre-document allowlisted fetch observer closes the
+received-byte measurement inside the page and exports only totals/counters.
+Losing disposable capability-probe aborts are excluded from product errors but
+any received bytes remain metered. These are deterministic results;
 live acceptance remains `0 / 2`; activation changed only the explicitly listed
 migration, Edge and exact-main Fly release state, while scheduled health remains
 default-off.

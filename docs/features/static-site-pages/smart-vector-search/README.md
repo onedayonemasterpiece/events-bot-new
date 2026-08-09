@@ -1024,6 +1024,12 @@ origin. Сломанный декоративный image/font subresource др�
 сам объявить Search `BROKEN_SEARCH_REQUEST`: наличие 1–5 видимых настоящих
 карточек, отсутствие skeleton/placeholder, точный response/card id match,
 реальный scroll и event-route HTTP 200 всё равно проверяются отдельно.
+Abort проигравшего одноразового route-selection probe
+(`/auth/v1/health`, `/rest/v1/rpc/transport_probe_v1` или
+`/functions/v1/transport-probe`) также является штатным внутренним control
+flow resilient transport, а не ошибкой пользовательского Search. Полученные
+probe bytes всё равно входят в budget; ошибка final product operation не
+исключается.
 
 На mobile callback network receipt сворачивается сразу до категории и числа
 полученных bytes; после attach тот же Appium session выполняет явные `getUser`
@@ -1070,6 +1076,16 @@ Android performance receipt сохраняет request id только внут�
 закрытых измерения: класс Auth path (`verify`, `user`, `token`, `mixed`) и
 достигнутую фазу (`request_only`, `response_seen`, `response_data_seen`). Это
 диагностирует реальный Chrome/Appium protocol boundary без raw network artifact.
+Live run `31334260547` локализовал воспроизводимый Android boundary как
+`mixed_request_only`: product Auth завершался, но performance bucket не выдавал
+response/terminal events. Поэтому Android дополнительно устанавливает до
+product scripts через Chromium `Page.addScriptToEvaluateOnNewDocument`
+allowlisted fetch observer только для Supabase `/auth/v1`. Он измеряет
+`Content-Length` либо clone уже полученного response body внутри страницы,
+наружу возвращает только total bytes и закрытые counters, после callback
+удаляется и не сохраняет URL, request id, body, session или token. Protocol
+tracker остаётся authoritative для physical request count/diagnostics; этот
+page observer лишь закрывает доказанный request-only byte gap.
 
 ### 16.9 Migration from current workflow
 
