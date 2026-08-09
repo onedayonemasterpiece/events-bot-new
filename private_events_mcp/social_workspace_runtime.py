@@ -11,6 +11,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import io
 import json
 import re
 import secrets
@@ -24,6 +25,7 @@ from urllib.parse import urlencode
 
 from .access_policy import social_scopes_authorized
 from .auth_store import OAuthStateStore
+from .media_contract import AssetIngestor, VerifiedAsset
 from .social_workspace import (
     SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
@@ -35,6 +37,8 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
+    AssetStageRequest,
+    MediaRole,
     SocialActionIntent,
     SocialActionStatus,
     SocialPlatform,
@@ -47,7 +51,7 @@ from .social_workspace import (
     validate_editorial_sample_response,
     validate_resolved_target_preview,
 )
-from .tool_catalog import ToolCallContext
+from .tool_catalog import ToolCallContext, ToolExecutionResult
 
 
 class SocialWorkspaceRuntimeError(SocialWorkspaceValidationError):
@@ -64,6 +68,12 @@ class SocialWorkspaceAdapter(Protocol):
         self, intent: SocialActionIntent, *, operation_ref: str
     ) -> Mapping[str, Any]: ...
     async def reconcile(self, operation_ref: str) -> Mapping[str, Any]: ...
+    async def stage_asset(
+        self, asset: VerifiedAsset, *, role: MediaRole
+    ) -> str: ...
+    async def read_asset(
+        self, asset_ref: str, *, owner_binding: str, max_bytes: int
+    ) -> Any: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +121,11 @@ class SocialBudgetLimits:
 
 
 _REF_RE = re.compile(r"^(tgt|itm|ast)_[A-Za-z0-9_-]{16,160}$")
+_INGESTED_REF_RE = re.compile(r"^ing_[A-Za-z0-9_-]{24,160}$")
+_CONTENT_DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
+_MIME_TYPE_RE = re.compile(
+    r"^(?:image|video|audio|application)/[A-Za-z0-9.+-]{1,64}$"
+)
 _SECRET_KEY = re.compile(
     r"(?:^id$|(?:provider|peer|owner|chat|user)_id$|provider|native|identifier|access_hash|token|secret|password|authorization|cookie|session|raw|method|path|url)",
     re.IGNORECASE,
@@ -147,6 +162,13 @@ class SocialWorkspaceRuntime:
         circuit_failure_threshold: int = 3,
         circuit_cooldown_seconds: int = 60,
         approval_url_base: str | None = None,
+        asset_ingestor: AssetIngestor | None = None,
+        asset_max_bytes: int = 30 * 1024 * 1024,
+        asset_ttl_seconds: int = 3600,
+        asset_ingest_timeout_seconds: float = 20.0,
+        asset_max_width: int = 8192,
+        asset_max_height: int = 8192,
+        asset_max_pixels: int = 40_000_000,
         clock: Any = time.time,
     ) -> None:
         if not isinstance(store, OAuthStateStore):
@@ -192,6 +214,23 @@ class SocialWorkspaceRuntime:
         ):
             raise ValueError("approval_url_base must be HTTPS or local HTTP")
         self.approval_url_base = approval_url_base
+        self.asset_ingestor = asset_ingestor
+        self.asset_max_bytes = int(asset_max_bytes)
+        self.asset_ttl_seconds = int(asset_ttl_seconds)
+        self.asset_ingest_timeout_seconds = float(asset_ingest_timeout_seconds)
+        self.asset_max_width = int(asset_max_width)
+        self.asset_max_height = int(asset_max_height)
+        self.asset_max_pixels = int(asset_max_pixels)
+        if self.asset_max_bytes < 1 or self.asset_max_bytes > 64 * 1024 * 1024:
+            raise ValueError("asset_max_bytes is outside the media budget")
+        if self.asset_ttl_seconds < 60 or self.asset_ttl_seconds > 86400:
+            raise ValueError("asset_ttl_seconds is outside the supported TTL")
+        if not 1 <= self.asset_ingest_timeout_seconds <= 120:
+            raise ValueError("asset ingest timeout is outside the supported range")
+        if not 1 <= self.asset_max_width <= 8192 or not 1 <= self.asset_max_height <= 8192:
+            raise ValueError("asset dimensions are outside the supported range")
+        if not 1 <= self.asset_max_pixels <= 40_000_000:
+            raise ValueError("asset pixel budget is outside the supported range")
         self._clock = clock
 
     def _now(self) -> int:
@@ -247,13 +286,24 @@ class SocialWorkspaceRuntime:
         return adapter
 
     def _mint_ref(
-        self, kind: str, provider_ref: Any, platform: str, principal: RuntimePrincipal
+        self,
+        kind: str,
+        provider_ref: Any,
+        platform: str,
+        principal: RuntimePrincipal,
+        *,
+        expires_at: int | None = None,
     ) -> str:
         if not isinstance(provider_ref, (str, int)) or not str(provider_ref):
             raise SocialWorkspaceRuntimeError("provider returned an invalid reference")
         prefix = {"target": "tgt", "item": "itm", "asset": "ast"}[kind]
         public_ref = f"{prefix}_{secrets.token_urlsafe(24)}"
         now = self._now()
+        expiry = now + self.reference_ttl_seconds
+        if expires_at is not None:
+            if type(expires_at) is not int or expires_at <= now:
+                raise SocialWorkspaceRuntimeError("reference expiry is invalid")
+            expiry = min(expiry, expires_at)
         client, subject, resource = self._binding(principal)
         with self.store._lock, self.store._connect() as conn:
             conn.execute(
@@ -263,7 +313,7 @@ class SocialWorkspaceRuntime:
                 ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
                 (self._hash(public_ref), kind, client, subject, resource, platform,
                  self.policy_version, self._encrypt(str(provider_ref)),
-                 now + self.reference_ttl_seconds, now),
+                 expiry, now),
             )
         return public_ref
 
@@ -341,6 +391,234 @@ class SocialWorkspaceRuntime:
                 (self._hash(public_ref), self._encrypt(_json(allowed)), self._now()),
             )
 
+    @staticmethod
+    def _asset_refs(intent: SocialActionIntent) -> tuple[str, ...]:
+        if intent.content is None:
+            return ()
+        values = [attachment.asset_ref for attachment in intent.content.media]
+        values.extend(
+            entity.custom_emoji_asset_ref
+            for entity in intent.content.entities
+            if entity.custom_emoji_asset_ref is not None
+        )
+        return tuple(dict.fromkeys(values))
+
+    def _validate_verified_asset(
+        self,
+        asset: Any,
+        *,
+        owner_binding: str,
+        requested_expires_at: int,
+        role: MediaRole,
+    ) -> VerifiedAsset:
+        if not isinstance(asset, VerifiedAsset):
+            raise SocialWorkspaceRuntimeError("asset ingestor returned an invalid result")
+        if (
+            not isinstance(asset.owner_binding, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", asset.owner_binding)
+            or not hmac.compare_digest(asset.owner_binding, owner_binding)
+        ):
+            raise SocialWorkspaceRuntimeError("verified asset owner binding mismatch")
+        if not _INGESTED_REF_RE.fullmatch(asset.storage_ref):
+            raise SocialWorkspaceRuntimeError("verified asset storage reference is invalid")
+        if not _CONTENT_DIGEST_RE.fullmatch(asset.content_digest):
+            raise SocialWorkspaceRuntimeError("verified asset digest is invalid")
+        if not _MIME_TYPE_RE.fullmatch(asset.mime_type):
+            raise SocialWorkspaceRuntimeError("verified asset MIME type is invalid")
+        expected_family = {
+            MediaRole.IMAGE: "image/",
+            MediaRole.VIDEO: "video/",
+            MediaRole.AUDIO: "audio/",
+        }.get(role)
+        if expected_family is not None and not asset.mime_type.startswith(expected_family):
+            raise SocialWorkspaceRuntimeError("verified asset MIME type does not match role")
+        if type(asset.byte_length) is not int or not 1 <= asset.byte_length <= self.asset_max_bytes:
+            raise SocialWorkspaceRuntimeError("verified asset size is outside the media budget")
+        now = self._now()
+        if (
+            type(asset.expires_at) is not int
+            or asset.expires_at <= now
+            or asset.expires_at > requested_expires_at
+        ):
+            raise SocialWorkspaceRuntimeError("verified asset expiry is invalid")
+        dimensions = (asset.width, asset.height)
+        if (asset.width is None) != (asset.height is None) or any(
+            value is not None and type(value) is not int
+            for value in dimensions
+        ):
+            raise SocialWorkspaceRuntimeError("verified asset dimensions are invalid")
+        if asset.width is not None and (
+            not 1 <= asset.width <= self.asset_max_width
+            or not 1 <= asset.height <= self.asset_max_height
+            or asset.width * asset.height > self.asset_max_pixels
+        ):
+            raise SocialWorkspaceRuntimeError("verified asset dimensions exceed the media budget")
+        if role in {MediaRole.IMAGE, MediaRole.VIDEO, MediaRole.ANIMATION} and asset.width is None:
+            raise SocialWorkspaceRuntimeError("verified visual asset dimensions are required")
+        return asset
+
+    def _mint_verified_asset_ref(
+        self,
+        provider_ref: str,
+        platform: str,
+        principal: RuntimePrincipal,
+        asset: VerifiedAsset,
+    ) -> str:
+        if not isinstance(provider_ref, str) or not provider_ref:
+            raise SocialWorkspaceRuntimeError("provider returned an invalid asset reference")
+        public_ref = f"ast_{secrets.token_urlsafe(24)}"
+        value: dict[str, Any] = {
+            "asset_ref": public_ref,
+            "content_digest": asset.content_digest,
+            "mime_type": asset.mime_type,
+            "byte_length": asset.byte_length,
+            "expires_at": asset.expires_at,
+        }
+        if asset.width is not None:
+            value["width"] = asset.width
+            value["height"] = asset.height
+        now = self._now()
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    """INSERT INTO social_workspace_ref(
+                       ref_hash,ref_kind,client_hash,subject_hash,resource_hash,platform,
+                       policy_version,provider_ref_ciphertext,expires_at,created_at
+                       ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        self._hash(public_ref),
+                        "asset",
+                        client,
+                        subject,
+                        resource,
+                        platform,
+                        self.policy_version,
+                        self._encrypt(provider_ref),
+                        asset.expires_at,
+                        now,
+                    ),
+                )
+                conn.execute(
+                    """INSERT INTO social_workspace_ref_preview(
+                       ref_hash,preview_json,created_at) VALUES(?,?,?)""",
+                    (
+                        self._hash(public_ref),
+                        self._encrypt(_json(value)),
+                        now,
+                    ),
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+        return public_ref
+
+    def _asset_metadata_on_conn(
+        self,
+        conn: sqlite3.Connection,
+        asset_ref: str,
+        platform: str,
+        binding: tuple[str, str, str],
+        *,
+        allow_expired: bool = False,
+    ) -> tuple[dict[str, Any], bool]:
+        client, subject, resource = binding
+        row = conn.execute(
+            """SELECT r.expires_at,p.preview_json FROM social_workspace_ref AS r
+               JOIN social_workspace_ref_preview AS p ON p.ref_hash=r.ref_hash
+               WHERE r.ref_hash=? AND r.ref_kind='asset' AND r.client_hash=?
+               AND r.subject_hash=? AND r.resource_hash=? AND r.platform=?
+               AND r.policy_version=?""",
+            (
+                self._hash(asset_ref),
+                client,
+                subject,
+                resource,
+                platform,
+                self.policy_version,
+            ),
+        ).fetchone()
+        if row is None:
+            raise SocialWorkspaceRuntimeError("asset reference is unknown or not bound")
+        expired = int(row["expires_at"]) <= self._now()
+        if expired and not allow_expired:
+            raise SocialWorkspaceRuntimeError("asset reference is expired or not bound")
+        try:
+            metadata = json.loads(self._decrypt(str(row["preview_json"])))
+        except Exception:  # noqa: BLE001 - encrypted local state is untrusted
+            raise SocialWorkspaceRuntimeError("verified asset metadata is invalid") from None
+        allowed = {
+            "asset_ref",
+            "content_digest",
+            "mime_type",
+            "byte_length",
+            "expires_at",
+            "width",
+            "height",
+        }
+        if not isinstance(metadata, dict) or set(metadata) - allowed:
+            raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
+        if (
+            metadata.get("asset_ref") != asset_ref
+            or not isinstance(metadata.get("content_digest"), str)
+            or not _CONTENT_DIGEST_RE.fullmatch(metadata["content_digest"])
+            or not isinstance(metadata.get("mime_type"), str)
+            or not _MIME_TYPE_RE.fullmatch(metadata["mime_type"])
+            or type(metadata.get("byte_length")) is not int
+            or not 1 <= metadata["byte_length"] <= self.asset_max_bytes
+            or type(metadata.get("expires_at")) is not int
+            or metadata["expires_at"] != int(row["expires_at"])
+        ):
+            raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
+        width, height = metadata.get("width"), metadata.get("height")
+        if (width is None) != (height is None) or any(
+            value is not None and type(value) is not int
+            for value in (width, height)
+        ):
+            raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
+        if width is not None and (
+            not 1 <= width <= self.asset_max_width
+            or not 1 <= height <= self.asset_max_height
+            or width * height > self.asset_max_pixels
+        ):
+            raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
+        if metadata["mime_type"].startswith(("image/", "video/")) and width is None:
+            raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
+        return metadata, expired
+
+    def _asset_metadata_for_intent(
+        self,
+        intent: SocialActionIntent,
+        principal: RuntimePrincipal,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> list[dict[str, Any]]:
+        refs = self._asset_refs(intent)
+        if not refs:
+            return []
+        if conn is None:
+            with self.store._lock, self.store._connect() as owned_conn:
+                return [
+                    self._asset_metadata_on_conn(
+                        owned_conn,
+                        ref,
+                        intent.platform.value,
+                        self._binding(principal),
+                    )[0]
+                    for ref in refs
+                ]
+        return [
+            self._asset_metadata_on_conn(
+                conn,
+                ref,
+                intent.platform.value,
+                self._binding(principal),
+            )[0]
+            for ref in refs
+        ]
+
     def _store_target_previews_from_output(self, value: Any) -> None:
         """Persist every closed-schema target preview minted by a read.
 
@@ -386,7 +664,7 @@ class SocialWorkspaceRuntime:
         allowed_operations = {
             *(item.value for item in SocialReadOperation),
             "capabilities", "prepare", "commit", "reconcile",
-            "asset_stage", "asset_status", "social_tool", "invalid",
+            "asset_stage", "asset_status", "asset_preview", "social_tool", "invalid",
         }
         operation = operation if operation in allowed_operations else "invalid"
         outcome = outcome if outcome in {
@@ -419,7 +697,7 @@ class SocialWorkspaceRuntime:
             operation=operation if operation in {
                 *(item.value for item in SocialReadOperation),
                 "capabilities", "prepare", "commit", "reconcile",
-                "asset_stage", "asset_status", "social_tool",
+                "asset_stage", "asset_status", "asset_preview", "social_tool",
             } else "invalid",
             outcome="denied",
             reason=reason,
@@ -604,10 +882,32 @@ class SocialWorkspaceRuntime:
         destination = self._resolve_ref(intent.destination_target_ref, "target", platform, principal) if intent.destination_target_ref else None
         media = intent.content
         if media is not None:
-            media = replace(media, media=tuple(
-                replace(attachment, asset_ref=self._resolve_ref(attachment.asset_ref, "asset", platform, principal))
-                for attachment in media.media
-            ))
+            media = replace(
+                media,
+                entities=tuple(
+                    replace(
+                        entity,
+                        custom_emoji_asset_ref=self._resolve_ref(
+                            entity.custom_emoji_asset_ref,
+                            "asset",
+                            platform,
+                            principal,
+                        ),
+                    )
+                    if entity.custom_emoji_asset_ref is not None
+                    else entity
+                    for entity in media.entities
+                ),
+                media=tuple(
+                    replace(
+                        attachment,
+                        asset_ref=self._resolve_ref(
+                            attachment.asset_ref, "asset", platform, principal
+                        ),
+                    )
+                    for attachment in media.media
+                ),
+            )
         return replace(intent, target_ref=target, item_ref=item,
                        destination_target_ref=destination, content=media)
 
@@ -836,6 +1136,15 @@ class SocialWorkspaceRuntime:
             safe["platform"] = platform
             if target_ref:
                 safe["target_ref"] = target_ref
+            features = safe.get("content_features")
+            if isinstance(features, list):
+                media_features = {"image", "video", "document", "audio", "animation"}
+                allowed_media = {"image"} if self.asset_ingestor is not None else set()
+                safe["content_features"] = [
+                    value
+                    for value in features
+                    if value not in media_features or value in allowed_media
+                ]
             validated = validate_capabilities(safe)
             result = asdict(validated)
             result = {key: (sorted(str(v) for v in value) if isinstance(value, (set, frozenset)) else str(value) if hasattr(value, "value") else value) for key, value in result.items()}
@@ -1051,7 +1360,7 @@ class SocialWorkspaceRuntime:
                         outcome="denied", reason="missing_scope", target_ref=intent.target_ref)
             raise SocialWorkspaceRuntimeError("required social action scope is missing")
         platform = intent.platform.value
-        digest = compute_action_digest(intent)
+        digest: str | None = None
         # Resolve every reference now, so cross-principal/resource/target mutation
         # fails before an approval can ever be issued.
         try:
@@ -1067,6 +1376,12 @@ class SocialWorkspaceRuntime:
         with self.store._lock, self.store._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
+                verified_assets = self._asset_metadata_for_intent(
+                    intent, principal, conn=conn
+                )
+                digest = compute_action_digest(
+                    intent, verified_assets=verified_assets or None
+                )
                 existing = conn.execute(
                     """SELECT * FROM social_workspace_preparation WHERE client_hash=? AND
                        subject_hash=? AND resource_hash=? AND platform=? AND action=? AND idempotency_hash=?""",
@@ -1080,6 +1395,11 @@ class SocialWorkspaceRuntime:
                         digest, int(existing["expires_at"]))
                 prep = "prep_" + secrets.token_urlsafe(24)
                 expires = now + self.preparation_ttl_seconds
+                if verified_assets:
+                    expires = min(
+                        expires,
+                        *(int(asset["expires_at"]) for asset in verified_assets),
+                    )
                 persisted_intent = {
                     key: value
                     for key, value in asdict(intent).items()
@@ -1108,6 +1428,7 @@ class SocialWorkspaceRuntime:
                      len(intent.content.media) if intent.content else 0, self._now()),
                 )
                 raise
+        assert digest is not None
         self._audit(principal, platform=platform, operation="prepare", outcome="succeeded",
                     reason="awaiting_approval", target_ref=intent.target_ref, action_digest=digest)
         return self._preparation_result(prep, intent, digest, expires)
@@ -1146,6 +1467,23 @@ class SocialWorkspaceRuntime:
             if row is None:
                 raise SocialWorkspaceRuntimeError("preparation is expired or unknown")
             intent = self._intent_from_row(row)
+            verified_assets = [
+                self._asset_metadata_on_conn(
+                    conn,
+                    ref,
+                    intent.platform.value,
+                    (
+                        str(row["client_hash"]),
+                        str(row["subject_hash"]),
+                        str(row["resource_hash"]),
+                    ),
+                )[0]
+                for ref in self._asset_refs(intent)
+            ]
+            if compute_action_digest(
+                intent, verified_assets=verified_assets or None
+            ) != action_digest:
+                raise SocialWorkspaceRuntimeError("verified asset action digest mismatch")
 
             def ref_preview(ref: str | None) -> dict[str, Any] | None:
                 if ref is None:
@@ -1182,6 +1520,9 @@ class SocialWorkspaceRuntime:
             )
         content = None
         if intent.content is not None:
+            asset_by_ref = {
+                str(asset["asset_ref"]): asset for asset in verified_assets
+            }
             content = {
                 "text": intent.content.text,
                 "entities": [asdict(item) for item in intent.content.entities],
@@ -1189,10 +1530,26 @@ class SocialWorkspaceRuntime:
                     {
                         "role": item.role.value,
                         "asset_fingerprint": self._hash(item.asset_ref)[:12],
+                        "content_digest": asset_by_ref[item.asset_ref]["content_digest"],
+                        "mime_type": asset_by_ref[item.asset_ref]["mime_type"],
+                        "byte_length": asset_by_ref[item.asset_ref]["byte_length"],
+                        "width": asset_by_ref[item.asset_ref].get("width"),
+                        "height": asset_by_ref[item.asset_ref].get("height"),
+                        "expires_at": _now_rfc3339(
+                            int(asset_by_ref[item.asset_ref]["expires_at"])
+                        ),
                         "alt_text": item.alt_text,
                         "spoiler": item.spoiler,
                     }
                     for item in intent.content.media
+                ],
+                "verified_assets": [
+                    {
+                        **asset,
+                        "asset_fingerprint": self._hash(str(asset["asset_ref"]))[:12],
+                        "expires_at": _now_rfc3339(int(asset["expires_at"])),
+                    }
+                    for asset in verified_assets
                 ],
             }
         return {
@@ -1231,6 +1588,26 @@ class SocialWorkspaceRuntime:
                 ).fetchone()
                 if prep is None or int(prep["expires_at"]) <= now:
                     raise SocialWorkspaceRuntimeError("preparation is expired or unknown")
+                intent = self._intent_from_row(prep)
+                verified_assets = [
+                    self._asset_metadata_on_conn(
+                        conn,
+                        ref,
+                        intent.platform.value,
+                        (
+                            str(prep["client_hash"]),
+                            str(prep["subject_hash"]),
+                            str(prep["resource_hash"]),
+                        ),
+                    )[0]
+                    for ref in self._asset_refs(intent)
+                ]
+                if compute_action_digest(
+                    intent, verified_assets=verified_assets or None
+                ) != str(prep["action_digest"]):
+                    raise SocialWorkspaceRuntimeError(
+                        "verified asset action digest mismatch"
+                    )
                 nonce_hash = self._hash(operator_nonce)
                 if conn.execute("SELECT 1 FROM social_workspace_approval WHERE operator_nonce_hash=?", (nonce_hash,)).fetchone():
                     raise SocialWorkspaceRuntimeError("operator approval nonce was already used")
@@ -1311,6 +1688,15 @@ class SocialWorkspaceRuntime:
                 if approval["consumed_at"] is not None:
                     raise SocialWorkspaceRuntimeError("approval receipt was already consumed")
                 intent = self._intent_from_row(prep)
+                verified_assets = self._asset_metadata_for_intent(
+                    intent, principal, conn=conn
+                )
+                if compute_action_digest(
+                    intent, verified_assets=verified_assets or None
+                ) != digest:
+                    raise SocialWorkspaceRuntimeError(
+                        "verified asset action digest mismatch"
+                    )
                 if not social_scopes_authorized(
                     intent.required_scopes, principal.scopes
                 ):
@@ -1513,21 +1899,74 @@ class SocialWorkspaceRuntime:
             )
             return unknown
 
-    async def stage_asset(self, request: Any, context: ToolCallContext) -> dict[str, Any]:
-        """Bind an already accepted server upload handle to an opaque asset ref.
+    @staticmethod
+    def _asset_scope_authorized(platform: str, scopes: frozenset[str]) -> bool:
+        return any(
+            social_scopes_authorized(frozenset({f"{platform}:{suffix}"}), scopes)
+            for suffix in ("post:publish", "story:write")
+        )
 
-        The upload transport owns bytes and malware scanning; the MCP model can
-        only present its server-minted ``upl_`` handle and declared digest.
+    async def stage_asset(
+        self, request: AssetStageRequest, context: ToolCallContext
+    ) -> dict[str, Any]:
+        """Ingest one ChatGPT file and bind the provider-staged asset.
+
+        Core never downloads ``download_url``.  It authorizes and reserves
+        budgets before delegating that outbound/storage work to the injected
+        ingestor, and the provider adapter receives only ``VerifiedAsset``.
         """
         principal = RuntimePrincipal.from_context(context)
         platform = request.platform.value
         try:
+            if not self._asset_scope_authorized(platform, principal.scopes):
+                raise SocialWorkspaceRuntimeError("required social asset scope is missing")
+            if request.role is not MediaRole.IMAGE:
+                raise SocialWorkspaceRuntimeError("only image asset staging is enabled")
+            if self.asset_ingestor is None:
+                raise SocialWorkspaceRuntimeError("social asset ingestor is unavailable")
+            adapter = self._adapter(platform)
+            stage = getattr(adapter, "stage_asset", None)
+            if not callable(stage):
+                raise SocialWorkspaceRuntimeError("social provider asset staging is unavailable")
             self._consume_budget(principal, platform, None, "asset_stage", "rate", 1)
             self._consume_budget(principal, platform, None, "asset_stage", "media", 1)
-            asset_ref = self._mint_ref("asset", request.upload_ref, platform, principal)
+            owner_binding = self._principal_hash(principal)
+            requested_expires_at = self._now() + min(
+                self.asset_ttl_seconds, self.reference_ttl_seconds
+            )
+            try:
+                ingested = await asyncio.wait_for(
+                    self.asset_ingestor.ingest(
+                        request.file,
+                        owner_binding=owner_binding,
+                        max_bytes=self.asset_max_bytes,
+                        expires_at=requested_expires_at,
+                    ),
+                    timeout=self.asset_ingest_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                raise SocialWorkspaceRuntimeError("social asset ingestion timed out") from None
+            verified = self._validate_verified_asset(
+                ingested,
+                owner_binding=owner_binding,
+                requested_expires_at=requested_expires_at,
+                role=request.role,
+            )
+            try:
+                provider_ref = await asyncio.wait_for(
+                    stage(verified, role=request.role),
+                    timeout=self.provider_timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                raise SocialWorkspaceRuntimeError(
+                    "social provider asset staging timed out"
+                ) from None
+            asset_ref = self._mint_verified_asset_ref(
+                provider_ref, platform, principal, verified
+            )
             result = {"asset_ref": asset_ref, "status": "ready"}
             self._audit(principal, platform=platform, operation="asset_stage",
-                        outcome="succeeded", reason="upload_bound", media_items=1)
+                        outcome="succeeded", reason="verified_asset_bound", media_items=1)
             return result
         except Exception as exc:
             self._audit(principal, platform=platform, operation="asset_stage",
@@ -1538,16 +1977,167 @@ class SocialWorkspaceRuntime:
         self, asset_ref: str, context: ToolCallContext, *, platform: str | None = None
     ) -> dict[str, Any]:
         principal = RuntimePrincipal.from_context(context)
-        platform = platform or self._ref_platform(asset_ref, "asset", principal)
-        self._resolve_ref(asset_ref, "asset", platform, principal)
-        result = {"asset_ref": asset_ref, "status": "ready",
-                  "trust": "untrusted_external_data"}
+        if platform is None:
+            client, subject, resource = self._binding(principal)
+            with self.store._lock, self.store._connect() as conn:
+                row = conn.execute(
+                    """SELECT platform FROM social_workspace_ref WHERE ref_hash=?
+                       AND ref_kind='asset' AND client_hash=? AND subject_hash=?
+                       AND resource_hash=? AND policy_version=?""",
+                    (
+                        self._hash(asset_ref),
+                        client,
+                        subject,
+                        resource,
+                        self.policy_version,
+                    ),
+                ).fetchone()
+            if row is None:
+                raise SocialWorkspaceRuntimeError("asset reference is unknown or not bound")
+            platform = str(row["platform"])
+        if not self._asset_scope_authorized(platform, principal.scopes):
+            raise SocialWorkspaceRuntimeError("required social asset scope is missing")
+        with self.store._lock, self.store._connect() as conn:
+            metadata, expired = self._asset_metadata_on_conn(
+                conn,
+                asset_ref,
+                platform,
+                self._binding(principal),
+                allow_expired=True,
+            )
+        result = {
+            "asset_ref": asset_ref,
+            "status": "expired" if expired else "ready",
+            "mime_type": metadata["mime_type"],
+            "byte_length": metadata["byte_length"],
+            "content_digest": metadata["content_digest"],
+            "expires_at": _now_rfc3339(int(metadata["expires_at"])),
+            "trust": "untrusted_external_data",
+        }
+        if metadata.get("width") is not None:
+            result["width"] = metadata["width"]
+            result["height"] = metadata["height"]
         self._audit(principal, platform=platform, operation="asset_status",
-                    outcome="succeeded", reason="ready")
+                    outcome="succeeded", reason=str(result["status"]))
         return result
+
+    @staticmethod
+    def _bounded_image_preview(raw: bytes) -> tuple[bytes, int, int]:
+        """Decode and re-encode one provider image as a metadata-free thumbnail."""
+
+        try:
+            from PIL import Image, ImageOps
+
+            with Image.open(io.BytesIO(raw)) as source:
+                if source.format not in {"JPEG", "PNG", "WEBP"}:
+                    raise SocialWorkspaceRuntimeError("story asset is not a supported image")
+                width, height = source.size
+                if not 1 <= width <= 8192 or not 1 <= height <= 8192:
+                    raise SocialWorkspaceRuntimeError("story image dimensions are invalid")
+                if width * height > 40_000_000:
+                    raise SocialWorkspaceRuntimeError("story image pixel budget exceeded")
+                source.load()
+                image = ImageOps.exif_transpose(source).convert("RGB")
+                image.thumbnail((768, 768), Image.Resampling.LANCZOS)
+                width, height = image.size
+                for quality in (82, 74, 66, 58, 50, 42):
+                    output = io.BytesIO()
+                    image.save(
+                        output,
+                        format="JPEG",
+                        quality=quality,
+                        optimize=True,
+                        progressive=True,
+                    )
+                    preview = output.getvalue()
+                    if 0 < len(preview) <= 65536:
+                        return preview, width, height
+        except SocialWorkspaceRuntimeError:
+            raise
+        except Exception:  # noqa: BLE001 - provider media is untrusted
+            raise SocialWorkspaceRuntimeError("story image preview is invalid") from None
+        raise SocialWorkspaceRuntimeError("story image preview exceeds response budget")
+
+    async def asset_preview(
+        self,
+        platform: str,
+        asset_ref: str,
+        context: ToolCallContext,
+    ) -> ToolExecutionResult:
+        """Return a bounded MCP image block for a principal-bound story asset."""
+
+        principal = RuntimePrincipal.from_context(context)
+        try:
+            if platform not in self.adapters:
+                raise SocialWorkspaceRuntimeError("social provider is disabled")
+            if not social_scopes_authorized(
+                frozenset({f"{platform}:story:read"}), principal.scopes
+            ):
+                raise SocialWorkspaceRuntimeError("required story read scope is missing")
+            if self._ref_platform(asset_ref, "asset", principal) != platform:
+                raise SocialWorkspaceRuntimeError("asset provider binding mismatch")
+            provider_ref = self._resolve_ref(asset_ref, "asset", platform, principal)
+            reader = getattr(self._adapter(platform), "read_asset", None)
+            if not callable(reader):
+                raise SocialWorkspaceRuntimeError("social asset preview is unavailable")
+            self._consume_budget(principal, platform, None, "asset_preview", "rate", 1)
+            materialized = await asyncio.wait_for(
+                reader(
+                    provider_ref,
+                    owner_binding=self._principal_hash(principal),
+                    max_bytes=self.asset_max_bytes,
+                ),
+                timeout=self.provider_timeout_seconds,
+            )
+            if isinstance(materialized, bytes):
+                raw = materialized
+            else:
+                raw = getattr(materialized, "content", None)
+            if type(raw) is not bytes or not 1 <= len(raw) <= self.asset_max_bytes:
+                raise SocialWorkspaceRuntimeError("provider returned an invalid story asset")
+            preview, width, height = await asyncio.to_thread(
+                self._bounded_image_preview, raw
+            )
+            structured = {
+                "platform": platform,
+                "asset_ref": asset_ref,
+                "mime_type": "image/jpeg",
+                "byte_length": len(preview),
+                "width": width,
+                "height": height,
+                "trust": "untrusted_external_data",
+            }
+            encoded = base64.b64encode(preview).decode("ascii")
+            self._consume_budget(
+                principal, platform, None, "asset_preview", "egress", len(encoded)
+            )
+            self._audit(
+                principal,
+                platform=platform,
+                operation="asset_preview",
+                outcome="succeeded",
+                reason="bounded_image_returned",
+                response_bytes=len(encoded),
+                media_items=1,
+            )
+            return ToolExecutionResult(
+                structured=structured,
+                content=(
+                    {"type": "image", "data": encoded, "mimeType": "image/jpeg"},
+                ),
+            )
+        except Exception as exc:
+            self._audit(
+                principal,
+                platform=platform,
+                operation="asset_preview",
+                outcome="denied",
+                reason=type(exc).__name__,
+            )
+            raise
 
 
 __all__ = [
-    "RuntimePrincipal", "SocialBudgetLimits", "SocialWorkspaceAdapter",
+    "AssetIngestor", "RuntimePrincipal", "SocialBudgetLimits", "SocialWorkspaceAdapter",
     "SocialWorkspaceRuntime", "SocialWorkspaceRuntimeError",
 ]

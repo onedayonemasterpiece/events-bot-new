@@ -18,7 +18,7 @@ from .repository import (
     ReadOnlySQLiteError,
     RepositoryError,
 )
-from .tool_catalog import ToolCallContext, ToolSpec
+from .tool_catalog import ToolCallContext, ToolExecutionResult, ToolSpec
 
 LATEST_LEGACY_PROTOCOL = "2025-11-25"
 SUPPORTED_LEGACY_PROTOCOLS = (
@@ -259,7 +259,7 @@ class MCPProtocol:
         if cached is not None:
             return self._response(request_id, result=cached)
         try:
-            structured = await asyncio.wait_for(
+            execution = await asyncio.wait_for(
                 tool.handler(
                     arguments,
                     context,
@@ -270,7 +270,14 @@ class MCPProtocol:
                     else max(0.25, float(tool.timeout_seconds))
                 ),
             )
-            result = self._text_result(structured)
+            if isinstance(execution, ToolExecutionResult):
+                result = {
+                    "content": [dict(block) for block in execution.content],
+                    "structuredContent": execution.structured,
+                    "isError": False,
+                }
+            else:
+                result = self._text_result(execution)
             if tool.cacheable:
                 self.cache.set(cache_key, result)
             return self._response(request_id, result=result)

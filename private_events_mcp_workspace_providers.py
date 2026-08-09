@@ -507,6 +507,7 @@ def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]
         allowed[VKActor.USER_MESSENGER].update({"edit", "delete"})
         allowed[VKActor.COMMUNITY_EDITOR].update({"edit", "delete"})
     if config.universal_social_media_story_enabled:
+        allowed[VKActor.COMMUNITY_EDITOR].add("media_upload")
         allowed[VKActor.STORY_READER].add("story_read")
         allowed[VKActor.STORY_EDITOR].add("story_write")
     return {actor: frozenset(capabilities) for actor, capabilities in allowed.items()}
@@ -534,6 +535,16 @@ class DurableVKWorkspaceAdapter:
 
     async def read(self, request: Any) -> Mapping[str, Any]:
         return await self.delegate.read(request)
+
+    async def stage_asset(self, asset: Any, *, role: MediaRole) -> str:
+        return await self.delegate.stage_asset(asset, role=role)
+
+    async def read_asset(
+        self, asset_ref: str, *, owner_binding: str, max_bytes: int
+    ) -> Any:
+        return await self.delegate.read_asset(
+            asset_ref, owner_binding=owner_binding, max_bytes=max_bytes
+        )
 
     @staticmethod
     def _unknown(operation_ref: str, action: str) -> dict[str, Any]:
@@ -627,7 +638,50 @@ class DurableVKWorkspaceAdapter:
         return self._unknown(operation_ref, str(row["action"]))
 
 
-def build_vk_workspace_adapter(config: PrivateEventsMCPConfig) -> DurableVKWorkspaceAdapter:
+class _TelegramVerifiedAssetReader:
+    def __init__(self, store: Any) -> None:
+        self.store = store
+
+    async def open_verified(self, storage_ref: str, owner_binding: str) -> bytes:
+        def read() -> bytes:
+            with self.store.open_verified(storage_ref, owner_binding) as (stream, _asset):
+                return stream.read()
+
+        return await asyncio.to_thread(read)
+
+
+class _VKVerifiedAssetReader:
+    def __init__(self, store: Any) -> None:
+        self.store = store
+
+    async def open_verified(self, storage_ref: str, owner_binding: str) -> Any:
+        from private_events_mcp_vk_upload import VKAssetMaterialization
+
+        def read() -> tuple[bytes, Any]:
+            with self.store.open_verified(storage_ref, owner_binding) as (stream, asset):
+                return stream.read(), asset
+
+        content, asset = await asyncio.to_thread(read)
+        return VKAssetMaterialization(
+            storage_ref=asset.storage_ref,
+            owner_binding=asset.owner_binding,
+            content_digest=asset.content_digest,
+            mime_type=asset.mime_type,
+            byte_length=asset.byte_length,
+            content=content,
+        )
+
+
+def build_vk_workspace_adapter(
+    config: PrivateEventsMCPConfig,
+    *,
+    asset_store: Any | None = None,
+) -> DurableVKWorkspaceAdapter:
+    from private_events_mcp_vk_transport import (
+        SecureVKMultipartTransport,
+        SecureVKStoryMediaReader,
+    )
+
     state = SQLiteProviderCoordinator(config.auth_database_path)
     delegate = VKWorkspaceAdapter(
         transport=DedicatedVKActorTransport(allowed=_vk_allowed(config)),
@@ -635,6 +689,15 @@ def build_vk_workspace_adapter(config: PrivateEventsMCPConfig) -> DurableVKWorks
         governor=DurableVKGovernor(state),
         cooldown=DurableVKCooldown(state),
         sanitize_text=_sanitize_provider_text,
+        asset_reader=(
+            _VKVerifiedAssetReader(asset_store) if asset_store is not None else None
+        ),
+        multipart_transport=(
+            SecureVKMultipartTransport() if asset_store is not None else None
+        ),
+        story_media_reader=(
+            SecureVKStoryMediaReader() if asset_store is not None else None
+        ),
         timeout_seconds=config.social_provider_timeout_seconds,
     )
     return DurableVKWorkspaceAdapter(delegate, state)
@@ -642,6 +705,8 @@ def build_vk_workspace_adapter(config: PrivateEventsMCPConfig) -> DurableVKWorks
 
 def build_private_events_mcp_workspace_adapters(
     config: PrivateEventsMCPConfig,
+    *,
+    asset_store: Any | None = None,
 ) -> dict[str, Any]:
     """Build only explicitly enabled provider adapters without making calls."""
 
@@ -651,13 +716,19 @@ def build_private_events_mcp_workspace_adapters(
     if config.universal_social_telegram_enabled:
         # Telegram implementation and durable ref/governor wiring are added by
         # the same integration before this builder is enabled in production.
-        adapters["telegram"] = build_telegram_workspace_adapter(config)
+        adapters["telegram"] = build_telegram_workspace_adapter(
+            config, asset_store=asset_store
+        )
     if config.universal_social_vk_enabled:
-        adapters["vk"] = build_vk_workspace_adapter(config)
+        adapters["vk"] = build_vk_workspace_adapter(config, asset_store=asset_store)
     return adapters
 
 
-def build_telegram_workspace_adapter(config: PrivateEventsMCPConfig) -> Any:
+def build_telegram_workspace_adapter(
+    config: PrivateEventsMCPConfig,
+    *,
+    asset_store: Any | None = None,
+) -> Any:
     from private_events_mcp_telegram_adapter import TelegramWorkspaceAdapter
 
     return TelegramWorkspaceAdapter(
@@ -665,6 +736,11 @@ def build_telegram_workspace_adapter(config: PrivateEventsMCPConfig) -> Any:
         refs=InMemoryTelegramOpaqueRefStore(config),
         governor=DurableTelegramGovernor(
             SQLiteProviderCoordinator(config.auth_database_path)
+        ),
+        asset_reader=(
+            _TelegramVerifiedAssetReader(asset_store)
+            if asset_store is not None
+            else None
         ),
         operation_timeout_seconds=config.social_provider_timeout_seconds,
     )
@@ -770,6 +846,7 @@ class InMemoryTelegramOpaqueRefStore:
         target_ref: str,
         message_id: int,
         allowed_actions: frozenset[SocialAction] | None = None,
+        kind: Any | None = None,
     ) -> Any:
         self._targets.get(target_ref)
         ref = _bounded_ref("itm")
@@ -778,15 +855,48 @@ class InMemoryTelegramOpaqueRefStore:
             target_ref,
             message_id,
             allowed_actions=(allowed_actions or self._allowed_actions) & self._allowed_actions,
+            **({"kind": kind} if kind is not None else {}),
         )
         self._items.put(ref, binding)
         return copy.deepcopy(binding)
 
-    def mint_read_asset(self, *, target_ref: str, media: Any, role: MediaRole) -> str:
+    def mint_read_asset(
+        self,
+        *,
+        target_ref: str,
+        media: Any,
+        role: MediaRole,
+        story_id: int | None = None,
+        expires_at: Any | None = None,
+        item_kind: Any | None = None,
+    ) -> str:
         self._targets.get(target_ref)
         ref = _bounded_ref("ast")
-        self._assets.put(ref, self._Asset(ref, role, self._copy(media)))
+        self._assets.put(
+            ref,
+            self._Asset(
+                ref,
+                role,
+                self._copy(media),
+                target_ref=target_ref,
+                story_id=story_id,
+                expires_at=expires_at,
+            ),
+        )
         return ref
+
+    def mint_upload_asset(self, *, role: MediaRole, upload: Any) -> Any:
+        if not isinstance(role, MediaRole):
+            raise ProviderBindingError("Telegram upload role is invalid")
+        ref = _bounded_ref("ast")
+        binding = self._Asset(
+            ref,
+            role,
+            copy.deepcopy(upload),
+            expires_at=getattr(upload, "expires_at", None),
+        )
+        self._assets.put(ref, binding)
+        return copy.deepcopy(binding)
 
     def mint_cursor(self, *, family: str, state: Mapping[str, Any]) -> str:
         ref = _bounded_ref("cur")

@@ -294,6 +294,8 @@ def _build_new_credentials(
                     "reaction",
                     "comment",
                     "schedule",
+                    "story:read",
+                    "story:write",
                     "analytics",
                     "audience",
                 )
@@ -331,6 +333,8 @@ def _build_new_credentials(
                     "reaction",
                     "comment",
                     "schedule",
+                    "story:read",
+                    "story:write",
                     "analytics",
                     "audience",
                 )

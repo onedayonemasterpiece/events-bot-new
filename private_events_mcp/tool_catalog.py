@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import copy
-import json
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Mapping, Sequence
+from typing import Any
 
 from .crypto import AccessIdentity
 from .repository import EventsEvidenceRepository, InvalidArgumentsError
@@ -15,7 +15,23 @@ class ToolCallContext:
     resource: str
 
 
-ToolHandler = Callable[[Mapping[str, Any], ToolCallContext], Awaitable[dict[str, Any]]]
+@dataclass(frozen=True, slots=True)
+class ToolExecutionResult:
+    """A structured tool result with explicit MCP content blocks.
+
+    Most tools return a plain mapping and are serialized to a text content
+    block.  Visual tools may additionally return bounded MCP image content
+    without smuggling binary data into ``structuredContent``.
+    """
+
+    structured: dict[str, Any]
+    content: tuple[Mapping[str, Any], ...]
+
+
+ToolHandler = Callable[
+    [Mapping[str, Any], ToolCallContext],
+    Awaitable[dict[str, Any] | ToolExecutionResult],
+]
 DenialHandler = Callable[[Mapping[str, Any], ToolCallContext, str], Awaitable[None]]
 ScopeSelector = Callable[[Mapping[str, Any]], frozenset[str]]
 
@@ -39,6 +55,7 @@ class ToolSpec:
     cacheable: bool = True
     publicly_discoverable: bool = True
     timeout_seconds: float | None = None
+    file_params: tuple[str, ...] = ()
 
     def is_visible(self, granted_scopes: frozenset[str]) -> bool:
         options = self.scope_options or (self.scopes,)
@@ -77,6 +94,9 @@ class ToolSpec:
                 }
             )
             platform_schema["enum"] = allowed_platforms
+        metadata: dict[str, Any] = {"securitySchemes": schemes}
+        if self.file_params:
+            metadata["openai/fileParams"] = list(self.file_params)
         return {
             "name": self.name,
             "title": self.title,
@@ -91,7 +111,7 @@ class ToolSpec:
                 "openWorldHint": self.open_world,
             },
             # Older ChatGPT Apps clients mirrored this field under _meta.
-            "_meta": {"securitySchemes": schemes},
+            "_meta": metadata,
         }
 
 

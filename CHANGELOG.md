@@ -4,6 +4,15 @@
 
 ### Fixed
 
+- Accepted VK's production video-story CDN under the same strict HTTPS,
+  public-DNS, no-redirect media boundary, so a valid story returned from
+  `stories.get` is no longer rejected before its opaque media ref is minted.
+
+- Aligned every Private Events MCP media byte/store/TTL/download/dimension
+  budget with its documented `PRIVATE_EVENTS_MCP_MEDIA_*` environment name
+  and made invalid media-budget values fail closed instead of being silently
+  clamped, so production activation applies the operator's exact limits.
+
 - Preserved the original Private Events MCP ChatGPT endpoint/client identity
   across routine bootstrap-token rotation and made the four original Telegram/
   VK read/publish scopes stable same-provider compatibility families for later
@@ -51,6 +60,25 @@
 ### Added
 
 - Added an append-only, requirements-aware Current UI Behavioral Decoder & Experiment Archaeology v1.1 source pass and two-stage exact-source capture workflow. It binds every behavioral record to the reviewed Decoder v1 manifest, emits separate provenance, complete media-policy, dynamic loading/skeleton, geometry, interaction, positioning, rail, overlay and experiment artifacts, and captures a closed 50-packet/99-raster matrix while remaining `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`. A deep validator now checks output hashes plus plan/phase/action/raster references; only a one-to-one full-resolution human review ledger, independent audit and durable Actions/Release provenance can unlock `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not change the immutable v1 snapshot, site runtime, tokens, normalization or Penpot.
+
+- Added the production-gated, image-only Private Events MCP media/story
+  contract for ChatGPT: one-file `fileParams` ingress into immutable
+  owner/SHA/MIME/size/dimension/TTL-bound storage, exact browser-approved
+  Telegram/VK story publication, bounded story reads and aggregate statistics
+  with viewer identities excluded. The existing endpoint, ChatGPT OAuth
+  client/resource/signing identity and connector name remain unchanged; Codex
+  still exposes exactly seven evidence tools and no social/file capability.
+  Fresh explicitly social-enabled credential profiles include granular
+  Telegram/VK story read/write scopes; existing provider-level grants remain
+  compatible and require only metadata refresh, not a new connector.
+  Media/story stays default-off behind explicit storage/host/size/TTL limits and
+  dedicated provider roles. Video is explicitly denied by the image-only
+  contract; any future support requires a separate proven gate. Image story
+  media can be inspected through a principal-bound, provider-URL-free MCP JPEG
+  thumbnail capped at 768×768 and 64 KiB; viewer identities remain excluded. CI now
+  compiles every top-level MCP adapter/provider module, runs
+  the full private-MCP test glob and checks the diff; an optional live smoke is
+  nonmutating by default and never prints secrets or private URLs.
 
 - Added a bounded VK incident-intake chain to Private Events MCP: recent
   comment/mention notification hints, exact canonical wall-post resolution,
