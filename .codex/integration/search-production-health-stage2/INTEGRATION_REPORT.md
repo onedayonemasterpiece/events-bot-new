@@ -2,7 +2,7 @@
 
 ## Base and safety
 
-- Integration base: `origin/main@1f449af361e586da509d0199cfe059d620fb42d6`;
+- Integration base: `origin/main@66bc0d43e36299417626f992021cfb7299ddf704`;
   it contains merged PR #441 at
   `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`.
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
@@ -21,17 +21,17 @@
 | reporter | `70754d633`, `ec02e0fc2` | `a557a6d0a` | platform disposition and REST mutation |
 | broker purpose/replay | `b3db5eff1`, `7954b1f98` | `ef00d10d9`, `330e20bcb` | distinct qualification persona, exact SQL identity, bounded replay and pg_cron erasure |
 | whole-cell observer | `b72cedeba` | `c07da8303` | pre-Auth through event-route physical POST/bytes/forbidden traffic boundary |
-| integration hardening | current branch | this report | Appium secret-log containment, Edge activation gate, reporter history/labels/aggregate and canonical docs |
+| integration hardening | current branch | this report | Appium secret-log containment, exact Edge source-revision activation gate, reporter history/labels/aggregate and canonical docs |
 
 ## Deterministic acceptance
 
 Required before live:
 
-- Search production-health aggregate suite: **128/128 PASS**;
+- Search production-health aggregate suite: **136/136 PASS**;
 - legacy Search harness: **31/31 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
   security and static source/release regression **135/135 PASS**; Edge contract
-  group **25/25 PASS** and Auth
+  group **26/26 PASS** and Auth
   Node **16/16 PASS**;
 - static source-binding/release regression: **87/87 PASS**;
 - workflow YAML and shell/node syntax;
@@ -50,8 +50,11 @@ Required before live:
    allowlist; set the exact event allowlist to
    `workflow_dispatch,schedule,repository_dispatch`; verify the three cached
    health personas plus distinct `search-cold-browser` account.
-4. Deploy `supabase/functions/event-search` from exact merged `origin/main` via
-   the pinned Supabase CLI and verify its side-effect-free HEAD contract.
+4. Generate/check the immutable `event-search` source digest, deploy
+   `supabase/functions/event-search` from exact merged `origin/main` via the
+   pinned Supabase CLI, and verify the side-effect-free HEAD contract exposes
+   that exact `X-KenigEvents-Search-Revision` separately from the stable
+   contract version.
 5. Deploy exact merged `origin/main` through `scripts/deploy_fly_main.sh` with
    validation profile `none`.
 6. Run manual `browser_android`, then manual `browser_ios`. Debugging runs are
@@ -74,7 +77,9 @@ keeps pre-runner UNKNOWN streaks, refuses missing-artifact BROKEN proof, pins
 Appium drivers, makes full qualification synchronous, and provides a bounded
 encrypted durable broker idempotency replay window with the full SQL identity
 and minute ciphertext erasure. It also verifies the
-active Edge contract with a side-effect-free HEAD before Auth/Search, enables
+active exact Edge source revision with a side-effect-free HEAD before
+Auth/Search, rechecks the revision on the one already-received Search response
+to close the HEAD-to-POST race, enables
 the iOS Safari console bucket, rejects mobile redirect chains, and keeps an
 adapter-level physical Search observer alive through final event-page
 diagnostics so the complete journey proves exactly one Search POST. Unknown
