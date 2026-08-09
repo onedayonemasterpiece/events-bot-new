@@ -5,8 +5,9 @@ alter table public.static_site_auth_session_issue_claim
   add column if not exists platform text;
 
 -- A recoverable credential is kept only as application-encrypted ciphertext
--- for the short lost-response window. It is atomically returned once and then
--- erased. No plaintext OTP/action link/session is stored in Postgres.
+-- for the short lost-response window. Identical claims receive that same
+-- ciphertext until the bounded window expires; expired ciphertext is erased.
+-- No plaintext OTP/action link/session is stored in Postgres.
 alter table public.static_site_auth_session_issue_claim
   add column if not exists credential_ciphertext text,
   add column if not exists credential_expires_at timestamptz;
