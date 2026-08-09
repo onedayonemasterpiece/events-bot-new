@@ -126,10 +126,10 @@ export function installAppiumClassicLogCommands(driver) {
       parameters: [{ name: 'type', type: 'string', required: true }],
     }));
   }
-  if (typeof driver.sendCommandAndGetResult !== 'function') {
-    driver.addCommand('sendCommandAndGetResult', webdriverCommand(
-      'POST', '/session/:sessionId/chromium/send_command_and_get_result', {
-        command: 'sendCommandAndGetResult',
+  if (typeof driver.executeCdp !== 'function') {
+    driver.addCommand('executeCdp', webdriverCommand(
+      'POST', '/session/:sessionId/goog/cdp/execute', {
+        command: 'executeCdp',
         parameters: [
           { name: 'cmd', type: 'string', required: true },
           { name: 'params', type: 'object', required: true },
@@ -382,15 +382,21 @@ export async function createAppiumSearchAdapter(options = {}) {
       if (!Array.isArray(initialLogs)) throw new Error('mobile_auth_network_log_unavailable');
       observePostBoundarySearch(initialLogs);
       let androidAuthScriptIdentifier = '';
-      if (platform === 'android' && typeof driver.sendCommandAndGetResult === 'function') {
+      if (platform === 'android' && typeof driver.executeCdp === 'function') {
         const allowedOrigins = [...new Set((options.supabaseOrigins || [])
           .map((value) => new URL(value).origin))];
-        const installed = await driver.sendCommandAndGetResult(
-          'Page.addScriptToEvaluateOnNewDocument', {
-            source: `(${installAndroidAuthByteProbe.toString()})(${JSON.stringify({ allowed_origins: allowedOrigins })})`,
-          },
-        );
+        let installed;
+        try {
+          installed = await driver.executeCdp(
+            'Page.addScriptToEvaluateOnNewDocument', {
+              source: `(${installAndroidAuthByteProbe.toString()})(${JSON.stringify({ allowed_origins: allowedOrigins })})`,
+            },
+          );
+        } catch {
+          throw new Error('mobile_android_cdp_route_unavailable');
+        }
         androidAuthScriptIdentifier = String(installed?.identifier || '');
+        if (!androidAuthScriptIdentifier) throw new Error('mobile_android_cdp_script_receipt_missing');
       }
       await driver.url(actionLink);
       await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(returnTarget).origin,
@@ -418,7 +424,7 @@ export async function createAppiumSearchAdapter(options = {}) {
           }, { timeout: timeoutMs, interval: 50,
             timeoutMsg: 'mobile_auth_page_meter_timeout' });
         } finally {
-          await driver.sendCommandAndGetResult(
+          await driver.executeCdp(
             'Page.removeScriptToEvaluateOnNewDocument',
             { identifier: androidAuthScriptIdentifier },
           ).catch(() => undefined);

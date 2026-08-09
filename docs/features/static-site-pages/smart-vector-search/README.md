@@ -1086,6 +1086,13 @@ allowlisted fetch observer только для Supabase `/auth/v1`. Он изм�
 удаляется и не сохраняет URL, request id, body, session или token. Protocol
 tracker остаётся authoritative для physical request count/diagnostics; этот
 page observer лишь закрывает доказанный request-only byte gap.
+Первый live transport check этой схемы, run `31335122827`, подтвердил, что
+старый ChromeDriver endpoint `/chromium/send_command_and_get_result` не
+экспортируется Appium/UiAutomator2 session. Канонический Appium base route для
+Chromium CDP — `POST /session/:sessionId/goog/cdp/execute`; adapter использует
+его явно и типизирует отсутствие route/receipt как `UNKNOWN_ANDROID_INFRA`, не
+как поломку Search. Browser cell этого run прошла полный `HEALTHY/PASS`, Android
+остановилась до callback и Search.
 
 ### 16.9 Migration from current workflow
 

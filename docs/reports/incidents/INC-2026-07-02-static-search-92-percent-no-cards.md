@@ -30,6 +30,18 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 merged-SHA run `31335122827` completed browser
+  `HEALTHY/PASS`: one HTTP-200 Search POST, five response IDs equal to five
+  cards, real wheel scroll, same-origin event HTTP 200, zero LLM/pagination,
+  zero console/network errors and 9,343 observed Supabase bytes. This also
+  verified that the prior Edge/RPC failures were disposable probe-race noise.
+  Android completed emulator/Appium/WebView preflight but stopped before Auth
+  callback and Search because Appium returned 404 for ChromeDriver's legacy
+  `/chromium/send_command_and_get_result` route. Appium base registers the
+  current Chromium extension as `/goog/cdp/execute`; the adapter now uses that
+  route and emits a closed typed infrastructure code if it is unavailable.
+  Browser evidence is valid, but the workflow is not Android acceptance.
+
 - 2026-08-09 diagnostic run `31334260547` closed the repeated Android boundary
   as `UNKNOWN_ANDROID_INFRA/mobile_auth_terminal_bytes_timeout_mixed_request_only`:
   the emulator/Appium/WebView preflight and product authorization completed,

@@ -212,7 +212,7 @@ function journeyFailure(error) {
 
 function isAdapterInfrastructureFailure(error) {
   const message = String(error?.message || '');
-  return /^(?:search_browser_(?:crashed|session_lost)(?:_[a-z0-9]+)*|mobile_[a-z0-9_]*(?:network_log_unavailable|diagnostics_unavailable|session_lost)|webdriver_session_error)$/iu.test(message)
+  return /^(?:search_browser_(?:crashed|session_lost)(?:_[a-z0-9]+)*|mobile_android_cdp_(?:route_unavailable|script_receipt_missing)|mobile_[a-z0-9_]*(?:network_log_unavailable|diagnostics_unavailable|session_lost)|webdriver_session_error)$/iu.test(message)
     || /(?:mobile_auth_terminal_bytes_timeout(?:_[a-z_]+)?|mobile_post_navigation_(?:terminal_bytes_missing|meter_(?:origin_)?missing)|search_(?:post_navigation_meter_(?:failed|origin_missing|missing)|post_navigation_observation_missing|physical_observation_missing))/iu.test(message)
     || /(?:invalid session id|no such window|target page, context or browser has been closed|browser has been closed|web view not found)/iu.test(message);
 }

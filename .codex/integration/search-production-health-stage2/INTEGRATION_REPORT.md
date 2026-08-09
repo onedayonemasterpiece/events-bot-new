@@ -8,7 +8,7 @@
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
 - PR #451 merged to `main` as `ad0a1f3bb12a63805aec65f52489151e3f382b83`.
 - Live acceptance workflows so far: `0 / 2` accepted; bounded diagnostic runs
-  through `31334260547` supplied browser product proof and isolated the
+  through `31335122827` supplied browser product proof and isolated the
   remaining Android evidence boundary without making an Android Search POST.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
@@ -104,6 +104,15 @@ failure, while final operations remain strict. The next live run must prove
 whether this was that expected race. Neither cell from `31334260547` is
 terminal acceptance, so the disposition remains unchanged pending a fresh
 merged-SHA browser+Android proof.
+
+Merged-SHA run `31335122827` then completed browser `HEALTHY/PASS` with one
+HTTP-200 Search POST, five matching cards, real scroll/event HTTP 200, zero
+console/network errors and 9,343 bytes. Android stopped before callback/Search:
+Appium returned 404 for the legacy ChromeDriver
+`/chromium/send_command_and_get_result` extension. The checked Appium base
+contract registers `/session/:sessionId/goog/cdp/execute`; the adapter now uses
+that route and exposes route/receipt absence only as typed Android
+infrastructure. A fresh main-SHA browser+Android run remains required.
 
 Follow-up run `31331011185` then reached neither Search path: browser was
 correctly typed `UNKNOWN_AUTH_BROKER` because the completed prior claim still
