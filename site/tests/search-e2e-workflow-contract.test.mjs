@@ -122,6 +122,11 @@ test('default pull-request CI runs the deterministic Search production-health su
   const searchStep = steps.find((step) => step.name === 'Run deterministic Search production-health contracts');
   assert.equal(searchStep?.run, 'npm run test:search-production-health');
   assert.equal(searchStep?.env, undefined);
+  assert.equal(steps.find((step) => step.name === 'Run existing Search harness contracts')?.run,
+    'npm run test:search-e2e-harness');
+  assert.match(source, /tests\/test_static_site_auth_session_broker\.py/u);
+  assert.match(source, /tests\/test_static_site_auth_session_broker_http\.py/u);
+  assert.match(source, /tests\/test_supabase_security_hardening\.py/u);
   assert.doesNotMatch(source, /\$\{\{\s*secrets\./u);
 });
 

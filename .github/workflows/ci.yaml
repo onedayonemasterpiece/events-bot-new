@@ -33,6 +33,8 @@ jobs:
         run: npm run test:transport-faults && npm run test:resilient-client
       - name: Run deterministic Search production-health contracts
         run: npm run test:search-production-health
+      - name: Run existing Search harness contracts
+        run: npm run test:search-e2e-harness
       - name: Build real static event pages
         env:
           PREVIEW_BUILD_ID: preview-ci-browser-gate
@@ -93,6 +95,9 @@ jobs:
           tests/test_static_site_release.py
           tests/test_static_site_build_debounce.py
           tests/test_static_site_build_handoff.py
+          tests/test_static_site_auth_session_broker.py
+          tests/test_static_site_auth_session_broker_http.py
+          tests/test_supabase_security_hardening.py
           tests/test_vk_auto_queue_import.py
       - name: Enforce shared Google AI limiter contracts
         run: |

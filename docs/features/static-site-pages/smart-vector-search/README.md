@@ -997,7 +997,8 @@ Storage/CDN и не-Supabase origins исключаются. В evidence поп�
   `full` marker может запросить её ровно один раз после health terminal PASS и
   выполняет bounded LLM + deterministic degraded fallback в одной ephemeral
   browser session.
-- default PR CI запускает deterministic Search architecture suite.
+- default PR CI запускает deterministic Search architecture, существующий
+  harness и broker admission/security suites.
 
 Data-only generation по-прежнему не имеет Search workflow trigger. Legacy
 cached/cold/LLM/mobile harness остаётся только manual debug и сериализован с

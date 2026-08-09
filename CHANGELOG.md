@@ -20,7 +20,8 @@
   still cannot trigger Search. A `full` marker requests the existing bounded
   LLM plus deterministic degraded qualification exactly once in one ephemeral
   browser session after standard health passes; qualification remains
-  unscheduled/selective, and PR #436 remains separate.
+  unscheduled/selective. Existing Search harness and broker admission/security
+  regressions now also run in default PR CI; PR #436 remains separate.
 
 - Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
   by promoting its 30 lazy card images to eager loading only inside the
