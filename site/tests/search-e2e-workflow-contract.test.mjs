@@ -139,6 +139,11 @@ test('all Stage-1 Search and default CI workflow YAML parses', async () => {
 
 test('registry freezes exact Search variants and platform-scoped personas', async () => {
   const source = await readFile(registryUrl, 'utf8');
+  const registry = YAML.parse(source);
+  assert.deepEqual(registry.scenarios['browser.route_health'].layers, ['L0', 'L1']);
+  assert.deepEqual(registry.scenarios['browser.route_health'].platforms, ['browser']);
+  assert.deepEqual(registry.scenarios['search.production_health'].layers, ['L0', 'L1', 'L2']);
+  assert.deepEqual(registry.scenarios['search.production_health'].platforms, ['browser', 'android', 'ios']);
   assert.match(source, /search\.live_cached_journey:[\s\S]*variants: \[cached_vector\]/u);
   assert.match(source, /search\.live_cold_journey:[\s\S]*variants: \[cold_vector, cold_vector_llm, degraded_vector_fallback\]/u);
   for (const token of [

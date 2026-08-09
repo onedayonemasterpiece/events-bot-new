@@ -120,8 +120,8 @@ scenarios:
   browser.route_health:
     title: Every selected HTML route is non-empty and runtime healthy
     status: partial
-    layers: [L0, L1, L2]
-    platforms: [browser, android, ios]
+    layers: [L0, L1]
+    platforms: [browser]
     trigger_tags: [static-data, static-route, visual-layout]
     cost: medium
     side_effects: none
@@ -530,8 +530,8 @@ scenarios:
     status: stage1_deterministic_contract_live_activation_pending
     contract: docs/features/static-site-pages/smart-vector-search/README.md
     handoff: docs/features/static-site-pages/smart-vector-search/stage-2-production-health-handoff.md
-    layers: [L0, L1]
-    platforms: [browser]
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
     trigger_tags: [smart-search, auth-session, supabase-connectivity, static-route]
     cost: low
     auth_mode: session_fixture
