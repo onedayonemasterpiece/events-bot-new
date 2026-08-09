@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
 
@@ -87,12 +88,15 @@ test('standalone WebdriverIO 9 Appium session receives the exact Classic getLogs
   assert.equal(driver.getLogs, undefined);
   assert.equal(installAppiumClassicLogCommands(driver), driver);
   assert.equal(typeof driver.getLogs, 'function');
-  assert.equal(typeof driver.sendCommandAndGetResult, 'function');
+  assert.equal(typeof driver.executeCdp, 'function');
   const installed = driver.getLogs;
-  const installedCdp = driver.sendCommandAndGetResult;
+  const installedCdp = driver.executeCdp;
   installAppiumClassicLogCommands(driver);
   assert.equal(driver.getLogs, installed);
-  assert.equal(driver.sendCommandAndGetResult, installedCdp);
+  assert.equal(driver.executeCdp, installedCdp);
+  const source = readFileSync(new URL('../e2e/search/adapters/appium-base.mjs', import.meta.url), 'utf8');
+  assert.match(source, /\/session\/:sessionId\/goog\/cdp\/execute/u);
+  assert.doesNotMatch(source, /chromium\/send_command_and_get_result/u);
 });
 
 test('pre-document Android Auth observer measures received body or declared bytes and exports counters only', async () => {
@@ -803,7 +807,7 @@ test('Android Auth callback uses a pre-document byte probe when performance logs
         },
       }) }));
     },
-    async sendCommandAndGetResult(command, params) {
+    async executeCdp(command, params) {
       commands.push([command, params]);
       return command === 'Page.addScriptToEvaluateOnNewDocument' ? { identifier: 'script-1' } : {};
     },

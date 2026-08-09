@@ -1026,6 +1026,7 @@ test('post-preflight Appium log/session loss is platform infrastructure, never p
     ['android', 'mobile_health_diagnostics_unavailable', 'UNKNOWN_ANDROID_INFRA'],
     ['ios', 'invalid session id', 'UNKNOWN_IOS_INFRA'],
     ['android', 'mobile_auth_terminal_bytes_timeout', 'UNKNOWN_ANDROID_INFRA'],
+    ['android', 'mobile_android_cdp_route_unavailable', 'UNKNOWN_ANDROID_INFRA'],
     ['ios', 'mobile_post_navigation_terminal_bytes_missing', 'UNKNOWN_IOS_INFRA'],
     ['browser', 'search_post_navigation_meter_failed', 'UNKNOWN_RUNNER_BROWSER'],
     ['browser', 'search_post_navigation_meter_origin_missing', 'UNKNOWN_RUNNER_BROWSER'],

@@ -49,6 +49,16 @@
 
 ### Fixed
 
+- Corrected the Android pre-document observer transport after live run
+  `31335122827`: Appium/UiAutomator2 does not expose ChromeDriver's legacy
+  `/chromium/send_command_and_get_result` route at the Appium session. The
+  adapter now uses Appium base driver's registered Chromium
+  `/goog/cdp/execute` route and emits a typed Android infrastructure failure if
+  that route or its script receipt is unavailable. The same run independently
+  completed browser `HEALTHY/PASS` with one Search POST, five matching cards,
+  real scroll, event HTTP 200 and zero network/console errors; Android stopped
+  before callback/Search, so it is not acceptance.
+
 - Replaced the unreliable Android Auth callback byte fence exposed by live run
   `31334260547`. ChromeDriver's performance bucket emitted only sanitized Auth
   request starts even though the product completed verification, so the
