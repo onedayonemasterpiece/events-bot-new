@@ -205,7 +205,15 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
         'behavior-packet.rail-keyboard-home-end',
         'behavior-packet.breakpoint-container-runtime-coverage-gap',
     } <= blocking_plan_ids
-    assert len(reviewed_receipt['blockers']) >= 2
+    assert len(reviewed_receipt['blockers']) == len(set(reviewed_receipt['blockers']))
+    assert [
+        blocker for blocker in reviewed_receipt['blockers']
+        if blocker.startswith('unresolved.behavior-blocker.')
+    ] == [
+        'unresolved.behavior-blocker.864db42986f38970b1',
+        'unresolved.behavior-blocker.fdec1149e1f0d6b359',
+    ]
+    assert len({row['id'] for row in reviewed_unresolved}) == len(reviewed_unresolved)
     assert reviewed_manifest['human_visual_review']['completed'] is True
     assert reviewed_manifest['human_visual_review']['reviewed_raster_count'] == 124
     assert reviewed_manifest['blockers'] == reviewed_receipt['blockers']

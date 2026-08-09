@@ -630,6 +630,12 @@ The capture implementation is intentionally split from acceptance:
    `blocks_ready:true` keeps the final receipt
    `EVIDENCE_COLLECTION_INCOMPLETE`.
 
+The reviewed materializer also treats an exact blocker ID as a set member:
+when the source-pass unresolved register already contains that blocker, capture
+reconciliation updates the same record instead of appending a duplicate. The
+manifest, receipt and artifact receipt therefore expose each retained readiness
+blocker exactly once.
+
 The corrected registry has 57 executable packets and ten exact blockers. Blocked states
 are recorded as blockers rather than replaced by fake wrappers: source-only
 PopularCategoryFilter, the unconsumed ListingPersonalFilter v1, unavailable
