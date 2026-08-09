@@ -542,3 +542,24 @@ screenshots do not promote those bindings to captured component evidence.
 The machine-readable final receipt and complete review report live at
 `.codex/integration/current-ui-decoder-v1/`. This closes decoding only. It does
 not start defragmentation or normalization automatically.
+
+## Behavioral Decoder & Experiment Archaeology v1.1 (append-only, in progress)
+
+`current_ui_behavior_graph/behavioral-decode.mjs` is an append-only evidence
+pass over the immutable v1 source pin. It writes a *new*, separately validated
+`behavioral-supplement-v1.1/` directory and never rewrites the reviewed v1
+manifest, receipt, components, candidate contracts, capsules or visual ledger.
+
+The supplement records source-qualified media/loading/geometry/positioning,
+rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, CTA Git
+history and the `transport_timetable_layout` treatment registry. It always
+marks source-only and planned evidence explicitly; `dHash` remains a diagnostic
+only and is not a human-review substitute. The three transport arms
+`departure_board_v1`, `route_strips_v1` and `next_departure_queue_v1` have
+separate planned evidence packets and remain `NOT_MERGED`, unaccepted until
+receipt-backed archaeology and capture/review are available.
+
+The only permitted completed supplement status is
+`READY_FOR_NORMALIZATION_CHARTER_SYNTHESIS`. It does not authorize component
+merges, normalisation, semantic tokens, production Astro/CSS/JS changes,
+Penpot mutation, experiment winner selection or an automatic next stage.
