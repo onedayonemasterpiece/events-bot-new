@@ -53,12 +53,19 @@ def _int(name: str, default: int, *, low: int, high: int) -> int:
 
 
 def _canonical_hostname(value: str) -> str:
-    if not value or len(value) > 253 or value.endswith("."):
+    if not value or len(value) > 253 or value.endswith(".") or "%" in value:
         raise ValueError("invalid hostname")
     try:
         return ipaddress.ip_address(value).compressed
     except ValueError:
         labels = value.split(".")
+        # WHATWG clients interpret legacy decimal/octal/hex numeric host forms
+        # as IPv4 even when Python's strict ipaddress parser rejects them.
+        if labels and all(
+            re.fullmatch(r"(?:0[xX][0-9A-Fa-f]+|[0-9]+)", label)
+            for label in labels
+        ):
+            raise ValueError("invalid hostname") from None
         if any(
             not label
             or len(label) > 63

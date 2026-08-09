@@ -96,9 +96,9 @@ redirect chain after the form POST.
   fields, preserves all stable identity/signing/state/social-approval values,
   and rejects incomplete bundles, overlap and symlinks before creating output;
 - credential generation and enabled runtime config reject origins containing
-  invalid DNS labels, credentials, whitespace/control characters, a query,
-  fragment or explicit port and reject multiline/NUL deploy values before any
-  secret artifact is created;
+  invalid DNS labels, noncanonical numeric-IP forms, IPv6 zones, credentials,
+  whitespace/control characters, a query, fragment or explicit port and reject
+  multiline/NUL deploy values before any secret artifact is created;
 - real Chrome authorization follows the 302 back to ChatGPT after deployment;
 - `/healthz`, exact in-container SHA, SQLite `quick_check`, DB-unchanged and
   secret-redaction checks remain green;
