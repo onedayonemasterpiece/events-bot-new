@@ -1,10 +1,10 @@
 # INC-2026-08-09 Private MCP rejected VK story CDN
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Private Events MCP VK story reads
 Opened: 2026-08-09
-Closed: —
+Closed: 2026-08-09
 Owners: events-bot production / Private Events MCP
 Related incidents: `INC-2026-08-09-private-mcp-missing-bearer-http-200`, `INC-2026-08-08-private-mcp-oauth-csp-redirect`
 Related docs: `docs/operations/private-events-mcp.md`, `docs/operations/release-governance.md`
@@ -49,6 +49,16 @@ strict CDN suffix list did not include the VK video host `*.okcdn.ru`.
   `vkvd740.okcdn.ru`; no signed URL, token, native content or query was logged.
 - 2026-08-09T10:54Z — a failing regression test reproduced rejection by both
   the adapter URL validator and secure media transport boundary.
+- 2026-08-09T11:01Z — PR #438 passed `python-ci` and
+  `static-browser-release-gate`, then merged to exact main
+  `4e073d6edd5b2da71deba5b3f3a7a238202b3c5b`.
+- 2026-08-09T11:05Z — exact main was deployed through
+  `scripts/deploy_fly_main.sh` as Fly release v1950.
+- 2026-08-09T11:12Z — both ChatGPT and Codex OAuth/MCP smokes, transport
+  negative controls, a DB-immutable evidence read suite, and the production VK
+  story-list plus aggregate-statistics smoke passed. The story response
+  contained one opaque media ref and no provider URL; no social write or media
+  upload was attempted.
 
 ## Root Cause
 
@@ -114,17 +124,44 @@ the failing VK story-read acceptance path is being changed.
 
 ## Follow-up Actions
 
-- [ ] Merge the narrow hotfix through reviewed PR and deploy exact main.
-- [ ] Repeat the production MCP VK story-list and aggregate-statistics smoke.
+- [x] Merge the narrow hotfix through reviewed PR and deploy exact main.
+- [x] Repeat the production MCP VK story-list and aggregate-statistics smoke.
 - [ ] Refresh the existing ChatGPT connector metadata and run the first
-      user-supplied image prepare/approval/commit canary separately.
+      user-supplied image prepare/approval/commit canary separately. This is a
+      separate write-path acceptance requiring an operator-selected file,
+      target and browser approval; it does not block closure of the read-only
+      VK CDN incident.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
+- regression commit: `cdb80436d4142bad6f85f4aad65855daa5be4b65`
+- reviewed PR: #438; both required CI jobs passed
+- merged/deployed main SHA: `4e073d6edd5b2da71deba5b3f3a7a238202b3c5b`
+- Fly release: v1950, image
+  `deployment-01KZK31CS8Z65TFM4FV7Z54XX6`
+- in-container SHA: exact merged main SHA above
 - deploy path: `scripts/deploy_fly_main.sh` from clean exact `origin/main`
-- regression checks: pending
-- post-deploy verification: pending
+- regression checks: observed `vkvd*.okcdn.ru` accepted; sibling/look-alike,
+  HTTP and userinfo controls rejected; full Private Events MCP suite passed
+  (`357 passed`); compileall, Ruff and diff-check passed; ChatGPT and Codex
+  OAuth smokes passed; Codex listed exactly seven evidence tools; missing and
+  invalid bearer, JSON-RPC batch and unsupported protocol controls passed for
+  both resources
+- post-deploy verification: `/healthz` returned 200 with `ok=true`,
+  `ready=true`, `db=ok` and no issues; SQLite `PRAGMA quick_check` returned
+  `ok`; an isolated MCP evidence read suite left the event DB SHA, size, event
+  row count and page count unchanged and reported `provider_calls=0`; the
+  production VK story-list returned one story with one opaque media ref, and
+  aggregate statistics returned non-negative integer views/reactions/comments/
+  shares without a provider URL
+- runtime regression window from 2026-08-09T11:05Z: 42 successful health
+  checks, one successful real webhook request, zero MCP/webhook 5xx, ten clean
+  executions each of the critical scheduler watchdog, Telegram monitoring and
+  email outbox worker, and zero literal occurrences of the MCP path secret,
+  OAuth client secret, operator token, signing key or social approval token
+- Telegram `getWebhookInfo`: configured, provider response `ok=true`, pending
+  updates `0`, and no current last error
+- social mutation/media upload count for this incident acceptance: `0`
 
 ## Prevention
 
