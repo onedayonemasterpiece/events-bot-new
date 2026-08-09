@@ -291,6 +291,35 @@ def _round(value: float) -> float:
     return round(float(value), 6)
 
 
+def _wilson_interval(
+    numerator: int,
+    denominator: int,
+    *,
+    z: float = 1.959963984540054,
+) -> dict[str, float] | None:
+    """Return the two-sided 95% Wilson score interval for a binomial rate."""
+
+    if denominator <= 0 or numerator < 0 or numerator > denominator:
+        return None
+    rate = numerator / denominator
+    z_squared = z * z
+    scale = 1.0 + z_squared / denominator
+    center = (rate + z_squared / (2.0 * denominator)) / scale
+    margin = (
+        z
+        * math.sqrt(
+            rate * (1.0 - rate) / denominator
+            + z_squared / (4.0 * denominator * denominator)
+        )
+        / scale
+    )
+    return {
+        "confidence_level": 0.95,
+        "lower": _round(max(0.0, center - margin)),
+        "upper": _round(min(1.0, center + margin)),
+    }
+
+
 def _sigmoid(value: float) -> float:
     if value >= 0:
         z = math.exp(-min(value, 60.0))
@@ -990,10 +1019,24 @@ def evaluate_unusual_quality_fixture(
         editorial_top.append(row)
         if len(editorial_top) >= 20:
             break
+    precision_at_k = 20
+    precision_numerator = sum(
+        row["label"] == "positive" for row in editorial_top
+    )
+    precision_denominator = len(editorial_top)
+    precision_sample_complete = (
+        precision_denominator == precision_at_k
+        and len(editorial_top) == precision_at_k
+    )
+    precision_sample_status = (
+        "complete" if precision_sample_complete else "insufficient_ranked_candidates"
+    )
     precision = (
-        sum(row["label"] == "positive" for row in editorial_top)
-        / len(editorial_top)
-        if editorial_top
+        precision_numerator / precision_at_k if precision_sample_complete else None
+    )
+    precision_wilson_interval = (
+        _wilson_interval(precision_numerator, precision_denominator)
+        if precision_sample_complete
         else None
     )
     # Recall/FPR measure the publishable editorial population. Rows that fail
@@ -1044,6 +1087,38 @@ def evaluate_unusual_quality_fixture(
         and build.get("evidence_kind") == "real_bge_canary"
         else "non_production_probe"
     )
+
+    positive_family_population = [row for row in first if row["label"] == "positive"]
+    family_labeled = [
+        row
+        for row in positive_family_population
+        if row.get("expected_family") in FAMILY_IDS
+    ]
+    family_top1_numerator = sum(
+        row["family"] == row["expected_family"] for row in family_labeled
+    )
+    family_top3_numerator = 0
+    family_confusion_matrix = {
+        expected: {predicted: 0 for predicted in FAMILY_IDS}
+        for expected in FAMILY_IDS
+    }
+    for row in family_labeled:
+        ranked_families = sorted(
+            row["family_scores"].items(),
+            key=lambda item: (-float(item[1]), str(item[0])),
+        )
+        top3 = {str(family) for family, _score in ranked_families[:3]}
+        if row["expected_family"] in top3:
+            family_top3_numerator += 1
+        family_confusion_matrix[str(row["expected_family"])][str(row["family"])] += 1
+    family_metric_denominator = len(family_labeled)
+    family_label_coverage_numerator = family_metric_denominator
+    family_label_coverage_denominator = len(positive_family_population)
+    family_taxonomy_coverage_numerator = len(
+        {str(row["expected_family"]) for row in family_labeled}
+    )
+    family_taxonomy_coverage_denominator = len(FAMILY_IDS)
+
     return {
         "schema_version": "unusual-event-quality-evaluation-v1",
         "evidence_kind": evidence_kind,
@@ -1059,6 +1134,11 @@ def evaluate_unusual_quality_fixture(
         "ordinary_corpus_policy_sha256": ORDINARY_CORPUS_POLICY_SHA256,
         "ordinary_corpus_receipt": ordinary_corpus_receipt,
         "editorial_precision_at_20": _round(precision) if precision is not None else None,
+        "editorial_precision_at_20_numerator": precision_numerator,
+        "editorial_precision_at_20_denominator": precision_denominator,
+        "editorial_precision_at_20_k": precision_at_k,
+        "editorial_precision_at_20_sample_status": precision_sample_status,
+        "editorial_precision_at_20_wilson_interval": precision_wilson_interval,
         "editorial_sample_size": len(editorial),
         "editorial_ranked_count": len(editorial_top),
         "hard_negative_false_positive_rate": (
@@ -1081,6 +1161,45 @@ def evaluate_unusual_quality_fixture(
         ),
         "family_diversity_top20": len(
             {str(row["family"]) for row in ranked_published}
+        ),
+        "expected_family_top1_accuracy": (
+            _round(family_top1_numerator / family_metric_denominator)
+            if family_metric_denominator
+            else None
+        ),
+        "expected_family_top1_accuracy_numerator": family_top1_numerator,
+        "expected_family_top1_accuracy_denominator": family_metric_denominator,
+        "expected_family_top3_recall": (
+            _round(family_top3_numerator / family_metric_denominator)
+            if family_metric_denominator
+            else None
+        ),
+        "expected_family_top3_recall_numerator": family_top3_numerator,
+        "expected_family_top3_recall_denominator": family_metric_denominator,
+        "expected_family_confusion_matrix": family_confusion_matrix,
+        "expected_family_taxonomy_coverage": _round(
+            family_taxonomy_coverage_numerator
+            / family_taxonomy_coverage_denominator
+        ),
+        "expected_family_taxonomy_coverage_numerator": (
+            family_taxonomy_coverage_numerator
+        ),
+        "expected_family_taxonomy_coverage_denominator": (
+            family_taxonomy_coverage_denominator
+        ),
+        "expected_family_label_coverage": (
+            _round(
+                family_label_coverage_numerator
+                / family_label_coverage_denominator
+            )
+            if family_label_coverage_denominator
+            else None
+        ),
+        "expected_family_label_coverage_numerator": (
+            family_label_coverage_numerator
+        ),
+        "expected_family_label_coverage_denominator": (
+            family_label_coverage_denominator
         ),
         "predictions": first,
     }
@@ -1157,17 +1276,44 @@ def _quality_gate(
         and math.isfinite(float(flip))
         and float(flip) < float(gate["identical_rebuild_flip_rate_max_exclusive"])
     )
-    precision = evaluation.get("editorial_precision_at_20")
-    checks["editorial_precision_at_20"] = bool(
-        isinstance(precision, (int, float))
-        and math.isfinite(float(precision))
-        and (
-            float(precision) >= float(gate["editorial_precision_at_20_min"])
-            or float(precision)
-            >= float(gate["frozen_reference_precision_at_20"])
-            - float(gate["frozen_reference_max_drop"])
+    precision_gate_keys = {
+        "editorial_precision_at_20_min",
+        "frozen_reference_precision_at_20",
+        "frozen_reference_max_drop",
+    }
+    if precision_gate_keys.issubset(gate):
+        precision = evaluation.get("editorial_precision_at_20")
+        precision_numerator = evaluation.get(
+            "editorial_precision_at_20_numerator"
         )
-    )
+        exact_precision_sample = (
+            evaluation.get("editorial_precision_at_20_k") == 20
+            and evaluation.get("editorial_ranked_count") == 20
+            and evaluation.get("editorial_precision_at_20_denominator") == 20
+            and evaluation.get("editorial_precision_at_20_sample_status") == "complete"
+            and isinstance(precision_numerator, int)
+            and not isinstance(precision_numerator, bool)
+            and 0 <= precision_numerator <= 20
+        )
+        checks["editorial_precision_at_20_sample"] = exact_precision_sample
+        checks["editorial_precision_at_20"] = bool(
+            exact_precision_sample
+            and isinstance(precision, (int, float))
+            and not isinstance(precision, bool)
+            and math.isfinite(float(precision))
+            and math.isclose(
+                float(precision),
+                float(precision_numerator) / 20.0,
+                rel_tol=0.0,
+                abs_tol=5e-7,
+            )
+            and (
+                float(precision) >= float(gate["editorial_precision_at_20_min"])
+                or float(precision)
+                >= float(gate["frozen_reference_precision_at_20"])
+                - float(gate["frozen_reference_max_drop"])
+            )
+        )
     checks["deterministic_repeat_exact"] = (
         evaluation.get("deterministic_repeat_exact") is True
     )
