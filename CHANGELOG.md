@@ -57,6 +57,9 @@
   with viewer identities excluded. The existing endpoint, ChatGPT OAuth
   client/resource/signing identity and connector name remain unchanged; Codex
   still exposes exactly seven evidence tools and no social/file capability.
+  Fresh explicitly social-enabled credential profiles include granular
+  Telegram/VK story read/write scopes; existing provider-level grants remain
+  compatible and require only metadata refresh, not a new connector.
   Media/story stays default-off behind explicit storage/host/size/TTL limits and
   dedicated provider roles. Video is explicitly denied by the image-only
   contract; any future support requires a separate proven gate. Image story
