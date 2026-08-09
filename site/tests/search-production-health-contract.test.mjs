@@ -239,13 +239,18 @@ test('meter uses Content-Length or received body and enforces 48/96 KiB boundari
   const atTarget = new SupabaseClientObservedByteMeter({ supabaseOrigins: [origin] });
   atTarget.recordResponse({ url: `${origin}/auth/v1/user`, headers: { 'content-length': String(SUPABASE_CLIENT_BYTE_TARGET) } });
   assert.equal(atTarget.snapshot().budget_status, 'within_target');
+  assert.equal(atTarget.snapshot().target_met, true);
+  assert.equal(atTarget.snapshot().cost_guard_passed, true);
 
   const atHard = new SupabaseClientObservedByteMeter({ supabaseOrigins: [origin] });
   atHard.recordResponse({ url: `${origin}/functions/v1/event-search`, body: new Uint8Array(SUPABASE_CLIENT_BYTE_HARD_LIMIT) });
   assert.equal(atHard.snapshot().budget_status, 'above_target');
+  assert.equal(atHard.snapshot().target_met, false);
+  assert.equal(atHard.snapshot().cost_guard_passed, true);
   assert.equal(atHard.snapshot().hard_limit_exceeded, false);
   atHard.recordResponse({ url: `${origin}/rest/v1/rpc/probe`, body: new Uint8Array(1) });
   assert.equal(atHard.snapshot().budget_status, 'hard_limit_exceeded');
+  assert.equal(atHard.snapshot().cost_guard_passed, false);
   assert.equal(atHard.snapshot().hard_limit_exceeded, true);
 
   const beforeExcluded = atHard.snapshot().total_bytes;

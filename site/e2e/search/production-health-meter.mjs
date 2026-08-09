@@ -117,6 +117,8 @@ export class SupabaseClientObservedByteMeter {
       target_bytes: SUPABASE_CLIENT_BYTE_TARGET,
       hard_limit_bytes: SUPABASE_CLIENT_BYTE_HARD_LIMIT,
       budget_status: status,
+      target_met: total <= SUPABASE_CLIENT_BYTE_TARGET,
+      cost_guard_passed: total <= SUPABASE_CLIENT_BYTE_HARD_LIMIT,
       hard_limit_exceeded: status === 'hard_limit_exceeded',
       categories: Object.freeze({ ...this.#categories }),
       sources: Object.freeze({ ...this.#sources }),
