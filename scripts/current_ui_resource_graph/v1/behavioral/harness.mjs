@@ -31,6 +31,7 @@ function cleanEnvironment(extra={}){
     PUBLIC_AUTHORIZED_SEARCH_TRANSPORT:'json',
     PUBLIC_YANDEX_AUTH_PROVIDER:'custom:yandex',
     PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE:'off',
+    PUBLIC_WEATHER_CALENDAR_ENABLED:'1',
     PUBLIC_PRELAUNCH_MODE:'0',
     ...extra,
   };
@@ -53,9 +54,14 @@ import RouteStrips from '../../components/transport/RouteStripsTimetable.astro';
 import NextDeparture from '../../components/transport/NextDepartureQueueTimetable.astro';
 const events=Array.isArray(eventsData)?eventsData:(eventsData.events||[]);const event=events.find((item)=>item.id===5374);if(!event)throw new Error('Pinned event 5374 missing');
 const suggestion=getKaupTransportSuggestion(event);if(!suggestion)throw new Error('Pinned Kaup suggestion missing');
-const props={route:suggestion.busRoute,arrivalStop:suggestion.busArrivalStop,originName:suggestion.busOriginName,originMapUrl:suggestion.busOriginMapUrl,walkRouteUrl:suggestion.stopToVenueDirectionsUrl,publicReturnAvailable:suggestion.publicReturnAvailable,options:suggestion.outbound};
+// Bounded PreviewEvent time variants feed the exact resolver; no timetable row
+// is invented by this controlled wrapper.
+const startTimes=Array.from({length:30},(_,index)=>String(8+Math.floor(index/2)).padStart(2,'0')+':'+(index%2?'30':'00'));
+const derivedOptions=[...new Map(startTimes.flatMap((start_time)=>getKaupTransportSuggestion({...event,start_time})?.outbound||[]).map((option)=>[option.tripId,option])).values()].sort((left,right)=>left.departureAt.localeCompare(right.departureAt)).slice(0,6);
+if(derivedOptions.length<4)throw new Error('Controlled exact-resolver transport fixture must expose at least four departures');
+const props={route:suggestion.busRoute,arrivalStop:suggestion.busArrivalStop,originName:suggestion.busOriginName,originMapUrl:suggestion.busOriginMapUrl,walkRouteUrl:suggestion.stopToVenueDirectionsUrl,publicReturnAvailable:suggestion.publicReturnAvailable,options:derivedOptions};
 ---
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Behavior transport</title></head><body><main data-behavior-transport-fixture data-event-id="5374"><DepartureBoard {...props} hidden={true}/><RouteStrips {...props}/><NextDeparture {...props}/></main><script>const treatment=window.__BEHAVIOR_TREATMENT__||'departure_board_v1';document.querySelectorAll('[data-transport-treatment]').forEach((node)=>{node.hidden=node.dataset.transportTreatment!==treatment});document.querySelector('[data-behavior-transport-fixture]')?.setAttribute('data-selected-treatment',treatment);</script></body></html>
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Behavior transport</title></head><body><main data-behavior-transport-fixture data-event-id="5374" data-option-provenance="exact-resolver-derived-preview-events" data-option-count={derivedOptions.length}><DepartureBoard {...props} hidden={true}/><RouteStrips {...props}/><NextDeparture {...props}/></main><script>const treatment=window.__BEHAVIOR_TREATMENT__||'departure_board_v1';document.querySelectorAll('[data-transport-treatment]').forEach((node)=>{node.hidden=node.dataset.transportTreatment!==treatment;node.querySelectorAll('details').forEach((details)=>{details.open=false})});document.querySelector('[data-behavior-transport-fixture]')?.setAttribute('data-selected-treatment',treatment);</script></body></html>
 <style is:global>html{font-family:system-ui;background:#f4f1e8;color:#17201f}body{margin:0}main{container:kaup-transport / inline-size;width:min(calc(100% - 24px),var(--behavior-container,391px));margin:24px auto;padding:16px;border-radius:20px;background:#fff;box-sizing:border-box}</style>
 `;
 const mediaRailPage=`---
@@ -65,6 +71,24 @@ const events=Array.isArray(eventsData)?eventsData:(eventsData.events||[]);const 
 ---
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Behavior media rail</title></head><body><main data-behavior-media-fixture><section class="primary" aria-label="Крупная афиша"><img src={event.image_url} alt="" /></section><EventMediaRail assets={event.image_assets||[]} galleryId="behavior-media" eventTitle={event.title} maxVisible={3}/></main></body></html>
 <style is:global>html{font-family:system-ui;background:#ece8e1}body{margin:0}main{width:min(calc(100% - 32px),760px);margin:24px auto}.primary{display:grid;place-items:center;min-height:420px;margin-bottom:16px;background:#ddd5ca}.primary img{max-width:100%;max-height:520px;object-fit:contain}</style>
+`;
+const weatherPage=`---
+import EventLayout from '../../layouts/EventLayout.astro';
+import WeatherDateContext from '../../components/WeatherDateContext.astro';
+---
+<EventLayout title="Behavior weather" description="Controlled exact-source weather runtime" canonicalUrl="https://kenigevents.ru/behavior-specimens/weather/" structuredData={[]}>
+  <main id="main" style="margin:64px auto;width:min(100% - 24px,720px)"><WeatherDateContext date="2026-08-08" dateLabel="8 августа" routeKind="date" /></main>
+</EventLayout>
+`;
+const listingMediaPage=`---
+import eventsData from '../../data/preview-events.json';
+import EventLayout from '../../layouts/EventLayout.astro';
+import ListingEventCard from '../../components/listings/ListingEventCard.astro';
+const events=Array.isArray(eventsData)?eventsData:(eventsData.events||[]);const event=events.find((item)=>item.id===7003)||events.find((item)=>item.image_url);if(!event)throw new Error('Pinned listing media event missing');
+---
+<EventLayout title="Behavior listing media" description="Controlled exact ListingEventCard media" canonicalUrl="https://kenigevents.ru/behavior-specimens/listing-media/" structuredData={[]}>
+  <main id="main" style="margin:48px auto;width:min(100% - 24px,640px)"><ListingEventCard event={event} priority /></main>
+</EventLayout>
 `;
 
 export function materializeBehaviorHarness({candidateRepo,harnessRoot,nodeModules,registry=buildBehaviorPacketRegistry()}){
@@ -79,7 +103,9 @@ export function materializeBehaviorHarness({candidateRepo,harnessRoot,nodeModule
   writeFileSync(join(site,'src/pages/behavior-specimens/time-nav.astro'),timeNavPage);
   writeFileSync(join(site,'src/pages/behavior-specimens/transport.astro'),transportPage);
   writeFileSync(join(site,'src/pages/behavior-specimens/media-rail.astro'),mediaRailPage);
-  const generated=['time-nav.astro','transport.astro','media-rail.astro'].map((name)=>({path:`site/src/pages/behavior-specimens/${name}`,sha256:stableHash(readFileSync(join(site,'src/pages/behavior-specimens',name),'utf8'))}));
+  writeFileSync(join(site,'src/pages/behavior-specimens/weather.astro'),weatherPage);
+  writeFileSync(join(site,'src/pages/behavior-specimens/listing-media.astro'),listingMediaPage);
+  const generated=['time-nav.astro','transport.astro','media-rail.astro','weather.astro','listing-media.astro'].map((name)=>({path:`site/src/pages/behavior-specimens/${name}`,sha256:stableHash(readFileSync(join(site,'src/pages/behavior-specimens',name),'utf8'))}));
   const receipt={schema_version:registry.schema_version,status:'materialized-not-built',source_sha:PINNED_SOURCE_SHA,source_worktree_clean_before:true,source_copy_mode:'reflink-or-copy',production_source_mutated:false,generated_test_only_pages:generated,plan_count:registry.plans.length,normalization_allowed:false};
   writeFileSync(join(root,'behavior-harness-receipt.json'),`${JSON.stringify(receipt,null,2)}\n`);return {...receipt,root,site};
 }

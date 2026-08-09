@@ -20,6 +20,15 @@
   transport treatments remain `experiment-unresolved` / `NOT_MERGED`; no
   winner, production UI or normalization decision was introduced.
 
+- Corrected Current UI behavioral packet semantics: transport disclosures now
+  expose real resolver-derived departures; action phases require visible
+  targets and observable deltas; sticky, focus, resize, Weather, Exhibitions
+  and media states have bounded runtime evidence; all 13 dynamic regions and
+  293 breakpoint/container probes carry explicit coverage refs. Native rail
+  keyboard scrolling and unreconciled per-probe breakpoint runtime evidence
+  now block readiness instead of producing duplicate or zero-geometry claims,
+  and font/route/screenshot waits plus per-plan progress are bounded.
+
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
   host/fetch policy, principal binding, workspace configuration, MIME, size,

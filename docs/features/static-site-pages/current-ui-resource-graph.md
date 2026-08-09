@@ -618,20 +618,28 @@ The capture implementation is intentionally split from acceptance:
    exact source SHA `ef7aa62e45c60f7a12da6160f490719c0721ec03`, validates the
    immutable Decoder v1 tree and manifest, builds a disposable reflink/copy
    harness without copying the installed `node_modules` tree, links the single
-   pinned dependency installation, and captures the closed 50-packet matrix. The Actions receipt must
+   pinned dependency installation, and captures the corrected closed 67-packet matrix. The Actions receipt must
    remain `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`.
 2. The review materializer may emit
-   `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after all 99 raster files
+   `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after all 124 raster files
    have been opened and reviewed individually at full resolution, every review
    is bound one-to-one to the observation path and SHA-256, the independent
    audit passes, and both the Actions artifact and permanent Release asset have
    complete immutable provenance.
 
-The matrix has 45 executable packets and five exact blockers. Blocked states
+The corrected registry has 57 executable packets and ten exact blockers. Blocked states
 are recorded as blockers rather than replaced by fake wrappers: source-only
 PopularCategoryFilter, the unconsumed ListingPersonalFilter v1, unavailable
-zero/one-item mobile rail fixtures, and the PersonalFeed unavailable branch
-that the pinned real corpus cannot reach honestly.
+zero/one-item mobile rail fixtures, the PersonalFeed unavailable branch that
+the pinned real corpus cannot reach honestly, hidden auth/personalization
+runtime modes, an intentionally unchanged discovery error fallback, and the
+native rail `End`/`Home` accessibility gap. Chromium leaves the exact focusable
+horizontal rail at `scrollLeft=0`; this blocks readiness instead of being
+replaced by a programmatic scroll. The unreconciled per-probe runtime evidence
+for the complete 293-row breakpoint/container matrix also has
+`blocks_ready:true`. Carrying every exact probe ID on that blocker is a
+fail-closed reconciliation receipt, not a claim that a family screenshot
+captured 293 transitions.
 
 Captured evidence remains plane-qualified as controlled exact-source runtime.
 It includes mobile menu/disclosure/focus-return behavior, rail edges and
@@ -640,6 +648,31 @@ and Split inline CTA anatomy, all three unresolved transport treatments,
 consumer-specific media behavior (including separate real `4:5` EventCard and
 `5:4` rail/search evidence), the large primary/poster plus smaller remaining
 photo previews, and Search/Favorites/PersonalFeed loading and recovery flows.
+The bounded dynamic closure now references every one of the 13 source matrix
+regions: Search, Favorites, PersonalFeed, discovery rerank, home local rerank,
+the popular personalized shelf, Weather, Exhibitions gallery, EventCard,
+ListingEventCard and mobile-listing media, auth runtime and personalization
+runtime. Each is bound to an executable packet or an exact explicit blocker;
+a source test is never relabelled as runtime capture.
+
+Transport disclosure packets use real exact treatment components with a
+controlled `PreviewEvent` fixture assembled only from distinct trips returned
+by the exact Kaup resolver across bounded start-time variants. This yields six
+real resolver rows for each treatment, makes closed/open geometry observably
+different, preserves `NOT_MERGED`, and selects no winner. The weekend sticky
+packet targets the visible desktop implementation at `1280×800`; hidden
+attached mobile/desktop duplicates are rejected. Interaction phases require a
+resolved visible target (or an explicit not-applicable contract), a real
+DOM/geometry/scroll/focus delta, and nonzero geometry where declared. Plans and
+observations carry reachability plus dynamic, breakpoint and coverage refs.
+
+Capture is bounded and diagnosable: each plan logs start/completion/failure and
+elapsed time; font settle is capped at four seconds, controlled routes at 20
+seconds, and screenshots at 30 seconds. Deferred media routes hold image
+requests only, so the previous `media-broken` deadlock cannot also hold fonts.
+OCR/photo packets retain their exact event/classification provenance. The
+time-nav popover clipping and mobile-menu post-close bottom-nav disappearance
+remain recorded visual conflicts rather than silently repaired behavior.
 The capture harness freezes clock, timezone and randomness and uses only
 test-local network fixtures; it does not contact Supabase or mutate the pinned
 `site/src` tree.
