@@ -251,6 +251,8 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
     }),
     diagnostics: Object.freeze({
       console_errors: 0, failed_requests: 0, error_responses: 0,
+      failed_document_requests: 0, failed_auth_requests: 0,
+      failed_edge_requests: 0, failed_rest_requests: 0, failed_rpc_requests: 0,
     }),
     meter: finalMeter,
   });

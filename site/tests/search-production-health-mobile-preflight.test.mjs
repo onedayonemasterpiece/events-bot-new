@@ -6,7 +6,8 @@ import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
   extractSanitizedNavigationResponses } from '../e2e/mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt, isSafeMobilePreflightRetryReceipt,
   runAppiumTransportPreflight } from '../e2e/mobile-web/appium-preflight.mjs';
-import { createAppiumSearchAdapter } from '../e2e/search/adapters/appium-base.mjs';
+import { createAppiumSearchAdapter,
+  installAppiumClassicLogCommands } from '../e2e/search/adapters/appium-base.mjs';
 import { buildAppiumCapabilities } from '../e2e/mobile-web/appium-browser.mjs';
 
 function preflightDriver(platform = 'android') {
@@ -75,6 +76,18 @@ test('Android preflight bounded-waits for the Chrome web context on a fresh emul
   assert.equal(reads, 3);
   assert.deepEqual(receipt.context_classes, ['native', 'webview']);
   assert.equal(receipt.side_effect_free, true);
+});
+
+test('standalone WebdriverIO 9 Appium session receives the exact Classic getLogs command', () => {
+  const driver = {
+    addCommand(name, implementation) { this[name] = implementation; },
+  };
+  assert.equal(driver.getLogs, undefined);
+  assert.equal(installAppiumClassicLogCommands(driver), driver);
+  assert.equal(typeof driver.getLogs, 'function');
+  const installed = driver.getLogs;
+  installAppiumClassicLogCommands(driver);
+  assert.equal(driver.getLogs, installed);
 });
 
 test('Appium health diagnostics expose only cumulative closed runtime and driver counts', async () => {

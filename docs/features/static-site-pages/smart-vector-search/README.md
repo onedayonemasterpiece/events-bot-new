@@ -1052,6 +1052,14 @@ failure локальный Appium log немедленно сворачивае�
 удаляется; raw строка, URL, capability, device/session id в artifact и stdout не
 попадают. Это диагностический infrastructure receipt и не разрешает broker,
 Auth или Search side effect.
+Standalone WebdriverIO `9.30.0` не содержит deprecated JSONWP `getLogs` даже
+при `wdio:enforceWebDriverClassic=true`; это официальный API-контракт, а не
+отсутствие Appium performance/Safari bucket. Shared Appium adapter добавляет в
+созданную session только точный `POST /session/:sessionId/log` через protocol
+command factory pinned `webdriver@9.30.0`. Отсутствие/ошибка bucket по-прежнему
+даёт platform `UNKNOWN_*` до product verdict. Browser failure evidence отдельно
+считает document, Auth, Edge, REST и RPC failure classes, не сохраняя URL или
+текст ошибки.
 
 ### 16.9 Migration from current workflow
 

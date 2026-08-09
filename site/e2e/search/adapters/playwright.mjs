@@ -89,16 +89,23 @@ export async function createPlaywrightSearchAdapter(options = {}) {
   const wholeCellActiveRequests = new Map();
   const wholeCellResponses = [];
   let wholeCellLastActivityAt = Date.now();
-  const diagnostics = { console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0 };
-  const isCriticalFailedRequest = (request) => {
+  const diagnostics = { console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0,
+    failed_document_requests: 0, failed_auth_requests: 0, failed_edge_requests: 0,
+    failed_rest_requests: 0, failed_rpc_requests: 0 };
+  const criticalFailedRequestClass = (request) => {
     try {
-      if (request.resourceType?.() === 'document') return true;
-      return classifySupabaseClientUrl(request.url(), { supabaseOrigins: wholeCellOrigins })
-        !== SUPABASE_CLIENT_BYTE_CLASSES.EXCLUDED;
+      if (request.resourceType?.() === 'document') return 'document';
+      const category = classifySupabaseClientUrl(request.url(), { supabaseOrigins: wholeCellOrigins });
+      return ({
+        [SUPABASE_CLIENT_BYTE_CLASSES.AUTH]: 'auth',
+        [SUPABASE_CLIENT_BYTE_CLASSES.EDGE]: 'edge',
+        [SUPABASE_CLIENT_BYTE_CLASSES.DIRECT_REST]: 'rest',
+        [SUPABASE_CLIENT_BYTE_CLASSES.DIRECT_RPC]: 'rpc',
+      })[category] || null;
     } catch {
       // Unknown third-party/subresource metadata is not Search product-health
       // evidence. The authoritative document and Supabase paths fail closed.
-      return false;
+      return null;
     }
   };
   const bindPage = (value) => {
@@ -118,7 +125,11 @@ export async function createPlaywrightSearchAdapter(options = {}) {
     };
     value.on('requestfinished', finish);
     value.on('requestfailed', (request) => {
-      if (isCriticalFailedRequest(request)) diagnostics.failed_requests += 1;
+      const category = criticalFailedRequestClass(request);
+      if (category) {
+        diagnostics.failed_requests += 1;
+        diagnostics[`failed_${category}_requests`] += 1;
+      }
       finish(request);
     });
     value.on('response', (response) => {

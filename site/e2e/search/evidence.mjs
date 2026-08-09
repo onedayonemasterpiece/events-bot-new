@@ -97,6 +97,8 @@ export function productionHealthEvidenceRecord(input = {}) {
     execution_status: closedText(input.execution_status, /^(?:PASS|FAILED|BLOCKED)$/u, 'FAILED'),
     failure_class: input.failure_class == null
       ? null : closedText(input.failure_class, /^[A-Z][A-Z0-9_]{2,63}$/u, 'EVIDENCE_REDACTION_FAILED'),
+    failure_code: input.failure_code == null
+      ? null : closedText(input.failure_code, /^[a-z][a-z0-9_]{2,95}$/u, 'search_health_unclassified_failure'),
     workflow_run_id: closedText(input.workflow_run_id, /^[1-9][0-9]{0,19}$/u),
     tested_at: closedText(input.tested_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u),
     target: {
@@ -195,6 +197,14 @@ export function productionHealthEvidenceRecord(input = {}) {
       },
       console_error_count: safeCount(journey.diagnostics?.console_errors),
       network_error_count: safeCount(journey.diagnostics?.failed_requests) + safeCount(journey.diagnostics?.error_responses),
+      network_error_classes: {
+        failed_document_requests: safeCount(journey.diagnostics?.failed_document_requests),
+        failed_auth_requests: safeCount(journey.diagnostics?.failed_auth_requests),
+        failed_edge_requests: safeCount(journey.diagnostics?.failed_edge_requests),
+        failed_rest_requests: safeCount(journey.diagnostics?.failed_rest_requests),
+        failed_rpc_requests: safeCount(journey.diagnostics?.failed_rpc_requests),
+        error_responses: safeCount(journey.diagnostics?.error_responses),
+      },
     },
     supabase_observed_bytes: {
       measurement_basis: 'client_observed_response_bytes',

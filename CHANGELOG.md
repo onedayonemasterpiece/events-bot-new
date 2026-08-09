@@ -38,6 +38,15 @@
 
 ### Fixed
 
+- Fixed live Search health diagnostics exposed by run `31332306409`.
+  Standalone WebdriverIO `9.30.0` removes deprecated JSONWP log commands even
+  for a forced Classic session, so the Appium adapter now installs only the
+  exact `/session/:sessionId/log` command required for Android performance and
+  iOS Safari buckets. Browser failures now retain closed document/Auth/Edge/
+  REST/RPC counters plus a sanitized internal failure code, without URLs or
+  raw errors, so a successful Search response cannot remain an undifferentiated
+  network count.
+
 - Fixed the remaining Android production-health preflight ambiguity exposed by
   live run `31331701360`: a fresh emulator may publish Chrome's DevTools/WebView
   context after the WebDriver session is ready, so the side-effect-free
