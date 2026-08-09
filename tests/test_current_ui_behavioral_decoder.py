@@ -89,6 +89,22 @@ def test_behavior_packet_registry_is_closed_bounded_and_not_merged():
     }
 
 
+def test_behavior_harness_never_copies_candidate_node_modules(tmp_path):
+    source = tmp_path / 'source-site'
+    target = tmp_path / 'target-site'
+    (source / 'node_modules' / 'package').mkdir(parents=True)
+    (source / 'node_modules' / 'package' / 'sentinel').write_text('must-not-copy')
+    (source / 'src').mkdir()
+    (source / 'src' / 'page.astro').write_text('<main>exact source</main>')
+    script = r"""
+      import {copySiteWithoutNodeModules} from './scripts/current_ui_resource_graph/v1/behavioral/harness.mjs';
+      copySiteWithoutNodeModules(process.argv[1],process.argv[2]);
+    """
+    subprocess.run(['node', '--input-type=module', '-e', script, str(source), str(target)], cwd=ROOT, check=True)
+    assert (target / 'src' / 'page.astro').read_text() == '<main>exact source</main>'
+    assert not (target / 'node_modules').exists()
+
+
 def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp_path):
     source = tmp_path / 'source'
     capture = tmp_path / 'capture'
@@ -120,6 +136,10 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
     reviews = [json.loads(line) for line in (final / 'visual-review-ledger.jsonl').read_text().splitlines()]
     assert len(reviews) == 99
     assert all(row['review_status'] == 'pending-human-full-resolution-review' for row in reviews)
+    portable_base_path = '../decoder-v1-snapshot-20260808T124842-4786ac53bc'
+    assert json.loads((final / 'manifest.json').read_text())['base_snapshot']['path'] == portable_base_path
+    assert json.loads((final / 'artifact-index.json').read_text())['base_snapshot']['path'] == portable_base_path
+    assert json.loads((final / 'artifact-receipt.json').read_text())['base_snapshot']['path'] == portable_base_path
 
     # The deep validator must reject a tampered compact entry even when an
     # attacker also refreshes the outer manifest/receipt hash chain.

@@ -549,6 +549,9 @@ not start defragmentation or normalization automatically.
 pass over the immutable v1 source pin. It writes a *new*, separately validated
 `behavioral-supplement-v1.1/` directory and never rewrites the reviewed v1
 manifest, receipt, components, candidate contracts, capsules or visual ledger.
+Its final manifest, artifact index and artifact receipt use the same portable
+sibling path to the immutable Decoder v1 snapshot; runner-local checkout paths
+are forbidden in the cross-repository handoff.
 
 The supplement records source-qualified media/loading/geometry/positioning,
 rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, CTA Git
@@ -576,7 +579,8 @@ The capture implementation is intentionally split from acceptance:
 1. `.github/workflows/current-ui-behavioral-decoder-v1-1.yml` checks out the
    exact source SHA `ef7aa62e45c60f7a12da6160f490719c0721ec03`, validates the
    immutable Decoder v1 tree and manifest, builds a disposable reflink/copy
-   harness, and captures the closed 50-packet matrix. The Actions receipt must
+   harness without copying the installed `node_modules` tree, links the single
+   pinned dependency installation, and captures the closed 50-packet matrix. The Actions receipt must
    remain `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`.
 2. The review materializer may emit
    `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after all 99 raster files
