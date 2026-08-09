@@ -2,15 +2,23 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const sha = (value) => createHash('sha256').update(String(value)).digest('hex');
 const lineNumber = (source, offset) => source.slice(0, offset).split('\n').length;
 const bounded = (value, limit = 480) => String(value).replace(/\s+/gu, ' ').trim().slice(0, limit);
-const evidenceLine = (value, limit = 480) => bounded(String(value)
+const DECODER_REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const MAX_MATCHED_RULES_PER_DOCUMENT = 256;
+const NON_UI_CREDENTIAL_LINE = /(?:\b[A-Z][A-Z0-9_]{2,}_(?:KEY|TOKEN|SECRET|PASSWORD|URL|URI|ENDPOINT|AUTHORIZATION)\d*\b|\b(?:access|refresh|authorization|api|publishable|service)[_-]?(?:key|token|secret)\b|https?:\/\/\S+)/iu;
+export const sanitizeRequirementEvidence = (value, limit = 480) => {
+  const raw = String(value);
+  if (NON_UI_CREDENTIAL_LINE.test(raw)) return `<redacted-non-ui-credential-line:${sha(raw).slice(0,16)}:${raw.length}>`;
+  return bounded(raw
   .replace(/((?:[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|URL|URI|ENDPOINT|AUTHORIZATION)[A-Z0-9_]*)\s*=\s*)([^\s\\]+)/giu,
     (_match, prefix, sensitive) => `${prefix}<redacted:${sha(sensitive).slice(0,16)}:${String(sensitive).length}>`)
   .replace(/\bsb_(?:secret|publishable)[A-Za-z0-9_.-]*/giu,
     (sensitive) => `<redacted:${sha(sensitive).slice(0,16)}:${sensitive.length}>`), limit);
+};
 
 export const REQUIREMENT_STATUS = Object.freeze([
   'accepted-current', 'implemented-current', 'accepted-not-implemented',
@@ -18,19 +26,37 @@ export const REQUIREMENT_STATUS = Object.freeze([
 ]);
 
 export const REQUIREMENT_SOURCES = Object.freeze([
+  ['docs/features/static-site-pages/page-archetype-source-map.md', 'page-archetype-authority'],
   ['docs/features/static-site-pages/image-framing.md', 'media-policy'],
   ['docs/features/static-site-pages/README.md', 'page-archetype-authority'],
   ['docs/features/static-site-pages/release-ui-contract.md', 'page-archetype-authority'],
+  ['docs/features/static-site-pages/schedule-user-requirements.md', 'schedule-and-favorites'],
+  ['docs/features/static-site-pages/rail-multimodal-directory.md', 'transport'],
   ['docs/features/static-site-pages/event-page-product-design.md', 'event-detail'],
   ['docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md', 'desktop-event-media'],
   ['docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md', 'event-card'],
   ['docs/features/static-site-pages/event-page-merged-skeleton.md', 'event-detail'],
+  ['docs/features/static-site-pages/event-mobile-ui-lab-2026-07-15.md', 'event-detail-mobile'],
   ['docs/features/static-site-pages/mobile-shell.md', 'mobile-shell'],
   ['docs/features/static-site-pages/event-transport-schedule.md', 'transport'],
   ['docs/features/static-site-pages/listing-personal-feed.md', 'personalization'],
+  ['docs/features/static-site-pages/personalizaion/requirements.md', 'personalization'],
+  ['docs/features/static-site-pages/personalizaion/personalization-to-be.md', 'personalization'],
+  ['docs/features/static-site-pages/personalizaion/personalization-implementation-contract.md', 'personalization'],
   ['docs/features/static-site-pages/personalizaion/personalization-current-runtime-audit-2026-08-02.md', 'personalization'],
+  ['docs/features/unsigned-personalization/requirements.md', 'personalization'],
+  ['docs/features/unsigned-personalization/personal-feed-architecture.md', 'personalization'],
   ['docs/features/static-site-pages/smart-vector-search/smart-vector-search-requirements.md', 'search'],
+  ['docs/features/static-site-pages/smart-vector-search/README.md', 'search'],
   ['docs/features/unsigned-personalization/authorized-event-search.md', 'search'],
+  ['docs/features/static-site-pages/listing-surfaces-v14-product.md', 'listing'],
+  ['docs/features/static-site-pages/listing-surfaces-v16-product.md', 'listing'],
+  ['docs/features/static-site-pages/listing-surfaces-v17-product.md', 'listing'],
+  ['docs/features/static-site-pages/listing-surfaces-v18-product.md', 'listing'],
+  ['docs/features/static-site-pages/listing-surfaces-v19-product.md', 'listing'],
+  ['docs/features/static-site-pages/listing-surfaces-v20-mobile-popular.md', 'listing'],
+  ['docs/features/static-site-pages/listing-surfaces-v21-mobile-popular.md', 'listing'],
+  ['docs/features/static-site-pages/listing-surfaces-v22-popular-breakpoint-restore.md', 'listing'],
   ['docs/features/static-site-pages/listing-surfaces-v23-mobile-adaptive.md', 'listing'],
   ['docs/features/static-site-pages/listing-surfaces-v24-mobile-pinch.md', 'listing'],
   ['docs/features/static-site-pages/listing-surfaces-v25-mobile-context.md', 'listing'],
@@ -40,19 +66,37 @@ export const REQUIREMENT_SOURCES = Object.freeze([
 ]);
 
 const DOCUMENT_DEFAULT_STATUS = Object.freeze({
+  'docs/features/static-site-pages/page-archetype-source-map.md': 'accepted-current',
   'docs/features/static-site-pages/image-framing.md': 'accepted-current',
   'docs/features/static-site-pages/README.md': 'accepted-current',
   'docs/features/static-site-pages/release-ui-contract.md': 'accepted-current',
+  'docs/features/static-site-pages/schedule-user-requirements.md': 'accepted-current',
+  'docs/features/static-site-pages/rail-multimodal-directory.md': 'accepted-current',
   'docs/features/static-site-pages/event-page-product-design.md': 'accepted-current',
   'docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md': 'accepted-current',
   'docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md': 'historical-replaced',
   'docs/features/static-site-pages/event-page-merged-skeleton.md': 'historical-replaced',
+  'docs/features/static-site-pages/event-mobile-ui-lab-2026-07-15.md': 'experiment-unresolved',
   'docs/features/static-site-pages/mobile-shell.md': 'accepted-current',
   'docs/features/static-site-pages/event-transport-schedule.md': 'accepted-current',
-  'docs/features/static-site-pages/listing-personal-feed.md': 'implemented-current',
+  'docs/features/static-site-pages/listing-personal-feed.md': 'conflict',
+  'docs/features/static-site-pages/personalizaion/requirements.md': 'accepted-current',
+  'docs/features/static-site-pages/personalizaion/personalization-to-be.md': 'accepted-not-implemented',
+  'docs/features/static-site-pages/personalizaion/personalization-implementation-contract.md': 'accepted-not-implemented',
   'docs/features/static-site-pages/personalizaion/personalization-current-runtime-audit-2026-08-02.md': 'conflict',
-  'docs/features/static-site-pages/smart-vector-search/smart-vector-search-requirements.md': 'accepted-current',
+  'docs/features/unsigned-personalization/requirements.md': 'historical-replaced',
+  'docs/features/unsigned-personalization/personal-feed-architecture.md': 'conflict',
+  'docs/features/static-site-pages/smart-vector-search/smart-vector-search-requirements.md': 'historical-replaced',
+  'docs/features/static-site-pages/smart-vector-search/README.md': 'accepted-current',
   'docs/features/unsigned-personalization/authorized-event-search.md': 'implemented-current',
+  'docs/features/static-site-pages/listing-surfaces-v14-product.md': 'historical-replaced',
+  'docs/features/static-site-pages/listing-surfaces-v16-product.md': 'historical-replaced',
+  'docs/features/static-site-pages/listing-surfaces-v17-product.md': 'historical-replaced',
+  'docs/features/static-site-pages/listing-surfaces-v18-product.md': 'conflict',
+  'docs/features/static-site-pages/listing-surfaces-v19-product.md': 'conflict',
+  'docs/features/static-site-pages/listing-surfaces-v20-mobile-popular.md': 'historical-replaced',
+  'docs/features/static-site-pages/listing-surfaces-v21-mobile-popular.md': 'historical-replaced',
+  'docs/features/static-site-pages/listing-surfaces-v22-popular-breakpoint-restore.md': 'conflict',
   'docs/features/static-site-pages/listing-surfaces-v23-mobile-adaptive.md': 'accepted-current',
   'docs/features/static-site-pages/listing-surfaces-v24-mobile-pinch.md': 'accepted-current',
   'docs/features/static-site-pages/listing-surfaces-v25-mobile-context.md': 'accepted-current',
@@ -66,10 +110,14 @@ const DOCUMENT_DEFAULT_STATUS = Object.freeze({
 // these reviewed requirements with filename/keyword heuristics.
 const CURATED_REQUIREMENTS = Object.freeze([
   ['authority.redirect-stub','docs/features/static-site-pages/requitements.md',1,7,null,null,'page-archetype-authority','The legacy requitements.md file is a redirect stub and is not current authority.','historical-replaced'],
+  ['authority.page-archetype-map','docs/features/static-site-pages/page-archetype-source-map.md',1,139,'3a729432',null,'page-archetype-authority','The accepted source map binds product requirements to verified current routes while explicitly refusing visual-archetype acceptance; its requirement plane is newer than the ef7 UI source pin and remains separately provenance-bound.','accepted-current'],
   ['authority.release-contract','docs/features/static-site-pages/release-ui-contract.md',3,20,null,null,'page-archetype-authority','The release UI contract is the current cross-page acceptance authority; labs and historical previews do not redefine it.','accepted-current'],
+  ['schedule.user-requirements','docs/features/static-site-pages/schedule-user-requirements.md',1,null,'5ac1b488',null,'schedule-and-favorites','The source requirements for saved-event reminders, calendar continuity and schedule behavior remain requirement evidence; implementation must be proven independently.','accepted-current'],
+  ['transport.multimodal-directory','docs/features/static-site-pages/rail-multimodal-directory.md',1,null,'9d669856',null,'TransportDirectory','The official-source rail and multimodal directory is current reference evidence, with public rail UI bounded to its documented reviewed destinations and exact-date exports.','accepted-current'],
   ['event-detail.two-desktop-families','docs/features/static-site-pages/event-desktop-media-families-2026-07-12.md',39,72,'c7d7459',81,'DesktopEventPage','Desktop Event Detail retains separate Editorial and Split AS-IS presentation families.','accepted-current'],
   ['event-detail.editorial-gate','site/src/lib/desktopEventPresentation.ts',60,92,'fe2e358',97,'DesktopEventPage','Editorial requires visual_only media with width >=1280, height >=720, and ratio >=1.25; portrait, document and low-resolution cases route Split.','implemented-current'],
   ['event-detail.cta-binding','site/src/components/DesktopEventActionPanel.astro',57,64,'322d9d4',125,'DesktopEventActionPanel','Split binds inline CTA; Editorial binds stacked CTA. This is current behavior, not an unresolved CTA experiment.','implemented-current'],
+  ['event-detail.mobile-lab-status','docs/features/static-site-pages/event-mobile-ui-lab-2026-07-15.md',1,5,null,null,'MobileEventPage','The mobile event UI lab preserves reviewed preview variants but explicitly is not the production contract; it remains experiment evidence.','experiment-unresolved'],
   ['media.hero-gallery','docs/features/static-site-pages/image-framing.md',7,35,'5b987a5',169,'EventHero','Hero/gallery visual_only media fills; OCR, text and unknown large media preserve document identity.','accepted-current'],
   ['media.mobile-rail','docs/features/static-site-pages/image-framing.md',135,161,'5b987a5',169,'MobileListingRailRow','Crop-safe classified visual media uses a 140x112 5:4 rail; OCR, unknown and unsafe media preserve authored geometry.','accepted-current'],
   ['media.non-rail-card','site/src/components/EventCard.astro',64,99,'7d96b42',125,'EventCard','Non-rail mobile visual cards use vertical 4:5 cover; OCR and unknown media use intrinsic geometry.','implemented-current'],
@@ -85,11 +133,26 @@ const CURATED_REQUIREMENTS = Object.freeze([
   ['loading.static-rerank','docs/features/static-site-pages/README.md',59,75,null,144,'HomeColdStartFeed','Reranking and continuation must preserve useful static first-paint content.','accepted-current'],
   ['loading.personal-feed-doc-conflict','docs/features/static-site-pages/listing-personal-feed.md',40,86,'cc61805',163,'PersonalFeedSlot','The older feed document overstates mobile visibility and cross-navigation hint restoration relative to current source.','conflict'],
   ['loading.exhibitions','site/src/components/ExhibitionsPersonalSurface.astro',139,1515,null,null,'ExhibitionsPersonalSurface','Exhibition deck and dialog images have real loading, loaded and error states with stable geometry.','implemented-current'],
+  ['search.source-brief-replaced','docs/features/static-site-pages/smart-vector-search/smart-vector-search-requirements.md',1,5,'6fb85f7f',null,'AuthorizedEventSearch','The original Search brief is retained as source evidence, while its own header delegates current authority to smart-vector-search/README.md.','historical-replaced'],
+  ['search.canonical-contract','docs/features/static-site-pages/smart-vector-search/README.md',1,8,'60eda72a',372,'AuthorizedEventSearch','The Smart Search README is the current consolidated product, architecture and operating contract; runtime implementation remains separately evidenced.','accepted-current'],
   ['selection.version-conflict','docs/features/static-site-pages/design-system/README.md',83,96,'c6a679d',340,'ListingPersonalFilter','Documentation names v2 candidate while catalog names v3 candidate and current consumers request v2 behavior inside the v3 shell.','conflict'],
   ['personalization.durable-status','docs/features/static-site-pages/personalizaion/personalization-current-runtime-audit-2026-08-02.md',3,247,'93f5849',316,'PersonalizationRuntime','The local runtime is useful AS-IS behavior but remains NO-GO as a durable personalization system.','conflict'],
+  ['personalization.owner-requirements','docs/features/static-site-pages/personalizaion/requirements.md',1,null,'c4fe6a37',null,'PersonalizationRuntime','The owner-authored personalization requirements are current product intent; individual implementation claims require separate source/runtime evidence.','accepted-current'],
+  ['personalization.target-blueprint','docs/features/static-site-pages/personalizaion/personalization-to-be.md',1,34,null,null,'PersonalizationRuntime','The target personalization system is an implementation blueprint and explicitly not a description of a completed production loop.','accepted-not-implemented'],
+  ['personalization.implementation-contract','docs/features/static-site-pages/personalizaion/personalization-implementation-contract.md',1,8,'52566838',null,'PersonalizationRuntime','The normative contract applies to new personalization work, while its own header records that the production durable loop is absent.','accepted-not-implemented'],
+  ['personalization.unsigned-requirements','docs/features/unsigned-personalization/requirements.md',1,5,null,null,'PersonalizationRuntime','The earlier anonymous-personalization draft is historical input, not current authority over the newer owner requirements and implementation contract.','historical-replaced'],
+  ['personalization.personal-feed-architecture','docs/features/unsigned-personalization/personal-feed-architecture.md',1,5,'b01b02ae',null,'PersonalFeedSlot','The static-catalog personal-feed MVP is implemented in bounded preview/source planes, while backend top-up and some prose claims remain optional, future or in conflict with the pinned runtime.','conflict'],
   ['personalization.remote-write','docs/features/static-site-pages/README.md',503,503,null,null,'PersonalizationRuntime','Durable first-party feedback persistence is accepted but not implemented; current likes/profile writes remain local.','accepted-not-implemented'],
   ['mobile-shell.current','docs/features/static-site-pages/mobile-shell.md',1,108,'64dd872',144,'Reference4MobileMenu','One Reference4 menu, bottom navigation, toast and auth runtime form the current mobile shell.','accepted-current'],
-  ['listing.current-chain','docs/features/static-site-pages/README.md',441,459,null,null,'listing-surfaces','Current listing lineage is V22 desktop plus V23–V28 mobile, sticky and desktop recovery refinements.','accepted-current'],
+  ['listing.v14-v15-replaced','docs/features/static-site-pages/listing-surfaces-v14-product.md',1,5,null,null,'listing-surfaces','The historical path records the V14 to V15 correction; V16 explicitly superseded its layout decisions.','historical-replaced'],
+  ['listing.v16-replaced','docs/features/static-site-pages/listing-surfaces-v16-product.md',1,5,null,null,'listing-surfaces','V16 is retained as history and is explicitly superseded by V17 except for rules later carried forward.','historical-replaced'],
+  ['listing.v17-replaced','docs/features/static-site-pages/listing-surfaces-v17-product.md',1,5,null,null,'listing-surfaces','V17 layout is explicitly superseded by V18; retained data-truth rules are reconciled through later current documents rather than promoting the whole file.','historical-replaced'],
+  ['listing.v18-mixed','docs/features/static-site-pages/listing-surfaces-v18-product.md',1,10,null,null,'listing-surfaces','V18 contains retained date-listing composition and media-truth rules, but V19 and later documents override bounded parts; the whole document cannot be labelled wholly current or wholly replaced.','conflict'],
+  ['listing.v19-mixed','docs/features/static-site-pages/listing-surfaces-v19-product.md',1,7,null,null,'listing-surfaces','V19 remains a desktop regression baseline carried into V20/V22, while later V27/V28 contracts govern current shell and Popular behavior.','conflict'],
+  ['listing.v20-replaced','docs/features/static-site-pages/listing-surfaces-v20-mobile-popular.md',1,6,null,null,'listing-surfaces','V20 mobile presentation was superseded; only explicitly inherited desktop/ranking evidence survives through later contracts.','historical-replaced'],
+  ['listing.v21-rejected','docs/features/static-site-pages/listing-surfaces-v21-mobile-popular.md',1,10,null,null,'listing-surfaces','V21 explicitly rejects its Popular-only large-card reconstruction and is superseded by V22/V23.','historical-replaced'],
+  ['listing.v22-mixed','docs/features/static-site-pages/listing-surfaces-v22-popular-breakpoint-restore.md',1,16,null,null,'listing-surfaces','V22 remains the accepted desktop Popular baseline, but its equal-column mobile claim is superseded by V23 and later mobile refinements.','conflict'],
+  ['listing.current-chain','docs/features/static-site-pages/README.md',441,459,null,null,'listing-surfaces','Current supersession is consumer-scoped: retained V18/V19 date-listing rules, V22 desktop Popular, V23 canonical EventCard reuse, V24/V25 mobile density/context, V26 sticky groups, V27 desktop shell recovery and V28 current desktop Popular/eligibility.','accepted-current'],
   ['transport.no-winner','.codex/lanes/ab-transport-experiment/RESULTS.md',1,324,'e2f5a2b',69,'TransportTimetableExperiment','Three treatments remain registered; production is forced off and no winner receipt exists.','experiment-unresolved'],
 ]);
 
@@ -99,7 +162,7 @@ export const DYNAMIC_REGIONS = Object.freeze([
   { id:'personal-feed',path:'site/src/components/PersonalFeedSlot.astro',route:'listing and event-detail consumers',data_source:'same-origin personal-feed JSON, optional resilient RPC, adjacent discovery manifest',trigger:'IntersectionObserver rootMargin 320px; idle fallback; desktop media-query retry',resolved_component:'canonical EventCard clones',initial_html:'live pending status and empty slot; listing contexts hidden',runtime_wait:true,states:['pending','personal','popular_fallback','unavailable'],fallback:'listing hides; desktop event detail uses popular fallback or honest unavailable',skeleton_status:'not-present-current',geometry_status:'not-reserved',offline_status:'not-implemented',evidence_scope:'controlled-runtime-required' },
   { id:'discovery-rerank',path:'site/src/layouts/EventLayout.astro',route:'event detail discovery feeds',data_source:'same-origin /data/discovery/<event>.json',trigger:'layout script initialization and More',resolved_component:'existing server EventCards reordered and appended',initial_html:'useful server-rendered discovery cards',runtime_wait:true,states:['static','reranked','appended','failure-static-fallback'],fallback:'static HTML remains; More hidden on failure',skeleton_status:'not-applicable-usable-static-content',geometry_status:'existing-card-geometry',offline_status:'not-implemented',evidence_scope:'candidate-runtime-or-controlled-runtime' },
   { id:'home-rerank',path:'site/src/components/HomeColdStartFeed.astro',route:'/',data_source:'local profile only',trigger:'hydration, storage and feedback events',resolved_component:'existing server EventCards reordered in place',initial_html:'all canonical cards server rendered',runtime_wait:false,states:['static_fallback','local_rerank'],fallback:'static order',skeleton_status:'not-applicable-no-runtime-wait',geometry_status:'existing-card-geometry-but-first-hydration-reorder-possible',offline_status:'not-applicable',evidence_scope:'candidate-runtime' },
-  { id:'popular-personalized-row',path:'site/src/components/PopularPersonalizedRow.astro',route:'/populyarnoe/',data_source:'local profile and server-rendered candidates',trigger:'desktop hydration at >=981px',resolved_component:'five existing candidate cards',initial_html:'section and candidates server-rendered but hidden',runtime_wait:false,states:['hidden','visible-five'],fallback:'fail-closed hidden',skeleton_status:'not-applicable-no-runtime-wait',geometry_status:'section-appears-after-hydration',offline_status:'not-applicable',evidence_scope:'controlled-runtime-required' },
+  { id:'popular-personalized-row',path:'site/src/components/listings/PopularPersonalizedRow.astro',route:'/populyarnoe/',data_source:'local profile and server-rendered candidates',trigger:'desktop hydration at >=981px',resolved_component:'five existing candidate cards',initial_html:'section and candidates server-rendered but hidden',runtime_wait:false,states:['hidden','visible-five'],fallback:'fail-closed hidden',skeleton_status:'not-applicable-no-runtime-wait',geometry_status:'section-appears-after-hydration',offline_status:'not-applicable',evidence_scope:'controlled-runtime-required' },
   { id:'weather',path:'site/src/components/WeatherDateContext.astro',route:'date and weekend listing consumers',data_source:'same-origin no-store pointer then immutable force-cache snapshot',trigger:'component runtime initialization',resolved_component:'WeatherDateContext forecast',initial_html:'loading/busy aside with reserved min-height but visibility hidden',runtime_wait:true,states:['loading','ready','degraded','hidden-unavailable'],fallback:'all validation/fetch failures hide and collapse the mount',skeleton_status:'not-present-current',geometry_status:'reserved-while-hidden-then-collapses-on-failure',offline_status:'not-implemented',evidence_scope:'controlled-runtime-required' },
   { id:'exhibitions-gallery',path:'site/src/components/ExhibitionsPersonalSurface.astro',route:'/vystavki/',data_source:'server exhibition catalog; browser image loads only',trigger:'deck/fullscreen image load and gallery controls',resolved_component:'same exhibition deck/gallery image',initial_html:'static deck and cards with per-image skeletons',runtime_wait:true,states:['loading','loaded','error','dialog-closed','dialog-open'],fallback:'explicit broken-photo message in dialog; stable deck error surface',skeleton_status:'implemented-current',geometry_status:'fixed frame and intrinsic bucket dependent',offline_status:'not-applicable-image-error',evidence_scope:'candidate-runtime-or-controlled-runtime' },
   { id:'event-card-media',path:'site/src/components/EventCard.astro',route:'all canonical EventCard consumers',data_source:'browser image resource',trigger:'decode/load/error',resolved_component:'same EventCard media',initial_html:'intrinsic or policy-bound media shell aria-busy with shimmer',runtime_wait:true,states:['loading','loaded','missing','error-fallback'],fallback:'generated semantic fallback, broken image hidden',skeleton_status:'implemented-current',geometry_status:'ratio-or-intrinsic-reserved',offline_status:'not-applicable-image-error',evidence_scope:'candidate-runtime-or-controlled-runtime' },
@@ -140,31 +203,53 @@ function gitFact(repoRoot, path) {
 }
 
 function statusFor(path, line) {
+  const documentStatus = DOCUMENT_DEFAULT_STATUS[path] || 'unresolved';
   if (/superseded|rejected|no longer used|historical\/rejected|deprecated|замен|отклон/iu.test(line)) return 'historical-replaced';
   if (/conflict|contradict|mismatch|расхожд|конфликт/iu.test(line)) return 'conflict';
+  // A line-level keyword may narrow a current document, but it must never
+  // promote a historical, mixed or proposal document back to current status.
+  if (['historical-replaced', 'proposal-only', 'conflict'].includes(documentStatus)) return documentStatus;
   if (/experiment|a\/b|comparison|variant/iu.test(line) && !/accepted as the baseline|accepted-current/iu.test(line)) return 'experiment-unresolved';
   if (/accepted but not implemented|accepted-not-implemented|ещ[её] не реализ/iu.test(line)) return 'accepted-not-implemented';
   if (/proposal|candidate|prototype|draft|to-be|target/iu.test(line) && !/implemented|accepted|production contract|pixel-current/iu.test(line)) return 'proposal-only';
   if (/implemented|production event-page contract|pixel-current|accepted .*production|canonical contract/iu.test(line)) return 'accepted-current';
-  return DOCUMENT_DEFAULT_STATUS[path] || 'unresolved';
+  return documentStatus;
 }
 
-export function buildRequirementsProvenance({ sourceRoot }) {
-  const repoRoot = resolve(sourceRoot, '..');
-  const pattern = /(?:aspect|ratio|crop|cover|contain|object-position|focal|poster|photo|ocr|document|image|media|skeleton|loading|spinner|stale|refresh|empty|error|retry|offline|rail|scroll|sticky|fixed|pinned|cta|action|transport|menu|popover|filter|personal|search)/iu;
+export function buildRequirementsProvenance({ sourceRoot, requirementsRoot = DECODER_REPO_ROOT }) {
+  const implementationRepoRoot = resolve(sourceRoot, '..');
+  const requirementRepoRoot = resolve(requirementsRoot);
+  const pattern = /(?:page|route|archetype|aspect|ratio|crop|cover|contain|object-position|focal|poster|photo|ocr|document|image|media|skeleton|loading|spinner|stale|refresh|empty|error|retry|offline|rail|scroll|sticky|fixed|pinned|cta|action|transport|menu|popover|filter|personal|recommend|favorite|calendar|search)/iu;
   const rows = [];
   for (const [path, surface] of REQUIREMENT_SOURCES) {
-    const absolute = join(repoRoot, path); if (!existsSync(absolute)) continue;
-    const content = readFileSync(absolute, 'utf8'); const git = gitFact(repoRoot, path);
-    const lines = content.split('\n'); let section = null;
+    const absolute = join(requirementRepoRoot, path);
+    if (!existsSync(absolute)) {
+      rows.push({
+        id:`requirement.missing.${sha(path).slice(0,18)}`, source_path:path, section:null, line:null,
+        commit:null, commit_date:null, commit_subject:null, pr:null, surface, component:null,
+        rule:'Required archaeology document is absent from the decoder requirements plane.', status:'unresolved',
+        evidence_kind:'missing-requirement-document', current_authority_claimed:false, decision:'NOT_MERGED',
+      });
+      continue;
+    }
+    const content = readFileSync(absolute, 'utf8'); const git = gitFact(requirementRepoRoot, path);
+    const documentStatus = DOCUMENT_DEFAULT_STATUS[path] || 'unresolved';
+    rows.push({
+      id:`requirement.document.${sha(path).slice(0,18)}`, source_path:path, section:null, line:1, ...git,
+      surface, component:null, rule:`Required archaeology document included with bounded line extraction (maximum ${MAX_MATCHED_RULES_PER_DOCUMENT} matched rules).`,
+      status:documentStatus, evidence_kind:'requirement-document-inventory', current_authority_claimed:documentStatus==='accepted-current', decision:'NOT_MERGED',
+    });
+    const lines = content.split('\n'); let section = null; let matchedRules = 0;
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index].trim(); if (/^#{1,6}\s/u.test(line)) section = bounded(line.replace(/^#{1,6}\s*/u, ''), 180);
       if (!line || !pattern.test(line)) continue;
+      if (matchedRules >= MAX_MATCHED_RULES_PER_DOCUMENT) break;
+      matchedRules += 1;
       const status = statusFor(path, line);
       rows.push({
         id: `requirement.${sha(`${path}\0${index + 1}\0${line}`).slice(0, 18)}`,
         source_path: path, section, line: index + 1, ...git, surface, component: null,
-        rule: evidenceLine(line), status, evidence_kind: 'pinned-requirement-document',
+        rule: sanitizeRequirementEvidence(line), status, evidence_kind: 'pinned-requirement-document',
         current_authority_claimed: status === 'accepted-current', decision: 'NOT_MERGED',
       });
     }
@@ -191,14 +276,14 @@ export function buildRequirementsProvenance({ sourceRoot }) {
   }
   const sourcePaths = new Set(DYNAMIC_REGIONS.map((item) => item.path));
   for (const path of sourcePaths) {
-    const absolute = join(repoRoot, path); if (!existsSync(absolute)) continue;
-    const content = readFileSync(absolute, 'utf8'); const git = gitFact(repoRoot, path);
+    const absolute = join(implementationRepoRoot, path); if (!existsSync(absolute)) continue;
+    const content = readFileSync(absolute, 'utf8'); const git = gitFact(implementationRepoRoot, path);
     for (const match of content.matchAll(/[^\n]*(?:data-[\w-]*(?:loading|skeleton|state|error|empty)|fetch\(|aria-(?:busy|live)|object-fit|aspect-ratio|position:\s*(?:sticky|fixed))[^\n]*/giu)) {
       rows.push({
         id: `requirement.${sha(`${path}\0${match.index}\0${match[0]}`).slice(0, 18)}`,
         source_path: path, section: null, line: lineNumber(content, match.index), ...git,
         surface: DYNAMIC_REGIONS.find((item) => item.path === path)?.id || 'runtime', component: path.split('/').at(-1),
-        rule: evidenceLine(match[0]), status: 'implemented-current', evidence_kind: 'pinned-source-implementation',
+        rule: sanitizeRequirementEvidence(match[0]), status: 'implemented-current', evidence_kind: 'pinned-source-implementation',
         current_authority_claimed: false, decision: 'NOT_MERGED',
       });
     }

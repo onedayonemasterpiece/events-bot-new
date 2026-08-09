@@ -554,8 +554,12 @@ sibling path to the immutable Decoder v1 snapshot; runner-local checkout paths
 are forbidden in the cross-repository handoff.
 
 The supplement records source-qualified media/loading/geometry/positioning,
-rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, CTA Git
-history and the `transport_timetable_layout` treatment registry. The
+rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, bounded
+CTA/variant history and the `transport_timetable_layout` treatment registry.
+Generic commit-subject history is pinned only to `ef7aa62` ancestry and remains
+semantically unclassified; explicit PR/run/non-ancestor branch evidence is a
+curated supplement with its own scope, never a claim of exhaustive coverage of
+every mutable remote ref, tag, release or artifact. The
 requirements-aware pass additionally writes a line/commit/PR provenance
 ledger, a complete consumer-scoped media matrix (including `4:5`, `5:4`,
 `3:2`, intrinsic `2:3`, `1:1` and extra ratios), and an explicit dynamic-region
@@ -566,6 +570,40 @@ only and is not a human-review substitute. The three transport arms
 `departure_board_v1`, `route_strips_v1` and `next_departure_queue_v1` have
 separate planned evidence packets and remain `NOT_MERGED`, unaccepted until
 receipt-backed archaeology and capture/review are available.
+
+Requirements archaeology deliberately uses two separately pinned planes. UI
+implementation is still decoded only from exact source
+`ef7aa62e45c60f7a12da6160f490719c0721ec03`; the requirements ledger is read
+from the decoder commit so it can include later accepted source maps without
+pretending they existed at `ef7aa62`. The required corpus now explicitly
+includes the page-archetype source map, schedule user requirements, rail and
+multimodal directory, image/EventCard/Event Detail desktop and mobile records,
+listing V14/V15 through V28 supersession chain, mobile shell, canonical Search
+plus its replaced source brief, owner personalization requirements, target and
+implementation contracts, Personal Feed architecture, and loading/skeleton
+documents. Extraction is deterministic and bounded to 256 matched lines per
+document. A historical, proposal or mixed/conflict document cannot be promoted
+to current authority by a line-level keyword; retained rules are reconciled in
+explicit curated records. Missing required documents and missing pinned dynamic
+region sources stay fail-closed evidence. In particular, the pinned dynamic
+source is
+`site/src/components/listings/PopularPersonalizedRow.astro`, not the obsolete
+non-`listings` path.
+
+`transport_timetable_layout` is decoded from the hash-checked `ef7aa62` source
+family (`transportExperiment.ts`, client/controller, Astro consumer and both
+build entry points), rather than from placeholder registry prose. The record
+preserves modes `off`, `qa`, `focus_group`, `live`; the three 3333/3333/3334
+bucket arms; browser-subject `SHA-256` first-u32-big-endian assignment;
+1–20-departure/future-after-10-minute-reserve eligibility; consent, automation,
+QA and valid-exposure telemetry gates; the five qualified action names; and the
+three-cell SRM threshold. Production build is forced `off`, QA/focus-group are
+secret-candidate modes, and `live` has no approved pinned build path. The source
+defines a qualified-action predicate but the pinned click-ingest path does not
+call it, while the SRM evaluator has tests but no runtime consumer; both are
+recorded as bounded archaeology findings, not silently accepted contracts. No
+winner/acceptance receipt is present, so every row remains
+`experiment-unresolved`, `NOT_MERGED`, and forbidden from normalization.
 
 The only permitted completed supplement status is
 `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not authorize component

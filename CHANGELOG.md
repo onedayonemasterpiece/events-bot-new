@@ -4,6 +4,22 @@
 
 ### Fixed
 
+- Completed the Behavioral Decoder v1.1 requirements/experiment source pass:
+  the bounded provenance corpus now includes page archetypes, schedule,
+  multimodal rail, listing V14/V15–V28 supersession, mobile, Search,
+  personalization contracts and Personal Feed/loading evidence without
+  promoting historical mixed documents by keyword. Corrected the pinned
+  `PopularPersonalizedRow` source path and replaced placeholder transport
+  experiment fields with hash-checked `ef7aa62` modes, browser-subject bucket
+  assignment, eligibility, analytics/qualified-action and SRM evidence. Generic
+  history is now deterministic `ef7aa62` ancestry rather than mutable
+  `git log --all`; curated CTA, transport, selection, rail/menu and mobile-media
+  records retain exact PR/commit/Actions/replacement scope without claiming an
+  exhaustive remote-ref crawl. Credential/env/URL-bearing requirement lines are
+  represented only by a bounded hash/presence marker. All
+  transport treatments remain `experiment-unresolved` / `NOT_MERGED`; no
+  winner, production UI or normalization decision was introduced.
+
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
   host/fetch policy, principal binding, workspace configuration, MIME, size,
