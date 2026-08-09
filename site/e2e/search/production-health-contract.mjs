@@ -9,6 +9,8 @@ const RESULT_VALUES = [
   'BROKEN_RESULT_ROUTE',
   'UNKNOWN_AUTH_BROKER',
   'UNKNOWN_RUNNER_BROWSER',
+  'UNKNOWN_ANDROID_INFRA',
+  'UNKNOWN_IOS_INFRA',
   'BLOCKED_RELEASE_NOT_ACTIVE',
   'COST_GUARD_FAILED',
   'EVIDENCE_REDACTION_FAILED',
@@ -19,6 +21,24 @@ export const PRODUCTION_HEALTH_RESULTS = Object.freeze(Object.fromEntries(
 ));
 
 export const PRODUCTION_HEALTH_RESULT_VALUES = Object.freeze([...RESULT_VALUES]);
+
+export const PRODUCTION_HEALTH_PRODUCT_STATES = Object.freeze({
+  HEALTHY: 'HEALTHY',
+  BROKEN: 'BROKEN',
+  UNCONFIRMED: 'UNCONFIRMED',
+});
+
+export const PRODUCTION_HEALTH_EXECUTION_STATUSES = Object.freeze({
+  PASS: 'PASS',
+  FAILED: 'FAILED',
+  BLOCKED: 'BLOCKED',
+});
+
+export const PRODUCTION_HEALTH_PLATFORMS = Object.freeze(['browser', 'android', 'ios']);
+
+export const PRODUCTION_HEALTH_FAILURE_CLASSES = Object.freeze(
+  RESULT_VALUES.filter((value) => !['HEALTHY', 'DEGRADED'].includes(value)),
+);
 
 export const ACCEPTED_HEALTH_CACHE_STATES = Object.freeze(['hit', 'miss', 'stored', 'bypass']);
 
@@ -70,13 +90,75 @@ export function isProductFailureResult(value) {
   return isProductionHealthResult(value) && value.startsWith('BROKEN_');
 }
 
-export function classifyProductionHealthResult(value) {
+const validatePlatform = (platform) => {
+  const normalized = String(platform || '').toLowerCase();
+  if (!PRODUCTION_HEALTH_PLATFORMS.includes(normalized)) {
+    throw new Error('search_health_platform_unknown');
+  }
+  return normalized;
+};
+
+/**
+ * Maps execution evidence to independent product and execution dimensions.
+ * Only a typed BROKEN_* failure proves a platform-specific product incident.
+ */
+export function classifyProductionHealthOutcome({ failureClass = null, platform = 'browser' } = {}) {
+  const normalizedPlatform = validatePlatform(platform);
+  if (failureClass !== null && !PRODUCTION_HEALTH_FAILURE_CLASSES.includes(failureClass)) {
+    throw new Error('search_health_failure_class_unknown');
+  }
+
+  const productIncident = typeof failureClass === 'string' && failureClass.startsWith('BROKEN_');
+  const releaseBlocked = failureClass === PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
+  const productHealth = productIncident
+    ? PRODUCTION_HEALTH_PRODUCT_STATES.BROKEN
+    : failureClass === null
+      ? PRODUCTION_HEALTH_PRODUCT_STATES.HEALTHY
+      : PRODUCTION_HEALTH_PRODUCT_STATES.UNCONFIRMED;
+  const executionStatus = failureClass === null
+    ? PRODUCTION_HEALTH_EXECUTION_STATUSES.PASS
+    : releaseBlocked
+      ? PRODUCTION_HEALTH_EXECUTION_STATUSES.BLOCKED
+      : PRODUCTION_HEALTH_EXECUTION_STATUSES.FAILED;
+
+  return Object.freeze({
+    product_health: productHealth,
+    execution_status: executionStatus,
+    failure_class: failureClass,
+    product_incident: productIncident,
+    incident_scope: productIncident
+      ? `search-product:${normalizedPlatform}:${failureClass}`
+      : null,
+  });
+}
+
+/**
+ * Backward-compatible adapter for Stage-1 callers that still use the old
+ * single-result vocabulary. DEGRADED remains legacy-only and cannot create a
+ * scheduled-health product incident.
+ */
+export function classifyProductionHealthResult(value, { platform = 'browser' } = {}) {
   if (!isProductionHealthResult(value)) throw new Error('search_health_result_unknown');
-  const productFailure = isProductFailureResult(value);
+  if (value === PRODUCTION_HEALTH_RESULTS.DEGRADED) {
+    validatePlatform(platform);
+    return Object.freeze({
+      result: value,
+      product_health: PRODUCTION_HEALTH_PRODUCT_STATES.UNCONFIRMED,
+      execution_status: PRODUCTION_HEALTH_EXECUTION_STATUSES.PASS,
+      failure_class: null,
+      product_failure: false,
+      product_incident: false,
+      incident_scope: null,
+    });
+  }
+  const outcome = classifyProductionHealthOutcome({
+    failureClass: value === PRODUCTION_HEALTH_RESULTS.HEALTHY ? null : value,
+    platform,
+  });
   return Object.freeze({
     result: value,
-    product_failure: productFailure,
-    product_incident: productFailure,
+    ...outcome,
+    product_failure: outcome.product_incident,
   });
 }
 
@@ -105,26 +187,34 @@ const finiteCount = (value) => (
  * cache outcomes in the contract.
  */
 export function evaluateProductionHealthObservation(observation = {}) {
+  const platform = validatePlatform(observation.platform || 'browser');
+  const classified = (result) => classifyProductionHealthResult(result, { platform });
   if (observation.evidence_redaction_passed !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.EVIDENCE_REDACTION_FAILED);
+    return classified(PRODUCTION_HEALTH_RESULTS.EVIDENCE_REDACTION_FAILED);
   }
   if (observation.cost_guard_passed !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED);
+    return classified(PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED);
   }
   if (observation.release_active !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE);
+    return classified(PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE);
+  }
+  if (platform === 'browser' && observation.runner_browser_known !== true) {
+    return classified(PRODUCTION_HEALTH_RESULTS.UNKNOWN_RUNNER_BROWSER);
+  }
+  if (platform === 'android' && observation.android_infra_known !== true) {
+    return classified(PRODUCTION_HEALTH_RESULTS.UNKNOWN_ANDROID_INFRA);
+  }
+  if (platform === 'ios' && observation.ios_infra_known !== true) {
+    return classified(PRODUCTION_HEALTH_RESULTS.UNKNOWN_IOS_INFRA);
   }
   if (observation.auth_broker_known !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.UNKNOWN_AUTH_BROKER);
-  }
-  if (observation.runner_browser_known !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.UNKNOWN_RUNNER_BROWSER);
+    return classified(PRODUCTION_HEALTH_RESULTS.UNKNOWN_AUTH_BROKER);
   }
   if (observation.search_surface_ready !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_SURFACE);
+    return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_SURFACE);
   }
   if (observation.auth_integration_ready !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.BROKEN_AUTH_INTEGRATION);
+    return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_AUTH_INTEGRATION);
   }
 
   const queryCount = finiteCount(observation.query_count);
@@ -146,25 +236,25 @@ export function evaluateProductionHealthObservation(observation = {}) {
     || storageImageRequests !== 0
     || !ACCEPTED_HEALTH_CACHE_STATES.includes(String(observation.cache_state || '').toLowerCase())
   ) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_REQUEST);
+    return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_REQUEST);
   }
 
   const cardCount = finiteCount(observation.card_count);
   if (cardCount === 0) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.BROKEN_NO_RESULTS);
+    return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_NO_RESULTS);
   }
   if (cardCount === null || cardCount < 1 || cardCount > 5 || observation.cards_rendered !== true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.BROKEN_RESULT_RENDER);
+    return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_RESULT_RENDER);
   }
   if (
     finiteCount(observation.real_scroll_count) !== 1
     || observation.real_scroll_performed !== true
     || finiteCount(observation.card_http_200_count) !== 1
   ) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.BROKEN_RESULT_ROUTE);
+    return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_RESULT_ROUTE);
   }
   if (observation.degraded === true) {
-    return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.DEGRADED);
+    return classified(PRODUCTION_HEALTH_RESULTS.DEGRADED);
   }
-  return classifyProductionHealthResult(PRODUCTION_HEALTH_RESULTS.HEALTHY);
+  return classified(PRODUCTION_HEALTH_RESULTS.HEALTHY);
 }

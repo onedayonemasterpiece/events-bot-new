@@ -9,6 +9,8 @@ export const PRODUCTION_HEALTH_PLANES = Object.freeze({
 export const PRODUCTION_HEALTH_TRIGGERS = Object.freeze({
   PULL_REQUEST: 'pull_request',
   MANUAL: 'workflow_dispatch',
+  SCHEDULE_MORNING: 'schedule_morning',
+  SCHEDULE_EVENING: 'schedule_evening',
   TWICE_DAILY: 'twice_daily',
   SEARCH_RUNTIME_DEPLOY: 'search_runtime_deploy',
   SMART_UPDATE: 'smart_update',
@@ -22,7 +24,8 @@ const PLANE_VALUES = new Set(Object.values(PRODUCTION_HEALTH_PLANES));
 const TRIGGER_VALUES = new Set(Object.values(PRODUCTION_HEALTH_TRIGGERS));
 const HEALTH_TRIGGERS = new Set([
   PRODUCTION_HEALTH_TRIGGERS.MANUAL,
-  PRODUCTION_HEALTH_TRIGGERS.TWICE_DAILY,
+  PRODUCTION_HEALTH_TRIGGERS.SCHEDULE_MORNING,
+  PRODUCTION_HEALTH_TRIGGERS.SCHEDULE_EVENING,
   PRODUCTION_HEALTH_TRIGGERS.SEARCH_RUNTIME_DEPLOY,
 ]);
 const GENERATION_TRIGGERS = new Set([
@@ -63,11 +66,39 @@ const zeroLiveCalls = () => ({
   supabase: 0,
 });
 
+export const PRODUCTION_HEALTH_MANUAL_PROFILES = Object.freeze({
+  BROWSER: 'browser',
+  BROWSER_ANDROID: 'browser_android',
+  BROWSER_IOS: 'browser_ios',
+  ALL: 'all',
+});
+
+export const SEARCH_VALIDATION_PROFILES = Object.freeze({
+  NONE: 'none',
+  STANDARD: 'standard',
+  FULL: 'full',
+});
+
+const PLATFORM_SELECTIONS = Object.freeze({
+  browser: Object.freeze(['browser']),
+  browser_android: Object.freeze(['browser', 'android']),
+  browser_ios: Object.freeze(['browser', 'ios']),
+  all: Object.freeze(['browser', 'android', 'ios']),
+});
+
+const noPlatforms = () => Object.freeze([]);
+
 /**
  * Stage 1 is intentionally a dry planner. `eligible` describes trigger policy,
  * never permission to execute production traffic in this implementation.
  */
-export function planProductionHealthRun({ plane, trigger, changedPaths = [] } = {}) {
+export function planProductionHealthRun({
+  plane,
+  trigger,
+  profile,
+  validationProfile,
+  changedPaths = [],
+} = {}) {
   if (!PLANE_VALUES.has(plane)) throw new Error(`search_health_plane_invalid:${String(plane || 'empty')}`);
   if (!TRIGGER_VALUES.has(trigger)) throw new Error(`search_health_trigger_invalid:${String(trigger || 'empty')}`);
   if (!Array.isArray(changedPaths) || changedPaths.some((path) => typeof path !== 'string')) {
@@ -78,6 +109,8 @@ export function planProductionHealthRun({ plane, trigger, changedPaths = [] } = 
   let eligible = false;
   let reason = 'trigger_not_allowed_for_plane';
   let selection = 'none';
+  let selectedPlatforms = noPlatforms();
+  let releaseQualificationRequested = false;
 
   if (GENERATION_TRIGGERS.has(trigger)) {
     reason = 'data_or_index_movement_never_triggers_health';
@@ -86,9 +119,48 @@ export function planProductionHealthRun({ plane, trigger, changedPaths = [] } = 
     reason = eligible ? 'relevant_contract_path' : 'no_relevant_contract_path';
     selection = eligible ? 'deterministic_pr_contract_ci' : 'none';
   } else if (plane === PRODUCTION_HEALTH_PLANES.PRODUCTION_HEALTH) {
-    eligible = HEALTH_TRIGGERS.has(trigger);
-    reason = eligible ? 'future_health_trigger_accepted' : reason;
-    selection = eligible ? 'single_bounded_health_journey' : 'none';
+    if (trigger === PRODUCTION_HEALTH_TRIGGERS.TWICE_DAILY) {
+      reason = 'ambiguous_schedule_forbidden';
+    } else if (trigger === PRODUCTION_HEALTH_TRIGGERS.SCHEDULE_MORNING) {
+      eligible = true;
+      reason = 'deterministic_morning_profile';
+      selection = 'scheduled_morning';
+      selectedPlatforms = PLATFORM_SELECTIONS.browser_android;
+    } else if (trigger === PRODUCTION_HEALTH_TRIGGERS.SCHEDULE_EVENING) {
+      eligible = true;
+      reason = 'deterministic_evening_profile';
+      selection = 'scheduled_evening';
+      selectedPlatforms = PLATFORM_SELECTIONS.browser_ios;
+    } else if (trigger === PRODUCTION_HEALTH_TRIGGERS.MANUAL) {
+      const manualProfile = profile || PRODUCTION_HEALTH_MANUAL_PROFILES.BROWSER;
+      if (Object.hasOwn(PLATFORM_SELECTIONS, manualProfile)) {
+        eligible = true;
+        reason = 'manual_profile_accepted';
+        selection = `manual_${manualProfile}`;
+        selectedPlatforms = PLATFORM_SELECTIONS[manualProfile];
+      } else {
+        reason = 'manual_profile_invalid';
+      }
+    } else if (trigger === PRODUCTION_HEALTH_TRIGGERS.SEARCH_RUNTIME_DEPLOY) {
+      if (
+        validationProfile === SEARCH_VALIDATION_PROFILES.STANDARD
+        || validationProfile === SEARCH_VALIDATION_PROFILES.FULL
+      ) {
+        eligible = true;
+        reason = 'explicit_release_validation_marker';
+        selection = `release_${validationProfile}`;
+        selectedPlatforms = PLATFORM_SELECTIONS.all;
+        releaseQualificationRequested = validationProfile === SEARCH_VALIDATION_PROFILES.FULL;
+      } else {
+        reason = validationProfile === SEARCH_VALIDATION_PROFILES.NONE || validationProfile == null
+          ? 'release_validation_not_requested'
+          : 'release_validation_profile_invalid';
+      }
+    } else if (HEALTH_TRIGGERS.has(trigger)) {
+      // The branches above exhaust all health triggers. Keep this fail-closed
+      // guard so adding a trigger requires an explicit deterministic mapping.
+      reason = 'health_trigger_mapping_missing';
+    }
   } else if (plane === PRODUCTION_HEALTH_PLANES.RELEASE_QUALIFICATION) {
     eligible = trigger === PRODUCTION_HEALTH_TRIGGERS.MANUAL;
     reason = eligible ? 'manual_selective_release_qualification' : reason;
@@ -105,6 +177,8 @@ export function planProductionHealthRun({ plane, trigger, changedPaths = [] } = 
     eligible,
     reason,
     selection,
+    selected_platforms: selectedPlatforms,
+    release_qualification_requested: releaseQualificationRequested,
     relevant_paths: Object.freeze(relevantPaths),
     live_calls: Object.freeze(zeroLiveCalls()),
     future_health_contract: plane === PRODUCTION_HEALTH_PLANES.PRODUCTION_HEALTH

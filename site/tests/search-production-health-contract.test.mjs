@@ -6,8 +6,13 @@ import test from 'node:test';
 import {
   ACCEPTED_HEALTH_CACHE_STATES,
   FUTURE_PRODUCTION_HEALTH_PLAN,
+  PRODUCTION_HEALTH_EXECUTION_STATUSES,
+  PRODUCTION_HEALTH_FAILURE_CLASSES,
+  PRODUCTION_HEALTH_PLATFORMS,
+  PRODUCTION_HEALTH_PRODUCT_STATES,
   PRODUCTION_HEALTH_RESULTS,
   PRODUCTION_HEALTH_RESULT_VALUES,
+  classifyProductionHealthOutcome,
   classifyProductionHealthResult,
   decideProductionHealthRetry,
   evaluateProductionHealthObservation,
@@ -38,6 +43,8 @@ const exactResults = [
   'BROKEN_RESULT_ROUTE',
   'UNKNOWN_AUTH_BROKER',
   'UNKNOWN_RUNNER_BROWSER',
+  'UNKNOWN_ANDROID_INFRA',
+  'UNKNOWN_IOS_INFRA',
   'BLOCKED_RELEASE_NOT_ACTIVE',
   'COST_GUARD_FAILED',
   'EVIDENCE_REDACTION_FAILED',
@@ -49,6 +56,8 @@ const healthyObservation = (overrides = {}) => ({
   release_active: true,
   auth_broker_known: true,
   runner_browser_known: true,
+  android_infra_known: true,
+  ios_infra_known: true,
   search_surface_ready: true,
   auth_integration_ready: true,
   query_count: 1,
@@ -99,8 +108,98 @@ test('result enum is exact and only BROKEN results are product failures/incident
     const expected = result.startsWith('BROKEN_');
     assert.equal(disposition.product_failure, expected, result);
     assert.equal(disposition.product_incident, expected, result);
+    assert.equal(disposition.incident_scope !== null, expected, result);
   }
   assert.throws(() => classifyProductionHealthResult('FAILED'), /result_unknown/u);
+});
+
+test('product health, execution status and platform incident scope are independent', () => {
+  assert.deepEqual(PRODUCTION_HEALTH_PRODUCT_STATES, {
+    HEALTHY: 'HEALTHY', BROKEN: 'BROKEN', UNCONFIRMED: 'UNCONFIRMED',
+  });
+  assert.deepEqual(PRODUCTION_HEALTH_EXECUTION_STATUSES, {
+    PASS: 'PASS', FAILED: 'FAILED', BLOCKED: 'BLOCKED',
+  });
+  assert.deepEqual(PRODUCTION_HEALTH_PLATFORMS, ['browser', 'android', 'ios']);
+  assert.deepEqual(PRODUCTION_HEALTH_FAILURE_CLASSES, exactResults.slice(2));
+
+  assert.deepEqual(classifyProductionHealthOutcome({ platform: 'browser' }), {
+    product_health: 'HEALTHY',
+    execution_status: 'PASS',
+    failure_class: null,
+    product_incident: false,
+    incident_scope: null,
+  });
+  assert.deepEqual(classifyProductionHealthOutcome({
+    failureClass: 'BROKEN_RESULT_RENDER', platform: 'android',
+  }), {
+    product_health: 'BROKEN',
+    execution_status: 'FAILED',
+    failure_class: 'BROKEN_RESULT_RENDER',
+    product_incident: true,
+    incident_scope: 'search-product:android:BROKEN_RESULT_RENDER',
+  });
+  for (const failureClass of [
+    'UNKNOWN_AUTH_BROKER',
+    'UNKNOWN_RUNNER_BROWSER',
+    'UNKNOWN_ANDROID_INFRA',
+    'UNKNOWN_IOS_INFRA',
+    'COST_GUARD_FAILED',
+    'EVIDENCE_REDACTION_FAILED',
+  ]) {
+    assert.deepEqual(classifyProductionHealthOutcome({ failureClass, platform: 'ios' }), {
+      product_health: 'UNCONFIRMED',
+      execution_status: 'FAILED',
+      failure_class: failureClass,
+      product_incident: false,
+      incident_scope: null,
+    }, failureClass);
+  }
+  assert.deepEqual(classifyProductionHealthOutcome({
+    failureClass: 'BLOCKED_RELEASE_NOT_ACTIVE', platform: 'browser',
+  }), {
+    product_health: 'UNCONFIRMED',
+    execution_status: 'BLOCKED',
+    failure_class: 'BLOCKED_RELEASE_NOT_ACTIVE',
+    product_incident: false,
+    incident_scope: null,
+  });
+  assert.throws(
+    () => classifyProductionHealthOutcome({ failureClass: 'RUNNER_FAILED', platform: 'browser' }),
+    /failure_class_unknown/u,
+  );
+  assert.throws(
+    () => classifyProductionHealthOutcome({ failureClass: null, platform: 'desktop' }),
+    /platform_unknown/u,
+  );
+});
+
+test('mobile infrastructure is classified before Auth/Search and never as a product incident', () => {
+  const android = evaluateProductionHealthObservation(healthyObservation({
+    platform: 'android', android_infra_known: false, auth_broker_known: false,
+  }));
+  assert.equal(android.result, 'UNKNOWN_ANDROID_INFRA');
+  assert.equal(android.product_health, 'UNCONFIRMED');
+  assert.equal(android.execution_status, 'FAILED');
+  assert.equal(android.product_incident, false);
+
+  const ios = evaluateProductionHealthObservation(healthyObservation({
+    platform: 'ios', ios_infra_known: false, search_surface_ready: false,
+  }));
+  assert.equal(ios.result, 'UNKNOWN_IOS_INFRA');
+  assert.equal(ios.product_health, 'UNCONFIRMED');
+  assert.equal(ios.execution_status, 'FAILED');
+  assert.equal(ios.product_incident, false);
+
+  const mobileProductFailure = evaluateProductionHealthObservation(healthyObservation({
+    platform: 'ios', search_surface_ready: false,
+  }));
+  assert.equal(mobileProductFailure.product_health, 'BROKEN');
+  assert.equal(mobileProductFailure.product_incident, true);
+  assert.equal(
+    mobileProductFailure.incident_scope,
+    'search-product:ios:BROKEN_SEARCH_SURFACE',
+  );
 });
 
 test('future health contract is one bounded UI vector request and contains no release coupling', () => {
