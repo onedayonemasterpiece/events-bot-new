@@ -1,6 +1,6 @@
 task: search-production-health-stage1
 base: origin/main@65926e63b436efcc275c8e4094473ab9ef1fd9e8
-final_rebase: origin/main@48378542d13869447bacc6bfeea136d650b3d407
+final_rebase: origin/main@150358ed88b5239753bf3669a1f1e311bf3f63cc
 integration_branch: integration/search-production-health-stage1-20260809
 requirements:
   R01: actual runtime/data path audit with exact code references
@@ -15,6 +15,8 @@ requirements:
   R10: canonical architecture and Stage 2 handoff
   R11: deterministic acceptance and zero live/prod execution
   R12: clean pushed PR
+  R13: fail-closed Fly runtime SHA to exact Kaggle source binding
+  R14: Stage-2 morning/evening mobile policy and platform-specific typed statuses
 lanes:
   discovery_runtime:
     mode: read_only
@@ -37,6 +39,22 @@ lanes:
     mode: serial_integration
     depends_on: [core_contracts, workflow_policy]
     owns: [docs, CHANGELOG.md, site/package.json, final_validation, PR]
+  premerge_source_binding:
+    mode: worktree_worker
+    effort: high
+    depends_on: [discovery_runtime]
+    owns: [R13]
+    branch: agent/search-production-health-stage1/source-binding
+    worktree: /home/dev/.codex/worktrees/events-bot-new/search-stage1-source-binding
+    writable_files: [Dockerfile, main.py, static_site_release.py, scripts/run_static_site_builder_kaggle.py, kaggle/StaticSiteBuilder/static_site_builder.py, tests/test_static_site_build_handoff.py, tests/test_static_site_build_debounce.py, .codex/lanes/search-production-health-stage2/r02-source-binding/RESULTS.md]
+  premerge_mobile_contract:
+    mode: worktree_worker
+    effort: high
+    depends_on: [discovery_workflows, discovery_risk]
+    owns: [R14]
+    branch: agent/search-production-health-stage1/mobile-contract
+    worktree: /home/dev/.codex/worktrees/events-bot-new/search-stage1-mobile-contract
+    writable_files: [site/e2e/search/production-health-contract.mjs, site/e2e/search/production-health-planner.mjs, site/tests/search-production-health-contract.test.mjs, site/tests/search-production-health-planner.test.mjs, .codex/lanes/search-production-health-stage2/r14-mobile-contract/RESULTS.md]
 constraints:
   live_search_calls: 0
   production_supabase_calls: 0
