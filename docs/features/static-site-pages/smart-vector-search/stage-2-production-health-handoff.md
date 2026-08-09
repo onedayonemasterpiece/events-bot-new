@@ -59,7 +59,9 @@ pagination или полный scheduled mobile/release matrix в production-hea
   общей OTP/Search Safari session через WebDriver async callback с explicit
   bounded 15-second script timeout; callback landing одновременно даёт exact
   target 2xx receipt и не требует повторного перехода на тот же clean URL;
-  48/96 KiB meter и strict evidence;
+  общий OTP/Search network reducer нормализует Android/CDP `{method,params}` и
+  официальный XCUITest `safariNetwork` `{method,event}`; 48/96 KiB meter и
+  strict evidence;
 - exact deployment marker `none|standard|full`, side-effect-free backend HEAD
   contract proof и pre-Search active release
   receipt и platform issue disposition, suppressing issue mutation when the

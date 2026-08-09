@@ -695,8 +695,11 @@ reviewable independently in ChatGPT.
 The same semantic browser-tab journey now has real Chrome Android/Appium
 UiAutomator2 and Mobile Safari/Appium XCUITest adapters. They validate the
 system keyboard, focused input and visual viewport before ordinary digit input;
-they do not substitute a desktop viewport or Playwright WebKit. PWA installation
-and Launcher/SpringBoard relaunch remain a separate milestone.
+they do not substitute a desktop viewport or Playwright WebKit. Their shared
+sanitized network reducer accepts Android/CDP `{method,params}` and the official
+XCUITest `safariNetwork` `{method,event}` envelope; neither raw URL nor OTP data
+is retained. PWA installation and Launcher/SpringBoard relaunch remain a separate
+milestone.
 
 The first terminal protected receipts for immutable SHA
 `4a19fbe0b243d8a9a4652ff0c1e4fee9e895cf9c` are Chromium

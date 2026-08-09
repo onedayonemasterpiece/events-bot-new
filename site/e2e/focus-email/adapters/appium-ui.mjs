@@ -7,6 +7,7 @@ import { sanitizedFailureClass } from '../helpers/runtime-diagnostics.mjs';
 import { buildAppiumCapabilities, classifyActiveIosApp, inspectSafariNativeUiProtocol,
   dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard, prepareIosSafariWebContext,
   summarizeKnownSafariNativeSource, withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
+import { appiumProtocolEventPayload } from '../../mobile-web/appium-network-receipt.mjs';
 
 const SELECTORS = Object.freeze({
   install: '[data-intake-stage="install"]:not([hidden])', skip: '[data-focus-install-skip]',
@@ -40,7 +41,7 @@ export function extractDriverNetworkEvents(logs) {
     visited.add(value);
     if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
     const eventMethod = String(value.method || '');
-    const params = value.params && typeof value.params === 'object' ? value.params : {};
+    const params = appiumProtocolEventPayload(value);
     if (eventMethod === 'Network.requestWillBeSent') {
       emit('request', params.requestId, params.request?.url, params.request?.method, null);
     } else if (eventMethod === 'Network.responseReceived') {

@@ -49,6 +49,14 @@
 
 ### Fixed
 
+- Fixed the actual XCUITest Safari network-envelope mismatch isolated by live
+  run `31341835441`. Appium's Android performance log is `{method, params}` but
+  its official `safariNetwork` serializer is `{method, event}`; the shared
+  reducer read only the former, so every real iOS document/POST/terminal-byte
+  receipt was empty even after callback-target reuse. Search and the existing
+  OTP Appium adapter now share one closed parser for both envelopes, including
+  Safari `loadingFinished.metrics.responseBodyBytesReceived`.
+
 - Fixed the redundant iOS target navigation exposed by merged-main Search
   health run `31341154421`. The shared OTP callback had already loaded and
   authorized the exact private Search document, but the journey navigated to

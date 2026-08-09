@@ -2,6 +2,18 @@ const safeUrl = (raw) => {
   try { return new URL(String(raw)); } catch { return null; }
 };
 
+// Android performance logs use the CDP `{method, params}` envelope. The
+// XCUITest driver's fully serialized safariNetwork bucket intentionally emits
+// `{method, event}` (see SafariNetworkLog.onNetworkEvent). Keep one neutral
+// reducer so Search and the existing OTP Appium adapter consume both real
+// transports instead of maintaining divergent iOS parsing.
+export function appiumProtocolEventPayload(value) {
+  if (!value || typeof value !== 'object') return {};
+  if (value.params && typeof value.params === 'object') return value.params;
+  if (value.event && typeof value.event === 'object') return value.event;
+  return {};
+}
+
 export function assertCanonicalCandidateEventDestination({ searchUrl, eventUrl, finalUrl } = {}) {
   const search = safeUrl(searchUrl);
   const expected = safeUrl(eventUrl);
@@ -100,7 +112,7 @@ export function createSanitizedNavigationResponseTracker() {
     visited.add(value);
     if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
     const method = String(value.method || '');
-    const params = value.params && typeof value.params === 'object' ? value.params : {};
+    const params = appiumProtocolEventPayload(value);
     if (method === 'Network.requestWillBeSent'
       && params.redirectResponse && typeof params.redirectResponse === 'object') {
       appendResponse(params.redirectResponse, params.type, params.requestId, false);
@@ -114,7 +126,8 @@ export function createSanitizedNavigationResponseTracker() {
     }
     if (method === 'Network.loadingFinished') {
       const identity = String(params.requestId || '');
-      const encodedBytes = Number(params.encodedDataLength);
+      const encodedBytes = Number(params.encodedDataLength
+        ?? params.metrics?.responseBodyBytesReceived);
       if (identity && Number.isSafeInteger(encodedBytes) && encodedBytes >= 0) {
         terminalBytesByRequestId.set(identity, encodedBytes);
         applyTerminalBytes(responseByRequestId.get(identity), encodedBytes);
@@ -231,7 +244,7 @@ export function countEventSearchPostRequests(logs, seenRequestIds = new Set()) {
     visited.add(value);
     if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
     if (String(value.method || '') === 'Network.requestWillBeSent') {
-      const params = value.params && typeof value.params === 'object' ? value.params : {};
+      const params = appiumProtocolEventPayload(value);
       const request = params.request && typeof params.request === 'object' ? params.request : {};
       const url = safeUrl(request.url);
       if (String(request.method || '').toUpperCase() === 'POST'

@@ -1249,3 +1249,16 @@ Merged-main run
 получен, выполняется один реальный reload для fail-closed HTTP proof. Browser в
 этом run снова `HEALTHY/PASS` (one POST, 5 IDs/cards, route 200), но terminal
 browser+iOS proof всё ещё требуется.
+
+Следующий merged-main run
+[`31341835441`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31341835441)
+показал тот же `search_target_http_invalid` даже после callback-receipt reuse и
+тем самым опроверг гипотезу о no-op как первопричине. Проверка pinned official
+XCUITest source выявила точную несовместимость: Android/CDP bucket передаёт
+`{method,params}`, а Appium `safariNetwork` сериализует `{method,event}`.
+Reducer принимал только первый envelope, поэтому реальные iOS document
+responses, Search POST и terminal bytes всегда выглядели отсутствующими. Один
+нейтральный OTP/Search parser теперь принимает оба envelope и для Safari берёт
+закрытый body count из `loadingFinished.metrics.responseBodyBytesReceived`.
+В этом run iOS снова сделал ноль Search POST, browser прошёл полностью;
+acceptance остаётся `1/2` до нового merged-main proof.

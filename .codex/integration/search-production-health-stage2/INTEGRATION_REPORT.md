@@ -26,6 +26,11 @@
   the identical URL produced no second Safari document event and timed out the
   HTTP receipt with zero Search POSTs. The adapter now reuses the callback's
   sanitized exact-target 2xx receipt and retains a real reload fallback.
+  Run `31341835441` repeated the empty HTTP receipt and disproved the no-op as
+  root cause. The pinned XCUITest implementation serializes `safariNetwork` as
+  `{method,event}` while the shared reducer accepted only Android/CDP
+  `{method,params}`. Both Search and OTP adapters now use one normalizer for the
+  two official envelopes and Safari terminal body-byte metrics.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -47,7 +52,7 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **152/152 PASS** after the shared
+- Search production-health aggregate suite: **153/153 PASS** after the shared
   OTP/Search Safari native-sheet, pre-side-effect retry, async owner-proof and
   closed failure-evidence regressions;
 - legacy Search harness: **32/32 PASS**;
