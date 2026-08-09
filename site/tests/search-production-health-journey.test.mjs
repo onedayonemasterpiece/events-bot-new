@@ -899,6 +899,41 @@ test('HEAD match followed by an Edge revision change is blocked from retained re
   assert.equal(result.product_health, 'UNCONFIRMED');
 });
 
+test('HEAD match followed by an Edge error without a valid revision remains a product request failure', async () => {
+  const headCalls = [];
+  const adapter = fakeJourneyAdapter({
+    responseTelemetry: { http_status: 502, search_backend_revision: '' },
+  });
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    expectedSearchBackendRevision: backendRevision,
+    releaseGate: async () => (await waitForActiveSearchBackend({
+      supabaseUrl: 'https://project.supabase.co', publishableKey: 'publishable-test-key',
+      expectedRevision: backendRevision, attempts: 1,
+      fetchImpl: async (url, init) => {
+        headCalls.push({ url, init });
+        return { status: 200, headers: new Headers({
+          'x-kenigevents-search-revision': backendRevision,
+          'x-kenigevents-search-contract': 'event-search-contract-v2',
+        }) };
+      },
+    })).active,
+    createAdapter: async () => adapter,
+    issueSession: async () => ({
+      authReceipt, meter: meter(4096), attach: async () => {}, cleanup: async () => {},
+    }),
+  });
+  assert.equal(headCalls.length, 1);
+  assert.equal(adapter.submitCalls, 1);
+  assert.equal(result.search.physical_post_count, 1);
+  assert.equal(result.search.response.search_backend_revision, null);
+  assert.equal(result.execution_status, 'FAILED');
+  assert.equal(result.failure_class, 'BROKEN_SEARCH_REQUEST');
+  assert.equal(result.product_health, 'BROKEN');
+});
+
 test('one physical Search POST is enforced through scroll and event navigation', async () => {
   await assert.rejects(() => runProductionHealthJourney({
     adapter: fakeJourneyAdapter({ postAfterOpen: true }),

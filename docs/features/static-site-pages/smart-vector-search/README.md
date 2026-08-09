@@ -875,9 +875,11 @@ Search response содержит оба независимых поля: точ�
 `search_contract_version`. Evidence всегда берёт backend revision из ответа,
 включая schedule/manual runs без expected marker; marker не подменяет observed
 runtime evidence. Если Edge сменился между успешным HEAD и единственным Search
-POST, response mismatch даёт `BLOCKED_RELEASE_NOT_ACTIVE` без retry и без
-product incident. Source digest нельзя называть или подменять придуманным git
-либо provider deploy SHA.
+POST, только другой синтаксически валидный response digest даёт
+`BLOCKED_RELEASE_NOT_ACTIVE` без retry и без product incident. Отсутствующая или
+malformed revision в Edge error остаётся ошибкой Search response, а не ложным
+release drift. Source digest нельзя называть или подменять придуманным git либо
+provider deploy SHA.
 
 ### 16.3 Три тестовых контура
 

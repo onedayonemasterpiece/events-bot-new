@@ -39,9 +39,10 @@
   deploy/health marker может ссылаться на эту backend revision. Обычный Search
   response также возвращает exact `search_backend_revision`; именно observed
   response revision попадает в health evidence даже для manual/schedule run без
-  marker. Mismatch после ранее успешного HEAD блокирует qualification без
-  повторного Search и без product incident. Edge failure не компенсируется
-  повторным Fly deploy.
+  marker. Только другой валидный digest после ранее успешного HEAD блокирует
+  qualification без повторного Search и без product incident; missing/malformed
+  revision в error response остаётся Search failure. Edge failure не
+  компенсируется повторным Fly deploy.
 - Перед активацией Search production-health broker policy должна одновременно
   разрешать exact main refs legacy/health/qualification workflows и event
   classes `workflow_dispatch,schedule,repository_dispatch`. После двух manual

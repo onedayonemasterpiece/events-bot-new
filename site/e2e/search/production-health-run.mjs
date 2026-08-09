@@ -121,11 +121,8 @@ const searchRequestsFromRuntime = (runtime) => (Array.isArray(runtime?.requests)
 const responseBackendRevisionMismatch = (journey, expectedRevision) => {
   const expected = String(expectedRevision || '').trim();
   if (!expected) return false;
-  const response = journey?.response_telemetry;
-  const responseReceived = Number(response?.http_status || 0) > 0
-    || Boolean(response?.search_contract_version)
-    || Boolean(response?.search_backend_revision);
-  return responseReceived && String(response?.search_backend_revision || '') !== expected;
+  const observed = String(journey?.response_telemetry?.search_backend_revision || '').trim();
+  return /^sha256:[0-9a-f]{64}$/u.test(observed) && observed !== expected;
 };
 
 async function retainFailedJourneyEvidence(adapter, runtime = {}) {
