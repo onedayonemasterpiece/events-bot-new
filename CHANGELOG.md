@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **my-data-hub daily statistics producer (default off)**: added a non-sensitive
+  `events-bot.daily-statistics.v1` aggregate command with RFC 8785 canonical envelope
+  and payload hashes, a restart-safe exact-byte filesystem outbox, bounded retries,
+  envelope-bound receipt validation, dedicated service credential configuration and
+  explicit canary/scheduling gates. No deployment, schedule, production database write
+  or my-data-hub canonical mutation is enabled by this change.
+
 - **Static site pages / first-party action-map research**: added the supplied full and concise research on semantic component-level interaction signals, including the `ALWAYS` / `CAMPAIGN_ONLY` / `DO_NOT_COLLECT` evidence policy; this is research input only, with no runtime telemetry change.
 
 - Added production health for the auto-built «Необычное» collection on the
