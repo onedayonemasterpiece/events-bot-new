@@ -385,16 +385,24 @@ export async function createBuiltInBrowserHooks(env, meter, dependencies = {}) {
       });
     },
     async issueSession({ platform, target }) {
+      const purpose = required(env, 'E2E_SEARCH_HEALTH_MODE');
+      if (!['production_health', 'release_qualification'].includes(purpose)) {
+        throw new Error('search_health_session_purpose_invalid');
+      }
       const oidc = dependencies.oidcToken || await githubOidcToken(env, fetchImpl);
       const issuer = fixtureModule.createAuthSessionBrokerIssuer({
         endpoint: required(env, 'AUTH_SESSION_BROKER_URL'), oidcToken: oidc,
       });
-      const personaId = 'search-cached-browser';
+      const releaseQualification = purpose === 'release_qualification';
+      const personaId = releaseQualification ? 'search-cold-browser' : 'search-cached-browser';
+      const personaEmail = releaseQualification
+        ? required(env, 'SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER')
+        : required(env, 'SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER');
       const fixture = await fixtureModule.createAuthSessionFixture({
-        authMode: 'session_fixture', realMailFallback: false, issuer, platform,
+        authMode: 'session_fixture', realMailFallback: false, issuer, purpose, platform,
         supabaseUrl, publishableKey, fetchImpl: meteredFetch,
         targetUrl: target.navigationUrl(), allowedOrigins: ['https://kenigevents.ru'],
-        personaId, personas: { [personaId]: { email: required(env, 'SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER') } },
+        personaId, personas: { [personaId]: { email: personaEmail } },
         scopeKind: 'job', scopeId: `search-health-browser-${required(env, 'GITHUB_RUN_ID')}-${env.GITHUB_RUN_ATTEMPT || '1'}`,
         runId: required(env, 'GITHUB_RUN_ID'), protectedProbe: protectedOwnerProbe,
       });
@@ -444,7 +452,7 @@ export async function createBuiltInMobileHooks(env, platform, dependencies = {})
         endpoint: required(env, 'AUTH_SESSION_BROKER_URL'), oidcToken: await oidc(),
       });
       const credential = await issuer.issue({
-        personaId: `search-cached-${platform}`, platform,
+        purpose: 'production_health', personaId: `search-cached-${platform}`, platform,
         redirectTo: target.navigationUrl(), runId: required(env, 'GITHUB_RUN_ID'),
       });
       let callback = fixtureModule.createBrowserVerificationCallback({

@@ -116,7 +116,7 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
     transport = Transport()
     logs: list[dict] = []
     result = broker.process(
-        {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+        {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
         token="opaque-signed-jwt", env=environment(), transport=transport,
         verifier=lambda _token, _env: claims(), audit_sink=logs.append,
     )
@@ -166,6 +166,66 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
     assert expected_key not in serialized
 
 
+def test_same_oidc_run_health_then_release_qualification_get_distinct_fresh_credentials():
+    class PurposeTransport(Transport):
+        def __init__(self):
+            super().__init__()
+            self.claimed_personas: set[str] = set()
+
+        def __call__(self, method, url, headers, body, timeout):
+            if url.endswith("/rpc/claim_static_site_auth_session_issue_v2"):
+                self.calls.append((method, url, dict(headers), body, timeout))
+                persona = json.loads(body)["p_persona_id"]
+                assert persona not in self.claimed_personas
+                self.claimed_personas.add(persona)
+                return 200, json.dumps({"claim": "new"}).encode()
+            if url.endswith("/auth/v1/admin/generate_link"):
+                self.calls.append((method, url, dict(headers), body, timeout))
+                payload = json.loads(body)
+                token = "cached-fresh" if payload["email"] == "search-cached@example.invalid" else "cold-fresh"
+                return 200, json.dumps({
+                    "email_otp": "456789" if token == "cached-fresh" else "567890",
+                    "action_link": (
+                        f"https://project.supabase.co/auth/v1/verify?token={token}&"
+                        f"redirect_to={quote(payload['redirect_to'], safe='')}"
+                    ),
+                    "redirect_to": payload["redirect_to"],
+                }).encode()
+            return super().__call__(method, url, headers, body, timeout)
+
+    transport = PurposeTransport()
+    shared = dict(
+        token="same-verified-oidc", env=environment(), transport=transport,
+        verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
+    )
+    health = broker.process({
+        "purpose": "production_health", "platform": "browser",
+        "redirect_to": "https://kenigevents.ru/poisk/",
+    }, **shared)
+    qualification = broker.process({
+        "purpose": "release_qualification", "platform": "browser",
+        "redirect_to": "https://kenigevents.ru/poisk/",
+    }, **shared)
+    assert health["claim"] == qualification["claim"] == "new"
+    assert health["action_link"] != qualification["action_link"]
+    assert transport.claimed_personas == {"search-cached-browser", "search-cold-browser"}
+    assert sum(call[1].endswith("/auth/v1/admin/generate_link") for call in transport.calls) == 2
+
+
+def test_purpose_platform_wire_is_closed_and_release_qualification_is_browser_only():
+    for request, code in [
+        ({"purpose": "unknown", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+         "purpose_not_allowed"),
+        ({"purpose": "release_qualification", "platform": "android", "redirect_to": "https://kenigevents.ru/poisk/"},
+         "purpose_platform_not_allowed"),
+    ]:
+        with pytest.raises(broker.BrokerError, match=code):
+            broker.process(
+                request, token="jwt", env=environment(), transport=Transport(),
+                verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
+            )
+
+
 @pytest.mark.parametrize(("platform", "persona_id", "email"), [
     ("browser", "search-cached-browser", "search-cached@example.invalid"),
     ("android", "search-cached-android", "search-android@example.invalid"),
@@ -174,7 +234,7 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
 def test_each_platform_uses_only_its_dedicated_server_side_persona(platform, persona_id, email):
     transport = Transport()
     result = broker.process(
-        {"platform": platform, "redirect_to": "https://kenigevents.ru/poisk/"},
+        {"purpose": "production_health", "platform": platform, "redirect_to": "https://kenigevents.ru/poisk/"},
         token="jwt", env=environment(), transport=transport,
         verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
     )
@@ -203,7 +263,7 @@ def test_broker_accepts_sdk_wrapped_generate_link_shape_for_issuer_compatibility
             return super().__call__(method, url, headers, body, timeout)
 
     result = broker.process(
-        {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+        {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
         token="jwt", env=environment(), transport=WrappedTransport(),
         verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
     )
@@ -227,7 +287,7 @@ def test_broker_rejects_generate_link_redirect_drift():
 
     with pytest.raises(broker.BrokerError, match="issuer_response_invalid"):
         broker.process(
-            {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+            {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
             token="jwt", env=environment(), transport=DriftedRedirectTransport(),
             verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
         )
@@ -245,7 +305,7 @@ def test_every_github_identity_dimension_is_fail_closed(claim_name, claim_value,
     transport = Transport()
     with pytest.raises(broker.BrokerError, match=code):
         broker.process(
-            {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+            {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
             token="jwt", env=environment(), transport=transport,
             verifier=lambda _token, _env: claims(**{claim_name: claim_value}), audit_sink=lambda _row: None,
         )
@@ -254,15 +314,15 @@ def test_every_github_identity_dimension_is_fail_closed(claim_name, claim_value,
 
 def test_platform_is_closed_and_spoofable_identity_fields_are_rejected():
     for request, code in [
-        ({"platform": "desktop", "redirect_to": "https://kenigevents.ru/poisk/"},
+        ({"purpose": "production_health", "platform": "desktop", "redirect_to": "https://kenigevents.ru/poisk/"},
          "platform_not_allowed"),
-        ({"platform": "browser", "redirect_to": "https://attacker.invalid/poisk/"},
+        ({"purpose": "production_health", "platform": "browser", "redirect_to": "https://attacker.invalid/poisk/"},
          "redirect_not_allowed"),
-        ({"platform": "browser", "persona_id": "search-cached-android",
+        ({"purpose": "production_health", "platform": "browser", "persona_id": "search-cached-android",
           "redirect_to": "https://kenigevents.ru/poisk/"}, "request_identity_spoofed"),
-        ({"platform": "browser", "run_id": "987654321",
+        ({"purpose": "production_health", "platform": "browser", "run_id": "987654321",
           "redirect_to": "https://kenigevents.ru/poisk/"}, "request_identity_spoofed"),
-        ({"platform": "browser", "repository": "attacker/repo",
+        ({"purpose": "production_health", "platform": "browser", "repository": "attacker/repo",
           "redirect_to": "https://kenigevents.ru/poisk/"}, "request_identity_spoofed"),
     ]:
         with pytest.raises(broker.BrokerError, match=code):
@@ -271,7 +331,7 @@ def test_platform_is_closed_and_spoofable_identity_fields_are_rejected():
 
     token = "Z" * 43
     result = broker.process(
-        {"platform": "browser", "redirect_to": f"https://kenigevents.ru/_review/{token}/poisk/"},
+        {"purpose": "production_health", "platform": "browser", "redirect_to": f"https://kenigevents.ru/_review/{token}/poisk/"},
         token="jwt", env=environment(), transport=Transport(), verifier=lambda _token, _env: claims(),
         audit_sink=lambda _row: None,
     )
@@ -288,7 +348,7 @@ def test_typed_ledger_rejection_never_generates_another_credential(claim, status
     transport = Transport(claim=claim)
     with pytest.raises(broker.BrokerError, match=claim) as caught:
         broker.process(
-            {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+            {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
             token="jwt", env=environment(), transport=transport, verifier=lambda _token, _env: claims(),
             audit_sink=lambda _row: None,
         )
@@ -306,7 +366,7 @@ def test_typed_ledger_rejection_never_generates_another_credential(claim, status
 
 def test_exact_run_allowlist_is_supported_but_wildcards_are_forbidden():
     broker.process(
-        {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+        {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
         token="jwt", env=environment(AUTH_SESSION_BROKER_ALLOWED_RUNS="123456789"), transport=Transport(),
         verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
     )
@@ -327,20 +387,24 @@ def test_broker_requires_dedicated_legacy_service_role_jwt(key):
 def test_platform_personas_are_server_derived_and_emails_must_be_unique():
     policy = broker.policy_from_env(environment())
     assert {
-        platform: persona.persona_id
-        for platform, persona in policy.platform_personas.items()
+        purpose_platform: persona.persona_id
+        for purpose_platform, persona in policy.purpose_platform_personas.items()
     } == {
-        "browser": "search-cached-browser",
-        "android": "search-cached-android",
-        "ios": "search-cached-ios",
+        ("production_health", "browser"): "search-cached-browser",
+        ("production_health", "android"): "search-cached-android",
+        ("production_health", "ios"): "search-cached-ios",
+        ("release_qualification", "browser"): "search-cold-browser",
+        ("legacy_debug", "browser"): "search-cached-browser",
+        ("legacy_debug", "android"): "search-cached-android",
+        ("legacy_debug", "ios"): "search-cached-ios",
     }
     configured = json.loads(environment()["AUTH_SESSION_BROKER_PERSONAS_JSON"])
-    configured["search-cached-ios"] = configured["search-cached-android"]
+    configured["search-cold-browser"] = configured["search-cached-browser"]
     with pytest.raises(broker.BrokerError, match="platform_personas_not_unique"):
         broker.policy_from_env(environment(
             AUTH_SESSION_BROKER_PERSONAS_JSON=json.dumps(configured),
         ))
-    del configured["search-cached-ios"]
+    del configured["search-cold-browser"]
     with pytest.raises(broker.BrokerError, match="platform_personas_invalid"):
         broker.policy_from_env(environment(
             AUTH_SESSION_BROKER_PERSONAS_JSON=json.dumps(configured),
@@ -350,7 +414,7 @@ def test_platform_personas_are_server_derived_and_emails_must_be_unique():
 def test_identical_immediate_replay_returns_same_unconsumed_credential_without_second_issue():
     transport = Transport()
     logs: list[dict] = []
-    request = {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
+    request = {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
     first = broker.process(
         request, token="jwt-a", env=environment(), transport=transport,
         verifier=lambda _token, _env: claims(), audit_sink=logs.append,
@@ -388,7 +452,7 @@ def test_identical_concurrent_issue_is_coalesced_to_one_claim_and_generate_link(
             assert both_verified.wait(timeout=2)
         return original_transport(method, url, headers, body, timeout)
 
-    request = {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
+    request = {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(
             broker.process, request, token="jwt-a", env=environment(),
@@ -405,7 +469,7 @@ def test_identical_concurrent_issue_is_coalesced_to_one_claim_and_generate_link(
 
 def test_identical_unconsumed_request_replays_after_process_state_loss_without_second_issue():
     first_transport = Transport()
-    request = {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
+    request = {"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
     first = broker.process(
         request, token="jwt-a", env=environment(), transport=first_transport,
         verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,

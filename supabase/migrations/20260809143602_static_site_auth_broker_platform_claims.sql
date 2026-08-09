@@ -1,6 +1,17 @@
 -- Bind Search health session claims to a closed platform vocabulary and return
 -- typed admission outcomes. No plaintext email, token, OTP, action link,
 -- cookie, or serialized session is persisted.
+do $$
+begin
+  if pg_catalog.to_regprocedure('cron.schedule(text,text,text)') is null then
+    execute 'create extension if not exists pg_cron';
+  end if;
+  if pg_catalog.to_regprocedure('cron.schedule(text,text,text)') is null then
+    raise exception 'static_site_auth_broker_requires_pg_cron' using errcode = '55000';
+  end if;
+end;
+$$;
+
 alter table public.static_site_auth_session_issue_claim
   add column if not exists platform text;
 
@@ -21,6 +32,10 @@ end
 where platform is null;
 
 alter table public.static_site_auth_session_issue_claim
+  -- Keep the deployed v1 RPC callable during migration-first rollout: its
+  -- insert does not name this new column. V1 has no platform input and all of
+  -- its browser-era claims therefore receive the closed compatibility value.
+  alter column platform set default 'browser',
   alter column platform set not null;
 
 alter table public.static_site_auth_session_issue_claim
@@ -160,3 +175,35 @@ revoke all on function public.complete_static_site_auth_session_issue_v2(
 grant execute on function public.complete_static_site_auth_session_issue_v2(
   text, integer, text, text, text, text, text
 ) to service_role;
+
+-- Replay validity ends at credential_expires_at. Physical ciphertext removal
+-- is independent of future broker traffic and runs every minute, so expired
+-- credential material does not remain until another claim happens.
+create or replace function public.cleanup_static_site_auth_session_issue_credentials_v1()
+returns integer
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $$
+declare
+  v_updated integer;
+begin
+  update public.static_site_auth_session_issue_claim c
+  set credential_ciphertext = null
+  where c.credential_ciphertext is not null
+    and c.credential_expires_at <= pg_catalog.now();
+  get diagnostics v_updated = row_count;
+  return v_updated;
+end;
+$$;
+
+revoke all on function public.cleanup_static_site_auth_session_issue_credentials_v1()
+  from public, anon, authenticated;
+grant execute on function public.cleanup_static_site_auth_session_issue_credentials_v1()
+  to service_role;
+
+select cron.schedule(
+  'static-site-auth-session-credential-cleanup',
+  '* * * * *',
+  'select public.cleanup_static_site_auth_session_issue_credentials_v1()'
+);

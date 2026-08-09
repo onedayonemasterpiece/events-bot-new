@@ -26,10 +26,25 @@ export const DEFAULT_PERSONA_ENV = Object.freeze({
 const activeScopes = new Set();
 const ALLOWED_SCOPE_KINDS = new Set(['test', 'worker', 'job', 'device']);
 export const SEARCH_HEALTH_PLATFORMS = Object.freeze(['browser', 'android', 'ios']);
-const SEARCH_HEALTH_PERSONAS = Object.freeze({
-  browser: 'search-cached-browser',
-  android: 'search-cached-android',
-  ios: 'search-cached-ios',
+export const SEARCH_SESSION_PURPOSES = Object.freeze([
+  'production_health',
+  'release_qualification',
+  'legacy_debug',
+]);
+export const SEARCH_SESSION_PERSONAS = Object.freeze({
+  production_health: Object.freeze({
+    browser: 'search-cached-browser',
+    android: 'search-cached-android',
+    ios: 'search-cached-ios',
+  }),
+  release_qualification: Object.freeze({
+    browser: 'search-cold-browser',
+  }),
+  legacy_debug: Object.freeze({
+    browser: 'search-cached-browser',
+    android: 'search-cached-android',
+    ios: 'search-cached-ios',
+  }),
 });
 
 export class AuthSessionFixtureBlockedError extends Error {
@@ -238,20 +253,26 @@ export function createAuthSessionBrokerIssuer(options = {}) {
   const inflight = new Map();
   return Object.freeze({
     kind: 'github_oidc_broker',
-    async issue({ personaId, platform, redirectTo }) {
+    async issue({ purpose, personaId, platform, redirectTo }) {
+      const normalizedPurpose = String(purpose || '').trim();
+      if (!SEARCH_SESSION_PURPOSES.includes(normalizedPurpose)) {
+        throw blocked('BROKER_PURPOSE_INVALID');
+      }
       const normalizedPlatform = String(platform || '').trim();
       if (!SEARCH_HEALTH_PLATFORMS.includes(normalizedPlatform)) {
         throw blocked('BROKER_PLATFORM_INVALID');
       }
+      const expectedPersona = SEARCH_SESSION_PERSONAS[normalizedPurpose]?.[normalizedPlatform];
+      if (!expectedPersona) throw blocked('BROKER_PURPOSE_PLATFORM_MISMATCH');
       // The persona is a compatibility assertion for existing callers only.
       // It never crosses the broker boundary; the server derives it from the
-      // validated platform and its own policy.
+      // validated purpose/platform pair and its own policy.
       if (personaId !== undefined
-        && String(personaId || '').trim() !== SEARCH_HEALTH_PERSONAS[normalizedPlatform]) {
-        throw blocked('BROKER_PERSONA_PLATFORM_MISMATCH');
+        && String(personaId || '').trim() !== expectedPersona) {
+        throw blocked('BROKER_PERSONA_PURPOSE_PLATFORM_MISMATCH');
       }
       const redirect = String(redirectTo || '');
-      const identity = `${normalizedPlatform}:${createHash('sha256').update(redirect).digest('hex')}`;
+      const identity = `${normalizedPurpose}:${normalizedPlatform}:${createHash('sha256').update(redirect).digest('hex')}`;
       const existing = inflight.get(identity);
       if (existing) return existing;
 
@@ -264,7 +285,11 @@ export function createAuthSessionBrokerIssuer(options = {}) {
             authorization: `Bearer ${oidcToken}`,
             'content-type': 'application/json',
           },
-          body: JSON.stringify({ platform: normalizedPlatform, redirect_to: redirect }),
+          body: JSON.stringify({
+            purpose: normalizedPurpose,
+            platform: normalizedPlatform,
+            redirect_to: redirect,
+          }),
         });
         let payload;
         try {
@@ -432,6 +457,7 @@ export async function createAuthSessionFixture(options = {}) {
       scopeKind,
       scopeId,
     };
+    if (options.purpose !== undefined) issueRequest.purpose = String(options.purpose || '').trim();
     if (options.platform !== undefined) issueRequest.platform = String(options.platform || '').trim();
     const issued = normalizeIssuerResult(await issuer.issue(issueRequest));
     counters.adminCredentials = issued.counters.adminCredentialCount;

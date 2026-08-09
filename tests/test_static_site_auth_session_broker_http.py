@@ -33,6 +33,7 @@ def _env(**overrides: str) -> dict[str, str]:
         "AUTH_SESSION_BROKER_ALLOWED_RUNS": "github-claim-bound",
         "AUTH_SESSION_BROKER_PERSONAS_JSON": (
             '{"search-cached-browser":"browser@example.invalid",'
+            '"search-cold-browser":"cold-browser@example.invalid",'
             '"search-cached-android":"android@example.invalid",'
             '"search-cached-ios":"ios@example.invalid"}'
         ),
@@ -179,7 +180,7 @@ async def test_http_admits_three_platforms_and_rejects_fourth_without_queueing(m
         active = [
             asyncio.create_task(client.post(
                 http_broker.ROUTE,
-                json={"platform": platform, "redirect_to": "https://kenigevents.ru/poisk/"},
+                json={"purpose": "production_health", "platform": platform, "redirect_to": "https://kenigevents.ru/poisk/"},
                 headers=headers,
             ))
             for platform in ("browser", "android", "ios")
@@ -187,7 +188,7 @@ async def test_http_admits_three_platforms_and_rejects_fourth_without_queueing(m
         assert await asyncio.to_thread(all_started.wait, 3)
         fourth = await client.post(
             http_broker.ROUTE,
-            json={"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+            json={"purpose": "production_health", "platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
             headers=headers,
         )
         assert fourth.status == 429

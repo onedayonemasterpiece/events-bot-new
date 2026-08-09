@@ -167,6 +167,12 @@ def test_broker_issue_claim_is_service_only_and_pii_free() -> None:
     assert "complete_static_site_auth_session_issue_v2" in platform_claim
     assert "credential_ciphertext = null" in platform_claim
     assert "credential_expires_at = pg_catalog.now() + interval '2 minutes'" in platform_claim
+    assert "cleanup_static_site_auth_session_issue_credentials_v1" in platform_claim
+    assert "credential_expires_at <= pg_catalog.now()" in platform_claim
+    assert "static-site-auth-session-credential-cleanup" in platform_claim
+    assert "'* * * * *'" in platform_claim
+    assert "cron.schedule(" in platform_claim
+    assert "static_site_auth_broker_requires_pg_cron" in platform_claim
     assert "security definer" in platform_claim
     assert "set search_path = pg_catalog" in platform_claim
     assert "from public, anon, authenticated" in platform_claim

@@ -539,7 +539,7 @@ test('built-in mobile hook needs no email persona and verifies Auth only after c
   const fixtureModule = {
     createAuthSessionBrokerIssuer() {
       return { async issue(input) {
-        calls.push(['issue', input.personaId, input.platform]);
+        calls.push(['issue', input.purpose, input.personaId, input.platform]);
         return { actionLink: 'https://project.supabase.co/auth/v1/verify?token=opaque', emailOtp: '123456' };
       } };
     },
@@ -555,7 +555,9 @@ test('built-in mobile hook needs no email persona and verifies Auth only after c
   assert.equal(verified.receipt.get_user_verified, true);
   assert.equal(issued.meterSnapshot().total_bytes, 1234);
   assert.deepEqual(calls, [
-    ['adapter', '/wd/hub'], ['issue', 'search-cached-android', 'android'], ['callback'],
+    ['adapter', '/wd/hub'],
+    ['issue', 'production_health', 'search-cached-android', 'android'],
+    ['callback'],
   ]);
 });
 
@@ -571,7 +573,8 @@ test('built-in browser hook binds the real owner probe into fixture issuance', a
       return { kind: 'github_oidc_broker', issue: async () => ({}) };
     },
     async createAuthSessionFixture(options) {
-      calls.push(['fixture', options.platform, typeof options.protectedProbe]);
+      calls.push(['fixture', options.purpose, options.platform, options.personaId,
+        typeof options.protectedProbe]);
       return { receipt: authReceipt, storageStatePath: '/tmp/ephemeral-state', cleanup: async () => {} };
     },
   };
@@ -581,6 +584,7 @@ test('built-in browser hook binds the real owner probe into fixture issuance', a
     PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: 'publishable',
     AUTH_SESSION_BROKER_URL: 'https://broker.example/issue',
     SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER: 'fixture@example.invalid',
+    E2E_SEARCH_HEALTH_MODE: 'production_health',
     GITHUB_RUN_ID: '42',
   }, observed, {
     adapterModule, fixtureModule, oidcToken: 'verified-oidc',
@@ -592,8 +596,38 @@ test('built-in browser hook binds the real owner probe into fixture issuance', a
   });
   assert.equal(issued.authReceipt.get_user_verified, true);
   assert.deepEqual(calls, [
-    ['adapter', true], ['issuer', 'verified-oidc'], ['fixture', 'browser', 'function'],
+    ['adapter', true], ['issuer', 'verified-oidc'],
+    ['fixture', 'production_health', 'browser', 'search-cached-browser', 'function'],
   ]);
+});
+
+test('release qualification browser hook uses the distinct cold persona', async () => {
+  let fixtureOptions;
+  const hooks = await createBuiltInBrowserHooks({
+    PERSONALIZATION_SUPABASE_URL: 'https://project.supabase.co',
+    PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: 'publishable',
+    AUTH_SESSION_BROKER_URL: 'https://broker.example/issue',
+    SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER: 'cold@example.invalid',
+    E2E_SEARCH_HEALTH_MODE: 'release_qualification',
+    GITHUB_RUN_ID: '42',
+  }, new SupabaseClientObservedByteMeter({ supabaseOrigins: ['https://project.supabase.co'] }), {
+    adapterModule: { createPlaywrightSearchAdapter: () => ({}) },
+    fixtureModule: {
+      createAuthSessionBrokerIssuer: () => ({ kind: 'github_oidc_broker', issue: async () => ({}) }),
+      async createAuthSessionFixture(options) {
+        fixtureOptions = options;
+        return { receipt: authReceipt, storageStatePath: '/tmp/ephemeral-state', cleanup: async () => {} };
+      },
+    },
+    oidcToken: 'verified-oidc', fetchImpl: async () => new Response('[]', { status: 200 }),
+  });
+  await hooks.issueSession({
+    platform: 'browser', target: normalizeAcceptedTargetResolverResult(targetRow()),
+  });
+  assert.equal(fixtureOptions.purpose, 'release_qualification');
+  assert.equal(fixtureOptions.personaId, 'search-cold-browser');
+  assert.deepEqual(fixtureOptions.personas,
+    { 'search-cold-browser': { email: 'cold@example.invalid' } });
 });
 
 test('authenticated owner runtime proof uses resilient get-user plus exactly one owner RLS read without returning identity', async () => {

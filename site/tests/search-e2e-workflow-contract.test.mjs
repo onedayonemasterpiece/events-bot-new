@@ -64,6 +64,7 @@ test('legacy Search canary is manual-only live debug and never reports product i
   assert.equal((source.match(/issue-static-search-session\.mjs/gu) || []).length, 2,
     'one broker issuance step per Android/iOS job; iOS retry must reuse the unconsumed callback');
   for (const jobName of ['browser', 'android', 'ios']) {
+    assert.equal(parsed.jobs[jobName].env.E2E_SEARCH_SESSION_PURPOSE, 'legacy_debug');
     const upload = parsed.jobs[jobName].steps.find((step) => String(step.name).startsWith('Upload sanitized'));
     assert.equal(upload?.with?.['include-hidden-files'], true, `${jobName} must upload .redaction-ok`);
   }
@@ -113,6 +114,13 @@ test('platform jobs invoke only the unified one-session runner and qualification
   assert.deepEqual(qualification.on.workflow_dispatch.inputs.profile.options, ['browser', 'full']);
   assert.match(qualificationSource, /\["cold_vector_llm","degraded_vector_fallback"\]/u);
   assert.match(qualificationSource, /one no-mail session/u);
+  assert.equal(qualification.jobs.browser.env.E2E_SEARCH_SESSION_PURPOSE, 'release_qualification');
+  assert.equal(qualification.jobs['full-browser'].env.E2E_SEARCH_SESSION_PURPOSE, 'release_qualification');
+  assert.equal(qualification.jobs.browser.env.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER,
+    '${{ secrets.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER }}');
+  assert.equal(qualification.jobs['full-browser'].env.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER,
+    '${{ secrets.SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER }}');
+  assert.equal(qualificationSource.includes('SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER'), false);
   assert.match(qualificationSource, /E2E_SEARCH_REVISION_POLICY: release_exact/u);
   assert.equal((qualificationSource.match(/search-backend-release-probe-cli\.mjs/gu) || []).length, 2);
   assert.match(qualificationSource, /before Auth\/Search/u);
@@ -195,8 +203,10 @@ test('browser fixture sends its issued session through the owner RLS probe', asy
   assert.match(source, /siteRequire\('playwright'\)/u);
   assert.doesNotMatch(source, /from 'playwright'/u);
   assert.match(source, /id: 'search-cached-browser'/u);
+  assert.match(source, /id: 'search-cold-browser'/u);
+  assert.match(source, /purpose === 'release_qualification'/u);
   assert.match(source, /platform: 'browser'/u);
-  assert.doesNotMatch(source, /id: 'search-(?:cold|degraded)-browser'/u);
+  assert.doesNotMatch(source, /id: 'search-degraded-browser'/u);
   assert.match(source, /protectedOwnerProbe\(\{ fetchImpl, userId, supabaseUrl, accessToken, publishableKey \}\)/u);
   assert.match(source, /apikey: publishableKey/u);
   assert.match(source, /authorization: `Bearer \$\{accessToken\}`/u);

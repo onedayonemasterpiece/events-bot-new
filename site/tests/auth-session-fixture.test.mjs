@@ -278,6 +278,7 @@ test('broker-compatible issuer can bootstrap without exposing an admin secret to
     targetUrl: 'https://kenigevents.ru/poisk/',
     personas: { 'search-cached': { email: 'search-cached@example.invalid' } }, personaId: 'search-cached',
     scopeKind: 'job', scopeId: 'scheduled-1', runId: '12345', tempRoot: root,
+    purpose: 'production_health', platform: 'browser',
     issuer, fetchImpl, clientFactory: fakeClientFactory, protectedProbe: verifiedRlsProbe,
   });
   assert.equal(calls.length, 1);
@@ -288,6 +289,8 @@ test('broker-compatible issuer can bootstrap without exposing an admin secret to
     runId: '12345',
     scopeKind: 'job',
     scopeId: 'scheduled-1',
+    purpose: 'production_health',
+    platform: 'browser',
   });
   assert.equal(fixture.receipt.bootstrap_method, 'github_oidc_broker_then_verify_otp');
   assert.equal(fixture.receipt.admin_credential_count, 1);
@@ -313,7 +316,7 @@ test('issuer counters are exact and fail closed before session verification', as
   assert.equal(sessionClientCreated, false);
 });
 
-test('GitHub OIDC broker issuer sends only platform/redirect and retains one-time action link', async () => {
+test('GitHub OIDC broker issuer sends only purpose/platform/redirect and retains one-time action link', async () => {
   let observed;
   const issuer = createAuthSessionBrokerIssuer({
     endpoint: 'https://broker.example.invalid/issue', oidcToken: 'signed-oidc-secret',
@@ -329,11 +332,11 @@ test('GitHub OIDC broker issuer sends only platform/redirect and retains one-tim
   });
   const result = await issuer.issue({
     personaId: 'search-cached-android', personaEmail: 'must-not-cross-broker-boundary@example.invalid',
-    platform: 'android', redirectTo: 'https://kenigevents.ru/poisk/',
+    purpose: 'production_health', platform: 'android', redirectTo: 'https://kenigevents.ru/poisk/',
     runId: '123456789', scopeKind: 'job', scopeId: 'worker-0',
   });
   assert.deepEqual(observed.body, {
-    platform: 'android', redirect_to: 'https://kenigevents.ru/poisk/',
+    purpose: 'production_health', platform: 'android', redirect_to: 'https://kenigevents.ru/poisk/',
   });
   assert.equal(observed.init.headers.authorization, 'Bearer signed-oidc-secret');
   assert.equal(result.actionLink, 'https://project.supabase.co/auth/v1/verify?token=one-time');
@@ -359,7 +362,7 @@ test('broker issuer coalesces identical in-process calls to one HTTP POST withou
     },
   });
   const request = {
-    personaId: 'search-cached-browser', platform: 'browser',
+    purpose: 'production_health', personaId: 'search-cached-browser', platform: 'browser',
     redirectTo: 'https://kenigevents.ru/poisk/', runId: 'ignored-compatibility-field',
   };
   const first = issuer.issue(request);
@@ -387,7 +390,8 @@ test('broker issuer preserves typed UNKNOWN infrastructure rejection', async () 
     }, { status: 423 }),
   });
   await assert.rejects(issuer.issue({
-    personaId: 'search-cached-ios', platform: 'ios', redirectTo: 'https://kenigevents.ru/poisk/',
+    purpose: 'production_health', personaId: 'search-cached-ios', platform: 'ios',
+    redirectTo: 'https://kenigevents.ru/poisk/',
   }), (error) => {
     assert.equal(error.reason, 'BROKER_PERSONA_BUSY');
     assert.equal(error.claim, 'persona_busy');
@@ -405,11 +409,17 @@ test('broker issuer rejects invalid platform and caller persona mismatch before 
     fetchImpl: async () => { posts += 1; return Response.json({}); },
   });
   await assert.rejects(issuer.issue({
-    personaId: 'search-cached-browser', platform: 'desktop', redirectTo: 'https://kenigevents.ru/poisk/',
+    purpose: 'production_health', personaId: 'search-cached-browser', platform: 'desktop',
+    redirectTo: 'https://kenigevents.ru/poisk/',
   }), /BROKER_PLATFORM_INVALID/u);
   await assert.rejects(issuer.issue({
-    personaId: 'search-cached-ios', platform: 'android', redirectTo: 'https://kenigevents.ru/poisk/',
-  }), /BROKER_PERSONA_PLATFORM_MISMATCH/u);
+    purpose: 'production_health', personaId: 'search-cached-ios', platform: 'android',
+    redirectTo: 'https://kenigevents.ru/poisk/',
+  }), /BROKER_PERSONA_PURPOSE_PLATFORM_MISMATCH/u);
+  await assert.rejects(issuer.issue({
+    purpose: 'release_qualification', personaId: 'search-cold-browser', platform: 'android',
+    redirectTo: 'https://kenigevents.ru/poisk/',
+  }), /BROKER_PURPOSE_PLATFORM_MISMATCH/u);
   assert.equal(posts, 0);
 });
 

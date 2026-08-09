@@ -34,10 +34,23 @@ _PERSONA_RE = re.compile(r"^[a-z][a-z0-9-]{1,63}$")
 _OTP_RE = re.compile(r"^[0-9]{6,10}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PLATFORMS = ("browser", "android", "ios")
-PLATFORM_PERSONA_IDS = {
-    "browser": "search-cached-browser",
-    "android": "search-cached-android",
-    "ios": "search-cached-ios",
+PURPOSES = ("production_health", "release_qualification", "legacy_debug")
+PURPOSE_PLATFORM_PERSONA_IDS = {
+    "production_health": {
+        "browser": "search-cached-browser",
+        "android": "search-cached-android",
+        "ios": "search-cached-ios",
+    },
+    "release_qualification": {
+        "browser": "search-cold-browser",
+    },
+    # The legacy workflow shares a concurrency group with production health,
+    # so these compatibility paths cannot overlap their cached personas.
+    "legacy_debug": {
+        "browser": "search-cached-browser",
+        "android": "search-cached-android",
+        "ios": "search-cached-ios",
+    },
 }
 
 Transport = Callable[[str, str, Mapping[str, str], bytes | None, float], tuple[int, bytes]]
@@ -80,7 +93,7 @@ class Policy:
     environments: frozenset[str]
     events: frozenset[str]
     runs: frozenset[str]
-    platform_personas: Mapping[str, Persona]
+    purpose_platform_personas: Mapping[tuple[str, str], Persona]
     redirects: tuple[str, ...]
     per_run_persona_limit: int
     audit_key: str
@@ -94,20 +107,23 @@ class AuthorizedIssue:
     workflow_ref: str
     run_id: str
     run_attempt: int
+    purpose: str
     platform: str
     persona: Persona
     redirect: str
 
     @property
-    def identity(self) -> tuple[str, str, str, int, str]:
-        # Every field except the closed platform vocabulary comes from the
-        # verified GitHub OIDC token. No caller-supplied identity is trusted.
+    def identity(self) -> tuple[str, str, str, int, str, str]:
+        # Repository/workflow/run fields come from verified GitHub OIDC. The
+        # platform/persona pair comes from the server's closed purpose mapping;
+        # no caller-supplied persona or mirrored OIDC identity is trusted.
         return (
             self.repository,
             self.workflow_ref,
             self.run_id,
             self.run_attempt,
             self.platform,
+            self.persona.persona_id,
         )
 
 
@@ -125,9 +141,9 @@ class _IssueReplay:
     remaining_replays: int = 1
 
 
-_ISSUE_FLIGHTS: dict[tuple[str, str, str, int, str], _IssueFlight] = {}
+_ISSUE_FLIGHTS: dict[tuple[str, str, str, int, str, str], _IssueFlight] = {}
 _ISSUE_FLIGHTS_LOCK = threading.Lock()
-_ISSUE_REPLAYS: dict[tuple[str, str, str, int, str], _IssueReplay] = {}
+_ISSUE_REPLAYS: dict[tuple[str, str, str, int, str, str], _IssueReplay] = {}
 _ISSUE_REPLAY_TTL_SECONDS = 30.0
 _ISSUE_REPLAY_MAX_ENTRIES = 12
 _DURABLE_REPLAY_POLL_ATTEMPTS = 20
@@ -223,14 +239,19 @@ def policy_from_env(env: Mapping[str, str]) -> Policy:
                 or any(char in email for char in "\r\n\x00"):
             raise BrokerError("personas_invalid", status=500)
         personas[persona] = email
-    required_personas = set(PLATFORM_PERSONA_IDS.values())
+    required_personas = {
+        persona_id
+        for platform_map in PURPOSE_PLATFORM_PERSONA_IDS.values()
+        for persona_id in platform_map.values()
+    }
     if not required_personas.issubset(personas):
         raise BrokerError("platform_personas_invalid", status=500)
-    platform_personas = {
-        platform: Persona(persona_id=persona_id, email=personas[persona_id])
-        for platform, persona_id in PLATFORM_PERSONA_IDS.items()
+    purpose_platform_personas = {
+        (purpose, platform): Persona(persona_id=persona_id, email=personas[persona_id])
+        for purpose, platform_map in PURPOSE_PLATFORM_PERSONA_IDS.items()
+        for platform, persona_id in platform_map.items()
     }
-    platform_emails = [persona.email for persona in platform_personas.values()]
+    platform_emails = [personas[persona_id] for persona_id in sorted(required_personas)]
     if len(set(platform_emails)) != len(platform_emails):
         raise BrokerError("platform_personas_not_unique", status=500)
 
@@ -265,7 +286,7 @@ def policy_from_env(env: Mapping[str, str]) -> Policy:
         environments=_allowlist(env, "AUTH_SESSION_BROKER_ALLOWED_ENVIRONMENTS"),
         events=_allowlist(env, "AUTH_SESSION_BROKER_ALLOWED_EVENTS"),
         runs=runs,
-        platform_personas=platform_personas,
+        purpose_platform_personas=purpose_platform_personas,
         redirects=redirects,
         per_run_persona_limit=limit,
         audit_key=audit_key,
@@ -361,11 +382,17 @@ def authorize_request(
     # Identity fields are forbidden in the body. They must come exclusively
     # from the verified OIDC claims above; accepting mirrors would create a
     # second, spoofable source of truth.
-    if set(request) != {"platform", "redirect_to"}:
+    if set(request) != {"purpose", "platform", "redirect_to"}:
         raise BrokerError("request_identity_spoofed")
+    purpose = str(request.get("purpose") or "").strip()
+    if purpose not in PURPOSES:
+        raise BrokerError("purpose_not_allowed")
     platform = str(request.get("platform") or "").strip()
-    if platform not in policy.platform_personas:
+    if platform not in PLATFORMS:
         raise BrokerError("platform_not_allowed")
+    persona = policy.purpose_platform_personas.get((purpose, platform))
+    if persona is None:
+        raise BrokerError("purpose_platform_not_allowed")
     redirect = str(request.get("redirect_to") or "").strip()
     if not _redirect_allowed(redirect, policy.redirects):
         raise BrokerError("redirect_not_allowed")
@@ -374,8 +401,9 @@ def authorize_request(
         workflow_ref=workflow_ref,
         run_id=run_id,
         run_attempt=int(run_attempt),
+        purpose=purpose,
         platform=platform,
-        persona=policy.platform_personas[platform],
+        persona=persona,
         redirect=redirect,
     )
 
@@ -452,7 +480,7 @@ def _audit_hash(value: str, key: str) -> str:
 
 def _audit(
     sink: AuditSink, policy: Policy, *, outcome: str, claims: Mapping[str, Any],
-    persona: str, platform: str, redirect: str,
+    persona: str, purpose: str, platform: str, redirect: str,
 ) -> None:
     # Never include claim values, run ids, redirect paths, email, OTP or JWT.
     sink({
@@ -464,6 +492,7 @@ def _audit(
         "environment_hash": _audit_hash(_claim(claims, "environment"), policy.audit_key),
         "run_hash": _audit_hash(_claim(claims, "run_id"), policy.audit_key),
         "persona_hash": _audit_hash(persona, policy.audit_key),
+        "purpose": purpose,
         "platform": platform,
         "redirect_hash": _audit_hash(redirect, policy.audit_key),
     })
@@ -508,7 +537,8 @@ def _issue_authorized(
             raise BrokerError("credential_replay_invalid", status=503)
         _audit(
             audit_sink, policy, outcome="replayed_durable", claims=claims,
-            persona=authorized.persona.persona_id, platform=authorized.platform,
+            persona=authorized.persona.persona_id, purpose=authorized.purpose,
+            platform=authorized.platform,
             redirect=authorized.redirect,
         )
         return result
@@ -517,7 +547,8 @@ def _issue_authorized(
     if admission != "new":
         _audit(
             audit_sink, policy, outcome=admission, claims=claims,
-            persona=authorized.persona.persona_id, platform=authorized.platform,
+            persona=authorized.persona.persona_id, purpose=authorized.purpose,
+            platform=authorized.platform,
             redirect=authorized.redirect,
         )
         status = 423 if admission == "persona_busy" else 409
@@ -567,7 +598,8 @@ def _issue_authorized(
         raise BrokerError("credential_replay_completion_rejected", status=503)
     _audit(
         audit_sink, policy, outcome="issued", claims=claims,
-        persona=authorized.persona.persona_id, platform=authorized.platform,
+        persona=authorized.persona.persona_id, purpose=authorized.purpose,
+        platform=authorized.platform,
         redirect=authorized.redirect,
     )
     return result
@@ -579,10 +611,10 @@ def _coalesced_issue(
 ) -> dict[str, Any]:
     """Coalesce overlap and allow one bounded lost-response replay.
 
-    The replay exists only in broker process memory for at most 30 seconds and
-    can be read once. It is never written to a database, file, log or job
-    artifact. This closes the ordinary HTTP lost-response window without
-    generating a second one-time credential or creating durable escrow.
+    One replay exists in broker process memory for at most 30 seconds. The SQL
+    claim ledger also holds a short-lived encrypted credential so a retry after
+    process loss can return the same issue instead of generating another one.
+    Plaintext credentials are never written to a file, log, or job artifact.
     """
     now = time.monotonic()
     replayed: dict[str, Any] | None = None
@@ -604,7 +636,8 @@ def _coalesced_issue(
     if replayed is not None:
         _audit(
             audit_sink, policy, outcome="replayed", claims=claims,
-            persona=authorized.persona.persona_id, platform=authorized.platform,
+            persona=authorized.persona.persona_id, purpose=authorized.purpose,
+            platform=authorized.platform,
             redirect=authorized.redirect,
         )
         return replayed

@@ -7,23 +7,29 @@ endpoint and never sends mail.
 
 ## Stage 2 identity and admission contract
 
-The request body has exactly two fields:
+The request body has exactly three fields:
 
 ```json
-{"platform":"browser|android|ios","redirect_to":"https://..."}
+{"purpose":"production_health|release_qualification|legacy_debug","platform":"browser|android|ios","redirect_to":"https://..."}
 ```
 
 Repository, `workflow_ref`, `run_id`, and `run_attempt` are accepted only from
 the verified GitHub OIDC token. Caller-supplied mirrors such as `persona_id` or
-`run_id` are rejected. The closed platform value is mapped server-side to the
-existing dedicated personas `search-cached-browser`, `search-cached-android`,
-and `search-cached-ios`. `AUTH_SESSION_BROKER_PERSONAS_JSON` must contain all
-three persona IDs with three distinct email addresses; duplicate or missing
-accounts fail startup validation.
+`run_id` are rejected. The server maps the closed purpose/platform pair to a
+persona: production health uses `search-cached-browser`,
+`search-cached-android`, or `search-cached-ios`; release qualification allows
+only browser and uses `search-cold-browser`; legacy debug uses the cached
+persona for its selected platform. Unknown purposes and unsupported pairs such
+as release qualification on mobile fail closed. The four mapped persona IDs in
+`AUTH_SESSION_BROKER_PERSONAS_JSON` must have four distinct email addresses;
+duplicate or missing accounts fail startup validation. Production health and
+legacy debug share one workflow concurrency group, so reuse of their cached
+personas is intentional; the separately callable release qualification gets
+the distinct cold browser persona.
 
 `claim_static_site_auth_session_issue_v2` atomically binds
-`(repository, workflow_ref, run_id, run_attempt, platform)` to the dedicated
-persona and returns one of:
+`(repository, workflow_ref, run_id, run_attempt, platform, persona)` and returns
+one of:
 
 - `new` — the caller owns the new issuance;
 - `replay` — the identical still-unconsumed identity receives the same durable
@@ -43,9 +49,11 @@ broker POST. Independently overlapping identical calls reaching one broker
 process are coalesced to one ledger call and one `generate_link`. To close the
 ordinary lost-HTTP-response window, a successful result may be replayed
 once from broker process memory for at most 30 seconds. In addition, the claim
-ledger holds a Fernet-encrypted result for at most two minutes. The key is
-derived in memory from the broker-only audit secret; plaintext OTP/action link
-is never stored. Exact retries from another process or after restart receive
+ledger accepts replay of a Fernet-encrypted result for at most two minutes. A
+named `pg_cron` job runs every minute and physically nulls expired ciphertext,
+independently of later broker traffic; the migration fails closed if Supabase
+Cron cannot be installed or resolved. The key is derived in memory from the
+broker-only audit secret; plaintext OTP/action link is never stored. Exact retries from another process or after restart receive
 the same one-time credential during the TTL and never call `generate_link`
 again; after expiry they are `duplicate_consumed`. The database row is
 service-role only and is never an
@@ -74,6 +82,6 @@ clients are forbidden.
 
 The claim ledger contains identity metadata plus only the bounded encrypted
 idempotency ciphertext. Audit records contain keyed hashes plus the
-non-sensitive closed platform. OIDC tokens, email addresses, plaintext OTPs or
+non-sensitive closed purpose and platform. OIDC tokens, email addresses, plaintext OTPs or
 action links, redirect paths, raw run IDs, cookies, and serialized sessions
 must never be logged or persisted.

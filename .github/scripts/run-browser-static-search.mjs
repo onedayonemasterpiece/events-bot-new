@@ -19,13 +19,14 @@ function required(name) {
   return value;
 }
 
-function persona(variant) {
-  if (!['cached_vector', 'cold_vector', 'cold_vector_llm', 'degraded_vector_fallback'].includes(variant)) {
-    throw new Error('search_variant_invalid');
+function persona(purpose) {
+  if (purpose === 'release_qualification') {
+    return { id: 'search-cold-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER') };
   }
-  // The broker now binds one unique account to each physical platform. The
-  // execution variant is a Search request policy, not an Auth identity.
-  return { id: 'search-cached-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER') };
+  if (purpose === 'legacy_debug') {
+    return { id: 'search-cached-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER') };
+  }
+  throw new Error('search_session_purpose_invalid');
 }
 
 async function oidcToken() {
@@ -181,7 +182,8 @@ async function verifyOwnerReceipts({ evidenceDir, accessToken, supabaseUrl, publ
 async function main() {
   const variants = selectedVariants();
   const targetUrl = required('E2E_SEARCH_TARGET_URL');
-  const selectedPersona = persona(variants[0]);
+  const purpose = required('E2E_SEARCH_SESSION_PURPOSE');
+  const selectedPersona = persona(purpose);
   const issuer = createAuthSessionBrokerIssuer({
     endpoint: required('AUTH_SESSION_BROKER_URL'),
     oidcToken: await oidcToken(),
@@ -199,7 +201,7 @@ async function main() {
       publishableKey: required('PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'),
       targetUrl, allowedOrigins: ['https://kenigevents.ru'],
       personaId: selectedPersona.id, personas: { [selectedPersona.id]: { email: selectedPersona.email } },
-      platform: 'browser',
+      purpose, platform: 'browser',
       scopeKind: 'job', scopeId: `search-${variants.join('-')}`, runId: required('GITHUB_RUN_ID'),
       protectedProbe: protectedOwnerProbe,
     });

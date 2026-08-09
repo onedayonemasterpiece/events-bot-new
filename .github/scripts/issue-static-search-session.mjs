@@ -10,6 +10,15 @@ function required(name) {
 }
 
 const PLATFORMS = new Set(['browser', 'android', 'ios']);
+const PERSONAS = Object.freeze({
+  production_health: Object.freeze({
+    browser: 'search-cached-browser', android: 'search-cached-android', ios: 'search-cached-ios',
+  }),
+  release_qualification: Object.freeze({ browser: 'search-cold-browser' }),
+  legacy_debug: Object.freeze({
+    browser: 'search-cached-browser', android: 'search-cached-android', ios: 'search-cached-ios',
+  }),
+});
 
 async function githubOidcToken() {
   const requestUrl = new URL(required('ACTIONS_ID_TOKEN_REQUEST_URL'));
@@ -27,15 +36,19 @@ async function githubOidcToken() {
 
 async function main() {
   const targetUrl = required('E2E_SEARCH_TARGET_URL');
+  const purpose = required('E2E_SEARCH_SESSION_PURPOSE');
   const platform = required('E2E_SEARCH_PLATFORM');
   if (!PLATFORMS.has(platform)) throw new Error('search_platform_invalid');
+  const personaId = PERSONAS[purpose]?.[platform];
+  if (!personaId) throw new Error('search_purpose_platform_invalid');
   const oidcToken = await githubOidcToken();
   const issuer = createAuthSessionBrokerIssuer({
     endpoint: required('AUTH_SESSION_BROKER_URL'),
     oidcToken,
   });
   const credential = await issuer.issue({
-    personaId: `search-cached-${platform}`,
+    purpose,
+    personaId,
     platform,
     redirectTo: targetUrl,
   });
