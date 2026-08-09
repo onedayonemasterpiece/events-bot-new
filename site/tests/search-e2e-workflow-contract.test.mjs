@@ -27,20 +27,6 @@ function assertManualOnly(parsed, label) {
   assert.deepEqual(Object.keys(parsed?.on || {}), ['workflow_dispatch'], `${label} must be manual-only`);
 }
 
-function assertDryPlannerWorkflow(source, parsed, { plane }) {
-  assertManualOnly(parsed, plane);
-  assert.deepEqual(parsed.permissions, { contents: 'read' });
-  assert.deepEqual(Object.keys(parsed.jobs || {}), ['plan']);
-  assert.equal(parsed.jobs.plan.environment, undefined);
-  assert.equal(parsed.jobs.plan.env, undefined);
-  assert.match(
-    source,
-    new RegExp(`node site/e2e/search/production-health-plan-cli\\.mjs --plane ${plane} --trigger workflow_dispatch`, 'u'),
-  );
-  assert.doesNotMatch(source, /\$\{\{\s*(?:secrets|vars)\.|id-token|environment\s*:|\b(?:curl|wget|playwright|appium|flyctl|supabase|broker)\b|https?:\/\//iu);
-  assert.doesNotMatch(source, /e2e:search-live|run-browser-static-search|resolve-static-search-target|issue-static-search-session/iu);
-}
-
 test('legacy Search canary is manual-only live debug and never reports product incidents', async () => {
   const source = await readFile(legacyWorkflowUrl, 'utf8');
   const parsed = YAML.parse(source);
@@ -48,6 +34,7 @@ test('legacy Search canary is manual-only live debug and never reports product i
   assert.deepEqual(parsed?.on?.workflow_dispatch?.inputs?.revision_policy?.options, ['release_exact', 'live_consistent']);
   assert.equal(parsed?.permissions?.['id-token'], 'write');
   assert.equal(parsed?.permissions?.issues, undefined);
+  assert.deepEqual(parsed.concurrency, { group: 'search-production-health', 'cancel-in-progress': false });
   for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
   for (const job of ['browser', 'android', 'ios', 'terminal']) assert.ok(parsed?.jobs?.[job]);
   assert.match(source, /environment: \{ name: search-e2e \}/u);
@@ -82,42 +69,39 @@ test('legacy Search canary is manual-only live debug and never reports product i
   }
 });
 
-test('all former Search cron and content/data build triggers are disabled', async () => {
-  const entries = await Promise.all([
-    legacyWorkflowUrl,
-    productionHealthWorkflowUrl,
-    releaseQualificationWorkflowUrl,
-  ].map(async (url) => {
-    const source = await readFile(url, 'utf8');
-    return { source, parsed: YAML.parse(source) };
-  }));
-  for (const { source, parsed } of entries) {
-    assertManualOnly(parsed, 'Search workflow');
-    for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
-    assert.equal(parsed.on.repository_dispatch, undefined);
-    assert.equal(parsed.on.workflow_run, undefined);
-    assert.equal(parsed.on.workflow_call, undefined);
-    assert.equal(parsed.on.push, undefined);
-  }
-});
-
-test('production health is a secretless deterministic dry planner', async () => {
+test('production health has only the two bounded schedules, manual profiles and runtime marker', async () => {
   const source = await readFile(productionHealthWorkflowUrl, 'utf8');
-  assertDryPlannerWorkflow(source, YAML.parse(source), { plane: 'production_health' });
-  assert.doesNotMatch(source, /execute_live|\blive\b/iu);
+  const parsed = YAML.parse(source);
+  assert.deepEqual(parsed.on.schedule, [{ cron: '17 6 * * *' }, { cron: '17 18 * * *' }]);
+  assert.deepEqual(parsed.on.workflow_dispatch.inputs.profile.options,
+    ['browser', 'browser_android', 'browser_ios', 'all']);
+  assert.deepEqual(parsed.on.repository_dispatch.types, ['search-runtime-deployed']);
+  assert.deepEqual(parsed.concurrency, { group: 'search-production-health', 'cancel-in-progress': false });
+  for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
+  assert.equal(parsed.on.workflow_run, undefined);
+  assert.equal(parsed.on.workflow_call, undefined);
+  assert.equal(parsed.on.push, undefined);
+  assert.doesNotMatch(source, /smart.update|snapshot.generation|corpus.movement|index.movement/iu);
 });
 
-test('release qualification keeps live execution disconnected and default-off', async () => {
-  const source = await readFile(releaseQualificationWorkflowUrl, 'utf8');
-  const parsed = YAML.parse(source);
-  assertDryPlannerWorkflow(source, parsed, { plane: 'release_qualification' });
-  assert.deepEqual(parsed.on.workflow_dispatch.inputs.execute_live, {
-    description: 'Reserved for a later stage; Stage 1 always emits a deterministic dry plan',
-    required: false,
-    default: false,
-    type: 'boolean',
-  });
-  assert.doesNotMatch(YAML.stringify(parsed.jobs), /inputs\.execute_live|e2e:search-live/iu);
+test('platform jobs invoke only the unified one-session runner and qualification is never scheduled', async () => {
+  const [healthSource, qualificationSource] = await Promise.all([
+    readFile(productionHealthWorkflowUrl, 'utf8'), readFile(releaseQualificationWorkflowUrl, 'utf8'),
+  ]);
+  const health = YAML.parse(healthSource);
+  const qualification = YAML.parse(qualificationSource);
+  assert.deepEqual(Object.keys(qualification.on), ['workflow_dispatch']);
+  for (const platform of ['browser', 'android', 'ios']) {
+    assert.ok(health.jobs[platform], platform);
+    assert.match(YAML.stringify(health.jobs[platform]), /production-health-run\.mjs/u);
+    assert.doesNotMatch(YAML.stringify(health.jobs[platform]), /issue-static-search-session|production-health-mobile-preflight/iu);
+  }
+  assert.equal((healthSource.match(/production-health-run\.mjs/gu) || []).length, 3);
+  assert.equal((healthSource.match(/gh workflow run search-release-qualification\.yml/gu) || []).length, 1);
+  assert.doesNotMatch(healthSource, /\bgh issue (?:create|comment|close|list)\b/iu);
+  assert.match(YAML.stringify(health.jobs.terminal), /production-health-report-plan-cli\.mjs/u);
+  assert.equal(qualification.on.schedule, undefined);
+  assert.match(qualificationSource, /production-health-run\.mjs/u);
 });
 
 test('default pull-request CI runs the deterministic Search production-health suite without secrets', async () => {
@@ -131,7 +115,7 @@ test('default pull-request CI runs the deterministic Search production-health su
   assert.doesNotMatch(source, /\$\{\{\s*secrets\./u);
 });
 
-test('all Stage-1 Search and default CI workflow YAML parses', async () => {
+test('all Search and default CI workflow YAML parses', async () => {
   for (const url of [legacyWorkflowUrl, productionHealthWorkflowUrl, releaseQualificationWorkflowUrl, ciWorkflowUrl]) {
     const source = await readFile(url, 'utf8');
     assert.doesNotThrow(() => YAML.parse(source), url.pathname);

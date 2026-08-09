@@ -27,7 +27,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: static-site-search-manual-${{ inputs.platform }}
+  group: search-production-health
   cancel-in-progress: false
 
 jobs:

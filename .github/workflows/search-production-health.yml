@@ -1,19 +1,352 @@
-name: Search production health planner
+name: Search production health
+run-name: Search health · ${{ github.event_name }} · ${{ github.run_id }}.${{ github.run_attempt }}
 
 on:
-  workflow_dispatch: {}
+  schedule:
+    - cron: '17 6 * * *'
+    - cron: '17 18 * * *'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Exact platform matrix
+        required: true
+        default: browser
+        type: choice
+        options: [browser, browser_android, browser_ios, all]
+  repository_dispatch:
+    types: [search-runtime-deployed]
 
 permissions:
   contents: read
+  id-token: write
+  actions: write
+
+concurrency:
+  group: search-production-health
+  cancel-in-progress: false
 
 jobs:
   plan:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      browser: ${{ steps.plan.outputs.browser }}
+      android: ${{ steps.plan.outputs.android }}
+      ios: ${{ steps.plan.outputs.ios }}
+      release_qualification: ${{ steps.plan.outputs.release_qualification }}
+      site_runtime_sha: ${{ steps.plan.outputs.site_runtime_sha }}
+      search_backend_revision: ${{ steps.plan.outputs.search_backend_revision }}
+      deployment_run_id: ${{ steps.plan.outputs.deployment_run_id }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0' }
+      - name: Validate trigger and emit exact platform plan
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          MANUAL_PROFILE: ${{ inputs.profile }}
+          EVENT_PATH: ${{ github.event_path }}
+        run: |
+          set -euo pipefail
+          args=(--plane production_health)
+          case "$EVENT_NAME" in
+            schedule)
+              case "$EVENT_SCHEDULE" in
+                '17 6 * * *') args+=(--trigger schedule_morning) ;;
+                '17 18 * * *') args+=(--trigger schedule_evening) ;;
+                *) echo 'Unknown Search health schedule.' >&2; exit 2 ;;
+              esac
+              ;;
+            workflow_dispatch)
+              args+=(--trigger workflow_dispatch --profile "$MANUAL_PROFILE")
+              ;;
+            repository_dispatch)
+              args+=(--trigger search_runtime_deploy)
+              while IFS= read -r -d '' value; do args+=("$value"); done < <(
+                node - "$EVENT_PATH" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const event = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const payload = event.client_payload || {};
+          const expectedKeys = [
+            'changed_surfaces', 'deployment_run_id', 'search_backend_revision',
+            'site_runtime_sha', 'validation_profile',
+          ];
+          if (JSON.stringify(Object.keys(payload).sort()) !== JSON.stringify(expectedKeys)) {
+            throw new Error('search_runtime_deploy_payload_keys_invalid');
+          }
+          if (!Array.isArray(payload.changed_surfaces)) {
+            throw new Error('search_runtime_changed_surfaces_invalid');
+          }
+          const fields = [
+            ['--site-runtime-sha', payload.site_runtime_sha],
+            ['--search-backend-revision', payload.search_backend_revision],
+            ['--validation-profile', payload.validation_profile],
+            ['--deployment-run-id', payload.deployment_run_id],
+          ];
+          for (const [name, value] of fields) process.stdout.write(`${name}\0${String(value || '')}\0`);
+          for (const value of payload.changed_surfaces || []) {
+            process.stdout.write(`--changed-surface\0${String(value)}\0`);
+          }
+          NODE
+              )
+              ;;
+            *) echo 'Unsupported Search health trigger.' >&2; exit 2 ;;
+          esac
+          node site/e2e/search/production-health-plan-cli.mjs "${args[@]}" > "$RUNNER_TEMP/search-health-plan.json"
+          node - "$RUNNER_TEMP/search-health-plan.json" "$GITHUB_OUTPUT" <<'NODE'
+          const { readFileSync, appendFileSync } = require('node:fs');
+          const plan = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          if (!plan.eligible) throw new Error(`Search health trigger rejected: ${plan.reason}`);
+          const selected = new Set(plan.selected_platforms);
+          const marker = plan.deployment_marker || {};
+          const lines = [
+            `browser=${selected.has('browser')}`,
+            `android=${selected.has('android')}`,
+            `ios=${selected.has('ios')}`,
+            `release_qualification=${plan.release_qualification_requested === true}`,
+            `site_runtime_sha=${marker.site_runtime_sha || ''}`,
+            `search_backend_revision=${marker.search_backend_revision || ''}`,
+            `deployment_run_id=${marker.deployment_run_id || ''}`,
+          ];
+          appendFileSync(process.argv[3], `${lines.join('\n')}\n`);
+          process.stdout.write(`${JSON.stringify({ selection: plan.selection, platforms: [...selected] })}\n`);
+          NODE
+
+  browser:
+    needs: plan
+    if: ${{ needs.plan.outputs.browser == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: { name: search-e2e }
+    env:
+      FLY_APP_NAME: ${{ vars.SEARCH_E2E_FLY_APP_NAME }}
+      FLY_API_TOKEN: ${{ secrets.SEARCH_E2E_FLY_SSH_TOKEN }}
+      AUTH_SESSION_BROKER_URL: ${{ secrets.SEARCH_E2E_AUTH_BROKER_URL }}
+      AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
+      PERSONALIZATION_SUPABASE_URL: ${{ vars.SEARCH_E2E_SUPABASE_URL }}
+      PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY }}
+      SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER: ${{ secrets.SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER }}
+      E2E_SEARCH_PLATFORM: browser
+      E2E_SEARCH_HEALTH_MODE: production_health
+      E2E_EXPECTED_SITE_RUNTIME_SHA: ${{ needs.plan.outputs.site_runtime_sha }}
+      E2E_EXPECTED_SEARCH_BACKEND_REVISION: ${{ needs.plan.outputs.search_backend_revision }}
+      E2E_DEPLOYMENT_RUN_ID: ${{ needs.plan.outputs.deployment_run_id }}
+      E2E_EVIDENCE_DIR: artifacts/search-production-health-browser-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+      - run: npm --prefix site ci --no-audit --no-fund
+      - working-directory: site
+        run: npx playwright install --with-deps chromium
+      - name: Resolve active immutable Search target before session creation
+        run: .github/scripts/resolve-static-search-target.sh
+      - name: Run one-session browser preflight, broker issuance, Auth and Search
+        run: node site/e2e/search/production-health-run.mjs
+      - name: Upload sanitized browser summary
+        if: ${{ always() && hashFiles('artifacts/search-production-health-browser-*/.redaction-ok') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          node-version: '22.22.0'
-      - name: Emit deterministic production-health plan
-        run: node site/e2e/search/production-health-plan-cli.mjs --plane production_health --trigger workflow_dispatch
+          name: search-production-health-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/search-production-health-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    needs: plan
+    if: ${{ needs.plan.outputs.android == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment: { name: search-e2e }
+    env:
+      FLY_APP_NAME: ${{ vars.SEARCH_E2E_FLY_APP_NAME }}
+      FLY_API_TOKEN: ${{ secrets.SEARCH_E2E_FLY_SSH_TOKEN }}
+      AUTH_SESSION_BROKER_URL: ${{ secrets.SEARCH_E2E_AUTH_BROKER_URL }}
+      AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
+      PERSONALIZATION_SUPABASE_URL: ${{ vars.SEARCH_E2E_SUPABASE_URL }}
+      PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY }}
+      E2E_SEARCH_PLATFORM: android
+      E2E_SEARCH_HEALTH_MODE: production_health
+      E2E_EXPECTED_SITE_RUNTIME_SHA: ${{ needs.plan.outputs.site_runtime_sha }}
+      E2E_EXPECTED_SEARCH_BACKEND_REVISION: ${{ needs.plan.outputs.search_backend_revision }}
+      E2E_DEPLOYMENT_RUN_ID: ${{ needs.plan.outputs.deployment_run_id }}
+      E2E_DEVICE_NAME: Pixel 7
+      E2E_PLATFORM_VERSION: '15'
+      E2E_APPIUM_HOST: 127.0.0.1
+      E2E_APPIUM_PORT: '4723'
+      E2E_APPIUM_PATH: /wd/hub
+      E2E_EVIDENCE_DIR: artifacts/search-production-health-android-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+      - run: npm --prefix site ci --no-audit --no-fund
+      - working-directory: site
+        run: npx appium driver list --installed
+      - name: Resolve active immutable Search target before device session creation
+        run: .github/scripts/resolve-static-search-target.sh
+      - name: Enable KVM
+        run: test -c /dev/kvm && sudo chmod 0666 /dev/kvm
+      - name: Run one-session Android preflight, broker issuance, Auth and Search
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.34.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          working-directory: site
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            appium_pid=''
+            cleanup_appium() {
+              if [ -n "${appium_pid:-}" ]; then kill "$appium_pid" || true; wait "$appium_pid" || true; fi
+              rm -f "${RUNNER_TEMP}/appium-search-health-android.log"
+            }
+            trap cleanup_appium EXIT
+            adb shell settings put secure show_ime_with_hard_keyboard 1
+            npx appium --base-path /wd/hub --port 4723 --allow-insecure uiautomator2:chromedriver_autodownload > "${RUNNER_TEMP}/appium-search-health-android.log" 2>&1 &
+            appium_pid=$!
+            ready=0
+            for n in $(seq 1 60); do
+              if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi
+              sleep 1
+            done
+            test "$ready" = 1
+            node e2e/search/production-health-run.mjs
+      - name: Upload sanitized Android summary
+        if: ${{ always() && hashFiles('site/artifacts/search-production-health-android-*/.redaction-ok') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: search-production-health-android-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/search-production-health-android-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  ios:
+    needs: plan
+    if: ${{ needs.plan.outputs.ios == 'true' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    environment: { name: search-e2e }
+    env:
+      FLY_APP_NAME: ${{ vars.SEARCH_E2E_FLY_APP_NAME }}
+      FLY_API_TOKEN: ${{ secrets.SEARCH_E2E_FLY_SSH_TOKEN }}
+      AUTH_SESSION_BROKER_URL: ${{ secrets.SEARCH_E2E_AUTH_BROKER_URL }}
+      AUTH_SESSION_BROKER_OIDC_AUDIENCE: kenigevents-static-search-broker
+      PERSONALIZATION_SUPABASE_URL: ${{ vars.SEARCH_E2E_SUPABASE_URL }}
+      PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY }}
+      E2E_SEARCH_PLATFORM: ios
+      E2E_SEARCH_HEALTH_MODE: production_health
+      E2E_EXPECTED_SITE_RUNTIME_SHA: ${{ needs.plan.outputs.site_runtime_sha }}
+      E2E_EXPECTED_SEARCH_BACKEND_REVISION: ${{ needs.plan.outputs.search_backend_revision }}
+      E2E_DEPLOYMENT_RUN_ID: ${{ needs.plan.outputs.deployment_run_id }}
+      E2E_DEVICE_NAME: iPhone 16
+      E2E_PLATFORM_VERSION: '18.5'
+      E2E_APPIUM_HOST: 127.0.0.1
+      E2E_APPIUM_PORT: '4723'
+      E2E_APPIUM_PATH: /wd/hub
+      E2E_EVIDENCE_DIR: artifacts/search-production-health-ios-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.6.0
+        with: { xcode-version: '16.4' }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+      - run: npm --prefix site ci --no-audit --no-fund
+      - name: Resolve active immutable Search target before device session creation
+        run: .github/scripts/resolve-static-search-target.sh
+      - name: Download matching WebDriverAgent
+        working-directory: site
+        run: npx appium driver run xcuitest download-wda -- --outdir "${RUNNER_TEMP}/search-health-wda" --platform iOS --kind sim
+      - name: Create iOS simulator
+        id: sim
+        run: |
+          udid="$(xcrun simctl create 'KenigEvents Search Health iPhone 16' 'com.apple.CoreSimulator.SimDeviceType.iPhone-16' 'com.apple.CoreSimulator.SimRuntime.iOS-18-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+      - name: Run one-session iOS preflight, broker issuance, Auth and Search
+        working-directory: site
+        env:
+          E2E_DEVICE_UDID: ${{ steps.sim.outputs.udid }}
+          E2E_PREBUILT_WDA_PATH: ${{ runner.temp }}/search-health-wda/WebDriverAgentRunner-Runner.app
+        run: |
+          set -euo pipefail
+          appium_pid=''
+          cleanup_appium() {
+            if [ -n "${appium_pid:-}" ]; then kill "$appium_pid" || true; wait "$appium_pid" || true; fi
+            rm -f "${RUNNER_TEMP}/appium-search-health-ios.log"
+          }
+          trap cleanup_appium EXIT
+          npx appium --base-path /wd/hub --port 4723 > "${RUNNER_TEMP}/appium-search-health-ios.log" 2>&1 &
+          appium_pid=$!
+          ready=0
+          for n in $(seq 1 120); do
+            if curl --max-time 2 -fsS http://127.0.0.1:4723/wd/hub/status >/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          node e2e/search/production-health-run.mjs
+      - name: Delete simulator
+        if: ${{ always() && steps.sim.outputs.udid != '' }}
+        run: xcrun simctl shutdown '${{ steps.sim.outputs.udid }}' || true; xcrun simctl delete '${{ steps.sim.outputs.udid }}' || true
+      - name: Upload sanitized iOS summary
+        if: ${{ always() && hashFiles('site/artifacts/search-production-health-ios-*/.redaction-ok') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: search-production-health-ios-${{ github.run_id }}-${{ github.run_attempt }}
+          path: site/artifacts/search-production-health-ios-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+  terminal:
+    if: ${{ always() }}
+    needs: [plan, browser, android, ios]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Download sanitized platform summaries
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: search-production-health-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/search-production-health
+      - name: Plan and apply platform-scoped disposition
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          IOS_RESULT: ${{ needs.ios.result }}
+          GH_TOKEN: ${{ github.token }}
+        run: node site/e2e/search/production-health-report-plan-cli.mjs --evidence-root artifacts/search-production-health --apply
+
+  request-release-qualification:
+    needs: [plan, terminal]
+    if: ${{ needs.plan.outputs.release_qualification == 'true' && needs.terminal.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Request one selective release qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SITE_RUNTIME_SHA: ${{ needs.plan.outputs.site_runtime_sha }}
+          SEARCH_BACKEND_REVISION: ${{ needs.plan.outputs.search_backend_revision }}
+          DEPLOYMENT_RUN_ID: ${{ needs.plan.outputs.deployment_run_id }}
+        run: |
+          set -euo pipefail
+          gh workflow run search-release-qualification.yml \
+            --ref "$GITHUB_SHA" \
+            -f profile=browser \
+            -f site_runtime_sha="$SITE_RUNTIME_SHA" \
+            -f search_backend_revision="$SEARCH_BACKEND_REVISION" \
+            -f deployment_run_id="$DEPLOYMENT_RUN_ID"
