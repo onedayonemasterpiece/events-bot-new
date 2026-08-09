@@ -46,6 +46,11 @@ def test_disabled_config_does_not_parse_mcp_only_client_values(monkeypatch) -> N
         "https://events.example?token=secret",
         "https://events.example#secret",
         "https://events.example:444",
+        "https://events.example\nsecret.example",
+        "https://events.example\tsecret.example",
+        "https://example..com",
+        "https://-bad.example",
+        "https://bad-.example",
     ],
 )
 def test_enabled_config_rejects_noncanonical_or_secret_bearing_origin(

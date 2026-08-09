@@ -345,8 +345,9 @@ social-approval value and all unknown forward-compatible fields value-for-value
 at the JSON data level. It refuses incomplete/inconsistent full bundles,
 source/output overlap, symlinked source or output paths, and mode-changing
 options such as `--base-url` or `--enable-chatgpt-social`.
-The base URL must be a canonical HTTPS origin with no credentials, query,
-fragment or explicit port. Every deploy field, including a forward-compatible
+The base URL must be a canonical HTTPS origin with valid DNS labels and no
+credentials, whitespace/control characters, query, fragment or explicit port.
+Every deploy field, including a forward-compatible
 unknown field retained during rotation, must have a valid environment name and
 a single-line NUL-free string value before `fly-secrets.env` can be written.
 

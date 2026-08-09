@@ -111,6 +111,11 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
         "https://events.example?token=stdout-secret",
         "https://events.example#stdout-secret",
         "https://events.example:444",
+        "https://events.example\nstdout-secret.example",
+        "https://events.example\tstdout-secret.example",
+        "https://example..com",
+        "https://-bad.example",
+        "https://bad-.example",
     ],
 )
 def test_generator_rejects_noncanonical_or_secret_bearing_origins_without_output(

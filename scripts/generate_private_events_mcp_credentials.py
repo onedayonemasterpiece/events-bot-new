@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -37,31 +38,49 @@ def token(prefix: str, bytes_count: int) -> str:
     return prefix + secrets.token_urlsafe(bytes_count)
 
 
+def _canonical_hostname(value: str) -> str:
+    if not value or len(value) > 253 or value.endswith("."):
+        raise ValueError("invalid hostname")
+    try:
+        return ipaddress.ip_address(value).compressed
+    except ValueError:
+        labels = value.split(".")
+        if any(
+            not label
+            or len(label) > 63
+            or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
+            is None
+            for label in labels
+        ):
+            raise ValueError("invalid hostname") from None
+        return value.casefold()
+
+
 def validate_base_url(value: str) -> str:
-    value = value.strip()
+    if value != value.strip() or any(
+        character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
+        for character in value
+    ):
+        raise argparse.ArgumentTypeError("base URL must be a canonical HTTPS origin")
     try:
         parsed = urlsplit(value)
         port = parsed.port
+        hostname = _canonical_hostname(parsed.hostname or "")
     except ValueError as exc:
         raise argparse.ArgumentTypeError("base URL must be a canonical HTTPS origin") from exc
-    hostname = parsed.hostname
+    authority = f"[{hostname}]" if ":" in hostname else hostname
     if (
         parsed.scheme != "https"
-        or hostname is None
         or parsed.username is not None
         or parsed.password is not None
         or port is not None
         or parsed.path not in {"", "/"}
         or parsed.query
         or parsed.fragment
-        or parsed.netloc.casefold() != hostname.casefold()
-        or re.fullmatch(
-            r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", hostname
-        )
-        is None
+        or parsed.netloc.casefold() != authority.casefold()
     ):
         raise argparse.ArgumentTypeError("base URL must be a canonical HTTPS origin")
-    return f"https://{hostname.casefold()}"
+    return f"https://{authority}"
 
 
 def write_private_text(path: Path, content: str) -> None:
