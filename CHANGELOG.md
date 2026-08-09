@@ -10,6 +10,10 @@
   specimen/page evidence indexes. Added real-component `EventHero` and
   `EventMediaRail` controlled specimens so the Event Presentation and Media
   Heavy capsules have isolated evidence in addition to exact-page evidence.
+- Fixed reviewed capsule indexing to retain full-page evidence explicitly
+  selected by the human review ledger when its capture-time record has no
+  capsule classification, and made screenshot-path-only page evidence require
+  an explicit page review before handoff.
 
 - Fixed StaticSiteBuilder terminal-owner recovery so a newer Smart Update
   fingerprint cannot supersede a completed Kaggle claim during the brief
