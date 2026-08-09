@@ -141,7 +141,8 @@
 
 - Fixed exact real-route absence-only evidence so the verified zero-medallion
   event records selector count zero without subsequently demanding a fabricated
-  visible component or raster.
+  visible component or raster. Its specimen registry no longer mixes that
+  absent component root with an unrelated mobile page-wrapper fallback.
 
 - Fixed the production candidate's legacy preview gate after the dated real
   `Море внутри` rail canary expired. The gate still checks its rendered row

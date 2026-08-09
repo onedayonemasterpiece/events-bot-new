@@ -166,7 +166,8 @@ export const REAL_ROUTE_VERIFICATIONS = Object.freeze([
   })),
   ...[2601, 5336, 6856, 6994, 6591, 698, 7040, 6562, 6990, 5829, 5278].map((eventId) => realRoute({
     id: `medallions-${eventId}`, capsule_ids: ['05-medallions'], event_id: eventId, route_template: '/sobytiya/{slug}/',
-    selectors: ['[data-medallion-layout]', '.mobile-event-production'], expected_absent_selectors: eventId === 2601 ? ['[data-medallion-layout]'] : [],
+    selectors: eventId === 2601 ? ['[data-medallion-layout]'] : ['[data-medallion-layout]', '.mobile-event-production'],
+    expected_absent_selectors: eventId === 2601 ? ['[data-medallion-layout]'] : [],
     source_paths: ['src/pages/sobytiya/[slug].astro', 'src/components/EventTokenMedallions.astro'],
   })),
   realRoute({

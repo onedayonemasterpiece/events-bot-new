@@ -198,7 +198,7 @@ def test_real_route_registry_uses_exact_production_and_lab_paths_with_honest_con
         _imports("buildSpecimenRegistry, assertSpecimenRegistry")
         + """
 const r=buildSpecimenRegistry(); assertSpecimenRegistry(r);
-console.log(JSON.stringify(r.real_route_verifications.map((row)=>({id:row.id,template:row.route_template,contexts:row.contexts.map((item)=>item.name),absent:row.expected_absent_selectors}))));
+console.log(JSON.stringify(r.real_route_verifications.map((row)=>({id:row.id,template:row.route_template,contexts:row.contexts.map((item)=>item.name),selectors:row.selectors,absent:row.expected_absent_selectors}))));
 """
     )
     by_id = {row["id"]: row for row in observed}
@@ -211,6 +211,7 @@ console.log(JSON.stringify(r.real_route_verifications.map((row)=>({id:row.id,tem
     assert by_id["artifact-catalog"]["absent"] == ["[data-artifact-collection]"]
     assert by_id["artifact-weekend"]["absent"] == ["[data-amber-artifact]"]
     assert by_id["medallions-2601"]["absent"] == ["[data-medallion-layout]"]
+    assert by_id["medallions-2601"]["selectors"] == ["[data-medallion-layout]"]
 
 
 def test_exact_manifest_and_runtime_resolver_has_no_url_leak_and_stable_bindings():
