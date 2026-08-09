@@ -3,7 +3,7 @@
 ## Scope and safety boundary
 
 - Initial audited base: `origin/main@65926e63b436efcc275c8e4094473ab9ef1fd9e8`.
-- Final rebased base: `origin/main@00a65ba6bbafe218422067ed5cf20a6a31a8c16a`.
+- Final rebased base: `origin/main@48378542d13869447bacc6bfeea136d650b3d407`.
 - Integration branch: `integration/search-production-health-stage1-20260809`.
 - Prohibited operations performed: **none**.
 - Live Search POSTs: `0`.
