@@ -223,35 +223,71 @@ $$;
 -- Stage 2 broker claims bind the signed workflow identity to a closed platform
 -- and distinguish replay from a genuinely busy dedicated persona.
 do $$
+declare
+  v_claim jsonb;
+  v_ciphertext text := repeat('x', 100);
 begin
-  if public.claim_static_site_auth_session_issue_v2(
+  v_claim := public.claim_static_site_auth_session_issue_v2(
     'health-run-1', 1, 'browser', 'search-cached-browser',
     'owner/repo', 'workflow@refs/heads/main', 1
-  ) <> 'new' then
+  );
+  if v_claim->>'claim' <> 'new' then
     raise exception 'first Stage 2 browser claim was not new';
   end if;
-  if public.claim_static_site_auth_session_issue_v2(
+  v_claim := public.claim_static_site_auth_session_issue_v2(
     'health-run-1', 1, 'browser', 'search-cached-browser',
     'owner/repo', 'workflow@refs/heads/main', 1
-  ) <> 'duplicate_inflight' then
+  );
+  if v_claim->>'claim' <> 'duplicate_inflight' then
     raise exception 'identical Stage 2 browser claim was not typed duplicate';
   end if;
-  if public.claim_static_site_auth_session_issue_v2(
+  if not public.complete_static_site_auth_session_issue_v2(
+    'health-run-1', 1, 'browser', 'search-cached-browser',
+    'owner/repo', 'workflow@refs/heads/main', v_ciphertext
+  ) then
+    raise exception 'Stage 2 browser claim credential was not completed';
+  end if;
+  v_claim := public.claim_static_site_auth_session_issue_v2(
+    'health-run-1', 1, 'browser', 'search-cached-browser',
+    'owner/repo', 'workflow@refs/heads/main', 1
+  );
+  if v_claim->>'claim' <> 'replay'
+    or v_claim->>'credential_ciphertext' <> v_ciphertext then
+    raise exception 'completed Stage 2 browser claim was not replayable';
+  end if;
+  update public.static_site_auth_session_issue_claim
+  set credential_expires_at = now() - interval '1 second'
+  where run_id = 'health-run-1'
+    and run_attempt = 1
+    and platform = 'browser'
+    and persona_id = 'search-cached-browser';
+  v_claim := public.claim_static_site_auth_session_issue_v2(
+    'health-run-1', 1, 'browser', 'search-cached-browser',
+    'owner/repo', 'workflow@refs/heads/main', 1
+  );
+  if v_claim->>'claim' <> 'duplicate_consumed'
+    or v_claim ? 'credential_ciphertext' then
+    raise exception 'expired Stage 2 browser replay was not consumed safely';
+  end if;
+  v_claim := public.claim_static_site_auth_session_issue_v2(
     'health-run-2', 1, 'browser', 'search-cached-browser',
     'owner/repo', 'workflow@refs/heads/main', 1
-  ) <> 'persona_busy' then
+  );
+  if v_claim->>'claim' <> 'persona_busy' then
     raise exception 'colliding Stage 2 browser claim was not typed busy';
   end if;
-  if public.claim_static_site_auth_session_issue_v2(
+  v_claim := public.claim_static_site_auth_session_issue_v2(
     'health-run-1', 1, 'android', 'search-cached-android',
     'owner/repo', 'workflow@refs/heads/main', 1
-  ) <> 'new' then
+  );
+  if v_claim->>'claim' <> 'new' then
     raise exception 'dedicated Android persona was not independently admitted';
   end if;
-  if public.claim_static_site_auth_session_issue_v2(
+  v_claim := public.claim_static_site_auth_session_issue_v2(
     'health-run-1', 1, 'ios', 'search-cached-ios',
     'owner/repo', 'workflow@refs/heads/main', 1
-  ) <> 'new' then
+  );
+  if v_claim->>'claim' <> 'new' then
     raise exception 'dedicated iOS persona was not independently admitted';
   end if;
 end;
