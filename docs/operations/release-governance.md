@@ -30,7 +30,7 @@
   через pinned local Supabase CLI и project ref:
   `supabase functions deploy event-search --project-ref <ref> --no-verify-jwt --use-api`.
   После deploy обязательны side-effect-free `HEAD /functions/v1/event-search`
-  с publishable `apikey`, exact `x-search-contract-version` и нулём Auth/Search
+  с publishable `apikey`, exact `X-KenigEvents-Search-Contract` и нулём Auth/Search
   POST. Только затем deploy/health marker может ссылаться на эту backend
   revision. Edge failure не компенсируется повторным Fly deploy.
 - Перед активацией Search production-health broker policy должна одновременно

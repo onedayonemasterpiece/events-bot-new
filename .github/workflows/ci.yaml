@@ -97,6 +97,7 @@ jobs:
           tests/test_static_site_build_handoff.py
           tests/test_static_site_auth_session_broker.py
           tests/test_static_site_auth_session_broker_http.py
+          tests/test_static_site_auth_session_broker_sql.py
           tests/test_supabase_security_hardening.py
           tests/test_vk_auto_queue_import.py
       - name: Enforce shared Google AI limiter contracts

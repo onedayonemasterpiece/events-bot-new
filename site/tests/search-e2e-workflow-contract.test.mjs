@@ -147,6 +147,7 @@ test('default pull-request CI runs the deterministic Search production-health su
     'npm run test:search-e2e-harness');
   assert.match(source, /tests\/test_static_site_auth_session_broker\.py/u);
   assert.match(source, /tests\/test_static_site_auth_session_broker_http\.py/u);
+  assert.match(source, /tests\/test_static_site_auth_session_broker_sql\.py/u);
   assert.match(source, /tests\/test_supabase_security_hardening\.py/u);
   assert.doesNotMatch(source, /\$\{\{\s*secrets\./u);
 });
