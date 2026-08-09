@@ -136,6 +136,10 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
     reviews = [json.loads(line) for line in (final / 'visual-review-ledger.jsonl').read_text().splitlines()]
     assert len(reviews) == 99
     assert all(row['review_status'] == 'pending-human-full-resolution-review' for row in reviews)
+    portable_base_path = '../decoder-v1-snapshot-20260808T124842-4786ac53bc'
+    assert json.loads((final / 'manifest.json').read_text())['base_snapshot']['path'] == portable_base_path
+    assert json.loads((final / 'artifact-index.json').read_text())['base_snapshot']['path'] == portable_base_path
+    assert json.loads((final / 'artifact-receipt.json').read_text())['base_snapshot']['path'] == portable_base_path
 
     # The deep validator must reject a tampered compact entry even when an
     # attacker also refreshes the outer manifest/receipt hash chain.

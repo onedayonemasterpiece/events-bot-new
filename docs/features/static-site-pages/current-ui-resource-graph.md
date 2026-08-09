@@ -549,6 +549,9 @@ not start defragmentation or normalization automatically.
 pass over the immutable v1 source pin. It writes a *new*, separately validated
 `behavioral-supplement-v1.1/` directory and never rewrites the reviewed v1
 manifest, receipt, components, candidate contracts, capsules or visual ledger.
+Its final manifest, artifact index and artifact receipt use the same portable
+sibling path to the immutable Decoder v1 snapshot; runner-local checkout paths
+are forbidden in the cross-repository handoff.
 
 The supplement records source-qualified media/loading/geometry/positioning,
 rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, CTA Git
