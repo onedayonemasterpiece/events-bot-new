@@ -290,6 +290,20 @@ test('adapter opens the captured first result and binds the browser navigation t
           requestId: 'storage-after-open', request: { method: 'GET', url: 'https://assets.example/storage/v1/object/42' },
         } }) },
       ];
+      if (logReads === 3) return [
+        { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+          requestId: 'late-search', request: {
+            method: 'POST', url: 'https://project.supabase.co/functions/v1/event-search?late=yes',
+          },
+        } }) },
+      ];
+      if (logReads === 4) return [
+        { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+          requestId: 'final-boundary-search', request: {
+            method: 'POST', url: 'https://project.supabase.co/functions/v1/event-search?final=yes',
+          },
+        } }) },
+      ];
       return [];
     },
     async $(selector) {
@@ -306,9 +320,9 @@ test('adapter opens the captured first result and binds the browser navigation t
   assert.equal(receipt.destination_class, 'event_detail');
   assert.equal(receipt.network_source, 'performance');
   assert.equal(receipt.raw_url_retained, false);
-  assert.equal(receipt.post_navigation_search_post_count, 0);
   assert.ok(receipt.search_page_activity_before_navigation);
   assert.equal((await adapter.healthDiagnostics()).storage_requests, 1);
+  assert.equal(await adapter.postNavigationSearchPostCount(), 2);
 });
 
 test('navigation receipt rejects cross-origin and non-200 document evidence', () => {

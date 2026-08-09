@@ -157,6 +157,16 @@ export async function createAppiumSearchAdapter(options = {}) {
     console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0,
   };
   const driverDiagnosticIds = new Set();
+  let postBoundarySearchPostCount = null;
+  let postBoundarySearchObservationActive = false;
+  const postBoundarySearchRequestIds = new Set();
+
+  const observePostBoundarySearch = (logs) => {
+    if (!postBoundarySearchObservationActive) return;
+    postBoundarySearchPostCount += countEventSearchPostRequests(
+      logs, postBoundarySearchRequestIds,
+    );
+  };
 
   const syncClosedDriverDiagnostics = async () => {
     const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
@@ -166,6 +176,7 @@ export async function createAppiumSearchAdapter(options = {}) {
     if (!Array.isArray(networkLogs) || !Array.isArray(consoleLogs)) {
       throw new Error('mobile_health_diagnostics_unavailable');
     }
+    observePostBoundarySearch(networkLogs);
     accumulateClosedDriverDiagnostics(networkLogs, driverDiagnostics, driverDiagnosticIds);
     accumulateClosedDriverDiagnostics(consoleLogs, driverDiagnostics, driverDiagnosticIds);
   };
@@ -426,8 +437,9 @@ export async function createAppiumSearchAdapter(options = {}) {
       if (!Array.isArray(initialLogs)) throw new Error('mobile_navigation_network_log_unavailable');
       accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
       const searchPageActivity = await driver.execute(snapshotSearchRuntimeProbe);
-      const postNavigationSearchRequestIds = new Set();
-      let postNavigationSearchPostCount = 0;
+      postBoundarySearchRequestIds.clear();
+      postBoundarySearchPostCount = 0;
+      postBoundarySearchObservationActive = true;
       lifecycle.first_card_captured = true;
       lifecycle.failure_stage = 'search_first_card_open';
       await (await driver.$('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]')).click();
@@ -440,9 +452,7 @@ export async function createAppiumSearchAdapter(options = {}) {
         const logs = await driver.getLogs(logType).catch(() => null);
         if (!Array.isArray(logs)) return false;
         accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
-        postNavigationSearchPostCount += countEventSearchPostRequests(
-          logs, postNavigationSearchRequestIds,
-        );
+        observePostBoundarySearch(logs);
         responses.push(...extractSanitizedNavigationResponses(logs));
         return responses.some((item) => item.origin === expectedUrl.origin
           && item.pathname === expectedUrl.pathname && item.status === 200
@@ -457,8 +467,21 @@ export async function createAppiumSearchAdapter(options = {}) {
       return Object.freeze({
         ...receipt,
         search_page_activity_before_navigation: searchPageActivity,
-        post_navigation_search_post_count: postNavigationSearchPostCount,
       });
+    },
+    async postNavigationSearchPostCount() {
+      if (!postBoundarySearchObservationActive
+        || !Number.isSafeInteger(postBoundarySearchPostCount)) {
+        throw new Error('search_post_navigation_observation_missing');
+      }
+      const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
+      const finalNetworkLogs = await driver.getLogs?.(networkType).catch(() => null);
+      if (!Array.isArray(finalNetworkLogs)) {
+        throw new Error('mobile_post_navigation_network_log_unavailable');
+      }
+      observePostBoundarySearch(finalNetworkLogs);
+      postBoundarySearchObservationActive = false;
+      return postBoundarySearchPostCount;
     },
     async showMoreState() {
       return driver.execute(() => { const node = document.querySelector('[data-search-more]');

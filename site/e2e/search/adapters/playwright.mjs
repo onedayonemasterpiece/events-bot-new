@@ -56,6 +56,9 @@ export async function createPlaywrightSearchAdapter(options = {}) {
   let context = options.context || null;
   let page = options.page || null;
   let ownsRuntime = false;
+  let postBoundarySearchPostCount = null;
+  let postBoundaryRequestObserver = null;
+  let postBoundaryObserverPage = null;
   const diagnostics = { console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0 };
   const bindPage = (value) => {
     value.on('console', (message) => { if (message.type() === 'error') diagnostics.console_errors += 1; });
@@ -69,6 +72,13 @@ export async function createPlaywrightSearchAdapter(options = {}) {
     return value;
   };
   let configuredPolicy = options.productionHealth === true ? { production_health: true } : {};
+  const stopPostBoundaryObservation = () => {
+    if (postBoundaryRequestObserver && postBoundaryObserverPage) {
+      postBoundaryObserverPage.off('request', postBoundaryRequestObserver);
+    }
+    postBoundaryRequestObserver = null;
+    postBoundaryObserverPage = null;
+  };
   const prepareContext = async (storageState) => {
     const value = await browser.newContext({ storageState: storageState || undefined });
     if (options.productionHealth === true) {
@@ -187,38 +197,44 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       const link = first.locator('a[href]').first();
       if (await link.count() !== 1) throw new Error('search_first_card_link_missing');
       const beforeOrigin = new URL(page.url()).origin;
-      let postNavigationSearchPostCount = 0;
+      stopPostBoundaryObservation();
+      postBoundarySearchPostCount = 0;
       const observeRequest = (request) => {
         try {
           if (request.method() === 'POST'
             && new URL(request.url()).pathname === '/functions/v1/event-search') {
-            postNavigationSearchPostCount += 1;
+            postBoundarySearchPostCount += 1;
           }
         } catch { /* malformed request metadata fails via the authoritative probe */ }
       };
       page.on('request', observeRequest);
-      try {
-        const searchPageActivity = await page.evaluate(snapshotSearchRuntimeProbe);
-        const [navigation] = await Promise.all([
-          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeoutMs }),
-          link.click(),
-        ]);
-        const afterOrigin = new URL(page.url()).origin;
-        const httpStatus = Number(navigation?.status() || 0);
-        let request = navigation?.request?.() || null;
-        while (request) {
-          if (new URL(request.url()).origin !== beforeOrigin) throw new Error('search_card_route_cross_origin');
-          request = request.redirectedFrom?.() || null;
-        }
-        return {
-          schema_version: 'browser-card-open-v1', same_origin: beforeOrigin === afterOrigin,
-          http_status: httpStatus, destination_class: 'event_detail', network_source: 'playwright_navigation_response',
-          search_page_activity_before_navigation: searchPageActivity,
-          post_navigation_search_post_count: postNavigationSearchPostCount,
-        };
-      } finally {
-        page.off('request', observeRequest);
+      postBoundaryRequestObserver = observeRequest;
+      postBoundaryObserverPage = page;
+      const searchPageActivity = await page.evaluate(snapshotSearchRuntimeProbe);
+      const [navigation] = await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeoutMs }),
+        link.click(),
+      ]);
+      const afterOrigin = new URL(page.url()).origin;
+      const httpStatus = Number(navigation?.status() || 0);
+      let request = navigation?.request?.() || null;
+      while (request) {
+        if (new URL(request.url()).origin !== beforeOrigin) throw new Error('search_card_route_cross_origin');
+        request = request.redirectedFrom?.() || null;
       }
+      return {
+        schema_version: 'browser-card-open-v1', same_origin: beforeOrigin === afterOrigin,
+        http_status: httpStatus, destination_class: 'event_detail', network_source: 'playwright_navigation_response',
+        search_page_activity_before_navigation: searchPageActivity,
+      };
+    },
+    async postNavigationSearchPostCount() {
+      if (!Number.isSafeInteger(postBoundarySearchPostCount)) {
+        throw new Error('search_post_navigation_observation_missing');
+      }
+      const count = postBoundarySearchPostCount;
+      stopPostBoundaryObservation();
+      return count;
     },
     async showMoreState() {
       const more = page.locator('[data-search-more]');
@@ -234,6 +250,7 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       return { visible: true, kind: 'error' };
     },
     async close() {
+      stopPostBoundaryObservation();
       if (ownsRuntime) await context?.close();
       if (ownsRuntime) await browser?.close();
     },

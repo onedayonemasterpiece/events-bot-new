@@ -18,7 +18,7 @@ export const PRODUCTION_HEALTH_REQUEST_POLICY = Object.freeze({
 const requiredMethods = [
   'open', 'inspectSurface', 'configureRequestPolicy', 'activity', 'healthDiagnostics',
   'typeQuery', 'submitWithSearchIntent', 'waitForTerminal', 'snapshotResults',
-  'realScrollResults', 'openFirstResult',
+  'realScrollResults', 'openFirstResult', 'postNavigationSearchPostCount',
 ];
 
 const finiteDelta = (after, before, key) => {
@@ -154,10 +154,6 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
     item.method === 'POST' && item.path === '/functions/v1/event-search'
   ));
   if (finalSearchRequests.length !== 1) throw new Error('search_health_request_count_invalid');
-  if (!Number.isSafeInteger(eventRoute.post_navigation_search_post_count)
-    || eventRoute.post_navigation_search_post_count !== 0) {
-    throw new Error('search_health_post_navigation_search_forbidden');
-  }
   if (finalActivity.meter?.hard_limit_exceeded === true) {
     throw new Error('search_health_supabase_hard_limit_exceeded');
   }
@@ -165,6 +161,11 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
   assertNoSearchErrors(diagnosticsBefore, diagnosticsFinal);
   if (finiteDelta(diagnosticsFinal, diagnosticsBefore, 'storage_requests') !== 0) {
     throw new Error('search_health_storage_forbidden');
+  }
+  const postNavigationSearchPostCount = await adapter.postNavigationSearchPostCount();
+  if (!Number.isSafeInteger(postNavigationSearchPostCount)
+    || postNavigationSearchPostCount !== 0) {
+    throw new Error('search_health_post_navigation_search_forbidden');
   }
   return Object.freeze({
     schema_version: 'search_production_health_journey_v1',

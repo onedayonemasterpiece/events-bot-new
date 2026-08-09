@@ -52,6 +52,9 @@ function fakeJourneyAdapter(overrides = {}) {
   let typed = '';
   let policy = null;
   let activityCalls = 0;
+  let navigationOpened = false;
+  let postNavigationSearchPostCount = 0;
+  let latePostRecorded = false;
   const state = {
     requests: [], responses: [], routes: [],
     network: { storage_requests: 0, receipt_rpc_requests: 0, failed_requests: 0 },
@@ -77,7 +80,13 @@ function fakeJourneyAdapter(overrides = {}) {
     async open() {},
     async inspectSurface() { return { enabled: true, authorized: true, input_tag: 'textarea', enter_key_hint: 'search' }; },
     async activity() { activityCalls += 1; return structuredClone(state); },
-    async healthDiagnostics() { return { ...diagnostics, ...(overrides.diagnostics || {}) }; },
+    async healthDiagnostics() {
+      if (navigationOpened && overrides.latePostAfterNavigation && !latePostRecorded) {
+        latePostRecorded = true;
+        postNavigationSearchPostCount += 1;
+      }
+      return { ...diagnostics, ...(overrides.diagnostics || {}) };
+    },
     async typeQuery(value) { typed = value; },
     async submitWithSearchIntent() {
       const body = {
@@ -105,8 +114,10 @@ function fakeJourneyAdapter(overrides = {}) {
     async realScrollResults() { return { performed: true, delta_y: 640, card_visible_after: true, gesture_count: 1 }; },
     async openFirstResult() {
       const searchPageActivity = structuredClone(state);
+      navigationOpened = true;
       if (overrides.postAfterOpen) {
         state.requests.push({ method: 'POST', path: '/functions/v1/event-search', body_contract: {} });
+        postNavigationSearchPostCount += 1;
       }
       if (overrides.resetActivityOnOpen) {
         state.requests.length = 0;
@@ -116,9 +127,9 @@ function fakeJourneyAdapter(overrides = {}) {
       return overrides.eventRoute || {
         same_origin: true, http_status: 200, destination_class: 'event_detail', network_source: 'fake',
         search_page_activity_before_navigation: searchPageActivity,
-        post_navigation_search_post_count: overrides.postAfterOpen ? 1 : 0,
       };
     },
+    async postNavigationSearchPostCount() { return postNavigationSearchPostCount; },
   };
 }
 
@@ -430,6 +441,13 @@ test('one physical Search POST is enforced through scroll and event navigation',
   }), /post_navigation_search_forbidden/u);
 });
 
+test('a late Search POST after event navigation completion still fails the whole-cell proof', async () => {
+  await assert.rejects(() => runProductionHealthJourney({
+    adapter: fakeJourneyAdapter({ latePostAfterNavigation: true }),
+    targetUrl: 'https://kenigevents.ru/',
+  }), /post_navigation_search_forbidden/u);
+});
+
 test('callback/session attach failure is Auth integration, not broker infrastructure', async () => {
   const adapter = fakeJourneyAdapter();
   adapter.preflight = async () => preflight;
@@ -720,9 +738,16 @@ test('Playwright card open preserves Search activity and independently counts la
   const adapter = await createPlaywrightSearchAdapter({ page, productionHealth: true });
   const receipt = await adapter.openFirstResult();
   assert.deepEqual(receipt.search_page_activity_before_navigation, searchActivity);
-  assert.equal(receipt.post_navigation_search_post_count, 1);
   assert.equal(receipt.same_origin, true);
   assert.equal(receipt.http_status, 200);
+  assert.equal(listeners.get('request')?.size || 0, 1);
+  for (const listener of listeners.get('request') || []) {
+    listener({
+      method: () => 'POST',
+      url: () => 'https://project.supabase.co/functions/v1/event-search?late=yes',
+    });
+  }
+  assert.equal(await adapter.postNavigationSearchPostCount(), 2);
   assert.equal(listeners.get('request')?.size || 0, 0);
   assert.doesNotMatch(JSON.stringify(receipt), /not-retained/u);
 });
