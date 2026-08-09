@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from typing import Any
@@ -48,7 +49,7 @@ from .social_workspace import (
     validate_status_request,
 )
 from .social_workspace_runtime import SocialWorkspaceRuntime
-from .tool_catalog import ToolCallContext, ToolSpec
+from .tool_catalog import ToolCallContext, ToolExecutionError, ToolSpec
 
 _PLATFORMS = ("telegram", "vk")
 
@@ -168,6 +169,40 @@ def build_social_workspace_tools(
         if isinstance(exc, InvalidArgumentsError):
             return exc
         return InvalidArgumentsError("social workspace request rejected")
+
+    def asset_rejected(exc: Exception) -> ToolExecutionError:
+        safe_code = getattr(exc, "error_code", None)
+        if isinstance(safe_code, str) and re.fullmatch(
+            r"[A-Z][A-Z0-9_]{2,63}", safe_code
+        ):
+            return ToolExecutionError(
+                safe_code, "Social asset staging rejected."
+            )
+        message = str(exc).lower()
+        if "file" in message and any(
+            marker in message
+            for marker in (
+                "object",
+                "download_url",
+                "file_id",
+                "file name",
+                "file mime",
+            )
+        ):
+            code = "FILE_REF_UNRESOLVED"
+        elif "mime" in message or "only image" in message:
+            code = "MIME_NOT_ALLOWED"
+        elif "scope" in message or "principal" in message:
+            code = "FILE_PRINCIPAL_MISMATCH"
+        elif (
+            "disabled" in message
+            or "ingestor" in message
+            or "provider asset staging" in message
+        ):
+            code = "WORKSPACE_NOT_BOUND"
+        else:
+            code = "FILE_FETCH_FAILED"
+        return ToolExecutionError(code, "Social asset staging rejected.")
 
     read_suffixes = ["discover", "read:public", "analytics", "audience"]
     if enabled("private_read"):
@@ -347,7 +382,7 @@ def build_social_workspace_tools(
             require_platform(request.platform.value)
             return await runtime.stage_asset(request, context)
         except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
-            raise rejected(exc) from None
+            raise asset_rejected(exc) from None
 
     async def asset_status(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:

@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import (
     Any,
     BinaryIO,
+    ClassVar,
     Protocol,
 )
 from urllib.parse import urlsplit
@@ -41,25 +42,105 @@ from urllib.parse import urlsplit
 class MediaStoreError(RuntimeError):
     """Base class for deliberately non-detailed media-store failures."""
 
+    error_code = "WORKSPACE_NOT_BOUND"
+    audit_reason_code = "workspace_not_bound"
+
 
 class MediaIngressRejected(MediaStoreError):
     """The remote input did not satisfy the ingress security contract."""
+
+    _MESSAGE_CODES: ClassVar[dict[str, str]] = {
+        "invalid download URL": "FILE_REF_UNRESOLVED",
+        "numeric download hosts are forbidden": "FILE_REF_UNRESOLVED",
+        "download host is not allowlisted": "FILE_HOST_NOT_ALLOWED",
+        "DNS resolution failed": "FILE_FETCH_FAILED",
+        "DNS returned an invalid answer": "FILE_FETCH_FAILED",
+        "DNS returned a non-public address": "FILE_FETCH_FAILED",
+        "DNS returned too many answers": "FILE_FETCH_FAILED",
+        "DNS returned no usable answers": "FILE_FETCH_FAILED",
+        "invalid file identity": "FILE_REF_UNRESOLVED",
+        "unsupported media role": "MIME_NOT_ALLOWED",
+        "invalid byte limit": "WORKSPACE_NOT_BOUND",
+        "invalid expiry": "WORKSPACE_NOT_BOUND",
+        "expiry must be in the next 24 hours": "FILE_EXPIRED",
+        "media type is not permitted for this role": "MIME_NOT_ALLOWED",
+        "claimed media type does not match content": "MIME_NOT_ALLOWED",
+        "media download timed out": "FILE_FETCH_FAILED",
+        "redirect responses are forbidden": "FILE_FETCH_FAILED",
+        "media download failed": "FILE_FETCH_FAILED",
+        "invalid Content-Length": "FILE_FETCH_FAILED",
+        "media exceeds byte limit": "FILE_TOO_LARGE",
+        "invalid media response chunk": "FILE_FETCH_FAILED",
+        "empty media response": "FILE_FETCH_FAILED",
+        "HTTP response is not streamable": "FILE_FETCH_FAILED",
+        "unsupported media format": "MIME_NOT_ALLOWED",
+        "invalid image dimensions": "MIME_NOT_ALLOWED",
+        "image dimensions exceed limits": "FILE_TOO_LARGE",
+        "image validation failed": "MIME_NOT_ALLOWED",
+        "media store capacity exceeded": "WORKSPACE_NOT_BOUND",
+    }
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str | None = None,
+        audit_detail: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        selected = error_code or self._MESSAGE_CODES.get(message, "FILE_FETCH_FAILED")
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,63}", selected):
+            selected = "FILE_FETCH_FAILED"
+        self.error_code = selected
+        detail = (
+            audit_detail
+            if isinstance(audit_detail, str)
+            and re.fullmatch(r"[a-z0-9]{6,32}", audit_detail)
+            else None
+        )
+        self.audit_reason_code = selected.lower() + (
+            "_" + detail if detail is not None else ""
+        )
 
 
 class MediaNotFound(MediaStoreError):
     """The opaque reference is unknown."""
 
+    error_code = "FILE_REF_UNRESOLVED"
+    audit_reason_code = "file_ref_unresolved"
+
 
 class MediaOwnershipError(MediaStoreError):
     """The reference is not bound to the requesting principal."""
+
+    error_code = "FILE_PRINCIPAL_MISMATCH"
+    audit_reason_code = "file_principal_mismatch"
 
 
 class MediaExpired(MediaStoreError):
     """The asset is no longer usable."""
 
+    error_code = "FILE_EXPIRED"
+    audit_reason_code = "file_expired"
+
 
 class MediaIntegrityError(MediaStoreError):
     """The stored bytes or filesystem object failed integrity checks."""
+
+    error_code = "FILE_INTEGRITY_FAILED"
+    audit_reason_code = "file_integrity_failed"
+
+
+def _host_audit_fingerprint(host: str) -> str:
+    """Fingerprint a dynamic host and its stable DNS suffixes without disclosure."""
+
+    labels = host.split(".")
+    values = [host]
+    values.append(".".join(labels[-2:]) if len(labels) >= 2 else host)
+    values.append(".".join(labels[-3:]) if len(labels) >= 3 else host)
+    return "".join(
+        hashlib.sha256(value.encode("ascii")).hexdigest()[:8] for value in values
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,7 +549,10 @@ class SecureMediaAssetStore:
             host.endswith("." + suffix) for suffix in self._allowed_wildcard_suffixes
         )
         if host not in self._allowed_hosts and not wildcard_match:
-            raise MediaIngressRejected("download host is not allowlisted")
+            raise MediaIngressRejected(
+                "download host is not allowlisted",
+                audit_detail=_host_audit_fingerprint(host),
+            )
         return host, 443
 
     async def _resolve_public(self, host: str, port: int) -> tuple[str, ...]:

@@ -18,7 +18,12 @@ from .repository import (
     ReadOnlySQLiteError,
     RepositoryError,
 )
-from .tool_catalog import ToolCallContext, ToolExecutionResult, ToolSpec
+from .tool_catalog import (
+    ToolCallContext,
+    ToolExecutionError,
+    ToolExecutionResult,
+    ToolSpec,
+)
 
 LATEST_LEGACY_PROTOCOL = "2025-11-25"
 SUPPORTED_LEGACY_PROTOCOLS = (
@@ -143,6 +148,26 @@ class MCPProtocol:
             "isError": False,
         }
 
+    @staticmethod
+    def _public_tool_error(exc: ToolExecutionError) -> dict[str, Any]:
+        structured = {
+            "error_code": exc.error_code,
+            "retry_safe": exc.retry_safe,
+        }
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        f"{exc.public_message} "
+                        f"(error_code={exc.error_code})"
+                    ),
+                }
+            ],
+            "structuredContent": structured,
+            "isError": True,
+        }
+
     def _auth_result(self, description: str, *, insufficient_scope: bool = False) -> dict[str, Any]:
         error = "insufficient_scope" if insufficient_scope else "invalid_token"
         challenge = self.challenge.replace('error="invalid_token"', f'error="{error}"')
@@ -222,6 +247,15 @@ class MCPProtocol:
         try:
             tool.validate_arguments(arguments)
             required_scopes = tool.required_scopes(arguments)
+        except ToolExecutionError as exc:
+            if tool.denial_handler is not None:
+                await tool.denial_handler(
+                    arguments, context, exc.error_code.lower()
+                )
+            return self._response(
+                request_id,
+                result=self._public_tool_error(exc),
+            )
         except (InvalidArgumentsError, ValueError) as exc:
             if tool.denial_handler is not None:
                 await tool.denial_handler(arguments, context, "invalid_arguments")
@@ -281,6 +315,15 @@ class MCPProtocol:
             if tool.cacheable:
                 self.cache.set(cache_key, result)
             return self._response(request_id, result=result)
+        except ToolExecutionError as exc:
+            if tool.denial_handler is not None:
+                await tool.denial_handler(
+                    arguments, context, exc.error_code.lower()
+                )
+            return self._response(
+                request_id,
+                result=self._public_tool_error(exc),
+            )
         except (InvalidArgumentsError, ValueError) as exc:
             if tool.denial_handler is not None:
                 await tool.denial_handler(arguments, context, "invalid_arguments")

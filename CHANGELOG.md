@@ -4,10 +4,24 @@
 
 ### Fixed
 
+- Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
+  `fileParams` now return bounded structured reason codes for unresolved refs,
+  host/fetch policy, principal binding, workspace configuration, MIME, size,
+  expiry and integrity failures while signed URLs, file IDs/names and provider
+  identifiers remain absent from responses and audit logs. Foreign-principal
+  assets and raw path/`file_*` strings still fail before provider I/O.
+  Dynamic denied hosts now fingerprint both the full hostname and stable DNS
+  suffixes, allowing an exact policy repair without storing a signed URL or
+  disclosing the temporary provider hostname.
+
 - Fixed the behavioral decoder Actions harness to exclude the exact-source
   `node_modules` directory from its disposable reflink/copy before attaching
   the single pinned dependency symlink, avoiding an `EEXIST` capture failure
   without changing the source tree or dependency versions.
+
+- Made the Behavioral Decoder v1.1 final manifest, artifact index and artifact
+  receipt bind immutable Decoder v1 through one portable sibling path instead
+  of retaining a runner-local absolute checkout path.
 
 - Accepted VK's production video-story CDN under the same strict HTTPS,
   public-DNS, no-redirect media boundary, so a valid story returned from

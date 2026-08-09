@@ -15,6 +15,7 @@ from private_events_mcp_media import (
     MediaIntegrityError,
     MediaOwnershipError,
     SecureMediaAssetStore,
+    _host_audit_fingerprint,
 )
 
 OWNER_A = hashlib.sha256(b"owner-A").hexdigest()
@@ -110,6 +111,28 @@ def test_ssrf_url_matrix_rejected_before_fetch(tmp_path, url):
     with pytest.raises(MediaIngressRejected):
         ingest(store, File(download_url=url))
     assert fetcher.calls == []
+
+
+def test_nonallowlisted_host_has_stable_safe_code_and_fingerprinted_audit_reason(
+    tmp_path,
+):
+    store, fetcher = make_store(tmp_path)
+    with pytest.raises(MediaIngressRejected) as caught:
+        ingest(store, File(download_url="https://foreign-files.example.test/a"))
+    assert caught.value.error_code == "FILE_HOST_NOT_ALLOWED"
+    assert caught.value.audit_reason_code.startswith("file_host_not_allowed_")
+    assert "foreign-files.example.test" not in caught.value.audit_reason_code
+    assert fetcher.calls == []
+
+
+def test_dynamic_host_audit_fingerprint_binds_stable_suffixes_without_disclosure():
+    first = _host_audit_fingerprint("random-a.downloads.example.test")
+    second = _host_audit_fingerprint("random-b.downloads.example.test")
+    assert len(first) == 24
+    assert len(second) == 24
+    assert first[:8] != second[:8]
+    assert first[8:] == second[8:]
+    assert "example" not in first
 
 
 @pytest.mark.parametrize(
