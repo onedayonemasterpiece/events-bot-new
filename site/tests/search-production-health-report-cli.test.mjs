@@ -49,8 +49,24 @@ test('terminal reporter opens infrastructure plan only on third prior/current id
 
 test('missing failed artifact becomes platform-specific UNKNOWN fallback without raw logs', async () => {
   const root = await mkdtemp(join(tmpdir(), 'search-report-empty-'));
-  const value = await runProductionHealthReporter(['--evidence-root', root], env('999', { IOS_RESULT: 'failure' }));
+  const output = join(root, 'aggregate', 'summary.json');
+  const value = await runProductionHealthReporter(
+    ['--evidence-root', root, '--aggregate-output', output],
+    env('999', { IOS_RESULT: 'failure' }),
+  );
   assert.deepEqual(value, [{ platform: 'ios', action: 'none' }]);
+  const summary = JSON.parse(await readFile(output, 'utf8')).platforms[0];
+  const requiredEvidenceFields = [
+    'tested_at', 'target_url_sha256', 'target_superseded', 'site_runtime_sha',
+    'search_backend_revision', 'content_generation_id', 'search_index_generation_id',
+    'search_contract_version', 'request_id', 'search_post_count', 'result_count',
+    'rendered_card_count', 'opened_route_status', 'latency_ms', 'cache_status',
+    'provider_attempt_counts', 'client_observed_supabase_bytes',
+  ];
+  assert.deepEqual(requiredEvidenceFields.filter((key) => !(key in summary)), []);
+  assert.equal(summary.evidence_available, false);
+  assert.equal(summary.search_post_count, 0);
+  assert.deepEqual(summary.provider_attempt_counts, { embedding: 0, vector: 0, llm: 0 });
 });
 
 test('fixed redaction output routes security disposition and forbids aggregate artifact', async () => {

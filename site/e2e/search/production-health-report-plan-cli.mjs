@@ -114,7 +114,28 @@ function fallbackSummary(platform, env) {
 }
 
 function aggregatePlatformSummary(summary, record) {
-  if (!record) return { ...summary, evidence_available: false };
+  if (!record) return {
+    ...summary,
+    evidence_available: false,
+    tested_at: null,
+    target_url_sha256: null,
+    target_superseded: false,
+    site_runtime_sha: null,
+    search_backend_revision: null,
+    content_generation_id: null,
+    search_index_generation_id: null,
+    search_contract_version: null,
+    request_id: null,
+    search_post_count: 0,
+    result_count: 0,
+    rendered_card_count: 0,
+    opened_route_status: null,
+    latency_ms: null,
+    cache_status: null,
+    provider_attempt_counts: { embedding: 0, vector: 0, llm: 0 },
+    pagination_requests: 0,
+    client_observed_supabase_bytes: 0,
+  };
   return {
     ...summary,
     evidence_available: true,
