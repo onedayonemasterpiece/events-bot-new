@@ -78,6 +78,7 @@ const openOperation = ({ kind, fingerprint, summary, identicalTerminalRuns = 1 }
   body: issueBody({ kind, fingerprint, summary, identicalTerminalRuns }),
   labels: labelsFor(kind, summary.platform),
   artifact_policy: kind === ISSUE_KIND.SECURITY_EVIDENCE ? 'forbidden' : 'sanitized_summary_only',
+  identical_terminal_runs: identicalTerminalRuns,
 });
 
 const closeProductOperation = (summary) => Object.freeze({
@@ -169,5 +170,86 @@ export function buildSearchHealthReportPlan({ summary, history = [] } = {}) {
     schema_version: SEARCH_HEALTH_REPORT_PLAN_SCHEMA,
     summary: current,
     operation,
+  });
+}
+
+const plainRecord = (value) => (
+  value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype
+);
+
+const planFail = (reason) => {
+  throw new Error(`search_health_report_plan_invalid:${reason}`);
+};
+
+const canonicalJson = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (plainRecord(value)) {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
+  }
+  return value;
+};
+
+const exactJsonEqual = (left, right) => (
+  JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right))
+);
+
+const expectedOperationForPlan = (summary, operation) => {
+  if (summary.product_health === 'HEALTHY') return closeProductOperation(summary);
+  if (summary.failure_class?.startsWith('BROKEN_')) {
+    return openOperation({
+      kind: ISSUE_KIND.PRODUCT,
+      fingerprint: `search-product:${summary.platform}:${summary.failure_class}`,
+      summary,
+    });
+  }
+  if (UNKNOWN_FAILURE_CLASSES.has(summary.failure_class)) {
+    const count = Number(operation?.identical_terminal_runs);
+    if (!Number.isInteger(count) || count < 1) planFail('unknown_streak');
+    return count >= 3
+      ? openOperation({
+        kind: ISSUE_KIND.INFRASTRUCTURE,
+        fingerprint: `search-infra:${summary.platform}:${summary.failure_class}`,
+        summary,
+        identicalTerminalRuns: count,
+      })
+      : noOperation(summary, 'infra_streak_below_threshold', count);
+  }
+  if (summary.failure_class === 'COST_GUARD_FAILED') {
+    return openOperation({
+      kind: ISSUE_KIND.COST,
+      fingerprint: `search-cost:${summary.platform}`,
+      summary,
+    });
+  }
+  if (summary.failure_class === 'EVIDENCE_REDACTION_FAILED') {
+    return openOperation({
+      kind: ISSUE_KIND.SECURITY_EVIDENCE,
+      fingerprint: `search-evidence:${summary.platform}`,
+      summary,
+    });
+  }
+  if (summary.execution_status === 'BLOCKED') return noOperation(summary, 'release_not_active');
+  return noOperation(summary, 'no_incident_disposition');
+};
+
+/**
+ * Revalidates a serialized report plan at the side-effect boundary. This
+ * rejects every extra or modified operation field by comparing it with the
+ * canonical operation derivable from the strict sanitized summary.
+ */
+export function normalizeSearchHealthReportPlan(plan) {
+  if (!plainRecord(plan)) planFail('record');
+  if (!exactJsonEqual(Object.keys(plan).sort(), ['operation', 'schema_version', 'summary'])) {
+    planFail('fields');
+  }
+  if (plan.schema_version !== SEARCH_HEALTH_REPORT_PLAN_SCHEMA) planFail('schema_version');
+  if (!plainRecord(plan.operation)) planFail('operation_record');
+  const summary = normalizeSearchHealthSummary(plan.summary);
+  const expectedOperation = expectedOperationForPlan(summary, plan.operation);
+  if (!exactJsonEqual(plan.operation, expectedOperation)) planFail('operation_not_canonical');
+  return Object.freeze({
+    schema_version: SEARCH_HEALTH_REPORT_PLAN_SCHEMA,
+    summary,
+    operation: expectedOperation,
   });
 }
