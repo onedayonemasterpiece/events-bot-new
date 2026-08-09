@@ -50,7 +50,26 @@ def test_enabled_config_requires_distinct_static_codex_client(monkeypatch) -> No
 def test_disabled_config_does_not_parse_mcp_only_client_values(monkeypatch) -> None:
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_ENABLED", "0")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "invalid id")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS", "not-an-integer")
     assert PrivateEventsMCPConfig.from_env().enabled is False
+
+
+def test_disabled_media_story_does_not_parse_stale_media_limits(monkeypatch) -> None:
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES", "not-an-integer")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES", "-1")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS", "never")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS", "slow")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH", "wide")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT", "tall")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS", "many")
+
+    config = PrivateEventsMCPConfig.from_env()
+
+    assert config.universal_social_media_story_enabled is False
+    assert config.max_asset_bytes == 30 * 1024 * 1024
+    assert config.max_store_bytes == 128 * 1024 * 1024
 
 
 def test_media_limits_use_the_canonical_documented_environment_names(

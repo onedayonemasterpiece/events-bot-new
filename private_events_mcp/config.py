@@ -67,6 +67,21 @@ def _strict_int(name: str, default: int, *, low: int, high: int) -> int:
     return value
 
 
+def _strict_feature_int(
+    name: str,
+    default: int,
+    *,
+    low: int,
+    high: int,
+    enabled: bool,
+) -> int:
+    """Ignore stale capability-only settings while that capability is inert."""
+
+    if not enabled:
+        return default
+    return _strict_int(name, default, low=low, high=high)
+
+
 def _hosts(name: str) -> tuple[str, ...]:
     raw = (os.getenv(name) or "").strip()
     if not raw:
@@ -315,41 +330,54 @@ class PrivateEventsMCPConfig:
                 if media_story_enabled
                 else ()
             ),
-            max_asset_bytes=_strict_int(
+            max_asset_bytes=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES",
                 30 * 1024 * 1024,
                 low=1,
                 high=64 * 1024 * 1024,
+                enabled=media_story_enabled,
             ),
-            max_store_bytes=_strict_int(
+            max_store_bytes=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES",
                 128 * 1024 * 1024,
                 low=1,
                 high=1024 * 1024 * 1024,
+                enabled=media_story_enabled,
             ),
-            asset_ttl_seconds=_strict_int(
+            asset_ttl_seconds=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS",
                 3600,
                 low=60,
                 high=86400,
+                enabled=media_story_enabled,
             ),
-            download_timeout_seconds=_strict_int(
+            download_timeout_seconds=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS",
                 20,
                 low=1,
                 high=120,
+                enabled=media_story_enabled,
             ),
-            max_width=_strict_int(
-                "PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH", 8192, low=1, high=8192
+            max_width=_strict_feature_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH",
+                8192,
+                low=1,
+                high=8192,
+                enabled=media_story_enabled,
             ),
-            max_height=_strict_int(
-                "PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT", 8192, low=1, high=8192
+            max_height=_strict_feature_int(
+                "PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT",
+                8192,
+                low=1,
+                high=8192,
+                enabled=media_story_enabled,
             ),
-            max_pixels=_strict_int(
+            max_pixels=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS",
                 40_000_000,
                 low=1,
                 high=40_000_000,
+                enabled=media_story_enabled,
             ),
             access_ttl_seconds=_int(
                 "PRIVATE_EVENTS_MCP_ACCESS_TTL_SECONDS", 900, low=300, high=3600
