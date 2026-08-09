@@ -38,13 +38,21 @@
 
 ### Fixed
 
-- Fixed the next Android live-health failure exposed by run `31333074131`.
+- Added a closed Android Auth-terminal diagnostic after run `31333753972`
+  reproduced the same pre-Search timeout even with `Network.loadingFailed`
+  support. A timeout now distinguishes the allowlisted Auth path class
+  (`verify`, `user`, `token`, or mixed) and whether only a request, a response,
+  or response data was observed. It still emits no URL, request id, body,
+  token, or raw protocol/error data.
+
+- Hardened the Android live-health terminal tracker after run `31333074131`.
   Chrome performance logs terminate a cancelled/failed request with
   `Network.loadingFailed`, not `Network.loadingFinished`; the sanitized Appium
   tracker now closes that request with the sum of its already received
-  `Network.dataReceived` bytes. This prevents an authorised callback's
-  background Auth cancellation from timing out before Search, without retaining
-  request ids, URLs, response bodies or raw network errors.
+  `Network.dataReceived` bytes. This closes the official cancellation branch
+  without retaining request ids, URLs, response bodies or raw network errors;
+  run `31333753972` later proved that a different pending branch still needed
+  closed diagnosis.
 
 - Fixed live Search health diagnostics exposed by run `31332306409`.
   Standalone WebdriverIO `9.30.0` removes deprecated JSONWP log commands even

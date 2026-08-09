@@ -458,6 +458,10 @@ test('CDP request start remains pending across drains until response terminal by
     },
   } }) }]);
   assert.equal(tracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }), 1);
+  assert.deepEqual(tracker.pendingTerminalSummary({ pathPrefix: '/auth/v1' }), {
+    total: 1, request_only: 0, response_seen: 1, received_data: 0,
+    verify: 1, user: 0, token: 0, other: 0,
+  });
 
   tracker.consume([{ message: JSON.stringify({ method: 'Network.loadingFinished', params: {
     requestId: 'auth-cross-drain', encodedDataLength: 2048,
@@ -738,7 +742,7 @@ test('mobile Auth callback rejects responseReceived partial bytes without termin
   const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
   await assert.rejects(
     () => adapter.bootstrapSession('https://project.supabase.co/auth/v1/verify?token=secret', target),
-    /auth.*terminal|terminal.*auth/u,
+    /mobile_auth_terminal_bytes_timeout_verify_response_seen/u,
   );
 });
 

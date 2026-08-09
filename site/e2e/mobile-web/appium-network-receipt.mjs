@@ -162,6 +162,30 @@ export function createSanitizedNavigationResponseTracker() {
       }
       return count;
     },
+    pendingTerminalSummary(filter = {}) {
+      const summary = {
+        total: 0, request_only: 0, response_seen: 0, received_data: 0,
+        verify: 0, user: 0, token: 0, other: 0,
+      };
+      for (const [identity, record] of responseByRequestId.entries()) {
+        if (record.terminal || !matches(record.item, filter)) continue;
+        summary.total += 1;
+        summary[record.response_seen ? 'response_seen' : 'request_only'] += 1;
+        if (Number(receivedBytesByRequestId.get(identity) || 0) > 0) summary.received_data += 1;
+        const pathname = String(record.item?.pathname || '');
+        const pathClass = pathname === '/auth/v1/verify' ? 'verify'
+          : pathname === '/auth/v1/user' ? 'user'
+            : pathname === '/auth/v1/token' ? 'token' : 'other';
+        summary[pathClass] += 1;
+      }
+      for (const record of untrackedTerminalRecords) {
+        if (record.terminal || !matches(record.item, filter)) continue;
+        summary.total += 1;
+        summary.response_seen += 1;
+        summary.other += 1;
+      }
+      return Object.freeze(summary);
+    },
   });
   return tracker;
 }
