@@ -673,6 +673,14 @@ wait is disabled and the actually rendered fallback is captured with
 `font_settle.status=timed-out-continued`; it is not relabelled as a loaded-font
 render.
 
+The home cold-start/rerank root contains 30 lazy `EventCard` images. Its
+disposable capture page therefore promotes those images to eager loading and
+requires a bounded load/error plus decode settlement before each of the two
+element rasters. The observation retains the image counts and test-only
+instrumentation mode. This closes runner-dependent progressive lazy loading
+without editing pinned source, masking image pixels, or relaxing perceptual
+comparison.
+
 Transport disclosure packets use real exact treatment components with a
 controlled `PreviewEvent` fixture assembled only from distinct trips returned
 by the exact Kaup resolver across bounded start-time variants. This yields six
