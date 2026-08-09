@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Fixed Current UI Decoder reviewed capsule materialization so capsule IDs are
+  matched across prefixed and compact serialized forms, and strengthened the
+  `GO` validator to reject empty, dangling or incomplete capsule-local
+  specimen/page evidence indexes. Added real-component `EventHero` and
+  `EventMediaRail` controlled specimens so the Event Presentation and Media
+  Heavy capsules have isolated evidence in addition to exact-page evidence.
+
 - Fixed StaticSiteBuilder terminal-owner recovery so a newer Smart Update
   fingerprint cannot supersede a completed Kaggle claim during the brief
   callback-ledger/Kaggle-REST status lag; the exact owner must now be adopted or
@@ -48,7 +55,7 @@
   path exists; generated client profiles do not request story scopes.
 
 - Added the real-component Current UI Decoder specimen and review pipeline:
-  19 bounded disposable Astro wrappers (20 interaction captures), exact
+  21 bounded disposable Astro wrappers (22 interaction captures), exact
   `PreviewEvent` transport/medallion fixtures, 26 real-route bindings across
   48 rendered contexts,
   element PNG/DOM/ARIA/computed/cascade/font evidence, and a fail-closed human

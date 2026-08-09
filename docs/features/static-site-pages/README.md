@@ -5,11 +5,11 @@
 > **Core fallback:** страницы событий работают без авторизации; optional Yandex/email identity, smart search and personalization are separate enhancements. Core event DB never moves to Supabase.
 > **Current release plan:** [production profile, atomic promotion and 10-day Telegraph cutover](release-plan.md).
 
-The read-only [Current UI Resource Graph v0 decoder](current-ui-resource-graph.md)
-reconstructs the pinned candidate's source/runtime inventory without changing
-Astro or creating/merging design-system resources. It keeps the immutable
-candidate and the independently published prelaunch root as separate identity
-planes.
+The read-only [Current UI Decoder v1 and Resource Graph v0 compatibility
+layer](current-ui-resource-graph.md) reconstructs the pinned candidate's
+source/runtime inventory and reviewed AS-IS evidence without changing Astro or
+creating/merging design-system resources. It keeps the immutable candidate and
+the independently published prelaunch root as separate identity planes.
 
 ## Focus-group product prototype (2026-07-27)
 

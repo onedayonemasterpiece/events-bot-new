@@ -12,7 +12,8 @@ function componentImport(renderer) {
     button: 'components/design-system/Button.astro', 'focus-egg': 'components/FocusEggArtifact.astro',
     amber: 'components/listings/AmberRailArtifact.astro', 'artifact-collection': 'components/artifacts/ArtifactCollection.astro',
     rail: 'components/EventTransportSchedule.astro', kaup: 'components/KaupTransportSchedule.astro',
-    medallions: 'components/EventTokenMedallions.astro',
+    medallions: 'components/EventTokenMedallions.astro', 'event-hero': 'components/EventHero.astro',
+    'event-media-rail': 'components/EventMediaRail.astro',
   })[renderer];
 }
 function renderExpression(row) {
@@ -23,6 +24,7 @@ function renderExpression(row) {
   if (row.renderer === 'artifact-collection') return '<Component />';
   if (row.renderer === 'kaup') return `<Component event={event} compact={${Boolean(props.compact)}} />`;
   if (row.renderer === 'medallions') return `<Component event={event} layout=${safeJson(props.layout)} allowTopSlot={${Boolean(props.allowTopSlot)}} />`;
+  if (row.renderer === 'event-media-rail') return `<Component assets={event.image_assets || []} galleryId="controlled-event-media" eventTitle={event.title} maxVisible={${Number(props.maxVisible)}} />`;
   return '<Component event={event} />';
 }
 

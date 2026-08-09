@@ -87,6 +87,11 @@ export function assertHumanReviewLedger(ledger, snapshotId, observations, pageVe
   return true;
 }
 
+export function capsuleEvidenceMatches(item, capsuleId) {
+  const canonical = String(capsuleId || '').replace(/^capsule\./u, '');
+  return (item?.capsule_ids || []).some((id) => String(id || '').replace(/^capsule\./u, '') === canonical);
+}
+
 function rewriteCapsule(root, capsuleReview, observations, pageVerifications) {
   const directory = capsuleReview.id.replace(/^capsule\./u, '');
   const capsuleRoot = join(root, 'conformance-capsules', directory);
@@ -100,13 +105,13 @@ function rewriteCapsule(root, capsuleReview, observations, pageVerifications) {
     decision: 'NOT_MERGED', recommendation: 'unresolved', normalization_allowed: false,
   });
   writeFileSync(capsulePath, json(capsule, true));
-  const specimenRefs = observations.filter((item) => item.capsule_ids?.includes(capsuleReview.id)).map((item) => ({
+  const specimenRefs = observations.filter((item) => capsuleEvidenceMatches(item, capsuleReview.id)).map((item) => ({
     id: `capsule-ref.${item.id}`, observation_id: item.id, specimen_id: item.specimen_id,
     screenshot_sha256: item.screenshot.sha256, review_status: 'reviewed', observation_attached: true,
     production_state_claimed: false, decision: 'NOT_MERGED', normalization_allowed: false,
   }));
   writeJsonl(join(capsuleRoot, 'specimen-observation-refs.jsonl'), specimenRefs);
-  const pageRefs = pageVerifications.filter((item) => item.capsule_ids?.includes(capsuleReview.id)).map((item) => ({
+  const pageRefs = pageVerifications.filter((item) => capsuleEvidenceMatches(item, capsuleReview.id)).map((item) => ({
     id: `capsule-ref.${item.id}`, verification_id: item.id, route_binding_id: item.route_binding_id,
     screenshot_sha256: item.screenshot?.sha256 || item.screenshot_sha256 || null,
     review_status: item.review_status, production_observed_by_capsule: item.production_state_claimed === true,
@@ -136,10 +141,12 @@ export function materializeReviewedHandoff({ snapshotRoot, reviewLedgerPath }) {
   assertHumanReviewLedger(ledger, manifest.snapshot_id, observations, pageVerifications, bindings, outputRoot);
   const reviews = new Map(ledger.observations.map((item) => [item.id, item]));
   const reviewedObservations = observations.map((item) => ({ ...item, ...reviews.get(item.id),
-    screenshot_sha256: item.screenshot.sha256, evidence_status: 'reviewed', review_status: 'reviewed', production_state_claimed: false }));
+    screenshot_sha256: item.screenshot.sha256, evidence_status: 'reviewed', review_status: 'reviewed', human_review_status: 'reviewed',
+    trace_status: 'source-to-specimen-with-real-route-binding-reviewed', production_state_claimed: false }));
   writeJsonl(join(root, 'specimen-observations.jsonl'), reviewedObservations);
   const pageReviews = new Map(ledger.page_verifications.map((item) => [item.id, item]));
-  const reviewedPages = pageVerifications.map((item) => pageReviews.has(item.id) ? ({ ...item, ...pageReviews.get(item.id), evidence_status: 'reviewed', review_status: 'reviewed' }) : item);
+  const reviewedPages = pageVerifications.map((item) => pageReviews.has(item.id) ? ({ ...item, ...pageReviews.get(item.id),
+    evidence_status: 'reviewed', review_status: 'reviewed', human_review_status: 'reviewed' }) : item);
   writeJsonl(join(root, 'page-verification.jsonl'), reviewedPages);
   writeFileSync(join(root, 'review-ledger.json'), json(ledger, true));
   const unresolved = readJsonl(join(root, 'unresolved.jsonl')).map((item) => item.blocks_handoff === true ? ({ ...item,

@@ -1107,3 +1107,47 @@ def test_playwright_stable_pair_preserves_capture_label_on_locator_failure():
       if (!message.includes('medallions-5336/desktop/0 capture attempt 1 failed') || !message.includes('Node is not visible')) process.exit(2);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, check=True)
+
+
+def test_review_materializer_matches_capsule_ids_across_serialized_forms():
+    script = """
+      import { capsuleEvidenceMatches } from './scripts/current_ui_resource_graph/v1/review-materialize.mjs';
+      const rows = [
+        { capsule_ids: ['04-transport'] },
+        { capsule_ids: ['capsule.04-transport'] },
+        { capsule_ids: ['05-medallions'] },
+      ];
+      process.stdout.write(JSON.stringify(rows.map((row) => capsuleEvidenceMatches(row, 'capsule.04-transport'))));
+    """
+    result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [True, True, False]
+
+    source = (REPO / "scripts/current_ui_resource_graph/v1/review-materialize.mjs").read_text(encoding="utf-8")
+    assert "source-to-specimen-with-real-route-binding-reviewed" in source
+    assert "human_review_status: 'reviewed'" in source
+
+
+def test_go_validator_requires_resolved_capsule_local_specimen_and_page_refs():
+    script = """
+      import { assertReviewedCapsuleEvidence } from './scripts/current_ui_resource_graph/v1/validate-snapshot.mjs';
+      const capsule = { id:'capsule.04-transport', review:{ evidence_ids:['observation.1','page.1'] } };
+      const base = { capsule, specimenRefs:[{observation_id:'observation.1'}], pageRefs:[{verification_id:'page.1'}],
+        observationIds:new Set(['observation.1']), pageIds:new Set(['page.1']) };
+      const result = {};
+      for (const [name, value] of Object.entries({
+        valid: base,
+        emptySpecimens: {...base, specimenRefs:[]},
+        danglingPage: {...base, pageRefs:[{verification_id:'page.missing'}]},
+        reviewOutsideLocalRefs: {...base, capsule:{...capsule,review:{evidence_ids:['observation.1','page.2']}}},
+      })) {
+        try { assertReviewedCapsuleEvidence(value); result[name] = 'accepted'; }
+        catch (error) { result[name] = error.message; }
+      }
+      process.stdout.write(JSON.stringify(result));
+    """
+    result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    observed = json.loads(result.stdout)
+    assert observed["valid"] == "accepted"
+    assert all(observed[name] != "accepted" for name in ("emptySpecimens", "danglingPage", "reviewOutsideLocalRefs"))

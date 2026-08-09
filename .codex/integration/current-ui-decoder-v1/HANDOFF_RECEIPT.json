@@ -1,8 +1,9 @@
 {
   "schema_version": "current_ui_decoder_v1_handoff_receipt",
   "snapshot_id": "decoder-v1-snapshot-20260808T124842-4786ac53bc",
-  "status": "complete",
-  "verdict": "GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION",
+  "status": "superseded",
+  "verdict": "NO_GO_PENDING_CORRECTIVE_CAPTURE",
+  "superseded_reason": "Capsule-local specimen/page reference shards were empty because prefixed and compact capsule IDs were compared literally; Event Presentation and Media Heavy also require isolated real-component specimens.",
   "source": {
     "repository": "onedayonemasterpiece/events-bot-new",
     "sha": "ef7aa62e45c60f7a12da6160f490719c0721ec03",
