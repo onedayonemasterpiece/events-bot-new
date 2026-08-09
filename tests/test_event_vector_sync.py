@@ -26,6 +26,17 @@ def _release_state(path: Path, *, active_job_id=None, last_success_at=None) -> N
         )
 
 
+def _running_static_job(path: Path, *, job_id: int = 50159) -> None:
+    with sqlite3.connect(path) as con:
+        con.execute(
+            "create table joboutbox (id integer primary key, task text, status text)"
+        )
+        con.execute(
+            "insert into joboutbox values (?, 'static_site_build', 'running')",
+            (job_id,),
+        )
+
+
 def test_static_release_guard_blocks_active_build_and_recent_publication(monkeypatch, tmp_path):
     monkeypatch.setenv("EVENT_VECTOR_SYNC_POST_STATIC_GRACE_SECONDS", "900")
     now = datetime(2026, 8, 9, 8, 0, tzinfo=timezone.utc)
@@ -45,6 +56,18 @@ def test_static_release_guard_blocks_active_build_and_recent_publication(monkeyp
     assert evs.static_release_guard(
         str(recent_db), now=datetime(2026, 8, 9, 8, 10, tzinfo=timezone.utc)
     ) is None
+
+
+def test_static_release_guard_blocks_running_static_preclaim_window(tmp_path):
+    now = datetime(2026, 8, 9, 8, 26, tzinfo=timezone.utc)
+    db_path = tmp_path / "preclaim.sqlite"
+    _release_state(db_path)
+    _running_static_job(db_path)
+
+    assert evs.static_release_guard(str(db_path), now=now) == {
+        "reason": "static_build_preclaim",
+        "retry_at": now + timedelta(minutes=5),
+    }
 
 
 @pytest.mark.asyncio

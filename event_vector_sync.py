@@ -86,6 +86,16 @@ def static_release_guard(db_path: str, *, now: datetime | None = None) -> dict[s
                 "SELECT active_job_id, last_success_at FROM static_site_build_state "
                 "WHERE release_channel='secret_preview'"
             ).fetchone()
+            outbox_exists = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='joboutbox'"
+            ).fetchone()
+            running_static = bool(
+                outbox_exists
+                and con.execute(
+                    "SELECT 1 FROM joboutbox "
+                    "WHERE task='static_site_build' AND status='running' LIMIT 1"
+                ).fetchone()
+            )
     except sqlite3.Error:
         # Fail open for deployments that do not have the static-site release
         # schema. The vector sync's own complete-receipt gates still apply.
@@ -95,6 +105,13 @@ def static_release_guard(db_path: str, *, now: datetime | None = None) -> dict[s
     if row[0] is not None:
         return {
             "reason": "static_build_active",
+            "retry_at": current + timedelta(minutes=5),
+        }
+    if running_static:
+        # The immutable snapshot/receipt are bound before the durable release
+        # claim is written. Cover that bounded pre-claim interval as well.
+        return {
+            "reason": "static_build_preclaim",
             "retry_at": current + timedelta(minutes=5),
         }
     raw_success = str(row[1] or "").strip()
