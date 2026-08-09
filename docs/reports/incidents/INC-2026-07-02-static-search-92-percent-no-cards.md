@@ -30,6 +30,15 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 two exact-main Search-fix candidate attempts failed
+  deterministically at the legacy `check:preview` gate after successfully
+  exporting the current Search catalog and building 1,300+ preview pages. The
+  exact assertion was an unconditional read of the expired
+  `date-2026-08-08` route for real event `4211` (`Море внутри`). The release
+  gate now uses that real rendered row only while its generated date route
+  exists; later builds retain the same OCR-containment and structured festival
+  medallion proof through immutable contracts, without resurrecting expired
+  pages.
 - 2026-08-08 Android run `31273078355` completed broker callback, same-storage
   auth and the first real vector Search response, then failed only at
   `search_real_scroll_missing`: UiAutomator2 `mobile: scrollGesture` acknowledged
@@ -174,6 +183,11 @@ Open. Current evidence supports multiple contributing roots:
    otherwise healthy multi-query UI journey fail only at the final exact
    revision assertion. Iterative Search debugging must therefore be separated
    from the final full-release revision gate.
+8. The legacy preview release gate also bound an unrelated mobile-rail visual
+   canary to the literal one-off route `date-2026-08-08`. Once that route
+   correctly expired, every later production candidate failed before the
+   Search-specific browser gate even though the Search page and corpus were
+   healthy.
 
 ## Contributing Factors
 
@@ -248,6 +262,11 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
   `live_consistent + cached_vector` journey may bootstrap a cache entry cleared
   by corpus updates, but must prove a same-journey repeat hit with zero provider
   attempts. Strict scheduled/release acceptance still rejects the initial miss.
+- 2026-08-09 preview-gate expiry correction: the `Море внутри` rendered rail is
+  checked only when its source event's generated date route exists. After
+  expiry, the gate still fails closed on the same OCR natural-geometry resolver
+  contract and on the `listing_ready` / `festival` medallion manifest binding,
+  but no longer demands a past page from the current release catalog.
 - 2026-08-08 iOS L2 correction: the shared exact-target resolver no longer uses
   Bash-4-only `mapfile`, so a macOS Bash 3.2 runner reaches session issuance and
   Safari/Appium instead of failing before the Search journey.

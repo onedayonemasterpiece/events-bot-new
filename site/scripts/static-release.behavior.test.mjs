@@ -68,6 +68,15 @@ test('production and candidate packaging preserve the dedicated home while addin
   assert.doesNotMatch(candidate, /'<main id="main">'/u);
 });
 
+test('legacy preview gate does not require an expired More vnutri date route', () => {
+  const previewCheck = readFileSync(new URL('./check-preview.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(previewCheck, /mobileRailRow\('date-2026-08-08',\s*4211\)/u);
+  assert.match(previewCheck, /moreRoutePath && existsSync\(moreRoutePath\)/u);
+  assert.match(previewCheck, /More vnutri immutable OCR media fixture must remain fail-closed/u);
+  assert.match(previewCheck, /moreManifest\?\.listingStatus !== 'listing_ready'/u);
+  assert.match(previewCheck, /moreManifest\?\.listingBinding !== 'festival'/u);
+});
+
 test('production and candidate builds forward only normalized browser-safe search config', () => {
   const production = readFileSync(new URL('./build-production.mjs', import.meta.url), 'utf8');
   const candidate = readFileSync(new URL('./build-secret-candidate.mjs', import.meta.url), 'utf8');

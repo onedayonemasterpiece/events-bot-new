@@ -134,6 +134,12 @@
   rejecting visually stable antialiased JPEG frames without weakening human
   review or perceptual fail-closed checks.
 
+- Fixed the production candidate's legacy preview gate after the dated real
+  `Море внутри` rail canary expired. The gate still checks its rendered row
+  while that date route exists, then falls back to immutable OCR-containment
+  and structured festival-medallion contracts instead of requiring a past
+  `date-2026-08-08` page in every future release.
+
 - Fixed Mobile Safari Search retaining its software keyboard after a valid
   native Search/Enter submit. The product now releases the first-page input
   after validation and before its single cost-bearing POST, so result scrolling

@@ -4,6 +4,7 @@ import eventsData from '../src/data/preview-events.json' with { type: 'json' };
 import relatedData from '../src/data/preview-related.json' with { type: 'json' };
 import interestClubsData from '../src/data/interest-clubs.json' with { type: 'json' };
 import festivalTimelineData from '../src/data/festival-timeline.json' with { type: 'json' };
+import festivalMedallionsData from '../src/data/festivalMedallions.json' with { type: 'json' };
 import busData from '../src/data/busTransportSchedules.json' with { type: 'json' };
 import templateContract from '../src/data/eventTemplateContract.json' with { type: 'json' };
 import { resolveMobileListingRailMediaItems } from '../src/lib/mobileListingRailMedia.mjs';
@@ -277,12 +278,63 @@ if (existsSync(pianissimoRoutePath)) {
     }
   }
 }
-const moreRail = mobileRailRow('date-2026-08-08', 4211);
-if (!moreRail.includes('data-image-text-mode="ocr_text"') || !moreRail.includes('--rail-media-fit:contain')) {
-  throw new Error('More vnutri 4211 OCR media must remain fail-closed');
+const moreEventId = 4211;
+const moreEvent = eventsData.events.find((event) => event.id === moreEventId);
+const moreRoute = moreEvent?.start_date ? `date-${moreEvent.start_date}` : '';
+const moreRoutePath = moreRoute ? join(root, moreRoute, 'index.html') : '';
+const moreManifest = festivalMedallionsData.items.find((item) => item.slug === 'more-vnutri');
+if (
+  moreManifest?.listingStatus !== 'listing_ready'
+  || moreManifest?.listingBinding !== 'festival'
+  || moreManifest?.avatarUrl !== '/assets/festivals/more-vnutri.svg'
+) {
+  throw new Error('More vnutri immutable festival medallion contract is incomplete');
 }
-if (!moreRail.includes('/assets/festivals/more-vnutri.svg')) {
-  throw new Error('More vnutri 4211 misses its structured external festival medallion');
+let moreRail = '';
+if (moreRoutePath && existsSync(moreRoutePath)) {
+  moreRail = mobileRailRow(moreRoute, moreEventId);
+  if (!moreRail.includes('data-image-text-mode="ocr_text"') || !moreRail.includes('--rail-media-fit:contain')) {
+    throw new Error('More vnutri 4211 OCR media must remain fail-closed');
+  }
+  if (!moreRail.includes(moreManifest.avatarUrl)) {
+    throw new Error('More vnutri 4211 misses its structured external festival medallion');
+  }
+} else {
+  // The 8–9 August event is a real release canary, not a permanent fixture.
+  // Once its date route expires, retain the two underlying contracts without
+  // requiring a generated page for a past event: OCR media stays contained,
+  // and the structured festival binding above remains listing-ready.
+  const moreOcrAsset = moreEvent?.image_assets?.find((asset) => asset.image_text_mode === 'ocr_text') || {
+    src: '/assets/festivals/timeline/more-vnutri.webp',
+    width: 1120,
+    height: 1400,
+    image_text_mode: 'ocr_text',
+    media_semantic_status: 'classified',
+    media_role: 'event_identity_poster',
+    media_role_confidence: 1,
+    safe_crop: false,
+  };
+  const moreFixture = moreEvent || {
+    id: moreEventId,
+    festival: 'МОРЕ ВНУТРИ',
+    image_text_mode: 'ocr_text',
+    image_assets: [moreOcrAsset],
+  };
+  const [moreMedia] = resolveMobileListingRailMediaItems(moreFixture, {
+    asset: moreOcrAsset,
+    src: moreOcrAsset.src,
+    ratio: moreOcrAsset.width / moreOcrAsset.height,
+    mode: 'natural',
+    adaptiveCrop: false,
+    objectPosition: '50% 50%',
+  });
+  if (
+    moreMedia?.fit !== 'contain'
+    || moreMedia?.imageTextMode !== 'ocr_text'
+    || moreMedia?.reason !== 'protected_natural_geometry'
+  ) {
+    throw new Error('More vnutri immutable OCR media fixture must remain fail-closed');
+  }
 }
 for (const row of [pianissimoRail, moreRail].filter(Boolean)) {
   if ((row.match(/icon--heart/gu) || []).length !== 3 || !row.includes('icon__heart-outline') || !row.includes('icon__heart-solid')) {
