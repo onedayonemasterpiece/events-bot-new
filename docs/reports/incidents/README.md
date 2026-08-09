@@ -22,6 +22,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-09-private-mcp-missing-bearer-http-200.md`
+  - Scope: Private Events MCP protected `tools/call` transport for both the
+    ChatGPT and Codex resources.
+  - Must not regress: missing/invalid bearer credentials return HTTP 401 with
+    the exact endpoint-specific RFC 9728 resource-metadata challenge, while
+    public initialization/catalogue discovery and authenticated calls remain
+    functional.
+
 - `INC-2026-08-08-private-mcp-oauth-csp-redirect.md`
   - Scope: Private Events MCP authorization HTML/CSP and validated ChatGPT or
     Codex callback navigation.
