@@ -22,6 +22,7 @@ import {
 } from '../e2e/search/production-health-meter.mjs';
 import {
   createBuiltInBrowserHooks,
+  githubMaskCommand,
   hasActiveSearchReleaseReceipt,
   resolveExpectedAcceptedTarget,
   runProductionHealthCell,
@@ -46,6 +47,13 @@ const meter = (bytes = 1024) => ({
   hard_limit_exceeded: bytes > SUPABASE_CLIENT_BYTE_HARD_LIMIT,
   categories: { auth: 0, edge: bytes, direct_rest: 0, direct_rpc: 0 },
   sources: { content_length: bytes, received_body: 0 }, excluded_requests: 0,
+});
+
+test('GitHub masking command accepts one exact secret and rejects log injection', () => {
+  assert.equal(githubMaskCommand('https://kenigevents.ru/_review/private/poisk/'),
+    '::add-mask::https://kenigevents.ru/_review/private/poisk/');
+  assert.throws(() => githubMaskCommand('https://example.test/\nleak'),
+    /search_health_mask_value_invalid/u);
 });
 
 function fakeJourneyAdapter(overrides = {}) {

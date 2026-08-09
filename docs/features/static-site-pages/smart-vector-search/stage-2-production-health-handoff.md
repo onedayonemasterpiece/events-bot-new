@@ -50,7 +50,8 @@ pagination или полный scheduled mobile/release matrix в production-hea
 - overlapping issue coalescing, 30-second memory replay и одинаковый
   encrypted durable result с двухминутным TTL для process/restart
   lost-response; plaintext credential, filesystem/cache/artifact escrow нет;
-- one-query/one-POST vector-only journey, card ID parity, scroll и route 200;
+- one-query/one-POST vector-only journey, card ID parity, обязательный реальный
+  scroll и exact candidate `/sobytiya/<slug>/` route 200;
 - Auth getUser + один owner RLS proof, 48/96 KiB meter и strict evidence;
 - exact deployment marker `none|standard|full`, side-effect-free backend HEAD
   contract proof и pre-Search active release
@@ -58,7 +59,8 @@ pagination или полный scheduled mobile/release matrix в production-hea
   pinned target was superseded.
 
 Перед live остаются только production gates: применить broker migration,
-добавить новый workflow_ref в broker allowlist, deploy exact merged main,
+добавить новые workflow refs и exact events
+`workflow_dispatch,schedule,repository_dispatch` в broker allowlist, deploy exact merged main,
 выполнить два manual workflows и затем включить automatic variable.
 
 ## Production environment/secrets
@@ -70,13 +72,16 @@ pagination или полный scheduled mobile/release matrix в production-hea
 - `SEARCH_E2E_AUTH_BROKER_URL` и OIDC audience
   `kenigevents-static-search-broker`;
 - `SEARCH_E2E_SUPABASE_URL` и `SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY`;
-- три отдельные no-mail platform personas: browser, Android и iOS. Одна
-  mutable session не передаётся между jobs; health, legacy и qualification
-  сериализованы общей concurrency group, а full qualification повторно
-  использует browser session только внутри одного job.
+- три отдельные no-mail health personas: browser, Android и iOS, плюс отдельная
+  `search-cold-browser` persona для release qualification. Одна mutable session
+  не передаётся между jobs. Health и legacy сериализованы общей concurrency
+  group; qualification имеет отдельную group и всегда получает новую cold
+  browser session, даже если вызвана из того же `full` GitHub run.
 
 Secrets не выводятся в job output/artifacts. Opaque target URL маскируется до
-первого log; evidence хранит только redacted path/fingerprint и typed counters.
+первого log; iOS Safari network/console остаются только в driver buckets, а
+Appium stdout работает на error-level с URL filter. Evidence хранит только
+fingerprint и typed counters.
 
 ## Triggers, которые надо включить после live acceptance
 
@@ -97,6 +102,13 @@ Release qualification остаётся manual/selective; никакого schedu
    platform cell; browser wheel и Android native touch должны пройти.
 2. **Browser + iOS:** новые отдельные sessions и ровно один Search POST на
    каждую cell; browser wheel и iOS XCUITest swipe должны пройти.
+
+До включения repository variable необходимо машинно сравнить sanitized
+receipts обоих успешных workflows: `target_url_sha256`, полный immutable target
+tuple, `site_runtime_sha`, `search_backend_revision`, `content_generation_id`
+и `search_index_generation_id` должны быть попарно равны. Любое отличие
+означает, что продукт между proofs изменился; variable остаётся выключенной и
+Stage 2 остаётся `PRODUCT_HEALTH_UNCONFIRMED`.
 
 За одну итерацию запрещено выполнять больше двух live Search runs. При failure
 сначала анализировать sanitized evidence и deterministic fixtures; GitHub

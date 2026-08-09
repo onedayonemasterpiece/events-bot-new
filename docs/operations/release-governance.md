@@ -25,6 +25,13 @@
   Пока provider не публикует отдельный non-secret Edge deploy SHA,
   `search_backend_revision` — точное ожидаемое значение response
   `search_contract_version`; выдумывать byte SHA запрещено.
+- Перед активацией Search production-health broker policy должна одновременно
+  разрешать exact main refs legacy/health/qualification workflows и event
+  classes `workflow_dispatch,schedule,repository_dispatch`. После двух manual
+  HEALTHY/PASS proofs repository variable включается только при точном равенстве
+  их target fingerprint/immutable tuple, site runtime SHA, backend revision и
+  content/index generation ids; это fail-closed проверка «продукт между
+  прогонами не менялся».
 - GitHub Actions deploy не используется и не является допустимым release path. Если в репозитории появляется workflow, который деплоит Fly app на push/workflow_dispatch, это process drift: его нужно удалить или отключить до следующего production-bound task.
 - Emergency deploy из отдельной ветки допустим только для быстрого восстановления production, если одновременно выполняются все условия:
   - ветка создана от актуального `origin/main`;

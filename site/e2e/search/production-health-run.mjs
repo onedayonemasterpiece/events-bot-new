@@ -31,6 +31,17 @@ const execFile = promisify(execFileCallback);
 const platforms = new Set(['browser', 'android', 'ios']);
 const SAFE_DEPLOYMENT_RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u;
 
+export function githubMaskCommand(value) {
+  const secret = String(value || '');
+  if (!secret || /[\r\n]/u.test(secret)) throw new Error('search_health_mask_value_invalid');
+  return `::add-mask::${secret}`;
+}
+
+function maskGitHubSecret(value, env = process.env) {
+  if (String(env.GITHUB_ACTIONS || '').toLowerCase() !== 'true') return;
+  process.stdout.write(`${githubMaskCommand(value)}\n`);
+}
+
 async function emitFailureClassOutput(env, failureClass) {
   const path = String(env.GITHUB_OUTPUT || '').trim();
   if (!path) return;
@@ -484,6 +495,10 @@ export async function createBuiltInMobileHooks(env, platform, dependencies = {})
       let callback = fixtureModule.createBrowserVerificationCallback({
         actionLink: credential.actionLink, redirectTo: target.navigationUrl(),
       });
+      // Mask both values before the first WebDriver navigation. The raw broker
+      // link never leaves this process; only the callback is sent to Appium.
+      maskGitHubSecret(credential.actionLink, env);
+      maskGitHubSecret(callback, env);
       credential.emailOtp = '';
       credential.actionLink = '';
       const issued = {
@@ -524,6 +539,9 @@ export async function runProductionHealthCli(env = process.env) {
     resolver: () => resolveCurrentAcceptedTargetFromFly(env),
     expectedSiteSha,
   });
+  // The accepted review URL is private. Register it with the runner before an
+  // adapter or Appium command can observe it.
+  maskGitHubSecret(initialResolution.target.navigationUrl(), env);
   const backendReceipt = expectedBackendRevision
     ? await waitForActiveSearchBackend({
       supabaseUrl: required(env, 'PERSONALIZATION_SUPABASE_URL'),

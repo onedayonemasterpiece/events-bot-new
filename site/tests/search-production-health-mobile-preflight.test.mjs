@@ -141,7 +141,7 @@ test('iOS preflight uses the Safari preparation hook then proves Mobile Safari/X
     deviceName: 'iPhone 16', platformVersion: '18.5', udid: 'test-udid',
   }, {});
   assert.equal(caps['appium:showSafariConsoleLog'], false);
-  assert.equal(caps['appium:showSafariNetworkLog'], true);
+  assert.equal(caps['appium:showSafariNetworkLog'], false);
   const driver = preflightDriver('ios');
   let prepared = 0;
   const receipt = await runAppiumTransportPreflight(driver, {

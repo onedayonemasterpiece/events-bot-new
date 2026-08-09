@@ -83,6 +83,10 @@ test('production health has only the two bounded schedules, manual profiles and 
   assert.match(source, /driver install xcuitest@12\.1\.4/u);
   assert.match(source, /E2E_APPIUM_DRIVER_VERSION: 8\.2\.2/u);
   assert.match(source, /E2E_APPIUM_DRIVER_VERSION: 12\.1\.4/u);
+  assert.equal((source.match(/--log-level error --log-no-colors\s+\\?\s*--log-filters/gu) || []).length, 2,
+    'both Appium servers must suppress command bodies and apply URL filters');
+  assert.equal((source.match(/appium-search-health-log-filters\.json/gu) || []).length >= 4, true);
+  assert.doesNotMatch(source, /npx appium[^\n]*(?:--log-level (?:debug|info)|--show-debug-info)/u);
   for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
   assert.equal(parsed.on.workflow_run, undefined);
   assert.equal(parsed.on.workflow_call, undefined);

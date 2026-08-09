@@ -13,11 +13,14 @@
   fresh OIDC broker session after a zero-side-effect real browser/device
   preflight and an active-backend HEAD contract probe, performs one vector-only
   UI POST with at most five cards, real
-  wheel/native scroll and a same-origin event HTTP 200, and records only
+  wheel/native scroll and an exact candidate `/sobytiya/<slug>/` event HTTP
+  200, and records only
   sanitized target/revision/counter/48–96 KiB evidence. Platform-bound broker
-  claims, three-way admission, an encrypted two-minute durable idempotency
+  claims, three-way admission, a distinct cold-browser qualification persona,
+  an encrypted two-minute durable idempotency
   lost-response replay, fail-closed retry, typed product/infra/cost/
-  evidence dispositions and exact-platform issue handling replace the old
+  evidence dispositions, terminal empty/render classification, whole-journey
+  byte accounting and exact-platform issue handling replace the old
   shared-persona and generic-incident behavior. Static/data/index generation
   still cannot trigger Search. A `full` marker requests the existing bounded
   LLM plus deterministic degraded qualification exactly once in one ephemeral
@@ -27,6 +30,11 @@
   dispatch remain default-off until the two bounded live acceptance workflows
   pass after merge, migration and exact-main deployment; PR #436 remains
   separate.
+  Mobile Safari network/console events remain in private driver buckets rather
+  than Appium stdout; Appium runs at error level with URL filters, and exact
+  target/callback values are runner-masked before navigation. Activation also
+  requires the exact workflow/event broker allowlists and equality of runtime,
+  target, backend and content/index identities across the two live proofs.
 
 - Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
   by promoting its 30 lazy card images to eager loading only inside the

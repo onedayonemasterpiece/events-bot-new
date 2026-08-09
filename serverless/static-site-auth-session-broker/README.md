@@ -80,6 +80,13 @@ supported. Auth Admin access uses only
 payload role is `service_role`; generic environment key selection and public
 clients are forbidden.
 
+For the activated Search health contour, `AUTH_SESSION_BROKER_ALLOWED_EVENTS`
+must contain exactly the used GitHub event classes
+`workflow_dispatch,schedule,repository_dispatch`; the workflow-ref allowlist
+must include legacy debug, production health and release qualification on
+`refs/heads/main`. Missing event/workflow policy is a fail-closed deployment
+blocker, never a Search product result.
+
 The claim ledger contains identity metadata plus only the bounded encrypted
 idempotency ciphertext. Audit records contain keyed hashes plus the
 non-sensitive closed purpose and platform. OIDC tokens, email addresses, plaintext OTPs or

@@ -889,8 +889,8 @@ cold vector, bounded LLM, degraded fallback и расширенные pagination
 mobile matrices сверх минимального health journey. `release_exact` применяется
 лишь к свежему immutable candidate как promotion gate. Candidate mismatch
 блокирует квалификацию, но не объявляет текущий production Search сломанным.
-Профиль `full` после успешного standard health ровно один раз запускает в одной
-no-mail browser session существующие `cold_vector_llm` и
+Профиль `full` после успешного standard health ровно один раз запускает в новой
+no-mail browser session отдельной persona `search-cold-browser` существующие `cold_vector_llm` и
 `degraded_vector_fallback`; прямого schedule у qualification нет.
 
 Существующий `site/e2e/search/` остаётся единственным harness. Stage-1 planner
@@ -1005,8 +1005,14 @@ UiAutomator2 `8.2.2`; iOS — Appium `3.6.0`, Xcode `16.4`, pinned XCUITest
 `12.1.4` и соответствующий downloaded WDA. Workflow устанавливает и проверяет
 точную driver version до side-effect-free preflight. XCUITest capability
 `showSafariConsoleLog=false` включает `safariConsole` bucket без печати raw
-events в Appium stdout; отсутствие capability не считается доказательством
-нулевых console errors.
+events в Appium stdout; `showSafariNetworkLog=false` аналогично сохраняет
+полный `safariNetwork` bucket для закрытого meter, но не зеркалирует private URL
+в server log. Оба Appium server запускаются с `--log-level error` и URL log
+filter, а exact target/callback регистрируются через GitHub `add-mask` до первой
+WebDriver navigation. Отсутствие capability не считается доказательством
+нулевых console errors. При отсутствии `Content-Length` mobile meter ждёт
+terminal `loadingFinished` через несколько log-drain циклов; незавершённый
+request fail-closed становится platform `UNKNOWN_*`, а не нулём bytes.
 
 ### 16.9 Migration from current workflow
 
@@ -1023,7 +1029,9 @@ events в Appium stdout; отсутствие capability не считается
 
 Data-only generation по-прежнему не имеет Search workflow trigger. Legacy
 cached/cold/LLM/mobile harness остаётся только manual debug и сериализован с
-health по общей session-fixture concurrency group.
+health по общей session-fixture concurrency group. Qualification имеет
+отдельную concurrency group и отдельную cold-browser persona, поэтому вызов
+`full` в том же GitHub run не переиспользует уже потреблённый health callback.
 
 ### 16.10 Ограниченный вывод по PR #436
 
@@ -1054,13 +1062,17 @@ guard, а не доказанный двунаправленный atomic mutex.
 
 Реализованы production resolver/pointer reread на success и failure,
 one-query browser/Appium
-journey, real scroll + HTTP-200 card open, client-observed byte meter, platform
+journey, обязательный реальный wheel/swipe, canonical
+`/sobytiya/<slug>/` HTTP-200 card open, typed empty/render terminal states,
+client-observed byte meter до конца event navigation, platform
 broker identity/admission и bounded encrypted durable lost-response
 replay (сверх in-process coalescing),
 explicit deploy marker, две schedule, manual profiles и typed reporter.
 Automatic schedule/dispatch остаются default-off. Перед первым live run
 migration broker claims должна быть
 применена, Fly broker — задеплоен из exact `origin/main`, а новый workflow ref —
-добавлен в broker allowlist. Затем допускаются максимум два полных workflow:
+добавлен в broker allowlist вместе с exact event allowlist
+`workflow_dispatch,schedule,repository_dispatch`. Затем допускаются максимум
+два полных workflow:
 browser+Android и browser+iOS. До их terminal evidence состояние остаётся
 `PRODUCT_HEALTH_UNCONFIRMED`.

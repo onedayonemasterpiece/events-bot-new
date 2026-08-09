@@ -251,7 +251,10 @@ export function buildAppiumCapabilities(platform, config, env = process.env) {
     // XCUITest >=7.22 collects no Safari console bucket unless this is set.
     // false keeps raw events out of Appium stdout while enabling getLogs.
     'appium:showSafariConsoleLog': false,
-    'appium:showSafariNetworkLog': true,
+    // `false` still collects fully serialized events in the safariNetwork
+    // bucket, but (unlike `true`) never mirrors private target/callback URLs to
+    // the Appium server log.
+    'appium:showSafariNetworkLog': false,
     // Keep ordinary navigation in WebKit: blanket nativeWebTap can miss
     // off-screen controls. Critical input focus is routed through an exact
     // native accessibility locator in focusWithNativeTap below.
