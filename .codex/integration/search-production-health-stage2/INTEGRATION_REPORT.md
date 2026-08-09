@@ -35,6 +35,8 @@ Required before live:
   Node **16/16 PASS**;
 - static source-binding/release regression: **87/87 PASS**;
 - workflow YAML and shell/node syntax;
+- GitHub Actions semantic validation with actionlint 1.7.12, including the
+  job/step context boundary for ephemeral Android/iOS Appium homes;
 - broker migration plus its canonical SQL replay/expiry contract on ephemeral
   PostgreSQL 17, and diff check;
 - independent checklist audit and fresh GitHub Actions.

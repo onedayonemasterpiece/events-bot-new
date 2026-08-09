@@ -184,14 +184,16 @@ jobs:
       E2E_APPIUM_PATH: /wd/hub
       E2E_APPIUM_VERSION: 3.6.0
       E2E_APPIUM_DRIVER_VERSION: 8.2.2
-      APPIUM_HOME: ${{ runner.temp }}/appium-home-search-health-android
-      npm_config_prefix: ${{ runner.temp }}/appium-npm-search-health-android
       E2E_EVIDENCE_DIR: artifacts/search-production-health-android-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+      - name: Isolate Android Appium installation in runner temp
+        run: |
+          echo "APPIUM_HOME=$RUNNER_TEMP/appium-home-search-health-android" >> "$GITHUB_ENV"
+          echo "npm_config_prefix=$RUNNER_TEMP/appium-npm-search-health-android" >> "$GITHUB_ENV"
       - run: npm --prefix site ci --no-audit --no-fund
       - name: Install pinned UiAutomator2 driver
         working-directory: site
@@ -279,8 +281,6 @@ jobs:
       E2E_APPIUM_DRIVER_VERSION: 12.1.4
       E2E_XCODE_VERSION: 16.4
       E2E_WDA_VERSION: xcuitest-12.1.4
-      APPIUM_HOME: ${{ runner.temp }}/appium-home-search-health-ios
-      npm_config_prefix: ${{ runner.temp }}/appium-npm-search-health-ios
       E2E_EVIDENCE_DIR: artifacts/search-production-health-ios-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -289,6 +289,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: '22.22.0', cache: npm, cache-dependency-path: site/package-lock.json }
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
+      - name: Isolate iOS Appium installation in runner temp
+        run: |
+          echo "APPIUM_HOME=$RUNNER_TEMP/appium-home-search-health-ios" >> "$GITHUB_ENV"
+          echo "npm_config_prefix=$RUNNER_TEMP/appium-npm-search-health-ios" >> "$GITHUB_ENV"
       - run: npm --prefix site ci --no-audit --no-fund
       - name: Install pinned XCUITest driver
         working-directory: site

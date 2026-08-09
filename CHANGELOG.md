@@ -37,6 +37,12 @@
 
 ### Fixed
 
+- Fixed the production-health workflow definition so Appium's temporary npm
+  and driver homes are exported from `RUNNER_TEMP` at step runtime instead of
+  using the unavailable `runner` context in job-level `env`; GitHub can now
+  validate and schedule the workflow while Android/iOS installations remain
+  isolated and ephemeral.
+
 - Separated the Smart Search Edge compatibility contract from its exact
   backend identity: a CI-verified deterministic source-tree digest now ships in
   the function, is exposed by the side-effect-free HEAD probe and Search
