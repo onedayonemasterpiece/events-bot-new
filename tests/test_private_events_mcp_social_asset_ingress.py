@@ -178,6 +178,11 @@ def _asset_tools(runtime):
 def test_official_file_param_descriptor_and_schema_are_exact(asset_runtime) -> None:
     runtime, _ingestor, _adapter, _now = asset_runtime
     stage = _asset_tools(runtime)["social_asset_stage"]
+    preview = _asset_tools(runtime)["social_asset_preview"]
+    assert stage.timeout_seconds >= (
+        runtime.asset_ingest_timeout_seconds + runtime.provider_timeout_seconds
+    )
+    assert preview.timeout_seconds >= runtime.provider_timeout_seconds
     descriptor = stage.descriptor(frozenset({"telegram:publish"}))
     assert descriptor["_meta"]["openai/fileParams"] == ["file"]
     assert descriptor["_meta"]["securitySchemes"] == descriptor["securitySchemes"]

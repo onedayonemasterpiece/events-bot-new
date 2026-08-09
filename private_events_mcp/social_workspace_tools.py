@@ -490,7 +490,15 @@ def build_social_workspace_tools(
                  SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA,
                  SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA, handler=asset_stage,
                  scope_selector=lambda _a: frozenset(), file_params=("file",),
-                 read_only=False, idempotent=False, **common),
+                 read_only=False, idempotent=False,
+                 **{
+                     **common,
+                     "timeout_seconds": (
+                         runtime.asset_ingest_timeout_seconds
+                         + runtime.provider_timeout_seconds
+                         + 2.0
+                     ),
+                 }),
         ToolSpec("social_asset_status", "Get social asset status",
                  "Read lifecycle state for a bound opaque asset reference.",
                  SOCIAL_WORKSPACE_ASSET_STATUS_SCHEMA,
@@ -502,7 +510,12 @@ def build_social_workspace_tools(
                  SOCIAL_WORKSPACE_ASSET_PREVIEW_OUTPUT_SCHEMA, handler=asset_preview,
                  scope_selector=lambda arguments: frozenset({
                      f"{require_platform(arguments.get('platform'))}:story:read"
-                 }), **{**common, "timeout_seconds": 25.0}),
+                 }), **{
+                     **common,
+                     "timeout_seconds": max(
+                         25.0, runtime.provider_timeout_seconds + 5.0
+                     ),
+                 }),
         ToolSpec("social_action_prepare", "Prepare social action",
                  "Persist an exact action digest for external human approval; this never executes it.",
                  prepare_schema, prepare_output_schema,
