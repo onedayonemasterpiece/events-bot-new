@@ -35,13 +35,18 @@ const GENERATION_TRIGGERS = new Set([
 
 const RELEVANT_PATHS = [
   /^site\/e2e\/search\//u,
+  /^site\/e2e\/(?:auth-session-fixture|mobile-web)\//u,
   /^site\/tests\/search-(?:e2e|production-health)/u,
   /^site\/src\/components\/(?:AuthorizedEventSearch|MobileSearchBottomNav)\.astro$/u,
   /^site\/src\/lib\/(?:staticSiteAuth|resilientSupabaseTransport)/u,
   /^supabase\/functions\/event-search\//u,
   /^supabase\/migrations\/[^/]*event_search[^/]*\.sql$/u,
-  /^\.github\/(?:workflows|scripts)\/[^/]*static-search[^/]*$/u,
+  /^\.github\/workflows\/(?:static-site-search-canary|search-production-health|search-release-qualification|ci)\.ya?ml$/u,
+  /^\.github\/scripts\/(?:[^/]*static-search[^/]*|resolve-static-search-target)\.[^/]+$/u,
+  /^site\/package\.json$/u,
   /^docs\/features\/unsigned-personalization\/authorized-event-search\.md$/u,
+  /^docs\/features\/static-site-pages\/smart-vector-search\//u,
+  /^docs\/testing\/static-site-autotest-scenarios\.v1\.yml$/u,
   /^docs\/operations\/static-site-autotest-strategy\.md$/u,
 ];
 

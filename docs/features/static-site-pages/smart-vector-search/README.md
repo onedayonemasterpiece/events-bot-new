@@ -719,13 +719,12 @@ Kaggle не тратит полный Astro build на заведомо уста
 замороженный receipt передаётся runner, поэтому последующая замена mutable
 owner receipt не может изменить revisions уже запущенного candidate.
 
-Расписания: cached каждые 30 минут, cold vector каждые 3 часа, bounded LLM
-четырежды в сутки, mobile nightly. `repository_dispatch` post-deploy запускает
-blocking cold + degraded browser gate. Повторный scheduled failure создаёт или
-обновляет один deduplicated GitHub incident; recovery закрывает его. До включения
-scheduled runs в blocking promotion нужны 50 consecutive browser vector PASS,
-10 Android, 10 iOS и нули по leaks, duplicate POST, budget overflow и
-unexplained revision mismatch.
+Исторические расписания (cached каждые 30 минут, cold каждые 3 часа, LLM
+четырежды в сутки и nightly mobile), автоматический post-deploy dispatch и
+generic issue reporter отключены архитектурной коррекцией из §16. Старый
+workflow сохранён только для явного ручного расследования. Production-health
+и release qualification теперь разные контуры; на этапе 1 оба новых workflow
+работают только как deterministic dry planner и не обращаются к production.
 
 Default server budget равен 12 LLM provider attempts/UTC day: четыре
 `cold_vector_llm` запуска по трём непагинированным regression queries. Любая
@@ -751,3 +750,262 @@ Default server budget равен 12 LLM provider attempts/UTC day: четыре
 Архитектурная основа Search сильнее, чем следует из исходного brief: уже есть authenticated Edge boundary, pgvector, quota idempotency, cache, provider limiter, occurrence collapse и resilient UI cleanup. Главная проблема — не отсутствие алгоритма, а отсутствие **единого release identity, revision-bound cache/corpus contract и живого сквозного доказательства**.
 
 Ближайшее правильное действие — восстановить и зафиксировать нынешний Gemini/pgvector baseline, унифицировать его с общими Auth/transport/tests, затем поставить BGE в shadow. Немедленный перевод production на BGE не лечит недельный отказ и создаст ещё одну недоказанную точку доступности.
+
+## 16. Search production-health: архитектурная коррекция, этап 1
+
+Этот раздел — канонический архитектурный контракт production-health. Он
+заменяет прежнее смешение регулярного product health, квалификации релиза и
+отладки harness. Этап 1 не выполняет live Search и не подтверждает здоровье
+production. Его корректный итог:
+
+```text
+ARCHITECTURE_READY_FOR_LIVE_VALIDATION
+PRODUCT_HEALTH_UNCONFIRMED
+```
+
+### 16.1 Фактическая AS-IS схема и ответы аудита
+
+Путь восстановлен по коду `origin/main` `65926e63b436efcc275c8e4094473ab9ef1fd9e8`,
+а не по старому локальному checkout:
+
+```text
+Smart Update
+  -> schedule_event_update_tasks
+  -> coalesced joboutbox static_site_build request
+  -> job_static_site_build_kaggle
+  -> repo SHA из Fly image revision file
+  -> vector barrier
+  -> immutable SQLite snapshot + snapshot-scoped Search receipt
+  -> input_fingerprint(repo_sha + snapshot/projection/build config)
+  -> durable single-flight claim + remote_handoff
+  -> Kaggle StaticSiteBuilder exact staged source/snapshot/config
+  -> validated immutable secret candidate
+  -> create-only publication + read-back hash verification
+  -> finish_static_site_build_claim
+  -> static_site_build_state.current_secret_candidate_receipt_json
+  -> resolve_current_secret_candidate
+  -> current accepted /_review/<opaque>/poisk/ target
+```
+
+1. **Откуда data-only generation получает repo SHA.**
+   [`scripts/deploy_fly_main.sh`](../../../../scripts/deploy_fly_main.sh)
+   передаёт clean `origin/main` SHA в Docker build; [`Dockerfile`](../../../../Dockerfile)
+   записывает его в `/app/.static-site-repo-sha`.
+   [`main.py::_resolve_static_site_repo_sha`](../../../../main.py#L23129-L23167)
+   читает этот файл, а mutable `STATIC_SITE_REPO_SHA` оставляет только как
+   совместимый fallback. Тот же SHA передаётся в
+   [`_static_site_build_kaggle_command`](../../../../main.py#L23170-L23330) и
+   remote handoff.
+2. **Moving main или pin.** Build после Smart Update закреплён на runtime SHA
+   уже развёрнутого Fly image, а не читает движущийся GitHub `main`. Он может
+   регулярно менять данные, `snapshot_id`, `build_id` и content revisions,
+   сохраняя тот же runtime SHA. Второй механизм pinning не нужен.
+3. **Current accepted target.** Каноника —
+   [`static_site_release.py::resolve_current_secret_candidate`](../../../../static_site_release.py#L1000-L1044),
+   а CLI-адаптер — [`scripts/request_static_site_build.py`](../../../../scripts/request_static_site_build.py#L42-L64).
+   Latest running/complete Kaggle kernel не является target.
+4. **Где repo SHA и build metadata.** До завершения они лежат в
+   `joboutbox.payload.snapshot`, `fingerprint_evidence` и `remote_handoff`
+   ([`main.py`](../../../../main.py#L24347-L24440)). После проверенной публикации
+   полный immutable receipt сохраняется в
+   `static_site_build_state.current_secret_candidate_receipt_json`
+   ([`static_site_release.py`](../../../../static_site_release.py#L1346-L1446)).
+   Candidate также публикует `candidate-build.json`.
+5. **Что запускало Search canary до этого PR.**
+   [`static-site-search-canary.yml`](../../../../.github/workflows/static-site-search-canary.yml)
+   имел ручной dispatch, post-deploy repository dispatch, cached cron дважды в
+   час, cold cron каждые три часа, четыре LLM cron в сутки и nightly mobile.
+6. **Откуда issue #431.** Старый inline terminal reporter считал повторным
+   любой failure после последнего scheduled failure, а ключ строил только из
+   platform + variants. Он смешивал `search_cache_state`, revision mismatch и
+   infrastructure failure, мог закрыть scheduled issue ручным success и не
+   использовал типизированный result. Это шум orchestration, не доказательство
+   отказа продукта.
+7. **Где `release_exact` связан с moving revisions.**
+   [`run.mjs::assertTargetSha`](../../../../site/e2e/search/run.mjs#L36-L58)
+   берёт замороженные revisions candidate, а
+   [`acceptance.mjs::assertSearchRevisionPolicy`](../../../../site/e2e/search/acceptance.mjs#L159-L185)
+   сравнивает их с живым ответом Edge. После обычного vector/catalog refresh
+   здоровая выдача могла быть отвергнута как
+   `search_target_response_revision_mismatch`.
+8. **Что переиспользуется вместо новой release-системы.** `repo_sha`,
+   `build_id`, `run_id`, `snapshot_id`, `input_fingerprint`, hashes candidate
+   receipt, `catalog_revision`, `corpus_revision`, `search_document_revision`,
+   Edge `search_contract_version` и `policy_versions`. Новая таблица, release
+   service или active-release control plane не создаются.
+
+### 16.2 Четыре identity и граница runtime/data
+
+| Identity | Канонический существующий источник | Семантика health |
+|---|---|---|
+| `site_runtime_sha` | accepted candidate `repo_sha`, первоначально baked Fly image SHA | функциональный runtime; фиксируется на run |
+| `search_backend_revision` | response `search_contract_version` + `policy_versions` | функциональный backend contract; точного Edge byte/deploy SHA пока нет |
+| `content_generation_id` | `snapshot_id`/`input_fingerprint`; content identity `catalog_revision` | telemetry, не exact health gate |
+| `search_index_generation_id` | `corpus_revision`/`search_document_revision` | telemetry, не exact health gate |
+
+`site_runtime_sha` уже закреплён правильно: Smart Update не обновляет его до
+реального Fly/runtime deploy. Actions checkout SHA может отличаться от target
+repo SHA и сам по себе не является failure. Отсутствие точного deployed Edge
+SHA остаётся честно отмеченным gap этапа 2; на этапе 1 не вводится новый ledger.
+
+### 16.3 Три тестовых контура
+
+**A. Deterministic Search CI.** Offline suite на PR проверяет planner/trigger
+policy, target normalization/pinning, один POST, допустимые cache hit и miss,
+revision drift, LLM/pagination zero, failure taxonomy, retry policy, redaction и
+48/96 KiB cost guard. Secrets, production target, Supabase, Kaggle, browser
+device labs и providers не используются.
+
+**B. Search production health.** После активации на этапе 2: manual, дважды в
+сутки и после реального Search runtime deployment. Один no-mail session, один
+vector-only UI query, ровно один Search POST с limit ≤5, 1–5 карточек, реальный
+scroll и открытие одной карточки с HTTP 200. Cache `hit`, `miss`, `stored` и
+`bypass` допустимы. Второго запроса, pagination, LLM, receipt RPC, Storage image,
+Android и iOS нет.
+
+**C. Search release qualification.** Только manual/selective. Здесь остаются
+cold vector, bounded LLM, degraded fallback, pagination/transport matrix,
+Android и iOS, а `release_exact` применяется лишь к свежему immutable candidate
+как promotion gate. Candidate mismatch блокирует квалификацию, но не объявляет
+текущий production Search сломанным.
+
+Существующий `site/e2e/search/` остаётся единственным harness. Stage-1 planner
+и contracts добавлены рядом с ним; auth fixture и `site/e2e/mobile-web/` не
+копируются и не переписываются.
+
+### 16.4 Target resolver contract
+
+1. I/O adapter читает только canonical current accepted receipt.
+2. Opaque URL маскируется до первого display/log/evidence; полный URL живёт
+   только в памяти live adapter. Публичный `https://kenigevents.ru/poisk/` не
+   является fallback, пока это не реально выпущенная поверхность.
+3. Полный immutable tuple фиксируется один раз до journey. Checkout SHA с ним
+   не сравнивается. `content_generation_id` и `search_index_generation_id`
+   записываются как telemetry.
+4. После journey разрешена только повторная проверка pointer. Если identity
+   изменилась, записывается `target_superseded=true`; Search не повторяется,
+   результат не становится product failure.
+5. Pre-dispatch resolver retry разрешён только при доказанных нулевых side
+   effects. После Search dispatch retry запрещён.
+
+Этап 1 содержит pure interface и fake-resolver tests; production resolver не
+вызывается.
+
+### 16.5 Trigger matrix
+
+| Событие | Deterministic CI | Production health после этапа 2 | Release qualification |
+|---|---:|---:|---:|
+| PR с Search/Auth/workflow contract | да | нет | нет |
+| manual health | нет | да | нет |
+| twice-daily health | нет | да | нет |
+| реальный `site_runtime_sha`/Search backend deploy | нет | да | selective |
+| manual qualification | нет | нет | да |
+| Smart Update / snapshot / data-only generation | нет | **нет** | нет |
+| corpus/index/catalog refresh | при contract diff | **нет** | только по решению release owner |
+| latest Kaggle job change | нет | нет | нет |
+
+На этапе 1 новые workflows имеют только `workflow_dispatch` и dry planner.
+Schedule и repository dispatch production-health ещё не включены.
+
+### 16.6 Failure taxonomy
+
+Допустимы только следующие типизированные результаты:
+
+```text
+HEALTHY
+DEGRADED
+BROKEN_SEARCH_SURFACE
+BROKEN_AUTH_INTEGRATION
+BROKEN_SEARCH_REQUEST
+BROKEN_NO_RESULTS
+BROKEN_RESULT_RENDER
+BROKEN_RESULT_ROUTE
+UNKNOWN_AUTH_BROKER
+UNKNOWN_RUNNER_BROWSER
+BLOCKED_RELEASE_NOT_ACTIVE
+COST_GUARD_FAILED
+EVIDENCE_REDACTION_FAILED
+```
+
+Только `BROKEN_*` означает product failure. `UNKNOWN_*` — неизвестный результат
+из-за инфраструктуры; `BLOCKED_*` — admission/release boundary; cost/redaction
+fail closed, но не доказывают поломку Search. Cache miss, content/index drift,
+candidate mismatch и `target_superseded` не являются product failure.
+
+### 16.7 Incident policy
+
+Product incident создаётся только для typed `BROKEN_*` в контуре current-target
+production health. CI, release qualification, manual legacy debug,
+`UNKNOWN_*`, `BLOCKED_*`, cost/redaction guard и superseded result не создают и
+не закрывают product issue. Старый generic issue reporter удалён. Stage 2 может
+добавить отдельный reporter только с ключом purpose + target runtime identity +
+typed result и принятой consecutive-failure policy; ручной success не закрывает
+автоматический incident.
+
+### 16.8 Egress budget и byte meter
+
+Future health contract:
+
+- Search POST `1`, result limit `≤5`;
+- LLM attempts `0`, pagination `0`, receipt RPC `0`, Storage images `0`;
+- target client-observed Supabase bytes `≤48 KiB`;
+- hard cap `96 KiB`, повышать его запрещено.
+
+Pure byte-meter классифицирует browser-observed responses как Auth, Edge
+Function и direct REST/RPC. Он использует корректный `Content-Length`, когда
+body недоступен, либо UTF-8 размер реально полученного body; Yandex Object
+Storage/CDN и не-Supabase origins исключаются. В evidence попадают только
+категория и целые byte counters. Это **client-observed budget proxy**, а не
+точный Supabase billing meter.
+
+### 16.9 Migration from current workflow
+
+- `static-site-search-canary.yml` — только ручной legacy/debug; прежние четыре
+  cron и post-deploy repository dispatch удалены; generic issue mutation нет.
+- `search-production-health.yml` — только `workflow_dispatch` + deterministic
+  planner, без secrets/live target/schedule.
+- `search-release-qualification.yml` — только manual dry planner; live off.
+- default PR CI запускает deterministic Search architecture suite.
+
+После merge этапа 1 ни один Search workflow автоматически не обращается к
+production. Data-only generation не имеет Search workflow trigger.
+
+### 16.10 Ограниченный вывод по PR #436
+
+[PR #436](https://github.com/onedayonemasterpiece/events-bot-new/pull/436)
+закрывает окно между переводом `joboutbox` static owner в `running` и записью
+durable `active_job_id`: vector sync дополнительно видит running outbox и
+откладывается как `static_build_preclaim`. Это полезная защита immutable
+candidate/release qualification, но не runtime pinning и не исправление
+ошибочной scheduled `release_exact` health-модели.
+
+Решение этапа 1: PR не merge/cherry-pick/deploy. Кодовая защита полезна
+независимо и должна пройти отдельный rebase/review; она не нужна для
+user-observable one-query production health. Также она остаётся point-in-time
+guard, а не доказанный двунаправленный atomic mutex.
+
+### 16.11 Что реализовано на этапе 1
+
+- pure planner, target pin/superseded contract, typed outcomes, incident/retry
+  policy и Supabase byte-meter;
+- deterministic tests для всех stage-1 acceptance boundaries;
+- отключение automatic legacy traffic и generic issues;
+- manual-only dry workflows для health и qualification;
+- deterministic Search suite в default PR CI;
+- этот канонический контракт и отдельный
+  [`stage-2-production-health-handoff.md`](stage-2-production-health-handoff.md).
+
+### 16.12 Что намеренно оставлено этапу 2
+
+- подключение pure target interface к production resolver и one-run secret;
+- browser mechanics для минимального one-query journey и HTTP-200 card open;
+- сбор client-observed bytes из real Auth/Edge/REST responses;
+- установка точного Search backend deployment identity, если stage-2 audit не
+  найдёт уже существующий provider receipt;
+- два ограниченных live browser runs;
+- включение twice-daily и real Search-runtime-deploy triggers;
+- typed reporter/alert policy после live validation;
+- selective connection release qualification к существующему live runner.
+
+До этих действий нельзя утверждать `HEALTHY` или закрывать regression contract
+инцидента только на основании stage-1 tests.

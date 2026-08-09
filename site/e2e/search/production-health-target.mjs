@@ -2,6 +2,8 @@ const ACCEPTED_SOURCE = 'current_accepted_pointer';
 const SECRET_REVIEW_PATH = /^\/_review\/[A-Za-z0-9_-]{43}\/poisk\/$/u;
 const SECRET_PREVIEW_PATH = /^\/preview-[a-z0-9][a-z0-9-]{5,}\/poisk\/$/iu;
 const SHA40 = /^[0-9a-f]{40}$/u;
+const SHA256 = /^[0-9a-f]{64}$/u;
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/u;
 
 export const ACCEPTED_TARGET_RESOLVER_SOURCE = ACCEPTED_SOURCE;
 
@@ -12,7 +14,7 @@ export function redactAcceptedTargetUrl(value) {
   } catch {
     throw new Error('search_health_target_url_invalid');
   }
-  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) {
     throw new Error('search_health_target_url_invalid');
   }
   const redactedPath = parsed.pathname
@@ -25,10 +27,11 @@ export function redactAcceptedTargetUrl(value) {
 class NormalizedAcceptedTarget {
   #navigationUrl;
 
-  constructor({ navigationUrl, targetRepoSha, acceptedReleaseId, generationIds }) {
+  constructor({ navigationUrl, immutableIdentity, generationIds }) {
     this.source = ACCEPTED_SOURCE;
-    this.target_repo_sha = targetRepoSha;
-    this.accepted_release_id = acceptedReleaseId;
+    this.target_repo_sha = immutableIdentity.repo_sha;
+    this.accepted_release_id = immutableIdentity.run_id;
+    this.immutable_identity = Object.freeze({ ...immutableIdentity });
     this.generation_ids = Object.freeze({ ...generationIds });
     this.target_url_redacted = redactAcceptedTargetUrl(navigationUrl);
     this.#navigationUrl = navigationUrl;
@@ -45,6 +48,7 @@ class NormalizedAcceptedTarget {
       target_url: this.target_url_redacted,
       target_repo_sha: this.target_repo_sha,
       accepted_release_id: this.accepted_release_id,
+      immutable_identity: { ...this.immutable_identity },
       // Generation identifiers are observability context only. They are not
       // used to accept, route, or compare a target.
       generation_ids: { ...this.generation_ids },
@@ -65,6 +69,18 @@ const normalizedGenerationIds = (input) => {
     .map(([key, value]) => [key, value.slice(0, 96)]));
 };
 
+const requiredSafeId = (value, code) => {
+  const normalized = String(value || '').trim();
+  if (!SAFE_ID.test(normalized)) throw new Error(code);
+  return normalized;
+};
+
+const requiredSha256 = (value, code) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!SHA256.test(normalized)) throw new Error(code);
+  return normalized;
+};
+
 /**
  * Normalize only the authoritative current-accepted pointer. A latest Kaggle
  * job, a generated snapshot, and the public /poisk/ URL are not fallback
@@ -77,7 +93,7 @@ export function normalizeAcceptedTargetResolverResult(input) {
   if (input.latest_kaggle_job != null || input.public_poisk_fallback != null || input.fallback_url != null) {
     throw new Error('search_health_target_fallback_forbidden');
   }
-  const navigationUrl = String(input.target_url || '');
+  const navigationUrl = String(input.target_url || input.public_url || '');
   let parsed;
   try {
     parsed = new URL(navigationUrl);
@@ -91,27 +107,34 @@ export function normalizeAcceptedTargetResolverResult(input) {
   ) {
     throw new Error('search_health_target_url_invalid');
   }
-  const targetRepoSha = String(input.target_repo_sha || '').trim().toLowerCase();
+  const targetRepoSha = String(input.target_repo_sha || input.repo_sha || '').trim().toLowerCase();
   if (!SHA40.test(targetRepoSha)) throw new Error('search_health_target_repo_sha_invalid');
-  const acceptedReleaseId = String(input.accepted_release_id || '').trim();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(acceptedReleaseId)) {
-    throw new Error('search_health_accepted_release_id_invalid');
-  }
+  const inputFingerprint = input.input_fingerprint == null || input.input_fingerprint === ''
+    ? null
+    : requiredSha256(input.input_fingerprint, 'search_health_target_input_fingerprint_invalid');
+  const immutableIdentity = {
+    build_id: requiredSafeId(input.build_id, 'search_health_target_build_id_invalid'),
+    run_id: requiredSafeId(input.run_id || input.accepted_release_id, 'search_health_target_run_id_invalid'),
+    repo_sha: targetRepoSha,
+    snapshot_id: requiredSafeId(input.snapshot_id, 'search_health_target_snapshot_id_invalid'),
+    result_sha256: requiredSha256(input.result_sha256, 'search_health_target_result_sha256_invalid'),
+    manifest_sha256: requiredSha256(input.manifest_sha256, 'search_health_target_manifest_sha256_invalid'),
+    token_sha256: requiredSha256(input.token_sha256, 'search_health_target_token_sha256_invalid'),
+    ...(inputFingerprint ? { input_fingerprint: inputFingerprint } : {}),
+  };
 
   // checkout_repo_sha is intentionally neither required nor compared. The
   // checked-out planner code and the accepted deployed target are independent.
   return new NormalizedAcceptedTarget({
     navigationUrl: parsed.href,
-    targetRepoSha,
-    acceptedReleaseId,
+    immutableIdentity,
     generationIds: normalizedGenerationIds(input),
   });
 }
 
 const samePinnedTarget = (left, right) => (
   left.navigationUrl() === right.navigationUrl()
-  && left.target_repo_sha === right.target_repo_sha
-  && left.accepted_release_id === right.accepted_release_id
+  && JSON.stringify(left.immutable_identity) === JSON.stringify(right.immutable_identity)
 );
 
 export function assessAcceptedTargetSupersession(pinned, observed) {

@@ -71,7 +71,13 @@ const resolverRow = (overrides = {}) => ({
   target_url: `https://kenigevents.ru/_review/${'A'.repeat(43)}/poisk/`,
   target_repo_sha: 'a'.repeat(40),
   checkout_repo_sha: 'b'.repeat(40),
-  accepted_release_id: 'release-42',
+  build_id: 'production-secret-42',
+  run_id: 'static-site:production-secret-42:run',
+  snapshot_id: 'snapshot-42',
+  result_sha256: 'c'.repeat(64),
+  manifest_sha256: 'd'.repeat(64),
+  token_sha256: 'e'.repeat(64),
+  input_fingerprint: 'f'.repeat(64),
   generation_ids: { catalog: 'catalog-9', corpus: 'corpus-10' },
   ...overrides,
 });
@@ -150,7 +156,17 @@ test('accepted target normalizes, redacts for display and does not couple checko
   assert.equal(target.target_url_redacted, 'https://kenigevents.ru/_review/<redacted>/poisk/');
   assert.equal(JSON.stringify(target).includes('A'.repeat(43)), false);
   assert.deepEqual(target.generation_ids, { catalog: 'catalog-9', corpus: 'corpus-10' });
+  assert.equal(target.immutable_identity.run_id, 'static-site:production-secret-42:run');
+  assert.equal(target.immutable_identity.input_fingerprint, 'f'.repeat(64));
   assert.equal(redactAcceptedTargetUrl(target.navigationUrl()), target.target_url_redacted);
+  const canonicalCliShape = normalizeAcceptedTargetResolverResult({
+    ...resolverRow(),
+    target_url: undefined,
+    target_repo_sha: undefined,
+    public_url: resolverRow().target_url,
+    repo_sha: resolverRow().target_repo_sha,
+  });
+  assert.deepEqual(canonicalCliShape.immutable_identity, target.immutable_identity);
   assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
     target_url: 'https://kenigevents.ru/poisk/',
   })), /target_url_invalid/u);
@@ -165,8 +181,14 @@ test('accepted target normalizes, redacts for display and does not couple checko
 test('target pin is stable and pointer changes are telemetry, not retry/product failure', async () => {
   const rows = [resolverRow(), resolverRow({
     target_url: `https://kenigevents.ru/_review/${'B'.repeat(43)}/poisk/`,
-    target_repo_sha: 'c'.repeat(40),
-    accepted_release_id: 'release-43',
+    target_repo_sha: '9'.repeat(40),
+    build_id: 'production-secret-43',
+    run_id: 'static-site:production-secret-43:run',
+    snapshot_id: 'snapshot-43',
+    result_sha256: '1'.repeat(64),
+    manifest_sha256: '2'.repeat(64),
+    token_sha256: '3'.repeat(64),
+    input_fingerprint: '4'.repeat(64),
   })];
   const run = createAcceptedTargetRun(async () => rows.shift());
   const first = await run.pin();
@@ -185,6 +207,10 @@ test('target pin is stable and pointer changes are telemetry, not retry/product 
     generation_ids: { catalog: 'new-generation' },
   }));
   assert.equal(assessAcceptedTargetSupersession(pinned, generationOnlyChange).target_superseded, false);
+  const immutableReceiptChange = normalizeAcceptedTargetResolverResult(resolverRow({
+    manifest_sha256: '8'.repeat(64),
+  }));
+  assert.equal(assessAcceptedTargetSupersession(pinned, immutableReceiptChange).target_superseded, true);
   assert.equal(assessAcceptedTargetSupersession(pinned, pinned).target_superseded, false);
 });
 

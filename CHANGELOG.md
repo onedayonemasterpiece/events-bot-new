@@ -11,6 +11,11 @@
   budget, idempotency and read-back checks; edit/delete still require external
   approval, and older `awaiting_human_approval` preparations are never upgraded
   or executed automatically.
+- Separated Search product health from immutable release qualification and
+  manual harness debugging. The legacy cached/cold/LLM/mobile schedules,
+  static-build post-deploy trigger and generic issue reporter no longer create
+  automatic production Search traffic or classify runner/broker/revision drift
+  as product incidents.
 
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
@@ -89,6 +94,13 @@
   and authenticated tool behavior are unchanged.
 
 ### Added
+
+- Added production-free Search health architecture contracts for current-target
+  pinning, typed product versus infrastructure outcomes, one-POST/zero-LLM/
+  zero-pagination planning, 48/96 KiB client-observed Supabase cost guards and
+  target supersession. Manual-only dry health and release-qualification
+  workflows plus default PR CI exercise these deterministic contracts; live
+  validation and schedules remain explicitly deferred to stage 2.
 
 - Added an append-only, requirements-aware Current UI Behavioral Decoder & Experiment Archaeology v1.1 source pass and two-stage exact-source capture workflow. It binds every behavioral record to the reviewed Decoder v1 manifest, emits separate provenance, complete media-policy, dynamic loading/skeleton, geometry, interaction, positioning, rail, overlay and experiment artifacts, and captures a closed 50-packet/99-raster matrix while remaining `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`. A deep validator now checks output hashes plus plan/phase/action/raster references; only a one-to-one full-resolution human review ledger, independent audit and durable Actions/Release provenance can unlock `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not change the immutable v1 snapshot, site runtime, tokens, normalization or Penpot.
 

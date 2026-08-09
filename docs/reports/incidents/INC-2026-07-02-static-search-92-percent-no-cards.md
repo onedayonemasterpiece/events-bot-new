@@ -7,7 +7,7 @@ Opened: 2026-07-02
 Closed: —
 Owners: static site / personalization search
 Related incidents: —
-Related docs: `docs/features/unsigned-personalization/authorized-event-search.md`, `docs/features/unsigned-personalization/semantic-vector-retrieval.md`, `docs/operations/release-governance.md`
+Related docs: `docs/features/static-site-pages/smart-vector-search/README.md`, `docs/features/unsigned-personalization/authorized-event-search.md`, `docs/features/unsigned-personalization/semantic-vector-retrieval.md`, `docs/operations/release-governance.md`
 
 ## Summary
 
@@ -29,6 +29,14 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 - Observability gap: Edge audit rows record backend success and stage timings, but the frontend has no durable client-side event for `response received`, `cards rendered`, `render error`, or `stuck at progress`.
 
 ## Timeline
+
+- 2026-08-09 production-health architecture stage 1 separated deterministic
+  CI, current-target product health and selective release qualification. The
+  noisy automatic cached/cold/LLM/mobile schedules and generic issue reporter
+  were disabled; new health/qualification workflows remain dry/manual until
+  the bounded stage-2 live validation. This is an orchestration correction, not
+  incident closure: `PRODUCT_HEALTH_UNCONFIRMED`. Canonical contract and AS-IS
+  evidence are in `docs/features/static-site-pages/smart-vector-search/README.md#16`.
 
 - 2026-08-09 browser run `31293895462` is a terminal Search-only
   `cold_vector + live_consistent` PASS on the accepted immutable candidate:

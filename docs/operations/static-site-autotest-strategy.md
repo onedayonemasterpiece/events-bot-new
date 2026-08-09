@@ -764,26 +764,18 @@ personalization добавляются вместе с реализацией/au
 
 ### M9 — Search live plane
 
-Реализованы независимые от Focus/mail `site/e2e/search` и
-`.github/workflows/static-site-search-canary.yml`. Scheduled runner всегда
-разрешает последний durable accepted secret candidate на production host,
-сверяет его SHA, выпускает fresh platform-scoped session через GitHub OIDC
-broker и сохраняет только sanitized receipts. Post-deploy failure является
-blocking; scheduled failures становятся promotion-blocking только после
-зафиксированных 50 browser / 10 Android / 10 iOS consecutive PASS thresholds.
+Реализованный `site/e2e/search` сохранён, но orchestration разделена на
+deterministic CI, будущий current-target production health и manual/selective
+release qualification. Старые automatic cached/cold/LLM/mobile schedules,
+static-build post-deploy dispatch и generic issue reporter отключены. На этапе
+1 новые health/qualification workflows являются только manual dry planners;
+`static-site-search-canary.yml` — ручной legacy debugger. Полный контракт,
+trigger matrix и stage-2 activation принадлежат единственному каноническому
+разделу [`smart-vector-search/README.md#16`](../features/static-site-pages/smart-vector-search/README.md#16-search-production-health-архитектурная-коррекция-этап-1).
 
-Ручной запуск имеет отдельную быструю политику `live_consistent` для отладки
-только Search journey на уже опубликованной `/poisk/`. Она разрешает ожидаемый
-drift между старым candidate receipt и живым каталогом, но требует валидные и
-одинаковые catalog/corpus revisions во всех ответах journey и полное совпадение
-каждого ответа с owner-scoped server receipt. Scheduled и post-deploy jobs
-fail-closed используют только `release_exact`; быстрый режим не продвигает
-release и не требует полной генерации 1300+ статических страниц.
-Только в `live_consistent + cached_vector` допускается один bootstrap после
-физической инвалидации кеша: первый `miss/stored` ограничен одной vector/
-embedding попыткой и нулём LLM, после чего повтор того же запроса обязан дать
-cache hit с нулевыми provider deltas. В `release_exact` первый miss остаётся
-ошибкой frequent cached canary.
+`release_exact`, cache repeat, LLM, pagination и mobile принадлежат только
+release qualification. Production health принимает cache hit/miss и движение
+content/index revisions и ограничен одним vector-only UI POST.
 
 Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но нельзя и
 заставлять каждый authenticated business test повторять дорогой real-mail OTP.
