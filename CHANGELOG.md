@@ -13,10 +13,11 @@
   intake, runtime prepare/commit honors the stable scope families end-to-end,
   and oversized provider cursor state fails closed before persistence.
 
-- Serialized the mutable event-vector projection against an active immutable
-  static-site build and added a 15-minute post-publication exact-test window.
-  Pending vector work is deferred, never dropped, so Search release acceptance
-  can compare one stable catalog/corpus revision before the next projection.
+- Serialized the mutable event-vector projection from the moment a static-site
+  outbox owner starts (including snapshot/receipt binding before its durable
+  release claim), through the active immutable build, and across a 15-minute
+  post-publication exact-test window. Pending vector work is deferred, never
+  dropped, so Search acceptance compares one stable catalog/corpus revision.
 
 - Raised the mobile Search native-touch ceiling from 24 to 40 bounded gestures
   after two Android Chrome receipts showed valid W3C swipes and 5.5–6.1k px of

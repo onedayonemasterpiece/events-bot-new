@@ -113,10 +113,11 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   three-query journeys reached useful terminal cards but the mutable vector
   projection advanced while the immutable candidate was building, so the
   response receipts correctly rejected the older target revisions. Vector
-  sync now defers while a static build has an active durable owner and for a
-  bounded 15-minute window after candidate publication. The pending request is
-  preserved and resumes after exact-target acceptance; this replaces the
-  one-off operator defer used to prove the race on job `49936`.
+  sync now defers from the static outbox owner's `running` transition (covering
+  snapshot/receipt binding before the release claim), while the durable build
+  owner is active, and for a bounded 15-minute window after publication. The
+  pending request is preserved and resumes after exact-target acceptance; this
+  replaces the one-off operator defer used to prove the race on job `49936`.
 - 2026-08-09 post-deploy run `31293081526` proved the accepted candidate's
   Search UI and server receipts for both `cold_vector` and deterministic
   `degraded_vector_fallback`, including useful vector cards with the verifier
