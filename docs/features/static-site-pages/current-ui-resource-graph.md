@@ -831,3 +831,35 @@ plans, so a machine consumer cannot mistake a closed evidence gap for an active
 one. The closure manifest and receipt expose `unresolved_records` and
 `blocking_unresolved_records`; these are the authoritative post-closure counts,
 while legacy inherited counters remain historical compatibility fields.
+
+### Terminal closure receipt
+
+The canonical closure capture is
+[Actions run 31327863197](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31327863197)
+at capture head `14be44b108ab4bd0b20d6dd95a20bcc4250adb95`.
+Artifact `9042097413` is 3,015,654 bytes with SHA-256
+`8bb8712effaa0ba3b08a672a784d9e1b90d876c6ca6d039a417bfc0617723523`.
+It records 293/293 terminal probes: 236 PASS, 39 MISMATCH, and 18
+UNREACHABLE_WITH_REASON, with zero planned/unconfirmed IDs.
+
+All eight selected breakpoint rasters and both rail keyboard rasters from that
+run were opened individually at original resolution. The final combined ledger
+contains 134/134 reviewed rasters; its SHA-256 is
+`8dafd73a26c14aa6229fdd9d25eb82f14e8639cd47245666ee0cbe792a5e6864`.
+The independent audit is committed at
+`.codex/integration/current-ui-behavioral-decoder-v1-1-closure/INDEPENDENT_AUDIT.md`
+and reports PASS with no Critical/High/Medium findings.
+
+The durable
+[closure Release](https://github.com/onedayonemasterpiece/events-bot-new/releases/tag/current-ui-behavioral-decoder-v1-1-closure-run-31327863197)
+contains the immutable raw capture, the final reviewed compact supplement, and
+the external durable receipt. The reviewed supplement ZIP SHA-256 is
+`cd89640e1d808a293fda8704c7294160a1d918009b3b21fa3562fde66900f4ab`;
+the final manifest and receipt SHA-256 values are respectively
+`c676be4f2ad956b8a58c7707c8f71b7bb33afd771e506457309597e76d67d9a1`
+and `d981ad23280dd177d1fef8a59674fe754c5887c76a0981cd722a59c604780d9f`.
+The strict closure validator passes with 87 recorded findings and zero
+readiness blockers.
+
+Final evidence status: **`READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`**. This is
+an evidence-readiness boundary only; the strict STOP above remains in force.

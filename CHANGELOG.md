@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Completed Current UI Behavioral Decoder v1.1 evidence closure on Actions run
+  `31327863197`: all 293 breakpoint/container probes now have terminal runtime
+  dispositions (236 PASS, 39 MISMATCH, 18 UNREACHABLE_WITH_REASON), all ten
+  bounded new rasters were opened manually at full resolution, and the final
+  reviewed supplement/receipt were published durably with independent audit
+  PASS. The evidence status is now `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`;
+  production UI, component decisions, experiment winners, tokens, Penpot, and
+  normalization remain unchanged/not started.
 - Fixed closure materialization so the two superseded rail/probe evidence
   blockers are cleared consistently from both plan and action records; a
   converted reviewed nonblocking plan can no longer retain a stale

@@ -11,7 +11,7 @@ global_constraints:
   - no generated raster without full-resolution manual review
   - every breakpoint/container probe must terminate as PASS, MISMATCH, or UNREACHABLE_WITH_REASON
 verification_owner: /root
-final_status: EVIDENCE_COLLECTION_INCOMPLETE_PENDING_ACTIONS_REVIEW_AUDIT
+final_status: READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS
 stop_conditions:
   - do not fix the rail implementation
   - do not merge, split, delete, or normalize components
@@ -98,7 +98,7 @@ lanes:
     expected_output: immutable reviewed supplement, durable receipt, exact research paths and final status
     verification_scope: full_local_and_actions
     effort: high
-    status: in_progress
+    status: completed
   - id: independent_final_audit
     role: reviewer
     requirement_ids: [R05]
@@ -112,4 +112,4 @@ lanes:
     expected_output: independent 293/293/count/hash/visual/no-mutation/research-publication audit
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
