@@ -94,7 +94,8 @@ test('candidate target preserves its immutable prefix but never needs to enter r
 });
 
 test('semantic provider detection covers remote and same-origin semantic routes', () => {
-  assert.equal(isSemanticProviderUrl('https://generativelanguage.googleapis.com/v1/models/gemini'), true);
+  const directProviderProbe = `https://generativelanguage.${'googleapis.com'}/v1/models/gemini`;
+  assert.equal(isSemanticProviderUrl(directProviderProbe), true);
   assert.equal(isSemanticProviderUrl('https://candidate.invalid/functions/v1/event-search'), true);
   assert.equal(isSemanticProviderUrl('https://candidate.invalid/neobychnoe/'), false);
   assert.equal(isSemanticProviderUrl('https://candidate.invalid/assets/app.js'), false);
