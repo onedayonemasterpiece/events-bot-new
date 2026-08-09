@@ -454,6 +454,29 @@ test('mobile protocol receipt counts unique event-search POSTs without retaining
   assert.deepEqual([...seen], ['search-1']);
 });
 
+test('mobile protocol receipt counts each physical POST dispatch in one CDP redirect chain', () => {
+  const seen = new Set();
+  const initial = { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+    requestId: 'redirected-search', timestamp: 101.25, request: {
+      method: 'POST', url: 'https://project.supabase.co/functions/v1/event-search?first=redacted',
+    },
+  } }) };
+  const redirected = { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+    requestId: 'redirected-search', timestamp: 101.5,
+    redirectResponse: {
+      status: 307, url: 'https://project.supabase.co/functions/v1/event-search?first=redacted',
+    },
+    request: {
+      method: 'POST', url: 'https://relay.example/functions/v1/event-search?second=redacted',
+    },
+  } }) };
+
+  assert.equal(countEventSearchPostRequests([initial, redirected], seen), 2);
+  assert.equal(countEventSearchPostRequests([initial, redirected], seen), 0);
+  assert.equal(JSON.stringify([...seen]).includes('first=redacted'), false);
+  assert.equal(JSON.stringify([...seen]).includes('second=redacted'), false);
+});
+
 test('adapter opens the captured first result and binds the browser navigation to driver network logs', async () => {
   let currentUrl = 'https://kenigevents.ru/poisk/';
   let logReads = 0;

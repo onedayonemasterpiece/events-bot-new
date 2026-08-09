@@ -698,6 +698,41 @@ test('release gate blocks before adapter/Auth/Search', async () => {
   assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
 });
 
+test('unavailable initial accepted receipt is retried boundedly and blocks before adapter/Auth/Search', async () => {
+  let reads = 0;
+  let sleeps = 0;
+  let adapters = 0;
+  let issued = 0;
+  const errors = [
+    'search_health_current_review_not_ready',
+    'search_health_target_source_invalid',
+    'search_health_target_url_invalid',
+  ];
+  const result = await runProductionHealthCell({
+    platform: 'browser',
+    targetRun: createAcceptedTargetRun(async () => {
+      const message = errors[Math.min(reads, errors.length - 1)];
+      reads += 1;
+      throw new Error(message);
+    }),
+    initialTargetMaxAttempts: 3,
+    initialTargetDelayMs: 1,
+    sleep: async () => { sleeps += 1; },
+    createAdapter: async () => { adapters += 1; return fakeJourneyAdapter(); },
+    issueSession: async () => { issued += 1; throw new Error('must_not_run'); },
+  });
+  assert.equal(reads, 3);
+  assert.equal(sleeps, 2);
+  assert.equal(adapters, 0);
+  assert.equal(issued, 0);
+  assert.equal(result.product_health, 'UNCONFIRMED');
+  assert.equal(result.execution_status, 'BLOCKED');
+  assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
+  assert.equal(result.search.physical_post_count, 0);
+  assert.equal(result.preflight.search_posts, 0);
+  assert.equal(result.auth.get_user_verified, false);
+});
+
 test('explicit release wait is bounded and performs only target reads before Auth/Search', async () => {
   let reads = 0;
   let sleeps = 0;
@@ -729,6 +764,25 @@ test('explicit release wait is bounded and performs only target reads before Aut
   });
   assert.equal(blocked.active, false);
   assert.equal(reads, 2);
+
+  reads = 0;
+  sleeps = 0;
+  const unavailable = await resolveExpectedAcceptedTarget({
+    resolver: async () => {
+      reads += 1;
+      throw new Error(reads === 1
+        ? 'search_health_current_review_not_ready'
+        : 'search_health_target_source_invalid');
+    },
+    maxAttempts: 3,
+    delayMs: 1,
+    sleep: async () => { sleeps += 1; },
+  });
+  assert.equal(unavailable.active, false);
+  assert.equal(unavailable.target, null);
+  assert.equal(unavailable.attempts, 3);
+  assert.equal(reads, 3);
+  assert.equal(sleeps, 2);
 });
 
 test('backend deployment marker is a pre-Auth/Search release receipt and missing identity blocks', async () => {
@@ -905,6 +959,43 @@ test('late post-navigation Search failure retains total physical count two and o
   assert.equal(result.search.response_id_count, 2);
   assert.equal(result.search.rendered_id_count, 2);
   assert.equal(result.supabase_observed_bytes.total_bytes, 37_000);
+});
+
+test('failed cell drains final diagnostics before sampling authoritative mobile physical activity', async () => {
+  const adapter = fakeJourneyAdapter({ bytes: 38_000 });
+  let diagnosticsDrained = false;
+  let diagnosticsCalls = 0;
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  adapter.snapshotResults = async () => { throw new Error('search_health_result_render_failed'); };
+  adapter.failedJourneyEvidence = async () => ({
+    activity: {
+      requests: [{ method: 'POST', path: '/functions/v1/event-search', body_contract: {
+        limit: 5, use_llm_verifier: false, allow_llm_fallback: false,
+      } }],
+      responses: [{ request_id: 'request-1', http_status: 200, route: 'direct',
+        response_ids: ['101', '102'], provider_attempts: { embedding: 1, vector: 1, llm: 0 } }],
+      meter: meter(38_000),
+    },
+    results: { terminal: true, rendered_ids: ['101', '102'] },
+    post_navigation_search_post_count: 0,
+  });
+  adapter.healthDiagnostics = async () => {
+    diagnosticsCalls += 1;
+    if (diagnosticsCalls >= 2) diagnosticsDrained = true;
+    return { console_errors: 0, failed_requests: 0, error_responses: 0 };
+  };
+  adapter.physicalActivity = async () => ({
+    search_posts: diagnosticsDrained ? 2 : 0,
+    storage_requests: 0, receipt_rpc_requests: 0, meter: meter(38_000),
+  });
+  const result = await runProductionHealthCell({
+    platform: 'android', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => adapter,
+    issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+  });
+  assert.equal(diagnosticsDrained, true);
+  assert.equal(result.search.physical_post_count, 2);
 });
 
 test('Auth traffic over the hard cap stops before the single Search and stays unconfirmed', async () => {

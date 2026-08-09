@@ -225,7 +225,15 @@ export function createAcceptedTargetRun(resolver) {
 
   return Object.freeze({
     pin() {
-      pinnedPromise ??= resolveNormalized();
+      if (!pinnedPromise) {
+        const pending = resolveNormalized();
+        pinnedPromise = pending;
+        // An unavailable/unready pointer is retryable only before a target is
+        // pinned. A successfully normalized target remains immutable.
+        pending.catch(() => {
+          if (pinnedPromise === pending) pinnedPromise = undefined;
+        });
+      }
       return pinnedPromise;
     },
     async observeSupersession() {

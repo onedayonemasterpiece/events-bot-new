@@ -153,7 +153,7 @@ export function extractSanitizedNavigationResponses(logs) {
   return tracker.responses();
 }
 
-/** Count unique physical event-search POSTs without retaining URL or body data. */
+/** Count unique physical event-search POST dispatches without retaining URL or body data. */
 export function countEventSearchPostRequests(logs, seenRequestIds = new Set()) {
   let count = 0;
   const visited = new WeakSet();
@@ -175,8 +175,17 @@ export function countEventSearchPostRequests(logs, seenRequestIds = new Set()) {
       if (String(request.method || '').toUpperCase() === 'POST'
         && url?.pathname === '/functions/v1/event-search') {
         const identity = String(params.requestId || '');
-        if (!identity || !seenRequestIds.has(identity)) {
-          if (identity) seenRequestIds.add(identity);
+        // CDP reuses requestId across redirects, but every requestWillBeSent is
+        // a physical dispatch. Its monotonic timestamp identifies the hop and
+        // also keeps replayed log entries idempotent across driver log drains.
+        // Older protocol fixtures without timestamps keep the legacy initial
+        // identity; a redirect still receives a distinct, sanitized key.
+        const timestamp = Number(params.timestamp);
+        const dispatchIdentity = !identity ? ''
+          : Number.isFinite(timestamp) ? `${identity}@${timestamp}`
+            : params.redirectResponse ? `${identity}@redirect` : identity;
+        if (!dispatchIdentity || !seenRequestIds.has(dispatchIdentity)) {
+          if (dispatchIdentity) seenRequestIds.add(dispatchIdentity);
           count += 1;
         }
       }

@@ -121,6 +121,11 @@ const searchRequestsFromRuntime = (runtime) => (Array.isArray(runtime?.requests)
 async function retainFailedJourneyEvidence(adapter, runtime = {}) {
   let persistent = null;
   let physical = null;
+  let diagnostics = {};
+  // Appium healthDiagnostics is also the final driver-log drain. It must run
+  // before either persistent or physical evidence is sampled, otherwise a
+  // Search dispatch already made by the cell can be reported as zero/stale.
+  try { diagnostics = await adapter?.healthDiagnostics?.() || {}; } catch { /* closed counters only */ }
   try { persistent = await adapter?.failedJourneyEvidence?.() || null; } catch { /* closed fallback below */ }
   try { physical = await adapter?.physicalActivity?.() || null; } catch { /* best-known closed counters below */ }
   const authoritativeRuntime = persistent?.activity || runtime;
@@ -128,11 +133,9 @@ async function retainFailedJourneyEvidence(adapter, runtime = {}) {
   const responses = Array.isArray(authoritativeRuntime?.responses) ? authoritativeRuntime.responses : [];
   const response = responses.at(-1) || {};
   let state = persistent?.results || {};
-  let diagnostics = {};
   if (!persistent?.results) {
     try { state = await adapter?.snapshotResults?.() || {}; } catch { /* closed counters only */ }
   }
-  try { diagnostics = await adapter?.healthDiagnostics?.() || {}; } catch { /* closed counters only */ }
   const renderedIds = Array.isArray(state.rendered_ids) ? state.rendered_ids.map(String) : [];
   const responseIds = Array.isArray(response.response_ids) ? response.response_ids.map(String) : [];
   const postNavigationSearchPostCount = Number(persistent?.post_navigation_search_post_count || 0);
@@ -201,6 +204,33 @@ function isAdapterInfrastructureFailure(error) {
     || /(?:invalid session id|no such window|target page, context or browser has been closed|browser has been closed|web view not found)/iu.test(message);
 }
 
+const isAcceptedTargetUnavailable = (error) => /^(?:search_health_current_review_(?:not_ready|resolver_invalid|url_invalid)|search_health_target_(?:source_invalid|fallback_forbidden|url_invalid|repo_sha_invalid|input_fingerprint_invalid|token_sha256_invalid|token_hash_mismatch|build_id_invalid|run_id_invalid|snapshot_id_invalid|result_sha256_invalid|manifest_sha256_invalid|not_current_accepted))$/u
+  .test(String(error?.message || '').split(':')[0]);
+
+export async function waitForInitialAcceptedTarget({
+  targetRun,
+  maxAttempts = 6,
+  delayMs = 10_000,
+  sleep = (milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)),
+} = {}) {
+  if (typeof targetRun?.pin !== 'function') throw new Error('search_health_target_run_missing');
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 12) {
+    throw new Error('search_health_initial_target_attempts_invalid');
+  }
+  if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 30_000) {
+    throw new Error('search_health_initial_target_delay_invalid');
+  }
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return Object.freeze({ target: await targetRun.pin(), active: true, attempts: attempt });
+    } catch (error) {
+      if (!isAcceptedTargetUnavailable(error)) throw error;
+      if (attempt < maxAttempts) await sleep(delayMs);
+    }
+  }
+  return Object.freeze({ target: null, active: false, attempts: maxAttempts });
+}
+
 /**
  * Callable platform-cell orchestration. Adapter construction and its
  * side-effect-free preflight happen before issuance; the same adapter then
@@ -216,11 +246,17 @@ export async function runProductionHealthCell(options = {}) {
     throw new Error('search_health_orchestration_hook_missing');
   }
 
-  const target = await options.targetRun.pin();
+  const initialTarget = await waitForInitialAcceptedTarget({
+    targetRun: options.targetRun,
+    maxAttempts: options.initialTargetMaxAttempts ?? 6,
+    delayMs: options.initialTargetDelayMs ?? 10_000,
+    sleep: options.sleep,
+  });
+  const target = initialTarget.target;
   const testedAt = new Date(typeof options.now === 'function' ? options.now() : Date.now()).toISOString();
-  const targetImmutable = acceptedTargetImmutableEvidence(target);
-  const releaseActive = typeof options.releaseGate === 'function'
-    ? await options.releaseGate(target) : true;
+  const targetImmutable = target ? acceptedTargetImmutableEvidence(target) : {};
+  const releaseActive = initialTarget.active === true && (typeof options.releaseGate === 'function'
+    ? await options.releaseGate(target) : true);
   let adapter = null;
   let issued = null;
   let preflight = {};
@@ -372,8 +408,13 @@ export async function resolveExpectedAcceptedTarget({
   }
   let target;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    target = await resolver();
-    if (!expectedSiteSha || target.target_repo_sha === expectedSiteSha) {
+    try {
+      target = await resolver();
+    } catch (error) {
+      if (!isAcceptedTargetUnavailable(error)) throw error;
+      target = null;
+    }
+    if (target && (!expectedSiteSha || target.target_repo_sha === expectedSiteSha)) {
       return Object.freeze({ target, active: true, attempts: attempt });
     }
     if (attempt < maxAttempts) await sleep(delayMs);
@@ -551,30 +592,40 @@ export async function runProductionHealthCli(env = process.env) {
   });
   // The accepted review URL is private. Register it with the runner before an
   // adapter or Appium command can observe it.
-  maskGitHubSecret(initialResolution.target.navigationUrl(), env);
-  const backendReceipt = expectedBackendRevision
+  if (initialResolution.target) maskGitHubSecret(initialResolution.target.navigationUrl(), env);
+  const backendReceipt = initialResolution.target && expectedBackendRevision
     ? await waitForActiveSearchBackend({
       supabaseUrl: required(env, 'PERSONALIZATION_SUPABASE_URL'),
       publishableKey: required(env, 'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'),
       expectedRevision: expectedBackendRevision,
     })
-    : { active: true, product_search_posts: 0, auth_requests: 0 };
+    : { active: initialResolution.target !== null, product_search_posts: 0, auth_requests: 0 };
   let firstRead = true;
   const targetRun = createAcceptedTargetRun(async () => {
     if (firstRead) {
       firstRead = false;
+      if (!initialResolution.target) throw new Error('search_health_current_review_not_ready');
       return acceptedTargetInput(initialResolution.target);
     }
     return acceptedTargetInput(await resolveCurrentAcceptedTargetFromFly(env));
   });
-  const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: [required(env, 'PERSONALIZATION_SUPABASE_URL')] });
-  const hooks = platform === 'browser'
-    ? await createBuiltInBrowserHooks(env, meter)
-    : env.E2E_SEARCH_PLATFORM_HOOK_MODULE
-      ? await externalPlatformHooks(env, platform, meter)
-      : await createBuiltInMobileHooks(env, platform);
+  const meter = new SupabaseClientObservedByteMeter({
+    supabaseOrigins: initialResolution.target
+      ? [required(env, 'PERSONALIZATION_SUPABASE_URL')] : [],
+  });
+  const hooks = !initialResolution.target
+    ? {
+      createAdapter: async () => { throw new Error('search_health_release_not_active'); },
+      issueSession: async () => { throw new Error('search_health_release_not_active'); },
+    }
+    : platform === 'browser'
+      ? await createBuiltInBrowserHooks(env, meter)
+      : env.E2E_SEARCH_PLATFORM_HOOK_MODULE
+        ? await externalPlatformHooks(env, platform, meter)
+        : await createBuiltInMobileHooks(env, platform);
   const result = await runProductionHealthCell({
     platform, targetRun, createAdapter: hooks.createAdapter, issueSession: hooks.issueSession,
+    initialTargetMaxAttempts: initialResolution.target ? 6 : 1,
     releaseGate: () => hasActiveSearchReleaseReceipt({
       siteActive: initialResolution.active, expectedSearchBackendRevision: expectedBackendRevision,
       deploymentRunId, backendActive: backendReceipt.active,
