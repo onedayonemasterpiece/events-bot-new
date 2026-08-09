@@ -120,8 +120,8 @@ scenarios:
   browser.route_health:
     title: Every selected HTML route is non-empty and runtime healthy
     status: partial
-    layers: [L0, L1]
-    platforms: [browser]
+    layers: [L0, L1, L2]
+    platforms: [browser, android, ios]
     trigger_tags: [static-data, static-route, visual-layout]
     cost: medium
     side_effects: none
@@ -536,9 +536,10 @@ scenarios:
     cost: low
     auth_mode: session_fixture
     depends_on: [auth.session_fixture, search.deterministic_architecture]
-    side_effects: one_vector_search_post_zero_llm_zero_pagination_zero_receipt_rpc_zero_storage_images
+    side_effects: one_vector_search_post_per_platform_zero_llm_zero_pagination_zero_receipt_rpc_zero_storage_images
     target: current_accepted_target_pinned_once_cache_and_generation_drift_allowed
-    evidence: typed_current_target_one_post_cards_scroll_route_http_200_and_client_observed_bytes
+    schedule_profiles: {morning: [browser, android], evening: [browser, ios]}
+    evidence: typed_current_target_one_post_cards_native_or_wheel_scroll_route_http_200_and_client_observed_bytes
     blocking:
       pull_request: deterministic_contract_only
       release: false_until_stage2_live_activation

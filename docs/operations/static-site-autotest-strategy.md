@@ -773,9 +773,11 @@ static-build post-deploy dispatch и generic issue reporter отключены. 
 trigger matrix и stage-2 activation принадлежат единственному каноническому
 разделу [`smart-vector-search/README.md#16`](../features/static-site-pages/smart-vector-search/README.md#16-search-production-health-архитектурная-коррекция-этап-1).
 
-`release_exact`, cache repeat, LLM, pagination и mobile принадлежат только
-release qualification. Production health принимает cache hit/miss и движение
-content/index revisions и ограничен одним vector-only UI POST.
+`release_exact`, cache repeat, LLM, pagination и расширенная mobile matrix
+принадлежат только release qualification. Production health принимает cache
+hit/miss и движение content/index revisions, ограничен одним vector-only UI
+POST на platform cell и дважды в сутки выполняет browser + Android либо browser
++ iOS с отдельной no-mail session на каждую платформу.
 
 Нельзя откладывать Android/iOS до «когда-нибудь после общей системы», но нельзя и
 заставлять каждый authenticated business test повторять дорогой real-mail OTP.

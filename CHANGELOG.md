@@ -18,7 +18,10 @@
   as product incidents. The deterministic current-target adapter now consumes
   the canonical resolver's full immutable tuple, including `input_fingerprint`,
   requires the exact trusted production origin, and verifies the opaque review
-  token against its accepted receipt hash.
+  token against its accepted receipt hash. Stage-2 health policy now fixes the
+  two daily profiles to browser+Android and browser+iOS with one independent
+  no-mail session and one Search POST per platform; the full LLM/mobile matrix
+  remains manual release qualification.
 
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,

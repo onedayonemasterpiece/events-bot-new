@@ -12,8 +12,10 @@ PRODUCT_HEALTH_UNCONFIRMED
 ## Цель этапа 2
 
 Подключить подготовленный pure contract к существующему current accepted target
-resolver и выполнить не более двух browser live Search runs за одну итерацию.
-Не возвращать cached-repeat, LLM, pagination или mobile в production-health.
+resolver и выполнить не более двух полных live workflows за одну итерацию:
+browser + Android, затем browser + iOS. Не возвращать cached-repeat, LLM,
+pagination или полный scheduled mobile/release matrix в production-health;
+минимальный Android/iOS user journey является обязательной частью health.
 
 ## Требуемые live-действия
 
@@ -22,11 +24,14 @@ resolver и выполнить не более двух browser live Search runs
 2. Подключить `search-production-health.yml` к существующему
    `resolve_current_secret_candidate` adapter. Разрешён только canonical current
    receipt; latest Kaggle job и public-root fallback запрещены.
-3. Получить no-mail browser session через существующий GitHub OIDC broker и
-   `auth.session_fixture`; не отправлять OTP и не читать mailbox.
+3. После side-effect-free browser/device preflight получить отдельную no-mail
+   session для каждой platform cell через существующий GitHub OIDC broker и
+   `auth.session_fixture`; не передавать session между jobs, не отправлять OTP
+   и не читать mailbox.
 4. Выполнить минимальный UI journey: открыть pinned `/poisk/`, один vector-only
    query, ровно один POST с limit ≤5, получить 1–5 карточек, сделать настоящий
-   wheel scroll и открыть одну карточку с HTTP 200.
+   wheel scroll в browser или native touch/swipe на mobile и открыть одну
+   карточку с HTTP 200.
 5. Собрать client-observed Auth/Edge/direct REST/RPC bytes, доказать target
    `≤48 KiB`, hard `≤96 KiB`, LLM/pagination/receipt-RPC/Storage-images `0`.
 6. После journey повторно прочитать только pointer. При смене target записать
@@ -43,9 +48,9 @@ resolver и выполнить не более двух browser live Search runs
 - `SEARCH_E2E_AUTH_BROKER_URL` и OIDC audience
   `kenigevents-static-search-broker`;
 - `SEARCH_E2E_SUPABASE_URL` и `SEARCH_E2E_SUPABASE_PUBLISHABLE_KEY`;
-- одна выделенная no-mail health persona. Существующую persona разрешено
-  переиспользовать только если её broker lease не пересекается с manual legacy
-  или qualification run.
+- три отдельные no-mail health personas: browser, Android и iOS. Одна mutable
+  session/account не разделяется между platform jobs, manual legacy или
+  qualification run.
 
 Secrets не выводятся в job output/artifacts. Opaque target URL маскируется до
 первого log; evidence хранит только redacted path/fingerprint и typed counters.
@@ -55,20 +60,20 @@ Secrets не выводятся в job output/artifacts. Opaque target URL ма�
 | Trigger | Политика |
 |---|---|
 | `workflow_dispatch` | оставить |
-| schedule два раза в сутки | добавить только после двух browser proofs |
+| `17 6 * * *` | browser + Android, 08:17 Europe/Kaliningrad |
+| `17 18 * * *` | browser + iOS, 20:17 Europe/Kaliningrad |
 | repository dispatch после реального Search runtime/backend deploy | добавить с pinned deployment identity |
 | Smart Update/static snapshot/data generation/corpus/index refresh | **никогда не добавлять** |
 
-Release qualification остаётся manual/selective; никакого scheduled LLM/mobile.
+Release qualification остаётся manual/selective; никакого scheduled LLM или
+расширенного mobile/release matrix.
 
-## Два browser live-runs
+## Два полных live workflows
 
-1. **Manual current-target proof:** один query, один POST, cache hit или miss,
-   1–5 карточек, scroll, card HTTP 200, typed result, bytes/redaction guards.
-2. **Trigger-path proof:** тот же минимальный контракт через подготовленный
-   Search-runtime-deploy trigger либо, до его включения, второй manual run с
-   frozen synthetic deployment payload. Он доказывает trigger/pinning, а не
-   cache repeat.
+1. **Browser + Android:** отдельные sessions и ровно один Search POST на каждую
+   platform cell; browser wheel и Android native touch должны пройти.
+2. **Browser + iOS:** новые отдельные sessions и ровно один Search POST на
+   каждую cell; browser wheel и iOS XCUITest swipe должны пройти.
 
 За одну итерацию запрещено выполнять больше двух live Search runs. При failure
 сначала анализировать sanitized evidence и deterministic fixtures; GitHub
@@ -95,7 +100,7 @@ PR #436 не является зависимостью health activation. Его
 
 ## Completion evidence этапа 2
 
-- два sanitized browser receipts с одним POST каждый;
+- sanitized browser + Android и browser + iOS receipts с одним POST на cell;
 - pinned target identity и superseded check;
 - Auth/Edge/REST byte totals и 48/96 KiB verdict;
 - card-open HTTP 200 и real-scroll receipt;

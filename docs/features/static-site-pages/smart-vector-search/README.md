@@ -843,10 +843,14 @@ Smart Update
 | `content_generation_id` | `snapshot_id`/`input_fingerprint`; content identity `catalog_revision` | telemetry, не exact health gate |
 | `search_index_generation_id` | `corpus_revision`/`search_document_revision` | telemetry, не exact health gate |
 
-`site_runtime_sha` уже закреплён правильно: Smart Update не обновляет его до
-реального Fly/runtime deploy. Actions checkout SHA может отличаться от target
-repo SHA и сам по себе не является failure. Отсутствие точного deployed Edge
-SHA остаётся честно отмеченным gap этапа 2; на этапе 1 не вводится новый ledger.
+`site_runtime_sha` берётся из реального Fly/runtime deploy и Smart Update сам
+его не меняет. Перед merge Stage 1 source-binding gate дополнительно обязан
+доказать соответствие этого SHA точному набору source bytes, переданному в
+Kaggle, и запретить recovery handoff от другого deployed SHA; одной повторяемой
+строки SHA в metadata недостаточно. Actions checkout SHA может отличаться от
+target repo SHA и сам по себе не является failure. Отсутствие точного deployed
+Edge SHA остаётся честно отмеченным gap этапа 2; новая release-система для этого
+не вводится.
 
 ### 16.3 Три тестовых контура
 
@@ -857,17 +861,19 @@ revision drift, LLM/pagination zero, failure taxonomy, retry policy, redaction �
 device labs и providers не используются.
 
 **B. Search production health.** После активации на этапе 2: manual, дважды в
-сутки и после реального Search runtime deployment. Один no-mail session, один
+сутки и после реального Search runtime deployment. Утренний профиль проверяет
+browser + Android Emulator, вечерний — browser + iOS Simulator; каждая platform
+cell получает отдельную no-mail session. В каждой cell выполняются один
 vector-only UI query, ровно один Search POST с limit ≤5, 1–5 карточек, реальный
-scroll и открытие одной карточки с HTTP 200. Cache `hit`, `miss`, `stored` и
-`bypass` допустимы. Второго запроса, pagination, LLM, receipt RPC, Storage image,
-Android и iOS нет.
+wheel/touch scroll и открытие одной карточки с HTTP 200. Cache `hit`, `miss`,
+`stored` и `bypass` допустимы. Второго запроса, pagination, LLM, receipt RPC,
+Storage image и real-mail OTP нет.
 
 **C. Search release qualification.** Только manual/selective. Здесь остаются
-cold vector, bounded LLM, degraded fallback, pagination/transport matrix,
-Android и iOS, а `release_exact` применяется лишь к свежему immutable candidate
-как promotion gate. Candidate mismatch блокирует квалификацию, но не объявляет
-текущий production Search сломанным.
+cold vector, bounded LLM, degraded fallback и расширенные pagination/transport/
+mobile matrices сверх минимального health journey. `release_exact` применяется
+лишь к свежему immutable candidate как promotion gate. Candidate mismatch
+блокирует квалификацию, но не объявляет текущий production Search сломанным.
 
 Существующий `site/e2e/search/` остаётся единственным harness. Stage-1 planner
 и contracts добавлены рядом с ним; auth fixture и `site/e2e/mobile-web/` не
