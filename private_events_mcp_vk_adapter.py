@@ -24,6 +24,7 @@ from urllib.parse import urlsplit
 
 from private_events_mcp.social_workspace import (
     ContentFeature,
+    MediaRole,
     SocialAction,
     SocialActionIntent,
     SocialActionStatus,
@@ -38,6 +39,22 @@ from private_events_mcp.social_workspace import (
     compute_action_digest,
     validate_opaque_ref,
 )
+from private_events_mcp_vk_upload import (
+    VKAssetMaterialization,
+    VKMultipartTransport,
+    VKMultipartUploadResult,
+    VKStoryMediaMaterialization,
+    VKStoryMediaReader,
+    VKUploadPurpose,
+    VKVerifiedAssetReader,
+)
+
+try:
+    from private_events_mcp.media_contract import VerifiedAsset
+except ModuleNotFoundError as exc:  # Core lane adds this module before integration.
+    if exc.name != "private_events_mcp.media_contract":
+        raise
+    VerifiedAsset = Any  # type: ignore[misc,assignment]
 
 VK_API_VERSION = "5.199"
 _TRUST = "untrusted_external_data"
@@ -45,8 +62,21 @@ _MAX_RESULT_PAGE = 25
 _MAX_PROVIDER_CURSOR_BYTES = 512
 _MAX_EDITORIAL_TOTAL = 100
 _MAX_TEXT = 4096
+_MAX_MEDIA_BYTES = 64 * 1024 * 1024
 _SAFE_HANDLE = re.compile(r"^[A-Za-z0-9_.-]{2,128}$")
 _NATIVE_HANDLE = re.compile(r"^(?:id|club|public|event)\d+$", re.IGNORECASE)
+_STORAGE_REF = re.compile(r"^ing_[A-Za-z0-9_-]{24,160}$")
+_OWNER_BINDING = re.compile(r"^[a-f0-9]{64}$")
+_CONTENT_DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
+_STORY_UPLOAD_RESULT = re.compile(r"^[^\x00]{8,8192}$", re.DOTALL)
+_VK_CDN_SUFFIXES = (
+    ".userapi.com",
+    ".vk.com",
+    ".vk.me",
+    ".vkuser.net",
+    ".vkuseraudio.net",
+    ".vkvideo.ru",
+)
 
 
 class VKWorkspaceError(RuntimeError):
@@ -162,9 +192,10 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "dialog_history": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getHistory", ["peer_id", "count"], ["offset", "start_message_id", "rev"]),
     "message_item": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getById", ["message_ids"]),
     "conversations": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getConversations", ["count"], ["offset", "filter"]),
-    "stories": _policy(VKActor.STORY_READER, "story_read", "stories.get", ["owners"]),
+    "stories": _policy(VKActor.STORY_READER, "story_read", "stories.get", ["owner_id"], ["extended", "fields"]),
+    "story_item": _policy(VKActor.STORY_READER, "story_read", "stories.getById", ["stories"], ["extended", "fields"]),
     "story_stats": _policy(VKActor.ANALYTICS_READER, "analytics", "stories.getStats", ["owner_id", "story_id"]),
-    "community_stats": _policy(VKActor.ANALYTICS_READER, "analytics", "stats.get", ["group_id"], ["date_from", "date_to", "intervals_count"]),
+    "community_stats": _policy(VKActor.ANALYTICS_READER, "analytics", "stats.get", ["group_id", "interval"], ["timestamp_from", "timestamp_to", "intervals_count"]),
     "audience": _policy(VKActor.PUBLIC_READER, "audience", "groups.getMembers", ["group_id", "count"], ["offset"]),
     "send_message": _policy(VKActor.USER_MESSENGER, "dm_send", "messages.send", ["peer_id", "message", "random_id"], ["attachment", "forward"]),
     "wall_post": _policy(VKActor.COMMUNITY_EDITOR, "post_publish", "wall.post", ["owner_id", "from_group", "message", "guid"], ["attachments", "publish_date", "signed"]),
@@ -177,7 +208,12 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "message_forward": _policy(VKActor.USER_MESSENGER, "forward", "messages.send", ["peer_id", "message", "random_id", "forward"]),
     "message_edit": _policy(VKActor.USER_MESSENGER, "edit", "messages.edit", ["peer_id", "message", "message_id"], ["attachment"]),
     "message_delete": _policy(VKActor.USER_MESSENGER, "delete", "messages.delete", ["message_ids", "delete_for_all"]),
-    "story_save": _policy(VKActor.STORY_EDITOR, "story_write", "stories.save", ["upload_results", "group_id"], ["extended"]),
+    "wall_photo_upload_server": _policy(VKActor.COMMUNITY_EDITOR, "media_upload", "photos.getWallUploadServer", ["group_id"]),
+    "wall_photo_save": _policy(VKActor.COMMUNITY_EDITOR, "media_upload", "photos.saveWallPhoto", ["group_id", "photo", "server", "hash"]),
+    "story_photo_upload_server": _policy(VKActor.STORY_EDITOR, "story_write", "stories.getPhotoUploadServer", ["group_id", "add_to_news"]),
+    "story_video_upload_server": _policy(VKActor.STORY_EDITOR, "story_write", "stories.getVideoUploadServer", ["group_id", "add_to_news"]),
+    "story_save": _policy(VKActor.STORY_EDITOR, "story_write", "stories.save", ["upload_results"]),
+    "story_delete": _policy(VKActor.STORY_EDITOR, "story_write", "stories.delete", ["owner_id", "story_id"]),
 }
 
 VK_FIXED_METHOD_ALLOWLIST = frozenset(policy.method for policy in _CALLS.values())
@@ -209,6 +245,58 @@ def _items(response: Any) -> list[Mapping[str, Any]]:
     return []
 
 
+def _story_feed_items(response: Any) -> list[Mapping[str, Any]]:
+    """Flatten the official ``stories.get`` ``items[].stories`` shape."""
+
+    stories: list[Mapping[str, Any]] = []
+    for feed_item in _items(response):
+        raw = feed_item.get("stories")
+        if isinstance(raw, list):
+            stories.extend(item for item in raw if isinstance(item, Mapping))
+    return stories
+
+
+def _story_stat_count(response: Any, name: str) -> int:
+    if not isinstance(response, Mapping):
+        return 0
+    stat = response.get(name)
+    if isinstance(stat, Mapping):
+        state = stat.get("state")
+        count = _int(stat.get("count"))
+        if state in {"on", "off", "hidden"} and count is not None:
+            return max(0, count)
+    return 0
+
+
+def _validated_vk_https_url(value: Any) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) > 4096
+        or "\\" in value
+        or any(ord(character) <= 0x20 or ord(character) == 0x7F for character in value)
+    ):
+        raise VKWorkspaceError("provider_media_invalid")
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        raise VKWorkspaceError("provider_media_invalid") from None
+    host = (parsed.hostname or "").lower().rstrip(".")
+    expected_netloc = host if port is None else f"{host}:{port}"
+    if (
+        parsed.scheme != "https"
+        or not host
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in {None, 443}
+        or parsed.fragment
+        or parsed.netloc != expected_netloc
+        or not any(host == suffix[1:] or host.endswith(suffix) for suffix in _VK_CDN_SUFFIXES)
+    ):
+        raise VKWorkspaceError("provider_media_invalid")
+    return value
+
+
 class VKWorkspaceAdapter:
     """Capability-gated VK implementation of the provider-neutral workspace."""
 
@@ -222,6 +310,9 @@ class VKWorkspaceAdapter:
         governor: VKCallGovernor,
         cooldown: VKCooldownHook,
         sanitize_text: Any,
+        asset_reader: VKVerifiedAssetReader | None = None,
+        multipart_transport: VKMultipartTransport | None = None,
+        story_media_reader: VKStoryMediaReader | None = None,
         timeout_seconds: float = 10.0,
     ) -> None:
         if not callable(getattr(transport, "invoke", None)) or not callable(getattr(transport, "permits", None)):
@@ -234,6 +325,12 @@ class VKWorkspaceAdapter:
             raise TypeError("cooldown hooks are required")
         if not callable(sanitize_text):
             raise TypeError("recursive sanitation hook is required")
+        if asset_reader is not None and not callable(getattr(asset_reader, "open_verified", None)):
+            raise TypeError("asset_reader must expose open_verified")
+        if multipart_transport is not None and not callable(getattr(multipart_transport, "upload", None)):
+            raise TypeError("multipart_transport must expose upload")
+        if story_media_reader is not None and not callable(getattr(story_media_reader, "fetch_vk_cdn", None)):
+            raise TypeError("story_media_reader must expose fetch_vk_cdn")
         if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 60:
             raise ValueError("timeout_seconds is invalid")
         self._transport = transport
@@ -241,12 +338,17 @@ class VKWorkspaceAdapter:
         self._governor = governor
         self._cooldown = cooldown
         self._sanitize_text = sanitize_text
+        self._asset_reader = asset_reader
+        self._multipart_transport = multipart_transport
+        self._story_media_reader = story_media_reader
         self._timeout = float(timeout_seconds)
         self._lock = asyncio.Lock()
         self._action_lock = asyncio.Lock()
+        self._asset_lock = asyncio.Lock()
         self._operations: dict[str, dict[str, Any]] = {}
         self._idempotency: dict[str, tuple[str, str]] = {}
         self._operation_claims: dict[str, tuple[str, str]] = {}
+        self._staged_assets: dict[tuple[str, str, str, str], str] = {}
 
     def __repr__(self) -> str:
         return "<VKWorkspaceAdapter platform='vk' transport='role_scoped'>"
@@ -260,7 +362,13 @@ class VKWorkspaceAdapter:
         except Exception:  # noqa: BLE001 - fail closed across injected transport implementations
             return False
 
-    async def _call(self, operation: str, params: Mapping[str, Any]) -> Any:
+    async def _call(
+        self,
+        operation: str,
+        params: Mapping[str, Any],
+        *,
+        attempt_hook: Any | None = None,
+    ) -> Any:
         policy = _CALLS[operation]
         keys = frozenset(params)
         if not policy.required.issubset(keys) or not keys.issubset(policy.required | policy.optional):
@@ -278,6 +386,8 @@ class VKWorkspaceAdapter:
                 raise VKWorkspaceError("rate_limited") from None
             outcome = "failed"
             try:
+                if attempt_hook is not None:
+                    attempt_hook()
                 result = await asyncio.wait_for(
                     self._transport.invoke(
                         actor=policy.actor,
@@ -348,6 +458,211 @@ class VKWorkspaceAdapter:
         if not isinstance(value, Mapping):
             raise VKWorkspaceError("opaque_reference_failed")
         return value
+
+    async def stage_asset(self, asset: "VerifiedAsset", *, role: MediaRole) -> str:
+        """Store only a verified-asset descriptor and return its inner VK ref.
+
+        The bytes are deliberately not opened or sent to VK here.  The core calls
+        this hook before persisting an outer asset binding; provider I/O happens
+        only from ``execute`` after the durable approval gate has been consumed.
+        """
+
+        if role is not MediaRole.IMAGE:
+            raise VKWorkspaceError("asset_role_unsupported")
+        try:
+            storage_ref = asset.storage_ref
+            owner_binding = asset.owner_binding
+            content_digest = asset.content_digest
+            mime_type = asset.mime_type
+            byte_length = asset.byte_length
+            expires_at = asset.expires_at
+            width = asset.width
+            height = asset.height
+        except AttributeError:
+            raise VKWorkspaceError("verified_asset_invalid") from None
+        if not isinstance(storage_ref, str) or not _STORAGE_REF.fullmatch(storage_ref):
+            raise VKWorkspaceError("verified_asset_invalid")
+        if not isinstance(owner_binding, str) or not _OWNER_BINDING.fullmatch(owner_binding):
+            raise VKWorkspaceError("verified_asset_invalid")
+        if not isinstance(content_digest, str) or not _CONTENT_DIGEST.fullmatch(content_digest):
+            raise VKWorkspaceError("verified_asset_invalid")
+        allowed_mimes = {MediaRole.IMAGE: {"image/jpeg", "image/png", "image/webp"}}
+        if mime_type not in allowed_mimes[role]:
+            raise VKWorkspaceError("asset_mime_unsupported")
+        if type(byte_length) is not int or not 1 <= byte_length <= _MAX_MEDIA_BYTES:
+            raise VKWorkspaceError("verified_asset_invalid")
+        if type(expires_at) is not int or expires_at <= int(datetime.now(timezone.utc).timestamp()):
+            raise VKWorkspaceError("asset_expired")
+        if (width is None) != (height is None) or any(
+            type(value) is not int or not 1 <= value <= 32_768
+            for value in (width, height)
+            if value is not None
+        ):
+            raise VKWorkspaceError("asset_geometry_invalid")
+        descriptor = {
+            "binding_kind": "verified_asset",
+            "storage_ref": storage_ref,
+            "owner_binding": owner_binding,
+            "content_digest": content_digest,
+            "mime_type": mime_type,
+            "byte_length": byte_length,
+            "expires_at": expires_at,
+            "width": width,
+            "height": height,
+            "role": role.value,
+        }
+        cache_key = (owner_binding, storage_ref, content_digest, role.value)
+        async with self._asset_lock:
+            existing = self._staged_assets.get(cache_key)
+            if existing is not None:
+                return existing
+            asset_ref = self._mint("asset", descriptor)
+            self._staged_assets[cache_key] = asset_ref
+            return asset_ref
+
+    async def _materialize_asset(self, binding: Mapping[str, Any]) -> VKAssetMaterialization:
+        if self._asset_reader is None:
+            raise VKWorkspaceError("asset_reader_unavailable")
+        storage_ref = binding.get("storage_ref")
+        owner_binding = binding.get("owner_binding")
+        content_digest = binding.get("content_digest")
+        byte_length = binding.get("byte_length")
+        mime_type = binding.get("mime_type")
+        if (
+            not isinstance(storage_ref, str)
+            or not _STORAGE_REF.fullmatch(storage_ref)
+            or not isinstance(owner_binding, str)
+            or not _OWNER_BINDING.fullmatch(owner_binding)
+            or not isinstance(content_digest, str)
+            or not _CONTENT_DIGEST.fullmatch(content_digest)
+            or type(byte_length) is not int
+            or not 1 <= byte_length <= _MAX_MEDIA_BYTES
+            or mime_type not in {"image/jpeg", "image/png", "image/webp"}
+        ):
+            raise VKWorkspaceError("verified_asset_invalid")
+        expires_at = _int(binding.get("expires_at"))
+        if expires_at is None or expires_at <= int(datetime.now(timezone.utc).timestamp()):
+            raise VKWorkspaceError("asset_expired")
+        try:
+            materialized = await self._await(
+                self._asset_reader.open_verified(
+                    storage_ref, owner_binding
+                )
+            )
+        except Exception:  # noqa: BLE001 - never expose storage implementation details
+            raise VKWorkspaceError("asset_materialization_failed") from None
+        if not isinstance(materialized, VKAssetMaterialization):
+            raise VKWorkspaceError("asset_materialization_failed")
+        expected = (
+            binding.get("storage_ref"),
+            binding.get("owner_binding"),
+            binding.get("content_digest"),
+            binding.get("mime_type"),
+            binding.get("byte_length"),
+        )
+        observed = (
+            materialized.storage_ref,
+            materialized.owner_binding,
+            materialized.content_digest,
+            materialized.mime_type,
+            materialized.byte_length,
+        )
+        content = materialized.content
+        if (
+            observed != expected
+            or type(content) is not bytes
+            or len(content) != materialized.byte_length
+            or not 1 <= len(content) <= _MAX_MEDIA_BYTES
+            or "sha256:" + hashlib.sha256(content).hexdigest() != materialized.content_digest
+        ):
+            raise VKWorkspaceError("asset_integrity_failed")
+        return materialized
+
+    async def _upload_multipart(
+        self,
+        *,
+        purpose: VKUploadPurpose,
+        upload_url: Any,
+        materialized: VKAssetMaterialization,
+        attempt_hook: Any,
+    ) -> VKMultipartUploadResult:
+        if self._multipart_transport is None:
+            raise VKWorkspaceError("multipart_transport_unavailable")
+        safe_url = _validated_vk_https_url(upload_url)
+        extensions = {
+            "image/jpeg": "jpg",
+            "image/png": "png",
+            "image/webp": "webp",
+            "video/mp4": "mp4",
+        }
+        extension = extensions.get(materialized.mime_type)
+        if extension is None:
+            raise VKWorkspaceError("asset_mime_unsupported")
+        attempt_hook()
+        try:
+            result = await asyncio.wait_for(
+                self._multipart_transport.upload(
+                    purpose=purpose,
+                    upload_url=safe_url,
+                    content=materialized.content,
+                    filename=f"asset.{extension}",
+                    mime_type=materialized.mime_type,
+                    timeout_seconds=self._timeout,
+                ),
+                timeout=self._timeout,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - multipart payloads/errors are provider-private
+            raise VKWorkspaceError("provider_unavailable") from None
+        if not isinstance(result, VKMultipartUploadResult):
+            raise VKWorkspaceError("provider_unavailable")
+        return result
+
+    async def read_asset(
+        self, asset_ref: str, *, owner_binding: str, max_bytes: int
+    ) -> VKStoryMediaMaterialization:
+        """Materialize a story visual through a closed, principal-bound CDN hook."""
+
+        validate_opaque_ref(asset_ref, "asset")
+        if not isinstance(owner_binding, str) or not _OWNER_BINDING.fullmatch(owner_binding):
+            raise SocialWorkspaceValidationError("owner_binding is invalid")
+        if type(max_bytes) is not int or not 1 <= max_bytes <= _MAX_MEDIA_BYTES:
+            raise SocialWorkspaceValidationError("max_bytes is invalid")
+        if self._story_media_reader is None:
+            raise VKWorkspaceError("story_media_reader_unavailable")
+        binding = self._resolve_ref("asset", asset_ref)
+        if binding.get("binding_kind") != "story_media":
+            raise VKWorkspaceError("asset_not_readable")
+        expires_at = _int(binding.get("expires_at"))
+        if expires_at is not None and expires_at <= int(datetime.now(timezone.utc).timestamp()):
+            raise VKWorkspaceError("asset_expired")
+        source_url = _validated_vk_https_url(binding.get("source_url"))
+        try:
+            result = await asyncio.wait_for(
+                self._story_media_reader.fetch_vk_cdn(
+                    source_url=source_url,
+                    owner_binding=owner_binding,
+                    max_bytes=max_bytes,
+                    timeout_seconds=self._timeout,
+                ),
+                timeout=self._timeout,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - provider URL/errors never cross this boundary
+            raise VKWorkspaceError("provider_unavailable") from None
+        if (
+            not isinstance(result, VKStoryMediaMaterialization)
+            or type(result.content) is not bytes
+            or result.byte_length != len(result.content)
+            or not 1 <= result.byte_length <= max_bytes
+            or not _CONTENT_DIGEST.fullmatch(result.content_digest)
+            or "sha256:" + hashlib.sha256(result.content).hexdigest() != result.content_digest
+            or result.mime_type != binding.get("mime_type")
+        ):
+            raise VKWorkspaceError("asset_integrity_failed")
+        return result
 
     @staticmethod
     def _cursor_context(request: SocialReadRequest, sample_ref: str | None = None) -> tuple[str, str, str, str, str]:
@@ -522,7 +837,7 @@ class VKWorkspaceAdapter:
             "target_kinds": [kind.value] if kind else ["self", "user", "group", "community"],
             "read_operations": sorted(operation.value for operation in reads),
             "actions": sorted(action.value for action in actions),
-            "content_features": sorted(feature.value for feature in {ContentFeature.RICH_TEXT, ContentFeature.LINKS, ContentFeature.IMAGE, ContentFeature.VIDEO, ContentFeature.DOCUMENT, ContentFeature.AUDIO, ContentFeature.ANIMATION}),
+            "content_features": sorted(feature.value for feature in {ContentFeature.RICH_TEXT, ContentFeature.LINKS, ContentFeature.IMAGE, ContentFeature.DOCUMENT, ContentFeature.AUDIO, ContentFeature.ANIMATION}),
             "max_text_length": _MAX_TEXT,
             "max_media_items": 10,
         }
@@ -850,6 +1165,58 @@ class VKWorkspaceAdapter:
             return max(0, value) if type(value) is int else 0
         return {"views": count("views"), "reactions": count("likes"), "comments": count("comments"), "shares": count("reposts")}
 
+    def _story_media_ref(self, raw: Mapping[str, Any]) -> str | None:
+        source_url: str | None = None
+        role: str | None = None
+        mime_type: str | None = None
+        width: int | None = None
+        height: int | None = None
+        photo = raw.get("photo")
+        if isinstance(photo, Mapping):
+            candidates: list[tuple[int, str, int | None, int | None]] = []
+            sizes = photo.get("sizes")
+            if isinstance(sizes, list):
+                for size in sizes:
+                    if not isinstance(size, Mapping):
+                        continue
+                    url = size.get("url")
+                    candidate_width = _int(size.get("width"))
+                    candidate_height = _int(size.get("height"))
+                    if isinstance(url, str):
+                        area = max(0, candidate_width or 0) * max(0, candidate_height or 0)
+                        candidates.append((area, url, candidate_width, candidate_height))
+            if candidates:
+                _area, source_url, width, height = max(candidates, key=lambda value: value[0])
+                role, mime_type = "image", "image/jpeg"
+        video = raw.get("video")
+        if source_url is None and isinstance(video, Mapping):
+            files = video.get("files")
+            if isinstance(files, Mapping):
+                ranked: list[tuple[int, str]] = []
+                for key, value in files.items():
+                    match = re.fullmatch(r"mp4_(\d{3,4})", str(key))
+                    if match and isinstance(value, str):
+                        ranked.append((int(match.group(1)), value))
+                if ranked:
+                    _quality, source_url = max(ranked)
+                    width, height = _int(video.get("width")), _int(video.get("height"))
+                    role, mime_type = "video", "video/mp4"
+        if source_url is None or role is None or mime_type is None:
+            return None
+        safe_url = _validated_vk_https_url(source_url)
+        return self._mint(
+            "asset",
+            {
+                "binding_kind": "story_media",
+                "source_url": safe_url,
+                "role": role,
+                "mime_type": mime_type,
+                "expires_at": _int(raw.get("expires_at")),
+                "width": width,
+                "height": height,
+            },
+        )
+
     def _public_item(self, raw: Mapping[str, Any], *, native: Mapping[str, Any], kind: SocialItemKind = SocialItemKind.POST, target_ref: str | None = None, caption: str = "") -> dict[str, Any]:
         item_ref = self._mint("item", native)
         text = self._sanitize(str(raw.get("text") or ""))[:_MAX_TEXT]
@@ -1094,12 +1461,23 @@ class VKWorkspaceAdapter:
         if request.operation is SocialReadOperation.LIST_STORIES:
             native = self._resolve_ref("target", request.target_ref or "")
             owner = _int(native.get("owner_id")) or _int(native.get("user_id"))
-            response = await self._call("stories", {"owners": str(owner)})
+            if owner is None:
+                raise VKWorkspaceError("target_binding_invalid")
+            response = await self._call("stories", {"owner_id": owner})
             results = []
-            for raw in _items(response):
+            for raw in _story_feed_items(response):
                 story_id = _int(raw.get("id"))
-                if story_id is not None:
-                    results.append(self._public_item(raw, native={"kind": "story", "owner_id": owner, "story_id": story_id}, kind=SocialItemKind.STORY, target_ref=request.target_ref))
+                story_owner = _int(raw.get("owner_id")) or owner
+                if story_id is None or story_owner != owner:
+                    continue
+                media_ref = self._story_media_ref(raw)
+                # A caption-only story is not inspectable by the MCP client.
+                if media_ref is None:
+                    continue
+                item = self._public_item(raw, native={"kind": "story", "owner_id": owner, "story_id": story_id}, kind=SocialItemKind.STORY, target_ref=request.target_ref)
+                if media_ref is not None:
+                    item["media"] = [media_ref]
+                results.append(item)
             return {"results": results[:limit], "trust": _TRUST}
 
         if request.operation is SocialReadOperation.GET_AUDIENCE:
@@ -1116,15 +1494,11 @@ class VKWorkspaceAdapter:
                 native = self._resolve_ref("item", request.item_ref)
                 if native.get("kind") == "story":
                     response = await self._call("story_stats", {"owner_id": native.get("owner_id"), "story_id": native.get("story_id")})
-                    raw_stats = response if isinstance(response, Mapping) else {}
-                    likes = raw_stats.get("likes")
-                    if isinstance(likes, Mapping):
-                        likes = likes.get("count")
                     metrics = {
-                        "views": max(0, _int(raw_stats.get("views")) or 0),
-                        "reactions": max(0, _int(likes) or 0),
-                        "comments": max(0, _int(raw_stats.get("replies")) or 0),
-                        "shares": max(0, _int(raw_stats.get("shares")) or 0),
+                        "views": _story_stat_count(response, "views"),
+                        "reactions": _story_stat_count(response, "likes"),
+                        "comments": _story_stat_count(response, "replies"),
+                        "shares": _story_stat_count(response, "shares"),
                     }
                 else:
                     response = await self._call("wall_item", {"posts": f"{native.get('owner_id')}_{native.get('post_id')}", "extended": 0})
@@ -1132,34 +1506,133 @@ class VKWorkspaceAdapter:
                     metrics = self._metrics(raws[0] if raws else {})
                 return {"item_ref": request.item_ref, "period_from": start, "period_to": end, "basic_metrics": metrics, "trust": _TRUST}
             native = self._resolve_ref("target", request.target_ref or "")
-            params: dict[str, Any] = {"group_id": native.get("group_id")}
-            if request.date_from: params["date_from"] = request.date_from
-            if request.date_to: params["date_to"] = request.date_to
+            params: dict[str, Any] = {"group_id": native.get("group_id"), "interval": "day"}
+            if request.date_from:
+                params["timestamp_from"] = int(
+                    datetime.fromisoformat(request.date_from + "T00:00:00+00:00").timestamp()
+                )
+            if request.date_to:
+                params["timestamp_to"] = int(
+                    datetime.fromisoformat(request.date_to + "T23:59:59+00:00").timestamp()
+                )
+            if not request.date_from and not request.date_to:
+                params["intervals_count"] = 1
             response = await self._call("community_stats", params)
             metrics = {"views": 0, "reactions": 0, "comments": 0, "shares": 0}
             for row in _items(response):
-                for key, source in (("views", "views"), ("reactions", "likes"), ("comments", "comments"), ("shares", "reposts")):
-                    value = row.get(source)
-                    if isinstance(value, Mapping): value = value.get("count")
-                    if type(value) is int and value > 0: metrics[key] += value
+                visitors = row.get("visitors")
+                activity = row.get("activity")
+                if isinstance(visitors, Mapping):
+                    views = _int(visitors.get("views"))
+                    if views is not None and views > 0:
+                        metrics["views"] += views
+                if isinstance(activity, Mapping):
+                    for key, source in (
+                        ("reactions", "likes"),
+                        ("comments", "comments"),
+                        ("shares", "copies"),
+                    ):
+                        value = _int(activity.get(source))
+                        if value is not None and value > 0:
+                            metrics[key] += value
             return {"target_ref": request.target_ref, "period_from": start, "period_to": end, "basic_metrics": metrics, "trust": _TRUST}
         raise SocialWorkspaceValidationError("unsupported VK read operation")
 
-    def _content(self, intent: SocialActionIntent) -> tuple[str, str | None]:
+    def _content(self, intent: SocialActionIntent) -> tuple[str, list[Mapping[str, Any]]]:
         content = intent.content
         if content is None:
-            return "", None
-        attachments = []
+            return "", []
+        bindings: list[Mapping[str, Any]] = []
         for media in content.media:
             binding = self._resolve_ref("asset", media.asset_ref)
-            attachment = binding.get("attachment")
             role = binding.get("role")
-            if not isinstance(attachment, str) or not re.fullmatch(r"(?:photo|video|doc|audio|audio_message|graffiti|album)-?\d+_\d+(?:_[A-Za-z0-9]+)?", attachment):
-                raise VKWorkspaceError("asset_not_ready")
             if role != media.role.value:
                 raise VKWorkspaceError("asset_role_mismatch")
+            if binding.get("binding_kind") != "verified_asset":
+                attachment = binding.get("attachment")
+                if not isinstance(attachment, str) or not re.fullmatch(r"(?:photo|video|doc|audio|audio_message|graffiti|album)-?\d+_\d+(?:_[A-Za-z0-9]+)?", attachment):
+                    raise VKWorkspaceError("asset_not_ready")
+            bindings.append(binding)
+        return content.text, bindings
+
+    @staticmethod
+    def _legacy_attachments(bindings: Sequence[Mapping[str, Any]]) -> str | None:
+        values: list[str] = []
+        for binding in bindings:
+            attachment = binding.get("attachment")
+            if not isinstance(attachment, str):
+                raise VKWorkspaceError("asset_not_supported_for_action")
+            values.append(attachment)
+        return ",".join(values) if values else None
+
+    def _ensure_operation_permitted(self, operation: str) -> None:
+        policy = _CALLS[operation]
+        if not self._permitted(policy.actor, policy.capability):
+            raise VKWorkspaceError("actor_capability_denied")
+
+    async def _wall_attachments(
+        self,
+        bindings: Sequence[Mapping[str, Any]],
+        *,
+        group_id: int,
+        attempt_hook: Any,
+    ) -> str | None:
+        attachments: list[str] = []
+        for binding in bindings:
+            if binding.get("binding_kind") != "verified_asset":
+                attachment = binding.get("attachment")
+                if not isinstance(attachment, str):
+                    raise VKWorkspaceError("asset_not_ready")
+                attachments.append(attachment)
+                continue
+            if binding.get("role") != MediaRole.IMAGE.value:
+                raise VKWorkspaceError("asset_not_supported_for_action")
+            self._ensure_operation_permitted("wall_photo_upload_server")
+            self._ensure_operation_permitted("wall_photo_save")
+            materialized = await self._materialize_asset(binding)
+            server_response = await self._call(
+                "wall_photo_upload_server",
+                {"group_id": group_id},
+                attempt_hook=attempt_hook,
+            )
+            upload_url = server_response.get("upload_url") if isinstance(server_response, Mapping) else None
+            upload = await self._upload_multipart(
+                purpose=VKUploadPurpose.WALL_PHOTO,
+                upload_url=upload_url,
+                materialized=materialized,
+                attempt_hook=attempt_hook,
+            )
+            if (
+                type(upload.server) is not int
+                or not isinstance(upload.photo, str)
+                or not upload.photo
+                or not isinstance(upload.upload_hash, str)
+                or not upload.upload_hash
+            ):
+                raise VKWorkspaceError("provider_unavailable")
+            saved = await self._call(
+                "wall_photo_save",
+                {
+                    "group_id": group_id,
+                    "photo": upload.photo,
+                    "server": upload.server,
+                    "hash": upload.upload_hash,
+                },
+                attempt_hook=attempt_hook,
+            )
+            photos = _items(saved)
+            if not photos:
+                raise VKWorkspaceError("provider_unavailable")
+            owner_id = _int(photos[0].get("owner_id"))
+            photo_id = _int(photos[0].get("id"))
+            access_key = photos[0].get("access_key")
+            if owner_id is None or photo_id is None:
+                raise VKWorkspaceError("provider_unavailable")
+            attachment = f"photo{owner_id}_{photo_id}"
+            if isinstance(access_key, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,256}", access_key):
+                attachment += "_" + access_key
             attachments.append(attachment)
-        return content.text, ",".join(attachments) if attachments else None
+        return ",".join(attachments) if attachments else None
 
     @staticmethod
     def _operation_ref(intent: SocialActionIntent, action_digest: str) -> str:
@@ -1206,24 +1679,34 @@ class VKWorkspaceAdapter:
             result = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": "failed", "retry_safe": False, "error_code": "expected_revision_unsupported"}
             self._operations[operation_ref] = result
             return dict(result)
-        text, attachments = self._content(intent)
+        text, bindings = self._content(intent)
         random_id = int(hashlib.sha256(intent.idempotency_key.encode()).hexdigest()[:8], 16) & 0x7FFFFFFF or 1
         guid = hashlib.sha256(intent.idempotency_key.encode()).hexdigest()
         target = self._resolve_ref("target", intent.target_ref) if intent.target_ref else None
         item = self._resolve_ref("item", intent.item_ref) if intent.item_ref else None
         destination = self._resolve_ref("target", intent.destination_target_ref) if intent.destination_target_ref else None
         new_item_native: Mapping[str, Any] | None = None
+        provider_attempted = False
+
+        def mark_provider_attempted() -> None:
+            nonlocal provider_attempted
+            provider_attempted = True
+
+        async def action_call(operation: str, params: Mapping[str, Any]) -> Any:
+            return await self._call(operation, params, attempt_hook=mark_provider_attempted)
+
         try:
             if intent.action is SocialAction.SEND_MESSAGE:
                 if target is None or self._target_kind(target) is not SocialTargetKind.USER or not self._valid_user_binding(target):
                     raise VKWorkspaceError("exact_user_required")
                 peer_id = target.get("peer_id")
+                attachments = self._legacy_attachments(bindings)
                 params = {"peer_id": peer_id, "message": text, "random_id": random_id, **({"attachment": attachments} if attachments else {})}
-                response = await self._call("send_message", params)
+                response = await action_call("send_message", params)
                 message_id = response.get("message_id") if isinstance(response, Mapping) else response
                 if type(message_id) is not int:
                     raise VKWorkspaceError("provider_unavailable")
-                readback = await self._call("message_item", {"message_ids": str(message_id)})
+                readback = await action_call("message_item", {"message_ids": str(message_id)})
                 observed = next((raw for raw in _items(readback) if _int(raw.get("id")) == message_id and _int(raw.get("peer_id")) == peer_id), None)
                 if observed is None:
                     raise VKWorkspaceError("read_after_write_failed")
@@ -1233,48 +1716,83 @@ class VKWorkspaceAdapter:
                     raise VKWorkspaceError("community_required")
                 if not self._valid_community_binding(target):
                     raise VKWorkspaceError("community_binding_invalid")
+                attachments = await self._wall_attachments(
+                    bindings,
+                    group_id=target["group_id"],
+                    attempt_hook=mark_provider_attempted,
+                )
                 params = {"owner_id": target.get("owner_id"), "from_group": 1, "message": text, "guid": guid, "signed": 0, **({"attachments": attachments} if attachments else {})}
                 if intent.action is SocialAction.SCHEDULE:
                     assert intent.schedule_at is not None
                     params["publish_date"] = int(datetime.fromisoformat(intent.schedule_at.replace("Z", "+00:00")).timestamp())
-                response = await self._call("wall_post", params)
+                response = await action_call("wall_post", params)
                 post_id = response.get("post_id") if isinstance(response, Mapping) else None
-                if type(post_id) is not int: raise VKWorkspaceError("provider_unavailable")
+                if type(post_id) is not int:
+                    raise VKWorkspaceError("provider_unavailable")
                 new_item_native = self._wall_native(target["owner_id"], post_id)
             elif intent.action is SocialAction.COMMENT:
-                if item is None or not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
+                if item is None or not self._valid_community_post(item):
+                    raise VKWorkspaceError("community_post_required")
+                group_id = _int(item.get("group_id")) or -int(item["owner_id"])
+                attachments = await self._wall_attachments(
+                    bindings,
+                    group_id=group_id,
+                    attempt_hook=mark_provider_attempted,
+                )
                 params = {"owner_id": item.get("owner_id"), "post_id": item.get("post_id"), "message": text, "guid": guid, "from_group": 1, **({"attachments": attachments} if attachments else {})}
-                response = await self._call("wall_comment", params)
+                response = await action_call("wall_comment", params)
                 comment_id = response.get("comment_id") if isinstance(response, Mapping) else None
-                if type(comment_id) is not int: raise VKWorkspaceError("provider_unavailable")
+                if type(comment_id) is not int:
+                    raise VKWorkspaceError("provider_unavailable")
                 new_item_native = {"kind": "comment", "owner_id": item.get("owner_id"), "post_id": item.get("post_id"), "comment_id": comment_id}
             elif intent.action is SocialAction.REACTION:
-                if item is None or not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
-                if intent.reaction not in {"like", "unlike"}: raise VKWorkspaceError("reaction_unsupported")
-                await self._call("like_add" if intent.reaction == "like" else "like_delete", {"type": "post", "owner_id": item.get("owner_id"), "item_id": item.get("post_id")})
+                if item is None or not self._valid_community_post(item):
+                    raise VKWorkspaceError("community_post_required")
+                if intent.reaction not in {"like", "unlike"}:
+                    raise VKWorkspaceError("reaction_unsupported")
+                await action_call("like_add" if intent.reaction == "like" else "like_delete", {"type": "post", "owner_id": item.get("owner_id"), "item_id": item.get("post_id")})
             elif intent.action is SocialAction.EDIT:
-                if item is None: raise VKWorkspaceError("item_required")
+                if item is None:
+                    raise VKWorkspaceError("item_required")
                 if item.get("kind") == "message":
-                    if not self._valid_message_binding(item): raise VKWorkspaceError("message_binding_invalid")
-                    await self._call("message_edit", {"peer_id": item.get("peer_id"), "message": text, "message_id": item.get("message_id"), **({"attachment": attachments} if attachments else {})})
+                    if not self._valid_message_binding(item):
+                        raise VKWorkspaceError("message_binding_invalid")
+                    attachments = self._legacy_attachments(bindings)
+                    await action_call("message_edit", {"peer_id": item.get("peer_id"), "message": text, "message_id": item.get("message_id"), **({"attachment": attachments} if attachments else {})})
                 else:
-                    if not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
-                    await self._call("wall_edit", {"owner_id": item.get("owner_id"), "post_id": item.get("post_id"), "message": text, **({"attachments": attachments} if attachments else {})})
+                    if not self._valid_community_post(item):
+                        raise VKWorkspaceError("community_post_required")
+                    group_id = _int(item.get("group_id")) or -int(item["owner_id"])
+                    attachments = await self._wall_attachments(
+                        bindings,
+                        group_id=group_id,
+                        attempt_hook=mark_provider_attempted,
+                    )
+                    await action_call("wall_edit", {"owner_id": item.get("owner_id"), "post_id": item.get("post_id"), "message": text, **({"attachments": attachments} if attachments else {})})
             elif intent.action is SocialAction.DELETE:
-                if item is None: raise VKWorkspaceError("item_required")
+                if item is None:
+                    raise VKWorkspaceError("item_required")
                 if item.get("kind") == "message":
-                    if not self._valid_message_binding(item): raise VKWorkspaceError("message_binding_invalid")
-                    await self._call("message_delete", {"message_ids": str(item.get("message_id")), "delete_for_all": 1})
+                    if not self._valid_message_binding(item):
+                        raise VKWorkspaceError("message_binding_invalid")
+                    await action_call("message_delete", {"message_ids": str(item.get("message_id")), "delete_for_all": 1})
+                elif item.get("kind") == "story":
+                    owner_id, story_id = _int(item.get("owner_id")), _int(item.get("story_id"))
+                    if owner_id is None or story_id is None:
+                        raise VKWorkspaceError("story_binding_invalid")
+                    await action_call("story_delete", {"owner_id": owner_id, "story_id": story_id})
                 else:
-                    if not self._valid_community_post(item): raise VKWorkspaceError("community_post_required")
-                    await self._call("wall_delete", {"owner_id": item.get("owner_id"), "post_id": item.get("post_id")})
+                    if not self._valid_community_post(item):
+                        raise VKWorkspaceError("community_post_required")
+                    await action_call("wall_delete", {"owner_id": item.get("owner_id"), "post_id": item.get("post_id")})
             elif intent.action is SocialAction.FORWARD:
-                if item is None or destination is None: raise VKWorkspaceError("destination_required")
+                if item is None or destination is None:
+                    raise VKWorkspaceError("destination_required")
                 if item.get("kind") == "message":
                     if not self._valid_message_binding(item) or self._target_kind(destination) is not SocialTargetKind.USER or not self._valid_user_binding(destination):
                         raise VKWorkspaceError("exact_user_required")
                     forward = json.dumps({"peer_id": item.get("peer_id"), "message_ids": [item.get("message_id")]}, separators=(",", ":"))
-                    await self._call("message_forward", {"peer_id": destination.get("peer_id"), "message": "", "random_id": random_id, "forward": forward})
+                    await action_call("message_forward", {"peer_id": destination.get("peer_id"), "message": "", "random_id": random_id, "forward": forward})
                 else:
                     if _int(item.get("owner_id")) is None or _int(item.get("post_id")) is None:
                         raise VKWorkspaceError("wall_post_required")
@@ -1283,31 +1801,83 @@ class VKWorkspaceAdapter:
                     if not self._valid_community_binding(destination):
                         raise VKWorkspaceError("community_binding_invalid")
                     params = {"object": f"wall{item.get('owner_id')}_{item.get('post_id')}", "group_id": destination["group_id"]}
-                    await self._call("wall_repost", params)
+                    await action_call("wall_repost", params)
             elif intent.action is SocialAction.STORY:
                 if target is None or self._target_kind(target) is not SocialTargetKind.COMMUNITY:
                     raise VKWorkspaceError("community_required")
                 if not self._valid_community_binding(target):
                     raise VKWorkspaceError("community_binding_invalid")
-                if not intent.content or len(intent.content.media) != 1:
+                if not intent.content or len(bindings) != 1:
                     raise VKWorkspaceError("story_requires_one_asset")
-                binding = self._resolve_ref("asset", intent.content.media[0].asset_ref)
-                upload_result = binding.get("story_upload_result")
-                if not isinstance(upload_result, str) or not re.fullmatch(r"[A-Za-z0-9._~-]{8,2048}", upload_result):
-                    raise VKWorkspaceError("asset_not_ready")
-                response = await self._call("story_save", {"upload_results": upload_result, "group_id": target["group_id"], "extended": 0})
+                binding = bindings[0]
+                legacy_binding = binding.get("binding_kind") != "verified_asset"
+                if legacy_binding:
+                    upload_result = binding.get("story_upload_result")
+                    if not isinstance(upload_result, str) or not _STORY_UPLOAD_RESULT.fullmatch(upload_result):
+                        raise VKWorkspaceError("asset_not_ready")
+                else:
+                    role = binding.get("role")
+                    if role == MediaRole.IMAGE.value:
+                        setup_operation = "story_photo_upload_server"
+                        purpose = VKUploadPurpose.STORY_PHOTO
+                    elif role == MediaRole.VIDEO.value:
+                        setup_operation = "story_video_upload_server"
+                        purpose = VKUploadPurpose.STORY_VIDEO
+                    else:
+                        raise VKWorkspaceError("asset_role_unsupported")
+                    self._ensure_operation_permitted(setup_operation)
+                    self._ensure_operation_permitted("story_save")
+                    materialized = await self._materialize_asset(binding)
+                    server_response = await action_call(
+                        setup_operation,
+                        {"group_id": target["group_id"], "add_to_news": 1},
+                    )
+                    upload_url = server_response.get("upload_url") if isinstance(server_response, Mapping) else None
+                    uploaded = await self._upload_multipart(
+                        purpose=purpose,
+                        upload_url=upload_url,
+                        materialized=materialized,
+                        attempt_hook=mark_provider_attempted,
+                    )
+                    upload_result = uploaded.story_upload_result
+                    if not isinstance(upload_result, str) or not _STORY_UPLOAD_RESULT.fullmatch(upload_result):
+                        raise VKWorkspaceError("provider_unavailable")
+                response = await action_call("story_save", {"upload_results": [upload_result]})
                 stories = _items(response)
-                if stories and _int(stories[0].get("id")) is not None:
-                    new_item_native = {"kind": "story", "group_id": target["group_id"], "owner_id": target["owner_id"], "story_id": stories[0]["id"]}
+                if not stories:
+                    raise VKWorkspaceError("provider_unavailable")
+                story_id = _int(stories[0].get("id"))
+                story_owner = _int(stories[0].get("owner_id")) or target["owner_id"]
+                if story_id is None or story_owner != target["owner_id"]:
+                    raise VKWorkspaceError("provider_unavailable")
+                if not legacy_binding:
+                    readback = await action_call(
+                        "story_item",
+                        {"stories": [f"{story_owner}_{story_id}"]},
+                    )
+                    observed = next(
+                        (
+                            raw
+                            for raw in _items(readback)
+                            if _int(raw.get("id")) == story_id
+                            and _int(raw.get("owner_id")) == story_owner
+                        ),
+                        None,
+                    )
+                    if observed is None:
+                        raise VKWorkspaceError("read_after_write_failed")
+                new_item_native = {"kind": "story", "group_id": target["group_id"], "owner_id": story_owner, "story_id": story_id}
             else:
                 raise SocialWorkspaceValidationError("unsupported VK action")
         except VKWorkspaceError as exc:
-            status = SocialActionStatus.OUTCOME_UNKNOWN if exc.code == "outcome_unknown" else SocialActionStatus.FAILED
-            result = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": status.value, "retry_safe": False, "error_code": exc.code}
+            error_code = "outcome_unknown" if provider_attempted else exc.code
+            status = SocialActionStatus.OUTCOME_UNKNOWN if provider_attempted else SocialActionStatus.FAILED
+            result = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": status.value, "retry_safe": False, "error_code": error_code}
             self._operations[operation_ref] = result
             return dict(result)
         result: dict[str, Any] = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": "succeeded", "retry_safe": False}
-        if intent.target_ref: result["target_ref"] = intent.target_ref
+        if intent.target_ref:
+            result["target_ref"] = intent.target_ref
         if new_item_native is not None:
             item_ref = self._mint("item", new_item_native)
             result["item_ref"] = item_ref
@@ -1336,7 +1906,10 @@ __all__ = [
     "VKActorTransport",
     "VKCallGovernor",
     "VKCooldownHook",
+    "VKMultipartTransport",
     "VKOpaqueRefStore",
+    "VKStoryMediaReader",
+    "VKVerifiedAssetReader",
     "VKWorkspaceAdapter",
     "VKWorkspaceError",
 ]
