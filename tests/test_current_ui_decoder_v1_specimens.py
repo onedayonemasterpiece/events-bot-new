@@ -138,11 +138,26 @@ const cases={
  dangling:()=>validateTraceIntegrity(base,[{specimen_id:'missing'}],[]),
  badDelta:()=>assertSpecimenRegistry({...base,controlled_specimens:base.controlled_specimens.map((row)=>row.id==='rail-explicit-real-event'?{...row,fixture_delta:{title:'fake'}}:row)}),
  sensitive:()=>assertEvidencePacket({schema_version:base.schema_version,evidence_status:'captured-not-reviewed',production_state_claimed:false,proof_label:'controlled-specimen-browser-element',screenshot:{sha256:'a'.repeat(64),dhash:'b'.repeat(16)},dom:{full_html_retained:false},network:{raw_urls_retained:false},note:'https://private.invalid'}),
+ relativeReview:()=>assertEvidencePacket({schema_version:base.schema_version,evidence_status:'captured-not-reviewed',production_state_claimed:false,proof_label:'controlled-specimen-browser-element',screenshot:{sha256:'a'.repeat(64),dhash:'b'.repeat(16)},dom:{full_html_retained:false},network:{raw_urls_retained:false},css_variable:'url(/_review/opaque-bearer-value/asset.webp)'}),
 };
 console.log(JSON.stringify(Object.fromEntries(Object.entries(cases).map(([name,fn])=>{try{fn();return [name,'accepted']}catch(error){return [name,error.message]}}))));
 """
     )
     assert all(value != "accepted" for value in observed.values())
+
+
+def test_capture_sanitizer_redacts_root_relative_review_paths():
+    observed = _node(
+        _imports("safeCapturedValue")
+        + """
+const sensitive=safeCapturedValue('url(/_review/opaque-bearer-value/asset.webp)');
+const ordinary=safeCapturedValue('var(--ke-surface-warm)');
+console.log(JSON.stringify({sensitive,ordinary}));
+"""
+    )
+    assert observed["sensitive"]["redacted"] is True
+    assert len(observed["sensitive"]["sha256"]) == 64
+    assert observed["ordinary"] == "var(--ke-surface-warm)"
 
 
 def test_materializer_rejects_candidate_ancestor_as_destructive_harness_root():
