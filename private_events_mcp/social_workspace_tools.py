@@ -9,6 +9,8 @@ from typing import Any
 
 from .repository import InvalidArgumentsError
 from .social_workspace import (
+    SOCIAL_WORKSPACE_ASSET_PREVIEW_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ASSET_PREVIEW_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA,
     SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA,
@@ -38,6 +40,7 @@ from .social_workspace import (
     SocialReadAccess,
     SocialReadOperation,
     required_scope_for_action,
+    validate_asset_preview_request,
     validate_asset_stage_request,
     validate_asset_status_request,
     validate_prepare_request,
@@ -353,6 +356,16 @@ def build_social_workspace_tools(
         except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
+    async def asset_preview(arguments: Mapping[str, Any], context: ToolCallContext) -> Any:
+        try:
+            if not enabled("media_story"):
+                raise InvalidArgumentsError("social story reads are disabled")
+            platform, ref = validate_asset_preview_request(arguments)
+            require_platform(platform.value)
+            return await runtime.asset_preview(platform.value, ref, context)
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
+            raise rejected(exc) from None
+
     def read_schema(operation: SocialReadOperation) -> dict[str, Any]:
         return _read_schema(
             operation,
@@ -483,6 +496,13 @@ def build_social_workspace_tools(
                  SOCIAL_WORKSPACE_ASSET_STATUS_SCHEMA,
                  SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA, handler=asset_status,
                  scope_selector=lambda _a: frozenset(), **common),
+        ToolSpec("social_asset_preview", "Preview social story image",
+                 "Return one bounded image preview for a principal-bound story asset.",
+                 SOCIAL_WORKSPACE_ASSET_PREVIEW_SCHEMA,
+                 SOCIAL_WORKSPACE_ASSET_PREVIEW_OUTPUT_SCHEMA, handler=asset_preview,
+                 scope_selector=lambda arguments: frozenset({
+                     f"{require_platform(arguments.get('platform'))}:story:read"
+                 }), **{**common, "timeout_seconds": 25.0}),
         ToolSpec("social_action_prepare", "Prepare social action",
                  "Persist an exact action digest for external human approval; this never executes it.",
                  prepare_schema, prepare_output_schema,
@@ -510,6 +530,7 @@ def build_social_workspace_tools(
         "social_content_stories": "media_story",
         "social_asset_stage": "media_story",
         "social_asset_status": "media_story",
+        "social_asset_preview": "media_story",
     }
     provider_tools = {
         "social_item_resolve": "vk",
@@ -574,6 +595,7 @@ def build_social_workspace_tools(
         ),
         "social_asset_stage": asset_options,
         "social_asset_status": asset_options,
+        "social_asset_preview": options_for(("story:read",), legacy_family="read"),
         "social_action_prepare": mutation_options,
         "social_action_commit": mutation_options,
         "social_action_status": mutation_options,

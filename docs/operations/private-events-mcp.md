@@ -120,11 +120,12 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_content_item` | fetch one bound item |
 | `social_content_thread` | comments or reaction summaries |
 | `social_comment_hints_list` | bounded recent VK comment/mention notifications as untrusted investigation hints |
-| `social_content_stories` | bounded Telegram/VK story metadata page through opaque target refs; media refs are not visual reads, with no mark-read/viewer identities |
+| `social_content_stories` | bounded Telegram/VK story page with opaque media refs and no mark-read/viewer identities |
 | `social_content_editorial_sample` | purpose-bound editorial sample, at most 25 items/page and 100 cumulatively |
 | `social_content_analytics` | bounded aggregate post/story statistics or audience counts where the credential is entitled |
 | `social_asset_stage` | ingest one ChatGPT `fileParams` image into immutable short-lived server storage |
 | `social_asset_status` | return only verified MIME/size/digest/dimensions/expiry and lifecycle state for an opaque asset ref |
+| `social_asset_preview` | render one principal-bound story image as a bounded metadata-free MCP JPEG thumbnail |
 | `social_action_prepare` | freeze exact typed action/content/target/media digest; no provider call |
 | `social_action_commit` | consume server-recorded human approval, then make the sole provider attempt |
 | `social_action_status` | reconcile durable success/failure/outcome-unknown state |
@@ -184,14 +185,15 @@ unusable and removed by bounded cleanup.
 `social_content_item` may read one returned story ref, and
 `social_content_analytics` may return item-level or bounded target-level story
 aggregates. Results contain opaque refs, bounded story text/metadata and
-aggregate counters only. A returned media `asset_ref` is metadata-only: the
-initial release has no `social_asset_preview`/`social_asset_read` tool and does
-not claim that ChatGPT can visually inspect or download provider story media.
-Those possible tool names are interface placeholders that must remain absent
-until authenticated bytes, authorization and redaction are separately
-implemented and proven. Viewer names, profile/user IDs, recent-viewer lists and
-other viewer identities are excluded; the adapters do not mark stories read or
-call viewer-list methods.
+aggregate counters. For an image media ref, `social_asset_preview` performs a
+fresh principal/provider binding check, downloads at most the configured asset
+cap through the dedicated adapter, validates JPEG/PNG/WebP pixels, strips
+metadata and returns a JPEG thumbnail no larger than 768×768 and 64 KiB as a
+standard MCP image content block. It never returns the provider URL, original
+file, native identifier or local path. Video media may be listed as metadata,
+but visual video retrieval remains unavailable in this image-only release.
+Viewer names, profile/user IDs, recent-viewer lists and other viewer identities
+are excluded; the adapters do not mark stories read or call viewer-list methods.
 
 An image story uses the existing typed `story` action with exactly one ready
 image `asset_ref` and one opaque target. Preparation freezes the exact target,
@@ -540,6 +542,11 @@ python scripts/smoke_private_events_mcp_media.py \
 python scripts/smoke_private_events_mcp_media.py \
   --credentials /secure/chatgpt-private-app-credentials.json \
   --platform telegram --target-ref '<opaque-target-ref>' --read-stories
+
+# one bounded image content block; receipt prints metadata/fingerprint only
+python scripts/smoke_private_events_mcp_media.py \
+  --credentials /secure/chatgpt-private-app-credentials.json \
+  --platform telegram --preview-asset-ref '<opaque-story-image-ref>'
 ```
 
 Preparing an image story additionally requires `--allow-write`, explicit
@@ -608,10 +615,10 @@ Record all of the following without secrets:
     `stage -> prepare -> exact browser approval -> commit -> provider read-back`;
     the approval page shows the exact provider/target/action and immutable asset
     digest/MIME/size/dimensions/expiry, and no upload occurs before approval;
-20. bounded story list/item/statistics reads return only metadata, opaque
-    story/media refs and aggregate counters; the catalogue has no
-    `social_asset_preview`/`social_asset_read`, no provider story-media download
-    occurs, viewer identities are absent, the trace has no viewer-list/mark-read
+20. bounded story list/item/statistics reads return opaque story/media refs and
+    aggregate counters; `social_asset_preview` returns one bounded, stripped
+    JPEG thumbnail for an image ref while never exposing provider URLs or native
+    IDs. Viewer identities are absent, the trace has no viewer-list/mark-read
     operation, and provider role attribution matches the dedicated Telegram MCP
     or VK story/analytics credential;
 21. restart preserves valid immutable refs/receipts, expired cleanup remains

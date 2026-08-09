@@ -11,6 +11,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import io
 import json
 import re
 import secrets
@@ -50,7 +51,7 @@ from .social_workspace import (
     validate_editorial_sample_response,
     validate_resolved_target_preview,
 )
-from .tool_catalog import ToolCallContext
+from .tool_catalog import ToolCallContext, ToolExecutionResult
 
 
 class SocialWorkspaceRuntimeError(SocialWorkspaceValidationError):
@@ -70,6 +71,9 @@ class SocialWorkspaceAdapter(Protocol):
     async def stage_asset(
         self, asset: VerifiedAsset, *, role: MediaRole
     ) -> str: ...
+    async def read_asset(
+        self, asset_ref: str, *, owner_binding: str, max_bytes: int
+    ) -> Any: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -660,7 +664,7 @@ class SocialWorkspaceRuntime:
         allowed_operations = {
             *(item.value for item in SocialReadOperation),
             "capabilities", "prepare", "commit", "reconcile",
-            "asset_stage", "asset_status", "social_tool", "invalid",
+            "asset_stage", "asset_status", "asset_preview", "social_tool", "invalid",
         }
         operation = operation if operation in allowed_operations else "invalid"
         outcome = outcome if outcome in {
@@ -693,7 +697,7 @@ class SocialWorkspaceRuntime:
             operation=operation if operation in {
                 *(item.value for item in SocialReadOperation),
                 "capabilities", "prepare", "commit", "reconcile",
-                "asset_stage", "asset_status", "social_tool",
+                "asset_stage", "asset_status", "asset_preview", "social_tool",
             } else "invalid",
             outcome="denied",
             reason=reason,
@@ -2016,6 +2020,121 @@ class SocialWorkspaceRuntime:
         self._audit(principal, platform=platform, operation="asset_status",
                     outcome="succeeded", reason=str(result["status"]))
         return result
+
+    @staticmethod
+    def _bounded_image_preview(raw: bytes) -> tuple[bytes, int, int]:
+        """Decode and re-encode one provider image as a metadata-free thumbnail."""
+
+        try:
+            from PIL import Image, ImageOps
+
+            with Image.open(io.BytesIO(raw)) as source:
+                if source.format not in {"JPEG", "PNG", "WEBP"}:
+                    raise SocialWorkspaceRuntimeError("story asset is not a supported image")
+                width, height = source.size
+                if not 1 <= width <= 8192 or not 1 <= height <= 8192:
+                    raise SocialWorkspaceRuntimeError("story image dimensions are invalid")
+                if width * height > 40_000_000:
+                    raise SocialWorkspaceRuntimeError("story image pixel budget exceeded")
+                source.load()
+                image = ImageOps.exif_transpose(source).convert("RGB")
+                image.thumbnail((768, 768), Image.Resampling.LANCZOS)
+                width, height = image.size
+                for quality in (82, 74, 66, 58, 50, 42):
+                    output = io.BytesIO()
+                    image.save(
+                        output,
+                        format="JPEG",
+                        quality=quality,
+                        optimize=True,
+                        progressive=True,
+                    )
+                    preview = output.getvalue()
+                    if 0 < len(preview) <= 65536:
+                        return preview, width, height
+        except SocialWorkspaceRuntimeError:
+            raise
+        except Exception:  # noqa: BLE001 - provider media is untrusted
+            raise SocialWorkspaceRuntimeError("story image preview is invalid") from None
+        raise SocialWorkspaceRuntimeError("story image preview exceeds response budget")
+
+    async def asset_preview(
+        self,
+        platform: str,
+        asset_ref: str,
+        context: ToolCallContext,
+    ) -> ToolExecutionResult:
+        """Return a bounded MCP image block for a principal-bound story asset."""
+
+        principal = RuntimePrincipal.from_context(context)
+        try:
+            if platform not in self.adapters:
+                raise SocialWorkspaceRuntimeError("social provider is disabled")
+            if not social_scopes_authorized(
+                frozenset({f"{platform}:story:read"}), principal.scopes
+            ):
+                raise SocialWorkspaceRuntimeError("required story read scope is missing")
+            if self._ref_platform(asset_ref, "asset", principal) != platform:
+                raise SocialWorkspaceRuntimeError("asset provider binding mismatch")
+            provider_ref = self._resolve_ref(asset_ref, "asset", platform, principal)
+            reader = getattr(self._adapter(platform), "read_asset", None)
+            if not callable(reader):
+                raise SocialWorkspaceRuntimeError("social asset preview is unavailable")
+            self._consume_budget(principal, platform, None, "asset_preview", "rate", 1)
+            materialized = await asyncio.wait_for(
+                reader(
+                    provider_ref,
+                    owner_binding=self._principal_hash(principal),
+                    max_bytes=self.asset_max_bytes,
+                ),
+                timeout=self.provider_timeout_seconds,
+            )
+            if isinstance(materialized, bytes):
+                raw = materialized
+            else:
+                raw = getattr(materialized, "content", None)
+            if type(raw) is not bytes or not 1 <= len(raw) <= self.asset_max_bytes:
+                raise SocialWorkspaceRuntimeError("provider returned an invalid story asset")
+            preview, width, height = await asyncio.to_thread(
+                self._bounded_image_preview, raw
+            )
+            structured = {
+                "platform": platform,
+                "asset_ref": asset_ref,
+                "mime_type": "image/jpeg",
+                "byte_length": len(preview),
+                "width": width,
+                "height": height,
+                "trust": "untrusted_external_data",
+            }
+            encoded = base64.b64encode(preview).decode("ascii")
+            self._consume_budget(
+                principal, platform, None, "asset_preview", "egress", len(encoded)
+            )
+            self._audit(
+                principal,
+                platform=platform,
+                operation="asset_preview",
+                outcome="succeeded",
+                reason="bounded_image_returned",
+                response_bytes=len(encoded),
+                media_items=1,
+            )
+            return ToolExecutionResult(
+                structured=structured,
+                content=(
+                    {"type": "image", "data": encoded, "mimeType": "image/jpeg"},
+                ),
+            )
+        except Exception as exc:
+            self._audit(
+                principal,
+                platform=platform,
+                operation="asset_preview",
+                outcome="denied",
+                reason=type(exc).__name__,
+            )
+            raise
 
 
 __all__ = [

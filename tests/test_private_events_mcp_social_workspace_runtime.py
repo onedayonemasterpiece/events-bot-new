@@ -5,13 +5,16 @@ import json
 import sqlite3
 import time
 from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 import pytest
+from PIL import Image
 
 from private_events_mcp.auth_store import OAuthStateStore, OAuthStoreError
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
+from private_events_mcp.protocol import MCPProtocol
 from private_events_mcp.repository import InvalidArgumentsError
 from private_events_mcp.social_workspace import (
     SocialAction,
@@ -71,6 +74,7 @@ class FakeAdapter:
         self.reconcile_refs = []
         self.resolve_calls = 0
         self.capability_calls = 0
+        self.asset_bytes: bytes | None = None
 
     async def capabilities(self, target_ref):
         self.capability_calls += 1
@@ -138,6 +142,13 @@ class FakeAdapter:
         return {"status": "failed", "retry_safe": False,
                 "error_code": "provider_not_observed"}
 
+    async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+        assert asset_ref.startswith("provider-asset-")
+        assert len(owner_binding) == 64
+        assert self.asset_bytes is not None
+        assert len(self.asset_bytes) <= max_bytes
+        return self.asset_bytes
+
 
 @pytest.fixture
 def runtime(tmp_path: Path):
@@ -150,6 +161,63 @@ def runtime(tmp_path: Path):
         provider_timeout_seconds=0.02,
     )
     return value, adapter, store
+
+
+@pytest.mark.asyncio
+async def test_story_asset_preview_returns_bounded_mcp_image_not_provider_reference(
+    runtime,
+) -> None:
+    service, adapter, _store = runtime
+    source = BytesIO()
+    Image.new("RGB", (1600, 900), (20, 80, 140)).save(source, format="PNG")
+    adapter.asset_bytes = source.getvalue()
+    legacy = scoped_context("telegram:read")
+    principal = RuntimePrincipal.from_context(legacy)
+    asset_ref = service._mint_ref(
+        "asset", "provider-asset-story-42", "telegram", principal
+    )
+    tools = build_social_workspace_tools(
+        service,
+        feature_policy={"media_story": True},
+        capability_policy={"telegram": True, "vk": False},
+    )
+    protocol = MCPProtocol(
+        tools,
+        cache_ttl_seconds=60,
+        challenge='Bearer error="invalid_token"',
+        resource=legacy.resource,
+        allowed_client_ids=frozenset({legacy.identity.client_id}),
+    )
+    response = await protocol.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 91,
+            "method": "tools/call",
+            "params": {
+                "name": "social_asset_preview",
+                "arguments": {"platform": "telegram", "asset_ref": asset_ref},
+            },
+        },
+        legacy.identity,
+    )
+    result = response["result"]
+    assert result["isError"] is False
+    assert result["structuredContent"] == {
+        "platform": "telegram",
+        "asset_ref": asset_ref,
+        "mime_type": "image/jpeg",
+        "byte_length": result["structuredContent"]["byte_length"],
+        "width": 768,
+        "height": 432,
+        "trust": "untrusted_external_data",
+    }
+    image = result["content"][0]
+    assert image["type"] == "image"
+    assert image["mimeType"] == "image/jpeg"
+    assert len(image["data"]) < 90_000
+    encoded = json.dumps(response)
+    assert "provider-asset-story-42" not in encoded
+    assert "download_url" not in encoded
 
 
 @pytest.mark.asyncio

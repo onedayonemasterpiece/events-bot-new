@@ -15,7 +15,23 @@ class ToolCallContext:
     resource: str
 
 
-ToolHandler = Callable[[Mapping[str, Any], ToolCallContext], Awaitable[dict[str, Any]]]
+@dataclass(frozen=True, slots=True)
+class ToolExecutionResult:
+    """A structured tool result with explicit MCP content blocks.
+
+    Most tools return a plain mapping and are serialized to a text content
+    block.  Visual tools may additionally return bounded MCP image content
+    without smuggling binary data into ``structuredContent``.
+    """
+
+    structured: dict[str, Any]
+    content: tuple[Mapping[str, Any], ...]
+
+
+ToolHandler = Callable[
+    [Mapping[str, Any], ToolCallContext],
+    Awaitable[dict[str, Any] | ToolExecutionResult],
+]
 DenialHandler = Callable[[Mapping[str, Any], ToolCallContext, str], Awaitable[None]]
 ScopeSelector = Callable[[Mapping[str, Any]], frozenset[str]]
 

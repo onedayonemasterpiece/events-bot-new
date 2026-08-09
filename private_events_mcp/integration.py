@@ -8,6 +8,7 @@ from typing import Any
 from aiohttp import web
 
 from .config import PrivateEventsMCPConfig
+from .media_contract import AssetIngestor
 from .server import (
     ENDPOINT_FINGERPRINT_APP_KEY,
     SERVER_APP_KEY,
@@ -84,6 +85,7 @@ def attach_private_events_mcp(
     *,
     social_adapters: Mapping[str, SocialAdapter] | None = None,
     social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
+    asset_ingestor: AssetIngestor | None = None,
 ) -> PrivateEventsMCPServer | None:
     """Attach the private MCP routes to the existing aiohttp app.
 
@@ -103,6 +105,7 @@ def attach_private_events_mcp(
         resolved,
         social_adapters=social_adapters,
         social_workspace_adapters=social_workspace_adapters,
+        asset_ingestor=asset_ingestor,
     )
     server.register(app)
     logger.info(

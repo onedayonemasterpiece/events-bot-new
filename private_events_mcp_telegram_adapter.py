@@ -15,8 +15,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
-import io
 import inspect
+import io
 import re
 import secrets
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -113,6 +113,9 @@ class TelegramAssetBinding:
     asset_ref: str
     role: MediaRole
     provider_media: Any = field(repr=False)
+    target_ref: str | None = None
+    story_id: int | None = None
+    expires_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -930,6 +933,11 @@ class TelegramWorkspaceAdapter:
         if type(max_bytes) is not int or not 0 < max_bytes <= _MAX_UPLOAD_BYTES:
             raise SocialWorkspaceValidationError("asset read bound is invalid")
         binding = self._asset(asset_ref)
+        if (
+            binding.expires_at is not None
+            and binding.expires_at <= datetime.now(timezone.utc)
+        ):
+            raise SocialWorkspaceValidationError("asset has expired")
         if isinstance(binding.provider_media, TelegramVerifiedUpload):
             if binding.provider_media.owner_binding != owner_binding:
                 raise SocialWorkspaceValidationError("asset owner binding mismatch")

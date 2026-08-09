@@ -139,6 +139,7 @@ class PrivateEventsMCPServer:
                     "media_story": config.universal_social_media_story_enabled,
                     "social_asset_stage": config.universal_social_media_story_enabled,
                     "social_asset_status": config.universal_social_media_story_enabled,
+                    "social_asset_preview": config.universal_social_media_story_enabled,
                     "social_content_stories": config.universal_social_media_story_enabled,
                 },
                 capability_policy={name: name in expected for name in ("telegram", "vk")},

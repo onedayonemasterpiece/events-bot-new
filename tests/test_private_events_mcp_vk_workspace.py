@@ -169,11 +169,49 @@ class FakeTransport:
         if method == "messages.getConversations":
             return {"items": [{"conversation": {"peer": {"id": 101}}, "last_message": {"id": 902, "peer_id": 101, "date": 1_700_000_101, "text": "Conversation history"}}]}
         if method == "stories.get":
-            return {"items": [{"id": 71, "date": 1_700_000_200, "text": "Story"}]}
+            return {
+                "items": [
+                    {
+                        "type": "stories",
+                        "owner_id": -101,
+                        "stories": [
+                            {
+                                "id": 71,
+                                "owner_id": -101,
+                                "date": 1_700_000_200,
+                                "text": "Story",
+                                "photo": {
+                                    "sizes": [
+                                        {
+                                            "url": "https://sun9-1.userapi.com/story.jpg",
+                                            "width": 1080,
+                                            "height": 1920,
+                                        }
+                                    ]
+                                },
+                            }
+                        ],
+                    }
+                ]
+            }
         if method == "stories.getStats":
-            return {"views": 45, "likes": {"count": 3}, "replies": 1, "shares": 2}
+            return {
+                "views": {"count": 45, "state": "on"},
+                "likes": {"count": 3, "state": "on"},
+                "replies": {"count": 1, "state": "on"},
+                "shares": {"count": 2, "state": "on"},
+            }
         if method == "stats.get":
-            return [{"views": 20, "likes": 4, "comments": 2, "reposts": 1}, {"views": 30, "likes": 5, "comments": 3, "reposts": 2}]
+            return [
+                {
+                    "visitors": {"views": 20},
+                    "activity": {"likes": 4, "comments": 2, "copies": 1},
+                },
+                {
+                    "visitors": {"views": 30},
+                    "activity": {"likes": 5, "comments": 3, "copies": 2},
+                },
+            ]
         if method == "groups.getMembers":
             return {"count": 4321, "items": []}
         if method == "messages.send":

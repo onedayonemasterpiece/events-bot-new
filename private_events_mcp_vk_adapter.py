@@ -459,7 +459,7 @@ class VKWorkspaceAdapter:
             raise VKWorkspaceError("opaque_reference_failed")
         return value
 
-    async def stage_asset(self, asset: "VerifiedAsset", *, role: MediaRole) -> str:
+    async def stage_asset(self, asset: VerifiedAsset, *, role: MediaRole) -> str:
         """Store only a verified-asset descriptor and return its inner VK ref.
 
         The bytes are deliberately not opened or sent to VK here.  The core calls

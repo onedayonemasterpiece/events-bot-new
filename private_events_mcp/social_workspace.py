@@ -1525,6 +1525,15 @@ def validate_asset_status_request(payload: Mapping[str, Any]) -> str:
     return validate_opaque_ref(data.get("asset_ref"), "asset")
 
 
+def validate_asset_preview_request(payload: Mapping[str, Any]) -> tuple[SocialPlatform, str]:
+    data = _object(payload, "request")
+    _only_fields(data, {"platform", "asset_ref"}, "request")
+    return (
+        _enum(data.get("platform"), SocialPlatform, "platform"),
+        validate_opaque_ref(data.get("asset_ref"), "asset"),
+    )
+
+
 def compute_action_digest(
     intent: SocialActionIntent,
     *,
@@ -2481,8 +2490,41 @@ SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
     },
 }
 
+SOCIAL_WORKSPACE_ASSET_PREVIEW_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["platform", "asset_ref"],
+    "properties": {
+        "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
+        "asset_ref": {"$ref": "#/$defs/asset_ref"},
+    },
+}
+
+SOCIAL_WORKSPACE_ASSET_PREVIEW_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "platform", "asset_ref", "mime_type", "byte_length", "width", "height", "trust"
+    ],
+    "properties": {
+        "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
+        "asset_ref": {"$ref": "#/$defs/asset_ref"},
+        "mime_type": {"const": "image/jpeg"},
+        "byte_length": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "width": {"type": "integer", "minimum": 1, "maximum": 768},
+        "height": {"type": "integer", "minimum": 1, "maximum": 768},
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
 
 __all__ = [
+    "SOCIAL_WORKSPACE_ASSET_PREVIEW_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_ASSET_PREVIEW_SCHEMA",
     "SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA",
     "SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA",
@@ -2559,6 +2601,7 @@ __all__ = [
     "required_scope_for_action",
     "required_scope_for_read",
     "validate_action_status_response",
+    "validate_asset_preview_request",
     "validate_asset_stage_request",
     "validate_asset_status_request",
     "validate_capabilities",

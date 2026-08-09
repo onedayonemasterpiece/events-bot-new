@@ -59,8 +59,9 @@
   still exposes exactly seven evidence tools and no social/file capability.
   Media/story stays default-off behind explicit storage/host/size/TTL limits and
   dedicated provider roles. Video is explicitly denied by the image-only
-  contract; any future support requires a separate proven gate. Story media
-  refs are metadata-only and no visual preview/read tool is claimed. CI now
+  contract; any future support requires a separate proven gate. Image story
+  media can be inspected through a principal-bound, provider-URL-free MCP JPEG
+  thumbnail capped at 768×768 and 64 KiB; viewer identities remain excluded. CI now
   compiles every top-level MCP adapter/provider module, runs
   the full private-MCP test glob and checks the diff; an optional live smoke is
   nonmutating by default and never prints secrets or private URLs.

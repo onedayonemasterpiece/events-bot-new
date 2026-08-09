@@ -19,13 +19,11 @@ import os
 import re
 import secrets
 import stat
-import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import aiohttp
-
 
 EVIDENCE_SCOPES = ("events:read", "incidents:read", "operations:read", "offline_access")
 MEDIA_TOOLS = frozenset(
@@ -34,6 +32,7 @@ MEDIA_TOOLS = frozenset(
         "social_content_analytics",
         "social_asset_stage",
         "social_asset_status",
+        "social_asset_preview",
         "social_action_prepare",
         "social_action_commit",
         "social_action_status",
@@ -176,7 +175,7 @@ async def _oauth_session(
     if redirect.get("state") != [state] or not redirect.get("code"):
         raise SmokeError("oauth_redirect_invalid")
 
-    basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode("ascii")
     async with session.post(
         token_endpoint,
         data={
@@ -248,6 +247,37 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
             return _structured(
                 await rpc("tools/call", {"name": name, "arguments": arguments})
             )
+
+        if args.preview_asset_ref:
+            preview_response = await rpc(
+                "tools/call",
+                {
+                    "name": "social_asset_preview",
+                    "arguments": {
+                        "platform": args.platform,
+                        "asset_ref": args.preview_asset_ref,
+                    },
+                },
+            )
+            structured = _structured(preview_response)
+            result = preview_response.get("result")
+            content = result.get("content") if isinstance(result, dict) else None
+            image = content[0] if isinstance(content, list) and content else None
+            if (
+                not isinstance(image, dict)
+                or image.get("type") != "image"
+                or image.get("mimeType") != "image/jpeg"
+                or not isinstance(image.get("data"), str)
+                or len(image["data"]) > 90_000
+            ):
+                raise SmokeError("story_image_preview_invalid")
+            receipt["story_image_preview"] = {
+                "asset_ref_fingerprint": _fingerprint(args.preview_asset_ref),
+                "mime_type": structured.get("mime_type"),
+                "byte_length": structured.get("byte_length"),
+                "width": structured.get("width"),
+                "height": structured.get("height"),
+            }
 
         if args.read_stories:
             stories = await call(
@@ -354,6 +384,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, default=5, choices=range(1, 26), metavar="1..25")
     parser.add_argument("--read-stories", action="store_true")
     parser.add_argument("--read-statistics", action="store_true")
+    parser.add_argument("--preview-asset-ref")
     parser.add_argument("--allow-write", action="store_true")
     write_mode = parser.add_mutually_exclusive_group()
     write_mode.add_argument("--prepare-story", action="store_true")
@@ -366,7 +397,13 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    if (args.read_stories or args.read_statistics or args.prepare_story or args.commit_story) and not args.platform:
+    if (
+        args.read_stories
+        or args.read_statistics
+        or args.preview_asset_ref
+        or args.prepare_story
+        or args.commit_story
+    ) and not args.platform:
         parser.error("provider reads/writes require --platform")
     if args.read_stories and not args.target_ref:
         parser.error("--read-stories requires --target-ref")

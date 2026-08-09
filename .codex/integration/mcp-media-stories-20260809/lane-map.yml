@@ -23,6 +23,7 @@ lanes:
       - tests/test_private_events_mcp_social_asset_ingress.py
     requirements: [R01, R02, R05]
     depends_on: [map_contract]
+    status: merged
   telegram_media_stories:
     mode: write
     owns:
@@ -30,6 +31,7 @@ lanes:
       - tests/test_private_events_mcp_telegram_media_stories.py
     requirements: [R01, R02, R03, R04]
     depends_on: [map_contract]
+    status: merged
   vk_media_stories:
     mode: write
     owns:
@@ -37,6 +39,7 @@ lanes:
       - tests/test_private_events_mcp_vk_media_stories.py
     requirements: [R01, R02, R03, R04]
     depends_on: [map_contract]
+    status: merged
   provider_storage_integration:
     mode: serial_integration
     owns:
@@ -45,6 +48,7 @@ lanes:
       - tests/test_private_events_mcp_workspace_providers.py
     requirements: [R01, R02, R03, R04]
     depends_on: [core_asset_ingress, telegram_media_stories, vk_media_stories]
+    status: validated_local
   docs_release:
     mode: write
     owns:
@@ -55,6 +59,7 @@ lanes:
       - scripts/smoke_private_events_mcp.py
     requirements: [R05, R06]
     depends_on: [provider_storage_integration]
+    status: merged
 
 integration_order:
   - map_contract
