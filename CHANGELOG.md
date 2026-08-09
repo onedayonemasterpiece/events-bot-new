@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Raised the mobile Search native-touch ceiling from 24 to 40 bounded gestures
+  after two Android Chrome receipts proved valid W3C swipes and positive DOM
+  movement could still stop before a tall final card. Final-card visibility,
+  positive DOM delta, native coordinates and sanitized gesture evidence remain
+  mandatory; the shared mobile E2E skill now records this accepted boundary.
+
 - Fixed Current UI Decoder reviewed capsule materialization so capsule IDs are
   matched across prefixed and compact serialized forms, and strengthened the
   `GO` validator to reject empty, dangling or incomplete capsule-local

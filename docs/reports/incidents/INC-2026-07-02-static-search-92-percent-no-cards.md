@@ -30,6 +30,59 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 browser run `31293895462` is a terminal Search-only
+  `cold_vector + live_consistent` PASS on the accepted immutable candidate:
+  all three incident query families produced 10/10 request/response/route
+  receipts, the first family paginated without duplicate ids/families, every
+  response id matched a rendered card, all real wheel-scroll gates passed and
+  every same-journey repeat was a cache hit. The exact-SHA browser fixture also
+  passed `auth.getUser`, the owner-scoped RLS probe, session restoration,
+  cleanup and redaction with product OTP `0` and external mail `0/0`; all ten
+  owner-scoped server receipts matched.
+- 2026-08-09 browser run `31294346370` is a terminal
+  `degraded_vector_fallback + live_consistent` PASS. All three query families
+  returned useful vector pages with actual mode `degraded_vector_fallback` and
+  the exact closed verifier status `degraded:deterministic_canary_failure`;
+  10/10/10 request/response/route receipts, pagination, final-card scroll,
+  cache-hit repeats and validation zero-POST all remained green. This proves
+  the deterministic LLM failure path without spending an LLM attempt or
+  weakening the ordinary result-card assertions.
+- 2026-08-09 iOS job in run `31293896454` is the first terminal Mobile Safari
+  Search PASS: the shared native-first OTP transport created a fresh simulator
+  session, completed the callback in Safari, restored the same-storage session,
+  focused/submitted through the native keyboard and completed all three query
+  families with 10/10/10 request/response/route receipts. Pagination,
+  response-id/card matching, duplicate rejection, validation zero-POST and
+  three cache-hit repeats passed; every final-card gate used the accepted
+  application-level `xcuitest_native_swipe` route and positive WebKit DOM
+  movement. The uploaded artifact contains `.redaction-ok` and no raw Appium,
+  target bearer, credential or session material.
+- 2026-08-09 the immediately parallel Android job in run `31293896454` moved
+  Chrome DOM by 5516 px through 24 real 1080x2400 W3C native-touch swipes but
+  did not observe the final card in the viewport, so the strict scroll gate
+  correctly rejected it as `search_real_scroll_missing`. This is isolated from
+  Search/API correctness: exact-target run `31293081092` had just completed all
+  three Android query families, pagination, cache repeats and positive final
+  card gates, then failed only at the independently expected stale-release
+  revision assertion. One unchanged Android-only control rerun is required
+  before changing the already live-proven shared gesture mechanics.
+- 2026-08-09 unchanged Android-only control run `31294660651` reproduced the
+  same boundary: 24 accepted absolute-coordinate W3C native-touch swipes moved
+  Chrome DOM by 6162 px, but the final tall card was still below the accepted
+  viewport gate. Official UiAutomator2 guidance confirms W3C Actions with valid
+  absolute native coordinates are the supported route for complex gestures;
+  the positive DOM delta independently proves delivery. The defect was the
+  feature helper's arbitrary 24-gesture ceiling, not the shared transport. Its
+  bound is now 40, matching the already accepted browser wheel bound while the
+  final-card and positive-DOM predicates remain unchanged.
+- 2026-08-09 post-deploy run `31293081526` proved the accepted candidate's
+  Search UI and server receipts for both `cold_vector` and deterministic
+  `degraded_vector_fallback`, including useful vector cards with the verifier
+  intentionally degraded. Both jobs failed only after the ten-response journey
+  because the candidate froze catalog/corpus revisions before the later vector
+  sync completed. The blocking terminal created observable incident issue
+  `#425`; the fast live-consistent browser recovery then automatically closed
+  the matching cold-browser alert `#392`.
 - 2026-08-09 an exact Search candidate completed every Kaggle gate and wrote a
   terminal `done` ledger receipt, while Kaggle REST briefly still returned
   `RUNNING`. Exact-owner recovery deferred for five minutes, but a newer Smart
@@ -278,6 +331,12 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - 2026-08-08 iOS L2 correction: the shared exact-target resolver no longer uses
   Bash-4-only `mapfile`, so a macOS Bash 3.2 runner reaches session issuance and
   Safari/Appium instead of failing before the Search journey.
+- 2026-08-09 Android tall-card correction: the native-touch loop remains
+  fail-closed on positive DOM movement plus final-card visibility, but its
+  bounded ceiling is 40 rather than 24. Two live receipts proved the accepted
+  W3C gesture moved Chrome 5.5–6.1k px and merely ran out of attempts; a unit
+  regression requires a final card beyond gesture 24 to be reached rather than
+  weakening the viewport predicate.
 - 2026-08-08 mobile transport correction: Android/iOS capabilities force
   WebDriver Classic, preventing WebdriverIO from selecting Appium's incomplete
   BiDi surface and failing on `script.addPreloadScript` before UI acceptance.

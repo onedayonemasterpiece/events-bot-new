@@ -33,7 +33,7 @@ function pageResultSnapshot() {
     card_renderer_unavailable: Boolean(results?.querySelector('[data-search-card-render-unavailable]')) };
 }
 
-export async function runRealTouchScroll({ readScrollY, lastCardVisible, gesture, wait, maxGestures = 24 }) {
+export async function runRealTouchScroll({ readScrollY, lastCardVisible, gesture, wait, maxGestures = 40 }) {
   const before = Number(await readScrollY());
   let cardVisible = false;
   let gestures = 0;
