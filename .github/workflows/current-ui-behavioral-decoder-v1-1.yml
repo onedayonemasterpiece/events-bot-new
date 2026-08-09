@@ -1,4 +1,4 @@
-name: Current UI Behavioral Decoder v1.1 capture
+name: Current UI Behavioral Decoder v1.1 closure capture
 
 on:
   workflow_dispatch:
@@ -9,53 +9,55 @@ permissions:
 jobs:
   capture:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       BEHAVIOR_SOURCE_SHA: ef7aa62e45c60f7a12da6160f490719c0721ec03
-      BEHAVIOR_BASE_MANIFEST_SHA256: f7740f7f533c3f0cda5d4d0b8ebe98b565d7f521368b96462daecbd26522d5cc
-      BEHAVIOR_BASE_TREE_SHA: e77fc2457fadfdffb46ed2d90304ebb91e89a715
-      BEHAVIOR_DESIGN_REPO_SHA: e9c8ae3cf31f6f44320b50e1bf1eb9f73cb51eb5
-      BEHAVIOR_SNAPSHOT_PATH: catalog/component-decoder/decoder-v1-snapshot-20260808T124842-4786ac53bc
+      BEHAVIOR_DESIGN_REPO_SHA: f9cb3c931d6f2200f0a4221f5130b3a6299f7005
+      BEHAVIOR_PRIOR_SUPPLEMENT_PATH: catalog/component-decoder/behavioral-supplement-v1.1-snapshot-20260808T124842-4786ac53bc
+      BEHAVIOR_PRIOR_MANIFEST_SHA256: c6c62cee8bea4e9440ff85bc75c46bc85cf5abf3e2fdcd4c7357c6ece916436f
+      BEHAVIOR_IMMUTABLE_V1_PATH: catalog/component-decoder/decoder-v1-snapshot-20260808T124842-4786ac53bc
+      BEHAVIOR_IMMUTABLE_V1_TREE: e77fc2457fadfdffb46ed2d90304ebb91e89a715
     steps:
-      - name: Checkout behavioral decoder
+      - name: Checkout closure decoder
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - name: Checkout immutable design-system snapshot carrier
+      - name: Checkout reviewed supplement and immutable v1 carrier
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: onedayonemasterpiece/lovekgd-design-system
-          ref: e9c8ae3cf31f6f44320b50e1bf1eb9f73cb51eb5
+          ref: f9cb3c931d6f2200f0a4221f5130b3a6299f7005
           path: _design-system
 
-      - name: Set deterministic paths and initialize failure receipt
+      - name: Initialize deterministic paths and failure receipt
         shell: bash
         run: |
           set -euo pipefail
           printf 'BEHAVIOR_EXACT_SOURCE=%s\n' "$RUNNER_TEMP/current-ui-behavioral-exact-source" >> "$GITHUB_ENV"
-          printf 'BEHAVIOR_HARNESS=%s\n' "$RUNNER_TEMP/current-ui-behavioral-harness" >> "$GITHUB_ENV"
-          printf 'BEHAVIOR_OUTPUT=%s\n' "$GITHUB_WORKSPACE/artifacts/current-ui-behavioral-v1-1/$GITHUB_RUN_ID" >> "$GITHUB_ENV"
-          mkdir -p "$GITHUB_WORKSPACE/artifacts/current-ui-behavioral-v1-1/$GITHUB_RUN_ID"
-          jq -n --arg run_id "$GITHUB_RUN_ID" '{schema_version:"current_ui_behavioral_capture_run_v1_1",status:"WORKFLOW_STARTED",run_id:$run_id}' > "$GITHUB_WORKSPACE/artifacts/current-ui-behavioral-v1-1/$GITHUB_RUN_ID/capture-run-receipt.json"
+          printf 'BEHAVIOR_HARNESS=%s\n' "$RUNNER_TEMP/current-ui-behavioral-closure-harness" >> "$GITHUB_ENV"
+          printf 'BEHAVIOR_OUTPUT=%s\n' "$GITHUB_WORKSPACE/artifacts/current-ui-behavioral-v1-1-closure/$GITHUB_RUN_ID" >> "$GITHUB_ENV"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts/current-ui-behavioral-v1-1-closure/$GITHUB_RUN_ID"
+          jq -n --arg run_id "$GITHUB_RUN_ID" '{schema_version:"current_ui_behavioral_closure_capture_run_v1_1",status:"WORKFLOW_STARTED",run_id:$run_id}' > "$GITHUB_WORKSPACE/artifacts/current-ui-behavioral-v1-1-closure/$GITHUB_RUN_ID/closure-capture-receipt.json"
 
-      - name: Validate immutable v1 and materialize exact source
+      - name: Validate reviewed baseline, immutable v1 and exact source
         shell: bash
         run: |
           set -euo pipefail
           test "$(git -C _design-system rev-parse HEAD)" = "$BEHAVIOR_DESIGN_REPO_SHA"
-          test "$(git -C _design-system rev-parse "HEAD:$BEHAVIOR_SNAPSHOT_PATH")" = "$BEHAVIOR_BASE_TREE_SHA"
-          printf '%s  %s\n' "$BEHAVIOR_BASE_MANIFEST_SHA256" "_design-system/$BEHAVIOR_SNAPSHOT_PATH/manifest.json" | sha256sum --check --strict
+          test "$(git -C _design-system rev-parse "HEAD:$BEHAVIOR_IMMUTABLE_V1_PATH")" = "$BEHAVIOR_IMMUTABLE_V1_TREE"
+          printf '%s  %s\n' "$BEHAVIOR_PRIOR_MANIFEST_SHA256" "_design-system/$BEHAVIOR_PRIOR_SUPPLEMENT_PATH/manifest.json" | sha256sum --check --strict
+          jq -e '.status == "EVIDENCE_COLLECTION_INCOMPLETE" and .source_sha == "ef7aa62e45c60f7a12da6160f490719c0721ec03" and .human_visual_review.completed == true and .counts.visual_reviews == 124' "_design-system/$BEHAVIOR_PRIOR_SUPPLEMENT_PATH/manifest.json" >/dev/null
           git cat-file -e "$BEHAVIOR_SOURCE_SHA^{commit}"
           git worktree add --detach "$BEHAVIOR_EXACT_SOURCE" "$BEHAVIOR_SOURCE_SHA"
           test -z "$(git -C "$BEHAVIOR_EXACT_SOURCE" status --porcelain)"
 
-      - name: Install exact Node and pinned site dependencies
+      - name: Install exact Node and site/browser runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.12.0
 
-      - name: Install exact site and browser runtime
+      - name: Install pinned site dependencies
         shell: bash
         run: |
           set -euo pipefail
@@ -64,41 +66,37 @@ jobs:
           npx playwright install --with-deps chromium
           test "$(node -p "require('./node_modules/astro/package.json').version")" = 6.4.8
 
-      - name: Generate deterministic behavioral packets
+      - name: Execute 293 browser probes and rail keyboard packet
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/current_ui_resource_graph/behavioral-capture.mjs \
+          node scripts/current_ui_resource_graph/behavioral-closure-capture.mjs \
             --candidate-repo "$BEHAVIOR_EXACT_SOURCE" \
-            --base-snapshot-root "$GITHUB_WORKSPACE/_design-system/$BEHAVIOR_SNAPSHOT_PATH" \
+            --prior-supplement "$GITHUB_WORKSPACE/_design-system/$BEHAVIOR_PRIOR_SUPPLEMENT_PATH" \
             --node-modules "$BEHAVIOR_EXACT_SOURCE/site/node_modules" \
             --harness-root "$BEHAVIOR_HARNESS" \
             --output "$BEHAVIOR_OUTPUT"
 
-      - name: Validate capture coverage, hashes and STOP boundary
+      - name: Validate terminal coverage, hashes and strict STOP
         shell: bash
         run: |
           set -euo pipefail
+          probe="$BEHAVIOR_OUTPUT/probe-runtime"
           supplement="$BEHAVIOR_OUTPUT/supplement"
-          capture="$BEHAVIOR_OUTPUT/capture"
-          jq -e '.status == "CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW" and .counts.behavior_packets == 67 and .counts.executable_packets == 57 and .counts.explicit_blockers == 10 and .counts.observations == 124 and .counts.rasters == 124 and .production_ui_mutated == false and .immutable_v1_modified == false and .normalization_allowed == false' "$BEHAVIOR_OUTPUT/capture-run-receipt.json" >/dev/null
-          jq -e '.status == "partial" and .final_status == "EVIDENCE_COLLECTION_INCOMPLETE" and .counts.plans == 67 and .counts.observations == 124 and .counts.rasters == 124 and .counts.explicit_blockers == 10 and (.blockers | length) >= 2' "$supplement/receipt.json" >/dev/null
-          jq -e -s 'length == 67 and (map(select(.capture_status == "explicit-blocker")) | length) == 10 and (map(select(.blocks_ready == true)) | map(.id) | sort) == ["behavior-packet.breakpoint-container-runtime-coverage-gap","behavior-packet.rail-keyboard-home-end"] and all(.[]; .decision == "NOT_MERGED" and .normalization_allowed == false and (.reachability | length) > 0)' "$supplement/behavior-specimen-plan.jsonl" >/dev/null
-          jq -e -s 'length == 124 and all(.[]; .capture_status == "captured" and .review_status == "pending-human-full-resolution-review" and .production_state_claimed == false and .normalization_allowed == false and .decision == "NOT_MERGED" and .screenshot.perceptually_stable == true and .transition.assertions_passed == true and (.reachability | length) > 0)' "$supplement/behavior-specimen-observations.jsonl" >/dev/null
-          jq -e -s '(map(select(.ratios | index("4:5"))) | length) == 1 and (map(select(.ratios | index("5:4"))) | length) == 4' "$supplement/behavior-specimen-observations.jsonl" >/dev/null
-          jq -e -s 'length == 13 and all(.[]; (.runtime_packet_ids | length) > 0 or (.explicit_blocker_packet_ids | length) > 0)' "$supplement/dynamic-region-loading-matrix.jsonl" >/dev/null
-          jq -e -s 'length == 293 and all(.[]; .coverage_status != "coverage-missing")' "$supplement/breakpoint-and-container-matrix.jsonl" >/dev/null
-          test "$(find "$capture/behavior-rasters" -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 124
-          while IFS= read -r row; do
-            path="$(jq -r '.screenshot.path' <<<"$row")"
-            expected="$(jq -r '.screenshot.sha256' <<<"$row")"
-            test "$(sha256sum "$capture/$path" | cut -d' ' -f1)" = "$expected"
-          done < "$supplement/behavior-specimen-observations.jsonl"
-          node --input-type=module -e "import {assertBehavioralSupplement} from './scripts/current_ui_resource_graph/v1/behavioral.mjs'; assertBehavioralSupplement(process.argv[1],{allowIncomplete:true});" "$supplement"
+          jq -e '.status == "CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW" and .counts.terminal_probes == 293 and .counts.pass + .counts.mismatch + .counts.unreachable == 293 and .counts.new_rasters == 10 and .counts.new_reviews == 0 and .production_ui_mutated == false and .immutable_v1_modified == false and .normalization_allowed == false and .decision == "NOT_MERGED"' "$BEHAVIOR_OUTPUT/closure-capture-receipt.json" >/dev/null
+          jq -e '.status == "TERMINAL_EVIDENCE_COMPLETE" and .planned_or_unconfirmed == 0 and .blocks_ready == false and .counts.terminal == 293 and .counts.pass + .counts.mismatch + .counts.unreachable == 293 and .counts.rasters == 8' "$probe/breakpoint-probe-receipt.json" >/dev/null
+          jq -e -s 'length == 293 and all(.[]; (.terminal_status == "PASS" or .terminal_status == "MISMATCH" or .terminal_status == "UNREACHABLE_WITH_REASON") and .production_state_claimed == false and .normalization_allowed == false and .decision == "NOT_MERGED")' "$probe/breakpoint-probe-terminal.jsonl" >/dev/null
+          jq -e '.status == "TERMINAL_EVIDENCE_COMPLETE" and .blocks_ready == false and .home_end == "non-required-nonblocking-observed-enhancement" and .rasters == 2' "$probe/rail-keyboard-receipt.json" >/dev/null
+          jq -e '.status == "partial" and .final_status == "EVIDENCE_COLLECTION_INCOMPLETE" and .counts.terminal_probes == 293 and .counts.new_rasters == 10 and .counts.new_reviews == 0 and (.blockers | length) == 0' "$supplement/receipt.json" >/dev/null
+          jq -e -s 'length == 293 and all(.[]; .blocks_ready == false and (.coverage_status == "runtime-probe-pass" or .coverage_status == "runtime-probe-mismatch" or .coverage_status == "unreachable-with-reason"))' "$supplement/breakpoint-and-container-matrix.jsonl" >/dev/null
+          test "$(find "$probe/breakpoint-probe-rasters" -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 8
+          test "$(find "$probe/rail-keyboard-rasters" -maxdepth 1 -type f -name '*.png' | wc -l)" -eq 2
+          node scripts/current_ui_resource_graph/v1/behavioral/closure-validate.mjs "$supplement" --allow-incomplete
           if grep -R -E --include='*.json' --include='*.jsonl' --include='*.md' 'decoder-fixture-public-value|example\.supabase\.co|sb_(secret|publishable)_[A-Za-z0-9_-]{12,}|Authorization[[:space:]]*:[[:space:]]*Bearer[[:space:]]+[^[:space:]]+|/_review/[A-Za-z0-9_-]{12,}' "$BEHAVIOR_OUTPUT"; then
-            echo 'Sensitive or fixture credential material survived behavioral evidence redaction' >&2
+            echo 'Sensitive material survived closure evidence redaction' >&2
             exit 1
           fi
+          test -z "$(git -C "$BEHAVIOR_EXACT_SOURCE" status --porcelain)"
           touch "$BEHAVIOR_OUTPUT/.validated"
 
       - name: Finalize failed receipt
@@ -108,14 +106,14 @@ jobs:
           set -euo pipefail
           mkdir -p "$BEHAVIOR_OUTPUT"
           if [[ ! -f "$BEHAVIOR_OUTPUT/.validated" ]]; then
-            jq -n --arg run_id "$GITHUB_RUN_ID" --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" '{schema_version:"current_ui_behavioral_capture_run_v1_1",status:"FAILED_VALIDATION",run_id:$run_id,run_url:$run_url,final_status:"EVIDENCE_COLLECTION_INCOMPLETE",blockers:["actions-capture-or-validation-failed"]}' > "$BEHAVIOR_OUTPUT/capture-run-receipt.json"
+            jq -n --arg run_id "$GITHUB_RUN_ID" --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" '{schema_version:"current_ui_behavioral_closure_capture_run_v1_1",status:"FAILED_VALIDATION",run_id:$run_id,run_url:$run_url,final_status:"EVIDENCE_COLLECTION_INCOMPLETE",blockers:["actions-closure-capture-or-validation-failed"]}' > "$BEHAVIOR_OUTPUT/closure-capture-receipt.json"
           fi
 
-      - name: Upload capture artifact for mandatory visual review
+      - name: Upload closure evidence for mandatory full-resolution review
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: current-ui-behavioral-decoder-v1-1-capture-${{ github.run_id }}
+          name: current-ui-behavioral-decoder-v1-1-closure-${{ github.run_id }}
           path: ${{ env.BEHAVIOR_OUTPUT }}
           if-no-files-found: error
           retention-days: 30

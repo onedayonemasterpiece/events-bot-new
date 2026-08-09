@@ -1,0 +1,115 @@
+mode: full_fanout
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_sha: 1f449af361e586da509d0199cfe059d620fb42d6
+base_branch: main
+integration_branch: integration/current-ui-behavioral-v1-1-closure
+global_constraints:
+  - immutable Decoder v1 subtree is read-only
+  - append-only behavioral supplement only
+  - no site/src, site/public, production Astro/CSS/JS, tokens, Penpot, component defragmentation, or experiment winners
+  - no generated raster without full-resolution manual review
+  - every breakpoint/container probe must terminate as PASS, MISMATCH, or UNREACHABLE_WITH_REASON
+verification_owner: /root
+final_status: READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS
+stop_conditions:
+  - do not fix the rail implementation
+  - do not merge, split, delete, or normalize components
+  - final status is READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS only when 293/293 probes are terminal and audit passes
+lanes:
+  - id: rail_semantic_contract_map
+    role: planner
+    requirement_ids: [R01]
+    target: exact rail semantics, project requirements, runtime keyboard/focus/boundary evidence
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence-backed decision whether Home/End is required plus exact capture assertions
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: breakpoint_probe_pipeline_map
+    role: planner
+    requirement_ids: [R02, R03]
+    target: existing 293-row matrix, harness, capture, validators, materializer, bounded raster selection
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: executable implementation map and exact schema/invariant recommendations
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: design_publication_verify
+    role: planner
+    requirement_ids: [R04]
+    target: lovekgd-design-system origin/main after PR 28
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: direct paths, commit/tree identity, R-07 README/index visibility, immutable R-01 through R-06 verification
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: probe_runtime_implementation
+    role: worker
+    requirement_ids: [R02]
+    target: 293-probe browser runtime executor, terminal records, deterministic evidence and bounded raster selection
+    depends_on: [breakpoint_probe_pipeline_map]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-behavioral-v1-1/probe-runtime-closure
+    worktree: /home/dev/.codex/worktrees/events-bot-new/behavioral-v1-1-probe-runtime
+    writable_files:
+      - scripts/current_ui_resource_graph/v1/behavioral
+      - scripts/current_ui_resource_graph/behavioral-capture.mjs
+      - tests/test_current_ui_behavioral_decoder.py
+      - tests/test_current_ui_behavioral_breakpoint_probes.py
+      - .codex/lanes/behavioral-v1-1-probe-runtime/RESULTS.md
+    forbidden_files: [site/src, site/public, Penpot]
+    expected_output: committed implementation with 293/293 executable or reasoned terminal dispositions
+    verification_scope: targeted_browser_and_full_local
+    effort: high
+    status: completed
+  - id: closure_integration
+    role: merge_reviewer
+    requirement_ids: [R01, R03, R04]
+    target: reviewed materialization, ledgers, docs, changelog, artifact and design-system handoff
+    depends_on: [rail_semantic_contract_map, breakpoint_probe_pipeline_map, design_publication_verify, probe_runtime_implementation]
+    execution_mode: serial_integration
+    branch: integration/current-ui-behavioral-v1-1-closure
+    worktree: /home/dev/.codex/worktrees/events-bot-new/behavioral-v1-1-closure
+    writable_files:
+      - scripts/current_ui_resource_graph/v1/behavioral
+      - tests
+      - .github/workflows/current-ui-behavioral-decoder-v1-1.yml
+      - .codex/integration/current-ui-behavioral-decoder-v1-1-closure
+      - docs/features/static-site-pages/current-ui-resource-graph.md
+      - docs/routes.yml
+      - CHANGELOG.md
+    forbidden_files: [site/src, site/public, Penpot]
+    expected_output: immutable reviewed supplement, durable receipt, exact research paths and final status
+    verification_scope: full_local_and_actions
+    effort: high
+    status: completed
+  - id: independent_final_audit
+    role: reviewer
+    requirement_ids: [R05]
+    target: final immutable supplement and cross-repo publication
+    depends_on: [closure_integration]
+    execution_mode: read_only_until_dependency
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: independent 293/293/count/hash/visual/no-mutation/research-publication audit
+    verification_scope: full_local
+    effort: high
+    status: completed

@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+- Completed Current UI Behavioral Decoder v1.1 evidence closure on Actions run
+  `31327863197`: all 293 breakpoint/container probes now have terminal runtime
+  dispositions (236 PASS, 39 MISMATCH, 18 UNREACHABLE_WITH_REASON), all ten
+  bounded new rasters were opened manually at full resolution, and the final
+  reviewed supplement/receipt were published durably with independent audit
+  PASS. The evidence status is now `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`;
+  production UI, component decisions, experiment winners, tokens, Penpot, and
+  normalization remain unchanged/not started.
+- Fixed closure materialization so the two superseded rail/probe evidence
+  blockers are cleared consistently from both plan and action records; a
+  converted reviewed nonblocking plan can no longer retain a stale
+  `blocker_id` for machine consumers. The final manifest and receipt now also
+  expose authoritative total/blocking unresolved counts instead of relying on
+  an inherited pre-closure counter.
+- Fixed breakpoint evidence rasters on clean Actions runners so optional
+  remote fonts cannot make Playwright's internal `document.fonts.ready` wait
+  outlive an already-terminal CSSOM probe. The decoder now records the
+  actually rendered fallback font, matching the existing bounded behavioral
+  packet policy, without changing site font or UI code.
+- Added a fail-closed Behavioral Decoder v1.1 closure pipeline that executes
+  all 293 breakpoint/container probes in exact-source Chromium, records only
+  `PASS`, `MISMATCH`, or `UNREACHABLE_WITH_REASON`, selects bounded unique
+  mismatch rasters, requires file-level full-resolution review for every new
+  raster, and binds terminal observations, automation/manual ledgers,
+  manifests, receipts, durable artifact provenance, and independent audit.
+- Reclassified mobile listing rail Home/End from a circular evidence blocker
+  to a non-required, nonblocking observation for the current ordinary
+  focusable overflow list. The exact keyboard packet now records sequential
+  focus, visible rail/Like focus, Space/Enter Like activation, Arrow boundary
+  states, the skipped `display:contents` event link, and the drag-only
+  `not_interested` conformance gap without changing production UI.
 - Fixed Current UI Behavioral Decoder v1.1 reviewed materialization so exact readiness blockers are emitted once even when the source supplement already contains the same blocker record.
 
 ### Fixed

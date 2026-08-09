@@ -49,7 +49,7 @@ export function assertBehaviorPacketRegistry(registry){
     if(disclosure?.fixture_provenance?.minimum_options<4||open?.actions?.some((action)=>action.optional)||!open?.expect?.details_open) throw new Error(`Transport disclosure is not truthfully actionable: ${treatment}`);
   }
   const rail=registry.plans.find((row)=>row.id==='behavior-packet.rail-keyboard-home-end');
-  if(rail?.execution_status!=='explicit-blocker'||rail?.blocks_ready!==true||rail?.runtime_probe?.observed_scroll_left!==0) throw new Error('Rail keyboard End/Home exact blocker missing');
+  if(rail?.execution_status!=='explicit-blocker'||rail?.blocks_ready!==false||rail?.home_end_required!==false||rail?.semantic_contract!=='ordinary-focusable-horizontal-content-list-not-composite'||!rail?.superseded_by) throw new Error('Rail closure semantic contract missing');
   const stickyWeekend=registry.plans.find((row)=>row.id==='behavior-packet.sticky-weekend-nav');
   if(!stickyWeekend?.visible_root_required||stickyWeekend.steps.some((row)=>row.expect?.root_geometry!=='nonzero')) throw new Error('Sticky weekend visible nonzero geometry contract missing');
   const home=registry.plans.find((row)=>row.id==='behavior-packet.home-static-to-local-rerank');
@@ -60,7 +60,7 @@ export function assertBehaviorPacketRegistry(registry){
   for(const id of ALL_BREAKPOINT_PROBE_IDS)if(!breakpointCovered.has(id))throw new Error(`Breakpoint/container probe lacks packet or exact blocker: ${id}`);
   if(ALL_BREAKPOINT_PROBE_IDS.length!==293||breakpointCovered.size!==293)throw new Error('Breakpoint/container reconciliation must cover exact 293-row matrix');
   const breakpointGap=registry.plans.find((row)=>row.id==='behavior-packet.breakpoint-container-runtime-coverage-gap');
-  if(breakpointGap?.blocks_ready!==true)throw new Error('Unobserved breakpoint/container matrix must block READY');
+  if(breakpointGap?.blocks_ready!==false||breakpointGap?.superseded_by!=='breakpoint-probe-observations.jsonl'||breakpointGap?.breakpoint_probe_ids?.length!==293)throw new Error('Terminal breakpoint/container closure reference missing');
   safeTree(registry); return true;
 }
 export function assertBehaviorObservation(row){
