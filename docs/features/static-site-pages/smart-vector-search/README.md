@@ -1103,6 +1103,15 @@ idle fence остановил journey до Search. Browser снова прошё
 `HEALTHY/PASS` с одним POST, пятью карточками и 9,343 bytes. Обновлённый
 pre-document observer теперь является Android whole-cell physical/byte fence;
 новый merged-SHA browser+Android proof обязателен.
+Run `31336453210` затем подтвердил эту границу в реальном Android: Auth,
+owner-RLS и один Search POST завершились; HTTP 200 вернул пять IDs, равных пяти
+карточкам, при нулевых LLM/pagination/receipt/storage и 8,219 bytes. Journey
+остановили два generic `Network.loadingFailed`, хотя closed class receipt
+показывал ноль document/Auth/Edge/REST/RPC failures и ноль error responses.
+Appium diagnostics теперь, как Playwright, связывает request metadata только
+внутри замыкания и считает критичными target document и allowlisted Supabase
+paths; unrelated/decorative subresources и exact disposable probes исключены.
+Полный Android scroll/event route всё ещё должен пройти новым merged-SHA run.
 
 ### 16.9 Migration from current workflow
 

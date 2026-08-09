@@ -30,6 +30,21 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 merged-SHA run `31336453210` crossed the previous Android
+  observer blocker: Android completed Auth/owner-RLS and exactly one real
+  vector-only Search POST returned HTTP 200 with five IDs equal to five cards,
+  cache hit, zero LLM/pagination/receipt/storage and 8,219 observed Supabase
+  bytes. It stopped before native scroll/event navigation because the generic
+  Appium diagnostics counted two failed requests; its closed class receipt
+  simultaneously proved zero failed document/Auth/Edge/REST/RPC requests and
+  zero error responses. These were therefore unrelated/decorative subresources,
+  not Search product failures. Appium diagnostics now correlate private CDP
+  request metadata across drains and count only target-document or allowlisted
+  Supabase failures, excluding the same exact disposable capability probes as
+  browser. Browser in the workflow again completed full `HEALTHY/PASS` with
+  one POST, five cards, event HTTP 200, zero errors and 9,343 bytes. Android is
+  still not terminal acceptance until the full scroll/event journey passes.
+
 - 2026-08-09 merged-SHA run `31335563487` again completed browser
   `HEALTHY/PASS` with one HTTP-200 Search POST, five response IDs equal to five
   cards, cache hit, real wheel/event HTTP 200, zero forbidden/network/console

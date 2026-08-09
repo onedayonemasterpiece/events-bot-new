@@ -49,6 +49,16 @@
 
 ### Fixed
 
+- Scoped Appium `Network.loadingFailed` diagnostics after live run
+  `31336453210` to the target document and allowlisted Supabase
+  Auth/Edge/REST/RPC requests, matching the browser contract. Android in that
+  run completed Auth and one HTTP-200 Search POST with five IDs equal to five
+  cards, but two failed decorative/unclassified subresources stopped it before
+  scroll despite all critical failure classes and error responses being zero.
+  Exact disposable capability probes and unrelated subresources no longer
+  become `BROKEN_SEARCH_REQUEST`; real document/product request failures remain
+  fail-closed.
+
 - Replaced Android production-health's remaining dependency on incomplete
   ChromeDriver response logs after live run `31335563487`. The exact Appium
   Chromium CDP route now installs one allowlisted pre-document physical

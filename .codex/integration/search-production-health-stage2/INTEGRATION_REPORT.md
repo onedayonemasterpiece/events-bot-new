@@ -127,6 +127,18 @@ Search/Storage/receipt counts. Performance logs remain independent navigation
 and diagnostic evidence, not Android's byte-completion fence. A fresh
 main-SHA browser+Android proof remains required.
 
+Merged-SHA run `31336453210` then crossed that observer boundary. Android
+completed Auth/owner-RLS and exactly one HTTP-200 vector Search POST with five
+IDs equal to five cards, zero LLM/pagination/receipt/storage and 8,219 bytes.
+Two generic Appium failed requests stopped the cell before native scroll/event
+navigation, while its closed class receipt showed zero document/Auth/Edge/REST/
+RPC failures and zero error responses. Appium diagnostics now correlate request
+metadata privately across log drains and count only target-document or
+allowlisted Supabase failures, excluding unrelated/decorative resources and the
+three exact disposable probes. Browser again passed the full journey with one
+POST, five cards, event HTTP 200, zero errors and 9,343 bytes. A fresh main-SHA
+browser+Android proof remains required.
+
 Follow-up run `31331011185` then reached neither Search path: browser was
 correctly typed `UNKNOWN_AUTH_BROKER` because the completed prior claim still
 held the original 20-minute persona lease, and the Android action again split
