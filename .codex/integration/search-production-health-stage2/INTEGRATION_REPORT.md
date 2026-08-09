@@ -2,7 +2,9 @@
 
 ## Base and safety
 
-- Base: `origin/main@dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66` (merged PR #441).
+- Integration base: `origin/main@1f449af36987ad63657da4387e909513c36cd995`;
+  it contains merged PR #441 at
+  `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`.
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
 - Live Search workflows so far: `0 / 2` permitted.
 - Production migration/deploy/session/Search calls during implementation: `0`.
