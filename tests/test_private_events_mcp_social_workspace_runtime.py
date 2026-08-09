@@ -36,7 +36,7 @@ ALL_SCOPES = frozenset(
         "post:publish", "edit", "delete", "forward", "reaction", "comment",
         "schedule", "story:read", "story:write", "analytics", "audience",
     )
-)
+) | frozenset({"vk:notifications:read"})
 
 
 def context(*, client: str = "chatgpt", subject: str = "alice", resource: str = "https://mcp") -> ToolCallContext:
@@ -374,6 +374,29 @@ def test_tools_are_private_noncacheable_granular_and_feature_hidden(runtime) -> 
     assert all(tool.scope_selector is not None for tool in tools)
     assert all(all(any(scope.startswith(p + ":") for p in ("telegram", "vk"))
                    for scope in option) for tool in tools for option in tool.scope_options)
+
+
+def test_vk_item_and_notification_tools_are_provider_and_scope_isolated(runtime) -> None:
+    service, _adapter, _store = runtime
+    telegram_only = {
+        tool.name
+        for tool in build_social_workspace_tools(
+            service, capability_policy={"telegram": True, "vk": False}
+        )
+    }
+    assert "social_item_resolve" not in telegram_only
+    assert "social_comment_hints_list" not in telegram_only
+
+    service.adapters["vk"] = FakeAdapter()
+    tools = {
+        tool.name: tool for tool in build_social_workspace_tools(service)
+    }
+    assert "social_item_resolve" in tools
+    hints = tools["social_comment_hints_list"]
+    assert frozenset({"vk:notifications:read"}) in hints.scope_options
+    assert hints.scope_selector(
+        {"platform": "vk", "operation": "list_notifications", "limit": 25}
+    ) == {"vk:notifications:read"}
 
 
 def test_catalog_omits_disabled_action_and_media_surfaces(runtime) -> None:

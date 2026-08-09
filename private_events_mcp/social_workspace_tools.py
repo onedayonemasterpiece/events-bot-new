@@ -17,7 +17,9 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA,
+    SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
@@ -172,6 +174,8 @@ def build_social_workspace_tools(
         for platform in enabled_platforms
         for suffix in read_suffixes
     }
+    if "vk" in enabled_platforms:
+        allowed_scopes.add("vk:notifications:read")
     allowed_scopes.update(
         scope
         for platform in enabled_platforms
@@ -414,6 +418,11 @@ def build_social_workspace_tools(
                  read_schema(SocialReadOperation.RESOLVE_TARGET),
                  SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
+        ToolSpec("social_item_resolve", "Resolve exact social item",
+                 "Resolve one canonical VK post URL to bound item and source-target references.",
+                 read_schema(SocialReadOperation.RESOLVE_ITEM),
+                 SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA, handler=read,
+                 scope_selector=read_scope, **common),
         ToolSpec("social_targets_search", "Search social targets",
                  "Search provider targets without exposing provider-native identifiers.",
                  read_schema(SocialReadOperation.SEARCH_TARGETS),
@@ -445,6 +454,11 @@ def build_social_workspace_tools(
                      SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
                      SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
                  ),
+                 handler=read, scope_selector=read_scope, **common),
+        ToolSpec("social_comment_hints_list", "List VK comment hints",
+                 "Read a bounded recent VK comment/mention notification page as untrusted investigation hints.",
+                 read_schema(SocialReadOperation.LIST_NOTIFICATIONS),
+                 SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
                  handler=read, scope_selector=read_scope, **common),
         ToolSpec("social_content_stories", "Read social stories",
                  "Read a bounded stories page through provider-neutral contracts.",
@@ -504,12 +518,20 @@ def build_social_workspace_tools(
         "social_asset_stage": "media_story",
         "social_asset_status": "media_story",
     }
+    provider_tools = {
+        "social_item_resolve": "vk",
+        "social_comment_hints_list": "vk",
+    }
     return tuple(
         spec
         for spec in specs
         if enabled(spec.name)
         and (enabled_actions or spec.name not in action_tool_names)
         and enabled(feature_tools.get(spec.name, spec.name))
+        and (
+            spec.name not in provider_tools
+            or provider_tools[spec.name] in enabled_platforms
+        )
     )
 
 

@@ -27,6 +27,8 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
@@ -781,6 +783,7 @@ class SocialWorkspaceRuntime:
         self, request: SocialReadRequest, safe: Mapping[str, Any]
     ) -> dict[str, Any]:
         schemas: dict[SocialReadOperation, Mapping[str, Any]] = {
+            SocialReadOperation.RESOLVE_ITEM: SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
             SocialReadOperation.SEARCH_TARGETS: SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.SEARCH_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
@@ -790,6 +793,7 @@ class SocialWorkspaceRuntime:
             SocialReadOperation.LIST_STORIES: SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
             SocialReadOperation.GET_STATISTICS: SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
             SocialReadOperation.GET_AUDIENCE: SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
+            SocialReadOperation.LIST_NOTIFICATIONS: SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
         }
         schema = schemas.get(request.operation)
         if schema is None:
