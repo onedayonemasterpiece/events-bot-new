@@ -36,6 +36,7 @@ def _registry_summary():
         mediaWithoutProvenance:executable.filter((row)=>row.family==='media'&&!row.media_provenance).length,
         transport:registry.plans.filter((row)=>row.family==='transport').map((row)=>({id:row.id,minimum:row.fixture_provenance?.minimum_options,open:row.steps.find((step)=>step.phase==='compact-open')?.expect?.details_open,optional:row.steps.flatMap((step)=>step.actions).some((action)=>action.optional)})),
         menuShort:byId['behavior-packet.menu-short-scroll'],
+        home:byId['behavior-packet.home-static-to-local-rerank'],
         rail:byId['behavior-packet.rail-keyboard-home-end'],
         sticky:byId['behavior-packet.sticky-weekend-nav'],
         breakpointBlocker:byId['behavior-packet.breakpoint-container-runtime-coverage-gap'],
@@ -79,6 +80,11 @@ def test_corrected_packet_registry_has_truthful_semantic_coverage():
     assert menu_short['steps'][1]['actions'][0]['kind'] == 'scroll-element'
     assert 'selector' not in menu_short['steps'][1]['actions'][0]
 
+    assert payload['home']['screenshot_stabilization'] == {
+        'images': 'eager-complete-bounded',
+        'timeout_ms': 30000,
+    }
+
     assert payload['rail']['execution_status'] == 'explicit-blocker'
     assert payload['rail']['blocks_ready'] is True
     assert payload['rail']['runtime_probe']['focusable'] is True
@@ -99,6 +105,9 @@ def test_capture_is_bounded_and_emits_per_plan_progress():
     assert 'FONT_SETTLE_TIMEOUT_MS=4000' in source
     assert 'SCREENSHOT_TIMEOUT_MS=30000' in source
     assert 'CONTROLLED_ROUTE_TIMEOUT_MS=20000' in source
+    assert 'settlePlanImages' in source
+    assert "image.loading='eager'" in source
+    assert 'image_settle' in source
     assert "process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1'" in source
     assert "resourceType:'image'" in source
     assert 'blocks_ready:plan.blocks_ready===true' in source

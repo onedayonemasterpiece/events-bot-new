@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
+  by promoting its 30 lazy card images to eager loading only inside the
+  disposable capture page, waiting for bounded load/error plus decode
+  completion, and retaining the resulting image-settle receipt. This prevents
+  locator screenshots from progressively activating new lazy images across
+  comparison attempts without changing the pinned site source or weakening the
+  perceptual stability gate.
+
 - Completed the Behavioral Decoder v1.1 requirements/experiment source pass:
   the bounded provenance corpus now includes page archetypes, schedule,
   multimodal rail, listing V14/V15–V28 supersession, mobile, Search,

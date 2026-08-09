@@ -471,7 +471,7 @@ export const BEHAVIOR_PACKET_PLANS=Object.freeze([
   plan('home-static-to-local-rerank','dynamic','/','[data-home-cold-start-feed]',[
     step('static-fallback',[],true,{root_attribute:{name:'data-home-feed-mode',value:'static_fallback'}}),
     step('local-rerank',[{kind:'set-profile',mature:true,liked_event_ids:[7008,7003,5658]}],true,{root_attribute:{name:'data-home-feed-mode',value:'local_rerank'}}),
-  ],{viewport:{width:1280,height:800},dynamic_region_ids:['home-rerank']}),
+  ],{viewport:{width:1280,height:800},dynamic_region_ids:['home-rerank'],screenshot_stabilization:{images:'eager-complete-bounded',timeout_ms:30000}}),
   plan('popular-personalized-hidden-mobile','dynamic','/populyarnoe/','[data-popular-personalized]',[
     step('hidden-fail-closed',[],true,{root_visibility:'hidden'}),
   ],{capture_scope:'page',allow_hidden_root:true,dynamic_region_ids:['popular-personalized-row']}),

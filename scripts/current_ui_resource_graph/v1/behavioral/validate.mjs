@@ -52,6 +52,8 @@ export function assertBehaviorPacketRegistry(registry){
   if(rail?.execution_status!=='explicit-blocker'||rail?.blocks_ready!==true||rail?.runtime_probe?.observed_scroll_left!==0) throw new Error('Rail keyboard End/Home exact blocker missing');
   const stickyWeekend=registry.plans.find((row)=>row.id==='behavior-packet.sticky-weekend-nav');
   if(!stickyWeekend?.visible_root_required||stickyWeekend.steps.some((row)=>row.expect?.root_geometry!=='nonzero')) throw new Error('Sticky weekend visible nonzero geometry contract missing');
+  const home=registry.plans.find((row)=>row.id==='behavior-packet.home-static-to-local-rerank');
+  if(home?.screenshot_stabilization?.images!=='eager-complete-bounded'||home?.screenshot_stabilization?.timeout_ms!==30000) throw new Error('Home lazy image stabilization contract missing');
   const dynamicCovered=new Set(registry.plans.flatMap((row)=>row.dynamic_region_ids||[]));
   for(const region of DYNAMIC_REGIONS)if(!dynamicCovered.has(region.id))throw new Error(`Dynamic region lacks runtime packet or exact blocker: ${region.id}`);
   const breakpointCovered=new Set(registry.plans.flatMap((row)=>row.breakpoint_probe_ids||[]));
@@ -73,7 +75,7 @@ export function assertBehaviorObservation(row){
 }
 export function assertBehaviorCaptureComplete(registry,observations,blockers){
   assertBehaviorPacketRegistry(registry);
-  const planMap=new Map(registry.plans.map((row)=>[row.id,row]));const byPlan=new Map(); for(const row of observations){assertBehaviorObservation(row);const plan=planMap.get(row.plan_id);if(!plan||row.reachability!==plan.reachability||stableHash(row.dynamic_region_ids)!==stableHash(plan.dynamic_region_ids||[])||stableHash(row.breakpoint_probe_ids)!==stableHash(plan.breakpoint_probe_ids||[]))throw new Error(`Behavior observation coverage drift: ${row.id}`);if(!byPlan.has(row.plan_id))byPlan.set(row.plan_id,new Set());byPlan.get(row.plan_id).add(row.phase);}
+  const planMap=new Map(registry.plans.map((row)=>[row.id,row]));const byPlan=new Map(); for(const row of observations){assertBehaviorObservation(row);const plan=planMap.get(row.plan_id);if(!plan||row.reachability!==plan.reachability||stableHash(row.dynamic_region_ids)!==stableHash(plan.dynamic_region_ids||[])||stableHash(row.breakpoint_probe_ids)!==stableHash(plan.breakpoint_probe_ids||[]))throw new Error(`Behavior observation coverage drift: ${row.id}`);if(plan.screenshot_stabilization?.images==='eager-complete-bounded'&&(row.image_settle?.status!=='settled'||row.image_settle?.complete_count!==row.image_settle?.image_count))throw new Error(`Behavior image stabilization receipt missing: ${row.id}`);if(!byPlan.has(row.plan_id))byPlan.set(row.plan_id,new Set());byPlan.get(row.plan_id).add(row.phase);}
   const blockerIds=new Set((blockers||[]).map((row)=>row.plan_id));
   for(const plan of registry.plans){
     if(plan.execution_status==='explicit-blocker'){if(!blockerIds.has(plan.id)) throw new Error(`Missing exact blocker receipt: ${plan.id}`);continue;}
