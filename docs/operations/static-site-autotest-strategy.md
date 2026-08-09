@@ -822,9 +822,11 @@ Android/iOS Search и real-mail OTP используют один нейтрал
 startup/capabilities. iOS сначала запускает `com.apple.mobilesafari` как native
 application, очищает только exact allowlisted first-run dialog через один
 текущий WDA alert либо одну native sheet с единственной точной allowlisted
-кнопкой, затем подключает WebKit. Анализ clean-simulator source сворачивается в
-закрытые счётчики; Search не сохраняет source и не имеет отдельного Safari
-обработчика. Общий профиль задаёт `appium:webviewConnectTimeout=60000` и bounded
+кнопкой, затем подключает WebKit. Clean-simulator source читается не более
+одного раза и сворачивается в закрытые счётчики; стабильное исчезновение
+проверяют повторные live exact element queries. Search не сохраняет source и не
+имеет отдельного Safari обработчика. Общий профиль задаёт
+`appium:webviewConnectTimeout=60000` и bounded
 `appium:webviewConnectRetries=120`: официальный XCUITest default 5000 мс уже
 привёл Search CI к отказу через 5.749 секунды. Action link и secret target не
 передаются в capabilities и не входят в публикуемые evidence/Appium logs.

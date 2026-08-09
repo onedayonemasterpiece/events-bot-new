@@ -49,6 +49,14 @@
 
 ### Fixed
 
+- Fixed the remaining bounded-dismissal race exposed by merged-SHA live run
+  `31338416105`: the shared Safari helper now captures the clean-simulator
+  native source once, exactly as the OTP adapter already does, while continuing
+  to query live exact elements for every post-click absence sample. The run
+  crossed native-sheet recognition and removed the dialog, but repeated
+  multi-second full hierarchy reads made three stable absence observations
+  impossible inside the five-second verification window.
+
 - Fixed the shared OTP/Search iOS Safari startup transport after production
   health runs `31337291226` and `31337643487` reproduced the same fresh-
   simulator first-run sheet before Auth or Search. The neutral mobile helper

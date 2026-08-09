@@ -429,12 +429,23 @@ export async function prepareIosSafariWebContext(driver, { inspect } = {}) {
   const nativeContext = contexts.find((value) => String(value).toUpperCase() === 'NATIVE_APP');
   if (!nativeContext) throw new Error('fail_browser_context:native_context_missing');
   if (String(currentContext).toUpperCase() !== 'NATIVE_APP') await driver.switchContext(nativeContext);
+  // Match the proven OTP adapter: capture the clean-simulator hierarchy once
+  // before any target/callback navigation. Re-reading a full XCTest source can
+  // take multiple seconds and makes three post-dismissal absence samples
+  // impossible inside the bounded five-second verification window. Live exact
+  // element queries still run on every sample and prevent a retained summary
+  // from becoming a phantom modal.
+  let startupNativeSourceSummaryPromise = null;
   const inspectNative = inspect || (() => inspectSafariNativeUiProtocol({
     findElements: (using, value) => driver.findElements(using, value),
     getAlertText: () => driver.getAlertText(),
     getAlertButtons: () => driver.executeScript('mobile: alert', [{ action: 'getButtons' }]),
     getActiveAppInfo: () => driver.executeScript('mobile: activeAppInfo', []),
-    getNativeSourceSummary: async () => summarizeKnownSafariNativeSource(await driver.getPageSource()),
+    getNativeSourceSummary: () => {
+      startupNativeSourceSummaryPromise ??= (async () =>
+        summarizeKnownSafariNativeSource(await driver.getPageSource()))();
+      return startupNativeSourceSummaryPromise;
+    },
   }));
   const startup = await stabilizeSafariSystemUi({
     inspect: inspectNative,

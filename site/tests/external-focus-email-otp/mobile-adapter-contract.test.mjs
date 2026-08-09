@@ -484,6 +484,7 @@ test('Safari inspection ignores a retained pre-dismissal source summary after li
 test('shared iOS startup clicks only the exact native first-run sheet button and never persists its source', async () => {
   const calls = [];
   let dismissed = false;
+  let sourceReads = 0;
   const source = '<XCUIElementTypeApplication name="Safari"><XCUIElementTypeSheet><XCUIElementTypeStaticText name="Выбор поисковой системы"/><XCUIElementTypeButton label="Настройки"/><XCUIElementTypeButton label="Продолжить"/></XCUIElementTypeSheet></XCUIElementTypeApplication>';
   const driver = {
     updateSettings: async (settings) => calls.push(['settings', settings]),
@@ -501,7 +502,10 @@ test('shared iOS startup clicks only the exact native first-run sheet button and
       if (command === 'mobile: alert') throw new Error('no WDA alert');
       throw new Error('unexpected_execute');
     },
-    getPageSource: async () => dismissed ? '<XCUIElementTypeApplication name="Safari"/>' : source,
+    getPageSource: async () => {
+      sourceReads += 1;
+      return dismissed ? '<XCUIElementTypeApplication name="Safari"/>' : source;
+    },
     elementClick: async (elementId) => { calls.push(['click', elementId]); dismissed = true; },
     waitUntil: async (predicate) => {
       if (!await predicate()) throw new Error('unexpected_webview_timeout');
@@ -509,6 +513,7 @@ test('shared iOS startup clicks only the exact native first-run sheet button and
   };
   const receipt = await prepareIosSafariWebContext(driver);
   assert.equal(receipt.dismissed, true);
+  assert.equal(sourceReads, 1);
   assert.deepEqual(calls.filter(([kind]) => kind === 'click'), [['click', 'continue-button']]);
   assert.doesNotMatch(JSON.stringify(receipt), /Выбор|Продолжить|Настройки|XCUIElementType/u);
 });
