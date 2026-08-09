@@ -11,6 +11,7 @@ import time
 import uuid
 from base64 import urlsafe_b64decode, urlsafe_b64encode
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -20,6 +21,7 @@ from .access_policy import CHATGPT_MAX_SCOPES, CODEX_MAX_SCOPES
 from .config import PrivateEventsMCPConfig
 from .crypto import AccessIdentity, TokenValidationError
 from .limits import AdmissionController, RateLimitExceeded
+from .media_contract import AssetIngestor
 from .oauth import PrivateOAuthServer
 from .protocol import (
     LATEST_LEGACY_PROTOCOL,
@@ -50,6 +52,7 @@ class PrivateEventsMCPServer:
         *,
         social_adapters: Mapping[str, SocialAdapter] | None = None,
         social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
+        asset_ingestor: AssetIngestor | None = None,
     ) -> None:
         self.config = config
         self.oauth = PrivateOAuthServer(config)
@@ -78,6 +81,27 @@ class PrivateEventsMCPServer:
             }
             if set(adapters) != expected:
                 raise ValueError("universal social adapter set does not match enabled providers")
+            if config.universal_social_media_story_enabled:
+                if asset_ingestor is None:
+                    raise ValueError(
+                        "universal social media/story requires an asset ingestor"
+                    )
+                if (
+                    not config.media_root
+                    or not Path(config.media_root).is_absolute()
+                    or not config.media_allowed_hosts
+                    or config.max_store_bytes < config.max_asset_bytes
+                ):
+                    raise ValueError(
+                        "universal social media/story requires storage and host policy"
+                    )
+                if any(
+                    not callable(getattr(adapters[name], "stage_asset", None))
+                    for name in expected
+                ):
+                    raise ValueError(
+                        "universal social media/story requires provider asset staging"
+                    )
             self.social_workspace = SocialWorkspaceRuntime(
                 store=self.oauth.store,
                 adapters=adapters,
@@ -86,6 +110,13 @@ class PrivateEventsMCPServer:
                 preparation_ttl_seconds=config.social_ticket_ttl_seconds,
                 response_cap_bytes=config.max_response_bytes,
                 approval_url_base=config.social_approval_url,
+                asset_ingestor=asset_ingestor,
+                asset_max_bytes=config.max_asset_bytes,
+                asset_ttl_seconds=config.asset_ttl_seconds,
+                asset_ingest_timeout_seconds=config.download_timeout_seconds,
+                asset_max_width=config.max_width,
+                asset_max_height=config.max_height,
+                asset_max_pixels=config.max_pixels,
                 budget_limits=SocialBudgetLimits(
                     attempts=config.social_publish_attempts_per_day
                 ),

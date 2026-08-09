@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import copy
-import json
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Mapping, Sequence
+from typing import Any
 
 from .crypto import AccessIdentity
 from .repository import EventsEvidenceRepository, InvalidArgumentsError
@@ -39,6 +39,7 @@ class ToolSpec:
     cacheable: bool = True
     publicly_discoverable: bool = True
     timeout_seconds: float | None = None
+    file_params: tuple[str, ...] = ()
 
     def is_visible(self, granted_scopes: frozenset[str]) -> bool:
         options = self.scope_options or (self.scopes,)
@@ -77,6 +78,9 @@ class ToolSpec:
                 }
             )
             platform_schema["enum"] = allowed_platforms
+        metadata: dict[str, Any] = {"securitySchemes": schemes}
+        if self.file_params:
+            metadata["openai/fileParams"] = list(self.file_params)
         return {
             "name": self.name,
             "title": self.title,
@@ -91,7 +95,7 @@ class ToolSpec:
                 "openWorldHint": self.open_world,
             },
             # Older ChatGPT Apps clients mirrored this field under _meta.
-            "_meta": {"securitySchemes": schemes},
+            "_meta": metadata,
         }
 
 

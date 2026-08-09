@@ -52,6 +52,33 @@ def _int(name: str, default: int, *, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
+def _hosts(name: str) -> tuple[str, ...]:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return ()
+    result: list[str] = []
+    for item in raw.split(","):
+        value = item.strip()
+        if not value or "://" in value or "/" in value or "@" in value:
+            raise ValueError(f"{name} must contain comma-separated hostnames")
+        if value.startswith("*."):
+            suffix = _canonical_hostname(value[2:])
+            try:
+                ipaddress.ip_address(suffix)
+            except ValueError:
+                pass
+            else:
+                raise ValueError(f"{name} wildcard suffix must be a DNS hostname")
+            host = f"*.{suffix}"
+        else:
+            if "*" in value:
+                raise ValueError(f"{name} wildcard must use one leading '*.'")
+            host = _canonical_hostname(value)
+        if host not in result:
+            result.append(host)
+    return tuple(result)
+
+
 def _canonical_hostname(value: str) -> str:
     if not value or len(value) > 253 or value.endswith(".") or "%" in value:
         raise ValueError("invalid hostname")
@@ -146,6 +173,15 @@ class PrivateEventsMCPConfig:
     social_ticket_ttl_seconds: int = 300
     social_provider_timeout_seconds: int = 12
     social_publish_attempts_per_day: int = 10
+    media_root: str = "/data/private-events-mcp-media"
+    media_allowed_hosts: tuple[str, ...] = ()
+    max_asset_bytes: int = 30 * 1024 * 1024
+    max_store_bytes: int = 128 * 1024 * 1024
+    asset_ttl_seconds: int = 3600
+    download_timeout_seconds: int = 20
+    max_width: int = 8192
+    max_height: int = 8192
+    max_pixels: int = 40_000_000
     access_ttl_seconds: int = 900
     refresh_ttl_seconds: int = 30 * 24 * 3600
     authorization_code_ttl_seconds: int = 300
@@ -167,6 +203,10 @@ class PrivateEventsMCPConfig:
     def from_env(cls) -> PrivateEventsMCPConfig:
         enabled = _bool("PRIVATE_EVENTS_MCP_ENABLED", False)
         base = (os.getenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL") or "").strip()
+        media_story_enabled = _strict_feature_bool(
+            "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED",
+            mcp_enabled=enabled,
+        )
         config = cls(
             enabled=enabled,
             # Disabled means inert even when stale deployment variables remain.
@@ -226,10 +266,7 @@ class PrivateEventsMCPConfig:
                 "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_EDIT_DELETE_ENABLED",
                 mcp_enabled=enabled,
             ),
-            universal_social_media_story_enabled=_strict_feature_bool(
-                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED",
-                mcp_enabled=enabled,
-            ),
+            universal_social_media_story_enabled=media_story_enabled,
             social_approval_token=(
                 os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN") or ""
             ).strip(),
@@ -253,6 +290,51 @@ class PrivateEventsMCPConfig:
                 10,
                 low=1,
                 high=100,
+            ),
+            media_root=(
+                os.getenv("PRIVATE_EVENTS_MCP_MEDIA_ROOT")
+                or "/data/private-events-mcp-media"
+            ).strip(),
+            media_allowed_hosts=(
+                _hosts("PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS")
+                if media_story_enabled
+                else ()
+            ),
+            max_asset_bytes=_int(
+                "PRIVATE_EVENTS_MCP_MAX_ASSET_BYTES",
+                30 * 1024 * 1024,
+                low=1,
+                high=64 * 1024 * 1024,
+            ),
+            max_store_bytes=_int(
+                "PRIVATE_EVENTS_MCP_MAX_STORE_BYTES",
+                128 * 1024 * 1024,
+                low=1,
+                high=1024 * 1024 * 1024,
+            ),
+            asset_ttl_seconds=_int(
+                "PRIVATE_EVENTS_MCP_ASSET_TTL_SECONDS",
+                3600,
+                low=60,
+                high=86400,
+            ),
+            download_timeout_seconds=_int(
+                "PRIVATE_EVENTS_MCP_DOWNLOAD_TIMEOUT_SECONDS",
+                20,
+                low=1,
+                high=120,
+            ),
+            max_width=_int(
+                "PRIVATE_EVENTS_MCP_MAX_WIDTH", 8192, low=1, high=8192
+            ),
+            max_height=_int(
+                "PRIVATE_EVENTS_MCP_MAX_HEIGHT", 8192, low=1, high=8192
+            ),
+            max_pixels=_int(
+                "PRIVATE_EVENTS_MCP_MAX_PIXELS",
+                40_000_000,
+                low=1,
+                high=40_000_000,
             ),
             access_ttl_seconds=_int(
                 "PRIVATE_EVENTS_MCP_ACCESS_TTL_SECONDS", 900, low=300, high=3600
@@ -375,10 +457,17 @@ class PrivateEventsMCPConfig:
                 "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN must contain at least 32 characters"
             )
         if self.universal_social_media_story_enabled:
-            raise ValueError(
-                "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED is unavailable "
-                "until authenticated upload storage passes its production gate"
-            )
+            if self.max_store_bytes < self.max_asset_bytes:
+                raise ValueError(
+                    "PRIVATE_EVENTS_MCP_MAX_STORE_BYTES must cover MAX_ASSET_BYTES"
+                )
+            if not self.media_root or not Path(self.media_root).is_absolute():
+                raise ValueError("PRIVATE_EVENTS_MCP_MEDIA_ROOT must be an absolute path")
+            if not self.media_allowed_hosts:
+                raise ValueError(
+                    "authenticated upload storage requires "
+                    "PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS for media/story"
+                )
 
     @property
     def private_prefix(self) -> str:

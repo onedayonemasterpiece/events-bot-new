@@ -17,6 +17,8 @@ from enum import Enum
 from typing import Any
 from urllib.parse import urlsplit
 
+from .media_contract import ChatGPTFile
+
 
 class SocialWorkspaceValidationError(ValueError):
     """A request does not conform to the public Social Workspace contract."""
@@ -156,7 +158,6 @@ _OPERATION_REF_RE = re.compile(r"^op_[A-Za-z0-9_-]{24,160}$")
 _SAMPLE_REF_RE = re.compile(r"^smp_[A-Za-z0-9_-]{24,160}$")
 _APPROVAL_REF_RE = re.compile(r"^apr_[A-Za-z0-9_-]{24,160}$")
 _APPROVAL_RECEIPT_RE = re.compile(r"^arc_[A-Za-z0-9_-]{24,160}$")
-_UPLOAD_REF_RE = re.compile(r"^upl_[A-Za-z0-9_-]{24,160}$")
 _CURSOR_RE = re.compile(r"^[A-Za-z0-9_-]{1,512}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9._~-]{8,128}$")
 _REACTION_RE = re.compile(r"^\S(?:.{0,30}\S)?$", re.DOTALL)
@@ -1457,40 +1458,64 @@ def validate_action_status_response(payload: Mapping[str, Any]) -> SocialActionS
 @dataclass(frozen=True, slots=True)
 class AssetStageRequest:
     platform: SocialPlatform
-    upload_ref: str
+    file: ChatGPTFile
     role: MediaRole
-    mime_type: str
-    byte_length: int
-    content_digest: str
 
 
 def validate_asset_stage_request(payload: Mapping[str, Any]) -> AssetStageRequest:
     data = _object(payload, "request")
+    _only_fields(data, {"platform", "file", "role"}, "request")
+    file_data = _object(data.get("file"), "file")
     _only_fields(
-        data,
-        {"platform", "upload_ref", "role", "mime_type", "byte_length", "content_digest"},
-        "request",
+        file_data,
+        {"download_url", "file_id", "mime_type", "file_name"},
+        "file",
     )
-    upload_ref = data.get("upload_ref")
-    if not isinstance(upload_ref, str) or not _UPLOAD_REF_RE.fullmatch(upload_ref):
-        raise SocialWorkspaceValidationError("upload_ref is invalid")
-    mime_type = _optional_text(data.get("mime_type"), "mime_type", maximum=100, required=True)
-    assert mime_type is not None
-    if not re.fullmatch(r"(?:image|video|audio|application)/[A-Za-z0-9.+-]{1,64}", mime_type):
-        raise SocialWorkspaceValidationError("mime_type is invalid")
-    byte_length = data.get("byte_length")
-    if type(byte_length) is not int or not 1 <= byte_length <= 64 * 1024 * 1024:
-        raise SocialWorkspaceValidationError("byte_length is outside the media budget")
-    digest = data.get("content_digest")
-    if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
-        raise SocialWorkspaceValidationError("content_digest is invalid")
+    download_url = file_data.get("download_url")
+    if (
+        not isinstance(download_url, str)
+        or download_url != download_url.strip()
+        or not 1 <= len(download_url) <= 4096
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in download_url)
+    ):
+        raise SocialWorkspaceValidationError("file download_url is invalid")
+    parsed_url = urlsplit(download_url)
+    if (
+        parsed_url.scheme != "https"
+        or not parsed_url.netloc
+        or parsed_url.username is not None
+        or parsed_url.password is not None
+        or parsed_url.fragment
+    ):
+        raise SocialWorkspaceValidationError("file download_url is invalid")
+    file_id = file_data.get("file_id")
+    if (
+        not isinstance(file_id, str)
+        or not 1 <= len(file_id) <= 256
+        or file_id != file_id.strip()
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in file_id)
+    ):
+        raise SocialWorkspaceValidationError("file file_id is invalid")
+    mime_type = _optional_text(file_data.get("mime_type"), "mime_type", maximum=100)
+    if mime_type is not None and not re.fullmatch(
+        r"(?:image|video|audio|application)/[A-Za-z0-9.+-]{1,64}", mime_type
+    ):
+        raise SocialWorkspaceValidationError("file mime_type is invalid")
+    file_name = _optional_text(file_data.get("file_name"), "file_name", maximum=255)
+    if file_name is not None and any(character in file_name for character in ("/", "\\", "\x00")):
+        raise SocialWorkspaceValidationError("file file_name is invalid")
+    role = _enum(data.get("role"), MediaRole, "role")
+    if role is not MediaRole.IMAGE:
+        raise SocialWorkspaceValidationError("only image asset staging is enabled")
     return AssetStageRequest(
         platform=_enum(data.get("platform"), SocialPlatform, "platform"),
-        upload_ref=upload_ref,
-        role=_enum(data.get("role"), MediaRole, "role"),
-        mime_type=mime_type,
-        byte_length=byte_length,
-        content_digest=digest,
+        file=ChatGPTFile(
+            download_url=download_url,
+            file_id=file_id,
+            mime_type=mime_type,
+            file_name=file_name,
+        ),
+        role=role,
     )
 
 
@@ -1500,9 +1525,22 @@ def validate_asset_status_request(payload: Mapping[str, Any]) -> str:
     return validate_opaque_ref(data.get("asset_ref"), "asset")
 
 
-def compute_action_digest(intent: SocialActionIntent) -> str:
+def compute_action_digest(
+    intent: SocialActionIntent,
+    *,
+    verified_assets: Sequence[Mapping[str, Any]] | None = None,
+) -> str:
+    value: dict[str, Any] = {"intent": asdict(intent)}
+    if verified_assets is not None:
+        value["verified_assets"] = sorted(
+            (dict(asset) for asset in verified_assets),
+            key=lambda asset: str(asset.get("asset_ref", "")),
+        )
     encoded = json.dumps(
-        asdict(intent), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        value if verified_assets is not None else asdict(intent),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -2371,19 +2409,26 @@ SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA: Mapping[str, Any] = {
 
 SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA: Mapping[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+        "OpenAIFile": {
+            "type": "object",
+            "properties": {
+                "download_url": {"type": "string"},
+                "file_id": {"type": "string"},
+                "mime_type": {"type": "string"},
+                "file_name": {"type": "string"},
+            },
+            "required": ["download_url", "file_id"],
+            "additionalProperties": False,
+        }
+    },
     "type": "object",
     "additionalProperties": False,
-    "required": ["platform", "upload_ref", "role", "mime_type", "byte_length", "content_digest"],
+    "required": ["platform", "file", "role"],
     "properties": {
         "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
-        "upload_ref": {"type": "string", "pattern": r"^upl_[A-Za-z0-9_-]{24,160}$"},
-        "role": {"type": "string", "enum": _enum_values(MediaRole)},
-        "mime_type": {
-            "type": "string",
-            "pattern": r"^(image|video|audio|application)/[A-Za-z0-9.+-]{1,64}$",
-        },
-        "byte_length": {"type": "integer", "minimum": 1, "maximum": 67108864},
-        "content_digest": {"type": "string", "pattern": r"^sha256:[a-f0-9]{64}$"},
+        "file": {"$ref": "#/$defs/OpenAIFile"},
+        "role": {"type": "string", "enum": [MediaRole.IMAGE.value]},
     },
 }
 
@@ -2413,12 +2458,24 @@ SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "$defs": _DEFS,
     "type": "object",
     "additionalProperties": False,
-    "required": ["asset_ref", "status", "trust"],
+    "required": [
+        "asset_ref",
+        "status",
+        "mime_type",
+        "byte_length",
+        "content_digest",
+        "expires_at",
+        "trust",
+    ],
     "properties": {
         "asset_ref": {"$ref": "#/$defs/asset_ref"},
         "status": {"type": "string", "enum": _enum_values(AssetLifecycleStatus)},
         "mime_type": {"type": "string", "maxLength": 100},
         "byte_length": {"type": "integer", "minimum": 0, "maximum": 67108864},
+        "content_digest": {"type": "string", "pattern": r"^sha256:[a-f0-9]{64}$"},
+        "width": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "height": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "expires_at": {"type": "string", "format": "date-time"},
         "error_code": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,63}$"},
         "trust": {"const": "untrusted_external_data"},
     },
