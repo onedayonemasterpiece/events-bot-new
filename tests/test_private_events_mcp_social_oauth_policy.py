@@ -20,6 +20,7 @@ from private_events_mcp.access_policy import (
     LEGACY_PUBLISH_SCOPES,
     LEGACY_SOCIAL_SCOPES,
     READ_SCOPES,
+    legacy_social_scope_for,
 )
 from private_events_mcp.config import PrivateEventsMCPConfig
 from private_events_mcp.crypto import (
@@ -235,17 +236,22 @@ async def test_granular_social_authorization_is_chatgpt_only_and_ui_is_exact(con
 
 
 @pytest.mark.asyncio
-async def test_legacy_coarse_scopes_are_not_granular_power_aliases(config) -> None:
+async def test_legacy_coarse_scopes_are_stable_provider_read_write_families(config) -> None:
     assert LEGACY_SOCIAL_SCOPES.isdisjoint(GRANULAR_SOCIAL_SCOPES)
-    legacy_read = frozenset({"telegram:read"})
-    legacy_publish = frozenset({"telegram:publish"})
-    assert not required_scope_for_read("telegram", "get_item", "private").issubset(
-        legacy_read
-    )
+    for operation, access in (
+        ("get_item", "private"),
+        ("search_items", "public"),
+        ("get_statistics", None),
+    ):
+        granular = next(iter(required_scope_for_read("telegram", operation, access)))
+        assert legacy_social_scope_for(granular) == "telegram:read"
+    assert legacy_social_scope_for("vk:notifications:read") == "vk:read"
     for action in ("send_message", "edit", "delete", "story"):
-        assert not required_scope_for_action("telegram", action).issubset(
-            legacy_publish
-        )
+        granular = next(iter(required_scope_for_action("telegram", action)))
+        assert legacy_social_scope_for(granular) == "telegram:publish"
+    assert legacy_social_scope_for("vk:delete") == "vk:publish"
+    assert legacy_social_scope_for("events:read") is None
+    assert legacy_social_scope_for("telegram:future_capability") is None
 
     app = web.Application()
     attach_private_events_mcp(app, config)
@@ -266,8 +272,9 @@ async def test_legacy_coarse_scopes_are_not_granular_power_aliases(config) -> No
         assert "telegram:delete" not in body
         assert "telegram:dm:send" not in body
         assert "telegram:story:write" not in body
-        assert "Legacy publish-scopes" in body
-        assert "отдельного внешнего подтверждения у них нет" in body
+        assert "Стабильные publish-scopes" in body
+        assert "новые типизированные действия" in body
+        assert "внешнего подтверждения оператора" in body
         assert not (LEGACY_PUBLISH_SCOPES & APPROVAL_REQUIRED_SOCIAL_SCOPES)
     finally:
         await client.close()

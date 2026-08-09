@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Any
 
 from .repository import InvalidArgumentsError
@@ -176,6 +177,14 @@ def build_social_workspace_tools(
     }
     if "vk" in enabled_platforms:
         allowed_scopes.add("vk:notifications:read")
+    # The original ChatGPT connector uses stable provider-level scope
+    # families.  Exact operation authorization is still repeated at call time
+    # by MCPProtocol and never crosses read/write or provider boundaries.
+    allowed_scopes.update(
+        f"{platform}:{family}"
+        for platform in enabled_platforms
+        for family in ("read", "publish")
+    )
     allowed_scopes.update(
         scope
         for platform in enabled_platforms
@@ -522,8 +531,68 @@ def build_social_workspace_tools(
         "social_item_resolve": "vk",
         "social_comment_hints_list": "vk",
     }
+
+    def options_for(
+        suffixes: tuple[str, ...], *, legacy_family: str
+    ) -> tuple[frozenset[str], ...]:
+        values = {
+            frozenset({f"{platform}:{suffix}"})
+            for platform in enabled_platforms
+            for suffix in suffixes
+            if f"{platform}:{suffix}" in allowed_scopes
+        }
+        values.update(
+            frozenset({f"{platform}:{legacy_family}"})
+            for platform in enabled_platforms
+        )
+        return tuple(sorted(values, key=lambda option: sorted(option)))
+
+    read_options = options_for(
+        tuple(read_suffixes), legacy_family="read"
+    )
+    discovery_options = options_for(("discover",), legacy_family="read")
+    notification_options = (
+        frozenset({"vk:notifications:read"}),
+        frozenset({"vk:read"}),
+    )
+    mutation_suffixes = tuple(
+        sorted(
+            {
+                next(iter(required_scope_for_action("telegram", action))).split(
+                    ":", 1
+                )[1]
+                for action in enabled_actions
+            }
+        )
+    )
+    mutation_options = options_for(mutation_suffixes, legacy_family="publish")
+    scoped_options = {
+        "social_capabilities": discovery_options,
+        "social_target_resolve": discovery_options,
+        "social_item_resolve": (
+            frozenset({"vk:read:public"}),
+            frozenset({"vk:read"}),
+        ),
+        "social_targets_search": discovery_options,
+        "social_targets_list": discovery_options,
+        "social_content_search": read_options,
+        "social_content_feed": read_options,
+        "social_content_item": read_options,
+        "social_content_thread": read_options,
+        "social_comment_hints_list": notification_options,
+        "social_content_stories": options_for(("story:read",), legacy_family="read"),
+        "social_content_editorial_sample": read_options,
+        "social_content_analytics": options_for(
+            ("analytics", "audience"), legacy_family="read"
+        ),
+        "social_asset_stage": mutation_options,
+        "social_asset_status": mutation_options,
+        "social_action_prepare": mutation_options,
+        "social_action_commit": mutation_options,
+        "social_action_status": mutation_options,
+    }
     return tuple(
-        spec
+        replace(spec, scope_options=scoped_options[spec.name])
         for spec in specs
         if enabled(spec.name)
         and (enabled_actions or spec.name not in action_tool_names)

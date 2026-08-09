@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Preserved the original Private Events MCP ChatGPT endpoint/client identity
+  across routine bootstrap-token rotation and made the four original Telegram/
+  VK read/publish scopes stable same-provider compatibility families for later
+  typed tools, so ordinary MCP updates no longer require a renamed connector.
+
 - Raised the mobile Search native-touch ceiling from 24 to 40 bounded gestures
   after two Android Chrome receipts proved valid W3C swipes and positive DOM
   movement could still stop before a tall final card. Final-card visibility,
@@ -33,6 +38,11 @@
   and authenticated tool behavior are unchanged.
 
 ### Added
+
+- Added a bounded VK incident-intake chain to Private Events MCP: recent
+  comment/mention notification hints, exact canonical wall-post resolution,
+  exact post-URL-to-all-events matching, and role-labelled event provenance for
+  sources, managed publications, VK inbox/import and identity decisions.
 
 - Completed the corrective immutable Current UI Decoder v1 r2 handoff: all 157
   indexed page and component rasters plus 135 raster-backed page records were

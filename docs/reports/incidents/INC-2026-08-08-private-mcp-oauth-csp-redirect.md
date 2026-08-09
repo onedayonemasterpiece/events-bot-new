@@ -98,8 +98,11 @@ redirect chain after the form POST.
 - real Chrome authorization follows the 302 back to ChatGPT after deployment;
 - `/healthz`, exact in-container SHA, SQLite `quick_check`, DB-unchanged and
   secret-redaction checks remain green;
-- rotate the private path and credentials because the incident screenshot
-  exposed the former path.
+- preserve the operator-confirmed installed connector identity unless its OAuth
+  client secret or signing key was exposed. The path segment alone is not an
+  authorization credential: the route must continue to return an OAuth 401
+  challenge and reject every unauthenticated tool call. A full-identity rotation
+  requires an explicit migration because it breaks the installed connector.
 
 ### Required evidence
 
@@ -134,10 +137,16 @@ retry until the CSP hotfix and credential rotation are deployed.
 - [ ] Rotate the bootstrap token after the operator's first successful ChatGPT
   connection with `--rotate-bootstrap-only`; compare the sanitized endpoint
   fingerprints before staging and do not run `--new-install` for that step.
+- [x] Recover the operator-provided original connector bundle by equality-only
+  safe fingerprint matching, restore that path/client identity while preserving
+  the current signing/state key, and verify a complete OAuth+PKCE smoke without
+  printing the endpoint or credentials.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
+- interim recovery deploy: Fly release `v1945`, exact in-container SHA
+  `0e1dad424811c2c2eedda2707b92263f8df1551b`; `/healthz` ready, DB `ok`, issues
+  empty; superseded by the pending stable-identity code release
 - deploy path: `scripts/deploy_fly_main.sh`
 - regression checks: stable-identity/bootstrap-only generator regression added;
   pending merged full suite and browser acceptance

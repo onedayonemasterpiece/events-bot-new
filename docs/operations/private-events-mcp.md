@@ -62,6 +62,7 @@ ChatGPT social scopes are granular by provider and action class:
 <provider>:story:write
 <provider>:analytics
 <provider>:audience
+vk:notifications:read
 ```
 
 `<provider>` is `telegram` or `vk`. Granting a scope does not bypass a runtime
@@ -69,9 +70,15 @@ kill switch, current provider rights, request budgets, or human approval.
 The two `story:*` names are reserved in the policy vocabulary, but are not
 requested by the credential generator and have no activatable production tool
 until the authenticated upload/storage gate is implemented.
-Legacy `telegram:read|publish` and `vk:read|publish` remain only for the narrow
-compatibility implementation when the universal workspace master switch is off;
-they do not alias to the granular workspace scopes.
+The original connector scopes `telegram:read|publish` and `vk:read|publish`
+remain stable provider-level compatibility families. On the ChatGPT resource,
+`*:read` authorizes later typed reads for the same provider and `*:publish`
+authorizes later typed mutations for the same provider. The mapping never
+crosses provider or read/write boundaries, and every typed mutation still needs
+the independent server-side preview/approval/commit flow. Codex can never
+receive these scopes. This lets normal MCP tool evolution preserve the existing
+connector URL, client identity and name; only a genuinely new capability family
+requires new OAuth consent.
 
 After the first successful connection rotate the one-time bootstrap operator
 token. Do not issue or share access/refresh tokens manually.
@@ -103,12 +110,14 @@ matching its granted scopes and the enabled provider/capability flags:
 |---|---|
 | `social_capabilities` | current provider, target and action capabilities |
 | `social_target_resolve` | resolve Saved/self, exact person, channel/group/community or known provider reference into an opaque bound ref |
+| `social_item_resolve` | resolve one canonical VK wall-post URL into bound item and source-target refs |
 | `social_targets_search` | bounded target search |
 | `social_targets_list` | bounded accessible dialogs/managed targets |
 | `social_content_search` | bounded keyword search |
 | `social_content_feed` | bounded target feed/history |
 | `social_content_item` | fetch one bound item |
 | `social_content_thread` | comments or reaction summaries |
+| `social_comment_hints_list` | bounded recent VK comment/mention notifications as untrusted investigation hints |
 | `social_content_editorial_sample` | purpose-bound editorial sample, at most 25 items/page and 100 cumulatively |
 | `social_content_analytics` | bounded aggregate statistics/audience counts where the credential is entitled |
 | `social_action_prepare` | freeze exact typed action/content/target/media digest; no provider call |
@@ -214,6 +223,7 @@ fallback. Each fixed typed method is mapped to one explicit role credential:
 
 ```text
 PRIVATE_EVENTS_MCP_VK_PUBLIC_READER_TOKEN
+PRIVATE_EVENTS_MCP_VK_NOTIFICATION_READER_TOKEN
 PRIVATE_EVENTS_MCP_VK_DIALOG_READER_TOKEN
 PRIVATE_EVENTS_MCP_VK_USER_MESSENGER_TOKEN
 PRIVATE_EVENTS_MCP_VK_COMMUNITY_EDITOR_TOKEN
@@ -231,6 +241,16 @@ operation ref so concurrent or mutated replays cannot duplicate provider work.
 Encrypted provider refs, sample/cursor state and action receipts survive process
 restart; an interrupted unreceipted operation becomes non-retryable
 `outcome_unknown` rather than being executed again.
+
+`social_comment_hints_list` uses only the fixed `notifications.get` method,
+requires the dedicated notification-reader actor and scope, returns at most 25
+hints per page, and accepts a maximum 48-hour date window. A hint is untrusted
+evidence, not proof of an event defect. Follow it via `root_item_ref` and
+`social_content_thread`, or resolve a known canonical `vk.com/wall…` URL with
+`social_item_resolve`. Then call `events_search(post_url=...)` to retrieve every
+exactly related event and `event_get` for role-labelled source/publication/
+identity evidence. Ambiguous URL relations are returned as all matches rather
+than guessed.
 
 ## Privacy, untrusted data and logs
 
@@ -290,6 +310,9 @@ python scripts/generate_private_events_mcp_credentials.py \
 Without `--enable-chatgpt-social`, the ChatGPT profile requests only the three
 evidence read scopes. With it, the profile contains the granular social scopes
 and `offline_access`; runtime switches still remain off until explicitly set.
+An already installed connector with the four original provider-level social
+scopes does not need a new name or identity: the compatibility families above
+cover later typed tools within the same provider/read-write boundary.
 The generator has no implicit/default generation mode. `--new-install` creates
 a new private path, ChatGPT client ID/secret, Codex client ID, signing key,
 social-approval token and bootstrap token. Do not use it for routine bootstrap

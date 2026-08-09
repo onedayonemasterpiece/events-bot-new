@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from .social_workspace import SOCIAL_WORKSPACE_SCOPES
 
-
 READ_SCOPES = frozenset({"events:read", "incidents:read", "operations:read"})
 LEGACY_SOCIAL_SCOPES = frozenset(
     {"telegram:read", "telegram:publish", "vk:read", "vk:publish"}
@@ -35,6 +34,41 @@ SOCIAL_MUTATION_SCOPES = frozenset(
 # retired; they must never be described as externally approved.
 APPROVAL_REQUIRED_SOCIAL_SCOPES = SOCIAL_MUTATION_SCOPES
 LEGACY_PUBLISH_SCOPES = frozenset({"telegram:publish", "vk:publish"})
+
+_LEGACY_READ_SUFFIXES = frozenset(
+    {
+        "discover",
+        "read:public",
+        "read:private",
+        "read:dialogs",
+        "story:read",
+        "analytics",
+        "audience",
+        "notifications:read",
+    }
+)
+
+
+def legacy_social_scope_for(required_scope: str) -> str | None:
+    """Return the stable coarse ChatGPT scope for one granular social scope.
+
+    The four original scopes are durable provider capability families.  This
+    compatibility mapping never crosses provider or read/write boundaries and
+    therefore lets an existing ChatGPT connector discover later typed tools
+    without changing its URL/client identity.  Codex cannot use the mapping
+    because its client policy never permits any legacy social scope.
+    """
+
+    if not isinstance(required_scope, str) or ":" not in required_scope:
+        return None
+    platform, suffix = required_scope.split(":", 1)
+    if platform not in {"telegram", "vk"}:
+        return None
+    if suffix in _LEGACY_READ_SUFFIXES:
+        return f"{platform}:read"
+    if required_scope in SOCIAL_MUTATION_SCOPES:
+        return f"{platform}:publish"
+    return None
 
 CHATGPT_DEFAULT_SCOPES = READ_SCOPES
 CODEX_DEFAULT_SCOPES = READ_SCOPES
