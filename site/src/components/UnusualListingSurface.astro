@@ -18,7 +18,7 @@ const approvedItems = feed.approved ? feed.items : [];
     </header>
 
     {feed.approved && approvedItems.length > 0 ? (
-      <section class="unusual-page__feed" aria-labelledby="unusual-feed-title" data-unusual-feed-ready="true" data-unusual-feed-build={feed.buildId}>
+      <section class="unusual-page__feed" aria-labelledby="unusual-feed-title" data-unusual-feed="ready" data-unusual-feed-ready="true" data-unusual-feed-build={feed.buildId}>
         <div class="unusual-page__feed-head">
           <h2 id="unusual-feed-title">{approvedItems.length} необычных событий</h2>
           <span>Не больше одного события на замысел</span>
@@ -28,6 +28,7 @@ const approvedItems = feed.approved ? feed.items : [];
             <div
               class="unusual-page__card"
               data-unusual-card
+              data-unusual-event-id={item.event.id}
               data-unusual-concept-id={item.conceptId}
               data-unusual-tier={item.tier}
               data-unusual-notify-eligible={item.notifyEligible ? 'true' : 'false'}
@@ -38,7 +39,7 @@ const approvedItems = feed.approved ? feed.items : [];
         </div>
       </section>
     ) : (
-      <section class="unusual-page__empty" aria-labelledby="unusual-empty-title" data-unusual-feed-empty>
+      <section class="unusual-page__empty" aria-labelledby="unusual-empty-title" data-unusual-feed="empty" data-unusual-feed-empty>
         <h2 id="unusual-empty-title">Подборка пока готовится</h2>
         <p>Показываем её только после проверки качества. При неполных данных, миграции или ошибке список остаётся пустым — обычные события сюда не подмешиваются.</p>
       </section>
