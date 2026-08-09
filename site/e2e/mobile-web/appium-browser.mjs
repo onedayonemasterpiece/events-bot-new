@@ -1,4 +1,5 @@
-import { classifySafariInspection, stabilizeSafariSystemUi } from './safari-system-ui.mjs';
+import { classifySafariInspection, SafariFirstRunUiError,
+  stabilizeSafariSystemUi } from './safari-system-ui.mjs';
 
 const IOS_WEB_INPUT_TYPES = Object.freeze([
   'XCUIElementTypeTextField',
@@ -301,11 +302,11 @@ export function summarizeKnownSafariNativeSource(source) {
 }
 
 /**
- * Inspect only the current bounded Safari first-run alert through native
- * XCTest predicate lookup plus WDA's alert API. Exactly one alert-text line
- * must equal the expected title, and the requested button must occur
- * exactly once in that same current alert. No XPath hierarchy snapshot or
- * unscoped same-named button is accepted.
+ * Inspect only the current bounded Safari first-run UI through native XCTest
+ * predicate lookup. A WDA alert must bind one exact title line to one exact
+ * alert button. A non-alert native sheet must bind one live exact title and
+ * button to one allowlisted clean-simulator container summary. No XPath action
+ * or unscoped same-named button is accepted.
  */
 export async function inspectSafariNativeUiProtocol({ findElements, getAlertText, getAlertButtons,
   getActiveAppInfo, getNativeSourceSummary }) {
@@ -320,6 +321,7 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
     exactStaticText: `type == 'XCUIElementTypeStaticText' AND (name == '${title}' OR label == '${title}')`,
     containingStaticText: `type == 'XCUIElementTypeStaticText' AND (name CONTAINS '${title}' OR label CONTAINS '${title}')`,
     exactAnyElement: `(name == '${title}' OR label == '${title}')`,
+    exactVisibleActionButton: `type == 'XCUIElementTypeButton' AND visible == 1 AND (name == '${action}' OR label == '${action}')`,
   };
   const query = async (predicate) => {
     const result = await findElements('-ios predicate string', predicate);
@@ -332,6 +334,7 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
   const exactStaticTexts = await query(predicates.exactStaticText);
   const containingStaticTexts = await query(predicates.containingStaticText);
   const exactAnyElements = await query(predicates.exactAnyElement);
+  const exactActionButtons = await query(predicates.exactVisibleActionButton);
   let alertText = null;
   let buttons = [];
   try {
@@ -362,10 +365,43 @@ export async function inspectSafariNativeUiProtocol({ findElements, getAlertText
     nativeSource = await getNativeSourceSummary().catch(() => ({ source_inspected: false }));
   }
   const titleBelongsToCurrentAlert = titles.length === 1 && exactTitleLineCount === 1;
-  const scopedActions = titleBelongsToCurrentAlert ? buttons.filter((label) => label === action) : [];
+  const alertActions = titleBelongsToCurrentAlert
+    ? buttons.filter((label) => label === action)
+    : [];
+  const nativeContainerCount = Number(nativeSource?.alert_container_count || 0)
+    + Number(nativeSource?.sheet_container_count || 0);
+  const nativeContainerIsExact = currentAlertCount === 0
+    && ['safari', 'springboard'].includes(activeAppOwner)
+    && nativeSource?.source_inspected === true
+    && Number(nativeSource.application_container_count) === 1
+    && Number(nativeSource.alert_container_count) === 0
+    && Number(nativeSource.sheet_container_count) === 1
+    && nativeContainerCount === 1
+    && Number(nativeSource.title_match_count) === 1
+    && Number(nativeSource.continue_match_count) === exactActionButtons.length
+    && Number(nativeSource.settings_match_count) <= 1
+    && Number(nativeSource.matched_static_text_count) === 1
+    && Number(nativeSource.matched_button_count)
+      === Number(nativeSource.continue_match_count) + Number(nativeSource.settings_match_count)
+    && Number(nativeSource.matched_other_type_count) === 0
+    && titles.length === 1
+    && exactStaticTexts.length === 1
+    && containingStaticTexts.length === 1
+    && exactAnyElements.length === 1;
+  const nativeActions = nativeContainerIsExact
+    ? exactActionButtons.map(() => ({ kind: 'native_exact_button', label: action }))
+    : [];
+  const scopedActions = titleBelongsToCurrentAlert ? alertActions : nativeActions;
+  const knownTopLevelCount = titleBelongsToCurrentAlert || nativeContainerIsExact ? 1 : 0;
+  // Some callers retain the clean pre-navigation source for a durable OTP
+  // diagnostic. Bind that historical container summary to live exact native
+  // elements so a dismissed sheet cannot remain a phantom blocker.
+  const liveNativeContainerCount = titles.length > 0 || exactActionButtons.length > 0
+    ? nativeContainerCount : 0;
+  const topLevelCount = currentAlertCount || liveNativeContainerCount;
   return {
     ...classifySafariInspection({ titleCount: titles.length, scopedActions,
-      topLevelCount: currentAlertCount, knownTopLevelCount: titleBelongsToCurrentAlert ? 1 : 0 }),
+      topLevelCount, knownTopLevelCount }),
     contract_probe: {
       exact_visible_static_text_count: titles.length,
       exact_static_text_count: exactStaticTexts.length,
@@ -398,10 +434,36 @@ export async function prepareIosSafariWebContext(driver, { inspect } = {}) {
     getAlertText: () => driver.getAlertText(),
     getAlertButtons: () => driver.executeScript('mobile: alert', [{ action: 'getButtons' }]),
     getActiveAppInfo: () => driver.executeScript('mobile: activeAppInfo', []),
+    getNativeSourceSummary: async () => summarizeKnownSafariNativeSource(await driver.getPageSource()),
   }));
   const startup = await stabilizeSafariSystemUi({
     inspect: inspectNative,
-    dismissKnownDialog: async (buttonLabel) => driver.executeScript('mobile: alert', [{ action: 'accept', buttonLabel }]),
+    dismissKnownDialog: async (token) => {
+      if (token?.kind !== 'native_exact_button') {
+        await driver.executeScript('mobile: alert', [{ action: 'accept', buttonLabel: token }]);
+        return;
+      }
+      const literal = iosPredicateLiteral(token.label);
+      const matches = await driver.findElements('-ios predicate string',
+        `type == 'XCUIElementTypeButton' AND visible == 1 AND (name == '${literal}' OR label == '${literal}')`);
+      if (!Array.isArray(matches) || matches.length !== 1) {
+        throw new SafariFirstRunUiError('native_action_match_count', {
+          dialog: 'search_engine_choice', seen: true, dismissed: false,
+          attempts: 1, elapsed_ms: 0, obstruction_free: false,
+          transitions: ['native_action_revalidated'],
+          last_inspection: { known_dialog_count: 1,
+            continue_button_count: Array.isArray(matches) ? matches.length : 0,
+            blocking_dialog_count: 1, unknown_blocking_dialog_count: 0 },
+        });
+      }
+      const elementId = matches[0]['element-6066-11e4-a52e-4f735466cecf'] || matches[0].ELEMENT;
+      if (!elementId) throw new SafariFirstRunUiError('native_action_id_missing', {
+        dialog: 'search_engine_choice', seen: true, dismissed: false,
+        attempts: 1, elapsed_ms: 0, obstruction_free: false,
+        transitions: ['native_action_revalidated'],
+      });
+      await driver.elementClick(elementId);
+    },
   });
   let selected = null;
   await driver.waitUntil(async () => {

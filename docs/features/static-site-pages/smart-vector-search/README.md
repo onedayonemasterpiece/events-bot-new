@@ -1177,3 +1177,20 @@ exact `origin/main`, а новый workflow ref —
 два полных workflow:
 browser+Android и browser+iOS. До их terminal evidence состояние остаётся
 `PRODUCT_HEALTH_UNCONFIRMED`.
+
+Live acceptance на 2026-08-09: workflow
+[`31337041139`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337041139)
+дал первый принятый proof — browser и Android оба `HEALTHY/PASS` на одном
+target/runtime/backend/content/index identity, с одним HTTP-200 Search POST,
+пятью IDs = пятью cards и открытием event route HTTP 200. Browser+iOS runs
+[`31337291226`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337291226)
+и [`31337643487`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337643487)
+дважды остановились в side-effect-free Safari preflight: `0` broker/Auth/Search
+операций. Общий OTP/Search mobile transport распознавал только WDA-alert route,
+хотя fresh iOS 18.5 simulator показал тот же allowlisted search-choice UI как
+native sheet. Исправление находится только в нейтральном `site/e2e/mobile-web/`:
+оно использует существующий bounded source reducer, допускает ровно одну sheet
+и один exact `Продолжить`, revalidate-ит element перед click и сохраняет лишь
+closed counters/error code. Отдельный Search workaround запрещён. Acceptance
+остаётся `1/2`; schedule variable не включается до нового merged-SHA iOS PASS и
+равенства immutable identity с первым proof.

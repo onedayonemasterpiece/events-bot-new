@@ -30,6 +30,29 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 workflow `31337041139` is the first accepted Stage-2 proof:
+  browser and Android both completed `HEALTHY/PASS` against the same immutable
+  target/runtime/backend/catalog/corpus identity. Each platform made exactly
+  one HTTP-200 vector-only Search POST, rendered five response IDs as five
+  cards, performed a real wheel/native scroll, opened the exact event route at
+  HTTP 200 and observed zero LLM/pagination/receipt/storage or product-network
+  errors. This closes acceptance `1/2`; automation remains default-off.
+
+- 2026-08-09 browser+iOS workflows `31337291226` and `31337643487` both kept
+  the browser green on the same product identity but stopped iOS before broker,
+  Auth or Search in the fresh-simulator Safari first-run UI. WDA reported no
+  current alert while the exact allowlisted search-choice title was present,
+  so the shared transport rejected it as `safari_first_run_ui` and the old
+  evidence truncation hid the closed suffix. Root-cause review found that the
+  earlier OTP-to-neutral transport extraction had retained the safe native
+  source reducer but had not wired it into default Search preflight or a
+  non-alert sheet action. The common OTP/Search helper now accepts only one
+  exact native sheet with one exact `Продолжить` button, revalidates its element
+  id before click, rejects ambiguity, and exposes only closed counters and a
+  safe infrastructure code. A new merged-SHA browser+iOS live proof is still
+  required; these two zero-side-effect infrastructure runs are not Search
+  product failures and do not close acceptance `2/2`.
+
 - 2026-08-09 merged-SHA run `31336453210` crossed the previous Android
   observer blocker: Android completed Auth/owner-RLS and exactly one real
   vector-only Search POST returned HTTP 200 with five IDs equal to five cards,

@@ -820,8 +820,11 @@ logs удаляются до завершения job и никогда не п�
 Android/iOS Search и real-mail OTP используют один нейтральный transport из
 `site/e2e/mobile-web/`; feature adapters не имеют права копировать Appium
 startup/capabilities. iOS сначала запускает `com.apple.mobilesafari` как native
-application, очищает только exact allowlisted first-run dialog, затем подключает
-WebKit. Общий профиль задаёт `appium:webviewConnectTimeout=60000` и bounded
+application, очищает только exact allowlisted first-run dialog через один
+текущий WDA alert либо одну native sheet с единственной точной allowlisted
+кнопкой, затем подключает WebKit. Анализ clean-simulator source сворачивается в
+закрытые счётчики; Search не сохраняет source и не имеет отдельного Safari
+обработчика. Общий профиль задаёт `appium:webviewConnectTimeout=60000` и bounded
 `appium:webviewConnectRetries=120`: официальный XCUITest default 5000 мс уже
 привёл Search CI к отказу через 5.749 секунды. Action link и secret target не
 передаются в capabilities и не входят в публикуемые evidence/Appium logs.
