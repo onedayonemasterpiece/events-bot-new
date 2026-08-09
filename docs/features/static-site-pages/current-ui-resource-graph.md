@@ -260,6 +260,12 @@ not acceptance gates. Each locator is scrolled once, must hold stable geometry
 for five animation frames, and then receives the same bounded consecutive-frame
 comparison. Exact-route pages additionally wait for network idle and fonts and
 disable motion before element capture.
+
+An absence-only real-route binding (for example event `2601`, whose exact
+resolver emits no medallion root) is complete only after every declared absent
+selector is measured at count zero. The decoder does not demand a visible root
+after that proof and does not fabricate an empty component or screenshot.
+
 Manifest, HTML and browser navigation retries are bounded to three attempts;
 retry configuration itself is capped.
 

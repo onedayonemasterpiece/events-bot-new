@@ -123,6 +123,11 @@ async function visibleLocator(page, selector) {
   return null;
 }
 
+export function isAbsenceOnlyBinding(binding) {
+  const absent = new Set(binding.expected_absent_selectors || []);
+  return absent.size > 0 && (binding.selectors || []).length > 0 && binding.selectors.every((selector) => absent.has(selector));
+}
+
 export function assertRealRouteEvidencePacket(packet) {
   if (packet.schema_version !== SPECIMEN_SCHEMA || packet.production_state_claimed !== false || packet.human_review_status !== 'pending') throw new Error('Invalid real-route evidence boundary');
   if (packet.full_url_retained !== false || JSON.stringify(packet).match(/https?:\/\//iu)) throw new Error('Real-route evidence leaked a URL');
@@ -189,6 +194,7 @@ export async function captureExactRealRoutes({
         const locator = await visibleLocator(page, selector); if (locator) selected.push({ selector, locator });
         if (selected.length >= maxElementsPerContext) break;
       }
+      if (!selected.length && isAbsenceOnlyBinding(binding)) continue;
       if (!selected.length) throw new Error(`No visible evidence selector for binding: ${binding.route_binding_id}`);
       for (let index = 0; index < selected.length; index += 1) {
         const { selector, locator } = selected[index]; const name = `${binding.route_binding_id}-${contextPlan.name}-${index}.png`;

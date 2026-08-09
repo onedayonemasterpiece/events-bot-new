@@ -295,3 +295,18 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(cases).map(([name,r
     assert observed["good"] == "accepted"
     assert observed["tolerant"] == "accepted"
     assert all(observed[name] != "accepted" for name in ("url", "unstable", "reviewed"))
+
+
+def test_expected_absence_only_route_binding_needs_no_fabricated_visible_element():
+    observed = _node(
+        _imports("isAbsenceOnlyBinding")
+        + """
+const selector='[data-medallion-layout]';
+console.log(JSON.stringify({
+  absenceOnly:isAbsenceOnlyBinding({selectors:[selector],expected_absent_selectors:[selector]}),
+  mixed:isAbsenceOnlyBinding({selectors:[selector,'[data-other]'],expected_absent_selectors:[selector]}),
+  empty:isAbsenceOnlyBinding({selectors:[],expected_absent_selectors:[]}),
+}));
+"""
+    )
+    assert observed == {"absenceOnly": True, "mixed": False, "empty": False}
