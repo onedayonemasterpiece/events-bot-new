@@ -44,7 +44,7 @@ auth fixture, shared mobile transport, registry and canonical Search docs.
 | R08 workflows/default PR CI | Done | two manual dry workflows; deterministic CI step |
 | R09 bounded PR #436 decision | Done | README §16.10; useful preclaim guard, not merged/deployed/dependency |
 | R10 canonical docs + Stage 2 handoff | Done | README §16 and `stage-2-production-health-handoff.md` |
-| R11 deterministic acceptance/zero live | Done | 29/29 architecture + 29/29 existing harness; safety counters above |
+| R11 deterministic acceptance/zero live | Done | 30/30 architecture + 29/29 existing harness; safety counters above |
 | R12 clean pushed PR | Pending fresh head | PR [#441](https://github.com/onedayonemasterpiece/events-bot-new/pull/441); push and fresh Actions evidence follow this local gate |
 | R13 fail-closed source binding | Done | source manifest/tree/archive parity and cross-deploy recovery negative tests |
 | R14 Stage-2 mobile/status contract | Done | morning browser+Android, evening browser+iOS, independent platform incident scope |
@@ -55,7 +55,7 @@ Commands executed from the clean integration worktree:
 
 ```bash
 npm --prefix site run test:search-production-health
-# 29 pass, 0 fail/skip/todo
+# 30 pass, 0 fail/skip/todo
 
 npm --prefix site run test:search-e2e-harness
 # 29 pass, 0 fail/skip/todo
