@@ -24205,15 +24205,14 @@ async def _recover_previous_static_site_attempt(
         or not claim.dataset_ref
     ):
         raise StaticSitePermanentError("static_site_recovery_handoff_identity_mismatch")
-    if required["repo_sha"] != current_repo_sha:
-        raise StaticSitePermanentError(
-            "static_site_recovery_cross_deploy_repo_sha_mismatch"
-        )
     handoff_source = (
         handoff.get("source_identity")
         if isinstance(handoff.get("source_identity"), Mapping)
         else None
     )
+    incompatible_reason = None
+    if required["repo_sha"] != current_repo_sha:
+        incompatible_reason = "static_site_recovery_cross_deploy_repo_sha_mismatch"
     if current_source_identity is not None:
         expected_source = {
             "image_source_manifest_sha256": str(
@@ -24227,9 +24226,74 @@ async def _recover_previous_static_site_attempt(
             str(handoff_source.get(key) or "") != value
             for key, value in expected_source.items()
         ):
-            raise StaticSitePermanentError(
+            incompatible_reason = (
                 "static_site_recovery_cross_deploy_source_identity_mismatch"
             )
+    if incompatible_reason:
+        # A replacement image cannot adopt bytes produced from a different
+        # immutable source identity.  It also must not leave an already
+        # terminal exact-owner claim permanently wedged: prove terminality,
+        # release only that run's resources, record the rejected handoff, and
+        # only then continue to a fresh current-image build.  A live/unknown
+        # remote remains single-flight and is never replaced.
+        from kaggle_status import (
+            TERMINAL_STATUSES,
+            reconcile_kaggle_run_failure_from_host,
+        )
+
+        remote_status = str(claim.remote_status or "").strip().lower()
+        if not claim.remote_terminal_at or remote_status not in TERMINAL_STATUSES:
+            raise StaticSiteSingleFlightDeferred(
+                f"{incompatible_reason}:terminal_evidence_pending:{claim.run_id}"
+            )
+        await reconcile_kaggle_run_failure_from_host(
+            db,
+            run_id=claim.run_id,
+            message=(
+                "static-site terminal handoff rejected before replacement: "
+                f"{incompatible_reason}"
+            ),
+        )
+        await asyncio.to_thread(
+            finish_static_site_build_claim,
+            db.path,
+            claim_token=claim.claim_token,
+            run_id=claim.run_id,
+            input_fingerprint=claim.input_fingerprint,
+            effective_date=claim.effective_date,
+            success=False,
+            receipt={
+                "status": "cross_deploy_recovery_rejected",
+                "reason": incompatible_reason,
+                "remote_status": remote_status,
+            },
+        )
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "remote_handoff": None,
+                "remote_recovery": {
+                    "status": "cross_deploy_recovery_rejected",
+                    "reason": incompatible_reason,
+                    "run_id": claim.run_id,
+                },
+            },
+        )
+        removed = await asyncio.to_thread(
+            delete_immutable_snapshot,
+            required["snapshot_path"],
+            required["manifest_path"],
+        )
+        await _delete_terminal_static_site_output(required["build_id"])
+        logging.warning(
+            "static_site_build: discarded incompatible terminal recovery "
+            "run_id=%s reason=%s snapshot_bytes=%s",
+            claim.run_id,
+            incompatible_reason,
+            removed,
+        )
+        return False, None
     snapshot_metadata = await asyncio.to_thread(
         validate_snapshot, Path(required["snapshot_path"]), Path(required["manifest_path"])
     )
