@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- **Static site pages / first-party action-map research**: added the supplied full and concise research on semantic component-level interaction signals, including the `ALWAYS` / `CAMPAIGN_ONLY` / `DO_NOT_COLLECT` evidence policy; this is research input only, with no runtime telemetry change.
 
 - Completed Current UI Behavioral Decoder v1.1 evidence closure on Actions run
   `31327863197`: all 293 breakpoint/container probes now have terminal runtime

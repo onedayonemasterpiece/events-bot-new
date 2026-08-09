@@ -532,6 +532,8 @@ Preview fixture note: production row `5370` («Точка и линия») curre
 
 Build/runbook: `docs/features/static-site-pages/astro-preview.md`. Reaction counter architecture: `docs/features/static-site-pages/reaction-counters.md`. Event-page medallions / quick-read tokens: `docs/features/static-site-pages/event-token-medallions.md`.
 
+Research input for first-party component action observability: `docs/features/static-site-pages/first-party-action-map-research/README.md`.
+
 ## Share / Open Graph
 
 The share experiment is closed. Production-like UI exposes only one `Поделиться` action. It attempts, in order:
