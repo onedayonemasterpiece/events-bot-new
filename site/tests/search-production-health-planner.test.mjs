@@ -15,6 +15,7 @@ test('relevant pull requests deterministically select contract CI without live w
   assert.equal(isProductionHealthContractPath('site/e2e/search/production-health-contract.mjs'), true);
   assert.equal(isProductionHealthContractPath('.github/workflows/search-production-health.yml'), true);
   assert.equal(isProductionHealthContractPath('site/e2e/auth-session-fixture/session-fixture.mjs'), true);
+  assert.equal(isProductionHealthContractPath('scripts/request_static_site_build.py'), true);
   assert.equal(isProductionHealthContractPath('README.md'), false);
   const relevant = planProductionHealthRun({
     plane: 'contract_ci',

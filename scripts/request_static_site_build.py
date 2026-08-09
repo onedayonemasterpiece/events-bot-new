@@ -60,6 +60,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
             "result_sha256": current.result_sha256,
             "manifest_sha256": current.manifest_sha256,
             "token_sha256": current.token_sha256,
+            "input_fingerprint": current.input_fingerprint,
             "verified_at": current.verified_at,
         }
     from main import enqueue_static_site_build_request

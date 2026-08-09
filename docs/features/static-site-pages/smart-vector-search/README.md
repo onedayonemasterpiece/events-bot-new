@@ -881,7 +881,10 @@ Android и iOS, а `release_exact` применяется лишь к свеже
    является fallback, пока это не реально выпущенная поверхность.
 3. Полный immutable tuple фиксируется один раз до journey. Checkout SHA с ним
    не сравнивается. `content_generation_id` и `search_index_generation_id`
-   записываются как telemetry.
+   записываются как telemetry. Canonical `--show-current-review` adapter
+   обязан получить `input_fingerprint` вместе с build/run/repo/snapshot и
+   digest-полями, а также проверить, что SHA-256 opaque URL token совпадает с
+   `token_sha256` accepted receipt.
 4. После journey разрешена только повторная проверка pointer. Если identity
    изменилась, записывается `target_superseded=true`; Search не повторяется,
    результат не становится product failure.

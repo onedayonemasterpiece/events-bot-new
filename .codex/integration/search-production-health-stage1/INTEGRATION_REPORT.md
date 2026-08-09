@@ -24,7 +24,7 @@
 
 No worker change was dropped. Integration tightened the core target pin from a
 synthetic release label to the repository's existing immutable candidate tuple
-(`build_id`, `run_id`, `repo_sha`, `snapshot_id`, artifact hashes and optional
+(`build_id`, `run_id`, `repo_sha`, `snapshot_id`, artifact hashes and required
 `input_fingerprint`) and expanded relevant-path policy to the new workflows,
 auth fixture, shared mobile transport, registry and canonical Search docs.
 

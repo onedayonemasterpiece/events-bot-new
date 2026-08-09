@@ -1,10 +1,47 @@
+import { createHash } from 'node:crypto';
+
 const ACCEPTED_SOURCE = 'current_accepted_pointer';
-const SECRET_REVIEW_PATH = /^\/_review\/[A-Za-z0-9_-]{43}\/poisk\/$/u;
+const SECRET_REVIEW_ROOT_PATH = /^\/_review\/([A-Za-z0-9_-]{43})\/$/u;
+const SECRET_REVIEW_SEARCH_PATH = /^\/_review\/([A-Za-z0-9_-]{43})\/poisk\/$/u;
 const SHA40 = /^[0-9a-f]{40}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$/u;
 
 export const ACCEPTED_TARGET_RESOLVER_SOURCE = ACCEPTED_SOURCE;
+
+/**
+ * Adapt the exact JSON shape emitted by
+ * `request_static_site_build.py --show-current-review`. The CLI returns the
+ * accepted review root; the health surface is its `/poisk/` child.
+ */
+export function currentReviewCliResultToAcceptedTargetInput(input) {
+  if (
+    !input || typeof input !== 'object'
+    || input.ok !== true
+    || input.status !== 'current_review_ready'
+    || input.release_channel !== 'secret_preview'
+  ) {
+    throw new Error('search_health_current_review_not_ready');
+  }
+  let root;
+  try {
+    root = new URL(String(input.public_url || ''));
+  } catch {
+    throw new Error('search_health_current_review_url_invalid');
+  }
+  if (
+    root.protocol !== 'https:'
+    || root.username || root.password || root.search || root.hash
+    || !SECRET_REVIEW_ROOT_PATH.test(root.pathname)
+  ) {
+    throw new Error('search_health_current_review_url_invalid');
+  }
+  return {
+    ...input,
+    source: ACCEPTED_SOURCE,
+    target_url: new URL('poisk/', root).href,
+  };
+}
 
 export function redactAcceptedTargetUrl(value) {
   let parsed;
@@ -16,7 +53,7 @@ export function redactAcceptedTargetUrl(value) {
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) {
     throw new Error('search_health_target_url_invalid');
   }
-  if (!SECRET_REVIEW_PATH.test(parsed.pathname)) throw new Error('search_health_target_not_current_accepted');
+  if (!SECRET_REVIEW_SEARCH_PATH.test(parsed.pathname)) throw new Error('search_health_target_not_current_accepted');
   const redactedPath = parsed.pathname
     .replace(/^\/_review\/[A-Za-z0-9_-]{43}\//u, '/_review/<redacted>/');
   return `${parsed.origin}${redactedPath}`;
@@ -101,15 +138,20 @@ export function normalizeAcceptedTargetResolverResult(input) {
   if (
     parsed.protocol !== 'https:'
     || parsed.username || parsed.password || parsed.search || parsed.hash
-    || !SECRET_REVIEW_PATH.test(parsed.pathname)
+    || !SECRET_REVIEW_SEARCH_PATH.test(parsed.pathname)
   ) {
     throw new Error('search_health_target_url_invalid');
   }
   const targetRepoSha = String(input.target_repo_sha || input.repo_sha || '').trim().toLowerCase();
   if (!SHA40.test(targetRepoSha)) throw new Error('search_health_target_repo_sha_invalid');
-  const inputFingerprint = input.input_fingerprint == null || input.input_fingerprint === ''
-    ? null
-    : requiredSha256(input.input_fingerprint, 'search_health_target_input_fingerprint_invalid');
+  const inputFingerprint = requiredSha256(
+    input.input_fingerprint,
+    'search_health_target_input_fingerprint_invalid',
+  );
+  const tokenSha256 = requiredSha256(input.token_sha256, 'search_health_target_token_sha256_invalid');
+  const reviewToken = parsed.pathname.match(SECRET_REVIEW_SEARCH_PATH)?.[1];
+  const observedTokenSha256 = createHash('sha256').update(reviewToken || '', 'utf8').digest('hex');
+  if (observedTokenSha256 !== tokenSha256) throw new Error('search_health_target_token_hash_mismatch');
   const immutableIdentity = {
     build_id: requiredSafeId(input.build_id, 'search_health_target_build_id_invalid'),
     run_id: requiredSafeId(input.run_id || input.accepted_release_id, 'search_health_target_run_id_invalid'),
@@ -117,8 +159,8 @@ export function normalizeAcceptedTargetResolverResult(input) {
     snapshot_id: requiredSafeId(input.snapshot_id, 'search_health_target_snapshot_id_invalid'),
     result_sha256: requiredSha256(input.result_sha256, 'search_health_target_result_sha256_invalid'),
     manifest_sha256: requiredSha256(input.manifest_sha256, 'search_health_target_manifest_sha256_invalid'),
-    token_sha256: requiredSha256(input.token_sha256, 'search_health_target_token_sha256_invalid'),
-    ...(inputFingerprint ? { input_fingerprint: inputFingerprint } : {}),
+    token_sha256: tokenSha256,
+    input_fingerprint: inputFingerprint,
   };
 
   // checkout_repo_sha is intentionally neither required nor compared. The

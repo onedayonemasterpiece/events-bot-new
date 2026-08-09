@@ -43,6 +43,7 @@ const RELEVANT_PATHS = [
   /^supabase\/migrations\/[^/]*event_search[^/]*\.sql$/u,
   /^\.github\/workflows\/(?:static-site-search-canary|search-production-health|search-release-qualification|ci)\.ya?ml$/u,
   /^\.github\/scripts\/(?:[^/]*static-search[^/]*|resolve-static-search-target)\.[^/]+$/u,
+  /^scripts\/request_static_site_build\.py$/u,
   /^site\/package\.json$/u,
   /^docs\/features\/unsigned-personalization\/authorized-event-search\.md$/u,
   /^docs\/features\/static-site-pages\/smart-vector-search\//u,

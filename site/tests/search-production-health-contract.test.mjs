@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -20,6 +22,7 @@ import {
 import {
   assessAcceptedTargetSupersession,
   createAcceptedTargetRun,
+  currentReviewCliResultToAcceptedTargetInput,
   normalizeAcceptedTargetResolverResult,
   redactAcceptedTargetUrl,
 } from '../e2e/search/production-health-target.mjs';
@@ -66,21 +69,27 @@ const healthyObservation = (overrides = {}) => ({
   ...overrides,
 });
 
-const resolverRow = (overrides = {}) => ({
-  source: 'current_accepted_pointer',
-  target_url: `https://kenigevents.ru/_review/${'A'.repeat(43)}/poisk/`,
-  target_repo_sha: 'a'.repeat(40),
-  checkout_repo_sha: 'b'.repeat(40),
-  build_id: 'production-secret-42',
-  run_id: 'static-site:production-secret-42:run',
-  snapshot_id: 'snapshot-42',
-  result_sha256: 'c'.repeat(64),
-  manifest_sha256: 'd'.repeat(64),
-  token_sha256: 'e'.repeat(64),
-  input_fingerprint: 'f'.repeat(64),
-  generation_ids: { catalog: 'catalog-9', corpus: 'corpus-10' },
-  ...overrides,
-});
+const tokenSha256 = (token) => createHash('sha256').update(token, 'utf8').digest('hex');
+
+const resolverRow = (overrides = {}) => {
+  const token = overrides.review_token || 'A'.repeat(43);
+  const { review_token: _reviewToken, ...rest } = overrides;
+  return {
+    source: 'current_accepted_pointer',
+    target_url: `https://kenigevents.ru/_review/${token}/poisk/`,
+    target_repo_sha: 'a'.repeat(40),
+    checkout_repo_sha: 'b'.repeat(40),
+    build_id: 'production-secret-42',
+    run_id: 'static-site:production-secret-42:run',
+    snapshot_id: 'snapshot-42',
+    result_sha256: 'c'.repeat(64),
+    manifest_sha256: 'd'.repeat(64),
+    token_sha256: tokenSha256(token),
+    input_fingerprint: 'f'.repeat(64),
+    generation_ids: { catalog: 'catalog-9', corpus: 'corpus-10' },
+    ...rest,
+  };
+};
 
 test('result enum is exact and only BROKEN results are product failures/incidents', () => {
   assert.deepEqual(PRODUCTION_HEALTH_RESULT_VALUES, exactResults);
@@ -159,14 +168,36 @@ test('accepted target normalizes, redacts for display and does not couple checko
   assert.equal(target.immutable_identity.run_id, 'static-site:production-secret-42:run');
   assert.equal(target.immutable_identity.input_fingerprint, 'f'.repeat(64));
   assert.equal(redactAcceptedTargetUrl(target.navigationUrl()), target.target_url_redacted);
-  const canonicalCliShape = normalizeAcceptedTargetResolverResult({
-    ...resolverRow(),
-    target_url: undefined,
-    target_repo_sha: undefined,
-    public_url: resolverRow().target_url,
-    repo_sha: resolverRow().target_repo_sha,
-  });
+  const cliToken = 'A'.repeat(43);
+  const canonicalCliShape = normalizeAcceptedTargetResolverResult(
+    currentReviewCliResultToAcceptedTargetInput({
+      ok: true,
+      status: 'current_review_ready',
+      release_channel: 'secret_preview',
+      public_url: `https://kenigevents.ru/_review/${cliToken}/`,
+      repo_sha: 'a'.repeat(40),
+      build_id: 'production-secret-42',
+      run_id: 'static-site:production-secret-42:run',
+      snapshot_id: 'snapshot-42',
+      result_sha256: 'c'.repeat(64),
+      manifest_sha256: 'd'.repeat(64),
+      token_sha256: tokenSha256(cliToken),
+      input_fingerprint: 'f'.repeat(64),
+      verified_at: '2026-08-09T00:00:00Z',
+    }),
+  );
   assert.deepEqual(canonicalCliShape.immutable_identity, target.immutable_identity);
+  assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
+    input_fingerprint: undefined,
+  })), /target_input_fingerprint_invalid/u);
+  assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
+    token_sha256: 'e'.repeat(64),
+  })), /target_token_hash_mismatch/u);
+  assert.throws(() => currentReviewCliResultToAcceptedTargetInput({
+    ok: false,
+    status: 'current_review_unavailable',
+    release_channel: 'secret_preview',
+  }), /current_review_not_ready/u);
   assert.throws(() => normalizeAcceptedTargetResolverResult(resolverRow({
     target_url: 'https://kenigevents.ru/poisk/',
   })), /target_url_invalid/u);
@@ -183,14 +214,13 @@ test('accepted target normalizes, redacts for display and does not couple checko
 
 test('target pin is stable and pointer changes are telemetry, not retry/product failure', async () => {
   const rows = [resolverRow(), resolverRow({
-    target_url: `https://kenigevents.ru/_review/${'B'.repeat(43)}/poisk/`,
+    review_token: 'B'.repeat(43),
     target_repo_sha: '9'.repeat(40),
     build_id: 'production-secret-43',
     run_id: 'static-site:production-secret-43:run',
     snapshot_id: 'snapshot-43',
     result_sha256: '1'.repeat(64),
     manifest_sha256: '2'.repeat(64),
-    token_sha256: '3'.repeat(64),
     input_fingerprint: '4'.repeat(64),
   })];
   const run = createAcceptedTargetRun(async () => rows.shift());
@@ -215,6 +245,15 @@ test('target pin is stable and pointer changes are telemetry, not retry/product 
   }));
   assert.equal(assessAcceptedTargetSupersession(pinned, immutableReceiptChange).target_superseded, true);
   assert.equal(assessAcceptedTargetSupersession(pinned, pinned).target_superseded, false);
+});
+
+test('canonical current-review CLI exposes the full immutable target tuple', async () => {
+  const source = await readFile(
+    new URL('../../scripts/request_static_site_build.py', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /"input_fingerprint": current\.input_fingerprint/u);
+  assert.match(source, /"token_sha256": current\.token_sha256/u);
 });
 
 test('Supabase meter classifies Auth, Edge, direct REST/RPC and excludes other origins', () => {
