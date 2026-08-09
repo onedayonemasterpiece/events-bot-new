@@ -1,9 +1,13 @@
 {
   "schema_version": "current_ui_decoder_v1_handoff_receipt",
   "snapshot_id": "decoder-v1-snapshot-20260808T124842-4786ac53bc",
-  "status": "superseded",
-  "verdict": "NO_GO_PENDING_CORRECTIVE_CAPTURE",
-  "superseded_reason": "Capsule-local specimen/page reference shards were empty because prefixed and compact capsule IDs were compared literally; Event Presentation and Media Heavy also require isolated real-component specimens.",
+  "status": "complete",
+  "verdict": "GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION",
+  "supersedes": {
+    "capture_run_id": 31291052330,
+    "design_system_merge_commit": "1ca65d165d01c10c9db323fd2c8ebf20f8f8b7ec",
+    "reason": "Corrective r2 capture closes capsule-local reference and isolated Event Presentation/Media Heavy evidence gaps."
+  },
   "source": {
     "repository": "onedayonemasterpiece/events-bot-new",
     "sha": "ef7aa62e45c60f7a12da6160f490719c0721ec03",
@@ -14,43 +18,45 @@
   },
   "decoder": {
     "repository": "onedayonemasterpiece/events-bot-new",
-    "sha": "ad2fb5a9c565b95aa746d7e6031edfe6e901d929",
+    "capture_sha": "961cd3506f5dc538097299b67c975b4fa117e5c9",
+    "review_materializer_sha": "25d82f59f891b9d64861cd15b787c5c0f86fd129",
     "workflow": ".github/workflows/current-ui-resource-graph.yml"
   },
   "capture": {
-    "run_id": 31291052330,
-    "run_url": "https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31291052330",
-    "artifact_id": 9031552834,
+    "run_id": 31293484656,
+    "run_url": "https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31293484656",
+    "artifact_id": 9032355884,
     "artifact_name": "current-ui-resource-graph-snapshot-20260808T124842-4786ac53bc",
-    "artifact_digest": "sha256:69a969f834ff4553ca8357fc2974a972c5d87a0dd719239fe36bd6eba6a3aaa2",
-    "created_at": "2026-08-09T03:01:25Z",
-    "expires_at": "2026-11-07T02:46:58Z"
+    "artifact_digest": "sha256:add07915b6b70da2a7d825e64e08a91da6d8eb28657d70a0009d087bc0f952b2",
+    "compressed_bytes": 20216615,
+    "created_at": "2026-08-09T04:12:45Z",
+    "expires_at": "2026-11-07T03:56:36Z"
   },
   "permanent_heavy_evidence": {
     "backend": "github-release",
-    "release_tag": "current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc",
-    "release_url": "https://github.com/onedayonemasterpiece/events-bot-new/releases/tag/current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc",
-    "asset_id": 507043428,
-    "asset_url": "https://github.com/onedayonemasterpiece/events-bot-new/releases/download/current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc/current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc-heavy-evidence.tar.gz",
-    "bytes": 18881370,
-    "sha256": "abbbb5bbe6cd472c3814a9586fa51375a708fc5cfe0319e3b9cfcd0cc4b2d279"
+    "release_tag": "current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc-r2",
+    "release_url": "https://github.com/onedayonemasterpiece/events-bot-new/releases/tag/current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc-r2",
+    "asset_id": 507100453,
+    "asset_url": "https://github.com/onedayonemasterpiece/events-bot-new/releases/download/current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc-r2/current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc-r2-heavy-evidence.tar.gz",
+    "bytes": 20051918,
+    "sha256": "a6ad9244b3ead55424f303fc15efbd988c07a507843bdf9728626e2850335e9c"
   },
   "human_review": {
     "schema_version": "current_ui_decoder_human_review_v1",
-    "reviewed_at": "2026-08-09T03:19:59Z",
+    "reviewed_at": "2026-08-09T04:18:00Z",
     "reviewer": "OpenAI Codex /root — manual visual review",
-    "ledger_sha256": "a59884a7f423f2e2468c1a3fb863248ee38f3d19860c300eb662675dc5f71d91",
+    "ledger_sha256": "88eeaf712a8d7534d53ffabaa0ab98c6eaa54f3e8dea54c2086d8d5c69f7165b",
     "page_rasters": 46,
-    "component_rasters": 109,
-    "raster_reviews": 155,
-    "controlled_observations": 20,
-    "page_verifications": 89,
+    "component_rasters": 111,
+    "raster_reviews": 157,
+    "controlled_observations": 22,
+    "raster_backed_page_verifications": 135,
     "capsules": 6
   },
   "compact_snapshot": {
     "receipt_status": "complete",
     "handoff_status": "GO",
-    "manifest_sha256": "18515f4d337ba18356e99d8233d0bf5dba988cedfa031bcf85a4b26d7277087e",
+    "manifest_sha256": "f7740f7f533c3f0cda5d4d0b8ebe98b565d7f521368b96462daecbd26522d5cc",
     "files": 203,
     "indexed_outputs": 201,
     "logical_components": 107,
@@ -60,12 +66,12 @@
   },
   "design_system_handoff": {
     "repository": "onedayonemasterpiece/lovekgd-design-system",
-    "pull_request": "https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/26",
-    "merge_commit": "1ca65d165d01c10c9db323fd2c8ebf20f8f8b7ec",
-    "compact_tree": "c0440f6c168ecfb46bfac97ec45a1c0fff09e96e",
+    "pull_request": "https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/27",
+    "merge_commit": "6e179f6edcf1a9232d56020719a8a7897009f9bd",
+    "compact_tree": "e77fc2457fadfdffb46ed2d90304ebb91e89a715",
     "path": "catalog/component-decoder/decoder-v1-snapshot-20260808T124842-4786ac53bc",
-    "snapshot_validation_run": "https://github.com/onedayonemasterpiece/lovekgd-design-system/actions/runs/31292505954",
-    "contract_validation_run": "https://github.com/onedayonemasterpiece/lovekgd-design-system/actions/runs/31292506001"
+    "snapshot_validation_run": "https://github.com/onedayonemasterpiece/lovekgd-design-system/actions/runs/31294881909",
+    "contract_validation_run": "https://github.com/onedayonemasterpiece/lovekgd-design-system/actions/runs/31294881910"
   },
   "constraints": {
     "candidate_contracts_are_not_accepted": true,
