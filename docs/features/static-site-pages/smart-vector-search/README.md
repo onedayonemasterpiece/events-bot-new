@@ -1076,16 +1076,20 @@ Android performance receipt сохраняет request id только внут�
 закрытых измерения: класс Auth path (`verify`, `user`, `token`, `mixed`) и
 достигнутую фазу (`request_only`, `response_seen`, `response_data_seen`). Это
 диагностирует реальный Chrome/Appium protocol boundary без raw network artifact.
-Live run `31334260547` локализовал воспроизводимый Android boundary как
-`mixed_request_only`: product Auth завершался, но performance bucket не выдавал
-response/terminal events. Поэтому Android дополнительно устанавливает до
+Live runs `31334260547` и `31335563487` локализовали воспроизводимый Android
+boundary как `request_only`: product Auth и owner-RLS завершались, но
+performance bucket не выдавал response/terminal events. Поэтому Android до
 product scripts через Chromium `Page.addScriptToEvaluateOnNewDocument`
-allowlisted fetch observer только для Supabase `/auth/v1`. Он измеряет
-`Content-Length` либо clone уже полученного response body внутри страницы,
-наружу возвращает только total bytes и закрытые counters, после callback
-удаляется и не сохраняет URL, request id, body, session или token. Protocol
-tracker остаётся authoritative для physical request count/diagnostics; этот
-page observer лишь закрывает доказанный request-only byte gap.
+устанавливает allowlisted physical observer для Supabase Auth, Edge,
+REST/RPC и запрещённых Storage/receipt paths во всех документах journey. Он
+измеряет `Content-Length` либо clone уже полученного response body внутри
+страницы, а host суммирует закрытые document-local deltas через callback,
+Search и event navigation. Наружу выходят только counters/category bytes;
+URL, request id, body, session и token не сохраняются. Protocol tracker
+остаётся независимым доказательством navigation/diagnostics и дополнительным
+счётчиком Search redirects, но Android byte-completion fence больше не зависит
+от неполного performance bucket. Только exact disposable capability-probe
+abort может закрыться без product failure; полученные probe bytes учитываются.
 Первый live transport check этой схемы, run `31335122827`, подтвердил, что
 старый ChromeDriver endpoint `/chromium/send_command_and_get_result` не
 экспортируется Appium/UiAutomator2 session. Канонический Appium base route для
@@ -1093,6 +1097,12 @@ Chromium CDP — `POST /session/:sessionId/goog/cdp/execute`; adapter испол
 его явно и типизирует отсутствие route/receipt как `UNKNOWN_ANDROID_INFRA`, не
 как поломку Search. Browser cell этого run прошла полный `HEALTHY/PASS`, Android
 остановилась до callback и Search.
+Следующий run `31335563487` подтвердил исправленный CDP route и прошёл Android
+callback, `getUser` и owner-RLS с 3,339 bytes, но старый whole-cell protocol
+idle fence остановил journey до Search. Browser снова прошёл полный
+`HEALTHY/PASS` с одним POST, пятью карточками и 9,343 bytes. Обновлённый
+pre-document observer теперь является Android whole-cell physical/byte fence;
+новый merged-SHA browser+Android proof обязателен.
 
 ### 16.9 Migration from current workflow
 

@@ -99,10 +99,12 @@ test('standalone WebdriverIO 9 Appium session receives the exact Classic getLogs
   assert.doesNotMatch(source, /chromium\/send_command_and_get_result/u);
 });
 
-test('pre-document Android Auth observer measures received body or declared bytes and exports counters only', async () => {
+test('pre-document Android physical observer measures all Supabase classes and exports counters only', async () => {
   const responses = [
     new Response('received-body'),
     new Response('', { headers: { 'content-length': '2048' } }),
+    new Response('rest-body'),
+    new Response('edge-body'),
     new Response('excluded'),
   ];
   const context = vm.createContext({
@@ -117,7 +119,9 @@ test('pre-document Android Auth observer measures received body or declared byte
   );
   await vm.runInContext("fetch('https://project.supabase.co/auth/v1/verify')", context);
   await vm.runInContext("fetch('https://project.supabase.co/auth/v1/user')", context);
-  await vm.runInContext("fetch('https://project.supabase.co/rest/v1/ignored')", context);
+  await vm.runInContext("fetch('https://project.supabase.co/rest/v1/user_saved_event')", context);
+  await vm.runInContext("fetch('https://project.supabase.co/functions/v1/event-search', {method:'POST'})", context);
+  await vm.runInContext("fetch('https://unrelated.example/rest/v1/ignored')", context);
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const pending = vm.runInContext(
       'globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__.pending_count', context,
@@ -128,11 +132,48 @@ test('pre-document Android Auth observer measures received body or declared byte
   const snapshot = JSON.parse(vm.runInContext(
     'JSON.stringify(globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__)', context,
   ));
+  assert.equal(snapshot.schema_version, 'android_physical_observer_v2');
+  assert.match(snapshot.document_generation, /^\d+-0\.\d+$/u);
+  delete snapshot.document_generation;
   assert.deepEqual(snapshot, {
-    schema_version: 'android_auth_bytes_v1', request_count: 2, closed_count: 2,
-    pending_count: 0, failed_count: 0, total_bytes: 2061,
+    schema_version: 'android_physical_observer_v2', request_count: 4, closed_count: 4,
+    pending_count: 0, failed_count: 0, total_bytes: 2079,
+    search_posts: 1, storage_requests: 0, receipt_rpc_requests: 0,
+    categories: { auth: 2061, edge: 9, direct_rest: 9, direct_rpc: 0 },
   });
   assert.doesNotMatch(JSON.stringify(snapshot), /project|verify|user|received-body|token/u);
+});
+
+test('Android physical observer closes only exact disposable probe aborts', async () => {
+  const context = vm.createContext({
+    URL, Request, Response,
+    location: { href: 'https://kenigevents.ru/poisk/' },
+    fetch: async () => { throw new TypeError('network detail must not survive'); },
+  });
+  vm.runInContext(
+    `(${installAndroidAuthByteProbe.toString()})(${JSON.stringify({
+      allowed_origins: ['https://project.supabase.co'],
+    })})`, context,
+  );
+  await vm.runInContext("fetch('https://project.supabase.co/functions/v1/transport-probe').catch(()=>null)", context);
+  let snapshot = JSON.parse(vm.runInContext(
+    'JSON.stringify(globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__)', context,
+  ));
+  assert.equal(snapshot.request_count, 1);
+  assert.equal(snapshot.closed_count, 1);
+  assert.equal(snapshot.pending_count, 0);
+  assert.equal(snapshot.failed_count, 0);
+
+  await vm.runInContext("fetch('https://project.supabase.co/functions/v1/event-search',{method:'POST'}).catch(()=>null)", context);
+  snapshot = JSON.parse(vm.runInContext(
+    'JSON.stringify(globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__)', context,
+  ));
+  assert.equal(snapshot.request_count, 2);
+  assert.equal(snapshot.closed_count, 1);
+  assert.equal(snapshot.pending_count, 0);
+  assert.equal(snapshot.failed_count, 1);
+  assert.equal(snapshot.search_posts, 1);
+  assert.doesNotMatch(JSON.stringify(snapshot), /project|transport-probe|event-search|network detail/u);
 });
 
 test('Appium health diagnostics expose only cumulative closed runtime and driver counts', async () => {
@@ -795,17 +836,32 @@ test('Android Auth callback uses a pre-document byte probe when performance logs
   const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
   const commands = [];
   let logs = 0;
+  let ownerProofComplete = false;
+  let ownerRequestStartsEmitted = false;
   const driver = {
     capabilities: {},
     async getLogs() {
       logs += 1;
-      if (logs !== 2) return [];
-      return ['verify', 'user'].map((kind) => ({ message: JSON.stringify({
+      if (logs === 2) return ['verify', 'user'].map((kind) => ({ message: JSON.stringify({
         method: 'Network.requestWillBeSent', params: {
           requestId: `auth-${kind}`, type: 'Fetch', request: { method: 'GET',
             url: `https://project.supabase.co/auth/v1/${kind}?secret=no` },
         },
       }) }));
+      if (ownerProofComplete && !ownerRequestStartsEmitted) {
+        ownerRequestStartsEmitted = true;
+        return [
+          { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+            requestId: 'owner-user', type: 'Fetch', request: { method: 'GET',
+              url: 'https://project.supabase.co/auth/v1/user?secret=no' },
+          } }) },
+          { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+            requestId: 'owner-rls', type: 'Fetch', request: { method: 'GET',
+              url: 'https://project.supabase.co/rest/v1/user_saved_event?secret=no' },
+          } }) },
+        ];
+      }
+      return [];
     },
     async executeCdp(command, params) {
       commands.push([command, params]);
@@ -817,8 +873,12 @@ test('Android Auth callback uses a pre-document byte probe when performance logs
     },
     async execute(fn) {
       if (fn?.name === 'snapshotAndroidAuthByteProbe') return {
-        schema_version: 'android_auth_bytes_v1', request_count: 2, closed_count: 2,
-        pending_count: 0, failed_count: 0, total_bytes: 3072,
+        schema_version: 'android_physical_observer_v2', document_generation: 'callback-1',
+        request_count: ownerProofComplete ? 4 : 2, closed_count: ownerProofComplete ? 4 : 2,
+        pending_count: 0, failed_count: 0, total_bytes: ownerProofComplete ? 3174 : 3072,
+        search_posts: 0, storage_requests: 0, receipt_rpc_requests: 0,
+        categories: { auth: ownerProofComplete ? 3172 : 3072,
+          edge: 0, direct_rest: ownerProofComplete ? 2 : 0, direct_rpc: 0 },
       };
       if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
         get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
@@ -837,10 +897,13 @@ test('Android Auth callback uses a pre-document byte probe when performance logs
   await adapter.bootstrapSession(`${target}?token_hash=bridge-secret&type=magiclink`, target);
   const verified = await adapter.verifyAuthenticatedOwner();
   assert.equal(verified.meter.categories.auth, 3172);
-  assert.deepEqual(commands.map(([name]) => name), [
-    'Page.addScriptToEvaluateOnNewDocument', 'Page.removeScriptToEvaluateOnNewDocument',
-  ]);
-  assert.match(commands[0][1].source, /android_auth_bytes_v1/u);
+  ownerProofComplete = true;
+  await adapter.awaitPhysicalIdle();
+  const physical = await adapter.physicalActivity();
+  assert.equal(physical.search_posts, 0);
+  assert.equal(physical.meter.total_bytes, 3174);
+  assert.deepEqual(commands.map(([name]) => name), ['Page.addScriptToEvaluateOnNewDocument']);
+  assert.match(commands[0][1].source, /android_physical_observer_v2/u);
   assert.doesNotMatch(JSON.stringify(verified), /project|verify|token|secret/u);
 });
 

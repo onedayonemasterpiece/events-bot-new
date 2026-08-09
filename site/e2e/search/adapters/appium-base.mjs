@@ -140,23 +140,52 @@ export function installAppiumClassicLogCommands(driver) {
   return driver;
 }
 
-/** Runs before product scripts in Android Chrome; retains closed byte counts only. */
+/**
+ * Runs before product scripts in every Android Chrome document. It is the
+ * authoritative Android physical boundary because ChromeDriver's performance
+ * log can legally expose a request start without the matching response events.
+ * Only closed counters and byte totals leave the page.
+ */
 export function installAndroidAuthByteProbe(config = {}) {
   const KEY = '__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__';
-  if (globalThis[KEY]?.schema_version === 'android_auth_bytes_v1') return;
+  if (globalThis[KEY]?.schema_version === 'android_physical_observer_v2') return;
   const origins = new Set(Array.isArray(config.allowed_origins) ? config.allowed_origins : []);
   const state = {
-    schema_version: 'android_auth_bytes_v1', request_count: 0, closed_count: 0,
-    pending_count: 0, failed_count: 0, total_bytes: 0,
+    schema_version: 'android_physical_observer_v2',
+    document_generation: `${Date.now()}-${Math.random()}`,
+    request_count: 0, closed_count: 0, pending_count: 0, failed_count: 0,
+    total_bytes: 0, search_posts: 0, storage_requests: 0,
+    receipt_rpc_requests: 0,
+    categories: { auth: 0, edge: 0, direct_rest: 0, direct_rpc: 0 },
   };
   const nativeFetch = globalThis.fetch.bind(globalThis);
-  const trackedUrl = (input) => {
+  const trackedRequest = (input, init) => {
     try {
       const raw = typeof input === 'string' || input instanceof URL ? input : input?.url;
       const url = new URL(String(raw), globalThis.location?.href);
-      return origins.has(url.origin)
-        && (url.pathname === '/auth/v1' || url.pathname.startsWith('/auth/v1/'));
-    } catch { return false; }
+      if (!origins.has(url.origin)) return null;
+      const path = url.pathname;
+      const method = String(init?.method || input?.method || 'GET').toUpperCase();
+      const disposable = path === '/auth/v1/health'
+        || path === '/rest/v1/rpc/transport_probe_v1'
+        || path === '/functions/v1/transport-probe';
+      if (path === '/auth/v1' || path.startsWith('/auth/v1/')) {
+        return { category: 'auth', path, method, disposable };
+      }
+      if (path === '/functions/v1' || path.startsWith('/functions/v1/')) {
+        return { category: 'edge', path, method, disposable };
+      }
+      if (path === '/rest/v1/rpc' || path.startsWith('/rest/v1/rpc/')) {
+        return { category: 'direct_rpc', path, method, disposable };
+      }
+      if (path === '/rest/v1' || path.startsWith('/rest/v1/')) {
+        return { category: 'direct_rest', path, method, disposable };
+      }
+      if (path === '/storage/v1' || path.startsWith('/storage/v1/')) {
+        return { category: null, path, method, disposable: false };
+      }
+      return null;
+    } catch { return null; }
   };
   const responseBytes = async (response) => {
     const rawDeclared = response?.headers?.get?.('content-length');
@@ -166,16 +195,27 @@ export function installAndroidAuthByteProbe(config = {}) {
     return (await response.clone().arrayBuffer()).byteLength;
   };
   globalThis.fetch = async (...args) => {
-    const tracked = trackedUrl(args[0]);
+    const tracked = trackedRequest(args[0], args[1]);
     if (tracked) {
       state.request_count += 1;
       state.pending_count += 1;
+      if (tracked.method === 'POST' && tracked.path === '/functions/v1/event-search') {
+        state.search_posts += 1;
+      }
+      if (tracked.path === '/storage/v1' || tracked.path.startsWith('/storage/v1/')) {
+        state.storage_requests += 1;
+      }
+      if (/^\/rest\/v1\/rpc\/get_event_search_receipt(?:_|$)/u.test(tracked.path)) {
+        state.receipt_rpc_requests += 1;
+      }
     }
     try {
       const response = await nativeFetch(...args);
       if (tracked) {
         void responseBytes(response).then((bytes) => {
-          state.total_bytes += Number(bytes || 0);
+          const value = Number(bytes || 0);
+          state.total_bytes += value;
+          if (tracked.category) state.categories[tracked.category] += value;
           state.closed_count += 1;
         }).catch(() => { state.failed_count += 1; })
           .finally(() => { state.pending_count = Math.max(0, state.pending_count - 1); });
@@ -183,7 +223,8 @@ export function installAndroidAuthByteProbe(config = {}) {
       return response;
     } catch (error) {
       if (tracked) {
-        state.failed_count += 1;
+        if (tracked.disposable) state.closed_count += 1;
+        else state.failed_count += 1;
         state.pending_count = Math.max(0, state.pending_count - 1);
       }
       throw error;
@@ -194,14 +235,24 @@ export function installAndroidAuthByteProbe(config = {}) {
 
 export function snapshotAndroidAuthByteProbe() {
   const state = globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__;
-  if (state?.schema_version !== 'android_auth_bytes_v1') return null;
+  if (state?.schema_version !== 'android_physical_observer_v2') return null;
   return {
     schema_version: state.schema_version,
+    document_generation: String(state.document_generation || ''),
     request_count: Number(state.request_count || 0),
     closed_count: Number(state.closed_count || 0),
     pending_count: Number(state.pending_count || 0),
     failed_count: Number(state.failed_count || 0),
     total_bytes: Number(state.total_bytes || 0),
+    search_posts: Number(state.search_posts || 0),
+    storage_requests: Number(state.storage_requests || 0),
+    receipt_rpc_requests: Number(state.receipt_rpc_requests || 0),
+    categories: {
+      auth: Number(state.categories?.auth || 0),
+      edge: Number(state.categories?.edge || 0),
+      direct_rest: Number(state.categories?.direct_rest || 0),
+      direct_rpc: Number(state.categories?.direct_rpc || 0),
+    },
   };
 }
 
@@ -266,6 +317,71 @@ export async function createAppiumSearchAdapter(options = {}) {
   const wholeCellSearchRequestIds = new Set();
   let wholeCellSearchPostCount = 0;
   let wholeCellOrigins = [...new Set((options.supabaseOrigins || []).map((value) => new URL(value).origin))];
+  let androidPhysicalScriptIdentifier = '';
+  let androidPhysicalLast = null;
+  const androidPhysicalTotals = {
+    request_count: 0, closed_count: 0, failed_count: 0, total_bytes: 0,
+    search_posts: 0, storage_requests: 0, receipt_rpc_requests: 0,
+    categories: { auth: 0, edge: 0, direct_rest: 0, direct_rpc: 0 },
+  };
+  let androidPostBoundaryStart = null;
+
+  const addAndroidPhysicalSnapshot = (snapshot) => {
+    if (platform !== 'android' || !snapshot
+      || snapshot.schema_version !== 'android_physical_observer_v2'
+      || !snapshot.document_generation) return false;
+    const sameDocument = androidPhysicalLast?.document_generation === snapshot.document_generation;
+    const previous = sameDocument ? androidPhysicalLast : {
+      request_count: 0, closed_count: 0, failed_count: 0, total_bytes: 0,
+      search_posts: 0, storage_requests: 0, receipt_rpc_requests: 0,
+      categories: { auth: 0, edge: 0, direct_rest: 0, direct_rpc: 0 },
+    };
+    for (const key of ['request_count', 'closed_count', 'failed_count', 'total_bytes',
+      'search_posts', 'storage_requests', 'receipt_rpc_requests']) {
+      androidPhysicalTotals[key] += Math.max(0,
+        Number(snapshot[key] || 0) - Number(previous[key] || 0));
+    }
+    for (const key of ['auth', 'edge', 'direct_rest', 'direct_rpc']) {
+      androidPhysicalTotals.categories[key] += Math.max(0,
+        Number(snapshot.categories?.[key] || 0) - Number(previous.categories?.[key] || 0));
+    }
+    androidPhysicalLast = structuredClone(snapshot);
+    return true;
+  };
+
+  const snapshotAndroidPhysical = async ({ required = false } = {}) => {
+    if (platform !== 'android') return null;
+    const snapshot = await driver.execute(snapshotAndroidAuthByteProbe).catch(() => null);
+    if (!addAndroidPhysicalSnapshot(snapshot) && required) {
+      throw new Error('mobile_android_physical_observer_missing');
+    }
+    return snapshot;
+  };
+
+  const androidMeterSnapshot = (totals = androidPhysicalTotals) => {
+    const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: wholeCellOrigins });
+    const origin = wholeCellOrigins[0];
+    if (!origin) throw new Error('search_physical_observation_missing');
+    const paths = {
+      auth: '/auth/v1/user', edge: '/functions/v1/event-search',
+      direct_rest: '/rest/v1/user_saved_event', direct_rpc: '/rest/v1/rpc/health',
+    };
+    for (const [category, pathname] of Object.entries(paths)) {
+      const bytes = Number(totals.categories?.[category] || 0);
+      if (bytes > 0) meter.recordResponse({ url: `${origin}${pathname}`,
+        headers: { 'content-length': String(bytes) }, body: null });
+    }
+    return meter.snapshot();
+  };
+
+  const subtractAndroidTotals = (after, before) => ({
+    search_posts: Math.max(0, Number(after.search_posts || 0) - Number(before?.search_posts || 0)),
+    storage_requests: Math.max(0, Number(after.storage_requests || 0) - Number(before?.storage_requests || 0)),
+    receipt_rpc_requests: Math.max(0, Number(after.receipt_rpc_requests || 0) - Number(before?.receipt_rpc_requests || 0)),
+    categories: Object.fromEntries(['auth', 'edge', 'direct_rest', 'direct_rpc'].map((key) => [
+      key, Math.max(0, Number(after.categories?.[key] || 0) - Number(before?.categories?.[key] || 0)),
+    ])),
+  });
 
   const observePostBoundarySearch = (logs) => {
     wholeCellResponseTracker.consume(logs);
@@ -381,8 +497,8 @@ export async function createAppiumSearchAdapter(options = {}) {
       const initialLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_auth_network_log_unavailable');
       observePostBoundarySearch(initialLogs);
-      let androidAuthScriptIdentifier = '';
-      if (platform === 'android' && typeof driver.executeCdp === 'function') {
+      if (platform === 'android' && typeof driver.executeCdp === 'function'
+        && !androidPhysicalScriptIdentifier) {
         const allowedOrigins = [...new Set((options.supabaseOrigins || [])
           .map((value) => new URL(value).origin))];
         let installed;
@@ -395,8 +511,8 @@ export async function createAppiumSearchAdapter(options = {}) {
         } catch {
           throw new Error('mobile_android_cdp_route_unavailable');
         }
-        androidAuthScriptIdentifier = String(installed?.identifier || '');
-        if (!androidAuthScriptIdentifier) throw new Error('mobile_android_cdp_script_receipt_missing');
+        androidPhysicalScriptIdentifier = String(installed?.identifier || '');
+        if (!androidPhysicalScriptIdentifier) throw new Error('mobile_android_cdp_script_receipt_missing');
       }
       await driver.url(actionLink);
       await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(returnTarget).origin,
@@ -410,25 +526,16 @@ export async function createAppiumSearchAdapter(options = {}) {
       const callbackTracker = createSanitizedNavigationResponseTracker();
       callbackTracker.consume(callbackLogs);
       let androidAuthBytes = null;
-      if (platform === 'android' && androidAuthScriptIdentifier) {
-        try {
-          await driver.waitUntil(async () => {
-            const snapshot = await driver.execute(snapshotAndroidAuthByteProbe);
-            if (!snapshot || snapshot.failed_count > 0) {
-              throw new Error('mobile_auth_page_meter_failed');
-            }
-            if (snapshot.request_count < 1 || snapshot.pending_count > 0
-              || snapshot.closed_count !== snapshot.request_count) return false;
-            androidAuthBytes = snapshot.total_bytes;
-            return true;
-          }, { timeout: timeoutMs, interval: 50,
-            timeoutMsg: 'mobile_auth_page_meter_timeout' });
-        } finally {
-          await driver.executeCdp(
-            'Page.removeScriptToEvaluateOnNewDocument',
-            { identifier: androidAuthScriptIdentifier },
-          ).catch(() => undefined);
-        }
+      if (platform === 'android' && androidPhysicalScriptIdentifier) {
+        await driver.waitUntil(async () => {
+          const snapshot = await snapshotAndroidPhysical({ required: true });
+          if (snapshot.failed_count > 0) throw new Error('mobile_auth_page_meter_failed');
+          if (snapshot.request_count < 1 || snapshot.pending_count > 0
+            || snapshot.closed_count !== snapshot.request_count) return false;
+          androidAuthBytes = snapshot.categories.auth;
+          return true;
+        }, { timeout: timeoutMs, interval: 50,
+          timeoutMsg: 'mobile_auth_page_meter_timeout' });
         callbackTracker.closePendingFromExternalMeasurement({ pathPrefix: '/auth/v1' });
         wholeCellResponseTracker.closePendingFromExternalMeasurement({ pathPrefix: '/auth/v1' });
       }
@@ -520,12 +627,15 @@ export async function createAppiumSearchAdapter(options = {}) {
       const quietMs = Math.max(25, Number(options.physicalQuietMs || 200));
       const deadline = Date.now() + timeoutMs;
       let quietSince = null;
+      let previousAndroidClosed = -1;
+      const androidObserverActive = platform === 'android' && Boolean(androidPhysicalScriptIdentifier);
       const pending = () => wholeCellOrigins.reduce((sum, origin) => (
         sum + ['/auth/v1', '/functions/v1', '/rest/v1'].reduce((value, prefix) => (
           value + wholeCellResponseTracker.pendingTerminalCount({ origin, pathPrefix: prefix })
         ), 0)
       ), 0);
-      while (pending() > 0 || quietSince === null || Date.now() - quietSince < quietMs) {
+      while ((androidObserverActive ? true : pending() > 0)
+        || quietSince === null || Date.now() - quietSince < quietMs) {
         if (Date.now() >= deadline) throw new Error('search_physical_observation_missing');
         if (typeof driver.pause === 'function') await driver.pause(Math.min(50, quietMs));
         else await new Promise((resolve) => setTimeout(resolve, Math.min(50, quietMs)));
@@ -533,12 +643,36 @@ export async function createAppiumSearchAdapter(options = {}) {
         if (!Array.isArray(logs)) throw new Error('search_physical_observation_missing');
         observePostBoundarySearch(logs);
         accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
-        if (logs.length > 0) quietSince = null;
+        if (androidObserverActive) {
+          const snapshot = await snapshotAndroidPhysical({ required: true });
+          if (snapshot.failed_count > 0) throw new Error('mobile_android_physical_observer_failed');
+          const stable = snapshot.pending_count === 0
+            && snapshot.closed_count === snapshot.request_count
+            && snapshot.closed_count === previousAndroidClosed;
+          previousAndroidClosed = snapshot.closed_count;
+          if (!stable) quietSince = null;
+          else if (quietSince === null) quietSince = Date.now();
+          if (stable && Date.now() - quietSince >= quietMs) break;
+        } else if (logs.length > 0) quietSince = null;
         else if (quietSince === null) quietSince = Date.now();
       }
     },
     async physicalActivity() {
       if (wholeCellOrigins.length < 1) throw new Error('search_physical_observation_missing');
+      if (platform === 'android' && androidPhysicalScriptIdentifier) {
+        await snapshotAndroidPhysical({ required: true });
+        const requests = wholeCellResponseTracker.requests()
+          .filter((item) => wholeCellOrigins.includes(item.origin));
+        return Object.freeze({
+          search_posts: Math.max(androidPhysicalTotals.search_posts, wholeCellSearchPostCount),
+          storage_requests: Math.max(androidPhysicalTotals.storage_requests,
+            requests.filter((item) => item.pathname === '/storage/v1'
+              || item.pathname.startsWith('/storage/v1/')).length),
+          receipt_rpc_requests: Math.max(androidPhysicalTotals.receipt_rpc_requests,
+            requests.filter((item) => /^\/rest\/v1\/rpc\/get_event_search_receipt(?:_|$)/u.test(item.pathname)).length),
+          meter: androidMeterSnapshot(),
+        });
+      }
       const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: wholeCellOrigins });
       for (const response of wholeCellResponseTracker.responses()) {
         if (!wholeCellOrigins.includes(response.origin)) continue;
@@ -647,6 +781,10 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async openFirstResult() {
       lifecycle.failure_stage = 'search_first_card_capture';
+      if (platform === 'android' && androidPhysicalScriptIdentifier) {
+        await snapshotAndroidPhysical({ required: true });
+        androidPostBoundaryStart = structuredClone(androidPhysicalTotals);
+      }
       const captured = await driver.execute(() => {
         const selector = '[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]';
         const card = document.querySelector(selector);
@@ -721,6 +859,30 @@ export async function createAppiumSearchAdapter(options = {}) {
         throw new Error('mobile_post_navigation_network_log_unavailable');
       }
       observePostBoundarySearch(finalNetworkLogs);
+      if (platform === 'android' && androidPhysicalScriptIdentifier) {
+        const quietMs = Math.max(25, Number(options.postNavigationQuietMs || 200));
+        const deadline = Date.now() + timeoutMs;
+        let quietSince = null;
+        let previousClosed = -1;
+        while (quietSince === null || Date.now() - quietSince < quietMs) {
+          if (Date.now() >= deadline) throw new Error('mobile_post_navigation_terminal_bytes_missing');
+          const snapshot = await snapshotAndroidPhysical({ required: true });
+          if (snapshot.failed_count > 0) throw new Error('mobile_post_navigation_meter_failed');
+          const stable = snapshot.pending_count === 0
+            && snapshot.closed_count === snapshot.request_count
+            && snapshot.closed_count === previousClosed;
+          previousClosed = snapshot.closed_count;
+          if (!stable) quietSince = null;
+          else if (quietSince === null) quietSince = Date.now();
+          if (typeof driver.pause === 'function') await driver.pause(Math.min(50, quietMs));
+          else await new Promise((resolve) => setTimeout(resolve, Math.min(50, quietMs)));
+        }
+        const delta = subtractAndroidTotals(androidPhysicalTotals, androidPostBoundaryStart || {});
+        postBoundarySearchPostCount = Math.max(postBoundarySearchPostCount, delta.search_posts);
+        postBoundaryMeterSnapshot = androidMeterSnapshot(delta);
+        postBoundarySearchObservationActive = false;
+        return postBoundarySearchPostCount;
+      }
       const pendingRelevantResponses = () => postBoundarySupabaseOrigins.reduce(
         (sum, origin) => sum + ['/auth/v1', '/functions/v1', '/rest/v1'].reduce(
           (originSum, prefix) => originSum
@@ -805,6 +967,14 @@ export async function createAppiumSearchAdapter(options = {}) {
       lifecycle.failure_stage = 'auth_local_purge';
       let purged = false;
       try { purged = await purgeLocalAuthState(); } catch { purged = false; }
+      if (platform === 'android' && androidPhysicalScriptIdentifier) {
+        try {
+          await driver.executeCdp?.('Page.removeScriptToEvaluateOnNewDocument', {
+            identifier: androidPhysicalScriptIdentifier,
+          });
+        } catch { /* session teardown is authoritative */ }
+        androidPhysicalScriptIdentifier = '';
+      }
       let deleted = false;
       try { deleted = await deleteDriverSession(); } finally {
         lifecycle.auth_local_purge_confirmed = purged;
