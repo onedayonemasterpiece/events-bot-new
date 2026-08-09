@@ -23,6 +23,12 @@
   no-mail session and one Search POST per platform; the full LLM/mobile matrix
   remains manual release qualification.
 
+- Bound every StaticSiteBuilder Kaggle source archive to the clean Fly image
+  revision with a deterministic source manifest and tree digest. Runtime,
+  Kaggle result, accepted candidate and recovery now fail closed on source/SHA
+  mismatch; a mutable Fly environment fallback and cross-deploy handoff reuse
+  can no longer make a repeated metadata SHA stand in for the actual bytes.
+
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
   host/fetch policy, principal binding, workspace configuration, MIME, size,

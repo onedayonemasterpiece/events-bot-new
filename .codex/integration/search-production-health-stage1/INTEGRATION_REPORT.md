@@ -3,7 +3,7 @@
 ## Scope and safety boundary
 
 - Initial audited base: `origin/main@65926e63b436efcc275c8e4094473ab9ef1fd9e8`.
-- Final rebased base: `origin/main@48378542d13869447bacc6bfeea136d650b3d407`.
+- Final rebased base: `origin/main@150358ed88b5239753bf3669a1f1e311bf3f63cc`.
 - Integration branch: `integration/search-production-health-stage1-20260809`.
 - Prohibited operations performed: **none**.
 - Live Search POSTs: `0`.
@@ -21,6 +21,8 @@
 | workflow policy | `.github/workflows`, workflow contract tests | `6b3a792a3` | `6471bdf48` | merged |
 | core contracts | `site/e2e/search/production-health-*`, focused tests | `2d195957f` | `a40dd7e4f` | merged |
 | integration/docs | canonical architecture, registry, handoff, package script, integration corrections | `960effec8` | this report | merged |
+| premerge source binding | Fly image SHA to exact Kaggle source bytes and recovery fence | `c72589bf3` | `ef4b69131` | merged |
+| premerge mobile contract | morning/evening platform plans and split typed status | `d22078d8f` | lane receipt | merged |
 
 No worker change was dropped. Integration tightened the core target pin from a
 synthetic release label to the repository's existing immutable candidate tuple
@@ -42,8 +44,10 @@ auth fixture, shared mobile transport, registry and canonical Search docs.
 | R08 workflows/default PR CI | Done | two manual dry workflows; deterministic CI step |
 | R09 bounded PR #436 decision | Done | README §16.10; useful preclaim guard, not merged/deployed/dependency |
 | R10 canonical docs + Stage 2 handoff | Done | README §16 and `stage-2-production-health-handoff.md` |
-| R11 deterministic acceptance/zero live | Done | 25/25 architecture + 29/29 existing harness; safety counters above |
-| R12 clean pushed PR | Done | draft PR [#441](https://github.com/onedayonemasterpiece/events-bot-new/pull/441) from the clean integration branch |
+| R11 deterministic acceptance/zero live | Done | 29/29 architecture + 29/29 existing harness; safety counters above |
+| R12 clean pushed PR | Pending fresh head | PR [#441](https://github.com/onedayonemasterpiece/events-bot-new/pull/441); push and fresh Actions evidence follow this local gate |
+| R13 fail-closed source binding | Done | source manifest/tree/archive parity and cross-deploy recovery negative tests |
+| R14 Stage-2 mobile/status contract | Done | morning browser+Android, evening browser+iOS, independent platform incident scope |
 
 ## Deterministic validation
 
@@ -51,7 +55,7 @@ Commands executed from the clean integration worktree:
 
 ```bash
 npm --prefix site run test:search-production-health
-# 25 pass, 0 fail/skip/todo
+# 29 pass, 0 fail/skip/todo
 
 npm --prefix site run test:search-e2e-harness
 # 29 pass, 0 fail/skip/todo
@@ -66,6 +70,16 @@ node site/e2e/search/production-health-plan-cli.mjs \
 # strict parse of the three Search workflows, default CI and scenario registry
 # policy grep: no cron/repository_dispatch/issues:write/gh issue mutation
 git diff --check origin/main...HEAD
+
+/home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
+  tests/test_static_site_release.py \
+  tests/test_static_site_build_handoff.py \
+  tests/test_static_site_build_debounce.py
+# 87 pass
+
+python3 -m py_compile main.py static_site_release.py \
+  scripts/run_static_site_builder_kaggle.py \
+  kaggle/StaticSiteBuilder/static_site_builder.py
 ```
 
 All final commands passed. `docs/routes.yml` has a pre-existing duplicate

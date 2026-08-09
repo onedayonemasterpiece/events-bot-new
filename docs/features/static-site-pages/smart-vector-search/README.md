@@ -792,8 +792,11 @@ Smart Update
    передаёт clean `origin/main` SHA в Docker build; [`Dockerfile`](../../../../Dockerfile)
    записывает его в `/app/.static-site-repo-sha`.
    [`main.py::_resolve_static_site_repo_sha`](../../../../main.py#L23129-L23167)
-   читает этот файл, а mutable `STATIC_SITE_REPO_SHA` оставляет только как
-   совместимый fallback. Тот же SHA передаётся в
+   читает этот файл и fail-closed отвергает mutable `STATIC_SITE_REPO_SHA` в
+   Fly runtime (fallback разрешён только локально). Baked source manifest
+   связывает SHA с детерминированным digest точных файлов image; runner и
+   Kaggle повторно проверяют source tree/archive, а result и candidate receipt
+   обязаны сохранить тот же source identity. Тот же SHA передаётся в
    [`_static_site_build_kaggle_command`](../../../../main.py#L23170-L23330) и
    remote handoff.
 2. **Moving main или pin.** Build после Smart Update закреплён на runtime SHA
@@ -844,10 +847,10 @@ Smart Update
 | `search_index_generation_id` | `corpus_revision`/`search_document_revision` | telemetry, не exact health gate |
 
 `site_runtime_sha` берётся из реального Fly/runtime deploy и Smart Update сам
-его не меняет. Перед merge Stage 1 source-binding gate дополнительно обязан
-доказать соответствие этого SHA точному набору source bytes, переданному в
-Kaggle, и запретить recovery handoff от другого deployed SHA; одной повторяемой
-строки SHA в metadata недостаточно. Actions checkout SHA может отличаться от
+его не меняет. Stage 1 source-binding gate теперь доказывает соответствие этого
+SHA точному набору source bytes, переданному в Kaggle, и запрещает recovery
+handoff от другого deployed SHA; одной повторяемой строки SHA в metadata
+недостаточно. Actions checkout SHA может отличаться от
 target repo SHA и сам по себе не является failure. Отсутствие точного deployed
 Edge SHA остаётся честно отмеченным gap этапа 2; новая release-система для этого
 не вводится.
