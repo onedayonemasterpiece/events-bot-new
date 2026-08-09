@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 from dataclasses import dataclass
@@ -51,16 +52,64 @@ def _int(name: str, default: int, *, low: int, high: int) -> int:
     return max(low, min(high, value))
 
 
+def _canonical_hostname(value: str) -> str:
+    if not value or len(value) > 253 or value.endswith(".") or "%" in value:
+        raise ValueError("invalid hostname")
+    try:
+        return ipaddress.ip_address(value).compressed
+    except ValueError:
+        labels = value.split(".")
+        # WHATWG clients interpret legacy decimal/octal/hex numeric host forms
+        # as IPv4 even when Python's strict ipaddress parser rejects them.
+        if labels and all(
+            re.fullmatch(r"(?:0[xX][0-9A-Fa-f]+|[0-9]+)", label)
+            for label in labels
+        ):
+            raise ValueError("invalid hostname") from None
+        if any(
+            not label
+            or len(label) > 63
+            or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
+            is None
+            for label in labels
+        ):
+            raise ValueError("invalid hostname") from None
+        return value.casefold()
+
+
 def _normalise_base_url(value: str) -> str:
-    value = value.strip().rstrip("/")
-    parsed = urlsplit(value)
+    if value != value.strip() or any(
+        character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
+        for character in value
+    ):
+        raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host")
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+        hostname = _canonical_hostname(parsed.hostname or "")
+    except ValueError as exc:
+        raise ValueError(
+            "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must be an absolute URL"
+        ) from exc
     if parsed.scheme not in {"https", "http"} or not parsed.netloc:
         raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must be an absolute URL")
-    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+    if (
+        parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or (parsed.scheme == "https" and port is not None)
+    ):
         raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host")
     if parsed.scheme != "https" and parsed.hostname not in {"127.0.0.1", "localhost"}:
         raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must use HTTPS")
-    return value
+    authority = f"[{hostname}]" if ":" in hostname else hostname
+    if port is not None:
+        authority = f"{authority}:{port}"
+    if parsed.netloc.casefold() != authority.casefold():
+        raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host")
+    return f"{parsed.scheme}://{authority}"
 
 
 @dataclass(frozen=True, slots=True)

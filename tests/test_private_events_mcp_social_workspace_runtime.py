@@ -36,13 +36,27 @@ ALL_SCOPES = frozenset(
         "post:publish", "edit", "delete", "forward", "reaction", "comment",
         "schedule", "story:read", "story:write", "analytics", "audience",
     )
-)
+) | frozenset({"vk:notifications:read"})
 
 
 def context(*, client: str = "chatgpt", subject: str = "alice", resource: str = "https://mcp") -> ToolCallContext:
     return ToolCallContext(
         AccessIdentity(subject, client, ALL_SCOPES, resource, "jti", int(time.time()) + 3600),
         resource,
+    )
+
+
+def scoped_context(*scopes: str) -> ToolCallContext:
+    return ToolCallContext(
+        AccessIdentity(
+            "alice",
+            "chatgpt",
+            frozenset(scopes),
+            "https://mcp",
+            "jti-scoped",
+            int(time.time()) + 3600,
+        ),
+        "https://mcp",
     )
 
 
@@ -189,6 +203,49 @@ async def test_exact_user_dm_prepare_external_approve_commit_and_replay(runtime)
     with pytest.raises(SocialWorkspaceRuntimeError):
         await service.commit({"preparation_ref": prepared["preparation_ref"], **approval,
                               "action_digest": prepared["action_digest"]}, context())
+    assert adapter.executions == 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_publish_scope_runs_typed_prepare_approval_commit_end_to_end(
+    runtime,
+) -> None:
+    service, adapter, _store = runtime
+    legacy = scoped_context("telegram:publish")
+    principal = RuntimePrincipal.from_context(legacy)
+    target = service._mint_ref("target", "native-user-legacy", "telegram", principal)
+    intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "send_message",
+            "idempotency_key": "legacy-typed-dm-123",
+            "target_ref": target,
+            "content": {"text": "Hello", "entities": [], "media": []},
+        }
+    )
+    prepared = await service.prepare(intent, legacy)
+    approval = service.approve_preparation(
+        preparation_ref=prepared["preparation_ref"],
+        operator_principal="operator@example.test",
+        operator_nonce="legacy-typed-dm-nonce-123456",
+    )
+    result = await service.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            **approval,
+            "action_digest": prepared["action_digest"],
+        },
+        legacy,
+    )
+    assert result["status"] == "succeeded"
+    assert adapter.executions == 1
+
+    cross_provider = scoped_context("vk:publish")
+    with pytest.raises(SocialWorkspaceRuntimeError, match="scope is missing"):
+        await service.prepare(intent, cross_provider)
+    read_only = scoped_context("telegram:read")
+    with pytest.raises(SocialWorkspaceRuntimeError, match="scope is missing"):
+        await service.prepare(intent, read_only)
     assert adapter.executions == 1
 
 
@@ -374,6 +431,29 @@ def test_tools_are_private_noncacheable_granular_and_feature_hidden(runtime) -> 
     assert all(tool.scope_selector is not None for tool in tools)
     assert all(all(any(scope.startswith(p + ":") for p in ("telegram", "vk"))
                    for scope in option) for tool in tools for option in tool.scope_options)
+
+
+def test_vk_item_and_notification_tools_are_provider_and_scope_isolated(runtime) -> None:
+    service, _adapter, _store = runtime
+    telegram_only = {
+        tool.name
+        for tool in build_social_workspace_tools(
+            service, capability_policy={"telegram": True, "vk": False}
+        )
+    }
+    assert "social_item_resolve" not in telegram_only
+    assert "social_comment_hints_list" not in telegram_only
+
+    service.adapters["vk"] = FakeAdapter()
+    tools = {
+        tool.name: tool for tool in build_social_workspace_tools(service)
+    }
+    assert "social_item_resolve" in tools
+    hints = tools["social_comment_hints_list"]
+    assert frozenset({"vk:notifications:read"}) in hints.scope_options
+    assert hints.scope_selector(
+        {"platform": "vk", "operation": "list_notifications", "limit": 25}
+    ) == {"vk:notifications:read"}
 
 
 def test_catalog_omits_disabled_action_and_media_surfaces(runtime) -> None:

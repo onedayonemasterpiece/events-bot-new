@@ -34,6 +34,7 @@ class SocialPlatform(_StringEnum):
 
 class SocialReadOperation(_StringEnum):
     RESOLVE_TARGET = "resolve_target"
+    RESOLVE_ITEM = "resolve_item"
     SEARCH_TARGETS = "search_targets"
     LIST_ITEMS = "list_items"
     SEARCH_ITEMS = "search_items"
@@ -43,6 +44,7 @@ class SocialReadOperation(_StringEnum):
     LIST_STORIES = "list_stories"
     GET_STATISTICS = "get_statistics"
     GET_AUDIENCE = "get_audience"
+    LIST_NOTIFICATIONS = "list_notifications"
     EDITORIAL_SAMPLE = "editorial_sample"
 
 
@@ -183,7 +185,7 @@ SOCIAL_WORKSPACE_SCOPES = frozenset(
     f"{platform.value}:{suffix}"
     for platform in SocialPlatform
     for suffix in _SCOPE_SUFFIXES
-)
+) | frozenset({"vk:notifications:read"})
 
 _ACTION_SCOPE_SUFFIX: Mapping[SocialAction, str] = {
     SocialAction.SEND_MESSAGE: "dm:send",
@@ -300,6 +302,12 @@ def required_scope_for_read(
         SocialReadOperation.SEARCH_TARGETS,
     }:
         suffix = "discover"
+    elif normalized_operation is SocialReadOperation.LIST_NOTIFICATIONS:
+        if normalized_platform is not SocialPlatform.VK:
+            raise SocialWorkspaceValidationError(
+                "notifications are supported only for VK"
+            )
+        suffix = "notifications:read"
     elif normalized_operation is SocialReadOperation.LIST_STORIES:
         suffix = "story:read"
     elif normalized_operation is SocialReadOperation.GET_STATISTICS:
@@ -878,6 +886,23 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             raise SocialWorkspaceValidationError(
                 "exact target resolution must expect one non-self target kind"
             )
+    elif operation is SocialReadOperation.RESOLVE_ITEM:
+        if (
+            platform is not SocialPlatform.VK
+            or target_locator is None
+            or target_locator.kind is not TargetLocatorKind.PROFILE_LINK
+        ):
+            raise SocialWorkspaceValidationError(
+                "exact item resolution requires one canonical VK post link"
+            )
+        if read_access is not SocialReadAccess.PUBLIC:
+            raise SocialWorkspaceValidationError(
+                "exact item resolution requires public read access"
+            )
+        if expected_target_kinds:
+            raise SocialWorkspaceValidationError(
+                "exact item resolution does not accept target kinds"
+            )
     elif operation is SocialReadOperation.SEARCH_TARGETS:
         if not query:
             raise SocialWorkspaceValidationError("query is required for target discovery")
@@ -927,6 +952,47 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         if forbidden:
             raise SocialWorkspaceValidationError(
                 "editorial sample does not allow: " + ", ".join(sorted(forbidden))
+            )
+    elif operation is SocialReadOperation.LIST_NOTIFICATIONS:
+        if platform is not SocialPlatform.VK:
+            raise SocialWorkspaceValidationError(
+                "notifications are supported only for VK"
+            )
+        if read_access is not None:
+            raise SocialWorkspaceValidationError(
+                "notifications use their dedicated access scope"
+            )
+        if raw_limit > 25:
+            raise SocialWorkspaceValidationError(
+                "notification limit must be an integer from 1 to 25"
+            )
+        if date_from is not None and date_to is not None:
+            start = datetime.strptime(date_from, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+            end = datetime.strptime(date_to, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+            if (end - start).days > 2:
+                raise SocialWorkspaceValidationError(
+                    "notification window must not exceed 48 hours"
+                )
+        forbidden = {
+            "target_ref",
+            "item_ref",
+            "query",
+            "item_kinds",
+            "target_locator",
+            "purpose",
+            "sample_ref",
+            "page_size",
+            "total_limit",
+            "expected_target_kinds",
+            "authorization_basis",
+        } & set(data)
+        if forbidden:
+            raise SocialWorkspaceValidationError(
+                "notifications do not allow: " + ", ".join(sorted(forbidden))
             )
     if operation in {
         SocialReadOperation.LIST_ITEMS,
@@ -2173,6 +2239,59 @@ SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA: Mapping[str, Any] = {
     },
 }
 
+SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["item", "source_target", "trust"],
+    "properties": {
+        "item": _EXTERNAL_ITEM,
+        "source_target": _EXTERNAL_TARGET,
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+_EXTERNAL_NOTIFICATION: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "item_ref", "root_item_ref", "kind", "published_at", "text", "trust"
+    ],
+    "properties": {
+        "item_ref": {"$ref": "#/$defs/item_ref"},
+        "root_item_ref": {"$ref": "#/$defs/item_ref"},
+        "kind": {"const": "comment"},
+        "published_at": {"type": "string", "format": "date-time"},
+        "text": {"type": "string", "maxLength": 4096},
+        "source_kind": {
+            "type": "string",
+            "enum": ["comment", "mention"],
+        },
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["results", "trust"],
+    "properties": {
+        "results": {
+            "type": "array",
+            "maxItems": 25,
+            "items": _EXTERNAL_NOTIFICATION,
+        },
+        "next_cursor": {
+            "type": "string",
+            "pattern": r"^[A-Za-z0-9_-]{1,512}$",
+        },
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
 SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$defs": _DEFS,
@@ -2318,7 +2437,9 @@ __all__ = [
     "SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA",
+    "SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_PREPARE_SCHEMA",
     "SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA",

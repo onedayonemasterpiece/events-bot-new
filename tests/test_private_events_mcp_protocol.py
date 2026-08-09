@@ -5,7 +5,7 @@ import pytest
 from private_events_mcp.crypto import AccessIdentity
 from private_events_mcp.protocol import MCPProtocol
 from private_events_mcp.repository import EventsEvidenceRepository
-from private_events_mcp.tool_catalog import build_tools
+from private_events_mcp.tool_catalog import ToolSpec, build_tools
 
 
 @pytest.fixture
@@ -76,3 +76,101 @@ async def test_search_fetch_flow(protocol, config) -> None:
         identity(config),
     )
     assert "Лекция об архитектуре" in fetched["result"]["structuredContent"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_evidence_extensions_preserve_exact_seven_tool_contract(protocol) -> None:
+    listed = await protocol.dispatch(
+        {"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, None
+    )
+    tools = listed["result"]["tools"]
+    assert [item["name"] for item in tools] == [
+        "search",
+        "fetch",
+        "events_search",
+        "event_get",
+        "incidents_search",
+        "incident_get",
+        "operations_snapshot",
+    ]
+    by_name = {item["name"]: item for item in tools}
+    assert "post_url" in by_name["events_search"]["inputSchema"]["properties"]
+    assert {
+        "event_id",
+        "source_url",
+        "post_url",
+        "run_id",
+        "job_id",
+        "error_class",
+        "time_from",
+        "time_to",
+    } <= set(by_name["incidents_search"]["inputSchema"]["properties"])
+
+
+@pytest.mark.asyncio
+async def test_stable_legacy_social_families_authorize_only_same_provider_and_mode(
+    config,
+) -> None:
+    calls = 0
+
+    async def handler(_arguments, _context):
+        nonlocal calls
+        calls += 1
+        return {"ok": True}
+
+    tool = ToolSpec(
+        "typed_send",
+        "Typed send",
+        "A typed, independently approved social mutation.",
+        {"type": "object", "additionalProperties": False, "properties": {}},
+        {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["ok"],
+            "properties": {"ok": {"const": True}},
+        },
+        scopes=frozenset(),
+        scope_options=(
+            frozenset({"telegram:dm:send"}),
+            frozenset({"telegram:publish"}),
+        ),
+        scope_selector=lambda _arguments: frozenset({"telegram:dm:send"}),
+        handler=handler,
+        publicly_discoverable=False,
+    )
+    social_protocol = MCPProtocol(
+        (tool,), cache_ttl_seconds=0, challenge='Bearer error="invalid_token"'
+    )
+
+    def social_identity(scopes):
+        return AccessIdentity(
+            "events-bot-owner",
+            config.oauth_client_id,
+            frozenset(scopes),
+            config.resource,
+            "social-token",
+            9_999_999_999,
+        )
+
+    request = {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {"name": "typed_send", "arguments": {}},
+    }
+    allowed = await social_protocol.dispatch(
+        request, social_identity({"telegram:publish"})
+    )
+    assert allowed["result"]["structuredContent"] == {"ok": True}
+    assert calls == 1
+
+    for denied_scopes in (
+        {"telegram:read"},
+        {"vk:publish"},
+        {"events:read"},
+    ):
+        denied = await social_protocol.dispatch(
+            request, social_identity(denied_scopes)
+        )
+        assert denied["result"]["isError"] is True
+    assert calls == 1

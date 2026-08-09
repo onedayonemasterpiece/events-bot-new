@@ -22,11 +22,14 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 from urllib.parse import urlencode
 
+from .access_policy import social_scopes_authorized
 from .auth_store import OAuthStateStore
 from .social_workspace import (
     SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
@@ -781,6 +784,7 @@ class SocialWorkspaceRuntime:
         self, request: SocialReadRequest, safe: Mapping[str, Any]
     ) -> dict[str, Any]:
         schemas: dict[SocialReadOperation, Mapping[str, Any]] = {
+            SocialReadOperation.RESOLVE_ITEM: SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
             SocialReadOperation.SEARCH_TARGETS: SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.SEARCH_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
@@ -790,6 +794,7 @@ class SocialWorkspaceRuntime:
             SocialReadOperation.LIST_STORIES: SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
             SocialReadOperation.GET_STATISTICS: SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
             SocialReadOperation.GET_AUDIENCE: SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
+            SocialReadOperation.LIST_NOTIFICATIONS: SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
         }
         schema = schemas.get(request.operation)
         if schema is None:
@@ -1041,7 +1046,7 @@ class SocialWorkspaceRuntime:
 
     async def prepare(self, intent: SocialActionIntent, context: ToolCallContext) -> dict[str, Any]:
         principal = RuntimePrincipal.from_context(context)
-        if not intent.required_scopes.issubset(principal.scopes):
+        if not social_scopes_authorized(intent.required_scopes, principal.scopes):
             self._audit(principal, platform=intent.platform.value, operation="prepare",
                         outcome="denied", reason="missing_scope", target_ref=intent.target_ref)
             raise SocialWorkspaceRuntimeError("required social action scope is missing")
@@ -1306,7 +1311,9 @@ class SocialWorkspaceRuntime:
                 if approval["consumed_at"] is not None:
                     raise SocialWorkspaceRuntimeError("approval receipt was already consumed")
                 intent = self._intent_from_row(prep)
-                if not intent.required_scopes.issubset(principal.scopes):
+                if not social_scopes_authorized(
+                    intent.required_scopes, principal.scopes
+                ):
                     raise SocialWorkspaceRuntimeError("required social action scope is missing")
                 target_ref = self._action_budget_target_ref(intent, conn)
                 self._consume_budget_on_conn(conn, principal, intent.platform.value,

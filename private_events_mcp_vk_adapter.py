@@ -42,6 +42,7 @@ from private_events_mcp.social_workspace import (
 VK_API_VERSION = "5.199"
 _TRUST = "untrusted_external_data"
 _MAX_RESULT_PAGE = 25
+_MAX_PROVIDER_CURSOR_BYTES = 512
 _MAX_EDITORIAL_TOTAL = 100
 _MAX_TEXT = 4096
 _SAFE_HANDLE = re.compile(r"^[A-Za-z0-9_.-]{2,128}$")
@@ -60,6 +61,7 @@ class VKWorkspaceError(RuntimeError):
 
 class VKActor(str, Enum):
     PUBLIC_READER = "public_reader"
+    NOTIFICATION_READER = "notification_reader"
     DIALOG_READER = "dialog_reader"
     USER_MESSENGER = "user_messenger"
     COMMUNITY_EDITOR = "community_editor"
@@ -148,6 +150,13 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "wall_item": _policy(VKActor.PUBLIC_READER, "read_public", "wall.getById", ["posts"], ["extended"]),
     "wall_search": _policy(VKActor.PUBLIC_READER, "search_public", "wall.search", ["owner_id", "query", "count"], ["offset", "owners_only"]),
     "newsfeed_search": _policy(VKActor.PUBLIC_READER, "search_public", "newsfeed.search", ["q", "count"], ["start_from"]),
+    "notifications": _policy(
+        VKActor.NOTIFICATION_READER,
+        "notifications_read",
+        "notifications.get",
+        ["count"],
+        ["start_from", "filters", "start_time", "end_time"],
+    ),
     "wall_comments": _policy(VKActor.PUBLIC_READER, "read_public", "wall.getComments", ["owner_id", "post_id", "count"], ["offset", "extended", "sort"]),
     "wall_likes": _policy(VKActor.PUBLIC_READER, "read_public", "likes.getList", ["type", "owner_id", "item_id", "count"], ["extended"]),
     "dialog_history": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getHistory", ["peer_id", "count"], ["offset", "start_message_id", "rev"]),
@@ -469,6 +478,10 @@ class VKWorkspaceAdapter:
             reads.add(SocialReadOperation.GET_STATISTICS)
         if self._permitted(VKActor.PUBLIC_READER, "audience"):
             reads.add(SocialReadOperation.GET_AUDIENCE)
+        if self._permitted(VKActor.NOTIFICATION_READER, "notifications_read"):
+            reads.add(SocialReadOperation.LIST_NOTIFICATIONS)
+        if self._permitted(VKActor.PUBLIC_READER, "read_public"):
+            reads.add(SocialReadOperation.RESOLVE_ITEM)
         checks: Mapping[SocialAction, tuple[tuple[VKActor, str], ...]] = {
             SocialAction.SEND_MESSAGE: ((VKActor.USER_MESSENGER, "dm_send"),),
             SocialAction.PUBLISH: ((VKActor.COMMUNITY_EDITOR, "post_publish"),),
@@ -583,6 +596,251 @@ class VKWorkspaceAdapter:
         if not candidates or _int(candidates[0].get("id")) != native_id:
             raise VKWorkspaceError("target_not_found")
         return self._target_preview({"kind": "user", "user_id": native_id, "peer_id": native_id}, candidates[0])
+
+    @staticmethod
+    def _parse_post_link(value: str) -> tuple[int, int]:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in {"vk.com", "www.vk.com"}
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise SocialWorkspaceValidationError("post link is not canonical VK")
+        match = re.fullmatch(r"/wall(-?[1-9][0-9]*)_([1-9][0-9]*)", parsed.path)
+        if match is None:
+            raise SocialWorkspaceValidationError("post link is not canonical VK")
+        owner_id, post_id = int(match.group(1)), int(match.group(2))
+        return owner_id, post_id
+
+    async def _resolve_item(self, request: SocialReadRequest) -> Mapping[str, Any]:
+        locator = request.target_locator
+        if (
+            request.read_access is not SocialReadAccess.PUBLIC
+            or locator is None
+            or locator.kind is not TargetLocatorKind.PROFILE_LINK
+            or locator.value is None
+        ):
+            raise SocialWorkspaceValidationError("VK post-link resolution is required")
+        owner_id, post_id = self._parse_post_link(locator.value)
+        response = await self._call(
+            "wall_item", {"posts": f"{owner_id}_{post_id}", "extended": 0}
+        )
+        posts = _items(response)
+        if not posts:
+            raise VKWorkspaceError("item_not_found")
+        post = posts[0]
+        if _int(post.get("owner_id")) != owner_id or _int(post.get("id")) != post_id:
+            raise VKWorkspaceError("item_not_found")
+
+        if owner_id < 0:
+            group_id = -owner_id
+            source_response = await self._call(
+                "get_groups",
+                {
+                    "group_ids": str(group_id),
+                    "fields": "screen_name,description,activity,site,members_count",
+                },
+            )
+            sources = _items(source_response)
+            if not sources and isinstance(source_response, Mapping):
+                groups = source_response.get("groups")
+                if isinstance(groups, list):
+                    sources = [item for item in groups if isinstance(item, Mapping)]
+            if not sources or _int(sources[0].get("id")) != group_id:
+                raise VKWorkspaceError("target_not_found")
+            source = sources[0]
+            target_ref = self._mint(
+                "target",
+                {
+                    "kind": SocialTargetKind.COMMUNITY.value,
+                    "group_id": group_id,
+                    "owner_id": owner_id,
+                },
+            )
+            kind = SocialTargetKind.COMMUNITY.value
+            title = str(source.get("name") or "VK community")
+            about = str(source.get("activity") or source.get("site") or "")
+            description = str(source.get("description") or "")
+            members = max(0, _int(source.get("members_count")) or 0)
+        else:
+            source_response = await self._call(
+                "get_users", {"user_ids": str(owner_id), "fields": "screen_name,status"}
+            )
+            sources = _items(source_response)
+            if not sources or _int(sources[0].get("id")) != owner_id:
+                raise VKWorkspaceError("target_not_found")
+            source = sources[0]
+            target_ref = self._mint(
+                "target",
+                {"kind": SocialTargetKind.USER.value, "user_id": owner_id, "peer_id": owner_id},
+            )
+            kind = SocialTargetKind.USER.value
+            title = " ".join(
+                part for part in (
+                    str(source.get("first_name") or "").strip(),
+                    str(source.get("last_name") or "").strip(),
+                ) if part
+            ) or "VK user"
+            about = str(source.get("status") or "")
+            description = ""
+            members = 0
+
+        handle = str(source.get("screen_name") or "").strip()
+        source_target: dict[str, Any] = {
+            "target_ref": target_ref,
+            "kind": kind,
+            "title": self._sanitize(title)[:256] or "VK source",
+            "about": self._sanitize(about)[:1024],
+            "description": self._sanitize(description)[:1024],
+            "basic_metrics": {"members": members},
+            "trust": _TRUST,
+        }
+        if _SAFE_HANDLE.fullmatch(handle):
+            source_target["canonical_handle"] = self._sanitize(handle)[:128]
+            source_target["profile_link"] = f"https://vk.com/{handle}"
+        return {
+            "item": self._public_item(
+                post,
+                native=self._wall_native(owner_id, post_id),
+                target_ref=target_ref,
+            ),
+            "source_target": source_target,
+            "trust": _TRUST,
+        }
+
+    def _notification_start_from(self, request: SocialReadRequest) -> str | None:
+        if request.cursor is None:
+            return None
+        try:
+            state = self._refs.resolve("cursor", request.cursor)
+        except Exception:  # noqa: BLE001 - opaque cursor failures are normalized
+            raise VKWorkspaceError("cursor_invalid") from None
+        expected = self._cursor_context(request)
+        actual = (
+            str(state.get("operation") or ""),
+            str(state.get("resource_fingerprint") or ""),
+            str(state.get("query_fingerprint") or ""),
+            str(state.get("sample_ref") or ""),
+            str(state.get("read_access") or ""),
+        )
+        start_from = state.get("start_from")
+        if (
+            actual != expected
+            or not isinstance(start_from, str)
+            or not start_from
+            or len(start_from.encode("utf-8")) > _MAX_PROVIDER_CURSOR_BYTES
+            or any(ord(character) < 0x20 for character in start_from)
+        ):
+            raise VKWorkspaceError("cursor_context_mismatch")
+        return start_from
+
+    def _notification_cursor(self, request: SocialReadRequest, start_from: str) -> str:
+        if (
+            not start_from
+            or len(start_from.encode("utf-8")) > _MAX_PROVIDER_CURSOR_BYTES
+            or any(ord(character) < 0x20 for character in start_from)
+        ):
+            raise VKWorkspaceError("cursor_invalid")
+        operation, resource, query, sample, read_access = self._cursor_context(request)
+        try:
+            return self._refs.mint(
+                "cursor",
+                {
+                    "operation": operation,
+                    "resource_fingerprint": resource,
+                    "query_fingerprint": query,
+                    "sample_ref": sample,
+                    "read_access": read_access,
+                    "start_from": start_from,
+                },
+            )
+        except Exception:  # noqa: BLE001 - opaque cursor failures are normalized
+            raise VKWorkspaceError("cursor_invalid") from None
+
+    async def _notifications(self, request: SocialReadRequest) -> Mapping[str, Any]:
+        params: dict[str, Any] = {
+            "count": min(request.limit, _MAX_RESULT_PAGE),
+            "filters": "comments,mentions",
+        }
+        start_from = self._notification_start_from(request)
+        if start_from is not None:
+            params["start_from"] = start_from
+        if request.date_from is not None:
+            params["start_time"] = int(
+                datetime.strptime(request.date_from, "%Y-%m-%d")
+                .replace(tzinfo=timezone.utc)
+                .timestamp()
+            )
+        if request.date_to is not None:
+            params["end_time"] = int(
+                datetime.strptime(request.date_to, "%Y-%m-%d")
+                .replace(tzinfo=timezone.utc)
+                .timestamp()
+            ) + 86_399
+        response = await self._call("notifications", params)
+        results: list[dict[str, Any]] = []
+        for raw in _items(response):
+            notification_type = str(raw.get("type") or "")
+            if notification_type not in {
+                "comment_post",
+                "reply_comment",
+                "mention_comments",
+            }:
+                continue
+            parent = raw.get("parent")
+            feedback = raw.get("feedback")
+            if not isinstance(parent, Mapping) or not isinstance(feedback, Mapping):
+                continue
+            owner_id = _int(parent.get("owner_id"))
+            post_id = _int(parent.get("id")) or _int(parent.get("post_id"))
+            comment_id = _int(feedback.get("id"))
+            if (
+                owner_id is None
+                or owner_id == 0
+                or post_id is None
+                or post_id <= 0
+                or comment_id is None
+                or comment_id <= 0
+            ):
+                continue
+            text = self._sanitize(str(feedback.get("text") or ""))[:_MAX_TEXT]
+            if not text.strip():
+                continue
+            results.append(
+                {
+                    "item_ref": self._mint(
+                        "item",
+                        {
+                            "kind": "comment",
+                            "owner_id": owner_id,
+                            "post_id": post_id,
+                            "comment_id": comment_id,
+                        },
+                    ),
+                    "root_item_ref": self._mint(
+                        "item", self._wall_native(owner_id, post_id)
+                    ),
+                    "kind": SocialItemKind.COMMENT.value,
+                    "published_at": _utc(feedback.get("date") or raw.get("date")),
+                    "text": text,
+                    "source_kind": (
+                        "mention" if "mention" in notification_type else "comment"
+                    ),
+                    "trust": _TRUST,
+                }
+            )
+            if len(results) >= min(request.limit, _MAX_RESULT_PAGE):
+                break
+        output: dict[str, Any] = {"results": results, "trust": _TRUST}
+        if isinstance(response, Mapping):
+            next_from = response.get("next_from")
+            if isinstance(next_from, str) and next_from:
+                output["next_cursor"] = self._notification_cursor(request, next_from)
+        return output
 
     def _metrics(self, item: Mapping[str, Any]) -> dict[str, int]:
         def count(field: str) -> int:
@@ -731,6 +989,10 @@ class VKWorkspaceAdapter:
             raise SocialWorkspaceValidationError("VK request is required")
         if request.operation is SocialReadOperation.RESOLVE_TARGET:
             return await self.resolve(request)
+        if request.operation is SocialReadOperation.RESOLVE_ITEM:
+            return await self._resolve_item(request)
+        if request.operation is SocialReadOperation.LIST_NOTIFICATIONS:
+            return await self._notifications(request)
         if request.operation is SocialReadOperation.SEARCH_TARGETS:
             return await self._discover(request)
         if request.operation is SocialReadOperation.EDITORIAL_SAMPLE:

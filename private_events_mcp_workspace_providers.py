@@ -46,6 +46,9 @@ class ProviderBindingError(RuntimeError):
     """Sanitized production binding error."""
 
 
+_MAX_PROVIDER_BINDING_ENVELOPE_BYTES = 64 * 1024
+
+
 def _bounded_ref(prefix: str) -> str:
     return f"{prefix}_{secrets.token_urlsafe(24)}"
 
@@ -121,6 +124,8 @@ class _DurableEncryptedMap:
 
     def put(self, key: str, value: Any) -> None:
         encoded = _seal_binding(self.signing_key, value)
+        if len(encoded.encode("ascii")) > _MAX_PROVIDER_BINDING_ENVELOPE_BYTES:
+            raise ProviderBindingError("provider binding exceeds size limit")
         now = self.state.now_ms()
         with self.state._lock, self.state._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -390,6 +395,7 @@ class DurableVKCooldown:
 
 _VK_TOKEN_ENVS: Mapping[VKActor, str] = {
     VKActor.PUBLIC_READER: "PRIVATE_EVENTS_MCP_VK_PUBLIC_READER_TOKEN",
+    VKActor.NOTIFICATION_READER: "PRIVATE_EVENTS_MCP_VK_NOTIFICATION_READER_TOKEN",
     VKActor.DIALOG_READER: "PRIVATE_EVENTS_MCP_VK_DIALOG_READER_TOKEN",
     VKActor.USER_MESSENGER: "PRIVATE_EVENTS_MCP_VK_USER_MESSENGER_TOKEN",
     VKActor.COMMUNITY_EDITOR: "PRIVATE_EVENTS_MCP_VK_COMMUNITY_EDITOR_TOKEN",
@@ -479,6 +485,7 @@ class DedicatedVKActorTransport:
 def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]:
     allowed: dict[VKActor, set[str]] = {
         VKActor.PUBLIC_READER: {"discover", "read_public", "search_public", "audience"},
+        VKActor.NOTIFICATION_READER: set(),
         VKActor.DIALOG_READER: set(),
         VKActor.USER_MESSENGER: set(),
         VKActor.COMMUNITY_EDITOR: set(),
@@ -488,6 +495,7 @@ def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]
     }
     if config.universal_social_private_read_enabled:
         allowed[VKActor.DIALOG_READER].add("dialogs")
+        allowed[VKActor.NOTIFICATION_READER].add("notifications_read")
     if config.universal_social_dm_enabled:
         allowed[VKActor.USER_MESSENGER].add("dm_send")
     if config.universal_social_post_enabled:

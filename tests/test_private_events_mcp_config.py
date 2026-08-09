@@ -39,6 +39,35 @@ def test_disabled_config_does_not_parse_mcp_only_client_values(monkeypatch) -> N
     assert PrivateEventsMCPConfig.from_env().enabled is False
 
 
+@pytest.mark.parametrize(
+    "unsafe_origin",
+    [
+        "https://user:secret@events.example",
+        "https://events.example?token=secret",
+        "https://events.example#secret",
+        "https://events.example:444",
+        "https://events.example\nsecret.example",
+        "https://events.example\tsecret.example",
+        "https://example..com",
+        "https://-bad.example",
+        "https://bad-.example",
+        "https://127.1",
+        "https://127.000.000.001",
+        "https://2130706433",
+        "https://0x7f000001",
+        "https://[fe80::1%25eth0]",
+    ],
+)
+def test_enabled_config_rejects_noncanonical_or_secret_bearing_origin(
+    monkeypatch, unsafe_origin: str
+) -> None:
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", unsafe_origin)
+    with pytest.raises(ValueError, match="PUBLIC_BASE_URL"):
+        PrivateEventsMCPConfig.from_env()
+
+
 def test_universal_social_flags_are_strictly_parented_and_provider_bound(
     monkeypatch,
 ) -> None:

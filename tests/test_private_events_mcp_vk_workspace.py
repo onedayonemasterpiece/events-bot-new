@@ -15,6 +15,7 @@ from private_events_mcp.social_workspace import (
     EditorialSampleState,
     SocialReadPurpose,
     SocialTargetKind,
+    SocialWorkspaceValidationError,
     TargetLocatorKind,
     validate_editorial_sample_response,
     validate_prepare_request,
@@ -130,7 +131,32 @@ class FakeTransport:
         if method in {"wall.search", "newsfeed.search"}:
             return {"items": [self._post(501), self._post(502)]}
         if method == "wall.getById":
-            return [{**self._post(501), "likes": {"count": 7}, "comments": {"count": 4}, "reposts": {"count": 2}}]
+            owner_id, post_id = str(params["posts"]).split("_", 1)
+            return [{**self._post(int(post_id)), "owner_id": int(owner_id), "likes": {"count": 7}, "comments": {"count": 4}, "reposts": {"count": 2}}]
+        if method == "notifications.get":
+            if params.get("start_from") == "provider-page-2":
+                return {"items": []}
+            return {
+                "items": [
+                    {
+                        "type": "comment_post",
+                        "date": 1_700_001_000,
+                        "parent": {"owner_id": -101, "id": 501},
+                        "feedback": {
+                            "id": 91,
+                            "date": 1_700_001_001,
+                            "text": "Вероятно, в событии неверная дата provider_secret",
+                        },
+                    },
+                    {
+                        "type": "like_post",
+                        "date": 1_700_001_002,
+                        "parent": {"owner_id": -101, "id": 501},
+                        "feedback": {"id": 92, "text": "must be skipped"},
+                    },
+                ],
+                "next_from": "provider-page-2",
+            }
         if method == "wall.getComments":
             return {"items": [{"id": 61, "date": 1_700_000_010, "text": "A comment"}]}
         if method == "likes.getList":
@@ -213,6 +239,155 @@ async def test_fixed_allowlist_version_and_exact_resolution_without_native_id_le
     assert all(set(call) == {"actor", "method", "params", "version", "timeout_seconds"} for call in transport.calls)
     assert not hasattr(adapter, "call") and not hasattr(adapter, "raw_method") and not hasattr(adapter, "vk_api")
     assert all(actor in {item.value for item in VKActor} for actor, _ in VK_OPERATION_ACTORS.values())
+
+
+@pytest.mark.asyncio
+async def test_exact_post_link_resolution_and_bounded_comment_notifications(workspace) -> None:
+    adapter, transport, refs, _, _ = workspace
+    resolved = await adapter.read(
+        read_request(
+            "resolve_item",
+            target_locator={
+                "kind": "profile_link",
+                "value": "https://vk.com/wall-101_501",
+            },
+            read_access="public",
+        )
+    )
+    assert resolved["item"]["kind"] == "post"
+    assert resolved["source_target"]["title"] == "Named Community"
+    assert resolved["item"]["target_ref"] == resolved["source_target"]["target_ref"]
+    assert "owner_id" not in json.dumps(resolved)
+    assert "provider_secret" not in json.dumps(resolved)
+
+    first = await adapter.read(
+        read_request(
+            "list_notifications",
+            limit=25,
+            date_from="2023-11-14",
+            date_to="2023-11-15",
+        )
+    )
+    assert len(first["results"]) == 1
+    hint = first["results"][0]
+    assert hint["source_kind"] == "comment"
+    assert "неверная дата" in hint["text"]
+    assert "provider_secret" not in hint["text"]
+    assert refs.resolve("item", hint["root_item_ref"]) == {
+        "kind": "post",
+        "group_id": 101,
+        "owner_id": -101,
+        "post_id": 501,
+    }
+    second = await adapter.read(
+        read_request(
+            "list_notifications",
+            limit=25,
+            date_from="2023-11-14",
+            date_to="2023-11-15",
+            cursor=first["next_cursor"],
+        )
+    )
+    assert second == {"results": [], "trust": "untrusted_external_data"}
+    calls = [call for call in transport.calls if call["method"] == "notifications.get"]
+    assert calls[0]["actor"] is VKActor.NOTIFICATION_READER
+    assert calls[0]["params"]["count"] == 25
+    assert calls[0]["params"]["filters"] == "comments,mentions"
+    assert calls[1]["params"]["start_from"] == "provider-page-2"
+
+
+@pytest.mark.asyncio
+async def test_notification_cursor_rejects_oversized_provider_state_before_persisting(
+    workspace,
+) -> None:
+    adapter, transport, refs, _, _ = workspace
+    original_invoke = transport.invoke
+
+    async def oversized_cursor(**call: Any) -> Any:
+        if call["method"] == "notifications.get":
+            return {"items": [], "next_from": "X" * 100_000}
+        return await original_invoke(**call)
+
+    transport.invoke = oversized_cursor
+    with pytest.raises(VKWorkspaceError, match="cursor_invalid"):
+        await adapter.read(read_request("list_notifications", limit=25))
+    assert not any(kind == "cursor" for kind, _ref in refs.values)
+
+
+@pytest.mark.asyncio
+async def test_runtime_notification_hint_to_exact_thread_chain_uses_only_public_refs(
+    workspace, tmp_path,
+) -> None:
+    adapter, _, _, _, _ = workspace
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"vk": adapter},
+        encryption_key="runtime-vk-notification-key-123456",
+    )
+    identity = AccessIdentity(
+        "operator",
+        "chatgpt",
+        frozenset({"vk:notifications:read", "vk:read:public"}),
+        "https://mcp.example",
+        "jti-notifications",
+        2_000_000_000,
+    )
+    context = ToolCallContext(identity, identity.audience)
+    resolved = await runtime.read(
+        read_request(
+            "resolve_item",
+            target_locator={
+                "kind": "profile_link",
+                "value": "https://vk.com/wall-101_501",
+            },
+            read_access="public",
+        ),
+        context,
+    )
+    hints = await runtime.read(
+        read_request("list_notifications", limit=25), context
+    )
+    root_ref = hints["results"][0]["root_item_ref"]
+    thread = await runtime.read(
+        read_request(
+            "list_comments",
+            item_ref=root_ref,
+            read_access="public",
+            limit=25,
+        ),
+        context,
+    )
+    assert resolved["item"]["target_ref"] == resolved["source_target"]["target_ref"]
+    assert thread["root_item_ref"] == root_ref
+    assert thread["items"][0]["text"] == "A comment"
+    public = json.dumps({"resolved": resolved, "hints": hints, "thread": thread})
+    assert "owner_id" not in public
+    assert "post_id" not in public
+    assert "comment_id" not in public
+    assert "provider-page-2" not in public
+
+
+def test_exact_post_link_and_notification_contracts_reject_unsafe_inputs() -> None:
+    for value in (
+        "https://evil.example/wall-101_501",
+        "https://vk.com:444/wall-101_501",
+        "https://user@vk.com/wall-101_501",
+        "https://vk.com/wall-101_501?reply=1",
+        "https://vk.com/club101",
+    ):
+        with pytest.raises(SocialWorkspaceValidationError):
+            request = read_request(
+                "resolve_item",
+                target_locator={"kind": "profile_link", "value": value},
+                read_access="public",
+            )
+            VKWorkspaceAdapter._parse_post_link(request.target_locator.value or "")
+    with pytest.raises(SocialWorkspaceValidationError):
+        read_request("list_notifications", limit=26)
+    with pytest.raises(SocialWorkspaceValidationError):
+        read_request(
+            "list_notifications", date_from="2026-08-01", date_to="2026-08-05"
+        )
 
 
 @pytest.mark.asyncio

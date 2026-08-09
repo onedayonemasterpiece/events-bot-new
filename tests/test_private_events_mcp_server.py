@@ -71,6 +71,67 @@ def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(confi
 
 
 @pytest.mark.asyncio
+async def test_existing_chatgpt_legacy_scopes_see_typed_tools_without_codex_social(
+    config,
+) -> None:
+    universal = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_dm_enabled=True,
+        universal_social_post_enabled=True,
+    )
+    server = attach_private_events_mcp(
+        web.Application(),
+        universal,
+        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+    )
+    assert server is not None
+    legacy_read = AccessIdentity(
+        "operator",
+        universal.oauth_client_id,
+        frozenset({"telegram:read"}),
+        universal.resource,
+        "legacy-read-jti",
+        2_000_000_000,
+    )
+    legacy_publish = AccessIdentity(
+        "operator",
+        universal.oauth_client_id,
+        frozenset({"telegram:publish"}),
+        universal.resource,
+        "legacy-publish-jti",
+        2_000_000_000,
+    )
+    request = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+    read_list = await server.protocol.dispatch(request, legacy_read)
+    publish_list = await server.protocol.dispatch(request, legacy_publish)
+    read_names = {tool["name"] for tool in read_list["result"]["tools"]}
+    publish_names = {tool["name"] for tool in publish_list["result"]["tools"]}
+    assert "social_target_resolve" in read_names
+    assert "social_content_feed" in read_names
+    assert "social_action_prepare" not in read_names
+    assert "social_action_prepare" in publish_names
+    assert "social_action_commit" in publish_names
+    assert "social_content_feed" not in publish_names
+
+    codex = AccessIdentity(
+        "operator",
+        universal.codex_oauth_client_id,
+        frozenset({"events:read", "incidents:read", "operations:read"}),
+        universal.codex_resource,
+        "codex-jti",
+        2_000_000_000,
+    )
+    codex_list = await server.codex_protocol.dispatch(request, codex)
+    assert len(codex_list["result"]["tools"]) == 7
+    assert not any(
+        tool["name"].startswith("social_")
+        for tool in codex_list["result"]["tools"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_social_approval_page_hides_preview_until_operator_auth_and_commits(
     config,
 ) -> None:

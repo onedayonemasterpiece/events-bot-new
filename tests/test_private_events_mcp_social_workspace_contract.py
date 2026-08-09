@@ -252,7 +252,7 @@ def test_action_enum_and_granular_scope_architecture_are_exact() -> None:
     }
     assert SOCIAL_WORKSPACE_SCOPES == {
         f"{platform}:{suffix}" for platform in ("telegram", "vk") for suffix in suffixes
-    }
+    } | {"vk:notifications:read"}
     assert SOCIAL_WORKSPACE_SCOPES.isdisjoint(CODEX_MAX_SCOPES)
     assert required_scope_for_action("telegram", "send_message") == {"telegram:dm:send"}
     assert required_scope_for_action("vk", "publish") == {"vk:post:publish"}
@@ -262,6 +262,11 @@ def test_action_enum_and_granular_scope_architecture_are_exact() -> None:
     assert required_scope_for_read("vk", "list_stories") == {"vk:story:read"}
     assert required_scope_for_read("vk", "get_statistics") == {"vk:analytics"}
     assert required_scope_for_read("vk", "get_audience") == {"vk:audience"}
+    assert required_scope_for_read("vk", "list_notifications") == {
+        "vk:notifications:read"
+    }
+    with pytest.raises(SocialWorkspaceValidationError):
+        required_scope_for_read("telegram", "list_notifications")
     with pytest.raises(SocialWorkspaceValidationError):
         required_scope_for_read("vk", "get_item")
 

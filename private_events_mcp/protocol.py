@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Mapping, Sequence
+from typing import Any
 
+from .access_policy import social_scopes_authorized
 from .crypto import AccessIdentity
 from .repository import (
     DatabaseUnavailableError,
@@ -17,7 +19,6 @@ from .repository import (
     RepositoryError,
 )
 from .tool_catalog import ToolCallContext, ToolSpec
-
 
 LATEST_LEGACY_PROTOCOL = "2025-11-25"
 SUPPORTED_LEGACY_PROTOCOLS = (
@@ -103,9 +104,10 @@ class MCPProtocol:
     def _identity_allowed(self, identity: AccessIdentity) -> bool:
         if self.resource and identity.audience != self.resource:
             return False
-        if self.allowed_client_ids and identity.client_id not in self.allowed_client_ids:
-            return False
-        return True
+        return not (
+            self.allowed_client_ids
+            and identity.client_id not in self.allowed_client_ids
+        )
 
     @staticmethod
     def _response(request_id: Any, *, result: Any = None, error: Any = None) -> dict[str, Any]:
@@ -230,7 +232,7 @@ class MCPProtocol:
                     "isError": True,
                 },
             )
-        if not required_scopes.issubset(identity.scopes):
+        if not social_scopes_authorized(required_scopes, identity.scopes):
             if tool.denial_handler is not None:
                 await tool.denial_handler(arguments, context, "insufficient_scope")
             return self._response(
@@ -351,7 +353,7 @@ class MCPProtocol:
                     "isError": True,
                 },
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - untrusted tool boundary is fail-closed
             return self._response(
                 request_id,
                 result={

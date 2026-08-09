@@ -371,8 +371,8 @@ class PrivateOAuthServer:
                 )
             if legacy:
                 capability_text += (
-                    " Также запрошены совместимые legacy social scopes для старых "
-                    "allowlist-инструментов."
+                    " Также запрошены стабильные provider-level social scopes для "
+                    "совместимости существующего ChatGPT connector."
                 )
             warnings: list[str] = []
             if social & APPROVAL_REQUIRED_SOCIAL_SCOPES:
@@ -382,8 +382,9 @@ class PrivateOAuthServer:
                 )
             if social & LEGACY_PUBLISH_SCOPES:
                 warnings.append(
-                    "Legacy publish-scopes используют только старый одноразовый "
-                    "prepare/commit ticket; отдельного внешнего подтверждения у них нет."
+                    "Стабильные publish-scopes сохраняют старые allowlist-инструменты "
+                    "с одноразовым prepare/commit ticket; новые типизированные действия "
+                    "дополнительно требуют внешнего подтверждения оператора."
                 )
             if warnings:
                 social_warning = (

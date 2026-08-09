@@ -63,6 +63,11 @@ redirect chain after the form POST.
   review found that the legacy ChatGPT redirect validator accepted userinfo and
   alternate ports. The final fix therefore rejects non-canonical authority and
   query components and emits a canonical client-specific CSP origin.
+- The credential generator previously had one implicit full-regeneration path.
+  Using it for the required post-connection bootstrap-token rotation would also
+  replace the private URL, OAuth client IDs/secret, signing key and independent
+  social-approval token, breaking the newly installed identity instead of only
+  retiring the one-time bootstrap credential.
 
 ## Automation Contract
 
@@ -86,11 +91,22 @@ redirect chain after the form POST.
 - invalid callback hosts/paths remain rejected;
 - full `tests/test_private_events_mcp_*.py`, compileall and `git diff --check`
   pass;
+- credential generation requires explicit `--new-install`; bootstrap rotation
+  from a complete bundle changes only the three consistent operator/bootstrap
+  fields, preserves all stable identity/signing/state/social-approval values,
+  and rejects incomplete bundles, overlap and symlinks before creating output;
+- credential generation and enabled runtime config reject origins containing
+  invalid DNS labels, noncanonical numeric-IP forms, IPv6 zones, credentials,
+  whitespace/control characters, a query, fragment or explicit port and reject
+  multiline/NUL deploy values before any secret artifact is created;
 - real Chrome authorization follows the 302 back to ChatGPT after deployment;
 - `/healthz`, exact in-container SHA, SQLite `quick_check`, DB-unchanged and
   secret-redaction checks remain green;
-- rotate the private path and credentials because the incident screenshot
-  exposed the former path.
+- preserve the operator-confirmed installed connector identity unless its OAuth
+  client secret or signing key was exposed. The path segment alone is not an
+  authorization credential: the route must continue to return an OAuth 401
+  challenge and reject every unauthenticated tool call. A full-identity rotation
+  requires an explicit migration because it breaks the installed connector.
 
 ### Required evidence
 
@@ -113,21 +129,37 @@ retry until the CSP hotfix and credential rotation are deployed.
   ports and callback queries, and never reflect raw authority text into CSP.
 - Add ChatGPT and Codex regression assertions for their distinct callback
   origins.
+- Split credential handling into an explicit full-identity `--new-install`
+  mode and `--rotate-bootstrap-only <full-credentials.json>`. The latter must
+  emit only fresh `0700`/`0600` artifacts and a redacted receipt while keeping
+  the installed private path, clients, signing state and social approval
+  identity unchanged.
 
 ## Follow-up Actions
 
 - [ ] Complete one real ChatGPT browser connection after exact-main deploy.
-- [ ] Rotate the bootstrap token again after the operator's first successful
-  ChatGPT connection.
+- [ ] Rotate the bootstrap token after the operator's first successful ChatGPT
+  connection with `--rotate-bootstrap-only`; compare the sanitized endpoint
+  fingerprints before staging and do not run `--new-install` for that step.
+- [x] Recover the operator-provided original connector bundle by equality-only
+  safe fingerprint matching, restore that path/client identity while preserving
+  the current signing/state key, and verify a complete OAuth+PKCE smoke without
+  printing the endpoint or credentials.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
+- interim recovery deploy: Fly release `v1945`, exact in-container SHA
+  `0e1dad424811c2c2eedda2707b92263f8df1551b`; `/healthz` ready, DB `ok`, issues
+  empty; superseded by the pending stable-identity code release
 - deploy path: `scripts/deploy_fly_main.sh`
-- regression checks: pending full suite and browser acceptance
+- regression checks: stable-identity/bootstrap-only generator regression added;
+  pending merged full suite and browser acceptance
 - post-deploy verification: pending
 
 ## Prevention
 
 OAuth browser acceptance now treats CSP callback navigation as part of the
 client contract rather than relying only on non-browser 302 assertions.
+Post-connection bootstrap retirement is now a narrow credential operation, so
+it cannot silently replace the callback-bound OAuth identity that the browser
+just installed.
