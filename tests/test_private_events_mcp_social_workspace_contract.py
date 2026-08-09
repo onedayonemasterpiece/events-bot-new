@@ -774,24 +774,41 @@ def test_external_output_families_are_closed_bounded_and_untrusted() -> None:
         )
 
 
-def test_asset_lifecycle_uses_upload_and_opaque_refs_not_paths_or_urls() -> None:
+def test_asset_lifecycle_uses_fileparams_and_opaque_refs_not_paths_or_legacy_handles() -> None:
     request = {
         "platform": "telegram",
-        "upload_ref": UPLOAD_REF,
+        "file": {
+            "download_url": "https://files.example.test/download?signed=1",
+            "file_id": "file_chatgpt_example",
+            "mime_type": "image/png",
+            "file_name": "poster.png",
+        },
         "role": "image",
-        "mime_type": "image/png",
-        "byte_length": 1024,
-        "content_digest": "sha256:" + "a" * 64,
     }
     validate(request, SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA)
-    assert validate_asset_stage_request(request).upload_ref == UPLOAD_REF
+    parsed = validate_asset_stage_request(request)
+    assert parsed.file.file_id == "file_chatgpt_example"
+    assert parsed.file.download_url.startswith("https://files.example.test/")
     assert validate_asset_status_request({"asset_ref": ASSET_REF}) == ASSET_REF
     validate({"asset_ref": ASSET_REF, "status": "ready"}, SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA)
     validate(
-        {"asset_ref": ASSET_REF, "status": "ready", "mime_type": "image/png", "byte_length": 1024, "trust": "untrusted_external_data"},
+        {
+            "asset_ref": ASSET_REF,
+            "status": "ready",
+            "mime_type": "image/png",
+            "byte_length": 1024,
+            "content_digest": "sha256:" + "a" * 64,
+            "expires_at": "2030-01-01T00:00:00Z",
+            "trust": "untrusted_external_data",
+        },
         SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA,
     )
-    for escape in ({"path": "/tmp/a.png"}, {"url": "https://evil/a.png"}, {"byte_length": 100_000_000}):
+    for escape in (
+        {"path": "/tmp/a.png"},
+        {"url": "https://evil/a.png"},
+        {"upload_ref": UPLOAD_REF},
+        {"content_digest": "sha256:" + "a" * 64},
+    ):
         with pytest.raises((SocialWorkspaceValidationError, ValidationError)):
             validate_asset_stage_request({**request, **escape})
 

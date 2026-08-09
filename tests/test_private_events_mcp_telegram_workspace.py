@@ -1399,7 +1399,15 @@ def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch()
         for name, value in inspect.getmembers(TelegramWorkspaceAdapter, inspect.isfunction)
         if not name.startswith("_")
     }
-    assert public == {"capabilities", "resolve", "read", "execute", "reconcile"}
+    assert public == {
+        "capabilities",
+        "resolve",
+        "read",
+        "execute",
+        "reconcile",
+        "stage_asset",
+        "read_asset",
+    }
     source = Path("private_events_mcp_telegram_adapter.py").read_text()
     assert "import telethon" in source  # lazy inside the fixed type factory
     assert "TELEGRAM_AUTH_BUNDLE_E2E" not in source

@@ -1,0 +1,80 @@
+requirements:
+  R01: "ChatGPT can stage and publish bounded image assets to Telegram and VK"
+  R02: "ChatGPT can publish Telegram and VK stories through exact approval"
+  R03: "ChatGPT can read bounded Telegram and VK story pages"
+  R04: "ChatGPT can read aggregate story statistics without viewer identities"
+  R05: "Preserve the existing ChatGPT OAuth identity and keep Codex evidence-only"
+  R06: "Independent review, full CI, exact-main deploy, and live acceptance"
+
+lanes:
+  map_contract:
+    mode: read_only
+    owns: []
+    requirements: [R01, R02, R03, R04, R05]
+  core_asset_ingress:
+    mode: write
+    owns:
+      - private_events_mcp/config.py
+      - private_events_mcp/server.py
+      - private_events_mcp/social_workspace.py
+      - private_events_mcp/social_workspace_runtime.py
+      - private_events_mcp/social_workspace_tools.py
+      - private_events_mcp/tool_catalog.py
+      - tests/test_private_events_mcp_social_asset_ingress.py
+    requirements: [R01, R02, R05]
+    depends_on: [map_contract]
+    status: merged
+  telegram_media_stories:
+    mode: write
+    owns:
+      - private_events_mcp_telegram_adapter.py
+      - tests/test_private_events_mcp_telegram_media_stories.py
+    requirements: [R01, R02, R03, R04]
+    depends_on: [map_contract]
+    status: merged
+  vk_media_stories:
+    mode: write
+    owns:
+      - private_events_mcp_vk_adapter.py
+      - tests/test_private_events_mcp_vk_media_stories.py
+    requirements: [R01, R02, R03, R04]
+    depends_on: [map_contract]
+    status: merged
+  provider_storage_integration:
+    mode: serial_integration
+    owns:
+      - private_events_mcp_workspace_providers.py
+      - private_events_mcp_provider_adapters.py
+      - tests/test_private_events_mcp_workspace_providers.py
+    requirements: [R01, R02, R03, R04]
+    depends_on: [core_asset_ingress, telegram_media_stories, vk_media_stories]
+    status: validated_local
+  docs_release:
+    mode: write
+    owns:
+      - docs/operations/private-events-mcp.md
+      - docs/operations/e2e-scenarios.md
+      - .env.example
+      - CHANGELOG.md
+      - scripts/smoke_private_events_mcp.py
+    requirements: [R05, R06]
+    depends_on: [provider_storage_integration]
+    status: merged
+
+integration_order:
+  - map_contract
+  - core_asset_ingress
+  - telegram_media_stories
+  - vk_media_stories
+  - provider_storage_integration
+  - docs_release
+  - independent_review
+  - exact_main_release
+
+invariants:
+  - "No OAuth path, client ID, client secret, signing key, or resource change"
+  - "Codex lists exactly seven evidence tools and receives no social scope"
+  - "No raw provider method or arbitrary outbound URL tool"
+  - "Every uploaded byte stream is size-, MIME-, digest-, owner-, and TTL-bound"
+  - "Every public mutation requires the existing browser approval flow"
+  - "No PR365 prod_ops_mcp or static bearer implementation"

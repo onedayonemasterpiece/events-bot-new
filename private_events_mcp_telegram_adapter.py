@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import inspect
+import io
 import re
 import secrets
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -46,8 +48,13 @@ _TRUST = "untrusted_external_data"
 _MAX_PAGE = 25
 _MAX_SAMPLE = 100
 _MAX_GLOBAL_SCAN = 100
-_MIN_TELETHON_VERSION = (1, 34)
+_MIN_TELETHON_VERSION = (1, 44)
 _MAX_TELETHON_MAJOR = 1
+_MAX_UPLOAD_BYTES = 30 * 1024 * 1024
+_UPLOAD_MIME_TYPES = {
+    MediaRole.IMAGE: frozenset({"image/jpeg", "image/png", "image/webp"}),
+    MediaRole.VIDEO: frozenset({"video/mp4", "video/quicktime", "video/webm"}),
+}
 
 
 class TelegramWorkspaceError(RuntimeError):
@@ -96,6 +103,7 @@ class TelegramItemBinding:
     target_ref: str
     message_id: int = field(repr=False)
     allowed_actions: frozenset[SocialAction] | None = None
+    kind: SocialItemKind = SocialItemKind.MESSAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +113,24 @@ class TelegramAssetBinding:
     asset_ref: str
     role: MediaRole
     provider_media: Any = field(repr=False)
+    target_ref: str | None = None
+    story_id: int | None = None
+    expires_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramVerifiedUpload:
+    """Immutable metadata for bytes held by the injected secure asset reader."""
+
+    storage_ref: str = field(repr=False)
+    owner_binding: str = field(repr=False)
+    content_digest: str
+    mime_type: str
+    byte_length: int
+    width: int
+    height: int
+    duration: float | None
+    expires_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,9 +169,23 @@ class TelegramOpaqueRefStore(Protocol):
         target_ref: str,
         message_id: int,
         allowed_actions: frozenset[SocialAction] | None = None,
+        kind: SocialItemKind = SocialItemKind.MESSAGE,
     ) -> TelegramItemBinding: ...
 
-    def mint_read_asset(self, *, target_ref: str, media: Any, role: MediaRole) -> str: ...
+    def mint_read_asset(
+        self,
+        *,
+        target_ref: str,
+        media: Any,
+        role: MediaRole,
+        story_id: int | None = None,
+        expires_at: datetime | None = None,
+        item_kind: SocialItemKind | None = None,
+    ) -> str: ...
+
+    def mint_upload_asset(
+        self, *, role: MediaRole, upload: TelegramVerifiedUpload
+    ) -> TelegramAssetBinding | Awaitable[TelegramAssetBinding]: ...
 
     def mint_cursor(self, *, family: str, state: Mapping[str, Any]) -> str: ...
 
@@ -189,6 +229,14 @@ class TelegramGovernor(Protocol):
     def assert_current(self, lease: TelegramLease) -> bool | Awaitable[bool]: ...
 
     def release(self, lease: TelegramLease) -> None | Awaitable[None]: ...
+
+
+class TelegramAssetReader(Protocol):
+    """Secure server-side byte source. Storage references are never filesystem paths."""
+
+    def open_verified(
+        self, storage_ref: str, owner_binding: str
+    ) -> Any | Awaitable[Any]: ...
 
 
 ClientFactory = Callable[[], Any | Awaitable[Any]]
@@ -313,7 +361,15 @@ class _DefaultTelethonTypes:
                 (functions.messages, "GetRepliesRequest"),
                 (functions.messages, "SendReactionRequest"),
                 (functions.stories, "GetPeerStoriesRequest"),
+                (functions.stories, "GetStoriesByIDRequest"),
+                (functions.stories, "GetStoriesViewsRequest"),
+                (functions.stories, "CanSendStoryRequest"),
                 (functions.stories, "SendStoryRequest"),
+                (types, "InputMediaUploadedPhoto"),
+                (types, "InputMediaUploadedDocument"),
+                (types, "DocumentAttributeVideo"),
+                (types, "InputPrivacyValueAllowAll"),
+                (types, "UpdateStoryID"),
                 (types, "MessageEntityCustomEmoji"),
                 (types, "MessageEntityBlockquote"),
                 (types, "InputMessageEntityMentionName"),
@@ -434,6 +490,16 @@ class _DefaultTelethonTypes:
             )
         if name == "peer_stories":
             return functions.stories.GetPeerStoriesRequest(peer=values["peer"])
+        if name == "stories_by_id":
+            return functions.stories.GetStoriesByIDRequest(
+                peer=values["peer"], id=list(values["story_ids"])
+            )
+        if name == "stories_views":
+            return functions.stories.GetStoriesViewsRequest(
+                peer=values["peer"], id=list(values["story_ids"])
+            )
+        if name == "can_send_story":
+            return functions.stories.CanSendStoryRequest(peer=values["peer"])
         if name == "send_story":
             return functions.stories.SendStoryRequest(
                 peer=values["peer"],
@@ -443,8 +509,63 @@ class _DefaultTelethonTypes:
                 entities=values["entities"],
                 random_id=secrets.randbits(63),
                 media_areas=[],
+                pinned=values.get("pinned"),
+                noforwards=values.get("noforwards"),
+                period=values.get("period"),
             )
         raise TelegramWorkspaceError("unsupported_provider_feature")
+
+    def upload_media(
+        self,
+        uploaded: Any,
+        *,
+        role: MediaRole,
+        mime_type: str,
+        width: int,
+        height: int,
+        duration: float | None,
+        spoiler: bool,
+    ) -> Any:
+        _, types = self._load()
+        if role is MediaRole.IMAGE:
+            return types.InputMediaUploadedPhoto(file=uploaded, spoiler=spoiler or None)
+        if role is MediaRole.VIDEO and duration is not None:
+            return types.InputMediaUploadedDocument(
+                file=uploaded,
+                mime_type=mime_type,
+                attributes=[
+                    types.DocumentAttributeVideo(
+                        duration=duration,
+                        w=width,
+                        h=height,
+                        supports_streaming=True,
+                    )
+                ],
+                spoiler=spoiler or None,
+            )
+        raise TelegramWorkspaceError("unsupported_provider_feature")
+
+    def public_story_privacy(self) -> tuple[Any, ...]:
+        _, types = self._load()
+        return (types.InputPrivacyValueAllowAll(),)
+
+    @staticmethod
+    def story_id(response: Any, *, random_id: int) -> int:
+        updates = list(getattr(response, "updates", None) or [])
+        single = getattr(response, "update", None)
+        if single is not None:
+            updates.append(single)
+        matches = {
+            getattr(update, "id", None)
+            for update in updates[:100]
+            if update.__class__.__name__ == "UpdateStoryID"
+            and getattr(update, "random_id", None) == random_id
+            and type(getattr(update, "id", None)) is int
+            and getattr(update, "id", 0) > 0
+        }
+        if len(matches) != 1:
+            raise TimeoutError("Telegram story id was not confirmed")
+        return matches.pop()
 
 
 @dataclass(slots=True)
@@ -477,6 +598,7 @@ class TelegramWorkspaceAdapter:
         refs: TelegramOpaqueRefStore,
         governor: TelegramGovernor,
         telethon_types: Any | None = None,
+        asset_reader: TelegramAssetReader | None = None,
         operation_timeout_seconds: float = 30.0,
     ) -> None:
         if not callable(client_factory):
@@ -512,6 +634,11 @@ class TelegramWorkspaceAdapter:
         self._refs = refs
         self._governor = governor
         self._types = telethon_types or _DefaultTelethonTypes()
+        if asset_reader is not None and not callable(
+            getattr(asset_reader, "open_verified", None)
+        ):
+            raise TypeError("asset_reader must implement open_verified")
+        self._asset_reader = asset_reader
         self._timeout = float(operation_timeout_seconds)
         self._lock = asyncio.Lock()
 
@@ -636,6 +763,35 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("opaque item binding mismatch")
         return binding
 
+    def _mint_item_binding(
+        self,
+        *,
+        target_ref: str,
+        message_id: int,
+        kind: SocialItemKind,
+        allowed_actions: frozenset[SocialAction] | None = None,
+    ) -> TelegramItemBinding:
+        minter = self._refs.mint_item
+        parameters = inspect.signature(minter).parameters
+        supports_kind = "kind" in parameters or any(
+            value.kind is inspect.Parameter.VAR_KEYWORD
+            for value in parameters.values()
+        )
+        values: dict[str, Any] = {
+            "target_ref": target_ref,
+            "message_id": message_id,
+            "allowed_actions": allowed_actions,
+        }
+        if supports_kind:
+            values["kind"] = kind
+        binding = minter(**values)
+        if not isinstance(binding, TelegramItemBinding):
+            raise SocialWorkspaceValidationError("item minter returned invalid binding")
+        if supports_kind and binding.kind is not kind:
+            raise SocialWorkspaceValidationError("item minter returned wrong item kind")
+        validate_opaque_ref(binding.item_ref, "item")
+        return binding
+
     def _asset(self, asset_ref: str) -> TelegramAssetBinding:
         validate_opaque_ref(asset_ref, "asset")
         binding = self._refs.resolve_asset(asset_ref)
@@ -644,6 +800,290 @@ class TelegramWorkspaceAdapter:
         if isinstance(binding.provider_media, (str, bytes, bytearray, memoryview)):
             raise SocialWorkspaceValidationError("asset is not staged provider media")
         return binding
+
+    @staticmethod
+    def _verified_upload(asset: Any, role: MediaRole) -> TelegramVerifiedUpload:
+        if role not in _UPLOAD_MIME_TYPES:
+            raise SocialWorkspaceValidationError("Telegram upload role must be image or video")
+
+        def field_value(primary: str, fallback: str | None = None) -> Any:
+            value = getattr(asset, primary, None)
+            return getattr(asset, fallback, None) if value is None and fallback else value
+
+        storage_ref = field_value("storage_ref", "storage_path")
+        owner_binding = field_value("owner_binding")
+        content_digest = field_value("content_digest", "sha256")
+        mime_type = field_value("mime_type", "detected_mime")
+        byte_length = field_value("byte_length")
+        width = field_value("width")
+        height = field_value("height")
+        duration = field_value("duration")
+        expires_at = field_value("expires_at")
+        declared_role = field_value("role")
+
+        # The initial provider contract mentioned storage_path, but callers must
+        # never pass a filesystem path. Only an opaque storage_ref is accepted.
+        if getattr(asset, "storage_ref", None) is None or not isinstance(storage_ref, str):
+            raise SocialWorkspaceValidationError("verified asset storage_ref is required")
+        if (
+            not re.fullmatch(r"ing_[A-Za-z0-9_-]{24,160}", storage_ref)
+        ):
+            raise SocialWorkspaceValidationError("verified asset storage_ref is invalid")
+        if not isinstance(owner_binding, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", owner_binding
+        ):
+            raise SocialWorkspaceValidationError("verified asset owner binding is invalid")
+        if not isinstance(content_digest, str) or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", content_digest
+        ):
+            raise SocialWorkspaceValidationError("verified asset digest is invalid")
+        if not isinstance(mime_type, str):
+            raise SocialWorkspaceValidationError("verified asset MIME is invalid")
+        mime_type = mime_type.strip().casefold()
+        if mime_type not in _UPLOAD_MIME_TYPES[role]:
+            raise SocialWorkspaceValidationError("verified asset MIME does not match role")
+        if type(byte_length) is not int or not 0 < byte_length <= _MAX_UPLOAD_BYTES:
+            raise SocialWorkspaceValidationError("verified asset exceeds Telegram size limit")
+        if type(width) is not int or type(height) is not int or not (
+            0 < width <= 20_000 and 0 < height <= 20_000
+        ):
+            raise SocialWorkspaceValidationError("verified asset dimensions are invalid")
+        if role is MediaRole.VIDEO:
+            if type(duration) not in {int, float} or not 0 < float(duration) <= 3600:
+                raise SocialWorkspaceValidationError("verified video duration is invalid")
+            duration = float(duration)
+        elif duration is not None:
+            raise SocialWorkspaceValidationError("verified image duration must be absent")
+        if declared_role is not None:
+            try:
+                normalized_declared_role = (
+                    declared_role
+                    if isinstance(declared_role, MediaRole)
+                    else MediaRole(declared_role)
+                )
+            except (TypeError, ValueError):
+                raise SocialWorkspaceValidationError("verified asset role is invalid") from None
+            if normalized_declared_role is not role:
+                raise SocialWorkspaceValidationError("verified asset role mismatch")
+
+        if isinstance(expires_at, datetime):
+            expiry = expires_at
+        elif type(expires_at) in {int, float}:
+            try:
+                expiry = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
+            except (OverflowError, OSError, ValueError):
+                raise SocialWorkspaceValidationError("verified asset expiry is invalid") from None
+        elif isinstance(expires_at, str):
+            try:
+                expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            except ValueError:
+                raise SocialWorkspaceValidationError("verified asset expiry is invalid") from None
+        else:
+            raise SocialWorkspaceValidationError("verified asset expiry is invalid")
+        if expiry.tzinfo is None:
+            raise SocialWorkspaceValidationError("verified asset expiry needs timezone")
+        expiry = expiry.astimezone(timezone.utc)
+        if expiry <= datetime.now(timezone.utc):
+            raise SocialWorkspaceValidationError("verified asset has expired")
+        return TelegramVerifiedUpload(
+            storage_ref=storage_ref,
+            owner_binding=owner_binding,
+            content_digest=content_digest,
+            mime_type=mime_type,
+            byte_length=byte_length,
+            width=width,
+            height=height,
+            duration=duration,
+            expires_at=expiry,
+        )
+
+    async def stage_asset(self, asset: Any, *, role: MediaRole) -> str:
+        """Bind verified server-owned metadata; provider upload is deferred to commit."""
+
+        if not isinstance(role, MediaRole):
+            raise SocialWorkspaceValidationError("Telegram upload role is invalid")
+        if role is MediaRole.VIDEO:
+            raise SocialWorkspaceValidationError(
+                "verified Telegram video ingress is unavailable"
+            )
+        upload = self._verified_upload(asset, role)
+        minter = getattr(self._refs, "mint_upload_asset", None)
+        if not callable(minter):
+            raise TelegramWorkspaceError("asset_store_unavailable", retry_safe=False)
+        binding = await _await(minter(role=role, upload=upload))
+        if (
+            not isinstance(binding, TelegramAssetBinding)
+            or binding.role is not role
+            or not isinstance(binding.provider_media, TelegramVerifiedUpload)
+            or binding.provider_media != upload
+        ):
+            raise SocialWorkspaceValidationError("upload asset minter returned invalid binding")
+        validate_opaque_ref(binding.asset_ref, "asset")
+        return binding.asset_ref
+
+    async def read_asset(
+        self, asset_ref: str, *, owner_binding: str, max_bytes: int
+    ) -> bytes:
+        """Materialize bounded story media without reading or marking the story itself."""
+
+        if not isinstance(owner_binding, str) or not re.fullmatch(
+            r"[0-9a-f]{64}", owner_binding
+        ):
+            raise SocialWorkspaceValidationError("asset owner binding is invalid")
+        if type(max_bytes) is not int or not 0 < max_bytes <= _MAX_UPLOAD_BYTES:
+            raise SocialWorkspaceValidationError("asset read bound is invalid")
+        binding = self._asset(asset_ref)
+        if (
+            binding.expires_at is not None
+            and binding.expires_at <= datetime.now(timezone.utc)
+        ):
+            raise SocialWorkspaceValidationError("asset has expired")
+        if isinstance(binding.provider_media, TelegramVerifiedUpload):
+            if binding.provider_media.owner_binding != owner_binding:
+                raise SocialWorkspaceValidationError("asset owner binding mismatch")
+            data = await self._read_upload_bytes(binding.provider_media)
+            if len(data) > max_bytes:
+                raise SocialWorkspaceValidationError("asset exceeds requested read bound")
+            return data
+
+        async def run(
+            client: Any, lease: TelegramLease, _attempt: _Attempt
+        ) -> bytes:
+            await self._fenced(lease)
+            iterator_factory = getattr(client, "iter_download", None)
+            if not callable(iterator_factory):
+                raise TelegramWorkspaceError("provider_dependency_unavailable")
+            chunks: list[bytes] = []
+            total = 0
+            iterator = iterator_factory(binding.provider_media, request_size=512 * 1024)
+            if not hasattr(iterator, "__aiter__"):
+                raise TelegramWorkspaceError("invalid_provider_response")
+            async for chunk in iterator:
+                if not isinstance(chunk, (bytes, bytearray, memoryview)):
+                    raise TelegramWorkspaceError("invalid_provider_response")
+                total += len(chunk)
+                if total > max_bytes:
+                    raise SocialWorkspaceValidationError(
+                        "asset exceeds requested read bound"
+                    )
+                chunks.append(bytes(chunk))
+            return b"".join(chunks)
+
+        return await self._session("read_asset", run)
+
+    def _mint_read_asset(
+        self,
+        *,
+        target_ref: str,
+        media: Any,
+        role: MediaRole,
+        story_id: int | None = None,
+        expires_at: datetime | None = None,
+    ) -> str:
+        minter = self._refs.mint_read_asset
+        parameters = inspect.signature(minter).parameters
+        supports_extra = any(
+            value.kind is inspect.Parameter.VAR_KEYWORD
+            for value in parameters.values()
+        )
+        values: dict[str, Any] = {
+            "target_ref": target_ref,
+            "media": media,
+            "role": role,
+        }
+        for name, value in (
+            ("story_id", story_id),
+            ("expires_at", expires_at),
+            ("item_kind", SocialItemKind.STORY if story_id is not None else None),
+        ):
+            if value is not None and (name in parameters or supports_extra):
+                values[name] = value
+        media_ref = minter(**values)
+        validate_opaque_ref(media_ref, "asset")
+        return media_ref
+
+    async def _read_upload_bytes(self, upload: TelegramVerifiedUpload) -> bytes:
+        if upload.expires_at <= datetime.now(timezone.utc):
+            raise SocialWorkspaceValidationError("verified asset has expired")
+        reader = self._asset_reader
+        if reader is None:
+            raise TelegramWorkspaceError("asset_reader_unavailable", retry_safe=False)
+        opened = await _await(
+            reader.open_verified(upload.storage_ref, upload.owner_binding)
+        )
+        close: Callable[[], Any] | None = None
+        if isinstance(opened, (bytes, bytearray, memoryview)):
+            data = bytes(opened)
+        else:
+            if isinstance(opened, (str, int)) or not callable(getattr(opened, "read", None)):
+                raise TelegramWorkspaceError("asset_reader_invalid", retry_safe=False)
+            close = getattr(opened, "close", None)
+            try:
+                data = await _await(opened.read(_MAX_UPLOAD_BYTES + 1))
+            finally:
+                if callable(close):
+                    await _await(close())
+            if not isinstance(data, (bytes, bytearray, memoryview)):
+                raise TelegramWorkspaceError("asset_reader_invalid", retry_safe=False)
+            data = bytes(data)
+        if (
+            len(data) != upload.byte_length
+            or len(data) > _MAX_UPLOAD_BYTES
+            or hashlib.sha256(data).hexdigest()
+            != upload.content_digest.removeprefix("sha256:")
+        ):
+            raise SocialWorkspaceValidationError("verified asset bytes do not match metadata")
+        return data
+
+    async def _provider_media(
+        self,
+        client: Any,
+        binding: TelegramAssetBinding,
+        *,
+        spoiler: bool,
+        attempt: _Attempt,
+    ) -> Any:
+        upload = binding.provider_media
+        if not isinstance(upload, TelegramVerifiedUpload):
+            compile_media = getattr(self._types, "media", None)
+            if spoiler and not callable(compile_media):
+                raise SocialWorkspaceValidationError("media spoiler is unsupported")
+            return (
+                compile_media(upload, spoiler=spoiler)
+                if callable(compile_media)
+                else upload
+            )
+        data = await self._read_upload_bytes(upload)
+        compile_upload = getattr(self._types, "upload_media", None)
+        if not callable(compile_upload) or not callable(getattr(client, "upload_file", None)):
+            raise TelegramWorkspaceError("provider_dependency_unavailable")
+        extension = {
+            "image/jpeg": "jpg",
+            "image/png": "png",
+            "image/webp": "webp",
+            "video/mp4": "mp4",
+            "video/quicktime": "mov",
+            "video/webm": "webm",
+        }[upload.mime_type]
+        stream = io.BytesIO(data)
+        stream.name = f"verified-asset.{extension}"
+        attempt.provider_mutation_attempted = True
+        uploaded = await _await(
+            client.upload_file(
+                stream,
+                file_size=upload.byte_length,
+                file_name=stream.name,
+            )
+        )
+        return compile_upload(
+            uploaded,
+            role=binding.role,
+            mime_type=upload.mime_type,
+            width=upload.width,
+            height=upload.height,
+            duration=upload.duration,
+            spoiler=spoiler,
+        )
 
     @staticmethod
     def _cursor_binding(
@@ -812,6 +1252,9 @@ class TelegramWorkspaceAdapter:
             set(binding.allowed_actions) if binding.allowed_actions is not None else None
         )
         features = set(ContentFeature)
+        # This release has a byte-verifying image ingestor only. Story video
+        # reads remain supported, but new video writes stay fail-closed.
+        features.discard(ContentFeature.VIDEO)
         if binding.kind is SocialTargetKind.SELF:
             actions = {
                 SocialAction.SEND_MESSAGE,
@@ -821,7 +1264,7 @@ class TelegramWorkspaceAdapter:
                 SocialAction.REACTION,
                 SocialAction.SCHEDULE,
             }
-            if binding.story_privacy is not None:
+            if self._story_privacy(binding) is not None:
                 actions.add(SocialAction.STORY)
             return _LivePolicy(
                 frozenset(actions if configured is None else actions & configured),
@@ -1004,12 +1447,25 @@ class TelegramWorkspaceAdapter:
             actions.add(SocialAction.EDIT)
         if can_delete:
             actions.add(SocialAction.DELETE)
-        if binding.story_privacy and can_story:
+        if self._story_privacy(binding) and can_story:
             actions.add(SocialAction.STORY)
         return _LivePolicy(
             frozenset(actions if configured is None else actions & configured),
             frozenset(features),
         )
+
+    def _story_privacy(self, binding: TelegramTargetBinding) -> tuple[Any, ...] | None:
+        if binding.story_privacy:
+            return binding.story_privacy
+        if binding.kind is not SocialTargetKind.CHANNEL:
+            return None
+        public_privacy = getattr(self._types, "public_story_privacy", None)
+        if not callable(public_privacy):
+            return None
+        rules = public_privacy()
+        if not isinstance(rules, tuple) or not rules:
+            raise TelegramWorkspaceError("provider_dependency_unavailable")
+        return rules
 
     async def _live_actions(
         self,
@@ -1112,19 +1568,17 @@ class TelegramWorkspaceAdapter:
         kind: SocialItemKind | None = None,
     ) -> dict[str, Any]:
         message_id = _provider_message_id(message)
-        item = self._refs.mint_item(
-            target_ref=target.target_ref,
-            message_id=message_id,
-            allowed_actions=None,
-        )
-        if not isinstance(item, TelegramItemBinding):
-            raise SocialWorkspaceValidationError("item minter returned invalid binding")
-        validate_opaque_ref(item.item_ref, "item")
         text = _safe_text(getattr(message, "message", None), 4096)
         selected_kind = kind or (
             SocialItemKind.POST
             if target.kind is SocialTargetKind.CHANNEL
             else SocialItemKind.MESSAGE
+        )
+        item = self._mint_item_binding(
+            target_ref=target.target_ref,
+            message_id=message_id,
+            kind=selected_kind,
+            allowed_actions=None,
         )
         payload: dict[str, Any] = {
             "item_ref": item.item_ref,
@@ -1138,7 +1592,7 @@ class TelegramWorkspaceAdapter:
         }
         media = getattr(message, "media", None)
         if media is not None:
-            media_ref = self._refs.mint_read_asset(
+            media_ref = self._mint_read_asset(
                 target_ref=target.target_ref,
                 media=media,
                 role=MediaRole.DOCUMENT,
@@ -1146,6 +1600,70 @@ class TelegramWorkspaceAdapter:
             validate_opaque_ref(media_ref, "asset")
             payload["media"] = [media_ref]
         return payload
+
+    @staticmethod
+    def _story_metrics(story_or_views: Any) -> dict[str, int]:
+        views = getattr(story_or_views, "views", None)
+        source = views if views is not None and not isinstance(views, int) else story_or_views
+        return {
+            "views": _int(getattr(source, "views_count", None)),
+            "reactions": _int(getattr(source, "reactions_count", None)),
+            "comments": 0,
+            "shares": _int(getattr(source, "forwards_count", None)),
+        }
+
+    @staticmethod
+    def _story_media_role(media: Any) -> MediaRole:
+        name = media.__class__.__name__
+        if name == "MessageMediaPhoto" or getattr(media, "photo", None) is not None:
+            return MediaRole.IMAGE
+        document = getattr(media, "document", None)
+        mime_type = getattr(document, "mime_type", None)
+        if (
+            name == "MessageMediaDocument"
+            and (
+                bool(getattr(media, "video", False))
+                or (isinstance(mime_type, str) and mime_type.startswith("video/"))
+            )
+        ):
+            return MediaRole.VIDEO
+        raise TelegramWorkspaceError("invalid_provider_response")
+
+    def _story_payload(
+        self, story: Any, target: TelegramTargetBinding
+    ) -> dict[str, Any]:
+        story_id = _provider_message_id(story)
+        media = getattr(story, "media", None)
+        binding = self._mint_item_binding(
+            target_ref=target.target_ref,
+            message_id=story_id,
+            kind=SocialItemKind.STORY,
+            allowed_actions=None,
+        )
+        result: dict[str, Any] = {
+            "item_ref": binding.item_ref,
+            "target_ref": target.target_ref,
+            "kind": SocialItemKind.STORY.value,
+            "published_at": _utc(getattr(story, "date", None)),
+            "text": _safe_text(getattr(story, "caption", None), 4096),
+            "caption": "",
+            "basic_metrics": self._story_metrics(story),
+            "trust": _TRUST,
+        }
+        if media is not None:
+            role = self._story_media_role(media)
+            expires_at = getattr(story, "expire_date", None)
+            if expires_at is not None and not isinstance(expires_at, datetime):
+                raise TelegramWorkspaceError("invalid_provider_response")
+            media_ref = self._mint_read_asset(
+                target_ref=target.target_ref,
+                media=media,
+                role=role,
+                story_id=story_id,
+                expires_at=expires_at,
+            )
+            result["media"] = [media_ref]
+        return result
 
     def _page(
         self,
@@ -1505,22 +2023,7 @@ class TelegramWorkspaceAdapter:
         page = stories[offset : offset + limit]
         results: list[dict[str, Any]] = []
         for story in page:
-            story_id = _provider_message_id(story)
-            binding = self._refs.mint_item(
-                target_ref=target.target_ref, message_id=story_id, allowed_actions=None
-            )
-            results.append(
-                {
-                    "item_ref": binding.item_ref,
-                    "target_ref": target.target_ref,
-                    "kind": "story",
-                    "published_at": _utc(getattr(story, "date", None)),
-                    "text": _safe_text(getattr(story, "caption", None), 4096),
-                    "caption": "",
-                    "basic_metrics": {"views": _int(getattr(story, "views", None))},
-                    "trust": _TRUST,
-                }
-            )
+            results.append(self._story_payload(story, target))
         return self._page(
             results,
             family="stories",
@@ -1529,7 +2032,113 @@ class TelegramWorkspaceAdapter:
             binding=cursor_binding,
         )
 
-    async def _statistics(self, client: Any, request: SocialReadRequest) -> Mapping[str, Any]:
+    async def _story_by_id(
+        self,
+        client: Any,
+        lease: TelegramLease,
+        target: TelegramTargetBinding,
+        story_id: int,
+    ) -> Any:
+        response = await self._call(
+            client,
+            lease,
+            self._types.request(
+                "stories_by_id", peer=target.entity, story_ids=[story_id]
+            ),
+        )
+        matches = [
+            story
+            for story in list(getattr(response, "stories", None) or [])[:25]
+            if getattr(story, "id", None) == story_id
+        ]
+        if len(matches) != 1:
+            raise TelegramWorkspaceError("invalid_provider_response")
+        return matches[0]
+
+    async def _story_views(
+        self,
+        client: Any,
+        lease: TelegramLease,
+        target: TelegramTargetBinding,
+        story_ids: Sequence[int],
+    ) -> list[Any]:
+        if not story_ids or len(story_ids) > _MAX_PAGE or any(
+            type(story_id) is not int or story_id <= 0 for story_id in story_ids
+        ):
+            raise SocialWorkspaceValidationError("story statistics bounds are invalid")
+        response = await self._call(
+            client,
+            lease,
+            self._types.request(
+                "stories_views", peer=target.entity, story_ids=list(story_ids)
+            ),
+        )
+        # Intentionally ignore response.users and StoryViews.recent_viewers. The
+        # Social Workspace exposes aggregates only and never viewer identities.
+        views = list(getattr(response, "views", None) or [])
+        if len(views) != len(story_ids):
+            raise TelegramWorkspaceError("invalid_provider_response")
+        return views
+
+    async def _story_statistics(
+        self,
+        client: Any,
+        lease: TelegramLease,
+        request: SocialReadRequest,
+    ) -> Mapping[str, Any]:
+        now = datetime.now(timezone.utc)
+        if request.item_ref:
+            item = self._item(request.item_ref)
+            if item.kind is not SocialItemKind.STORY:
+                raise SocialWorkspaceValidationError("item is not a story")
+            target = self._target(item.target_ref)
+            story = await self._story_by_id(client, lease, target, item.message_id)
+            metrics = self._story_metrics(
+                (await self._story_views(client, lease, target, [item.message_id]))[0]
+            )
+            ref = {"item_ref": item.item_ref}
+            dates = [
+                _utc(getattr(story, "date", None)),
+                now.isoformat().replace("+00:00", "Z"),
+            ]
+        else:
+            target = self._target(request.target_ref or "")
+            response = await self._call(
+                client, lease, self._types.request("peer_stories", peer=target.entity)
+            )
+            stories = list(
+                getattr(getattr(response, "stories", None), "stories", None) or []
+            )[:_MAX_PAGE]
+            ids = [_provider_message_id(story) for story in stories]
+            metrics = {name: 0 for name in ("views", "reactions", "comments", "shares")}
+            if ids:
+                for view in await self._story_views(client, lease, target, ids):
+                    for name, value in self._story_metrics(view).items():
+                        metrics[name] += value
+            ref = {"target_ref": target.target_ref}
+            dates = [
+                _utc(getattr(stories[-1], "date", None))
+                if stories
+                else now.isoformat().replace("+00:00", "Z"),
+                now.isoformat().replace("+00:00", "Z"),
+            ]
+        return {
+            **ref,
+            "period_from": dates[0],
+            "period_to": dates[1],
+            "basic_metrics": metrics,
+            "trust": _TRUST,
+        }
+
+    async def _statistics(
+        self, client: Any, lease: TelegramLease, request: SocialReadRequest
+    ) -> Mapping[str, Any]:
+        if request.item_ref and self._item(request.item_ref).kind is SocialItemKind.STORY:
+            return await self._story_statistics(client, lease, request)
+        if SocialItemKind.STORY in request.item_kinds:
+            if request.item_kinds != (SocialItemKind.STORY,):
+                raise SocialWorkspaceValidationError("story statistics require story-only kind")
+            return await self._story_statistics(client, lease, request)
         now = datetime.now(timezone.utc)
         if request.item_ref:
             item = self._item(request.item_ref)
@@ -1577,6 +2186,11 @@ class TelegramWorkspaceAdapter:
             if operation is SocialReadOperation.GET_ITEM:
                 item = self._item(request.item_ref or "")
                 target = self._target(item.target_ref)
+                if item.kind is SocialItemKind.STORY:
+                    story = await self._story_by_id(
+                        client, lease, target, item.message_id
+                    )
+                    return {"item": self._story_payload(story, target), "trust": _TRUST}
                 message = await _await(client.get_messages(target.entity, ids=item.message_id))
                 return {"item": self._item_payload(message, target), "trust": _TRUST}
             if operation is SocialReadOperation.LIST_COMMENTS:
@@ -1589,7 +2203,7 @@ class TelegramWorkspaceAdapter:
             if operation is SocialReadOperation.LIST_STORIES:
                 return await self._stories(client, lease, request)
             if operation is SocialReadOperation.GET_STATISTICS:
-                return await self._statistics(client, request)
+                return await self._statistics(client, lease, request)
             if operation is SocialReadOperation.GET_AUDIENCE:
                 target = self._target(request.target_ref or "")
                 if target.kind not in {SocialTargetKind.CHANNEL, SocialTargetKind.GROUP}:
@@ -1613,7 +2227,7 @@ class TelegramWorkspaceAdapter:
         return await self._session(request.operation.value, run)
 
     async def _preflight(
-        self, client: Any, intent: SocialActionIntent
+        self, client: Any, lease: TelegramLease, intent: SocialActionIntent
     ) -> _PreflightSnapshot:
         item = self._item(intent.item_ref) if intent.item_ref else None
         source = self._target(item.target_ref) if item is not None else None
@@ -1629,6 +2243,23 @@ class TelegramWorkspaceAdapter:
         )
         if intent.action not in actions:
             raise SocialWorkspaceValidationError("capability denied: unsupported_action")
+        if intent.action is SocialAction.STORY:
+            can_send_request = getattr(self._types, "request", None)
+            if self._types.__class__ is _DefaultTelethonTypes or callable(
+                getattr(self._types, "upload_media", None)
+            ):
+                if not callable(can_send_request):
+                    raise TelegramWorkspaceError("provider_dependency_unavailable")
+                allowed = await self._call(
+                    client,
+                    lease,
+                    can_send_request("can_send_story", peer=target.entity),
+                )
+                count_remains = getattr(allowed, "count_remains", None)
+                if type(count_remains) is not int or count_remains <= 0:
+                    raise SocialWorkspaceValidationError(
+                        "capability denied: story_quota_or_rights"
+                    )
         if intent.action is SocialAction.FORWARD:
             destination_actions = await self._live_actions(client, target)
             if SocialAction.FORWARD not in destination_actions:
@@ -1647,6 +2278,15 @@ class TelegramWorkspaceAdapter:
             SocialTargetKind.GROUP,
         }:
             raise SocialWorkspaceValidationError("publish requires channel or group")
+        if intent.action is SocialAction.STORY:
+            if self._story_privacy(target) is None:
+                raise SocialWorkspaceValidationError(
+                    "story privacy is unavailable"
+                )
+            if intent.content is None or len(intent.content.media) != 1:
+                raise SocialWorkspaceValidationError("story requires exactly one media asset")
+            if intent.content.media[0].role is not MediaRole.IMAGE:
+                raise SocialWorkspaceValidationError("story media must be a verified image")
         if intent.content and (
             len(intent.content.text) > 4096 or len(intent.content.media) > 10
         ):
@@ -1669,13 +2309,13 @@ class TelegramWorkspaceAdapter:
         if assets:
             media_values = []
             for attachment, asset in zip(content.media, assets):
-                compile_media = getattr(self._types, "media", None)
-                if attachment.spoiler and not callable(compile_media):
-                    raise SocialWorkspaceValidationError("media spoiler is unsupported")
                 media_values.append(
-                    compile_media(asset.provider_media, spoiler=attachment.spoiler)
-                    if callable(compile_media)
-                    else asset.provider_media
+                    await self._provider_media(
+                        client,
+                        asset,
+                        spoiler=attachment.spoiler,
+                        attempt=attempt,
+                    )
                 )
             attempt.provider_mutation_attempted = True
             return await _await(
@@ -1827,7 +2467,7 @@ class TelegramWorkspaceAdapter:
             return replay
 
         async def run(client: Any, lease: TelegramLease, attempt: _Attempt) -> Mapping[str, Any]:
-            snapshot = await self._preflight(client, intent)
+            snapshot = await self._preflight(client, lease, intent)
             target, source, item = snapshot.target, snapshot.source, snapshot.item
             await self._fenced(lease)
             result: Any = None
@@ -1908,25 +2548,22 @@ class TelegramWorkspaceAdapter:
             elif intent.action is SocialAction.STORY:
                 assert intent.content is not None
                 assets = self._compile_media(intent.content)
-                if len(assets) != 1 or target.story_privacy is None:
+                story_privacy = self._story_privacy(target)
+                if len(assets) != 1 or story_privacy is None:
                     raise SocialWorkspaceValidationError(
-                        "story requires one staged asset and explicit stored privacy"
+                        "story requires one staged asset and closed privacy"
                     )
-                compile_story_media = getattr(self._types, "media", None)
-                if intent.content.media[0].spoiler and not callable(compile_story_media):
-                    raise SocialWorkspaceValidationError("story media spoiler is unsupported")
+                provider_media = await self._provider_media(
+                    client,
+                    assets[0],
+                    spoiler=intent.content.media[0].spoiler,
+                    attempt=attempt,
+                )
                 story_request = self._types.request(
                     "send_story",
                     peer=target.entity,
-                    media=(
-                        compile_story_media(
-                            assets[0].provider_media,
-                            spoiler=intent.content.media[0].spoiler,
-                        )
-                        if callable(compile_story_media)
-                        else assets[0].provider_media
-                    ),
-                    privacy_rules=target.story_privacy,
+                    media=provider_media,
+                    privacy_rules=story_privacy,
                     caption=intent.content.text,
                     entities=self._compile_entities(intent.content),
                 )
@@ -1936,6 +2573,17 @@ class TelegramWorkspaceAdapter:
                     lease,
                     story_request,
                 )
+                story_id_parser = getattr(self._types, "story_id", None)
+                if callable(story_id_parser):
+                    story_id = story_id_parser(
+                        result, random_id=getattr(story_request, "random_id", None)
+                    )
+                    observed_story = await self._story_by_id(
+                        client, lease, target, story_id
+                    )
+                    if _provider_message_id(observed_story) != story_id:
+                        raise TimeoutError("story read-back mismatch")
+                    result = observed_story
             else:
                 raise SocialWorkspaceValidationError("unsupported Telegram action")
 
@@ -1958,8 +2606,19 @@ class TelegramWorkspaceAdapter:
             message = result[0] if isinstance(result, Sequence) and result else result
             message_id = getattr(message, "id", None)
             if type(message_id) is int and message_id > 0:
-                minted = self._refs.mint_item(
-                    target_ref=target.target_ref, message_id=message_id, allowed_actions=None
+                minted = self._mint_item_binding(
+                    target_ref=target.target_ref,
+                    message_id=message_id,
+                    kind=(
+                        SocialItemKind.STORY
+                        if intent.action is SocialAction.STORY
+                        else (
+                            SocialItemKind.POST
+                            if target.kind is SocialTargetKind.CHANNEL
+                            else SocialItemKind.MESSAGE
+                        )
+                    ),
+                    allowed_actions=None,
                 )
                 receipt["item_ref"] = minted.item_ref
                 if intent.action is SocialAction.SEND_MESSAGE:
@@ -2013,12 +2672,14 @@ class TelegramWorkspaceAdapter:
 
 __all__ = [
     "TelegramAssetBinding",
+    "TelegramAssetReader",
     "TelegramGovernor",
     "TelegramItemBinding",
     "TelegramLease",
     "TelegramOpaqueRefStore",
     "TelegramOperationClaim",
     "TelegramTargetBinding",
+    "TelegramVerifiedUpload",
     "TelegramWorkspaceAdapter",
     "TelegramWorkspaceError",
 ]

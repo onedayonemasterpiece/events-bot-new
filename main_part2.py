@@ -22338,14 +22338,34 @@ def create_app() -> web.Application:
     private_mcp_config = PrivateEventsMCPConfig.from_env()
     private_mcp_social_adapters = None
     private_mcp_workspace_adapters = None
+    private_mcp_asset_store = None
     if private_mcp_config.enabled:
         if private_mcp_config.universal_social_enabled:
             from private_events_mcp_workspace_providers import (
                 build_private_events_mcp_workspace_adapters,
             )
 
+            if private_mcp_config.universal_social_media_story_enabled:
+                from private_events_mcp_media import SecureMediaAssetStore
+
+                private_mcp_asset_store = SecureMediaAssetStore(
+                    private_mcp_config.media_root,
+                    allowed_hosts=private_mcp_config.media_allowed_hosts,
+                    max_asset_bytes=private_mcp_config.max_asset_bytes,
+                    max_store_bytes=private_mcp_config.max_store_bytes,
+                    ttl_seconds=private_mcp_config.asset_ttl_seconds,
+                    timeout_seconds=private_mcp_config.download_timeout_seconds,
+                    max_width=private_mcp_config.max_width,
+                    max_height=private_mcp_config.max_height,
+                    max_pixels=private_mcp_config.max_pixels,
+                )
+                private_mcp_asset_store.cleanup_expired()
+
             private_mcp_workspace_adapters = (
-                build_private_events_mcp_workspace_adapters(private_mcp_config)
+                build_private_events_mcp_workspace_adapters(
+                    private_mcp_config,
+                    asset_store=private_mcp_asset_store,
+                )
             )
         else:
             from main import vk_api
@@ -22361,6 +22381,7 @@ def create_app() -> web.Application:
         private_mcp_config,
         social_adapters=private_mcp_social_adapters,
         social_workspace_adapters=private_mcp_workspace_adapters,
+        asset_ingestor=private_mcp_asset_store,
     )
     SimpleRequestHandler(dp, bot).register(app, path="/webhook")
     setup_application(app, dp, bot=bot)
