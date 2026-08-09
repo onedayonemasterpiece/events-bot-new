@@ -59,6 +59,8 @@
 
 ### Added
 
+- Added an append-only, requirements-aware Current UI Behavioral Decoder & Experiment Archaeology v1.1 source pass and two-stage exact-source capture workflow. It binds every behavioral record to the reviewed Decoder v1 manifest, emits separate provenance, complete media-policy, dynamic loading/skeleton, geometry, interaction, positioning, rail, overlay and experiment artifacts, and captures a closed 50-packet/99-raster matrix while remaining `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`. A deep validator now checks output hashes plus plan/phase/action/raster references; only a one-to-one full-resolution human review ledger, independent audit and durable Actions/Release provenance can unlock `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not change the immutable v1 snapshot, site runtime, tokens, normalization or Penpot.
+
 - Added the production-gated, image-only Private Events MCP media/story
   contract for ChatGPT: one-file `fileParams` ingress into immutable
   owner/SHA/MIME/size/dimension/TTL-bound storage, exact browser-approved

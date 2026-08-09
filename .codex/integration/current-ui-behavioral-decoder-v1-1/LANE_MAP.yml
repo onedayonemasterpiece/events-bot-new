@@ -1,0 +1,100 @@
+mode: full_fanout
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_branch: main
+integration_branch: integration/current-ui-behavioral-decoder-v1-1
+global_constraints:
+  - immutable Decoder v1 subtree is read-only
+  - append-only behavioral supplement only
+  - no site/src, site/public, production CSS/JS, tokens, Penpot, issues, or experiment decisions
+  - source/runtime claims stay plane-qualified; planned and source-only never become captured/runtime-observed
+verification_owner: /root
+stop_conditions:
+  - no component merge/deletion/normalization
+  - no experiment winner without decision receipt
+  - final supplement status only READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS
+lanes:
+  - id: media_geometry_rails_map
+    role: mapper
+    requirement_ids: [R01, R02, R04, R05]
+    target: pinned candidate source and immutable v1 evidence
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence map with paths, branches, selectors, breakpoints, capture states
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: interaction_loading_map
+    role: mapper
+    requirement_ids: [R03, R06, R07]
+    target: pinned source/runtime interaction and recovery behavior
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: state-machine and selection/overlay/recovery evidence map
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: experiment_cta_history_map
+    role: mapper
+    requirement_ids: [R08, R09, R10]
+    target: Git history, PR/release evidence, CTA and transport experiment provenance
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: experiment registry candidates and CTA provenance chain
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: supplement_core
+    role: worker
+    requirement_ids: [R11]
+    target: append-only schema, deterministic writer, validator, tests, docs
+    depends_on: [media_geometry_rails_map, interaction_loading_map, experiment_cta_history_map]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-behavioral-decoder-v1-1/core
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-behavioral-core
+    writable_files: [scripts/current_ui_resource_graph, tests, docs/features/static-site-pages/current-ui-resource-graph.md, docs/routes.yml, CHANGELOG.md]
+    forbidden_files: [site/src, site/public, Penpot]
+    expected_output: committed supplement implementation and bounded capture plan
+    verification_scope: full_local
+    effort: high
+    status: merged
+  - id: evidence_capture_review
+    role: worker
+    requirement_ids: [R12]
+    target: exact-source temporary harness, Actions artifact and human visual ledger
+    depends_on: [supplement_core]
+    execution_mode: serial_after_dependency
+    branch: agent/current-ui-behavioral-decoder-v1-1/capture
+    worktree: /home/dev/.codex/worktrees/events-bot-new/current-ui-behavioral-capture
+    writable_files: [scripts/current_ui_resource_graph, .github/workflows, tests, docs, CHANGELOG.md]
+    forbidden_files: [site/src, site/public, Penpot]
+    expected_output: reviewed capture evidence and receipt
+    verification_scope: ci_only
+    effort: high
+    status: in_progress
+  - id: final_audit
+    role: reviewer
+    requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12]
+    target: append-only supplement and immutable handoff
+    depends_on: [evidence_capture_review]
+    execution_mode: serial_after_dependency
+    branch: none
+    worktree: none
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: independent acceptance report
+    verification_scope: full_local
+    effort: high
+    status: planned
