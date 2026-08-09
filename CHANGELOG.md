@@ -162,6 +162,12 @@
   rail is not misreported as a rendered component and the production hard block
   remains a separate source/config fact.
 
+- Fixed Current UI Decoder evidence redaction for root-relative candidate
+  bearer paths embedded by compiled CSS variables or ARIA snapshots. Values
+  containing `/_review/` are now reduced to bounded hash/length facts, rejected
+  by the recursive packet validator, and still covered by the independent
+  whole-artifact secret scan.
+
 - Fixed the production candidate's legacy preview gate after the dated real
   `Море внутри` rail canary expired. The gate still checks its rendered row
   while that date route exists, then falls back to immutable OCR-containment

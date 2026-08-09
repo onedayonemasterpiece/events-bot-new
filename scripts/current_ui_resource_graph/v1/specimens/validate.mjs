@@ -4,7 +4,7 @@ import { assertFixtureDelta } from './fixtures.mjs';
 
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{2,80}$/u;
 const SAFE_SOURCE = /^src\/(?:components|lib|pages)\/[A-Za-z0-9_./\[\]-]+\.(?:astro|ts|mjs)$/u;
-const SENSITIVE = /(?:authorization|bearer\s|password|client[_-]?secret|access[_-]?token|api[_-]?key|sb_(?:secret|publishable)|https?:\/\/)/iu;
+const SENSITIVE = /(?:authorization|bearer\s|password|client[_-]?secret|access[_-]?token|api[_-]?key|sb_(?:secret|publishable)|https?:\/\/|\/_review\/)/iu;
 
 export function stableHash(value) {
   const stable = (item) => Array.isArray(item) ? item.map(stable)

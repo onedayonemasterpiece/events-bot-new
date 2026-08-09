@@ -378,6 +378,11 @@ make reruns comparable. A partial/failed `receipt.json` is written before risky
 work. The candidate URL is accepted only through a configured environment
 variable or file, is never placed on the command line, and its bearer prefix is
 redacted from errors and artifacts.
+Root-relative candidate bearer paths are also sensitive: CSS custom-property,
+matched-rule and accessibility strings containing `/_review/` are replaced by
+bounded length/SHA-256 records before either real-route JSONL is written. The
+recursive final gate independently scans every output byte for both the full
+candidate base and its opaque path segment and fails closed on either.
 
 ## Coverage hypotheses
 

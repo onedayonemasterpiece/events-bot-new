@@ -75,7 +75,7 @@ export function pngDifferenceHash(buffer) {
 
 export function safeCapturedValue(value, maximum = 512) {
   const text = String(value ?? '');
-  if (text.length <= maximum && !/(?:https?:\/\/|authorization|bearer\s|password|access[_-]?token|api[_-]?key|sb_(?:secret|publishable))/iu.test(text)) return text;
+  if (text.length <= maximum && !/(?:https?:\/\/|\/_review\/|authorization|bearer\s|password|access[_-]?token|api[_-]?key|sb_(?:secret|publishable))/iu.test(text)) return text;
   return { redacted: true, length: text.length, sha256: sha(text) };
 }
 
