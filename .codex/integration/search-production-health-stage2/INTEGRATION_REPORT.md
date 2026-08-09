@@ -6,8 +6,11 @@
   it contains merged PR #441 at
   `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`.
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
-- Live Search workflows so far: `0 / 2` permitted.
-- Production migration/deploy/session/Search calls during implementation: `0`.
+- PR #451 merged to `main` as `ad0a1f3bb12a63805aec65f52489151e3f382b83`.
+- Live acceptance workflows so far: `0 / 2` accepted; one permitted diagnostic
+  run (`31330520373`) completed and exposed two harness false negatives.
+- The post-merge activation migration and exact Edge/Fly deployments are
+  complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
 
 ## Integrated lanes
@@ -27,7 +30,8 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **136/136 PASS**;
+- Search production-health aggregate suite: **137/137 PASS** after the first
+  live-run regressions;
 - legacy Search harness: **31/31 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
   security and static source/release regression **135/135 PASS**; Edge contract
@@ -70,6 +74,17 @@ Required before live:
 
 Current disposition: `STAGE2_IMPLEMENTED_LIVE_ACCEPTANCE_PENDING / PRODUCT_HEALTH_UNCONFIRMED`.
 
+Steps 1–5 were completed from exact merged `main`: the v2 broker migration and
+minute cleanup are active, broker event/workflow allowlists and distinct
+personas were verified, Edge HEAD exposes
+`sha256:7ab0bd272925e959531bdcf679e995c65ee672165bd05788d51f7d13d35875d7`,
+and Fly reports the baked merge SHA with ready health/DB/disk checks. First
+diagnostic run `31330520373` proved one real browser Search POST, five matching
+cards, zero LLM/pagination and 9,162 observed bytes, then false-failed on two
+decorative subresource failures. Android booted but `/bin/sh` rejected
+`pipefail` before Appium or Search. Both causes now have deterministic fixes;
+clean live acceptance is still pending.
+
 The current hardening pass additionally proves one physical POST is observed
 once from pre-Auth through event navigation, accepts bounded cache-write
 telemetry outcomes, rejects real skeleton/placeholder UI,
@@ -92,4 +107,6 @@ closed null/zero values. Mobile protocol receipts also ingest CDP
 relay transport probes, discarded retries, Auth/RLS, Search and post-navigation
 traffic are counted exactly once; pending measurements and the hard cap are
 closed before the one Search dispatch. These are deterministic results;
-live acceptance remains `0 / 2` and no production state has been changed.
+live acceptance remains `0 / 2`; activation changed only the explicitly listed
+migration, Edge and exact-main Fly release state, while scheduled health remains
+default-off.

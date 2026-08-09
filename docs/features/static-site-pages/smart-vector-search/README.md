@@ -1011,6 +1011,13 @@ Storage/CDN и не-Supabase origins исключаются. В evidence поп�
 категория и целые byte counters. Это **client-observed budget proxy**, а не
 точный Supabase billing meter.
 
+Browser network diagnostics считают ошибкой только failed main-document
+navigation либо failed request к allowlisted Supabase Search/Auth/REST/RPC
+origin. Сломанный декоративный image/font subresource другого origin не может
+сам объявить Search `BROKEN_SEARCH_REQUEST`: наличие 1–5 видимых настоящих
+карточек, отсутствие skeleton/placeholder, точный response/card id match,
+реальный scroll и event-route HTTP 200 всё равно проверяются отдельно.
+
 На mobile callback network receipt сворачивается сразу до категории и числа
 полученных bytes; после attach тот же Appium session выполняет явные `getUser`
 и один owner-RLS read через instrumented resilient transport. Raw URL, token,
@@ -1027,6 +1034,9 @@ WebDriver navigation. Отсутствие capability не считается д
 нулевых console errors. При отсутствии `Content-Length` mobile meter ждёт
 terminal `loadingFinished` через несколько log-drain циклов; незавершённый
 request fail-closed становится platform `UNKNOWN_*`, а не нулём bytes.
+Android emulator action запускает переданный script через POSIX `sh`, поэтому
+production-health wrapper явно входит в Bash до `set -o pipefail`; это
+зафиксировано workflow contract test и не относится к Appium/Auth/Search retry.
 
 ### 16.9 Migration from current workflow
 

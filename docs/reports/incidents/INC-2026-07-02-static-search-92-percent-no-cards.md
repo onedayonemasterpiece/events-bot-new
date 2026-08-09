@@ -30,6 +30,22 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 first merged Stage-2 live run `31330520373` executed against the
+  accepted target after the broker migration, exact Edge deployment and
+  exact-main Fly deployment. Browser Auth/getUser/owner-RLS succeeded; its one
+  real vector-only Search POST returned HTTP 200 with five response IDs that
+  exactly matched five rendered cards, `LLM=0`, pagination `0`, cache telemetry
+  `stored` and 9,162 client-observed Supabase bytes. The cell then false-failed
+  `BROKEN_SEARCH_REQUEST` because two unrelated failed decorative subresources
+  were included in the generic Playwright failure counter. Android booted the
+  API-35 emulator but the third-party action ran the multiline script through
+  `/usr/bin/sh`, where `set -o pipefail` exited before Appium, broker, Auth or
+  Search. The browser diagnostic is now scoped to target-document and
+  allowlisted Supabase failures; the Android script explicitly enters Bash.
+  This run is regression/root-cause evidence, not either of the two terminal
+  daily acceptance proofs, so the incident remains open pending clean
+  browser+Android and browser+iOS runs on the same product identity.
+
 - 2026-08-09 PR #441 merged as
   `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`. Stage 2 is implemented in
   PR #451 with two bounded schedules, one-query browser/Android/iOS journeys,

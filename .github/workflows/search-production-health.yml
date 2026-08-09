@@ -217,6 +217,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -timezone UTC
           disable-animations: true
           script: |
+            bash <<'BASH'
             set -euo pipefail
             appium_pid=''
             cleanup_appium() {
@@ -242,6 +243,7 @@ jobs:
             done
             test "$ready" = 1
             node e2e/search/production-health-run.mjs
+            BASH
       - name: Upload sanitized Android summary
         if: ${{ always() && hashFiles('site/artifacts/search-production-health-android-*/.redaction-ok') != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

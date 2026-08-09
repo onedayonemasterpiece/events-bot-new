@@ -91,6 +91,8 @@ test('production health has only the two bounded schedules, manual profiles and 
   assert.match(source, /npm_config_prefix=\$RUNNER_TEMP\/appium-npm-search-health-android/u);
   assert.match(source, /APPIUM_HOME=\$RUNNER_TEMP\/appium-home-search-health-ios/u);
   assert.match(source, /npm_config_prefix=\$RUNNER_TEMP\/appium-npm-search-health-ios/u);
+  assert.match(YAML.stringify(parsed.jobs.android), /bash <<'BASH'[\s\S]*set -euo pipefail/u,
+    'android-emulator-runner invokes script through sh, so strict mode must run inside bash');
   assert.equal((source.match(/--log-level error --log-no-colors\s+\\?\s*--log-filters/gu) || []).length, 2,
     'both Appium servers must suppress command bodies and apply URL filters');
   assert.equal((source.match(/appium-search-health-log-filters\.json/gu) || []).length >= 4, true);
