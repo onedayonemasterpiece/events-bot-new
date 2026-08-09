@@ -25,7 +25,7 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **79/79 PASS**;
+- Search production-health aggregate suite: **80/80 PASS**;
 - legacy Search harness: **30/30 PASS**;
 - broker Python/security **41/41 PASS** and Auth Node **16/16 PASS**;
 - static source-binding/release regression: **87/87 PASS**;

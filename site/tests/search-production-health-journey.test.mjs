@@ -17,6 +17,7 @@ import {
   mergeSupabaseClientByteSnapshots,
 } from '../e2e/search/production-health-meter.mjs';
 import {
+  createBuiltInBrowserHooks,
   resolveExpectedAcceptedTarget,
   runProductionHealthCell,
 } from '../e2e/search/production-health-run.mjs';
@@ -351,6 +352,43 @@ test('built-in mobile hook needs no email persona and verifies Auth only after c
   assert.equal(issued.meterSnapshot().total_bytes, 1234);
   assert.deepEqual(calls, [
     ['adapter', '/wd/hub'], ['issue', 'search-cached-android', 'android'], ['callback'],
+  ]);
+});
+
+test('built-in browser hook binds the real owner probe into fixture issuance', async () => {
+  const calls = [];
+  const adapter = {};
+  const adapterModule = {
+    createPlaywrightSearchAdapter(options) { calls.push(['adapter', options.productionHealth]); return adapter; },
+  };
+  const fixtureModule = {
+    createAuthSessionBrokerIssuer(options) {
+      calls.push(['issuer', options.oidcToken]);
+      return { kind: 'github_oidc_broker', issue: async () => ({}) };
+    },
+    async createAuthSessionFixture(options) {
+      calls.push(['fixture', options.platform, typeof options.protectedProbe]);
+      return { receipt: authReceipt, storageStatePath: '/tmp/ephemeral-state', cleanup: async () => {} };
+    },
+  };
+  const observed = new SupabaseClientObservedByteMeter({ supabaseOrigins: ['https://project.supabase.co'] });
+  const hooks = await createBuiltInBrowserHooks({
+    PERSONALIZATION_SUPABASE_URL: 'https://project.supabase.co',
+    PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY: 'publishable',
+    AUTH_SESSION_BROKER_URL: 'https://broker.example/issue',
+    SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER: 'fixture@example.invalid',
+    GITHUB_RUN_ID: '42',
+  }, observed, {
+    adapterModule, fixtureModule, oidcToken: 'verified-oidc',
+    fetchImpl: async () => new Response('[]', { status: 200 }),
+  });
+  assert.equal(await hooks.createAdapter(), adapter);
+  const issued = await hooks.issueSession({
+    platform: 'browser', target: normalizeAcceptedTargetResolverResult(targetRow()),
+  });
+  assert.equal(issued.authReceipt.get_user_verified, true);
+  assert.deepEqual(calls, [
+    ['adapter', true], ['issuer', 'verified-oidc'], ['fixture', 'browser', 'function'],
   ]);
 });
 

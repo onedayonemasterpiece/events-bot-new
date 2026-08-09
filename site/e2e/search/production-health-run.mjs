@@ -288,22 +288,24 @@ async function protectedOwnerProbe({ fetchImpl, userId, supabaseUrl, accessToken
   return Array.isArray(rows) && rows.every((row) => String(row?.user_id || '') === userId);
 }
 
-async function browserHooks(env, meter) {
-  const [{ createPlaywrightSearchAdapter }, fixtureModule] = await Promise.all([
-    import('./adapters/playwright.mjs'), import('../auth-session-fixture/session-fixture.mjs'),
+export async function createBuiltInBrowserHooks(env, meter, dependencies = {}) {
+  const [adapterModule, fixtureModule] = await Promise.all([
+    dependencies.adapterModule || import('./adapters/playwright.mjs'),
+    dependencies.fixtureModule || import('../auth-session-fixture/session-fixture.mjs'),
   ]);
+  const fetchImpl = dependencies.fetchImpl || globalThis.fetch.bind(globalThis);
   const supabaseUrl = required(env, 'PERSONALIZATION_SUPABASE_URL');
   const publishableKey = required(env, 'PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY');
-  const meteredFetch = createSupabaseMeteredFetch(globalThis.fetch.bind(globalThis), meter);
+  const meteredFetch = createSupabaseMeteredFetch(fetchImpl, meter);
   return {
     async createAdapter() {
-      return createPlaywrightSearchAdapter({
+      return adapterModule.createPlaywrightSearchAdapter({
         browserName: env.E2E_SEARCH_BROWSER || 'chromium', headless: env.E2E_HEADLESS !== '0',
         timeoutMs: env.E2E_SEARCH_TIMEOUT_MS, productionHealth: true,
       });
     },
     async issueSession({ platform, target }) {
-      const oidc = await githubOidcToken(env, globalThis.fetch.bind(globalThis));
+      const oidc = dependencies.oidcToken || await githubOidcToken(env, fetchImpl);
       const issuer = fixtureModule.createAuthSessionBrokerIssuer({
         endpoint: required(env, 'AUTH_SESSION_BROKER_URL'), oidcToken: oidc,
       });
@@ -314,7 +316,7 @@ async function browserHooks(env, meter) {
         targetUrl: target.navigationUrl(), allowedOrigins: ['https://kenigevents.ru'],
         personaId, personas: { [personaId]: { email: required(env, 'SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER') } },
         scopeKind: 'job', scopeId: `search-health-browser-${required(env, 'GITHUB_RUN_ID')}-${env.GITHUB_RUN_ATTEMPT || '1'}`,
-        runId: required(env, 'GITHUB_RUN_ID'), protectedProbe,
+        runId: required(env, 'GITHUB_RUN_ID'), protectedProbe: protectedOwnerProbe,
       });
       return {
         authReceipt: fixture.receipt, storageStatePath: fixture.storageStatePath,
@@ -414,7 +416,7 @@ export async function runProductionHealthCli(env = process.env) {
   });
   const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: [required(env, 'PERSONALIZATION_SUPABASE_URL')] });
   const hooks = platform === 'browser'
-    ? await browserHooks(env, meter)
+    ? await createBuiltInBrowserHooks(env, meter)
     : env.E2E_SEARCH_PLATFORM_HOOK_MODULE
       ? await externalPlatformHooks(env, platform, meter)
       : await createBuiltInMobileHooks(env, platform);
