@@ -9,6 +9,10 @@ global_constraints:
   - no site/src, site/public, production CSS/JS, tokens, Penpot, issues, or experiment decisions
   - source/runtime claims stay plane-qualified; planned and source-only never become captured/runtime-observed
 verification_owner: /root
+final_status: EVIDENCE_COLLECTION_INCOMPLETE
+retained_readiness_blockers:
+  - unresolved.behavior-blocker.864db42986f38970b1
+  - unresolved.behavior-blocker.fdec1149e1f0d6b359
 stop_conditions:
   - no component merge/deletion/normalization
   - no experiment winner without decision receipt
@@ -83,7 +87,7 @@ lanes:
     expected_output: reviewed capture evidence and receipt
     verification_scope: ci_only
     effort: high
-    status: in_progress
+    status: completed
   - id: final_audit
     role: reviewer
     requirement_ids: [R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12]
@@ -97,7 +101,7 @@ lanes:
     expected_output: independent acceptance report
     verification_scope: full_local
     effort: high
-    status: planned
+    status: completed
   - id: requirements_experiment_fix
     role: worker
     requirement_ids: [R01, R03, R08, R09, R10]
@@ -139,4 +143,4 @@ lanes:
     expected_output: no READY while any coverage or interaction blocker remains
     verification_scope: full_local_and_actions
     effort: high
-    status: in_progress
+    status: completed

@@ -543,7 +543,7 @@ The machine-readable final receipt and complete review report live at
 `.codex/integration/current-ui-decoder-v1/`. This closes decoding only. It does
 not start defragmentation or normalization automatically.
 
-## Behavioral Decoder & Experiment Archaeology v1.1 (append-only, in progress)
+## Behavioral Decoder & Experiment Archaeology v1.1 (append-only, evidence incomplete)
 
 `scripts/current_ui_resource_graph/behavioral-decode.mjs` is an append-only evidence
 pass over the immutable v1 source pin. It writes a *new*, separately validated
@@ -717,3 +717,29 @@ raster always has an exact SHA-256; repeated-frame stability follows the pinned
 Playwright pixel/perceptual comparator rather than requiring byte-identical PNG
 encoding. Neither the file hash nor the comparator result is accepted as a
 substitute for the mandatory human visual review.
+
+### Completed behavioral handoff — evidence remains incomplete
+
+The canonical capture is [Actions run 31318132051](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31318132051),
+artifact `9039433060`, archived permanently in the
+[v1.1 evidence Release](https://github.com/onedayonemasterpiece/events-bot-new/releases/tag/current-ui-behavioral-decoder-v1-1-run-31318132051)
+with SHA-256 `c677f69572ccdbf5b7f1402037a3cb8c164bd2f503fae35eae9168c46eb8d909`.
+All 124 raster files were opened manually at full resolution; the ledger SHA-256 is
+`97c8cbcf2e4bbc34fd7e8c03454f09219bfb723acd4751b89744d6a8eb0f7731`.
+
+The reviewed compact sibling supplement was imported through
+[lovekgd-design-system PR 28](https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/28)
+and merged as
+[`f9cb3c931d6f2200f0a4221f5130b3a6299f7005`](https://github.com/onedayonemasterpiece/lovekgd-design-system/commit/f9cb3c931d6f2200f0a4221f5130b3a6299f7005).
+Its manifest SHA-256 is
+`c6c62cee8bea4e9440ff85bc75c46bc85cf5abf3e2fdcd4c7357c6ece916436f`;
+both design-repository validators and the immutable-v1 tree assertion pass.
+The independent audit is recorded at
+`.codex/integration/current-ui-behavioral-decoder-v1-1/INDEPENDENT_AUDIT.md`.
+
+The final status is deliberately `EVIDENCE_COLLECTION_INCOMPLETE`, not READY.
+Only two findings have `blocks_ready:true`: the exact mobile rail has no working
+native `End`/`Home` behavior, and the complete 293-row breakpoint/container
+matrix lacks one truthful runtime probe per row. The separate CTA anatomies,
+transport treatments and 25 reviewed visual conflicts remain AS-IS evidence;
+no merge, normalization or winner is selected.
