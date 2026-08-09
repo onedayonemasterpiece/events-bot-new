@@ -6,6 +6,12 @@
 
 ### Fixed
 
+- Separated the Smart Search Edge compatibility contract from its exact
+  backend identity: a CI-verified deterministic source-tree digest now ships in
+  the function, is exposed by the side-effect-free HEAD probe and Search
+  response, is compared exactly to deploy markers before Auth/Search, and is
+  recorded from the observed response even for manual or scheduled health runs.
+
 - Implemented bounded Search production health as a separate current-target
   contour: 06:17 UTC runs browser+Android, 18:17 UTC runs browser+iOS, manual
   profiles are explicit, and only a validated `search-runtime-deployed`

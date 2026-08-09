@@ -18,7 +18,7 @@ const sha = '0123456789abcdef0123456789abcdef01234567';
 
 const marker = (overrides = {}) => ({
   site_runtime_sha: sha,
-  search_backend_revision: 'event-search:89abcdef',
+  search_backend_revision: `sha256:${'d'.repeat(64)}`,
   validation_profile: 'standard',
   changed_surfaces: ['site_runtime'],
   deployment_run_id: 'fly-main-123.1',
@@ -119,7 +119,7 @@ test('release qualification is manual selective and never schedule-eligible', ()
 test('CLI validates marker and emits sanitized deterministic JSON without side effects', async () => {
   const args = [
     '--plane', 'production_health', '--trigger', 'search_runtime_deploy',
-    '--site-runtime-sha', sha, '--search-backend-revision', 'event-search:89abcdef',
+    '--site-runtime-sha', sha, '--search-backend-revision', `sha256:${'d'.repeat(64)}`,
     '--validation-profile', 'full', '--changed-surface', 'site_runtime',
     '--deployment-run-id', 'fly-main-123.1',
   ];

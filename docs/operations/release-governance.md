@@ -22,17 +22,26 @@
   backend revision, deployment id и telemetry-only changed surfaces. Эти
   аргументы не передаются `flyctl`; static/data/Kaggle publication marker не
   создаёт. `full` дополнительно может запросить одну selective qualification.
-  Пока provider не публикует отдельный non-secret Edge deploy SHA,
-  `search_backend_revision` — точное ожидаемое значение response
-  `search_contract_version`; выдумывать byte SHA запрещено.
+  `search_backend_revision` — точный `sha256:<64>` digest deployable
+  `supabase/functions/event-search/` source tree, а не contract version, git SHA
+  или придуманный provider deploy SHA.
 - Изменения `supabase/functions/event-search/` не доставляются Fly deploy. Их
   governed release выполняется отдельно из того же clean exact `origin/main`
   через pinned local Supabase CLI и project ref:
   `supabase functions deploy event-search --project-ref <ref> --no-verify-jwt --use-api`.
+  Перед deploy обязательны
+  `node scripts/generate_event_search_revision.mjs` и повторный
+  `node scripts/generate_event_search_revision.mjs --check`; generated constant
+  входит в deploy, но исключён из собственного deterministic digest.
   После deploy обязательны side-effect-free `HEAD /functions/v1/event-search`
-  с publishable `apikey`, exact `X-KenigEvents-Search-Contract` и нулём Auth/Search
-  POST. Только затем deploy/health marker может ссылаться на эту backend
-  revision. Edge failure не компенсируется повторным Fly deploy.
+  с publishable `apikey`, exact `X-KenigEvents-Search-Revision`, совместимый
+  `X-KenigEvents-Search-Contract` и нулём Auth/Search POST. Только затем
+  deploy/health marker может ссылаться на эту backend revision. Обычный Search
+  response также возвращает exact `search_backend_revision`; именно observed
+  response revision попадает в health evidence даже для manual/schedule run без
+  marker. Mismatch после ранее успешного HEAD блокирует qualification без
+  повторного Search и без product incident. Edge failure не компенсируется
+  повторным Fly deploy.
 - Перед активацией Search production-health broker policy должна одновременно
   разрешать exact main refs legacy/health/qualification workflows и event
   classes `workflow_dispatch,schedule,repository_dispatch`. После двух manual

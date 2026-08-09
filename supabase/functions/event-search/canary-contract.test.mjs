@@ -60,6 +60,16 @@ test("HEAD exposes only the side-effect-free active contract receipt", () => {
     source.indexOf('if (request.method !== "POST")'));
   assert.match(head, /X-KenigEvents-Search-Contract/);
   assert.match(head, /SEARCH_CONTRACT_VERSION/);
+  assert.match(head, /X-KenigEvents-Search-Revision/);
+  assert.match(head, /SEARCH_BACKEND_REVISION/);
   assert.match(head, /status: 200/);
   assert.doesNotMatch(head, /runEventSearch|auth|getUser|rpc|fetch/u);
+});
+
+test("response keeps contract compatibility separate from exact source revision", () => {
+  assert.match(source, /import \{ SEARCH_BACKEND_REVISION \} from "\.\/search-backend-revision\.generated\.ts"/u);
+  const receipt = source.slice(source.indexOf("function receiptContractFields"),
+    source.indexOf("async function", source.indexOf("function receiptContractFields")));
+  assert.match(receipt, /search_contract_version: SEARCH_CONTRACT_VERSION/u);
+  assert.match(receipt, /search_backend_revision: SEARCH_BACKEND_REVISION/u);
 });

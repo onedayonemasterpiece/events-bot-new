@@ -842,7 +842,7 @@ Smart Update
 | Identity | Канонический существующий источник | Семантика health |
 |---|---|---|
 | `site_runtime_sha` | accepted candidate `repo_sha`, первоначально baked Fly image SHA | функциональный runtime; фиксируется на run |
-| `search_backend_revision` | validated `search-runtime-deployed` marker; response `search_contract_version` remains observed telemetry | ожидаемый функциональный backend contract; точного Edge byte/deploy SHA пока нет |
+| `search_backend_revision` | generated `search-backend-revision.generated.ts`; validated marker и фактический Search response | exact `sha256:<64>` digest исполняемого source tree Edge Function |
 | `content_generation_id` | `snapshot_id`/`input_fingerprint`; content identity `catalog_revision` | telemetry, не exact health gate |
 | `search_index_generation_id` | `corpus_revision`/`search_document_revision` | telemetry, не exact health gate |
 
@@ -851,21 +851,33 @@ Smart Update
 SHA точному набору source bytes, переданному в Kaggle, и запрещает recovery
 handoff от другого deployed SHA; одной повторяемой строки SHA в metadata
 недостаточно. Actions checkout SHA может отличаться от
-target repo SHA и сам по себе не является failure. Отсутствие точного deployed
-Edge SHA остаётся честно отмеченным gap этапа 2; новая release-система для этого
-не вводится.
+target repo SHA и сам по себе не является failure. Edge identity не выдаётся за
+git/deploy SHA: это отдельный точный content digest deployable source tree
+`supabase/functions/event-search/`, вычисляемый
+`scripts/generate_event_search_revision.mjs`. Digest использует отсортированные
+portable paths и length-framed raw file bytes; generated revision module и
+`*.test.*` исключены. CI запускает generator с `--check`, поэтому изменение
+исполняемых `.ts/.tsx/.js/.mjs/.json` bytes без обновления generated constant
+fail closed.
 
 В текущем marker contract `search_backend_revision` обязан быть точным
-ожидаемым `search_contract_version`, а непустой `deployment_run_id` служит
-correlation receipt. Для deploy-triggered запуска ожидаемая версия проверяется
+ожидаемым `sha256:<64>` source digest, а непустой `deployment_run_id` служит
+correlation receipt. Для deploy-triggered запуска ожидаемая revision проверяется
 ограниченным `HEAD /functions/v1/event-search`: active Edge Function отвечает
-только публичным contract id и не выполняет Auth, quota, DB, provider или
-product Search. Этот HEAD probe и active accepted-site receipt проходят
+публичными `X-KenigEvents-Search-Revision` и
+`X-KenigEvents-Search-Contract`, не выполняя Auth, quota, DB, provider или
+product Search. Первый header сравнивается с marker строго и отдельно от
+совместимого contract version. Этот HEAD probe и active accepted-site receipt проходят
 **до** session/Auth/Search; отсутствие или mismatch даёт
 `BLOCKED_RELEASE_NOT_ACTIVE` и нулевой product POST. Единственный разрешённый
-Search response затем сохраняет фактически
-наблюдённый `search_contract_version` и `policy_versions` как telemetry.
-Отдельный Edge byte/SHA нельзя подменять придуманной metadata.
+Search response содержит оба независимых поля: точный фактически наблюдённый
+`search_backend_revision` и compatibility telemetry
+`search_contract_version`. Evidence всегда берёт backend revision из ответа,
+включая schedule/manual runs без expected marker; marker не подменяет observed
+runtime evidence. Если Edge сменился между успешным HEAD и единственным Search
+POST, response mismatch даёт `BLOCKED_RELEASE_NOT_ACTIVE` без retry и без
+product incident. Source digest нельзя называть или подменять придуманным git
+либо provider deploy SHA.
 
 ### 16.3 Три тестовых контура
 

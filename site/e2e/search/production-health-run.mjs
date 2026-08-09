@@ -118,6 +118,16 @@ const preferMoreCompleteMeter = (current, candidate) => {
 const searchRequestsFromRuntime = (runtime) => (Array.isArray(runtime?.requests) ? runtime.requests : [])
   .filter((item) => item?.method === 'POST' && item?.path === '/functions/v1/event-search');
 
+const responseBackendRevisionMismatch = (journey, expectedRevision) => {
+  const expected = String(expectedRevision || '').trim();
+  if (!expected) return false;
+  const response = journey?.response_telemetry;
+  const responseReceived = Number(response?.http_status || 0) > 0
+    || Boolean(response?.search_contract_version)
+    || Boolean(response?.search_backend_revision);
+  return responseReceived && String(response?.search_backend_revision || '') !== expected;
+};
+
 async function retainFailedJourneyEvidence(adapter, runtime = {}) {
   let persistent = null;
   let physical = null;
@@ -163,6 +173,7 @@ async function retainFailedJourneyEvidence(adapter, runtime = {}) {
     response_telemetry: {
       request_id: response.request_id, http_status: response.http_status, route: response.route,
       search_contract_version: response.search_contract_version,
+      search_backend_revision: response.search_backend_revision,
       catalog_revision: response.catalog_revision, corpus_revision: response.corpus_revision,
       search_document_revision: response.search_document_revision,
     },
@@ -266,6 +277,7 @@ export async function runProductionHealthCell(options = {}) {
   let targetSuperseded = false;
   let pointerRereadAttempted = false;
   let failureClass = releaseActive === true ? null : PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
+  let backendRevisionMismatch = false;
   let phase = releaseActive === true ? 'preflight' : 'release_gate';
   let cleanupStatus = 'PENDING';
 
@@ -296,6 +308,9 @@ export async function runProductionHealthCell(options = {}) {
       }
       phase = 'journey';
       journey = await runProductionHealthJourney({ adapter, targetUrl: target.navigationUrl() });
+      backendRevisionMismatch = responseBackendRevisionMismatch(
+        journey, options.expectedSearchBackendRevision,
+      );
       meter = preferMoreCompleteMeter(meter, await combinedObservedMeter(issued, journey));
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
       phase = 'pointer_reread';
@@ -315,6 +330,9 @@ export async function runProductionHealthCell(options = {}) {
       try { runtime = await adapter?.activity?.() || {}; } catch { /* persistent receipt may survive */ }
       const retained = await retainFailedJourneyEvidence(adapter, runtime);
       if (retained.search_post_count > 0 || runtime?.meter) journey = retained;
+      backendRevisionMismatch = responseBackendRevisionMismatch(
+        journey, options.expectedSearchBackendRevision,
+      );
       const observed = await combinedObservedMeter(issued, retained);
       meter = preferMoreCompleteMeter(meter, observed);
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
@@ -344,6 +362,13 @@ export async function runProductionHealthCell(options = {}) {
     if (cleanupStatus === 'FAIL' && (!failureClass || String(failureClass).startsWith('BROKEN_'))) {
       failureClass = infraFailure(platform);
     }
+    // A successful preflight HEAD is only a point-in-time gate. The one Search
+    // response is authoritative if the Edge deployment changes before POST;
+    // retain that response as evidence but never retry or classify the race as
+    // a product incident.
+    if (backendRevisionMismatch) {
+      failureClass = PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
+    }
   }
   return finalize();
 
@@ -370,7 +395,7 @@ export function hasActiveSearchReleaseReceipt({
   if (siteActive !== true) return false;
   const expected = String(expectedSearchBackendRevision || '').trim();
   if (!expected) return true;
-  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(expected)
+  return /^sha256:[0-9a-f]{64}$/u.test(expected)
     && SAFE_DEPLOYMENT_RUN_ID.test(String(deploymentRunId || '').trim())
     && backendActive === true;
 }
@@ -580,7 +605,7 @@ export async function runProductionHealthCli(env = process.env) {
   }
   const expectedBackendRevision = String(env.E2E_EXPECTED_SEARCH_BACKEND_REVISION || '').trim();
   const deploymentRunId = String(env.E2E_DEPLOYMENT_RUN_ID || '').trim();
-  if (expectedBackendRevision && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(expectedBackendRevision)) {
+  if (expectedBackendRevision && !/^sha256:[0-9a-f]{64}$/u.test(expectedBackendRevision)) {
     throw new Error('search_health_expected_backend_revision_invalid');
   }
   if (deploymentRunId && !SAFE_DEPLOYMENT_RUN_ID.test(deploymentRunId)) {

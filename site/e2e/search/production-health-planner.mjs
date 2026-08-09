@@ -61,7 +61,7 @@ const RELEVANT_PATHS = [
   /^supabase\/migrations\/[^/]*event_search[^/]*\.sql$/u,
   /^\.github\/workflows\/(?:static-site-search-canary|search-production-health|search-release-qualification|ci)\.ya?ml$/u,
   /^\.github\/scripts\/(?:[^/]*static-search[^/]*|resolve-static-search-target)\.[^/]+$/u,
-  /^scripts\/(?:request_static_site_build\.py|search-runtime-deploy-dispatch\.mjs|deploy_fly_main\.sh)$/u,
+  /^scripts\/(?:request_static_site_build\.py|search-runtime-deploy-dispatch\.mjs|deploy_fly_main\.sh|generate_event_search_revision\.mjs)$/u,
   /^site\/package\.json$/u,
   /^docs\/features\/unsigned-personalization\/authorized-event-search\.md$/u,
   /^docs\/features\/static-site-pages\/smart-vector-search\//u,
@@ -76,7 +76,7 @@ const PLATFORM_SELECTIONS = Object.freeze({
   all: Object.freeze(['browser', 'android', 'ios']),
 });
 
-const SAFE_REVISION = /^[A-Za-z0-9][A-Za-z0-9._:-]{6,127}$/u;
+const SAFE_BACKEND_REVISION = /^sha256:[0-9a-f]{64}$/u;
 const SAFE_DEPLOYMENT_RUN = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u;
 const SAFE_SURFACE = /^[a-z][a-z0-9_-]{0,47}$/u;
 const SEVERITY_WORDS = new Set(['critical', 'high', 'medium', 'low', 'severity']);
@@ -103,7 +103,7 @@ export function validateSearchRuntimeDeployPayload(payload) {
   const siteRuntimeSha = String(payload.site_runtime_sha || '').toLowerCase();
   if (!/^[0-9a-f]{40}$/u.test(siteRuntimeSha)) throw new Error('search_runtime_site_sha_invalid');
   const searchBackendRevision = validateSafeScalar(
-    payload.search_backend_revision, SAFE_REVISION, 'search_runtime_backend_revision_invalid',
+    payload.search_backend_revision, SAFE_BACKEND_REVISION, 'search_runtime_backend_revision_invalid',
   );
   const validationProfile = String(payload.validation_profile || '').trim().toLowerCase();
   if (![SEARCH_VALIDATION_PROFILES.STANDARD, SEARCH_VALIDATION_PROFILES.FULL].includes(validationProfile)) {

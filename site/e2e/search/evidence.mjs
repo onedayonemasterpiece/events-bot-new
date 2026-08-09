@@ -136,7 +136,7 @@ export function productionHealthEvidenceRecord(input = {}) {
       cleanup_status: closedText(input.cleanup_status, /^(?:PASS|PENDING|FAIL)$/u, 'PENDING'),
     },
     search: {
-      expected_backend_revision: closedText(input.expected_search_backend_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
+      expected_backend_revision: closedText(input.expected_search_backend_revision, /^sha256:[0-9a-f]{64}$/u),
       ui_submission_count: safeCount(journey.search_post_count),
       physical_post_count: safeCount(journey.physical_search_post_count ?? journey.search_post_count),
       vector_only: journey.request_contract?.use_llm_verifier === false,
@@ -153,6 +153,7 @@ export function productionHealthEvidenceRecord(input = {}) {
         http_status: safeCount(journey.response_telemetry?.http_status),
         route: closedText(journey.response_telemetry?.route, /^(?:direct|relay)$/u, 'direct'),
         search_contract_version: closedText(journey.response_telemetry?.search_contract_version, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
+        search_backend_revision: closedText(journey.response_telemetry?.search_backend_revision, /^sha256:[0-9a-f]{64}$/u),
         catalog_revision: closedText(journey.response_telemetry?.catalog_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
         corpus_revision: closedText(journey.response_telemetry?.corpus_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
         search_document_revision: closedText(journey.response_telemetry?.search_document_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
@@ -211,6 +212,7 @@ export async function writeProductionHealthEvidence(directory, input) {
   const runtimeFingerprint = createHash('sha256').update(JSON.stringify({
     repo_sha: record.target.target_repo_sha,
     search_contract_version: record.search.response.search_contract_version,
+    search_backend_revision: record.search.response.search_backend_revision,
     expected_backend_revision: record.search.expected_backend_revision,
   }), 'utf8').digest('hex');
   const summary = {
@@ -221,7 +223,7 @@ export async function writeProductionHealthEvidence(directory, input) {
     target_url_sha256: record.target.target_url_sha256,
     target_superseded: record.target.target_superseded,
     site_runtime_sha: record.target.target_repo_sha,
-    search_backend_revision: record.search.expected_backend_revision || record.search.response.search_contract_version,
+    search_backend_revision: record.search.response.search_backend_revision,
     content_generation_id: record.search.response.catalog_revision,
     search_index_generation_id: record.search.response.corpus_revision,
     search_contract_version: record.search.response.search_contract_version,

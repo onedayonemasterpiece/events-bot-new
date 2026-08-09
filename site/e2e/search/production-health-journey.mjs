@@ -74,6 +74,9 @@ function assertVectorResponse(response) {
       throw new Error(`search_health_response_identity_invalid:${field}`);
     }
   }
+  if (!/^sha256:[0-9a-f]{64}$/u.test(String(response.search_backend_revision || ''))) {
+    throw new Error('search_health_response_identity_invalid:search_backend_revision');
+  }
 }
 
 function assertCards(response, state) {
@@ -220,6 +223,7 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
       http_status: response.http_status,
       route: response.route,
       search_contract_version: response.search_contract_version,
+      search_backend_revision: response.search_backend_revision,
       catalog_revision: response.catalog_revision,
       corpus_revision: response.corpus_revision,
       search_document_revision: response.search_document_revision,

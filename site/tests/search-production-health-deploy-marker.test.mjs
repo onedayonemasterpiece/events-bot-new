@@ -15,7 +15,7 @@ const sha = '0123456789abcdef0123456789abcdef01234567';
 
 const payload = {
   site_runtime_sha: sha,
-  search_backend_revision: 'event-search:89abcdef',
+  search_backend_revision: `sha256:${'d'.repeat(64)}`,
   validation_profile: 'standard',
   changed_surfaces: ['site_runtime', 'search_backend'],
   deployment_run_id: 'fly-main-123.1',
@@ -36,7 +36,7 @@ test('dispatch helper emits the exact repository_dispatch envelope and no URL or
 test('dispatch CLI rejects none and emits deterministic standard/full payloads', async () => {
   const baseArgs = [
     '--site-runtime-sha', sha,
-    '--search-backend-revision', 'event-search:89abcdef',
+    '--search-backend-revision', `sha256:${'d'.repeat(64)}`,
     '--changed-surface', 'site_runtime',
     '--deployment-run-id', 'fly-main-123.1',
   ];
@@ -113,7 +113,7 @@ test('default none and failed Fly deploy emit zero dispatches; successful standa
   await writeFile(fixture.callLog, '');
   await assert.rejects(execFileAsync('bash', [script,
     '--search-validation-profile', 'standard',
-    '--search-backend-revision', 'event-search:89abcdef',
+    '--search-backend-revision', `sha256:${'d'.repeat(64)}`,
     '--search-deployment-run-id', 'fly-main-123.1',
     '--search-changed-surface', 'site_runtime',
   ], { cwd: fixture.root, env: { ...fixture.env, FLY_DEPLOY_EXIT: '42' } }));
@@ -124,7 +124,7 @@ test('default none and failed Fly deploy emit zero dispatches; successful standa
   await writeFile(fixture.callLog, '');
   await execFileAsync('bash', [script,
     '--search-validation-profile', 'standard',
-    '--search-backend-revision', 'event-search:89abcdef',
+    '--search-backend-revision', `sha256:${'d'.repeat(64)}`,
     '--search-deployment-run-id', 'fly-main-123.1',
     '--search-changed-surface', 'site_runtime',
   ], { cwd: fixture.root, env: fixture.env });
@@ -137,7 +137,7 @@ test('default none and failed Fly deploy emit zero dispatches; successful standa
   await execFileAsync('bash', [script], { cwd: fixture.root, env: {
     ...fixture.env,
     SEARCH_VALIDATION_PROFILE: 'standard',
-    SEARCH_BACKEND_REVISION: 'event-search:89abcdef',
+    SEARCH_BACKEND_REVISION: `sha256:${'d'.repeat(64)}`,
     SEARCH_DEPLOYMENT_RUN_ID: 'fly-main-env-123.1',
     SEARCH_CHANGED_SURFACES: 'site_runtime,search_backend',
   } });

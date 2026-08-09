@@ -33,6 +33,11 @@ jobs:
         run: npm run test:transport-faults && npm run test:resilient-client
       - name: Run deterministic Search production-health contracts
         run: npm run test:search-production-health
+      - name: Verify exact Search backend source revision
+        working-directory: .
+        run: |
+          node scripts/generate_event_search_revision.mjs --check
+          node --test supabase/functions/event-search/canary-contract.test.mjs
       - name: Run existing Search harness contracts
         run: npm run test:search-e2e-harness
       - name: Build real static event pages

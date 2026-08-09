@@ -81,6 +81,7 @@ function summaryFromRecord(record, env) {
     runtime_fingerprint: sha(JSON.stringify({
       repo_sha: record.target?.target_repo_sha,
       search_contract_version: record.search?.response?.search_contract_version,
+      search_backend_revision: record.search?.response?.search_backend_revision,
       expected_backend_revision: record.search?.expected_backend_revision,
     })),
     run_id: runId,
@@ -143,7 +144,7 @@ function aggregatePlatformSummary(summary, record) {
     target_url_sha256: record.target?.target_url_sha256,
     target_superseded: record.target?.target_superseded === true,
     site_runtime_sha: record.target?.target_repo_sha,
-    search_backend_revision: record.search?.expected_backend_revision || record.search?.response?.search_contract_version,
+    search_backend_revision: record.search?.response?.search_backend_revision,
     content_generation_id: record.search?.response?.catalog_revision,
     search_index_generation_id: record.search?.response?.corpus_revision,
     search_contract_version: record.search?.response?.search_contract_version,

@@ -46,6 +46,7 @@ export function summarizeSearchPayload(payload, extras = {}) {
   return {
     schema_version: boundedString(payload.schema_version ?? payload.search_contract_version, 80),
     search_contract_version: boundedString(payload.search_contract_version ?? payload.schema_version, 80),
+    search_backend_revision: boundedString(payload.search_backend_revision, 96),
     request_id: stableId(payload.request_id),
     receipt_id: stableId(payload.receipt_id),
     response_ids: visible.map(eventId),

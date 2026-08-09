@@ -142,6 +142,9 @@ test('default pull-request CI runs the deterministic Search production-health su
   const steps = parsed.jobs['static-browser-release-gate'].steps;
   const searchStep = steps.find((step) => step.name === 'Run deterministic Search production-health contracts');
   assert.equal(searchStep?.run, 'npm run test:search-production-health');
+  const backendRevisionStep = steps.find((step) => step.name === 'Verify exact Search backend source revision');
+  assert.match(backendRevisionStep?.run || '', /generate_event_search_revision\.mjs --check/u);
+  assert.match(backendRevisionStep?.run || '', /event-search\/canary-contract\.test\.mjs/u);
   assert.equal(searchStep?.env, undefined);
   assert.equal(steps.find((step) => step.name === 'Run existing Search harness contracts')?.run,
     'npm run test:search-e2e-harness');

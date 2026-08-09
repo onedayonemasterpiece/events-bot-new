@@ -48,6 +48,7 @@ const meter = (bytes = 1024) => ({
   categories: { auth: 0, edge: bytes, direct_rest: 0, direct_rpc: 0 },
   sources: { content_length: bytes, received_body: 0 }, excluded_requests: 0,
 });
+const backendRevision = `sha256:${'d'.repeat(64)}`;
 
 test('GitHub masking command accepts one exact secret and rejects log injection', () => {
   assert.equal(githubMaskCommand('https://kenigevents.ru/_review/private/poisk/'),
@@ -78,6 +79,7 @@ function fakeJourneyAdapter(overrides = {}) {
   const ids = overrides.ids || ['101', '102'];
   const response = {
     schema_version: 'event_search_v2', search_contract_version: 'event_search_v2',
+    search_backend_revision: backendRevision,
     request_id: 'request-1', receipt_id: null, response_ids: [...ids],
     response_families: ids.map((id) => `event:${id}`), item_count: ids.length, fallback_count: 0,
     has_more: false, next_offset: 0, result_cache_status: overrides.cache || 'miss', served_from_cache: overrides.cache === 'hit',
@@ -327,7 +329,7 @@ test('transport instrumentation records one physical Search once when its raw fe
   const originalClients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
   try {
     globalThis.fetch = async () => new Response(JSON.stringify({
-      search_contract_version: 'event_search_v2',
+      search_contract_version: 'event_search_v2', search_backend_revision: backendRevision,
       requested_execution_mode: 'cold_vector', actual_execution_mode: 'cold_vector',
       result_cache_status: 'miss', items: [{ event_id: 1 }],
       request_counters: { embedding_provider_attempts: 1, vector_rpc_attempts: 1, llm_provider_attempts: 0 },
@@ -382,7 +384,7 @@ test('cold resilient route selection meters its physical functions probe without
         return new Response('[]', { status: 200, headers: { 'content-length': String(bytes) } });
       }
       return new Response(JSON.stringify({
-        search_contract_version: 'event_search_v2',
+        search_contract_version: 'event_search_v2', search_backend_revision: backendRevision,
         requested_execution_mode: 'cold_vector', actual_execution_mode: 'cold_vector',
         result_cache_status: 'miss', items: [{ event_id: 1 }],
         request_counters: { embedding_provider_attempts: 1, vector_rpc_attempts: 1, llm_provider_attempts: 0 },
@@ -445,6 +447,7 @@ test('real ResilientSupabaseTransport transformed Response meters probe and Sear
       }
       return new Response(JSON.stringify({
         schema_version: 'event_search_v2', search_contract_version: 'event_search_v2',
+        search_backend_revision: backendRevision,
         request_id: 'real-transport-request', requested_execution_mode: 'cold_vector',
         actual_execution_mode: 'cold_vector', result_cache_status: 'miss',
         catalog_revision: 'a'.repeat(64), corpus_revision: 'b'.repeat(64),
@@ -645,7 +648,12 @@ test('cell preflights before issuance, uses one adapter, rereads pointer without
     assert.equal(raw.includes('A'.repeat(43)), false);
     assert.equal(raw.includes('https://'), false);
     assert.equal(raw.includes('raw error'), false);
-    assert.equal(JSON.parse(raw).target.immutable_identity.manifest_sha256, 'c'.repeat(64));
+    const written = JSON.parse(raw);
+    assert.equal(written.target.immutable_identity.manifest_sha256, 'c'.repeat(64));
+    assert.equal(written.search.expected_backend_revision, null);
+    assert.equal(written.search.response.search_backend_revision, backendRevision);
+    const summary = JSON.parse(await readFile(join(root, 'qa-summary.json'), 'utf8'));
+    assert.equal(summary.search_backend_revision, backendRevision);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -788,23 +796,23 @@ test('explicit release wait is bounded and performs only target reads before Aut
 test('backend deployment marker is a pre-Auth/Search release receipt and missing identity blocks', async () => {
   assert.equal(hasActiveSearchReleaseReceipt({ siteActive: true }), true);
   assert.equal(hasActiveSearchReleaseReceipt({
-    siteActive: true, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: '',
+    siteActive: true, expectedSearchBackendRevision: backendRevision, deploymentRunId: '',
   }), false);
   assert.equal(hasActiveSearchReleaseReceipt({
-    siteActive: true, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: 'deploy-42.1',
+    siteActive: true, expectedSearchBackendRevision: backendRevision, deploymentRunId: 'deploy-42.1',
     backendActive: true,
   }), true);
   assert.equal(hasActiveSearchReleaseReceipt({
-    siteActive: false, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: 'deploy-42.1',
+    siteActive: false, expectedSearchBackendRevision: backendRevision, deploymentRunId: 'deploy-42.1',
   }), false);
 
   let issued = 0;
   const result = await runProductionHealthCell({
     platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
     releaseGate: async () => hasActiveSearchReleaseReceipt({
-      siteActive: true, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: '',
+      siteActive: true, expectedSearchBackendRevision: backendRevision, deploymentRunId: '',
     }),
-    expectedSearchBackendRevision: 'event-search-v2',
+    expectedSearchBackendRevision: backendRevision,
     createAdapter: async () => fakeJourneyAdapter(),
     issueSession: async () => { issued += 1; throw new Error('must_not_run'); },
   });
@@ -819,22 +827,76 @@ test('backend contract probe is a bounded HEAD-only pre-Auth/Search gate', async
   let sleeps = 0;
   const receipt = await waitForActiveSearchBackend({
     supabaseUrl: 'https://project.supabase.co', publishableKey: 'publishable-test-key',
-    expectedRevision: 'event-search-contract-v2', attempts: 3, delayMs: 1,
+    expectedRevision: backendRevision, attempts: 3, delayMs: 1,
     sleep: async () => { sleeps += 1; },
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
       return { status: calls.length === 3 ? 200 : 503, headers: new Headers({
-        'x-kenigevents-search-contract': calls.length === 3 ? 'event-search-contract-v2' : 'old',
+        'x-kenigevents-search-revision': calls.length === 3 ? backendRevision : `sha256:${'0'.repeat(64)}`,
+        'x-kenigevents-search-contract': 'event-search-contract-v2',
       }) };
     },
   });
   assert.equal(receipt.active, true);
+  assert.equal(receipt.observed_revision, backendRevision);
+  assert.equal(receipt.observed_contract_version, 'event-search-contract-v2');
   assert.equal(receipt.product_search_posts, 0);
   assert.equal(receipt.auth_requests, 0);
   assert.equal(sleeps, 2);
   assert.equal(calls.length, 3);
   assert.ok(calls.every(({ url, init }) => url.endsWith('/functions/v1/event-search')
     && init.method === 'HEAD' && init.redirect === 'error'));
+});
+
+test('backend release probe never retains unclosed response headers', async () => {
+  const receipt = await waitForActiveSearchBackend({
+    supabaseUrl: 'https://project.supabase.co', publishableKey: 'publishable-test-key',
+    expectedRevision: backendRevision, attempts: 1,
+    fetchImpl: async () => ({ status: 503, headers: {
+      get: (name) => name === 'x-kenigevents-search-revision'
+        ? 'unsafe revision value' : 'unsafe contract value',
+    } }),
+  });
+  assert.equal(receipt.active, false);
+  assert.equal(receipt.observed_revision, null);
+  assert.equal(receipt.observed_contract_version, null);
+});
+
+test('HEAD match followed by an Edge revision change is blocked from retained response without retry', async () => {
+  const changedRevision = `sha256:${'e'.repeat(64)}`;
+  const headCalls = [];
+  const adapter = fakeJourneyAdapter({
+    rendererUnavailable: true,
+    responseTelemetry: { search_backend_revision: changedRevision },
+  });
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    expectedSearchBackendRevision: backendRevision,
+    releaseGate: async () => (await waitForActiveSearchBackend({
+      supabaseUrl: 'https://project.supabase.co', publishableKey: 'publishable-test-key',
+      expectedRevision: backendRevision, attempts: 1,
+      fetchImpl: async (url, init) => {
+        headCalls.push({ url, init });
+        return { status: 200, headers: new Headers({
+          'x-kenigevents-search-revision': backendRevision,
+          'x-kenigevents-search-contract': 'event-search-contract-v2',
+        }) };
+      },
+    })).active,
+    createAdapter: async () => adapter,
+    issueSession: async () => ({
+      authReceipt, meter: meter(4096), attach: async () => {}, cleanup: async () => {},
+    }),
+  });
+  assert.equal(headCalls.length, 1);
+  assert.equal(adapter.submitCalls, 1);
+  assert.equal(result.search.physical_post_count, 1);
+  assert.equal(result.search.response.search_backend_revision, changedRevision);
+  assert.equal(result.execution_status, 'BLOCKED');
+  assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
+  assert.equal(result.product_health, 'UNCONFIRMED');
 });
 
 test('one physical Search POST is enforced through scroll and event navigation', async () => {

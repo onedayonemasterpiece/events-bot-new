@@ -15,6 +15,8 @@ try {
   });
   process.stdout.write(`${JSON.stringify({
     schema_version: receipt.schema_version, active: receipt.active,
+    observed_revision: receipt.observed_revision,
+    observed_contract_version: receipt.observed_contract_version || null,
     attempts: receipt.attempts, product_search_posts: 0, auth_requests: 0,
   })}\n`);
   if (!receipt.active) process.exitCode = 3;

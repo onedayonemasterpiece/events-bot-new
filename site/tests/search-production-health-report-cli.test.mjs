@@ -7,13 +7,14 @@ import test from 'node:test';
 import { runProductionHealthReporter } from '../e2e/search/production-health-report-plan-cli.mjs';
 
 const hash = 'a'.repeat(64);
+const backendRevision = `sha256:${'d'.repeat(64)}`;
 const record = (platform, runId, failureClass = null) => ({
   schema_version: 'search_production_health_evidence_v1', platform,
   product_health: failureClass ? 'UNCONFIRMED' : 'HEALTHY',
   execution_status: failureClass ? 'FAILED' : 'PASS', failure_class: failureClass,
   workflow_run_id: runId,
   target: { target_url_sha256: hash, target_repo_sha: 'b'.repeat(40), target_superseded: false },
-  search: { response: { search_contract_version: 'v1' } },
+  search: { response: { search_contract_version: 'v1', search_backend_revision: backendRevision } },
 });
 
 async function put(root, name, value) {
@@ -86,7 +87,8 @@ test('workflow aggregate contains only sanitized per-platform summaries and tota
   await put(root, 'browser', {
     ...record('browser', '1200'), tested_at: '2026-08-09T15:00:00.000Z',
     search: {
-      response: { search_contract_version: 'v1', catalog_revision: 'cat', corpus_revision: 'corpus', request_id: 'req' },
+      response: { search_contract_version: 'v1', search_backend_revision: backendRevision,
+        catalog_revision: 'cat', corpus_revision: 'corpus', request_id: 'req' },
       physical_post_count: 1, response_id_count: 2, card_count: 2, latency_ms: 450,
       cache_state: 'miss', provider_attempts: { embedding: 1, vector: 1, llm: 0 },
       event_route: { http_status: 200 },
@@ -103,6 +105,7 @@ test('workflow aggregate contains only sanitized per-platform summaries and tota
   assert.equal(value.aggregate.pagination_requests, 0);
   assert.equal(value.aggregate.client_observed_supabase_bytes, 12345);
   assert.equal(value.platforms[0].opened_route_status, 200);
+  assert.equal(value.platforms[0].search_backend_revision, backendRevision);
   assert.equal(JSON.stringify(value).includes('https://kenigevents.ru'), false);
 });
 

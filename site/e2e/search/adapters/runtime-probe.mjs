@@ -137,6 +137,7 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     return {
       schema_version: String(payload?.schema_version ?? payload?.search_contract_version ?? '').slice(0, 80),
       search_contract_version: String(payload?.search_contract_version ?? payload?.schema_version ?? '').slice(0, 80),
+      search_backend_revision: String(payload?.search_backend_revision ?? '').slice(0, 96),
       request_id: id(payload?.request_id), receipt_id: id(payload?.receipt_id),
       response_ids: shown.map(eventId), response_families: shown.map(family),
       item_count: Array.isArray(payload?.items) ? payload.items.length : 0,
@@ -252,7 +253,8 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
           state.responses.push({ sequence, ...summarize(payload, response.status, route) });
         };
         const retainUnreadable = () => {
-          state.responses.push({ sequence, schema_version: '', search_contract_version: '', request_id: null,
+          state.responses.push({ sequence, schema_version: '', search_contract_version: '',
+            search_backend_revision: '', request_id: null,
             receipt_id: null, response_ids: [], response_families: [], item_count: 0, fallback_count: 0,
             has_more: false, next_offset: 0, result_cache_status: 'unreadable', served_from_cache: false,
             requested_execution_mode: '', actual_execution_mode: '', catalog_revision: '', corpus_revision: '',
