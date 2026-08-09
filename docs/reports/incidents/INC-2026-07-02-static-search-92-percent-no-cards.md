@@ -30,6 +30,14 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 an exact Search candidate completed every Kaggle gate and wrote a
+  terminal `done` ledger receipt, while Kaggle REST briefly still returned
+  `RUNNING`. Exact-owner recovery deferred for five minutes, but a newer Smart
+  Update fingerprint then superseded the terminal claim and launched a second
+  full build. Root cause was `claim_static_site_build` treating any terminal
+  ledger row as permission to replace the owner before recovery. Terminal
+  owners now remain single-flight blockers until their exact recovery finishes
+  and clears the claim.
 - 2026-08-09 two exact-main Search-fix candidate attempts failed
   deterministically at the legacy `check:preview` gate after successfully
   exporting the current Search catalog and building 1,300+ preview pages. The

@@ -588,7 +588,10 @@ def test_terminal_orphan_remains_recoverable_by_exact_job_and_dataset(tmp_path) 
     assert recoverable_static_site_build(database, job_id=42) is None
 
 
-def test_terminal_remote_claim_does_not_block_new_coalesced_job_for_claim_ttl(tmp_path) -> None:
+@pytest.mark.parametrize("remote_status", ["done", "failed"])
+def test_terminal_remote_claim_blocks_followup_until_exact_recovery(
+    tmp_path, remote_status: str
+) -> None:
     database = tmp_path / "terminal-supersede.sqlite"
     _fingerprint_db(database)
     now = datetime(2026, 7, 20, 12, tzinfo=timezone.utc)
@@ -612,9 +615,10 @@ def test_terminal_remote_claim_does_not_block_new_coalesced_job_for_claim_ttl(tm
             """
         )
         connection.execute(
-            "INSERT INTO kaggle_run_ledger VALUES(?, 'failed', ?, ?, ?)",
+            "INSERT INTO kaggle_run_ledger VALUES(?, ?, ?, ?, ?)",
             (
                 "remote-terminal-error",
+                remote_status,
                 now.isoformat(),
                 now.isoformat(),
                 (now + timedelta(seconds=10)).isoformat(),
@@ -631,17 +635,23 @@ def test_terminal_remote_claim_does_not_block_new_coalesced_job_for_claim_ttl(tm
         stale_seconds=7200,
         now=now + timedelta(seconds=20),
     )
-    assert replacement.action == "claimed"
+    assert replacement.action == "busy"
+    assert replacement.blocking_run_id == "remote-terminal-error"
+    assert replacement.blocking_fingerprint == "c" * 64
     with sqlite3.connect(database) as connection:
         active = connection.execute(
             "SELECT active_job_id, active_run_id FROM static_site_build_state"
         ).fetchone()
-        superseded = connection.execute(
+        blocked = connection.execute(
             "SELECT evidence_json FROM static_site_build_history "
-            "WHERE run_id='remote-terminal-error' AND outcome='failed' ORDER BY id DESC LIMIT 1"
+            "WHERE run_id='replacement-run' AND outcome='busy' ORDER BY id DESC LIMIT 1"
         ).fetchone()
-    assert active == (42, "replacement-run")
-    assert json.loads(superseded[0])["reason"] == "terminal_remote_claim_superseded"
+    assert active == (41, "remote-terminal-error")
+    assert json.loads(blocked[0]) == {
+        "blocking_run_id": "remote-terminal-error",
+        "reason": "terminal_remote_recovery_pending",
+        "remote_status": remote_status,
+    }
 
 
 class _MemoryS3:

@@ -1258,8 +1258,16 @@ def claim_static_site_build(
                     connection, str(active_run_id), now=now_utc, stale_seconds=stale_seconds
                 )
             )
-            if not terminal_status and (claim_fresh or remote_live):
-                evidence = {"reason": "active_single_flight", "blocking_run_id": active_run_id}
+            if terminal_status or claim_fresh or remote_live:
+                evidence = (
+                    {
+                        "reason": "terminal_remote_recovery_pending",
+                        "blocking_run_id": active_run_id,
+                        "remote_status": terminal_status,
+                    }
+                    if terminal_status
+                    else {"reason": "active_single_flight", "blocking_run_id": active_run_id}
+                )
                 connection.execute(
                     """
                     INSERT INTO static_site_build_history(
@@ -1279,29 +1287,6 @@ def claim_static_site_build(
                     input_fingerprint,
                     blocking_run_id=str(active_run_id or "") or None,
                     blocking_fingerprint=str(active_fingerprint or "") or None,
-                )
-            if terminal_status:
-                evidence = {
-                    "reason": "terminal_remote_claim_superseded",
-                    "remote_status": terminal_status,
-                    "superseded_by_run_id": run_id,
-                }
-                connection.execute(
-                    """
-                    INSERT INTO static_site_build_history(
-                        release_channel, job_id, request_watermark, input_fingerprint,
-                        effective_date, force_rebuild, outcome, run_id, evidence_json, created_at
-                    ) VALUES(?, ?, NULL, ?, ?, 0, 'failed', ?, ?, ?)
-                    """,
-                    (
-                        RELEASE_CHANNEL_SECRET,
-                        int(active_job_id or 0) or None,
-                        str(active_fingerprint or "") or None,
-                        str(active_effective_date or "") or None,
-                        str(active_run_id or "") or None,
-                        json.dumps(evidence, sort_keys=True),
-                        now_iso,
-                    ),
                 )
         if not force_rebuild and last_fingerprint == input_fingerprint:
             evidence = {"reason": "unchanged_public_inputs", "previous_run_id": last_run_id}
