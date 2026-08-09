@@ -1062,15 +1062,32 @@ def test_browser_capture_freezes_fixture_clock_and_waits_for_stable_layout():
     assert "image.decode()" in source
     assert "near-viewport media did not settle" in source
     assert "Browser layout did not stabilize" in source
-    assert "firstPerceptualDhash !== perceptualDhash" in source
-    assert "Browser pixels failed perceptual two-frame stability" in source
+    assert "capturePlaywrightStablePair" in source
+    assert "getComparator('image/jpeg')" in source
     assert "pixel_exact_stable: firstScreenshot.equals(stableScreenshot)" in source
     assert "perceptual_dhash_64" in source
     assert "raw_raster_role: 'noncanonical_visual_evidence'" in source
     assert "Screenshot exceeds deterministic byte reservation" in source
     decoder = DECODER.read_text(encoding="utf-8")
-    assert "cross_run_acceptance: 'equal_perceptual_dhash_64'" in decoder
+    assert "bounded_until_two_consecutive_playwright_pixelmatch_frames_threshold_0_2_max_diff_pixels_0" in decoder
+    assert "cross_run_acceptance: 'human_review_with_hash_bound_rasters'" in decoder
     component_evidence = (REPO / "scripts/current_ui_resource_graph/v1/evidence.mjs").read_text(encoding="utf-8")
-    assert "firstDhash !== confirmDhash" in component_evidence
+    assert "maximumAttempts: 8" in component_evidence
+    assert "threshold: 0.2" in component_evidence
+    assert "maxDiffPixels: 0" in component_evidence
     assert "screenshot_exact_stable: buffer.equals(confirm)" in component_evidence
-    assert "Component screenshot failed perceptual two-frame stability contract" in component_evidence
+    assert "'[data-desktop-clean-event]'" not in component_evidence
+
+
+def test_playwright_stable_pair_retries_until_two_consecutive_frames_match():
+    script = """
+      import { capturePlaywrightStablePair } from './scripts/current_ui_resource_graph/v1/evidence.mjs';
+      const frames = [Buffer.from('a'), Buffer.from('b'), Buffer.from('b')];
+      const result = await capturePlaywrightStablePair({
+        capture: async () => frames.shift(),
+        comparator: (left, right) => left.equals(right) ? null : { errorMessage: 'different' },
+        label: 'fixture', maximumAttempts: 3,
+      });
+      if (result.attempts !== 3 || result.first.toString() !== 'b' || result.accepted.toString() !== 'b') process.exit(2);
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, check=True)

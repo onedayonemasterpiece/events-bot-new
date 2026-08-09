@@ -233,18 +233,26 @@ motion, and requires five identical animation-frame layout fingerprints before
 collecting computed evidence or pixels. Near-viewport media settlement is
 bounded and fails closed instead of allowing an unresolved decode promise to
 stall the artifact job. Following Playwright's screenshot-assertion contract,
-capture also requires two consecutive screenshot buffers to have the same
-perceptual dHash before the image is accepted; both raw SHA-256 values and
-whether the buffers were byte-identical remain recorded. Volatile perceptual
-content still fails closed. Raw browser rasters remain
+capture takes a bounded sequence of up to eight frames until two consecutive
+frames match through the pinned Playwright `pixelmatch` comparator. It uses
+Playwright's documented YIQ perceptual threshold `0.2` with zero pixels allowed
+beyond that threshold; it does not require byte equality or exact equality of a
+coarse dHash. Both raw SHA-256 values, diagnostic dHashes, the attempt count and
+whether the accepted buffers were byte-identical remain recorded. Volatile
+perceptual content still fails closed after the bounded attempts. Raw browser rasters remain
 explicitly noncanonical visual evidence because independent Chromium sessions
 can differ in a sparse set of antialiased/media pixels even after structure and
-computed styles are identical. `screenshots-index.jsonl` therefore stores a
-stable 64-bit perceptual dHash rather than a raw-byte hash; canonical graph
-shards and receipts use a fixed, size-checked screenshot budget. Cross-run
-acceptance requires equal perceptual dHash while retaining both raw specimens
-for human visual QA, following Playwright's tolerance-based rather than
-raw-byte visual-comparison model.
+computed styles are identical. `screenshots-index.jsonl` therefore stores raw
+hashes, diagnostic dHashes and the comparator contract; canonical graph shards
+and receipts use a fixed, size-checked screenshot budget. Cross-run acceptance
+is the hash-bound human visual review rather than equality of encoded bytes or
+dHash, following Playwright's tolerance-based visual-comparison model.
+
+Generic component evidence excludes `[data-desktop-clean-event]`: that marker
+is the complete event-page surface, not a component boundary. Event layouts are
+captured through page verification, while actual component roots such as the
+desktop action panel, media frame, transport blocks and medallion layout remain
+eligible for element capture.
 Manifest, HTML and browser navigation retries are bounded to three attempts;
 retry configuration itself is capped.
 
