@@ -118,9 +118,12 @@ function safeTarget(candidateBase, relativeKey) {
 }
 
 async function visibleLocator(page, selector) {
-  const candidates = page.locator(selector); const count = Math.min(await candidates.count(), 12);
-  for (let index = 0; index < count; index += 1) if (await candidates.nth(index).isVisible()) return candidates.nth(index);
-  return null;
+  // Playwright locators are re-resolved before every action. Keep the
+  // visibility predicate in the locator itself so a responsive duplicate
+  // cannot make a previously selected nth() point at a hidden sibling while
+  // stable screenshots are sampled.
+  const visible = page.locator(selector).filter({ visible: true });
+  return await visible.count() > 0 ? visible.first() : null;
 }
 
 export function isAbsenceOnlyBinding(binding) {

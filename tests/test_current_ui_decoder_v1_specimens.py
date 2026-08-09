@@ -212,6 +212,21 @@ console.log(JSON.stringify(r.real_route_verifications.map((row)=>({id:row.id,tem
     assert by_id["artifact-weekend"]["absent"] == ["[data-amber-artifact]"]
     assert by_id["medallions-2601"]["absent"] == ["[data-medallion-layout]"]
     assert by_id["medallions-2601"]["selectors"] == ["[data-medallion-layout]"]
+    medallion_selectors = {
+        selector
+        for row in observed
+        if row["id"].startswith("medallions-") and row["id"] != "medallions-2601"
+        for selector in row["selectors"]
+    }
+    assert medallion_selectors == {
+        '.event-token-section[data-medallion-slot="top"]',
+        '.event-token-section[data-medallion-slot="inline"]',
+    }
+    assert all(
+        ".mobile-event-production" not in row["selectors"]
+        for row in observed
+        if row["id"].startswith(("medallions-", "transport-"))
+    )
 
 
 def test_exact_manifest_and_runtime_resolver_has_no_url_leak_and_stable_bindings():

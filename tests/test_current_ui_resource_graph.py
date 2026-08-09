@@ -1091,3 +1091,19 @@ def test_playwright_stable_pair_retries_until_two_consecutive_frames_match():
       if (result.attempts !== 3 || result.first.toString() !== 'b' || result.accepted.toString() !== 'b') process.exit(2);
     """
     subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, check=True)
+
+
+def test_playwright_stable_pair_preserves_capture_label_on_locator_failure():
+    script = """
+      import { capturePlaywrightStablePair } from './scripts/current_ui_resource_graph/v1/evidence.mjs';
+      let message = '';
+      try {
+        await capturePlaywrightStablePair({
+          capture: async () => { throw new Error('Node is not visible'); },
+          comparator: () => null,
+          label: 'Exact real-route medallions-5336/desktop/0',
+        });
+      } catch (error) { message = error.message; }
+      if (!message.includes('medallions-5336/desktop/0 capture attempt 1 failed') || !message.includes('Node is not visible')) process.exit(2);
+    """
+    subprocess.run(["node", "--input-type=module", "-e", script], cwd=REPO, check=True)

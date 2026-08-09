@@ -13,11 +13,17 @@ function sha(value) { return createHash('sha256').update(value).digest('hex'); }
 
 export async function capturePlaywrightStablePair({ capture, comparator, label, maximumAttempts = PLAYWRIGHT_SCREENSHOT_COMPARISON.maximumAttempts }) {
   if (typeof capture !== 'function' || typeof comparator !== 'function') throw new Error('Stable screenshot capture requires a capture function and Playwright comparator');
-  let previous = await capture();
+  const captureWithContext = async (attempt) => {
+    try { return await capture(); }
+    catch (error) {
+      throw new Error(`${label} capture attempt ${attempt} failed: ${String(error?.message || error).slice(0, 480)}`, { cause: error });
+    }
+  };
+  let previous = await captureWithContext(1);
   const attemptedSha256 = [sha(previous)];
   let lastDifference = null;
   for (let attempt = 2; attempt <= maximumAttempts; attempt += 1) {
-    const current = await capture();
+    const current = await captureWithContext(attempt);
     attemptedSha256.push(sha(current));
     lastDifference = comparator(previous, current, PLAYWRIGHT_SCREENSHOT_COMPARISON);
     if (!lastDifference) return {
