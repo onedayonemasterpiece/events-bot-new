@@ -1,0 +1,25 @@
+name: Search release qualification planner
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute_live:
+        description: Reserved for a later stage; Stage 1 always emits a deterministic dry plan
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.22.0'
+      - name: Emit deterministic release-qualification plan
+        run: node site/e2e/search/production-health-plan-cli.mjs --plane release_qualification --trigger workflow_dispatch

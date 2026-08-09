@@ -1,5 +1,5 @@
-name: Static site Search canary
-run-name: Search canary · ${{ inputs.variant || github.event.action || github.event.schedule }} · ${{ inputs.platform || 'scheduled' }}
+name: Static site Search canary (manual legacy debug)
+run-name: Manual Search debug · ${{ inputs.variant }} · ${{ inputs.platform }}
 
 on:
   workflow_dispatch:
@@ -22,21 +22,12 @@ on:
         default: release_exact
         type: choice
         options: [release_exact, live_consistent]
-  repository_dispatch:
-    types: [static-site-search-post-deploy]
-  schedule:
-    - cron: '17,47 * * * *'
-    - cron: '23 */3 * * *'
-    - cron: '41 1,7,13,19 * * *'
-    - cron: '19 2 * * *'
-
 permissions:
   contents: read
   id-token: write
-  issues: write
 
 concurrency:
-  group: static-site-search-${{ inputs.platform || github.event.schedule || github.event.action }}
+  group: static-site-search-manual-${{ inputs.platform }}
   cancel-in-progress: false
 
 jobs:
@@ -45,36 +36,23 @@ jobs:
     outputs:
       variants: ${{ steps.plan.outputs.variants }}
       platform: ${{ steps.plan.outputs.platform }}
-      blocking: ${{ steps.plan.outputs.blocking }}
-      incident_key: ${{ steps.plan.outputs.incident_key }}
       revision_policy: ${{ steps.plan.outputs.revision_policy }}
     steps:
       - id: plan
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE: ${{ github.event.schedule }}
           INPUT_VARIANT: ${{ inputs.variant }}
           INPUT_PLATFORM: ${{ inputs.platform }}
           INPUT_REVISION_POLICY: ${{ inputs.revision_policy }}
         run: |
           set -euo pipefail
-          case "$EVENT_NAME:$SCHEDULE" in
-            workflow_dispatch:*) variants="[\"$INPUT_VARIANT\"]"; platform="$INPUT_PLATFORM"; blocking=false; revision_policy="$INPUT_REVISION_POLICY" ;;
-            repository_dispatch:*) variants='["cold_vector","degraded_vector_fallback"]'; platform=browser; blocking=true; revision_policy=release_exact ;;
-            schedule:'17,47 * * * *') variants='["cached_vector"]'; platform=browser; blocking=false; revision_policy=release_exact ;;
-            schedule:'23 */3 * * *') variants='["cold_vector"]'; platform=browser; blocking=false; revision_policy=release_exact ;;
-            schedule:'41 1,7,13,19 * * *') variants='["cold_vector_llm"]'; platform=browser; blocking=false; revision_policy=release_exact ;;
-            schedule:'19 2 * * *') variants='["cached_vector"]'; platform=mobile; blocking=false; revision_policy=release_exact ;;
-            *) echo 'Unsupported Search trigger' >&2; exit 1 ;;
-          esac
+          variants="[\"$INPUT_VARIANT\"]"
+          platform="$INPUT_PLATFORM"
+          revision_policy="$INPUT_REVISION_POLICY"
           case "$platform" in browser|android|ios|mobile|all) ;; *) exit 1;; esac
           case "$revision_policy" in release_exact|live_consistent) ;; *) exit 1;; esac
           echo "variants=$variants" >> "$GITHUB_OUTPUT"
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
-          echo "blocking=$blocking" >> "$GITHUB_OUTPUT"
           echo "revision_policy=$revision_policy" >> "$GITHUB_OUTPUT"
-          key="$(printf '%s-%s' "$platform" "$variants" | sha256sum | cut -c1-12)"
-          echo "incident_key=$key" >> "$GITHUB_OUTPUT"
 
   browser:
     needs: plan
@@ -110,7 +88,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Resolve latest accepted immutable Search target
         run: .github/scripts/resolve-static-search-target.sh
-      - name: Bound scheduled LLM run to three non-paginated provider attempts
+      - name: Bound manual LLM debug run to three non-paginated provider attempts
         if: ${{ matrix.variant == 'cold_vector_llm' }}
         run: |
           echo 'E2E_SEARCH_QUERIES_JSON=[{"id":"family_nature_v1","value":"На природу с детьми","paginate":false},{"id":"seaside_art_v1","value":"искусство у моря","paginate":false},{"id":"friday_free_v1","value":"в пятницу бесплатно","paginate":false}]' >> "$GITHUB_ENV"
@@ -289,41 +267,19 @@ jobs:
     needs: [plan, browser, android, ios]
     runs-on: ubuntu-24.04
     steps:
-      - name: Emit blocking result and deduplicated repeated-failure incident
+      - name: Aggregate manual debug result
         env:
-          GH_TOKEN: ${{ github.token }}
+          PLAN: ${{ needs.plan.result }}
           BROWSER: ${{ needs.browser.result }}
           ANDROID: ${{ needs.android.result }}
           IOS: ${{ needs.ios.result }}
-          EVENT_NAME: ${{ github.event_name }}
-          INCIDENT_KEY: ${{ needs.plan.outputs.incident_key }}
-          VARIANTS: ${{ needs.plan.outputs.variants }}
         run: |
           set -euo pipefail
           failed=false
-          for result in "$BROWSER" "$ANDROID" "$IOS"; do
+          for result in "$PLAN" "$BROWSER" "$ANDROID" "$IOS"; do
             case "$result" in success|skipped) ;; *) failed=true;; esac
           done
-          title="[Search canary] repeated failure ${INCIDENT_KEY}"
-          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
-          if [ "$failed" = false ]; then
-            if [ -n "$existing" ]; then
-              gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Recovered in ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
-              gh issue close "$existing" --repo "$GITHUB_REPOSITORY" --reason completed
-            fi
-            exit 0
+          if [ "$failed" = true ]; then
+            echo 'One or more manual Search debug jobs failed.' >&2
+            exit 1
           fi
-          repeated=false
-          if [ "$EVENT_NAME" = repository_dispatch ]; then
-            repeated=true
-          elif [ "$EVENT_NAME" = schedule ]; then
-            prior="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/static-site-search-canary.yml/runs?event=schedule&status=completed&per_page=1" --jq '.workflow_runs[0].conclusion // ""')"
-            [ "$prior" = failure ] && repeated=true
-          fi
-          if [ "$repeated" = true ]; then
-            body="Search canary failed repeatedly. Variants: ${VARIANTS}. Current sanitized run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. No target/session/query evidence is copied into this issue."
-            if [ -n "$existing" ]; then gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body";
-            else gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body";
-            fi
-          fi
-          exit 1
