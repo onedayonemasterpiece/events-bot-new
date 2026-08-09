@@ -227,7 +227,11 @@ recreating it per candidate:
   public projection and protected by a durable SQLite claim. A crashed Fly
   waiter must reconcile/adopt the exact Kaggle dataset/output before another
   push; automatic/operator requests no-op on an unchanged fingerprint unless
-  the operator explicitly requests `force_rebuild`.
+  the operator explicitly requests `force_rebuild`. A terminal status-dataset
+  row does not make that claim supersedable: until the exact owner recovery
+  persists success/failure and clears the claim, every newer fingerprint stays
+  `busy`. This closes the short interval where the callback ledger is terminal
+  but Kaggle REST still reports `RUNNING`.
 - immutable SQLite inputs live only for the handoff lifecycle. Success,
   no-op, recovered success and failures without a durable remote dataset delete
   the snapshot, manifest and SQLite sidecars. A pushed dataset keeps its exact

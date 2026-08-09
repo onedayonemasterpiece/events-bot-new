@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Fixed StaticSiteBuilder terminal-owner recovery so a newer Smart Update
+  fingerprint cannot supersede a completed Kaggle claim during the brief
+  callback-ledger/Kaggle-REST status lag; the exact owner must now be adopted or
+  failed and clear its claim before another full build can launch.
+
 - Fixed the Private Events MCP protected-resource transport so an
   unauthenticated `tools/call` now returns HTTP 401 with the exact ChatGPT or
   Codex resource-metadata challenge instead of wrapping the authentication
