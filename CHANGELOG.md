@@ -127,6 +127,13 @@
 
 ### Fixed
 
+- Fixed browser evidence stability to follow the declared Playwright visual
+  contract: sequential page/generic-component frames must have equal 64-bit
+  perceptual dHash while both raw SHA-256 values and exact-equality status are
+  retained. Controlled isolated PNG specimens remain byte-stable. This avoids
+  rejecting visually stable antialiased JPEG frames without weakening human
+  review or perceptual fail-closed checks.
+
 - Fixed Mobile Safari Search retaining its software keyboard after a valid
   native Search/Enter submit. The product now releases the first-page input
   after validation and before its single cost-bearing POST, so result scrolling

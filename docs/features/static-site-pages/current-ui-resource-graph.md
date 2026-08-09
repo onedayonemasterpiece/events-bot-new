@@ -233,8 +233,10 @@ motion, and requires five identical animation-frame layout fingerprints before
 collecting computed evidence or pixels. Near-viewport media settlement is
 bounded and fails closed instead of allowing an unresolved decode promise to
 stall the artifact job. Following Playwright's screenshot-assertion contract,
-capture also requires two consecutive screenshot buffers to match before the
-image is accepted; volatile pixels fail closed. Raw browser rasters remain
+capture also requires two consecutive screenshot buffers to have the same
+perceptual dHash before the image is accepted; both raw SHA-256 values and
+whether the buffers were byte-identical remain recorded. Volatile perceptual
+content still fails closed. Raw browser rasters remain
 explicitly noncanonical visual evidence because independent Chromium sessions
 can differ in a sparse set of antialiased/media pixels even after structure and
 computed styles are identical. `screenshots-index.jsonl` therefore stores a
@@ -312,7 +314,8 @@ exact real-route bindings across 49 viewport contexts. Rail, Kaup and medallions
 `no-groups` branch has no valid exact-data fixture and is therefore recorded as
 `source-model-only`, not fabricated through data-module replacement.
 
-Every controlled capture retains two stable PNG buffers, SHA-256 and dHash,
+Every controlled isolated-specimen capture retains two byte-stable PNG buffers,
+SHA-256 and dHash,
 bounded DOM/ARIA/computed/cascade/font/geometry evidence, focus/open/hidden
 state, media facts, console/network counts, source paths and capsule IDs. The
 workflow intentionally finishes this first stage as a partial `NO_GO` pending

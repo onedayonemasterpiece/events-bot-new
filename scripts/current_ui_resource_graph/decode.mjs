@@ -371,7 +371,7 @@ async function run(argv) {
       },
       counts, coverage_results: Object.fromEntries(['FOUND', 'MISSING', 'DISCOVERED', 'AMBIGUOUS'].map((status) => [status, coverage.filter((row) => row.status === status).length])),
       viewports: { core: [{ width: 390, height: 844 }, { width: 1728, height: 900 }], optional_evidence: [{ width: 430, height: 932 }, { width: 768, height: 1024 }, { width: 1280, height: 800 }] },
-      visual_evidence_contract: { raw_raster_role: 'noncanonical_visual_evidence', canonical_fingerprint: 'dhash-64', in_session_stability: 'two_consecutive_exact_buffers', cross_run_acceptance: 'equal_perceptual_dhash_64' },
+      visual_evidence_contract: { raw_raster_role: 'noncanonical_visual_evidence', canonical_fingerprint: 'dhash-64', in_session_stability: 'two_consecutive_equal_perceptual_dhash_64_with_exact_sha_recorded', cross_run_acceptance: 'equal_perceptual_dhash_64' },
       output_byte_budget: budget.limit, output_bytes_before_manifest: budget.used,
       outputs: outputHashes(output, hashedNames),
       constraints: { automatic_defragmentation: false, automatic_merge: false, candidate_as_is_contract_generation: true, normative_component_contract_generation: false, full_html_retained: false, bearer_url_retained: false },

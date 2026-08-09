@@ -1272,26 +1272,29 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         const filename = `${safeFamily}-${selectedPage.observation.route_hash.slice(0, 12)}-${viewport.width}x${viewport.height}.jpg`;
         const path = join(screenshotDir, filename);
         const screenshotOptions = { type: 'jpeg', quality: 65, fullPage: false, animations: 'disabled', caret: 'hide', scale: 'css' };
-        let previousScreenshot = null; let stableScreenshot = null;
-        for (let attempt = 0; attempt < 10; attempt += 1) {
-          const currentScreenshot = await page.screenshot(screenshotOptions);
-          if (previousScreenshot?.equals(currentScreenshot)) { stableScreenshot = currentScreenshot; break; }
-          previousScreenshot = currentScreenshot;
-        }
-        if (!stableScreenshot) throw new Error(`Browser pixels did not stabilize: ${selectedPage.observation.route_hash.slice(0, 12)}`);
+        const firstScreenshot = await page.screenshot(screenshotOptions);
+        const stableScreenshot = await page.screenshot(screenshotOptions);
+        const differenceHash = async (bytes) => {
+          const { data } = await sharp(bytes).greyscale().resize(9, 8, { fit: 'fill', kernel: 'lanczos3' }).raw().toBuffer({ resolveWithObject: true });
+          let bits = '';
+          for (let y = 0; y < 8; y += 1) for (let x = 0; x < 8; x += 1) bits += data[y * 9 + x] > data[y * 9 + x + 1] ? '1' : '0';
+          return BigInt(`0b${bits}`).toString(16).padStart(16, '0');
+        };
+        const firstPerceptualDhash = await differenceHash(firstScreenshot);
+        const perceptualDhash = await differenceHash(stableScreenshot);
+        if (firstPerceptualDhash !== perceptualDhash) throw new Error(`Browser pixels failed perceptual two-frame stability: ${selectedPage.observation.route_hash.slice(0, 12)}`);
         writeFileSync(path, stableScreenshot);
         const size = statSync(path).size;
         if (size > MAX_SCREENSHOT_BYTES) throw new Error(`Screenshot exceeds deterministic byte reservation: ${filename}`);
         budget.claim(MAX_SCREENSHOT_BYTES, `screenshots/${filename}`);
-        const { data: dhashPixels } = await sharp(stableScreenshot).greyscale().resize(9, 8, { fit: 'fill', kernel: 'lanczos3' }).raw().toBuffer({ resolveWithObject: true });
-        let dhashBits = '';
-        for (let y = 0; y < 8; y += 1) for (let x = 0; x < 8; x += 1) dhashBits += dhashPixels[y * 9 + x] > dhashPixels[y * 9 + x + 1] ? '1' : '0';
-        const perceptualDhash = BigInt(`0b${dhashBits}`).toString(16).padStart(16, '0');
         const relativePath = `screenshots/${filename}`;
-        screenshots.push({ id: `screenshot.${sha256(`${selectedPage.observation.route_hash}\0${viewport.width}`).slice(0, 16)}`, page_family: selectedPage.pageFamily, selection: selectedPage.selection, route_hash: selectedPage.observation.route_hash, screenshot_path: relativePath, viewport, perceptual_dhash_64: perceptualDhash, pixel_stability: 'two_consecutive_exact_buffers', raw_raster_role: 'noncanonical_visual_evidence', source: 'exact_candidate_browser' });
+        screenshots.push({ id: `screenshot.${sha256(`${selectedPage.observation.route_hash}\0${viewport.width}`).slice(0, 16)}`, page_family: selectedPage.pageFamily, selection: selectedPage.selection, route_hash: selectedPage.observation.route_hash, screenshot_path: relativePath, viewport,
+          first_sha256: sha256(firstScreenshot), screenshot_sha256: sha256(stableScreenshot), perceptual_dhash_64: perceptualDhash,
+          first_perceptual_dhash_64: firstPerceptualDhash, pixel_exact_stable: firstScreenshot.equals(stableScreenshot),
+          pixel_stability: 'two_consecutive_equal_perceptual_dhash_64', raw_raster_role: 'noncanonical_visual_evidence', source: 'exact_candidate_browser' });
         componentEvidence.push(...await captureComponentScopedEvidence({
           page, pageFamily: selectedPage.pageFamily, routeHash: selectedPage.observation.route_hash,
-          viewport, outputDir, budget, plane: 'latest_checked_kaggle_candidate',
+          viewport, outputDir, budget, sharp, plane: 'latest_checked_kaggle_candidate',
         }));
         const uiFamilies = families.filter((item) => item.runtime_observations.includes(selectedPage.observation.id)).map((item) => item.id).sort();
         viewportEvidence.push({ page_family: selectedPage.pageFamily, ui_families: uiFamilies, route_hash: selectedPage.observation.route_hash, viewport, structure: computed.structure_hash, computed, screenshot_path: relativePath, selection: selectedPage.selection });
