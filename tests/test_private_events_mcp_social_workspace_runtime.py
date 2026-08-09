@@ -19,6 +19,7 @@ from private_events_mcp.repository import InvalidArgumentsError
 from private_events_mcp.social_workspace import (
     SocialAction,
     SocialReadOperation,
+    compute_action_digest,
     validate_prepare_request,
     validate_read_request,
 )
@@ -240,7 +241,7 @@ async def test_self_resolution_and_opaque_encrypted_binding(runtime) -> None:
 
 
 @pytest.mark.asyncio
-async def test_exact_user_dm_prepare_external_approve_commit_and_replay(runtime) -> None:
+async def test_exact_user_dm_prepare_is_directly_approved_commit_and_replay(runtime) -> None:
     service, adapter, _store = runtime
     resolved = await service.resolve(validate_read_request({
         "platform": "telegram", "operation": "resolve_target",
@@ -255,12 +256,11 @@ async def test_exact_user_dm_prepare_external_approve_commit_and_replay(runtime)
     prepared = await service.prepare(intent, context())
     replay = await service.prepare(intent, context())
     assert replay["preparation_ref"] == prepared["preparation_ref"]
-    approval = service.approve_preparation(
-        preparation_ref=prepared["preparation_ref"],
-        operator_principal="operator@example.test", operator_nonce="nonce-unique-123456789",
-    )
+    assert prepared["status"] == "approved"
+    assert replay["status"] == "approved"
+    assert "approval_url" not in prepared
     result = await service.commit({
-        "preparation_ref": prepared["preparation_ref"], **approval,
+        "preparation_ref": prepared["preparation_ref"],
         "action_digest": prepared["action_digest"],
     }, context())
     assert result["status"] == "succeeded"
@@ -269,9 +269,72 @@ async def test_exact_user_dm_prepare_external_approve_commit_and_replay(runtime)
     assert "raw_method" not in result and "access_token" not in result
     assert adapter.executions == 1
     with pytest.raises(SocialWorkspaceRuntimeError):
-        await service.commit({"preparation_ref": prepared["preparation_ref"], **approval,
+        await service.commit({"preparation_ref": prepared["preparation_ref"],
                               "action_digest": prepared["action_digest"]}, context())
     assert adapter.executions == 1
+
+
+@pytest.mark.asyncio
+async def test_destructive_edit_still_requires_external_approval(runtime) -> None:
+    service, adapter, _store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    item = service._mint_ref("item", "native-message-42", "telegram", principal)
+    intent = validate_prepare_request({
+        "platform": "telegram", "action": "edit",
+        "idempotency_key": "edit-external-approval-123", "item_ref": item,
+        "content": {"text": "Corrected", "entities": [], "media": []},
+    })
+    prepared = await service.prepare(intent, context())
+    assert prepared["status"] == "awaiting_human_approval"
+    with pytest.raises(SocialWorkspaceRuntimeError, match="approval"):
+        await service.commit({
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        }, context())
+    assert adapter.executions == 0
+
+
+@pytest.mark.asyncio
+async def test_existing_awaiting_outbound_preparation_is_not_auto_upgraded(
+    runtime,
+) -> None:
+    service, adapter, _store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-old-user", "telegram", principal)
+    payload = {
+        "platform": "telegram",
+        "action": "send_message",
+        "idempotency_key": "old-awaiting-send-123",
+        "target_ref": target,
+        "content": {"text": "Old request", "entities": [], "media": []},
+    }
+    intent = validate_prepare_request(payload)
+    digest = compute_action_digest(intent)
+    prep = "prep_" + "o" * 24
+    now = service._now()
+    client, subject, resource = service._binding(principal)
+    with service.store._lock, service.store._connect() as conn:
+        conn.execute(
+            """INSERT INTO social_workspace_preparation(preparation_hash,preparation_ref,
+               client_hash,subject_hash,resource_hash,platform,action,target_ref_hash,
+               action_digest,idempotency_hash,intent_ciphertext,status,expires_at,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                service._hash(prep), prep, client, subject, resource, "telegram",
+                "send_message", service._hash(target), digest,
+                service._hash(intent.idempotency_key),
+                service._encrypt(json.dumps(payload, sort_keys=True)),
+                "awaiting_human_approval", now + 600, now,
+            ),
+        )
+    replay = await service.prepare(intent, context())
+    assert replay["preparation_ref"] == prep
+    assert replay["status"] == "awaiting_human_approval"
+    with pytest.raises(SocialWorkspaceRuntimeError, match="approval"):
+        await service.commit(
+            {"preparation_ref": prep, "action_digest": digest}, context()
+        )
+    assert adapter.executions == 0
 
 
 @pytest.mark.asyncio

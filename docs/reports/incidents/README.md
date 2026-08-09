@@ -27,7 +27,10 @@
     asset staging and Telegram Saved Messages image publication.
   - Must not regress: the runtime file object produces a ready opaque `ast_*`
     for the same OAuth principal, while string/path/file-id-only and foreign
-    principal inputs fail before provider I/O with safe diagnostic codes.
+    principal inputs fail before provider I/O with safe diagnostic codes. A
+    fresh explicit outbound request prepares as `approved` without a second
+    browser prompt; stopped/old awaiting preparations remain inert and
+    edit/delete retain external approval.
 
 - `INC-2026-08-09-private-mcp-vk-story-cdn-rejected.md`
   - Scope: Private Events MCP VK story list/media-ref projection and the

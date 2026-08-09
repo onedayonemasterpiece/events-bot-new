@@ -3,8 +3,8 @@
 
 The default path lists the granted catalogue only. Provider reads require
 explicit opaque refs. Story preparation/commit additionally require
-``--allow-write`` and use an owner-only receipt file so the private approval URL
-and exact preparation values are never printed.
+``--allow-write`` and use an owner-only receipt file so exact preparation
+values are never printed.
 """
 
 from __future__ import annotations
@@ -330,15 +330,16 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                     "content": {"media": [{"asset_ref": args.asset_ref, "role": "image"}]},
                 },
             )
-            required = ("preparation_ref", "action_digest", "approval_url", "expires_at")
+            required = ("preparation_ref", "action_digest", "expires_at")
             if any(not isinstance(prepared.get(key), str) or not prepared[key] for key in required):
                 raise SmokeError("story_preparation_invalid")
+            if prepared.get("status") != "approved" or "approval_url" in prepared:
+                raise SmokeError("story_preparation_not_directly_authorized")
             private_receipt = {
                 "schema": 1,
                 "platform": args.platform,
                 "preparation_ref": prepared["preparation_ref"],
                 "action_digest": prepared["action_digest"],
-                "approval_url": prepared["approval_url"],
                 "expires_at": prepared["expires_at"],
             }
             _write_private_receipt(args.receipt_file, private_receipt)
@@ -347,7 +348,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 "action_digest_fingerprint": _fingerprint(prepared["action_digest"]),
                 "secure_receipt_written": True,
                 "provider_attempted": False,
-                "next_step": "inspect_and_approve_exact_browser_page_before_commit",
+                "next_step": "commit_exact_user_requested_preparation",
             }
 
         if args.commit_story:

@@ -28,10 +28,10 @@ SOCIAL_MUTATION_SCOPES = frozenset(
         "story:write",
     }
 )
-# Only the new granular workspace mutations are protected by the external
-# operator-approval flow.  The two coarse legacy publish scopes intentionally
-# retain their older one-use prepare/commit semantics until the legacy tools are
-# retired; they must never be described as externally approved.
+# Granular scopes describe mutation authority.  Outbound actions explicitly
+# requested through the typed ChatGPT tool use one-use prepare/commit without a
+# second prompt; edit/delete retain external operator approval.  Coarse legacy
+# scopes stay inside the same provider/read-write family.
 APPROVAL_REQUIRED_SOCIAL_SCOPES = SOCIAL_MUTATION_SCOPES
 LEGACY_PUBLISH_SCOPES = frozenset({"telegram:publish", "vk:publish"})
 

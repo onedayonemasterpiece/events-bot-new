@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import html
-import json
 import logging
 import re
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from aiohttp import web
@@ -377,14 +376,15 @@ class PrivateOAuthServer:
             warnings: list[str] = []
             if social & APPROVAL_REQUIRED_SOCIAL_SCOPES:
                 warnings.append(
-                    "Новые granular mutation-scopes выполняются только после отдельного "
-                    "внешнего подтверждения оператора и prepare/commit шага."
+                    "Исходящие действия по явному поручению пользователя выполняются через "
+                    "одноразовые prepare/commit без второго подтверждения; edit/delete требуют "
+                    "отдельного внешнего подтверждения оператора."
                 )
             if social & LEGACY_PUBLISH_SCOPES:
                 warnings.append(
                     "Стабильные publish-scopes сохраняют старые allowlist-инструменты "
-                    "с одноразовым prepare/commit ticket; новые типизированные действия "
-                    "дополнительно требуют внешнего подтверждения оператора."
+                    "с одноразовым prepare/commit ticket; новые типизированные исходящие "
+                    "действия не требуют второго подтверждения, а edit/delete требуют."
                 )
             if warnings:
                 social_warning = (
