@@ -24,6 +24,22 @@ function specimen(value) {
 
 export const CONTROLLED_SPECIMENS = Object.freeze([
   specimen({
+    id: 'event-hero-photo-cover-real-event', capsule_ids: ['01-event-presentation-states', '03-media-heavy'], renderer: 'event-hero',
+    source_paths: ['src/components/EventHero.astro'], consumer_paths: ['src/pages/sobytiya/[slug].astro'],
+    fixture_ref: { catalog: 'preview-events', event_id: 5336 }, fixture_delta: {}, props: {}, root_selector: '[data-event-hero]',
+    part_selectors: ['[data-hero-media]', '[data-hero-gallery-open]', '[data-event-hero-cta]'], actions: [],
+    expected_markers: ['[data-event-hero]', '[data-hero-mode="photo-cover"]', '[data-hero-composition="photo-cinematic-sheet"]'],
+    viewport: { width: 720, height: 1100 }, container: { width: 688, height: 'auto' },
+  }),
+  specimen({
+    id: 'event-media-rail-overflow-real-event', capsule_ids: ['03-media-heavy'], renderer: 'event-media-rail',
+    source_paths: ['src/components/EventMediaRail.astro'], consumer_paths: ['src/components/DesktopEventPage.astro'],
+    fixture_ref: { catalog: 'preview-events', event_id: 2781 }, fixture_delta: {}, props: { maxVisible: 3 }, root_selector: '[data-event-media-rail]',
+    part_selectors: ['.event-media-rail__item', '.event-media-rail__more', '[data-hero-gallery-open]'], actions: [],
+    expected_markers: ['[data-event-media-rail]', '.event-media-rail__item', '.event-media-rail__more'],
+    viewport: { width: 1024, height: 900 }, container: { width: 720, height: 'auto' },
+  }),
+  specimen({
     id: 'button-primary-default', capsule_ids: ['02-button-cta'], renderer: 'button',
     source_paths: ['src/components/design-system/Button.astro'], consumer_paths: [], fixture_ref: null, fixture_delta: {},
     props: { variant: 'primary', size: 'default', state: 'default' }, root_selector: '[data-specimen-root] .ke-button',

@@ -44,6 +44,17 @@ explicit unresolved observation (`NOT_MERGED`).
 
 ## Event-presentation follow-up — Actions 31278123911
 
+> **Superseded evidence-label erratum (2026-08-09).** The legacy table below
+> labelled four intended selectors by event IDs `7186`, `7052`, `7301` and
+> `7048`. The exhaustive v1 manifest reconciliation later proved that those
+> four IDs were absent from the exact pinned candidate and records them as
+> `explicit-unreachable`. Their rows must not be cited as captures of those
+> exact events. The corresponding presentation formats were visually verified
+> on other hash-bound candidate routes in Decoder v1; see
+> `../current-ui-decoder-v1/INTEGRATION_REPORT.md`. Event `6996` remains an
+> exact captured no-image state. This erratum preserves the historical review
+> log while removing the contradictory identity claim.
+
 The expanded accepted artifact contains 46 captures. All 23 desktop and all 23
 mobile images were reviewed through labelled contact sheets. The five newly
 reserved Event Detail pairs were also opened at original size:

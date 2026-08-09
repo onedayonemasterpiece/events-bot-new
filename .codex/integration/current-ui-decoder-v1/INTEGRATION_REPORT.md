@@ -1,10 +1,18 @@
 # Current UI Decoder v1 — final integration report
 
-## Verdict
+## Superseded verdict — corrective capture pending
 
-`GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION`
+`NO_GO_PENDING_CORRECTIVE_CAPTURE`
 
-This is an evidence-readiness verdict only. It does not approve component
+The earlier reviewed handoff below is retained as historical provenance, but
+its `GO` is superseded. A final audit found that capsule-local specimen/page
+reference shards were empty because compact and prefixed capsule IDs were
+compared literally. The corrected decoder also adds isolated real-component
+evidence for the Event Presentation and Media Heavy capsules. Do not use the
+old compact snapshot as the defragmentation input; a replacement immutable
+capture, full visual review and design-repository import are required.
+
+The eventual evidence-readiness verdict remains narrow. It will not approve component
 equivalence, merge/split, style normalization, token creation, Penpot
 materialization, or Astro/CSS/runtime changes.
 

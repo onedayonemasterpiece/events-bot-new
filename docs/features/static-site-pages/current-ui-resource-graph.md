@@ -341,11 +341,20 @@ phase.
 
 The canonical capture run materializes a disposable Astro 6.4.8 harness from a
 reflink/copy of the exact candidate `site/src`; it never edits the pinned tree.
-The bounded registry has 19 controlled cases and 20 capture steps, plus 26
+The bounded registry has 21 controlled cases and 22 capture steps, plus 26
 exact real-route bindings across 48 rendered viewport contexts. Rail, Kaup and medallions receive real
 `PreviewEvent` fixtures and render the real component definitions. The bus
 `no-groups` branch has no valid exact-data fixture and is therefore recorded as
 `source-model-only`, not fabricated through data-module replacement.
+
+The Event Presentation and Media Heavy capsules also receive isolated evidence
+from the real `EventHero.astro` and `EventMediaRail.astro` definitions. The hero
+uses exact event `5336`; the media rail uses all ten exact assets of event
+`2781` with `maxVisible=3`, preserving three small previews plus the `+7 фото`
+overflow action. These captures do not invent a component boundary for the
+large poster companion or desktop split/editorial shells inside
+`DesktopEventPage.astro`: those remain internal conditional resources verified
+on exact real pages.
 
 The exact secret candidate is a non-production `tail` research build for the
 Amber system. Its `/artefakty/` binding therefore verifies the active collection
@@ -371,6 +380,20 @@ verification, the Actions run/artifact/digest/expiry, and permanent-storage
 URI/version/digest. Only then may it emit the narrow verdict
 `GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION`; all component/capsule decisions remain
 `NOT_MERGED`.
+For a reviewed `GO`, each capsule must contain non-empty local
+`specimen-observation-refs.jsonl` and `real-page-verification-refs.jsonl` files;
+their IDs must resolve to the global shards and must cover every evidence ID in
+the capsule review. Capsule IDs are canonicalized across the serialized
+`capsule.<id>` and `<id>` forms. Empty, dangling or prefix-mismatched local
+indexes fail closed.
+
+The review ledger and reviewed capsule overlay are authoritative for completed
+visual reconciliation. Capture-time `pending` fields can remain inside
+non-promoted candidate contracts when that individual contract still lacks a
+dedicated state or consumer specimen; they do not become accepted contracts.
+Materialized specimen/page rows themselves are rewritten to explicit reviewed
+trace statuses. A `GO` never turns a candidate contract into normative design
+system authority.
 
 JSONL is stable-sorted and written incrementally. Deterministic snapshot time,
 per-file SHA-256 receipts, per-route input limits and a total output byte budget

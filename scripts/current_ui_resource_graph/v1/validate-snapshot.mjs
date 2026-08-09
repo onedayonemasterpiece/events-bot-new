@@ -31,6 +31,22 @@ function verifyFile(root, entry, label) {
   return path;
 }
 
+export function assertReviewedCapsuleEvidence({ capsule, specimenRefs, pageRefs, observationIds, pageIds }) {
+  if (!specimenRefs.length || !pageRefs.length) throw new Error(`Reviewed capsule lacks local specimen/page evidence refs: ${capsule.id}`);
+  const localIds = new Set();
+  for (const ref of specimenRefs) {
+    if (!ref.observation_id || !observationIds.has(ref.observation_id)) throw new Error(`Dangling capsule specimen observation: ${capsule.id}`);
+    localIds.add(ref.observation_id);
+  }
+  for (const ref of pageRefs) {
+    if (!ref.verification_id || !pageIds.has(ref.verification_id)) throw new Error(`Dangling capsule page verification: ${capsule.id}`);
+    localIds.add(ref.verification_id);
+  }
+  const reviewEvidence = capsule.review?.evidence_ids || [];
+  if (!reviewEvidence.length || reviewEvidence.some((id) => !localIds.has(id))) throw new Error(`Capsule review evidence is not represented by local refs: ${capsule.id}`);
+  return true;
+}
+
 export function validateCompactSnapshot(snapshotRoot, { canonical = null } = {}) {
   const root = resolve(snapshotRoot);
   const manifestPath = join(root, 'manifest.json'); const receiptPath = join(root, 'receipt.json');
@@ -54,6 +70,10 @@ export function validateCompactSnapshot(snapshotRoot, { canonical = null } = {})
   const contracts = walk(join(root, 'candidate-contracts')).filter((path) => path.endsWith('.contract.json')).map(readJson);
   assertCandidateContracts(contracts);
   const contractById = new Map(contracts.map((item) => [item.id, item]));
+  const observations = readJsonl(join(root, 'specimen-observations.jsonl'));
+  const pageVerifications = readJsonl(join(root, 'page-verification.jsonl'));
+  const observationIds = new Set(observations.map((item) => item.id));
+  const pageIds = new Set(pageVerifications.map((item) => item.id));
   const capsuleRoots = readdirSync(join(root, 'conformance-capsules'), { withFileTypes: true }).filter((item) => item.isDirectory()).map((item) => join(root, 'conformance-capsules', item.name)).sort();
   if (capsuleRoots.length !== 6) throw new Error(`Capsule count mismatch: ${capsuleRoots.length}`);
   for (const capsuleRoot of capsuleRoots) {
@@ -64,6 +84,12 @@ export function validateCompactSnapshot(snapshotRoot, { canonical = null } = {})
       if (!contractById.has(ref.id)) throw new Error(`Dangling capsule contract: ${ref.id}`);
       verifyFile(root, ref, `capsule contract ${ref.id}`);
     }
+    if (manifest.go_no_go?.status === 'GO') assertReviewedCapsuleEvidence({
+      capsule: readJson(join(capsuleRoot, 'capsule.json')),
+      specimenRefs: readJsonl(join(capsuleRoot, 'specimen-observation-refs.jsonl')),
+      pageRefs: readJsonl(join(capsuleRoot, 'real-page-verification-refs.jsonl')),
+      observationIds, pageIds,
+    });
   }
 
   for (const name of ['specimen-plan.jsonl', 'specimen-observations.jsonl', 'page-verification.jsonl', 'mismatches.jsonl', 'unresolved.jsonl']) {
@@ -73,9 +99,6 @@ export function validateCompactSnapshot(snapshotRoot, { canonical = null } = {})
   const blocking = readJsonl(join(root, 'unresolved.jsonl')).filter((item) => item.blocks_handoff === true);
   if (manifest.go_no_go?.status === 'GO' && blocking.length) throw new Error('GO snapshot contains blocking unresolved records');
   if (manifest.go_no_go?.status === 'GO') {
-    const observations = readJsonl(join(root, 'specimen-observations.jsonl'));
-    const pageVerifications = readJsonl(join(root, 'page-verification.jsonl'));
-    const pageIds = new Set(pageVerifications.map((item) => item.id));
     if (!observations.length || !observations.every((item) => item.source_binding_id && item.screenshot_sha256 &&
       item.review_status === 'reviewed' && ['state-equivalent', 'consumer-exists-only', 'lab-source-only'].includes(item.trace_kind) &&
       (item.trace_kind === 'lab-source-only' || pageIds.has(item.page_verification_id)))) throw new Error('GO snapshot lacks reviewed bound specimen evidence');

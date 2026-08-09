@@ -1,5 +1,5 @@
 {
-  "controlled_count": 19,
+  "controlled_count": 21,
   "real_route_count": 26,
   "source_model_only_count": 1,
   "capsules": [
@@ -14,6 +14,8 @@
     "amber",
     "artifact-collection",
     "button",
+    "event-hero",
+    "event-media-rail",
     "focus-egg",
     "kaup",
     "medallions",

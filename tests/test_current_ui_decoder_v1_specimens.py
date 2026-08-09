@@ -56,7 +56,7 @@ console.log(JSON.stringify(r.controlled_specimens.map((row)=>({
 }))));
 """
     )
-    assert len(observed) == 19
+    assert len(observed) == 21
     for row in observed:
         assert row["route_kind"] == "controlled-specimen"
         assert row["claim_scope"] == "controlled-candidate-source-render-only"
@@ -88,6 +88,37 @@ console.log(JSON.stringify(selected));
     assert [row for row in observed if row["delta"]] == [next(row for row in observed if row["id"] == "rail-forecast-controlled-delta")]
 
 
+def test_event_presentation_and_media_capsules_have_real_component_specimens():
+    observed = _node(
+        _imports("buildSpecimenRegistry, loadPreviewEventCatalog, resolvePreviewEventFixture, renderSpecimenPage")
+        + f"""
+const registry=buildSpecimenRegistry(); const catalog=loadPreviewEventCatalog({json.dumps(str(REPO / 'site'))});
+const rows=registry.controlled_specimens.filter((row)=>['event-hero','event-media-rail'].includes(row.renderer)).map((row)=>{{
+  const fixture=resolvePreviewEventFixture(catalog,row.fixture_ref,row.fixture_delta);
+  return {{id:row.id,renderer:row.renderer,event_id:fixture.event.id,capsules:row.capsule_ids,source:renderSpecimenPage(row,fixture)}};
+}});
+console.log(JSON.stringify(rows));
+"""
+    )
+    assert {row["id"] for row in observed} == {
+        "event-hero-photo-cover-real-event",
+        "event-media-rail-overflow-real-event",
+    }
+    by_id = {row["id"]: row for row in observed}
+    assert by_id["event-hero-photo-cover-real-event"]["event_id"] == 5336
+    assert by_id["event-hero-photo-cover-real-event"]["capsules"] == [
+        "01-event-presentation-states",
+        "03-media-heavy",
+    ]
+    assert "EventHero.astro" in by_id["event-hero-photo-cover-real-event"]["source"]
+    assert "event={event}" in by_id["event-hero-photo-cover-real-event"]["source"]
+    assert by_id["event-media-rail-overflow-real-event"]["event_id"] == 2781
+    assert by_id["event-media-rail-overflow-real-event"]["capsules"] == ["03-media-heavy"]
+    assert "EventMediaRail.astro" in by_id["event-media-rail-overflow-real-event"]["source"]
+    assert "assets={event.image_assets || []}" in by_id["event-media-rail-overflow-real-event"]["source"]
+    assert "maxVisible={3}" in by_id["event-media-rail-overflow-real-event"]["source"]
+
+
 def test_unreachable_bus_state_is_source_model_only_and_not_materialized():
     observed = _node(
         _imports("buildSpecimenRegistry")
@@ -116,7 +147,7 @@ const med=readFileSync({json.dumps(str(harness / 'src/pages/specimens/medallions
 console.log(JSON.stringify({{receipt, sourceIsSymlink:lstatSync({json.dumps(str(harness / 'upstream'))}).isSymbolicLink(), med}}));
 """
     )
-    assert observed["receipt"]["generated_wrapper_count"] == 19
+    assert observed["receipt"]["generated_wrapper_count"] == 21
     assert observed["receipt"]["source_copy_mode"] == "exact-src-reflink-or-copy"
     assert observed["receipt"]["source_symlinked"] is False
     assert observed["receipt"]["production_source_mutated"] is False
@@ -312,7 +343,7 @@ console.log(JSON.stringify({stable:JSON.stringify(a)===JSON.stringify(b),specime
 """
     )
     assert observed["stable"] is True
-    assert observed["specimens"] == 19
+    assert observed["specimens"] == 21
     assert observed["pages"] == 48
     assert observed["allSourceRefs"] is True and observed["allRouteRefs"] is True
     assert observed["review"] == ["pending"]
