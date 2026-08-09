@@ -1,7 +1,7 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe,
   verifyAuthenticatedOwnerRuntimeProbe } from './runtime-probe.mjs';
 import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
-import { assertCanonicalCandidateEventDestination, buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
+import { appiumProtocolEventPayload, assertCanonicalCandidateEventDestination, buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
   countEventSearchPostRequests, createSanitizedNavigationResponseTracker,
   extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt,
@@ -82,7 +82,7 @@ function accumulateClosedDriverDiagnostics(logs, diagnostics, seen,
     visited.add(value);
     if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
     const method = String(value.method || '');
-    const params = value.params && typeof value.params === 'object' ? value.params : {};
+    const params = appiumProtocolEventPayload(value);
     const requestId = String(params.requestId || params.timestamp || value.timestamp || 'unidentified');
     if (method === 'Network.requestWillBeSent' || method === 'Network.responseReceived') {
       const rawUrl = method === 'Network.requestWillBeSent'

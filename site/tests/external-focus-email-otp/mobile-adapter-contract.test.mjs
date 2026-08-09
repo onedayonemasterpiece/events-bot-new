@@ -553,10 +553,14 @@ test('Appium network logs retain sanitized request identity and failure class', 
     { message: JSON.stringify({ method: 'Network.responseReceived', params: { requestId: 'otp-1',
       response: { status: 200, url: 'https://example.supabase.co/auth/v1/otp?email=secret@example.test' } } }) },
     { message: JSON.stringify({ method: 'Network.loadingFailed', params: { requestId: 'health-2', canceled: true, errorText: 'raw details' } }) },
+    { message: JSON.stringify({ method: 'Network.responseReceived', event: { requestId: 'safari-otp',
+      response: { status: 202, url: 'https://example.supabase.co/auth/v1/otp?email=hidden@example.test' } } }) },
   ];
   const events = extractDriverNetworkEvents(logs);
-  assert.deepEqual(events.at(-1), { type: 'failure', request_id: 'health-2', method: null,
+  assert.deepEqual(events.at(-2), { type: 'failure', request_id: 'health-2', method: null,
     hostname: null, path: null, status: null, failure_class: 'request_cancelled' });
+  assert.deepEqual(events.at(-1), { type: 'response', request_id: 'safari-otp', method: 'GET',
+    hostname: 'example.supabase.co', path: '/auth/v1/otp', status: 202 });
   assert.doesNotMatch(JSON.stringify(events), /secret|@|raw details/u);
 });
 

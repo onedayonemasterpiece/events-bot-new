@@ -31,6 +31,22 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 ## Timeline
 
 - 2026-08-09 merged-main browser+iOS workflow
+  [`31341835441`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31341835441)
+  again stopped before Search with `search_target_http_invalid`, despite the
+  callback-target receipt reuse; iOS completed callback and owner-RLS, and
+  browser remained `HEALTHY/PASS`. This disproved the earlier no-op navigation
+  hypothesis. Targeted review of the pinned official XCUITest driver source
+  found the actual boundary: Safari's log bucket serializes
+  `{method,event}`, while the neutral receipt/diagnostic reducers accepted only
+  Android/CDP `{method,params}`. Consequently all real iOS document responses,
+  physical Search requests and terminal byte metrics were invisible. The
+  shared OTP/Search reducer now normalizes both official envelopes and reads
+  Safari's terminal `metrics.responseBodyBytesReceived`; deterministic tests
+  use the real XCUITest shape. Attempt 1 in this run also closed the familiar
+  startup sheet failure and safely retried once; final iOS Search POST count was
+  zero. Acceptance remains `1/2` and automation remains disabled.
+
+- 2026-08-09 merged-main browser+iOS workflow
   [`31341154421`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31341154421)
   proved the explicit 15-second async owner proof: iOS completed callback,
   `getUser` and owner-RLS with zero Search POSTs. The next boundary failed as

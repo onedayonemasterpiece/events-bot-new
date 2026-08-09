@@ -284,12 +284,12 @@ test('iOS reuses the callback landing document receipt instead of navigating the
       networkReads += 1;
       if (networkReads !== 2) return [];
       return [
-        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+        { message: JSON.stringify({ method: 'Network.responseReceived', event: {
           requestId: 'callback-document', type: 'Document', response: {
             url: actionLink, status: 200, headers: { 'content-length': '4096' },
           },
         } }) },
-        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+        { message: JSON.stringify({ method: 'Network.responseReceived', event: {
           requestId: 'callback-auth', type: 'Fetch', response: {
             url: 'https://project.supabase.co/auth/v1/verify', status: 200,
             headers: { 'content-length': '1024' },
@@ -687,6 +687,42 @@ test('CDP loadingFinished supplies terminal bytes while Content-Length keeps pre
   const responses = extractSanitizedNavigationResponses(rawLogs);
   assert.deepEqual(responses.map((item) => item.encoded_bytes), [4096, 128]);
   assert.doesNotMatch(JSON.stringify(responses), /auth-terminal|auth-declared/u);
+});
+
+test('XCUITest safariNetwork event envelopes feed the shared response and POST reducers', () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const edge = 'https://project.supabase.co/functions/v1/event-search';
+  const logs = [
+    { message: JSON.stringify({ method: 'Network.responseReceived', event: {
+      requestId: 'safari-document', type: 'Document', response: {
+        status: 200, url: target, headers: { 'content-length': '2048' },
+      },
+    } }) },
+    { message: JSON.stringify({ method: 'Network.requestWillBeSent', event: {
+      requestId: 'safari-search', type: 'Fetch', timestamp: 42,
+      request: { method: 'POST', url: edge },
+    } }) },
+    { message: JSON.stringify({ method: 'Network.responseReceived', event: {
+      requestId: 'safari-auth', type: 'Fetch', response: {
+        status: 200, url: 'https://project.supabase.co/auth/v1/user', headers: {},
+      },
+    } }) },
+    { message: JSON.stringify({ method: 'Network.loadingFinished', event: {
+      requestId: 'safari-auth', metrics: { responseBodyBytesReceived: 777 },
+    } }) },
+  ];
+  assert.deepEqual(extractSanitizedNavigationResponses(logs), [
+    {
+      origin: 'https://kenigevents.ru',
+      pathname: '/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/',
+      status: 200, resource_type: 'document', encoded_bytes: 2048,
+    },
+    {
+      origin: 'https://project.supabase.co', pathname: '/auth/v1/user', status: 200,
+      resource_type: 'fetch', encoded_bytes: 777,
+    },
+  ]);
+  assert.equal(countEventSearchPostRequests(logs), 1);
 });
 
 test('CDP request start remains pending across drains until response terminal bytes arrive', () => {
