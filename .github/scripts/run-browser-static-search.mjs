@@ -20,13 +20,12 @@ function required(name) {
 }
 
 function persona(variant) {
-  if (variant === 'cached_vector') {
-    return { id: 'search-cached-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER') };
+  if (!['cached_vector', 'cold_vector', 'cold_vector_llm', 'degraded_vector_fallback'].includes(variant)) {
+    throw new Error('search_variant_invalid');
   }
-  if (variant === 'degraded_vector_fallback') {
-    return { id: 'search-degraded-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_DEGRADED_BROWSER') };
-  }
-  return { id: 'search-cold-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_COLD_BROWSER') };
+  // The broker now binds one unique account to each physical platform. The
+  // execution variant is a Search request policy, not an Auth identity.
+  return { id: 'search-cached-browser', email: required('SEARCH_E2E_PERSONA_EMAIL_CACHED_BROWSER') };
 }
 
 async function oidcToken() {
@@ -182,6 +181,7 @@ async function main() {
       publishableKey: required('PERSONALIZATION_SUPABASE_PUBLISHABLE_KEY'),
       targetUrl, allowedOrigins: ['https://kenigevents.ru'],
       personaId: selectedPersona.id, personas: { [selectedPersona.id]: { email: selectedPersona.email } },
+      platform: 'browser',
       scopeKind: 'job', scopeId: `search-${variant}`, runId: required('GITHUB_RUN_ID'),
       protectedProbe: protectedOwnerProbe,
     });

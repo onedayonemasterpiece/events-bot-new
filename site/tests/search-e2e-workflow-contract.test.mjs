@@ -170,9 +170,9 @@ test('browser fixture sends its issued session through the owner RLS probe', asy
   assert.match(source, /createRequire\(new URL\('\.\.\/\.\.\/site\/package\.json'/u);
   assert.match(source, /siteRequire\('playwright'\)/u);
   assert.doesNotMatch(source, /from 'playwright'/u);
-  for (const persona of ['search-cached-browser', 'search-cold-browser', 'search-degraded-browser']) {
-    assert.ok(source.includes(persona), persona);
-  }
+  assert.match(source, /id: 'search-cached-browser'/u);
+  assert.match(source, /platform: 'browser'/u);
+  assert.doesNotMatch(source, /id: 'search-(?:cold|degraded)-browser'/u);
   assert.match(source, /protectedOwnerProbe\(\{ fetchImpl, userId, supabaseUrl, accessToken, publishableKey \}\)/u);
   assert.match(source, /apikey: publishableKey/u);
   assert.match(source, /authorization: `Bearer \$\{accessToken\}`/u);
