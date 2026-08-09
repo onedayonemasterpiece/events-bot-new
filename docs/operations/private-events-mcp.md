@@ -413,11 +413,13 @@ PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE=/app/.static-site-repo-sha
 Image ingress/storage uses nonsecret bounded settings. The allowlist is
 mandatory when media/story is enabled and has no implicit host default because
 ChatGPT file-download hostnames are an operationally observed dependency, not a
-stable name promised by the connector contract:
+stable name promised by the connector contract. Current ChatGPT uploads can use
+a rotating Azure storage-account label, so the production policy may explicitly
+allow both the exact OpenAI host and the Azure Blob suffix:
 
 ```text
 PRIVATE_EVENTS_MCP_MEDIA_ROOT=/data/private-events-mcp-media
-PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS=<comma-separated exact hosts or explicit *.suffix entries>
+PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS=files.oaiusercontent.com,*.blob.core.windows.net
 PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES=31457280
 PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES=134217728
 PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS=3600
@@ -426,6 +428,15 @@ PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH=8192
 PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT=8192
 PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS=40000000
 ```
+
+`*.blob.core.windows.net` is handled more narrowly than an ordinary wildcard.
+The URL must have exactly one canonical Azure storage-account label, a blob
+path, and a non-expired blob-scoped SAS granting only `sp=r` (and HTTPS when
+`spr` is present). Unsigned, container-wide, write-enabled, duplicate-field or
+expired SAS URLs fail before DNS or network I/O. Every download still uses
+public-IP resolution/pinning, no redirects, no caller credentials and the
+measured image/byte/dimension limits below. The signed URL, file ID and filename
+are never persisted or logged.
 
 TTL configuration is capped at `86400`. The initial fileParams stage accepts at
 most one image per call. Telegram continues to use only
