@@ -11,6 +11,11 @@
   identifiers remain absent from responses and audit logs. Foreign-principal
   assets and raw path/`file_*` strings still fail before provider I/O.
 
+- Fixed the behavioral decoder Actions harness to exclude the exact-source
+  `node_modules` directory from its disposable reflink/copy before attaching
+  the single pinned dependency symlink, avoiding an `EEXIST` capture failure
+  without changing the source tree or dependency versions.
+
 - Accepted VK's production video-story CDN under the same strict HTTPS,
   public-DNS, no-redirect media boundary, so a valid story returned from
   `stories.get` is no longer rejected before its opaque media ref is minted.

@@ -1,4 +1,4 @@
-import { constants, cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { constants, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, join, parse, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { PINNED_SOURCE_SHA, buildBehaviorPacketRegistry } from './registry.mjs';
@@ -11,6 +11,13 @@ function assertDisposable(root){
 function reflinkCopy(source,target){
   const result=spawnSync('cp',['-a','--reflink=auto',source,target],{encoding:'utf8'});
   if(result.status!==0) cpSync(source,target,{recursive:true,mode:constants.COPYFILE_FICLONE});
+}
+export function copySiteWithoutNodeModules(source,target){
+  mkdirSync(target,{recursive:true});
+  for(const entry of readdirSync(source,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){
+    if(entry.name==='node_modules')continue;
+    reflinkCopy(join(source,entry.name),join(target,entry.name));
+  }
 }
 function cleanEnvironment(extra={}){
   return {
@@ -65,7 +72,7 @@ export function materializeBehaviorHarness({candidateRepo,harnessRoot,nodeModule
   if(!existsSync(join(source,'site/src/data/preview-events.json'))) throw new Error('Exact candidate repository missing');
   const head=spawnSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'}).stdout.trim();if(head!==PINNED_SOURCE_SHA)throw new Error('Behavior harness source SHA mismatch');
   const clean=spawnSync('git',['status','--porcelain'],{cwd:source,encoding:'utf8'}).stdout.trim();if(clean)throw new Error('Exact candidate worktree is dirty');
-  rmSync(root,{recursive:true,force:true});mkdirSync(root,{recursive:true});reflinkCopy(join(source,'site'),site);
+  rmSync(root,{recursive:true,force:true});mkdirSync(root,{recursive:true});copySiteWithoutNodeModules(join(source,'site'),site);
   symlinkSync(join(source,'docs'),join(root,'docs'),'dir');
   const modules=resolve(nodeModules);if(!existsSync(join(modules,'astro/bin/astro.mjs'))||!existsSync(join(modules,'playwright/index.mjs')))throw new Error('Pinned-compatible Astro/Playwright node_modules missing');
   symlinkSync(modules,join(site,'node_modules'),'dir');mkdirSync(join(site,'src/pages/behavior-specimens'),{recursive:true});
