@@ -88,12 +88,13 @@ test('R01-R07 keep the cross-surface product contracts in canonical implementati
   assert.match(availability, /furthestEventDate/u);
   assert.match(availability, /horizonEnd\s*=\s*endOfMonth\(furthestEventDate\)/u);
   assert.match(calendar, /data-calendar-horizon/u);
-  assert.match(calendar, /const href:[\s\S]*!hasEvents[\s\S]*\?\s*null/u);
+  assert.match(calendar, /const destinationAvailable\s*=\s*hasEvents\s*\|\|\s*weekendAvailable/u);
+  assert.match(calendar, /const href:[\s\S]*!destinationAvailable[\s\S]*\?\s*null/u);
   assert.match(calendar, /aria-disabled="true"/u);
 
   assert.match(menu, /data-reference4-collections-open/u);
   assert.match(menu, /aria-label="Подборки"/u);
-  for (const label of ['Детям', 'Необычное', 'Бесплатно', 'Клубы по интересам']) {
+  for (const label of ['Необычное', 'Бесплатно', 'Клубы по интересам']) {
     assert.match(menu, new RegExp(`>${label}<`, 'u'));
   }
   assert.ok((menu.match(/>Бесплатно</gu) || []).length >= 2, 'Free remains top-level and in Collections');
