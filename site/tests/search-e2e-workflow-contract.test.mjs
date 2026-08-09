@@ -9,6 +9,7 @@ const productionHealthWorkflowUrl = new URL('../../.github/workflows/search-prod
 const releaseQualificationWorkflowUrl = new URL('../../.github/workflows/search-release-qualification.yml', import.meta.url);
 const ciWorkflowUrl = new URL('../../.github/workflows/ci.yaml', import.meta.url);
 const registryUrl = new URL('../../docs/testing/static-site-autotest-scenarios.v1.yml', import.meta.url);
+const e2eIndexUrl = new URL('../../docs/operations/e2e-scenarios.md', import.meta.url);
 const productionBuildUrl = new URL('../scripts/build-production.mjs', import.meta.url);
 const candidateBuildUrl = new URL('../scripts/build-secret-candidate.mjs', import.meta.url);
 const exporterUrl = new URL('../scripts/export-production-preview-data.py', import.meta.url);
@@ -135,6 +136,16 @@ test('all Stage-1 Search and default CI workflow YAML parses', async () => {
     const source = await readFile(url, 'utf8');
     assert.doesNotThrow(() => YAML.parse(source), url.pathname);
   }
+});
+
+test('E2E index preserves current MCP contract and labels old Search journey manual-only', async () => {
+  const source = await readFile(e2eIndexUrl, 'utf8');
+  assert.equal(source.split('\n').filter((line) => line.includes('scripts/smoke_private_events_mcp.py')).length, 1);
+  assert.match(source, /prepare\(approved\) -> commit/u);
+  assert.doesNotMatch(source, /prepare -> browser approval -> commit/u);
+  assert.match(source, /Manual legacy authenticated semantic Search harness/u);
+  assert.match(source, /former cached 30-minute[\s\S]*triggers are disabled/u);
+  assert.doesNotMatch(source, /scheduled\/post-deploy `release_exact` still requires/u);
 });
 
 test('registry freezes exact Search variants and platform-scoped personas', async () => {
