@@ -376,6 +376,7 @@ test('cold resilient route selection meters its physical functions probe without
   try {
     globalThis.fetch = async (input) => {
       const url = new URL(String(input));
+      if (url.pathname === '/auth/v1/health') throw new Error('expected_losing_probe_abort');
       if (url.pathname === '/functions/v1/transport-probe') {
         return new Response(null, { status: 204, headers: { 'content-length': '128' } });
       }
@@ -399,6 +400,7 @@ test('cold resilient route selection meters its physical functions probe without
     installSearchRuntimeProbe({ production_health: true });
     const transport = {
       async request(input, init) {
+        try { await this.rawFetch('https://project.supabase.co/auth/v1/health'); } catch { /* losing probe */ }
         await this.rawFetch('https://project.supabase.co/functions/v1/transport-probe', { method: 'HEAD' });
         await this.rawFetch('https://project.supabase.co/rest/v1/safe_read');
         await this.rawFetch('https://relay.example/rest/v1/safe_read');
@@ -1421,6 +1423,8 @@ test('Playwright diagnostics ignore failed decorative subresources but retain do
     for (const listener of listeners.get('requestfailed') || []) listener(request);
   };
   fail('https://images.example.invalid/card.webp', 'image');
+  fail('https://project.supabase.co/functions/v1/transport-probe', 'fetch');
+  fail('https://project.supabase.co/rest/v1/rpc/transport_probe_v1', 'fetch');
   assert.equal((await adapter.healthDiagnostics()).failed_requests, 0);
   fail('https://project.supabase.co/functions/v1/event-search', 'fetch');
   fail('https://kenigevents.ru/_review/token/poisk/', 'document');

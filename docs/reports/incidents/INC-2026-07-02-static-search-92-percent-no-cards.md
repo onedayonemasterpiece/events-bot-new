@@ -30,6 +30,24 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 diagnostic run `31334260547` closed the repeated Android boundary
+  as `UNKNOWN_ANDROID_INFRA/mobile_auth_terminal_bytes_timeout_mixed_request_only`:
+  the emulator/Appium/WebView preflight and product authorization completed,
+  zero Search POSTs were made, but ChromeDriver's performance bucket exposed
+  only Auth request starts and never response/terminal events. This disproved
+  both the prior `loadingFinished`-only and cancellation hypotheses. Android
+  now installs a pre-document, allowlisted Auth fetch byte observer through the
+  exact Chromium CDP command; it keeps only closed counters and total bytes and
+  is removed after callback. The same run's browser Search returned HTTP 200
+  with five IDs equal to five cards and zero LLM/pagination, but was stopped by
+  one failed Edge-class and one failed RPC-class diagnostic before scroll. The
+  only expected aborts now excluded are the resilient transport's three exact
+  disposable capability-probe paths; final operations remain strict. Because
+  the prior closed evidence intentionally omitted the paths, whether those two
+  failures were expected probe races must be verified by the next live run.
+  This run is diagnostic evidence, not mobile acceptance; a new exact
+  merged-SHA browser+Android run is required.
+
 - 2026-08-09 run `31333753972` again produced a complete browser
   `HEALTHY/PASS`, but Android reproduced
   `mobile_auth_terminal_bytes_timeout` before Search. Handling

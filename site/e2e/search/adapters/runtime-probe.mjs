@@ -213,6 +213,11 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
       return { limit: 0, offset: 0, use_llm_verifier: true, allow_llm_fallback: true, execution_mode_present: true };
     }
   };
+  const isDisposableTransportProbe = (url) => Boolean(url && (
+    url.pathname === '/functions/v1/transport-probe'
+    || url.pathname === '/rest/v1/rpc/transport_probe_v1'
+    || url.pathname === '/auth/v1/health'
+  ));
   const wrap = (owner, property, label, transport = false) => {
     const original = owner?.[property];
     if (typeof original !== 'function' || original.__keSearchHarnessWrapped) return false;
@@ -285,7 +290,11 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
         scheduleMeasure(url, response);
         return response;
       } catch (error) {
-        state.network.failed_requests += 1;
+        // Resilient route selection races direct and relay capability probes;
+        // aborting the losing disposable probe is expected control flow, not
+        // a Search product-network failure. Final product operations remain
+        // fail-closed below and in adapter diagnostics.
+        if (!isDisposableTransportProbe(url)) state.network.failed_requests += 1;
         if (error && typeof error === 'object') state.physically_observed_failures.add(error);
         throw error;
       }

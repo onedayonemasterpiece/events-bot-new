@@ -120,12 +120,89 @@ export function installAppiumClassicLogCommands(driver) {
   if (!driver || typeof driver.addCommand !== 'function') {
     throw new TypeError('mobile_classic_log_adapter_missing');
   }
-  if (typeof driver.getLogs === 'function') return driver;
-  driver.addCommand('getLogs', webdriverCommand('POST', '/session/:sessionId/log', {
-    command: 'getLogs',
-    parameters: [{ name: 'type', type: 'string', required: true }],
-  }));
+  if (typeof driver.getLogs !== 'function') {
+    driver.addCommand('getLogs', webdriverCommand('POST', '/session/:sessionId/log', {
+      command: 'getLogs',
+      parameters: [{ name: 'type', type: 'string', required: true }],
+    }));
+  }
+  if (typeof driver.sendCommandAndGetResult !== 'function') {
+    driver.addCommand('sendCommandAndGetResult', webdriverCommand(
+      'POST', '/session/:sessionId/chromium/send_command_and_get_result', {
+        command: 'sendCommandAndGetResult',
+        parameters: [
+          { name: 'cmd', type: 'string', required: true },
+          { name: 'params', type: 'object', required: true },
+        ],
+      },
+    ));
+  }
   return driver;
+}
+
+/** Runs before product scripts in Android Chrome; retains closed byte counts only. */
+export function installAndroidAuthByteProbe(config = {}) {
+  const KEY = '__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__';
+  if (globalThis[KEY]?.schema_version === 'android_auth_bytes_v1') return;
+  const origins = new Set(Array.isArray(config.allowed_origins) ? config.allowed_origins : []);
+  const state = {
+    schema_version: 'android_auth_bytes_v1', request_count: 0, closed_count: 0,
+    pending_count: 0, failed_count: 0, total_bytes: 0,
+  };
+  const nativeFetch = globalThis.fetch.bind(globalThis);
+  const trackedUrl = (input) => {
+    try {
+      const raw = typeof input === 'string' || input instanceof URL ? input : input?.url;
+      const url = new URL(String(raw), globalThis.location?.href);
+      return origins.has(url.origin)
+        && (url.pathname === '/auth/v1' || url.pathname.startsWith('/auth/v1/'));
+    } catch { return false; }
+  };
+  const responseBytes = async (response) => {
+    const rawDeclared = response?.headers?.get?.('content-length');
+    const declared = Number(rawDeclared);
+    if (rawDeclared != null && String(rawDeclared).trim() !== ''
+      && Number.isSafeInteger(declared) && declared >= 0) return declared;
+    return (await response.clone().arrayBuffer()).byteLength;
+  };
+  globalThis.fetch = async (...args) => {
+    const tracked = trackedUrl(args[0]);
+    if (tracked) {
+      state.request_count += 1;
+      state.pending_count += 1;
+    }
+    try {
+      const response = await nativeFetch(...args);
+      if (tracked) {
+        void responseBytes(response).then((bytes) => {
+          state.total_bytes += Number(bytes || 0);
+          state.closed_count += 1;
+        }).catch(() => { state.failed_count += 1; })
+          .finally(() => { state.pending_count = Math.max(0, state.pending_count - 1); });
+      }
+      return response;
+    } catch (error) {
+      if (tracked) {
+        state.failed_count += 1;
+        state.pending_count = Math.max(0, state.pending_count - 1);
+      }
+      throw error;
+    }
+  };
+  Object.defineProperty(globalThis, KEY, { value: state, configurable: false });
+}
+
+export function snapshotAndroidAuthByteProbe() {
+  const state = globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__;
+  if (state?.schema_version !== 'android_auth_bytes_v1') return null;
+  return {
+    schema_version: state.schema_version,
+    request_count: Number(state.request_count || 0),
+    closed_count: Number(state.closed_count || 0),
+    pending_count: Number(state.pending_count || 0),
+    failed_count: Number(state.failed_count || 0),
+    total_bytes: Number(state.total_bytes || 0),
+  };
 }
 
 export async function createAppiumSearchAdapter(options = {}) {
@@ -304,6 +381,17 @@ export async function createAppiumSearchAdapter(options = {}) {
       const initialLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_auth_network_log_unavailable');
       observePostBoundarySearch(initialLogs);
+      let androidAuthScriptIdentifier = '';
+      if (platform === 'android' && typeof driver.sendCommandAndGetResult === 'function') {
+        const allowedOrigins = [...new Set((options.supabaseOrigins || [])
+          .map((value) => new URL(value).origin))];
+        const installed = await driver.sendCommandAndGetResult(
+          'Page.addScriptToEvaluateOnNewDocument', {
+            source: `(${installAndroidAuthByteProbe.toString()})(${JSON.stringify({ allowed_origins: allowedOrigins })})`,
+          },
+        );
+        androidAuthScriptIdentifier = String(installed?.identifier || '');
+      }
       await driver.url(actionLink);
       await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(returnTarget).origin,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_timeout' });
@@ -315,6 +403,29 @@ export async function createAppiumSearchAdapter(options = {}) {
       observePostBoundarySearch(callbackLogs);
       const callbackTracker = createSanitizedNavigationResponseTracker();
       callbackTracker.consume(callbackLogs);
+      let androidAuthBytes = null;
+      if (platform === 'android' && androidAuthScriptIdentifier) {
+        try {
+          await driver.waitUntil(async () => {
+            const snapshot = await driver.execute(snapshotAndroidAuthByteProbe);
+            if (!snapshot || snapshot.failed_count > 0) {
+              throw new Error('mobile_auth_page_meter_failed');
+            }
+            if (snapshot.request_count < 1 || snapshot.pending_count > 0
+              || snapshot.closed_count !== snapshot.request_count) return false;
+            androidAuthBytes = snapshot.total_bytes;
+            return true;
+          }, { timeout: timeoutMs, interval: 50,
+            timeoutMsg: 'mobile_auth_page_meter_timeout' });
+        } finally {
+          await driver.sendCommandAndGetResult(
+            'Page.removeScriptToEvaluateOnNewDocument',
+            { identifier: androidAuthScriptIdentifier },
+          ).catch(() => undefined);
+        }
+        callbackTracker.closePendingFromExternalMeasurement({ pathPrefix: '/auth/v1' });
+        wholeCellResponseTracker.closePendingFromExternalMeasurement({ pathPrefix: '/auth/v1' });
+      }
       // The issued callback can be a same-origin token_hash bridge while the
       // actual verify request is sent to Supabase. Correlate the closed Auth
       // category, never the callback link's unrelated origin.
@@ -337,9 +448,11 @@ export async function createAppiumSearchAdapter(options = {}) {
           throw new Error(`mobile_auth_terminal_bytes_timeout_${pathClass}_${state}`);
         }
       }
-      callbackAuthObservedBytes += callbackTracker.responses()
-        .filter((item) => item.pathname === '/auth/v1' || item.pathname.startsWith('/auth/v1/'))
-        .reduce((sum, item) => sum + Number(item.encoded_bytes || 0), 0);
+      callbackAuthObservedBytes += androidAuthBytes == null
+        ? callbackTracker.responses()
+          .filter((item) => item.pathname === '/auth/v1' || item.pathname.startsWith('/auth/v1/'))
+          .reduce((sum, item) => sum + Number(item.encoded_bytes || 0), 0)
+        : Number(androidAuthBytes || 0);
       lifecycle.auth_callback_authorized = true;
       lifecycle.failure_stage = 'search_surface';
     },

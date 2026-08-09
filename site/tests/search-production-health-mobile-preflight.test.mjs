@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import vm from 'node:vm';
 
 import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
   countEventSearchPostRequests, createSanitizedNavigationResponseTracker,
@@ -7,6 +8,7 @@ import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
 import { buildMobilePreflightFailureReceipt, isSafeMobilePreflightRetryReceipt,
   runAppiumTransportPreflight } from '../e2e/mobile-web/appium-preflight.mjs';
 import { createAppiumSearchAdapter,
+  installAndroidAuthByteProbe,
   installAppiumClassicLogCommands } from '../e2e/search/adapters/appium-base.mjs';
 import { buildAppiumCapabilities } from '../e2e/mobile-web/appium-browser.mjs';
 
@@ -85,9 +87,48 @@ test('standalone WebdriverIO 9 Appium session receives the exact Classic getLogs
   assert.equal(driver.getLogs, undefined);
   assert.equal(installAppiumClassicLogCommands(driver), driver);
   assert.equal(typeof driver.getLogs, 'function');
+  assert.equal(typeof driver.sendCommandAndGetResult, 'function');
   const installed = driver.getLogs;
+  const installedCdp = driver.sendCommandAndGetResult;
   installAppiumClassicLogCommands(driver);
   assert.equal(driver.getLogs, installed);
+  assert.equal(driver.sendCommandAndGetResult, installedCdp);
+});
+
+test('pre-document Android Auth observer measures received body or declared bytes and exports counters only', async () => {
+  const responses = [
+    new Response('received-body'),
+    new Response('', { headers: { 'content-length': '2048' } }),
+    new Response('excluded'),
+  ];
+  const context = vm.createContext({
+    URL, Request, Response,
+    location: { href: 'https://kenigevents.ru/poisk/' },
+    fetch: async () => responses.shift(),
+  });
+  vm.runInContext(
+    `(${installAndroidAuthByteProbe.toString()})(${JSON.stringify({
+      allowed_origins: ['https://project.supabase.co'],
+    })})`, context,
+  );
+  await vm.runInContext("fetch('https://project.supabase.co/auth/v1/verify')", context);
+  await vm.runInContext("fetch('https://project.supabase.co/auth/v1/user')", context);
+  await vm.runInContext("fetch('https://project.supabase.co/rest/v1/ignored')", context);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const pending = vm.runInContext(
+      'globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__.pending_count', context,
+    );
+    if (pending === 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+  const snapshot = JSON.parse(vm.runInContext(
+    'JSON.stringify(globalThis.__KENIGEVENTS_ANDROID_AUTH_BYTES_V1__)', context,
+  ));
+  assert.deepEqual(snapshot, {
+    schema_version: 'android_auth_bytes_v1', request_count: 2, closed_count: 2,
+    pending_count: 0, failed_count: 0, total_bytes: 2061,
+  });
+  assert.doesNotMatch(JSON.stringify(snapshot), /project|verify|user|received-body|token/u);
 });
 
 test('Appium health diagnostics expose only cumulative closed runtime and driver counts', async () => {
@@ -744,6 +785,59 @@ test('mobile Auth callback rejects responseReceived partial bytes without termin
     () => adapter.bootstrapSession('https://project.supabase.co/auth/v1/verify?token=secret', target),
     /mobile_auth_terminal_bytes_timeout_verify_response_seen/u,
   );
+});
+
+test('Android Auth callback uses a pre-document byte probe when performance logs contain request starts only', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const commands = [];
+  let logs = 0;
+  const driver = {
+    capabilities: {},
+    async getLogs() {
+      logs += 1;
+      if (logs !== 2) return [];
+      return ['verify', 'user'].map((kind) => ({ message: JSON.stringify({
+        method: 'Network.requestWillBeSent', params: {
+          requestId: `auth-${kind}`, type: 'Fetch', request: { method: 'GET',
+            url: `https://project.supabase.co/auth/v1/${kind}?secret=no` },
+        },
+      }) }));
+    },
+    async sendCommandAndGetResult(command, params) {
+      commands.push([command, params]);
+      return command === 'Page.addScriptToEvaluateOnNewDocument' ? { identifier: 'script-1' } : {};
+    },
+    async url() {}, async getUrl() { return target; },
+    async waitUntil(predicate, options = {}) {
+      if (!await predicate()) throw new Error(options.timeoutMsg || 'wait_failed');
+    },
+    async execute(fn) {
+      if (fn?.name === 'snapshotAndroidAuthByteProbe') return {
+        schema_version: 'android_auth_bytes_v1', request_count: 2, closed_count: 2,
+        pending_count: 0, failed_count: 0, total_bytes: 3072,
+      };
+      if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
+        get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+        product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+        real_mail_fallback: 'forbidden',
+      };
+      if (fn?.name === 'snapshotSearchRuntimeProbe') return {
+        meter: { total_bytes: 100, target_bytes: 48 * 1024, hard_limit_bytes: 96 * 1024,
+          categories: { auth: 100, edge: 0, direct_rest: 0, direct_rpc: 0 } },
+      };
+      return true;
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver,
+    supabaseOrigins: ['https://project.supabase.co'] });
+  await adapter.bootstrapSession(`${target}?token_hash=bridge-secret&type=magiclink`, target);
+  const verified = await adapter.verifyAuthenticatedOwner();
+  assert.equal(verified.meter.categories.auth, 3172);
+  assert.deepEqual(commands.map(([name]) => name), [
+    'Page.addScriptToEvaluateOnNewDocument', 'Page.removeScriptToEvaluateOnNewDocument',
+  ]);
+  assert.match(commands[0][1].source, /android_auth_bytes_v1/u);
+  assert.doesNotMatch(JSON.stringify(verified), /project|verify|token|secret/u);
 });
 
 test('mobile Auth callback waits across log drains for terminal bytes before owner proof', async () => {
