@@ -76,3 +76,32 @@ async def test_search_fetch_flow(protocol, config) -> None:
         identity(config),
     )
     assert "Лекция об архитектуре" in fetched["result"]["structuredContent"]["text"]
+
+
+@pytest.mark.asyncio
+async def test_evidence_extensions_preserve_exact_seven_tool_contract(protocol) -> None:
+    listed = await protocol.dispatch(
+        {"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, None
+    )
+    tools = listed["result"]["tools"]
+    assert [item["name"] for item in tools] == [
+        "search",
+        "fetch",
+        "events_search",
+        "event_get",
+        "incidents_search",
+        "incident_get",
+        "operations_snapshot",
+    ]
+    by_name = {item["name"]: item for item in tools}
+    assert "post_url" in by_name["events_search"]["inputSchema"]["properties"]
+    assert {
+        "event_id",
+        "source_url",
+        "post_url",
+        "run_id",
+        "job_id",
+        "error_class",
+        "time_from",
+        "time_to",
+    } <= set(by_name["incidents_search"]["inputSchema"]["properties"])
