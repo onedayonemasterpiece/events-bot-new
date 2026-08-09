@@ -737,8 +737,9 @@ as LLM reserve/failover.
   Lite-first code path; the runtime behavior is controlled by live secrets for
   active/reserve key lists;
 - `HEAD /functions/v1/event-search` is the release-readiness surface: it returns
-  only `X-KenigEvents-Search-Contract` with `Cache-Control: no-store` and does
-  not enter Auth, quota, database, provider or product Search code.
+  `X-KenigEvents-Search-Revision` plus the separate compatibility header
+  `X-KenigEvents-Search-Contract`, with `Cache-Control: no-store`, and does not
+  enter Auth, quota, database, provider or product Search code.
   Production-health uses this bounded probe before issuing a no-mail session;
   authenticated POST behavior is unchanged;
 - readiness probe covers auth config, Yandex provider, userinfo adapter and Edge
@@ -858,6 +859,11 @@ of a network alert.
 
 `supabase/functions/event-search` returns and logs investigation IDs for every successful request:
 
+- `search_backend_revision` — exact deterministic `sha256:<64>` digest of the
+  deployable Edge source tree; generated output and tests are excluded from its
+  own digest and CI verifies the committed constant;
+- `search_contract_version` — compatibility contract version, independent from
+  the exact backend source revision;
 - `request_id` — per-call UUID;
 - `served_list_id` — UUID for the returned list;
 - `served_list_hash` — SHA-256 over `query_hash`, returned event ids and fallback ids;
