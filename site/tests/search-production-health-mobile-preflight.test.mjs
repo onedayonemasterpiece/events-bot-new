@@ -59,6 +59,24 @@ test('Android preflight proves real Chrome/UiAutomator2 without navigation or ne
   assert.doesNotMatch(JSON.stringify(receipt), /CHROMIUM|sessionId|deviceName/iu);
 });
 
+test('Android preflight bounded-waits for the Chrome web context on a fresh emulator', async () => {
+  const driver = preflightDriver('android');
+  let reads = 0;
+  driver.getContexts = async () => {
+    driver.events.push('getContexts');
+    reads += 1;
+    return reads < 3 ? ['NATIVE_APP'] : ['NATIVE_APP', 'CHROMIUM'];
+  };
+  const receipt = await runAppiumTransportPreflight(driver, {
+    platform: 'android', expectedCapabilities: { platformVersion: '16' },
+    contextWait: { timeoutMs: 2_000, intervalMs: 1, now: () => reads * 10,
+      sleep: async () => {} },
+  });
+  assert.equal(reads, 3);
+  assert.deepEqual(receipt.context_classes, ['native', 'webview']);
+  assert.equal(receipt.side_effect_free, true);
+});
+
 test('Appium health diagnostics expose only cumulative closed runtime and driver counts', async () => {
   const driver = preflightDriver('android');
   let networkRead = 0;

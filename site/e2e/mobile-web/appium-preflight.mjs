@@ -19,6 +19,25 @@ const normalizedContextClass = (value) => {
   return 'other';
 };
 
+async function waitForNativeAndWebContexts(driver, {
+  timeoutMs = 20_000,
+  intervalMs = 500,
+  now = () => Date.now(),
+  sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
+  const startedAt = now();
+  let contexts = [];
+  do {
+    const observed = await driver.getContexts();
+    contexts = Array.isArray(observed) ? observed : [];
+    const classes = contexts.map(normalizedContextClass);
+    if (classes.includes('native') && classes.includes('webview')) return contexts;
+    if (now() - startedAt >= timeoutMs) break;
+    await sleep(intervalMs);
+  } while (true);
+  return contexts;
+}
+
 const closedFailureClass = (error) => {
   const message = String(error?.message || error);
   if (/native_context_missing/iu.test(message)) return 'native_context_missing';
@@ -80,7 +99,7 @@ export function buildMobilePreflightFailureReceipt({ platform, error, attempt = 
  */
 export async function runAppiumTransportPreflight(driver, {
   platform, expectedCapabilities = {}, startupAttempt = 1, iosPrepare = null,
-  env = process.env,
+  env = process.env, contextWait = {},
 } = {}) {
   if (!driver || !['android', 'ios'].includes(platform)) {
     throw new TypeError('mobile_preflight_adapter_missing');
@@ -107,7 +126,11 @@ export async function runAppiumTransportPreflight(driver, {
   }
 
   const originalContext = await driver.getContext();
-  const contexts = await driver.getContexts();
+  // Chrome 115+ may expose its DevTools socket shortly after the WebDriver
+  // session itself is ready. A single getContexts() is therefore not a valid
+  // transport preflight; poll the same, still side-effect-free session for a
+  // bounded interval before classifying infrastructure unavailable.
+  const contexts = await waitForNativeAndWebContexts(driver, contextWait);
   const contextClasses = [...new Set((Array.isArray(contexts) ? contexts : [])
     .map(normalizedContextClass))].filter((value) => value !== 'other').sort();
   const nativeContext = (Array.isArray(contexts) ? contexts : [])

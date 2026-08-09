@@ -1044,6 +1044,14 @@ request fail-closed становится platform `UNKNOWN_*`, а не нулё�
 Android emulator action запускает переданный script через POSIX `sh`, поэтому
 production-health wrapper явно входит в Bash до `set -o pipefail`; это
 зафиксировано workflow contract test и не относится к Appium/Auth/Search retry.
+На свежем emulator Chrome DevTools/WebView context может появиться уже после
+готовности WebDriver session, поэтому side-effect-free preflight bounded-waits
+до 20 секунд за одновременным наличием native и web context. При session-create
+failure локальный Appium log немедленно сворачивается в allowlisted booleans
+(`chromedriver_missing`, download/Chrome/WebView/UiAutomator2 failure class) и
+удаляется; raw строка, URL, capability, device/session id в artifact и stdout не
+попадают. Это диагностический infrastructure receipt и не разрешает broker,
+Auth или Search side effect.
 
 ### 16.9 Migration from current workflow
 

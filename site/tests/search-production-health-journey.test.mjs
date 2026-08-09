@@ -960,6 +960,28 @@ test('callback/session attach failure is Auth integration, not broker infrastruc
   assert.equal(result.failure_class, 'BROKEN_AUTH_INTEGRATION');
 });
 
+test('mobile preflight failure preserves only a closed Appium diagnostic receipt', async () => {
+  const receipt = {
+    schema_version: 'mobile-preflight-failure-v1', failure_stage: 'webdriver_session_create',
+    error_class: 'webdriver_session_error', appium_server_ready: true, elapsed_ms: 91_000,
+    log_inspected: true, chromedriver_discovery_attempted: true, chromedriver_missing: true,
+    chromedriver_download_failed: false, chrome_session_failed: false,
+    web_context_failed: false, uiautomator_server_failed: false,
+  };
+  const error = new Error('webdriver_session_error:raw secret');
+  error.searchReceipt = receipt;
+  const result = await runProductionHealthCell({
+    platform: 'android', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => { throw error; },
+    issueSession: async () => { throw new Error('issuance_forbidden'); },
+  });
+  assert.equal(result.failure_class, 'UNKNOWN_ANDROID_INFRA');
+  assert.equal(result.preflight.error_class, 'webdriver_session_error');
+  assert.equal(result.preflight.appium_server_ready, true);
+  assert.equal(result.preflight.chromedriver_missing, true);
+  assert.doesNotMatch(JSON.stringify(result), /raw secret/u);
+});
+
 test('cleanup failure prevents a healthy PASS and leaves closed failure evidence', async () => {
   const adapter = fakeJourneyAdapter();
   adapter.preflight = async () => preflight;

@@ -25,6 +25,20 @@ export function summarizeAppiumSessionStartup(value, { truncated = false } = {})
   };
 }
 
+export function summarizeAndroidAppiumSessionStartup(value, { truncated = false } = {}) {
+  const source = typeof value === 'string' ? value.slice(-MAX_LOG_CHARS) : '';
+  return {
+    log_inspected: source.length > 0,
+    log_truncated: truncated === true || (typeof value === 'string' && value.length > MAX_LOG_CHARS),
+    chromedriver_discovery_attempted: has(source, /chromedriver/iu),
+    chromedriver_missing: has(source, /No Chromedriver found|Could not find a Chromedriver|chromedriver.+not found/iu),
+    chromedriver_download_failed: has(source, /chromedriver.+(?:download|storage).+(?:fail|error)|(?:fail|error).+download.+chromedriver/iu),
+    chrome_session_failed: has(source, /Unable to (?:automate|start).+Chrome|Chrome session.+fail|unknown error:.+Chrome/iu),
+    web_context_failed: has(source, /No webviews found|web ?view not found|failed to connect to socket.+chrome_devtools/iu),
+    uiautomator_server_failed: has(source, /UiAutomator2.+(?:server|instrumentation).+(?:fail|error)|socket hang up/iu),
+  };
+}
+
 async function readBoundedLogTail(path) {
   const handle = await open(path, 'r').catch(() => null);
   if (!handle) return { source: '', truncated: false };
@@ -50,7 +64,7 @@ function closedErrorClass(error) {
 export async function buildAppiumSessionFailureReceipt({ error, platform, startedAt,
   endedAt = Date.now(), logPath, appiumServerReady = false, startupAttempt = 1 } = {}) {
   let log = { source: '', truncated: false };
-  if (platform === 'ios' && logPath) log = await readBoundedLogTail(logPath);
+  if (logPath) log = await readBoundedLogTail(logPath);
   const attempt = [1, 2].includes(Number(startupAttempt)) ? Number(startupAttempt) : 0;
   return {
     schema_version: 'mobile-preflight-failure-v1',
@@ -66,6 +80,8 @@ export async function buildAppiumSessionFailureReceipt({ error, platform, starte
     retry_safe: attempt === 1,
     side_effects: buildZeroSideEffectReceipt({ attempt, driverSessionCreated: false,
       driverSessionDeleted: false }),
-    ...summarizeAppiumSessionStartup(log.source, { truncated: log.truncated }),
+    ...(platform === 'android'
+      ? summarizeAndroidAppiumSessionStartup(log.source, { truncated: log.truncated })
+      : summarizeAppiumSessionStartup(log.source, { truncated: log.truncated })),
   };
 }
