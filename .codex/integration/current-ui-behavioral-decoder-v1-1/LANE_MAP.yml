@@ -12,7 +12,7 @@ verification_owner: /root
 stop_conditions:
   - no component merge/deletion/normalization
   - no experiment winner without decision receipt
-  - final supplement status only READY_FOR_NORMALIZATION_CHARTER_SYNTHESIS
+  - final supplement status only READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS
 lanes:
   - id: media_geometry_rails_map
     role: mapper

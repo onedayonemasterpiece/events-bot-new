@@ -50,7 +50,7 @@
 
 ### Added
 
-- Added an append-only Current UI Behavioral Decoder & Experiment Archaeology v1.1 source pass. It binds every behavioral record to the reviewed Decoder v1 manifest, emits separate media/geometry/loading/interaction/positioning/rail/overlay/experiment artifacts and fails closed until capture plus human review evidence is attached. It does not change the immutable v1 snapshot, site runtime, tokens, normalization or Penpot.
+- Added an append-only, requirements-aware Current UI Behavioral Decoder & Experiment Archaeology v1.1 source pass. It binds every behavioral record to the reviewed Decoder v1 manifest, emits separate provenance, complete media-policy, dynamic loading/skeleton, geometry, interaction, positioning, rail, overlay and experiment artifacts, and fails closed until exact action packets plus file-level full-resolution human review evidence are attached. It does not change the immutable v1 snapshot, site runtime, tokens, normalization or Penpot.
 
 - Added a bounded VK incident-intake chain to Private Events MCP: recent
   comment/mention notification hints, exact canonical wall-post resolution,

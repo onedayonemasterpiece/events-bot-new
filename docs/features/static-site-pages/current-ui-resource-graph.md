@@ -545,14 +545,19 @@ not start defragmentation or normalization automatically.
 
 ## Behavioral Decoder & Experiment Archaeology v1.1 (append-only, in progress)
 
-`current_ui_behavior_graph/behavioral-decode.mjs` is an append-only evidence
+`scripts/current_ui_resource_graph/behavioral-decode.mjs` is an append-only evidence
 pass over the immutable v1 source pin. It writes a *new*, separately validated
 `behavioral-supplement-v1.1/` directory and never rewrites the reviewed v1
 manifest, receipt, components, candidate contracts, capsules or visual ledger.
 
 The supplement records source-qualified media/loading/geometry/positioning,
 rails, overlays/selection state machines, breakpoint `-1/0/+1` probes, CTA Git
-history and the `transport_timetable_layout` treatment registry. It always
+history and the `transport_timetable_layout` treatment registry. The
+requirements-aware pass additionally writes a line/commit/PR provenance
+ledger, a complete consumer-scoped media matrix (including `4:5`, `5:4`,
+`3:2`, intrinsic `2:3`, `1:1` and extra ratios), and an explicit dynamic-region
+loading/skeleton/fallback matrix. It preserves reviewed conflicts instead of
+inventing a global crop, upscaling, offline, retry or skeleton contract. It always
 marks source-only and planned evidence explicitly; `dHash` remains a diagnostic
 only and is not a human-review substitute. The three transport arms
 `departure_board_v1`, `route_strips_v1` and `next_departure_queue_v1` have
@@ -560,6 +565,6 @@ separate planned evidence packets and remain `NOT_MERGED`, unaccepted until
 receipt-backed archaeology and capture/review are available.
 
 The only permitted completed supplement status is
-`READY_FOR_NORMALIZATION_CHARTER_SYNTHESIS`. It does not authorize component
+`READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not authorize component
 merges, normalisation, semantic tokens, production Astro/CSS/JS changes,
 Penpot mutation, experiment winner selection or an automatic next stage.
