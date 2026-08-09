@@ -25,7 +25,7 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **101/101 PASS**;
+- Search production-health aggregate suite: **104/104 PASS**;
 - legacy Search harness: **30/30 PASS**;
 - broker Python/security **44/44 PASS**, Edge contract **5/5 PASS** and Auth
   Node **16/16 PASS**;
@@ -60,5 +60,7 @@ the iOS Safari console bucket, rejects mobile redirect chains, and keeps an
 adapter-level physical Search observer alive through final event-page
 diagnostics so the complete journey proves exactly one Search POST. Unknown
 pre-runner cells retain the exact sanitized summary schema with explicit
-closed null/zero values. These are deterministic results;
+closed null/zero values. Mobile protocol receipts also ingest CDP
+`redirectResponse` for the document chain and correlate terminal
+`loadingFinished.encodedDataLength` when Content-Length is absent. These are deterministic results;
 live acceptance remains `0 / 2` and no production state has been changed.
