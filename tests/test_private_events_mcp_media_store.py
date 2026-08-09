@@ -15,6 +15,7 @@ from private_events_mcp_media import (
     MediaIntegrityError,
     MediaOwnershipError,
     SecureMediaAssetStore,
+    _host_audit_fingerprint,
 )
 
 OWNER_A = hashlib.sha256(b"owner-A").hexdigest()
@@ -122,6 +123,16 @@ def test_nonallowlisted_host_has_stable_safe_code_and_fingerprinted_audit_reason
     assert caught.value.audit_reason_code.startswith("file_host_not_allowed_")
     assert "foreign-files.example.test" not in caught.value.audit_reason_code
     assert fetcher.calls == []
+
+
+def test_dynamic_host_audit_fingerprint_binds_stable_suffixes_without_disclosure():
+    first = _host_audit_fingerprint("random-a.downloads.example.test")
+    second = _host_audit_fingerprint("random-b.downloads.example.test")
+    assert len(first) == 24
+    assert len(second) == 24
+    assert first[:8] != second[:8]
+    assert first[8:] == second[8:]
+    assert "example" not in first
 
 
 @pytest.mark.parametrize(
