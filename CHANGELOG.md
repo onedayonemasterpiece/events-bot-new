@@ -6,7 +6,7 @@
 
 ### Fixed
 
-- Activated bounded Search production health as a separate current-target
+- Implemented bounded Search production health as a separate current-target
   contour: 06:17 UTC runs browser+Android, 18:17 UTC runs browser+iOS, manual
   profiles are explicit, and only a validated `search-runtime-deployed`
   standard/full marker can request deploy validation. Every platform uses a
@@ -21,7 +21,10 @@
   LLM plus deterministic degraded qualification exactly once in one ephemeral
   browser session after standard health passes; qualification remains
   unscheduled/selective. Existing Search harness and broker admission/security
-  regressions now also run in default PR CI; PR #436 remains separate.
+  regressions now also run in default PR CI. Automatic schedules and deploy
+  dispatch remain default-off until the two bounded live acceptance workflows
+  pass after merge, migration and exact-main deployment; PR #436 remains
+  separate.
 
 - Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
   by promoting its 30 lazy card images to eager loading only inside the

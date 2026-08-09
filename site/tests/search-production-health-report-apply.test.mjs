@@ -13,6 +13,7 @@ const summary = (overrides = {}) => ({
   product_health: 'HEALTHY',
   execution_status: 'PASS',
   failure_class: null,
+  target_superseded: false,
   target_fingerprint: fingerprint('a'),
   runtime_fingerprint: fingerprint('b'),
   run_id: '31307905426',

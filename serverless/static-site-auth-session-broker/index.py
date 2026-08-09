@@ -16,6 +16,7 @@ import json
 import os
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
@@ -117,8 +118,25 @@ class _IssueFlight:
     error: BrokerError | None = None
 
 
+@dataclass
+class _IssueReplay:
+    result: dict[str, Any]
+    expires_at: float
+    remaining_replays: int = 1
+
+
 _ISSUE_FLIGHTS: dict[tuple[str, str, str, int, str], _IssueFlight] = {}
 _ISSUE_FLIGHTS_LOCK = threading.Lock()
+_ISSUE_REPLAYS: dict[tuple[str, str, str, int, str], _IssueReplay] = {}
+_ISSUE_REPLAY_TTL_SECONDS = 30.0
+_ISSUE_REPLAY_MAX_ENTRIES = 12
+
+
+def reset_transient_issue_state_for_tests() -> None:
+    with _ISSUE_FLIGHTS_LOCK:
+        _ISSUE_FLIGHTS.clear()
+        _ISSUE_REPLAYS.clear()
+
 
 
 def _required(env: Mapping[str, str], name: str) -> str:
@@ -496,18 +514,37 @@ def _coalesced_issue(
     authorized: AuthorizedIssue, *, claims: Mapping[str, Any], policy: Policy,
     transport: Transport, audit_sink: AuditSink,
 ) -> dict[str, Any]:
-    """Coalesce only overlapping identical calls; never retain credentials.
+    """Coalesce overlap and allow one bounded lost-response replay.
 
-    The owner publishes its result to callers that already joined the same
-    in-flight identity. The registry entry is removed immediately on
-    completion, so it is neither a session cache nor credential escrow.
+    The replay exists only in broker process memory for at most 30 seconds and
+    can be read once. It is never written to a database, file, log or job
+    artifact. This closes the ordinary HTTP lost-response window without
+    generating a second one-time credential or creating durable escrow.
     """
+    now = time.monotonic()
+    replayed: dict[str, Any] | None = None
     with _ISSUE_FLIGHTS_LOCK:
+        for identity, replay in list(_ISSUE_REPLAYS.items()):
+            if replay.expires_at <= now or replay.remaining_replays < 1:
+                del _ISSUE_REPLAYS[identity]
+        replay = _ISSUE_REPLAYS.get(authorized.identity)
+        if replay is not None:
+            replayed = dict(replay.result)
+            replay.remaining_replays -= 1
+            if replay.remaining_replays < 1:
+                del _ISSUE_REPLAYS[authorized.identity]
         flight = _ISSUE_FLIGHTS.get(authorized.identity)
         owner = flight is None
-        if owner:
+        if replayed is None and owner:
             flight = _IssueFlight(ready=threading.Event())
             _ISSUE_FLIGHTS[authorized.identity] = flight
+    if replayed is not None:
+        _audit(
+            audit_sink, policy, outcome="replayed", claims=claims,
+            persona=authorized.persona.persona_id, platform=authorized.platform,
+            redirect=authorized.redirect,
+        )
+        return replayed
     assert flight is not None
     if not owner:
         flight.ready.wait(timeout=15.0)
@@ -524,6 +561,13 @@ def _coalesced_issue(
             authorized, claims=claims, policy=policy,
             transport=transport, audit_sink=audit_sink,
         )
+        with _ISSUE_FLIGHTS_LOCK:
+            if len(_ISSUE_REPLAYS) >= _ISSUE_REPLAY_MAX_ENTRIES:
+                oldest = min(_ISSUE_REPLAYS, key=lambda key: _ISSUE_REPLAYS[key].expires_at)
+                del _ISSUE_REPLAYS[oldest]
+            _ISSUE_REPLAYS[authorized.identity] = _IssueReplay(
+                result=dict(flight.result), expires_at=time.monotonic() + _ISSUE_REPLAY_TTL_SECONDS,
+            )
         return dict(flight.result)
     except BrokerError as exc:
         flight.error = exc

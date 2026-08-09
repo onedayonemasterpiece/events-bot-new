@@ -28,6 +28,7 @@ import { runProductionHealthJourney } from './production-health-journey.mjs';
 
 const execFile = promisify(execFileCallback);
 const platforms = new Set(['browser', 'android', 'ios']);
+const SAFE_DEPLOYMENT_RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$/u;
 
 async function emitFailureClassOutput(env, failureClass) {
   const path = String(env.GITHUB_OUTPUT || '').trim();
@@ -97,6 +98,54 @@ const combinedObservedMeter = (issued, journey) => {
   ));
 };
 
+const preferMoreCompleteMeter = (current, candidate) => {
+  const currentBytes = Number(current?.total_bytes || 0);
+  const candidateBytes = Number(candidate?.total_bytes || 0);
+  return candidateBytes >= currentBytes ? candidate : current;
+};
+
+const searchRequestsFromRuntime = (runtime) => (Array.isArray(runtime?.requests) ? runtime.requests : [])
+  .filter((item) => item?.method === 'POST' && item?.path === '/functions/v1/event-search');
+
+async function retainFailedJourneyEvidence(adapter, runtime = {}) {
+  const requests = searchRequestsFromRuntime(runtime);
+  const responses = Array.isArray(runtime?.responses) ? runtime.responses : [];
+  const response = responses.at(-1) || {};
+  let state = {};
+  let diagnostics = {};
+  try { state = await adapter?.snapshotResults?.() || {}; } catch { /* closed counters only */ }
+  try { diagnostics = await adapter?.healthDiagnostics?.() || {}; } catch { /* closed counters only */ }
+  const renderedIds = Array.isArray(state.rendered_ids) ? state.rendered_ids.map(String) : [];
+  const responseIds = Array.isArray(response.response_ids) ? response.response_ids.map(String) : [];
+  return {
+    schema_version: 'search_production_health_failed_journey_v1',
+    search_post_count: requests.length,
+    request_contract: requests[0]?.body_contract || {},
+    cache_state: response.result_cache_status,
+    response_telemetry: {
+      request_id: response.request_id, http_status: response.http_status, route: response.route,
+      search_contract_version: response.search_contract_version,
+      catalog_revision: response.catalog_revision, corpus_revision: response.corpus_revision,
+      search_document_revision: response.search_document_revision,
+    },
+    provider_attempts: response.provider_attempts || {},
+    response_ids: responseIds, rendered_ids: renderedIds,
+    card_count: renderedIds.length, terminal_ui: state.terminal === true,
+    forbidden_activity: {
+      llm_calls: Number(response.provider_attempts?.llm || 0),
+      pagination_requests: Math.max(0, requests.length - 1),
+      receipt_rpc_calls: Number(runtime.network?.receipt_rpc_requests || 0),
+      storage_image_requests: Number(runtime.network?.storage_requests || 0),
+    },
+    diagnostics: {
+      console_errors: Number(diagnostics.console_errors || 0),
+      failed_requests: Number(diagnostics.failed_requests || runtime.network?.failed_requests || 0),
+      error_responses: Number(diagnostics.error_responses || 0),
+    },
+    meter: runtime.meter || emptyMeter(),
+  };
+}
+
 function journeyFailure(error) {
   const code = String(error?.message || '').split(':')[0];
   if (/surface|input|enter_key/u.test(code)) return PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_SURFACE;
@@ -135,6 +184,7 @@ export async function runProductionHealthCell(options = {}) {
   let journey = {};
   let meter = emptyMeter();
   let targetSuperseded = false;
+  let pointerRereadAttempted = false;
   let failureClass = releaseActive === true ? null : PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
   let phase = releaseActive === true ? 'preflight' : 'release_gate';
   let cleanupStatus = 'PENDING';
@@ -147,8 +197,10 @@ export async function runProductionHealthCell(options = {}) {
       assertPreflight(preflight, platform);
       phase = 'issuance';
       issued = await options.issueSession({ platform, target, adapter });
-      await attachIssuedSession(adapter, issued, target.navigationUrl());
+      // From this point onward failures are product Auth/session-integration
+      // evidence, not broker admission failures.
       phase = 'auth';
+      await attachIssuedSession(adapter, issued, target.navigationUrl());
       if (typeof issued?.verifyAuth === 'function') {
         const verified = await issued.verifyAuth(adapter);
         auth = verified?.receipt || verified || {};
@@ -164,13 +216,10 @@ export async function runProductionHealthCell(options = {}) {
       }
       phase = 'journey';
       journey = await runProductionHealthJourney({ adapter, targetUrl: target.navigationUrl() });
-      if (options.expectedSearchBackendRevision
-        && journey.response_telemetry?.search_contract_version !== options.expectedSearchBackendRevision) {
-        failureClass = PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
-      }
-      meter = await combinedObservedMeter(issued, journey);
+      meter = preferMoreCompleteMeter(meter, await combinedObservedMeter(issued, journey));
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
       phase = 'pointer_reread';
+      pointerRereadAttempted = true;
       const supersession = await options.targetRun.observeSupersession();
       targetSuperseded = supersession.target_superseded === true;
     }
@@ -182,19 +231,37 @@ export async function runProductionHealthCell(options = {}) {
     else failureClass = journeyFailure(error);
     try {
       const runtime = await adapter?.activity?.();
-      meter = await combinedObservedMeter(issued, { meter: runtime?.meter });
+      const retained = await retainFailedJourneyEvidence(adapter, runtime);
+      if (retained.search_post_count > 0 || runtime?.meter) journey = retained;
+      const observed = await combinedObservedMeter(issued, retained);
+      meter = preferMoreCompleteMeter(meter, observed);
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
     } catch { /* the closed failure class is sufficient */ }
   } finally {
+    if (releaseActive === true && !pointerRereadAttempted) {
+      pointerRereadAttempted = true;
+      try {
+        const supersession = await options.targetRun.observeSupersession();
+        targetSuperseded = supersession.target_superseded === true;
+      } catch {
+        if (!failureClass || String(failureClass).startsWith('BROKEN_')) {
+          failureClass = PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
+        }
+      }
+    }
     try { await adapter?.close?.(); } catch { cleanupStatus = 'FAIL'; }
     try {
       if (typeof issued?.cleanup === 'function') await issued.cleanup();
     } catch { cleanupStatus = 'FAIL'; }
     if (cleanupStatus !== 'FAIL') cleanupStatus = 'PASS';
     try {
-      meter = await combinedObservedMeter(issued, journey);
+      const observed = await combinedObservedMeter(issued, journey);
+      meter = preferMoreCompleteMeter(meter, observed);
       if (meter.hard_limit_exceeded) failureClass = PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
     } catch { /* keep the earlier closed meter/failure result */ }
+    if (cleanupStatus === 'FAIL' && (!failureClass || String(failureClass).startsWith('BROKEN_'))) {
+      failureClass = infraFailure(platform);
+    }
   }
   return finalize();
 
@@ -202,6 +269,7 @@ export async function runProductionHealthCell(options = {}) {
     const outcome = classifyProductionHealthOutcome({ failureClass, platform });
     const value = {
       platform, ...outcome, target_immutable: targetImmutable, target_superseded: targetSuperseded,
+      expected_search_backend_revision: options.expectedSearchBackendRevision || null,
       preflight, auth, journey, meter, cleanup_status: cleanupStatus,
       workflow_run_id: options.workflowRunId,
       tested_at: testedAt,
@@ -212,6 +280,16 @@ export async function runProductionHealthCell(options = {}) {
     }
     return productionHealthEvidenceRecord(value);
   }
+}
+
+export function hasActiveSearchReleaseReceipt({
+  siteActive, expectedSearchBackendRevision = '', deploymentRunId = '',
+} = {}) {
+  if (siteActive !== true) return false;
+  const expected = String(expectedSearchBackendRevision || '').trim();
+  if (!expected) return true;
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(expected)
+    && SAFE_DEPLOYMENT_RUN_ID.test(String(deploymentRunId || '').trim());
 }
 
 export async function resolveCurrentAcceptedTargetFromFly(env = process.env) {
@@ -399,8 +477,12 @@ export async function runProductionHealthCli(env = process.env) {
     throw new Error('search_health_expected_site_runtime_sha_invalid');
   }
   const expectedBackendRevision = String(env.E2E_EXPECTED_SEARCH_BACKEND_REVISION || '').trim();
+  const deploymentRunId = String(env.E2E_DEPLOYMENT_RUN_ID || '').trim();
   if (expectedBackendRevision && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(expectedBackendRevision)) {
     throw new Error('search_health_expected_backend_revision_invalid');
+  }
+  if (deploymentRunId && !SAFE_DEPLOYMENT_RUN_ID.test(deploymentRunId)) {
+    throw new Error('search_health_deployment_run_id_invalid');
   }
   const initialResolution = await resolveExpectedAcceptedTarget({
     resolver: () => resolveCurrentAcceptedTargetFromFly(env),
@@ -422,7 +504,10 @@ export async function runProductionHealthCli(env = process.env) {
       : await createBuiltInMobileHooks(env, platform);
   const result = await runProductionHealthCell({
     platform, targetRun, createAdapter: hooks.createAdapter, issueSession: hooks.issueSession,
-    releaseGate: (target) => !expectedSiteSha || target.target_repo_sha === expectedSiteSha,
+    releaseGate: () => hasActiveSearchReleaseReceipt({
+      siteActive: initialResolution.active, expectedSearchBackendRevision: expectedBackendRevision,
+      deploymentRunId,
+    }),
     expectedSearchBackendRevision: expectedBackendRevision || null,
     evidenceDirectory: required(env, 'E2E_EVIDENCE_DIR'),
     workflowRunId: required(env, 'GITHUB_RUN_ID'),

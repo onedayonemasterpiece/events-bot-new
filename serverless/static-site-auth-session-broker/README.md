@@ -37,11 +37,16 @@ platform) and rejects a fourth immediately rather than queueing it.
 
 Overlapping identical calls inside one client issuer are coalesced to one
 broker POST. Independently overlapping identical calls reaching one broker
-process are coalesced to one ledger call and one `generate_link`. Results exist
-only while those callers are in flight and are removed immediately afterward:
-there is no credential/session cache, escrow, serialized session, or artifact.
-The workflow exports the masked one-time browser callback only through the
-current job's `GITHUB_ENV` and clears credential fields after use.
+process are coalesced to one ledger call and one `generate_link`. To close the
+ordinary lost-HTTP-response window, a successful result may be replayed
+**once**, from broker process memory only, for at most 30 seconds. The bounded
+entry is deleted on that read or expiry; at most 12 entries may exist. It is
+never written to the database, filesystem, logs, Actions cache or artifact.
+After a process restart or from another broker process, the durable duplicate
+claim remains fail-closed as `duplicate_inflight`; implementing cross-process
+credential replay would require forbidden credential escrow. The workflow
+exports the masked one-time browser callback only through the current job's
+`GITHUB_ENV` and clears credential fields after use.
 
 ## Deployment policy
 

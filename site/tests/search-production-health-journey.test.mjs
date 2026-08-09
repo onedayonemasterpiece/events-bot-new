@@ -7,6 +7,10 @@ import test from 'node:test';
 
 import { summarizeSearchPayload } from '../e2e/search/acceptance.mjs';
 import {
+  createPlaywrightSearchAdapter,
+  snapshotResultsInPage,
+} from '../e2e/search/adapters/playwright.mjs';
+import {
   PRODUCTION_HEALTH_UI_QUERY,
   runProductionHealthJourney,
 } from '../e2e/search/production-health-journey.mjs';
@@ -18,6 +22,7 @@ import {
 } from '../e2e/search/production-health-meter.mjs';
 import {
   createBuiltInBrowserHooks,
+  hasActiveSearchReleaseReceipt,
   resolveExpectedAcceptedTarget,
   runProductionHealthCell,
 } from '../e2e/search/production-health-run.mjs';
@@ -337,19 +342,81 @@ test('explicit release wait is bounded and performs only target reads before Aut
   assert.equal(reads, 2);
 });
 
-test('explicit backend deployment mismatch blocks after the single Search without retry', async () => {
+test('backend deployment marker is a pre-Auth/Search release receipt and missing identity blocks', async () => {
+  assert.equal(hasActiveSearchReleaseReceipt({ siteActive: true }), true);
+  assert.equal(hasActiveSearchReleaseReceipt({
+    siteActive: true, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: '',
+  }), false);
+  assert.equal(hasActiveSearchReleaseReceipt({
+    siteActive: true, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: 'deploy-42.1',
+  }), true);
+  assert.equal(hasActiveSearchReleaseReceipt({
+    siteActive: false, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: 'deploy-42.1',
+  }), false);
+
+  let issued = 0;
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    releaseGate: async () => hasActiveSearchReleaseReceipt({
+      siteActive: true, expectedSearchBackendRevision: 'event-search-v2', deploymentRunId: '',
+    }),
+    expectedSearchBackendRevision: 'event-search-v2',
+    createAdapter: async () => fakeJourneyAdapter(),
+    issueSession: async () => { issued += 1; throw new Error('must_not_run'); },
+  });
+  assert.equal(issued, 0);
+  assert.equal(result.execution_status, 'BLOCKED');
+  assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
+  assert.equal(result.search.physical_post_count, 0);
+});
+
+test('callback/session attach failure is Auth integration, not broker infrastructure', async () => {
   const adapter = fakeJourneyAdapter();
   adapter.preflight = async () => preflight;
   adapter.close = async () => {};
   const result = await runProductionHealthCell({
     platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
-    expectedSearchBackendRevision: 'expected-v2',
+    createAdapter: async () => adapter,
+    issueSession: async () => ({ authReceipt, attach: async () => { throw new Error('session_restore_failed'); }, cleanup: async () => {} }),
+  });
+  assert.equal(result.failure_class, 'BROKEN_AUTH_INTEGRATION');
+});
+
+test('cleanup failure prevents a healthy PASS and leaves closed failure evidence', async () => {
+  const adapter = fakeJourneyAdapter();
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => { throw new Error('delete_session_failed'); };
+  const result = await runProductionHealthCell({
+    platform: 'android', targetRun: createAcceptedTargetRun(async () => targetRow()),
     createAdapter: async () => adapter,
     issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
   });
-  assert.equal(result.execution_status, 'BLOCKED');
-  assert.equal(result.failure_class, 'BLOCKED_RELEASE_NOT_ACTIVE');
+  assert.equal(result.product_health, 'UNCONFIRMED');
+  assert.equal(result.execution_status, 'FAILED');
+  assert.equal(result.failure_class, 'UNKNOWN_ANDROID_INFRA');
+  assert.equal(result.auth.cleanup_status, 'FAIL');
+});
+
+test('failed journey retains physical POST, meter and supersession evidence', async () => {
+  const adapter = fakeJourneyAdapter({ skeletons: 1, bytes: 35_000 });
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  let reads = 0;
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => {
+      reads += 1;
+      return targetRow(reads === 1 ? 'A'.repeat(43) : 'B'.repeat(43), reads === 1 ? {} : {
+        manifest_sha256: 'e'.repeat(64), token_sha256: createHash('sha256').update('B'.repeat(43)).digest('hex'),
+      });
+    }),
+    createAdapter: async () => adapter,
+    issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+  });
+  assert.equal(result.failure_class, 'BROKEN_RESULT_RENDER');
   assert.equal(result.search.physical_post_count, 1);
+  assert.equal(result.supabase_observed_bytes.total_bytes, 35_000);
+  assert.equal(result.target.target_superseded, true);
+  assert.equal(reads, 2);
 });
 
 test('Auth traffic over the hard cap stops before the single Search and stays unconfirmed', async () => {
@@ -488,4 +555,60 @@ test('authenticated owner runtime proof uses resilient get-user plus exactly one
     Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });
   }
+});
+
+
+test('Playwright snapshot detects real skeleton markup and id-less placeholders', () => {
+  const resultNode = { hidden: false, querySelector: () => null };
+  const event = { getAttribute: (name) => name === 'data-event-id' ? '42' : '',
+    getBoundingClientRect: () => ({ width: 10, height: 10, top: 0, bottom: 10 }) };
+  const placeholder = { getAttribute: () => '',
+    getBoundingClientRect: () => ({ width: 10, height: 10, top: 0, bottom: 10 }) };
+  const prior = {
+    document: Object.getOwnPropertyDescriptor(globalThis, 'document'),
+    getComputedStyle: Object.getOwnPropertyDescriptor(globalThis, 'getComputedStyle'),
+    innerHeight: Object.getOwnPropertyDescriptor(globalThis, 'innerHeight'),
+  };
+  Object.defineProperty(globalThis, 'document', { configurable: true, writable: true, value: {
+    querySelector(selector) {
+      if (selector === '[data-search-results]') return resultNode;
+      if (selector === '[data-search-status]') return { getAttribute: () => null };
+      if (selector === '[data-search-submit]') return { getAttribute: () => 'false' };
+      return null;
+    },
+    querySelectorAll(selector) {
+      if (selector.includes('.authorized-search__skeleton-card')) return [{}];
+      if (selector.includes('[data-event-card][data-event-id]')) return [event];
+      if (selector.includes('[data-event-card],')) return [event, placeholder];
+      return [];
+    },
+  } });
+  Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, writable: true,
+    value: () => ({ display: 'block', visibility: 'visible' }) });
+  Object.defineProperty(globalThis, 'innerHeight', { configurable: true, writable: true, value: 800 });
+  try {
+    const snapshot = snapshotResultsInPage();
+    assert.equal(snapshot.skeleton_count, 1);
+    assert.equal(snapshot.placeholder_count, 1);
+  } finally {
+    for (const [name, descriptor] of Object.entries(prior)) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+});
+
+test('Playwright target open rejects an otherwise same-final-URL redirect chain', async () => {
+  const page = {
+    on() {}, viewportSize: () => ({ width: 1280, height: 720 }),
+    url: () => 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/',
+    async goto() {
+      return { status: () => 200, request: () => ({ redirectedFrom: () => ({}) }) };
+    },
+  };
+  const adapter = await createPlaywrightSearchAdapter({ page, productionHealth: true });
+  await assert.rejects(
+    () => adapter.open('https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/'),
+    /search_target_redirected/u,
+  );
 });

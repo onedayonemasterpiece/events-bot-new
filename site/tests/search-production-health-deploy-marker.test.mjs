@@ -132,4 +132,17 @@ test('default none and failed Fly deploy emit zero dispatches; successful standa
   assert.equal((calls.match(/^gh:api --method POST/gmu) || []).length, 1);
   assert.match(calls, /"event_type":"search-runtime-deployed"/u);
   assert.match(calls, /"validation_profile":"standard"/u);
+
+  await writeFile(fixture.callLog, '');
+  await execFileAsync('bash', [script], { cwd: fixture.root, env: {
+    ...fixture.env,
+    SEARCH_VALIDATION_PROFILE: 'standard',
+    SEARCH_BACKEND_REVISION: 'event-search:89abcdef',
+    SEARCH_DEPLOYMENT_RUN_ID: 'fly-main-env-123.1',
+    SEARCH_CHANGED_SURFACES: 'site_runtime,search_backend',
+  } });
+  calls = await readFile(fixture.callLog, 'utf8');
+  assert.equal((calls.match(/^gh:api --method POST/gmu) || []).length, 1);
+  const envelope = JSON.parse(calls.split('\n').find((line) => line.startsWith('{')));
+  assert.deepEqual(envelope.client_payload.changed_surfaces, ['search_backend', 'site_runtime']);
 });

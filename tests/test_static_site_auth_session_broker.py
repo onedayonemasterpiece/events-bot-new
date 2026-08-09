@@ -20,6 +20,13 @@ sys.modules[SPEC.name] = broker
 SPEC.loader.exec_module(broker)
 
 
+@pytest.fixture(autouse=True)
+def _reset_transient_issue_state():
+    broker.reset_transient_issue_state_for_tests()
+    yield
+    broker.reset_transient_issue_state_for_tests()
+
+
 def _service_role_jwt(role: str = "service_role") -> str:
     encode = lambda value: base64.urlsafe_b64encode(
         json.dumps(value, separators=(",", ":")).encode()
@@ -333,6 +340,26 @@ def test_platform_personas_are_server_derived_and_emails_must_be_unique():
         broker.policy_from_env(environment(
             AUTH_SESSION_BROKER_PERSONAS_JSON=json.dumps(configured),
         ))
+
+
+def test_identical_immediate_replay_returns_same_unconsumed_credential_without_second_issue():
+    transport = Transport()
+    logs: list[dict] = []
+    request = {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
+    first = broker.process(
+        request, token="jwt-a", env=environment(), transport=transport,
+        verifier=lambda _token, _env: claims(), audit_sink=logs.append,
+    )
+    second = broker.process(
+        request, token="jwt-b", env=environment(), transport=transport,
+        verifier=lambda _token, _env: claims(), audit_sink=logs.append,
+    )
+    assert second == first
+    assert sum(call[1].endswith("/rpc/claim_static_site_auth_session_issue_v2") for call in transport.calls) == 1
+    assert sum(call[1].endswith("/auth/v1/admin/generate_link") for call in transport.calls) == 1
+    assert [row["outcome"] for row in logs] == ["issued", "replayed"]
+    assert "456789" not in json.dumps(logs)
+    assert "token=secret" not in json.dumps(logs)
 
 
 def test_identical_concurrent_issue_is_coalesced_to_one_claim_and_generate_link():

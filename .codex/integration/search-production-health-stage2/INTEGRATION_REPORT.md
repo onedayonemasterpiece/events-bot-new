@@ -25,9 +25,9 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **80/80 PASS**;
+- Search production-health aggregate suite: **95/95 PASS**;
 - legacy Search harness: **30/30 PASS**;
-- broker Python/security **41/41 PASS** and Auth Node **16/16 PASS**;
+- broker Python/security **42/42 PASS** and Auth Node **16/16 PASS**;
 - static source-binding/release regression: **87/87 PASS**;
 - workflow YAML and shell/node syntax;
 - migration contract and diff check;
@@ -45,3 +45,12 @@ Required before live:
 7. Update the Search incident regression record and issue #431 with exact run IDs.
 
 Current disposition: `STAGE2_IMPLEMENTED_LIVE_ACCEPTANCE_PENDING / PRODUCT_HEALTH_UNCONFIRMED`.
+
+The current hardening pass additionally proves one physical POST is metered
+once, accepts real cache-hit execution, rejects real skeleton/placeholder UI,
+aligns the Appium preflight/diagnostic receipt, preserves failed-journey bytes,
+gates cleanup, rereads pointer on failure, suppresses superseded issue mutation,
+keeps pre-runner UNKNOWN streaks, refuses missing-artifact BROKEN proof, pins
+Appium drivers, makes full qualification synchronous, and permits only one
+bounded volatile broker lost-response replay. These are deterministic results;
+live acceptance remains `0 / 2` and no production state has been changed.

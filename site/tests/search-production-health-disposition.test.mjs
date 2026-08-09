@@ -20,6 +20,7 @@ const summary = (overrides = {}) => ({
   product_health: 'HEALTHY',
   execution_status: 'PASS',
   failure_class: null,
+  target_superseded: false,
   target_fingerprint: fingerprint('a'),
   runtime_fingerprint: fingerprint('b'),
   run_id: '31307905426',
@@ -30,7 +31,7 @@ const summary = (overrides = {}) => ({
 test('summary interface is an exact fixed allowlist and rejects raw evidence fields', () => {
   assert.deepEqual(SEARCH_HEALTH_SUMMARY_FIELDS, [
     'schema_version', 'platform', 'product_health', 'execution_status', 'failure_class',
-    'target_fingerprint', 'runtime_fingerprint', 'run_id', 'run_url',
+    'target_superseded', 'target_fingerprint', 'runtime_fingerprint', 'run_id', 'run_url',
   ]);
   assert.deepEqual(normalizeSearchHealthSummary(summary()), summary());
   for (const forbiddenField of [
@@ -62,6 +63,19 @@ test('summary validation fails closed on inconsistent dimensions and unsafe run 
       failure_class: 'UNKNOWN_ANDROID_INFRA',
     })),
     /android_failure_platform_mismatch/u,
+  );
+});
+
+
+test('superseded target never opens or closes a product incident', () => {
+  const broken = buildSearchHealthReportPlan({ summary: summary({
+    target_superseded: true, product_health: 'BROKEN', execution_status: 'FAILED',
+    failure_class: 'BROKEN_NO_RESULTS',
+  }) });
+  const healthy = buildSearchHealthReportPlan({ summary: summary({ target_superseded: true }) });
+  assert.deepEqual(
+    [broken.operation.action, broken.operation.reason, healthy.operation.action, healthy.operation.reason],
+    ['none', 'target_superseded', 'none', 'target_superseded'],
   );
 });
 

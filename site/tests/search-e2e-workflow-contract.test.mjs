@@ -78,6 +78,10 @@ test('production health has only the two bounded schedules, manual profiles and 
   assert.deepEqual(parsed.on.repository_dispatch.types, ['search-runtime-deployed']);
   assert.deepEqual(parsed.concurrency, { group: 'search-production-health', 'cancel-in-progress': false });
   assert.match(String(parsed.jobs.plan.if), /workflow_dispatch.*SEARCH_PRODUCTION_HEALTH_ENABLED/u);
+  assert.match(source, /driver install uiautomator2@8\.2\.2/u);
+  assert.match(source, /driver install xcuitest@12\.1\.4/u);
+  assert.match(source, /E2E_APPIUM_DRIVER_VERSION: 8\.2\.2/u);
+  assert.match(source, /E2E_APPIUM_DRIVER_VERSION: 12\.1\.4/u);
   for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
   assert.equal(parsed.on.workflow_run, undefined);
   assert.equal(parsed.on.workflow_call, undefined);
@@ -91,14 +95,17 @@ test('platform jobs invoke only the unified one-session runner and qualification
   ]);
   const health = YAML.parse(healthSource);
   const qualification = YAML.parse(qualificationSource);
-  assert.deepEqual(Object.keys(qualification.on), ['workflow_dispatch']);
+  assert.deepEqual(Object.keys(qualification.on).sort(), ['workflow_call', 'workflow_dispatch']);
   for (const platform of ['browser', 'android', 'ios']) {
     assert.ok(health.jobs[platform], platform);
     assert.match(YAML.stringify(health.jobs[platform]), /production-health-run\.mjs/u);
     assert.doesNotMatch(YAML.stringify(health.jobs[platform]), /issue-static-search-session|production-health-mobile-preflight/iu);
   }
   assert.equal((healthSource.match(/production-health-run\.mjs/gu) || []).length, 3);
-  assert.equal((healthSource.match(/gh workflow run search-release-qualification\.yml/gu) || []).length, 1);
+  assert.equal(health.jobs['request-release-qualification'].uses, './.github/workflows/search-release-qualification.yml');
+  assert.equal(health.jobs['request-release-qualification'].with.profile, 'full');
+  assert.equal(health.jobs['request-release-qualification'].secrets, 'inherit');
+  assert.doesNotMatch(healthSource, /gh workflow run search-release-qualification\.yml/u);
   assert.doesNotMatch(healthSource, /\bgh issue (?:create|comment|close|list)\b/iu);
   assert.match(YAML.stringify(health.jobs.terminal), /production-health-report-plan-cli\.mjs/u);
   assert.equal(qualification.on.schedule, undefined);
@@ -107,7 +114,7 @@ test('platform jobs invoke only the unified one-session runner and qualification
   assert.match(qualificationSource, /\["cold_vector_llm","degraded_vector_fallback"\]/u);
   assert.match(qualificationSource, /one no-mail session/u);
   assert.match(qualificationSource, /E2E_SEARCH_REVISION_POLICY: release_exact/u);
-  assert.match(healthSource, /-f profile=full/u);
+  assert.equal(qualification.on.workflow_call.inputs.profile.type, 'string');
   for (const platform of ['browser', 'android', 'ios']) {
     assert.match(String(health.jobs['request-release-qualification'].if),
       new RegExp(`needs\\.${platform}\\.result == 'success'`, 'u'));

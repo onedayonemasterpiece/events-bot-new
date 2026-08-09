@@ -23,8 +23,13 @@ export function extractSanitizedNavigationResponses(logs) {
       const url = safeUrl(response.url);
       const status = Number(response.status);
       if (url && Number.isInteger(status)) {
+        const declared = Number(response.headers?.['content-length'] ?? response.headers?.['Content-Length']);
+        const encoded = Number(response.encodedDataLength);
+        const encodedBytes = Number.isSafeInteger(declared) && declared >= 0
+          ? declared : Number.isSafeInteger(encoded) && encoded >= 0 ? encoded : 0;
         responses.push({ origin: url.origin, pathname: url.pathname, status,
-          resource_type: String(params.type || '').toLowerCase() });
+          resource_type: String(params.type || '').toLowerCase(),
+          ...(encodedBytes > 0 ? { encoded_bytes: encodedBytes } : {}) });
       }
     }
     Object.values(value).forEach((child) => visit(child, depth + 1));
@@ -53,6 +58,31 @@ export function buildSameOriginNavigationReceipt({ beforeUrl, expectedUrl, final
     same_origin: true,
     http_status: 200,
     destination_class: 'event_detail',
+    network_source: networkSource === 'safariNetwork' ? 'safariNetwork' : 'performance',
+    raw_url_retained: false,
+  });
+}
+
+
+/** Prove the pinned private Search target itself returned 2xx with no redirect. */
+export function buildExactTargetNavigationReceipt({ expectedUrl, finalUrl, responses,
+  networkSource } = {}) {
+  const expected = safeUrl(expectedUrl);
+  const final = safeUrl(finalUrl);
+  if (!expected || !final || final.href !== expected.href) throw new Error('search_target_redirected');
+  const observed = Array.isArray(responses) ? responses : [];
+  if (observed.some((item) => Number(item?.status) >= 300 && Number(item?.status) < 400)) {
+    throw new Error('search_target_redirected');
+  }
+  const matching = observed.filter((item) => item?.origin === expected.origin
+    && item?.pathname === expected.pathname
+    && (!item.resource_type || item.resource_type === 'document'));
+  if (!matching.some((item) => Number(item.status) >= 200 && Number(item.status) < 300)) {
+    throw new Error('search_target_http_invalid');
+  }
+  return Object.freeze({
+    schema_version: 'mobile-target-open-v1', same_origin: true, redirect_count: 0,
+    http_status_class: '2xx',
     network_source: networkSource === 'safariNetwork' ? 'safariNetwork' : 'performance',
     raw_url_retained: false,
   });

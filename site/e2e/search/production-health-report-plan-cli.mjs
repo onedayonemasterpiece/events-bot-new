@@ -10,6 +10,10 @@ import { buildSearchHealthReportPlan } from './production-health-disposition/rep
 
 const sha = (value) => createHash('sha256').update(String(value), 'utf8').digest('hex');
 const platforms = ['browser', 'android', 'ios'];
+const safeFallbackFailureClasses = new Set([
+  'UNKNOWN_AUTH_BROKER', 'UNKNOWN_RUNNER_BROWSER', 'UNKNOWN_ANDROID_INFRA', 'UNKNOWN_IOS_INFRA',
+  'BLOCKED_RELEASE_NOT_ACTIVE', 'EVIDENCE_REDACTION_FAILED',
+]);
 
 async function resultsBelow(root) {
   const found = [];
@@ -29,6 +33,40 @@ async function resultsBelow(root) {
   return found;
 }
 
+async function aggregateSummariesBelow(root) {
+  const found = [];
+  async function walk(directory) {
+    let entries;
+    try { entries = await readdir(directory, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile() && entry.name === 'summary.json') {
+        let value;
+        try { value = JSON.parse(await readFile(path, 'utf8')); } catch { continue; }
+        if (value?.schema_version !== 'search_production_health_workflow_summary_v1'
+          || !Array.isArray(value.platforms)) continue;
+        for (const item of value.platforms) {
+          found.push({
+            schema_version: 'search_production_health_summary_v1',
+            platform: item.platform,
+            product_health: item.product_health,
+            execution_status: item.execution_status,
+            failure_class: item.failure_class,
+            target_superseded: item.target_superseded === true,
+            target_fingerprint: item.target_fingerprint,
+            runtime_fingerprint: item.runtime_fingerprint,
+            run_id: item.run_id,
+            run_url: item.run_url,
+          });
+        }
+      }
+    }
+  }
+  if (root) await walk(resolve(root));
+  return found;
+}
+
 function summaryFromRecord(record, env) {
   const runId = String(env.GITHUB_RUN_ID || '');
   const repository = String(env.GITHUB_REPOSITORY || '');
@@ -38,10 +76,12 @@ function summaryFromRecord(record, env) {
     product_health: record.product_health,
     execution_status: record.execution_status,
     failure_class: record.failure_class,
+    target_superseded: record.target?.target_superseded === true,
     target_fingerprint: record.target?.target_url_sha256,
     runtime_fingerprint: sha(JSON.stringify({
       repo_sha: record.target?.target_repo_sha,
       search_contract_version: record.search?.response?.search_contract_version,
+      expected_backend_revision: record.search?.expected_backend_revision,
     })),
     run_id: runId,
     run_url: `https://github.com/${repository}/actions/runs/${runId}`,
@@ -55,7 +95,7 @@ function fallbackSummary(platform, env) {
   const supplied = String(env[`${platform.toUpperCase()}_FAILURE_CLASS`] || '');
   let failure = defaultFailure;
   try {
-    if (supplied) {
+    if (supplied && safeFallbackFailureClasses.has(supplied)) {
       classifyProductionHealthOutcome({ failureClass: supplied, platform });
       failure = supplied;
     }
@@ -65,6 +105,7 @@ function fallbackSummary(platform, env) {
   return {
     schema_version: 'search_production_health_summary_v1', platform,
     product_health: outcome.product_health, execution_status: outcome.execution_status, failure_class: failure,
+    target_superseded: false,
     target_fingerprint: sha(`target-unavailable:${platform}`),
     runtime_fingerprint: sha(`${env.GITHUB_SHA || 'unknown'}:${platform}`),
     run_id: runId,
@@ -81,7 +122,7 @@ function aggregatePlatformSummary(summary, record) {
     target_url_sha256: record.target?.target_url_sha256,
     target_superseded: record.target?.target_superseded === true,
     site_runtime_sha: record.target?.target_repo_sha,
-    search_backend_revision: record.search?.response?.search_contract_version,
+    search_backend_revision: record.search?.expected_backend_revision || record.search?.response?.search_contract_version,
     content_generation_id: record.search?.response?.catalog_revision,
     search_index_generation_id: record.search?.response?.corpus_revision,
     search_contract_version: record.search?.response?.search_contract_version,
@@ -115,11 +156,17 @@ export async function runProductionHealthReporter(argv = process.argv.slice(2), 
   const options = parse(argv);
   const currentRecords = await resultsBelow(options.evidenceRoot);
   const priorRecords = await resultsBelow(options.historyRoot);
+  const priorAggregates = await aggregateSummariesBelow(options.historyRoot);
   const currentByPlatform = new Map(currentRecords.map((item) => [item.platform, item]));
-  const prior = priorRecords.map((item) => summaryFromRecord(item, {
+  const priorEvidence = priorRecords.map((item) => summaryFromRecord(item, {
     ...env,
     GITHUB_RUN_ID: String(item.workflow_run_id || env.GITHUB_RUN_ID || ''),
-  })).filter((item) => item.run_id !== String(env.GITHUB_RUN_ID || '')).sort((left, right) => {
+  }));
+  // Aggregate summaries preserve typed pre-runner UNKNOWN cells that have no
+  // platform result.json. Prefer the platform evidence when both are present.
+  const priorByIdentity = new Map(priorAggregates.map((item) => [`${item.run_id}:${item.platform}`, item]));
+  for (const item of priorEvidence) priorByIdentity.set(`${item.run_id}:${item.platform}`, item);
+  const prior = [...priorByIdentity.values()].filter((item) => item.run_id !== String(env.GITHUB_RUN_ID || '')).sort((left, right) => {
     const a = BigInt(left.run_id);
     const b = BigInt(right.run_id);
     return a < b ? -1 : a > b ? 1 : 0;

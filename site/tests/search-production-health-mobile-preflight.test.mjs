@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { buildSameOriginNavigationReceipt,
+import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
   extractSanitizedNavigationResponses } from '../e2e/mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt, isSafeMobilePreflightRetryReceipt,
   runAppiumTransportPreflight } from '../e2e/mobile-web/appium-preflight.mjs';
@@ -293,4 +293,53 @@ test('navigation receipt rejects cross-origin and non-200 document evidence', ()
     responses: [{ origin: 'https://kenigevents.ru', pathname: '/events/1', status: 404,
       resource_type: 'document' }],
   }), /http_200_missing/u);
+});
+
+
+test('mobile pinned target receipt rejects redirect and requires exact 2xx document', () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  assert.equal(buildExactTargetNavigationReceipt({
+    expectedUrl: target, finalUrl: target, networkSource: 'performance',
+    responses: [{ origin: 'https://kenigevents.ru', pathname: '/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/', status: 200, resource_type: 'document' }],
+  }).redirect_count, 0);
+  assert.throws(() => buildExactTargetNavigationReceipt({
+    expectedUrl: target, finalUrl: target,
+    responses: [{ origin: 'https://kenigevents.ru', pathname: '/other', status: 302, resource_type: 'document' }],
+  }), /search_target_redirected/u);
+});
+
+test('mobile Auth callback response bytes join explicit getUser/RLS meter without retaining URL', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  let logs = 0;
+  const driver = {
+    capabilities: {},
+    async getLogs() {
+      logs += 1;
+      if (logs !== 2) return [];
+      return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
+        type: 'Document', response: { status: 303,
+          url: 'https://project.supabase.co/auth/v1/verify?token=secret', encodedDataLength: 2048 },
+      } }) }];
+    },
+    async url() {}, async getUrl() { return target; },
+    async waitUntil(predicate) { if (!await predicate()) throw new Error('wait_failed'); },
+    async execute(fn) {
+      if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
+        get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,
+        product_otp_issue_count: 0, external_mail_send_count: 0, external_mail_receipt_count: 0,
+        real_mail_fallback: 'forbidden',
+      };
+      if (fn?.name === 'snapshotSearchRuntimeProbe') return {
+        meter: { total_bytes: 100, target_bytes: 48 * 1024, hard_limit_bytes: 96 * 1024,
+          categories: { auth: 100, edge: 0, direct_rest: 0, direct_rpc: 0 } },
+      };
+      return true;
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  await adapter.bootstrapSession('https://project.supabase.co/auth/v1/verify?token=secret', target);
+  const verified = await adapter.verifyAuthenticatedOwner();
+  assert.equal(verified.meter.categories.auth, 2148);
+  assert.equal(verified.meter.total_bytes, 2148);
+  assert.doesNotMatch(JSON.stringify(verified), /project|verify|token|secret/u);
 });

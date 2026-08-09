@@ -12,7 +12,7 @@ const record = (platform, runId, failureClass = null) => ({
   product_health: failureClass ? 'UNCONFIRMED' : 'HEALTHY',
   execution_status: failureClass ? 'FAILED' : 'PASS', failure_class: failureClass,
   workflow_run_id: runId,
-  target: { target_url_sha256: hash, target_repo_sha: 'b'.repeat(40) },
+  target: { target_url_sha256: hash, target_repo_sha: 'b'.repeat(40), target_superseded: false },
   search: { response: { search_contract_version: 'v1' } },
 });
 
@@ -88,4 +88,53 @@ test('workflow aggregate contains only sanitized per-platform summaries and tota
   assert.equal(value.aggregate.client_observed_supabase_bytes, 12345);
   assert.equal(value.platforms[0].opened_route_status, 200);
   assert.equal(JSON.stringify(value).includes('https://kenigevents.ru'), false);
+});
+
+
+test('missing artifact never trusts a BROKEN workflow output as product proof', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'search-report-unproved-broken-'));
+  const value = await runProductionHealthReporter(
+    ['--evidence-root', root],
+    env('1300', { BROWSER_RESULT: 'failure', BROWSER_FAILURE_CLASS: 'BROKEN_NO_RESULTS' }),
+  );
+  assert.deepEqual(value, [{ platform: 'browser', action: 'none' }]);
+});
+
+test('aggregate fallback history carries pre-runner UNKNOWN streak to the third run', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'search-report-current-empty-'));
+  const history = await mkdtemp(join(tmpdir(), 'search-report-aggregate-history-'));
+  for (const runId of ['100', '200']) {
+    const directory = join(history, runId, `search-production-health-aggregate-${runId}-1`);
+    await mkdir(directory, { recursive: true });
+    const fallback = {
+      schema_version: 'search_production_health_summary_v1', platform: 'android',
+      product_health: 'UNCONFIRMED', execution_status: 'FAILED', failure_class: 'UNKNOWN_ANDROID_INFRA',
+      target_superseded: false, target_fingerprint: hash, runtime_fingerprint: hash,
+      run_id: runId, run_url: `https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/${runId}`,
+      evidence_available: false,
+    };
+    await writeFile(join(directory, 'summary.json'), JSON.stringify({
+      schema_version: 'search_production_health_workflow_summary_v1', workflow_run_id: runId,
+      platforms: [fallback], platform_count: 1, aggregate: {},
+    }));
+  }
+  const value = await runProductionHealthReporter(
+    ['--evidence-root', root, '--history-root', history],
+    env('300', { ANDROID_RESULT: 'failure', ANDROID_FAILURE_CLASS: 'UNKNOWN_ANDROID_INFRA' }),
+  );
+  assert.deepEqual(value, [{ platform: 'android', action: 'open_or_update' }]);
+});
+
+test('superseded evidence never mutates product issues', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'search-report-superseded-'));
+  await put(root, 'browser', {
+    ...record('browser', '1400'), product_health: 'BROKEN', execution_status: 'FAILED',
+    failure_class: 'BROKEN_NO_RESULTS', target: {
+      target_url_sha256: hash, target_repo_sha: 'b'.repeat(40), target_superseded: true,
+    },
+  });
+  const value = await runProductionHealthReporter(
+    ['--evidence-root', root], env('1400', { BROWSER_RESULT: 'failure' }),
+  );
+  assert.deepEqual(value, [{ platform: 'browser', action: 'none' }]);
 });

@@ -22,11 +22,12 @@ export async function runRealWheelScroll({
   return { performed: true, delta_y: after - before, card_visible_after: await lastCardVisible() };
 }
 
-function snapshotResultsInPage() {
+export function snapshotResultsInPage() {
   const results = document.querySelector('[data-search-results]');
   const status = document.querySelector('[data-search-status]');
   const submit = document.querySelector('[data-search-submit]');
   const cards = Array.from(document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]'));
+  const candidateCards = Array.from(document.querySelectorAll('[data-search-results] [data-event-card], [data-search-results] [data-search-vector-card]'));
   const visible = (node) => {
     const style = getComputedStyle(node); const rect = node.getBoundingClientRect();
     return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0
@@ -43,8 +44,8 @@ function snapshotResultsInPage() {
     terminal: !error && !busy && Boolean(results && !results.hidden && cards.length > 0),
     error, cards_visible: cards.some(visible), visible_card_count: cards.filter(visible).length,
     rendered_ids: ids, rendered_families: families,
-    skeleton_count: document.querySelectorAll('[data-search-skeletons]:not([hidden]) [data-search-skeleton], [data-search-results] [data-skeleton]').length,
-    placeholder_count: cards.filter((node) => !node.getAttribute('data-event-id')).length,
+    skeleton_count: document.querySelectorAll('[data-search-skeletons]:not([hidden]) .authorized-search__skeleton-card, [data-search-results] [data-skeleton]').length,
+    placeholder_count: candidateCards.filter((node) => !node.getAttribute('data-event-id')).length,
     card_renderer_unavailable: Boolean(results?.querySelector('[data-search-card-render-unavailable]')),
   };
 }
@@ -113,6 +114,7 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       const observed = new URL(page.url());
       if (observed.origin !== expected.origin) throw new Error('search_target_origin_changed');
       if (observed.href !== expected.href) throw new Error('search_target_redirected');
+      if (response?.request?.()?.redirectedFrom?.()) throw new Error('search_target_redirected');
       if (!response || response.status() < 200 || response.status() >= 300) throw new Error('search_target_http_invalid');
     },
     async inspectSurface() {

@@ -842,7 +842,7 @@ Smart Update
 | Identity | Канонический существующий источник | Семантика health |
 |---|---|---|
 | `site_runtime_sha` | accepted candidate `repo_sha`, первоначально baked Fly image SHA | функциональный runtime; фиксируется на run |
-| `search_backend_revision` | response `search_contract_version` + `policy_versions` | функциональный backend contract; точного Edge byte/deploy SHA пока нет |
+| `search_backend_revision` | validated `search-runtime-deployed` marker; response `search_contract_version` remains observed telemetry | ожидаемый функциональный backend contract; точного Edge byte/deploy SHA пока нет |
 | `content_generation_id` | `snapshot_id`/`input_fingerprint`; content identity `catalog_revision` | telemetry, не exact health gate |
 | `search_index_generation_id` | `corpus_revision`/`search_document_revision` | telemetry, не exact health gate |
 
@@ -856,9 +856,13 @@ Edge SHA остаётся честно отмеченным gap этапа 2; н
 не вводится.
 
 В текущем marker contract `search_backend_revision` обязан быть точным
-ожидаемым `search_contract_version`, потому что только это значение доступно в
-одном разрешённом product Search response. `policy_versions` сохраняются как
-telemetry; отдельный Edge byte/SHA нельзя подменять придуманной metadata.
+ожидаемым `search_contract_version`, а непустой `deployment_run_id` служит
+доверенным post-success release receipt. Для deploy-triggered запуска эта пара
+проверяется **до** Auth/Search вместе с active accepted-site receipt; отсутствие
+или невалидность marker даёт `BLOCKED_RELEASE_NOT_ACTIVE` и нулевой product
+traffic. Единственный разрешённый Search response затем сохраняет фактически
+наблюдённый `search_contract_version` и `policy_versions` как telemetry.
+Отдельный Edge byte/SHA нельзя подменять придуманной metadata.
 
 ### 16.3 Три тестовых контура
 
@@ -904,9 +908,10 @@ no-mail browser session существующие `cold_vector_llm` и
    обязан получить `input_fingerprint` вместе с build/run/repo/snapshot и
    digest-полями, а также проверить, что SHA-256 opaque URL token совпадает с
    `token_sha256` accepted receipt.
-4. После journey разрешена только повторная проверка pointer. Если identity
-   изменилась, записывается `target_superseded=true`; Search не повторяется,
-   результат не становится product failure.
+4. После terminal journey, включая failure после dispatch, выполняется только
+   повторная проверка pointer. Если identity изменилась, записывается
+   `target_superseded=true`; Search не повторяется, а reporter не создаёт и не
+   закрывает product issue по этому результату.
 5. Pre-dispatch resolver retry разрешён только при доказанных нулевых side
    effects. После Search dispatch retry запрещён.
 
@@ -970,6 +975,8 @@ production health. CI, release qualification, manual legacy debug,
 typed `BROKEN_*`; HEALTHY закрывает только product issue той же platform.
 Одинаковый `UNKNOWN_*` создаёт infrastructure issue только на третьем подряд
 terminal результате своей platform; cost/evidence имеют отдельные fingerprints.
+Если sanitized evidence отсутствует, workflow output `BROKEN_*` не считается
+product proof и fail-closed классифицируется как platform `UNKNOWN_*`.
 
 ### 16.8 Egress budget и byte meter
 
@@ -986,6 +993,14 @@ body недоступен, либо UTF-8 размер реально получ
 Storage/CDN и не-Supabase origins исключаются. В evidence попадают только
 категория и целые byte counters. Это **client-observed budget proxy**, а не
 точный Supabase billing meter.
+
+На mobile callback network receipt сворачивается сразу до категории и числа
+полученных bytes; после attach тот же Appium session выполняет явные `getUser`
+и один owner-RLS read через instrumented resilient transport. Raw URL, token,
+body и driver log не сохраняются. Android использует Appium `3.6.0` + pinned
+UiAutomator2 `8.2.2`; iOS — Appium `3.6.0`, Xcode `16.4`, pinned XCUITest
+`12.1.4` и соответствующий downloaded WDA. Workflow устанавливает и проверяет
+точную driver version до side-effect-free preflight.
 
 ### 16.9 Migration from current workflow
 
@@ -1031,10 +1046,13 @@ guard, а не доказанный двунаправленный atomic mutex.
 
 ### 16.12 Что реализовано на этапе 2 и что осталось
 
-Реализованы production resolver/pointer reread, one-query browser/Appium
+Реализованы production resolver/pointer reread на success и failure,
+one-query browser/Appium
 journey, real scroll + HTTP-200 card open, client-observed byte meter, platform
-broker identity/admission, explicit deploy marker, две schedule, manual profiles
-и typed reporter. Перед первым live run migration broker claims должна быть
+broker identity/admission и bounded one-read in-memory lost-response replay,
+explicit deploy marker, две schedule, manual profiles и typed reporter.
+Automatic schedule/dispatch остаются default-off. Перед первым live run
+migration broker claims должна быть
 применена, Fly broker — задеплоен из exact `origin/main`, а новый workflow ref —
 добавлен в broker allowlist. Затем допускаются максимум два полных workflow:
 browser+Android и browser+iOS. До их terminal evidence состояние остаётся

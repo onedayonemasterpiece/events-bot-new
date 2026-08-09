@@ -130,7 +130,9 @@ export function buildSearchHealthReportPlan({ summary, history = [] } = {}) {
   const prior = normalizeSearchHealthHistory(history);
   let operation;
 
-  if (current.product_health === 'HEALTHY') {
+  if (current.target_superseded === true) {
+    operation = noOperation(current, 'target_superseded');
+  } else if (current.product_health === 'HEALTHY') {
     operation = closeProductOperation(current);
   } else if (current.failure_class?.startsWith('BROKEN_')) {
     operation = openOperation({
@@ -194,6 +196,7 @@ const exactJsonEqual = (left, right) => (
 );
 
 const expectedOperationForPlan = (summary, operation) => {
+  if (summary.target_superseded === true) return noOperation(summary, 'target_superseded');
   if (summary.product_health === 'HEALTHY') return closeProductOperation(summary);
   if (summary.failure_class?.startsWith('BROKEN_')) {
     return openOperation({

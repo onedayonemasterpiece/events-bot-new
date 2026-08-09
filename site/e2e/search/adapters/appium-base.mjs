@@ -1,7 +1,7 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe,
   verifyAuthenticatedOwnerRuntimeProbe } from './runtime-probe.mjs';
 import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
-import { buildSameOriginNavigationReceipt,
+import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
   extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt,
   runAppiumTransportPreflight } from '../../mobile-web/appium-preflight.mjs';
@@ -152,6 +152,7 @@ export async function createAppiumSearchAdapter(options = {}) {
   let configuredPolicy = {};
   let nativeKeyboardObserved = false;
   let closed = false;
+  let callbackAuthObservedBytes = 0;
   const driverDiagnostics = {
     console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0,
   };
@@ -167,6 +168,19 @@ export async function createAppiumSearchAdapter(options = {}) {
     }
     accumulateClosedDriverDiagnostics(networkLogs, driverDiagnostics, driverDiagnosticIds);
     accumulateClosedDriverDiagnostics(consoleLogs, driverDiagnostics, driverDiagnosticIds);
+  };
+
+  const meterWithCallbackAuthBytes = (meter = {}) => {
+    const categories = { auth: 0, edge: 0, direct_rest: 0, direct_rpc: 0, ...(meter.categories || {}) };
+    categories.auth = Number(categories.auth || 0) + callbackAuthObservedBytes;
+    const total = Object.values(categories).reduce((sum, value) => sum + Number(value || 0), 0);
+    const target = Number(meter.target_bytes || 48 * 1024);
+    const hard = Number(meter.hard_limit_bytes || 96 * 1024);
+    return {
+      ...meter, categories, total_bytes: total, target_bytes: target, hard_limit_bytes: hard,
+      budget_status: total <= target ? 'within_target' : total <= hard ? 'above_target' : 'hard_limit_exceeded',
+      target_met: total <= target, cost_guard_passed: total <= hard, hard_limit_exceeded: total > hard,
+    };
   };
 
   const deleteDriverSession = async () => {
@@ -243,19 +257,45 @@ export async function createAppiumSearchAdapter(options = {}) {
     async bootstrapSession(actionLink, returnTarget) {
       lifecycle.failure_stage = 'auth_callback';
       lifecycle.auth_callback_started = true;
+      const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
+      const initialLogs = await driver.getLogs(networkType).catch(() => null);
+      if (!Array.isArray(initialLogs)) throw new Error('mobile_auth_network_log_unavailable');
       await driver.url(actionLink);
       await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(returnTarget).origin,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_timeout' });
       await driver.waitUntil(async () => driver.execute(() => document.querySelector('[data-authorized-search]')
         ?.classList.contains('is-authorized') === true),
       { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_session_not_restored' });
+      const callbackLogs = await driver.getLogs(networkType).catch(() => null);
+      if (!Array.isArray(callbackLogs)) throw new Error('mobile_auth_network_log_unavailable');
+      callbackAuthObservedBytes += extractSanitizedNavigationResponses(callbackLogs)
+        .filter((item) => item.pathname === '/auth/v1' || item.pathname.startsWith('/auth/v1/'))
+        .reduce((sum, item) => sum + Number(item.encoded_bytes || 0), 0);
       lifecycle.auth_callback_authorized = true;
       lifecycle.failure_stage = 'search_surface';
     },
     async open(targetUrl) {
+      const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
+      const initialLogs = await driver.getLogs(networkType).catch(() => null);
+      if (!Array.isArray(initialLogs)) throw new Error('mobile_target_network_log_unavailable');
       await driver.url(targetUrl);
-      await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(targetUrl).origin,
-        { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_target_origin_changed' });
+      await driver.waitUntil(async () => (await driver.getUrl()) === targetUrl,
+        { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_target_redirected' });
+      const responses = [];
+      await driver.waitUntil(async () => {
+        const logs = await driver.getLogs(networkType).catch(() => null);
+        if (!Array.isArray(logs)) return false;
+        responses.push(...extractSanitizedNavigationResponses(logs));
+        try {
+          lifecycle.target_navigation_receipt = buildExactTargetNavigationReceipt({
+            expectedUrl: targetUrl, finalUrl: await driver.getUrl(), responses, networkSource: networkType,
+          });
+          return true;
+        } catch (error) {
+          if (String(error?.message) === 'search_target_redirected') throw error;
+          return false;
+        }
+      }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'search_target_http_invalid' });
     },
     async inspectSurface() {
       await driver.waitUntil(async () => driver.execute(() => Boolean(document.querySelector('[data-authorized-search]'))),
@@ -293,7 +333,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.execute(installSearchRuntimeProbe, { ...configuredPolicy, production_health: true });
       const receipt = await driver.execute(verifyAuthenticatedOwnerRuntimeProbe);
       const snapshot = await driver.execute(snapshotSearchRuntimeProbe);
-      return { receipt, meter: snapshot.meter };
+      return { receipt, meter: meterWithCallbackAuthBytes(snapshot.meter) };
     },
     async typeQuery(value) {
       lifecycle.failure_stage = 'search_input_focus';

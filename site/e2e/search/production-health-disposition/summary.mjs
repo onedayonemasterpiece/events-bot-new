@@ -13,6 +13,7 @@ export const SEARCH_HEALTH_SUMMARY_FIELDS = Object.freeze([
   'product_health',
   'execution_status',
   'failure_class',
+  'target_superseded',
   'target_fingerprint',
   'runtime_fingerprint',
   'run_id',
@@ -124,6 +125,7 @@ export function normalizeSearchHealthSummary(summary) {
   if (summary.failure_class !== null && !FAILURE_CLASS_SET.has(summary.failure_class)) {
     fail('failure_class');
   }
+  if (typeof summary.target_superseded !== 'boolean') fail('target_superseded');
   if (!FINGERPRINT_PATTERN.test(summary.target_fingerprint)) fail('target_fingerprint');
   if (!FINGERPRINT_PATTERN.test(summary.runtime_fingerprint)) fail('runtime_fingerprint');
   if (typeof summary.run_id !== 'string' || !RUN_ID_PATTERN.test(summary.run_id)) fail('run_id');
@@ -137,6 +139,7 @@ export function normalizeSearchHealthSummary(summary) {
     product_health: summary.product_health,
     execution_status: summary.execution_status,
     failure_class: summary.failure_class,
+    target_superseded: summary.target_superseded,
     target_fingerprint: summary.target_fingerprint,
     runtime_fingerprint: summary.runtime_fingerprint,
     run_id: summary.run_id,
