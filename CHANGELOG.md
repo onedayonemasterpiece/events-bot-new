@@ -29,6 +29,14 @@
   now block readiness instead of producing duplicate or zero-geometry claims,
   and font/route/screenshot waits plus per-plan progress are bounded.
 
+- Made Behavioral Decoder v1.1 review materialization preserve readiness
+  blockers instead of erasing them after a complete raster ledger. Final
+  breakpoint/container and dynamic-region rows now bind their executable
+  packet observations or exact blocker IDs one by one; plan/action/page records
+  retain reachability and coverage refs. Manifest and receipt counts are
+  evidence-derived, while the corrected 67/57/10/124 Actions contract and
+  value-oriented secret scan remain fail-closed.
+
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
   host/fetch policy, principal binding, workspace configuration, MIME, size,

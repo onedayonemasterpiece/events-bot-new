@@ -625,7 +625,10 @@ The capture implementation is intentionally split from acceptance:
    have been opened and reviewed individually at full resolution, every review
    is bound one-to-one to the observation path and SHA-256, the independent
    audit passes, and both the Actions artifact and permanent Release asset have
-   complete immutable provenance.
+   complete immutable provenance. Those review/provenance gates are necessary
+   but not sufficient: any packet or per-probe reconciliation row with
+   `blocks_ready:true` keeps the final receipt
+   `EVIDENCE_COLLECTION_INCOMPLETE`.
 
 The corrected registry has 57 executable packets and ten exact blockers. Blocked states
 are recorded as blockers rather than replaced by fake wrappers: source-only
@@ -642,8 +645,9 @@ fail-closed reconciliation receipt, not a claim that a family screenshot
 captured 293 transitions.
 
 Captured evidence remains plane-qualified as controlled exact-source runtime.
-It includes mobile menu/disclosure/focus-return behavior, rail edges and
-keyboard alternatives, sticky/fixed collisions, separate Editorial stacked
+It includes mobile menu/disclosure/focus-return behavior, rail edges and the
+exact observed absence of a working native `End`/`Home` alternative,
+sticky/fixed collisions, separate Editorial stacked
 and Split inline CTA anatomy, all three unresolved transport treatments,
 consumer-specific media behavior (including separate real `4:5` EventCard and
 `5:4` rail/search evidence), the large primary/poster plus smaller remaining
