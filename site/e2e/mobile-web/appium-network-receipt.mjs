@@ -5,7 +5,37 @@ const safeUrl = (raw) => {
 /** Reduce Chrome/Safari protocol logs to URL objects held only in memory. */
 export function extractSanitizedNavigationResponses(logs) {
   const responses = [];
+  const responseByRequestId = new Map();
+  const terminalBytesByRequestId = new Map();
   const visited = new WeakSet();
+  const applyTerminalBytes = (record, encodedBytes) => {
+    if (!record || record.has_declared_length) return;
+    if (encodedBytes > 0) record.item.encoded_bytes = encodedBytes;
+    else delete record.item.encoded_bytes;
+  };
+  const appendResponse = (response, resourceType, requestId, terminalEligible) => {
+    const url = safeUrl(response?.url);
+    const status = Number(response?.status);
+    if (!url || !Number.isInteger(status)) return;
+    const declared = Number(response?.headers?.['content-length']
+      ?? response?.headers?.['Content-Length']);
+    const hasDeclaredLength = Number.isSafeInteger(declared) && declared >= 0;
+    const partialEncoded = Number(response?.encodedDataLength);
+    const encodedBytes = hasDeclaredLength
+      ? declared : Number.isSafeInteger(partialEncoded) && partialEncoded >= 0 ? partialEncoded : 0;
+    const item = { origin: url.origin, pathname: url.pathname, status,
+      resource_type: String(resourceType || '').toLowerCase(),
+      ...(encodedBytes > 0 ? { encoded_bytes: encodedBytes } : {}) };
+    responses.push(item);
+    const identity = String(requestId || '');
+    if (terminalEligible && identity) {
+      const record = { item, has_declared_length: hasDeclaredLength };
+      responseByRequestId.set(identity, record);
+      if (terminalBytesByRequestId.has(identity)) {
+        applyTerminalBytes(record, terminalBytesByRequestId.get(identity));
+      }
+    }
+  };
   const visit = (value, depth = 0) => {
     if (depth > 10 || value == null) return;
     if (typeof value === 'string') {
@@ -17,19 +47,22 @@ export function extractSanitizedNavigationResponses(logs) {
     if (typeof value !== 'object' || visited.has(value)) return;
     visited.add(value);
     if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
-    if (String(value.method || '') === 'Network.responseReceived') {
-      const params = value.params && typeof value.params === 'object' ? value.params : {};
+    const method = String(value.method || '');
+    const params = value.params && typeof value.params === 'object' ? value.params : {};
+    if (method === 'Network.requestWillBeSent'
+      && params.redirectResponse && typeof params.redirectResponse === 'object') {
+      appendResponse(params.redirectResponse, params.type, params.requestId, false);
+    }
+    if (method === 'Network.responseReceived') {
       const response = params.response && typeof params.response === 'object' ? params.response : {};
-      const url = safeUrl(response.url);
-      const status = Number(response.status);
-      if (url && Number.isInteger(status)) {
-        const declared = Number(response.headers?.['content-length'] ?? response.headers?.['Content-Length']);
-        const encoded = Number(response.encodedDataLength);
-        const encodedBytes = Number.isSafeInteger(declared) && declared >= 0
-          ? declared : Number.isSafeInteger(encoded) && encoded >= 0 ? encoded : 0;
-        responses.push({ origin: url.origin, pathname: url.pathname, status,
-          resource_type: String(params.type || '').toLowerCase(),
-          ...(encodedBytes > 0 ? { encoded_bytes: encodedBytes } : {}) });
+      appendResponse(response, params.type, params.requestId, true);
+    }
+    if (method === 'Network.loadingFinished') {
+      const identity = String(params.requestId || '');
+      const encodedBytes = Number(params.encodedDataLength);
+      if (identity && Number.isSafeInteger(encodedBytes) && encodedBytes >= 0) {
+        terminalBytesByRequestId.set(identity, encodedBytes);
+        applyTerminalBytes(responseByRequestId.get(identity), encodedBytes);
       }
     }
     Object.values(value).forEach((child) => visit(child, depth + 1));

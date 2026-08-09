@@ -251,6 +251,114 @@ test('first-card navigation receipt proves same-origin HTTP 200 without retainin
   assert.doesNotMatch(JSON.stringify(receipt), /example|private|token|kenigevents/iu);
 });
 
+test('CDP redirectResponse exposes a document redirect that both target and card receipts reject', () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const rawLogs = [
+    { message: JSON.stringify({ message: {
+      method: 'Network.requestWillBeSent', params: {
+        requestId: 'document-chain', type: 'Document',
+        request: { method: 'GET', url: target },
+        redirectResponse: { status: 302, url: 'https://evil.example/bounce?secret=no' },
+      },
+    } }) },
+    { message: JSON.stringify({ message: {
+      method: 'Network.responseReceived', params: {
+        requestId: 'document-chain', type: 'Document',
+        response: { status: 200, url: target },
+      },
+    } }) },
+  ];
+  const responses = extractSanitizedNavigationResponses(rawLogs);
+  assert.deepEqual(responses, [
+    { origin: 'https://evil.example', pathname: '/bounce', status: 302, resource_type: 'document' },
+    { origin: 'https://kenigevents.ru', pathname: '/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/', status: 200, resource_type: 'document' },
+  ]);
+  assert.throws(() => buildExactTargetNavigationReceipt({
+    expectedUrl: target, finalUrl: target, responses,
+  }), /redirected|cross_origin/u);
+  const sameOriginRedirectResponses = extractSanitizedNavigationResponses([
+    { message: JSON.stringify({ message: {
+      method: 'Network.requestWillBeSent', params: {
+        requestId: 'same-origin-document-chain', type: 'Document',
+        request: { method: 'GET', url: target },
+        redirectResponse: { status: 302, url: 'https://kenigevents.ru/old-search?private=no' },
+      },
+    } }) },
+    rawLogs[1],
+  ]);
+  assert.throws(() => buildExactTargetNavigationReceipt({
+    expectedUrl: target, finalUrl: target, responses: sameOriginRedirectResponses,
+  }), /redirected/u);
+  assert.throws(() => buildSameOriginNavigationReceipt({
+    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: target,
+    finalUrl: target, responses,
+  }), /redirected|cross_origin/u);
+  assert.doesNotMatch(JSON.stringify(responses), /secret/u);
+});
+
+test('CDP subresource redirectResponse remains harmless to exact target and card receipts', () => {
+  const target = 'https://kenigevents.ru/events/42';
+  const rawLogs = [
+    { message: JSON.stringify({ message: {
+      method: 'Network.requestWillBeSent', params: {
+        requestId: 'image-chain', type: 'Image',
+        request: { method: 'GET', url: 'https://cdn.example/final.webp' },
+        redirectResponse: { status: 302, url: 'https://cdn.example/old.webp?secret=no' },
+      },
+    } }) },
+    { message: JSON.stringify({ message: {
+      method: 'Network.responseReceived', params: {
+        requestId: 'document-final', type: 'Document',
+        response: { status: 200, url: target },
+      },
+    } }) },
+  ];
+  const responses = extractSanitizedNavigationResponses(rawLogs);
+  assert.equal(responses[0].resource_type, 'image');
+  assert.equal(responses[0].status, 302);
+  assert.equal(buildExactTargetNavigationReceipt({
+    expectedUrl: target, finalUrl: target, responses,
+  }).redirect_count, 0);
+  assert.equal(buildSameOriginNavigationReceipt({
+    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: target,
+    finalUrl: target, responses,
+  }).http_status, 200);
+});
+
+test('CDP loadingFinished supplies terminal bytes while Content-Length keeps precedence', () => {
+  const rawLogs = [
+    { message: JSON.stringify({ message: {
+      method: 'Network.responseReceived', params: {
+        requestId: 'auth-terminal', type: 'Fetch', response: {
+          status: 200, url: 'https://project.supabase.co/auth/v1/user',
+          headers: {}, encodedDataLength: 64,
+        },
+      },
+    } }) },
+    { message: JSON.stringify({ message: {
+      method: 'Network.loadingFinished', params: {
+        requestId: 'auth-terminal', encodedDataLength: 4096,
+      },
+    } }) },
+    { message: JSON.stringify({ message: {
+      method: 'Network.responseReceived', params: {
+        requestId: 'auth-declared', type: 'Fetch', response: {
+          status: 200, url: 'https://project.supabase.co/auth/v1/token',
+          headers: { 'content-length': '128' }, encodedDataLength: 32,
+        },
+      },
+    } }) },
+    { message: JSON.stringify({ message: {
+      method: 'Network.loadingFinished', params: {
+        requestId: 'auth-declared', encodedDataLength: 8192,
+      },
+    } }) },
+  ];
+  const responses = extractSanitizedNavigationResponses(rawLogs);
+  assert.deepEqual(responses.map((item) => item.encoded_bytes), [4096, 128]);
+  assert.doesNotMatch(JSON.stringify(responses), /auth-terminal|auth-declared/u);
+});
+
 test('mobile protocol receipt counts unique event-search POSTs without retaining request data', () => {
   const seen = new Set();
   const request = { message: JSON.stringify({ message: {
