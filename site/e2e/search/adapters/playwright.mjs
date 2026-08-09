@@ -90,6 +90,17 @@ export async function createPlaywrightSearchAdapter(options = {}) {
   const wholeCellResponses = [];
   let wholeCellLastActivityAt = Date.now();
   const diagnostics = { console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0 };
+  const isCriticalFailedRequest = (request) => {
+    try {
+      if (request.resourceType?.() === 'document') return true;
+      return classifySupabaseClientUrl(request.url(), { supabaseOrigins: wholeCellOrigins })
+        !== SUPABASE_CLIENT_BYTE_CLASSES.EXCLUDED;
+    } catch {
+      // Unknown third-party/subresource metadata is not Search product-health
+      // evidence. The authoritative document and Supabase paths fail closed.
+      return false;
+    }
+  };
   const bindPage = (value) => {
     value.on('console', (message) => { if (message.type() === 'error') diagnostics.console_errors += 1; });
     value.on('request', (request) => {
@@ -106,7 +117,10 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       if (wholeCellActiveRequests.delete(request)) wholeCellLastActivityAt = Date.now();
     };
     value.on('requestfinished', finish);
-    value.on('requestfailed', (request) => { diagnostics.failed_requests += 1; finish(request); });
+    value.on('requestfailed', (request) => {
+      if (isCriticalFailedRequest(request)) diagnostics.failed_requests += 1;
+      finish(request);
+    });
     value.on('response', (response) => {
       let path = '';
       try { path = new URL(response.url()).pathname; } catch { /* ignored */ }

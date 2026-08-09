@@ -1384,6 +1384,27 @@ test('Playwright physical observer waits for delayed page-init bytes before pre-
   assert.equal(activity.meter.hard_limit_exceeded, true);
 });
 
+test('Playwright diagnostics ignore failed decorative subresources but retain document and Supabase failures', async () => {
+  const listeners = new Map();
+  const page = {
+    on(name, listener) { const values = listeners.get(name) || new Set(); values.add(listener); listeners.set(name, values); },
+    off(name, listener) { listeners.get(name)?.delete(listener); },
+    viewportSize: () => ({ width: 1280, height: 720 }), url: () => 'about:blank',
+  };
+  const adapter = await createPlaywrightSearchAdapter({
+    page, productionHealth: true, supabaseOrigins: ['https://project.supabase.co'],
+  });
+  const fail = (url, resourceType) => {
+    const request = { url: () => url, resourceType: () => resourceType };
+    for (const listener of listeners.get('requestfailed') || []) listener(request);
+  };
+  fail('https://images.example.invalid/card.webp', 'image');
+  assert.equal((await adapter.healthDiagnostics()).failed_requests, 0);
+  fail('https://project.supabase.co/functions/v1/event-search', 'fetch');
+  fail('https://kenigevents.ru/_review/token/poisk/', 'document');
+  assert.equal((await adapter.healthDiagnostics()).failed_requests, 2);
+});
+
 test('Playwright card open preserves Search activity and independently counts later Search POSTs', async () => {
   let currentUrl = 'https://kenigevents.ru/poisk/';
   const listeners = new Map();

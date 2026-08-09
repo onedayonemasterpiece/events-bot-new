@@ -37,6 +37,16 @@
 
 ### Fixed
 
+- Fixed the first merged Search production-health live run: the Android
+  emulator action now enters Bash before enabling `pipefail` (the action
+  invokes its script through POSIX `sh`), and browser diagnostics count failed
+  target documents and Supabase Search/Auth/Data requests rather than
+  unrelated decorative image/font subresources. Run `31330520373` had already
+  proved one real browser Search POST returned HTTP 200, five matching cards,
+  zero LLM/pagination and bounded bytes; these fixes remove the two harness
+  false negatives without weakening Search response, rendering, route, scroll,
+  storage or cost gates.
+
 - Fixed the production-health workflow definition so Appium's temporary npm
   and driver homes are exported from `RUNNER_TEMP` at step runtime instead of
   using the unavailable `runner` context in job-level `env`; GitHub can now
