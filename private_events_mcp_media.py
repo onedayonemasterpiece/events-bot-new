@@ -131,6 +131,18 @@ class MediaIntegrityError(MediaStoreError):
     audit_reason_code = "file_integrity_failed"
 
 
+def _host_audit_fingerprint(host: str) -> str:
+    """Fingerprint a dynamic host and its stable DNS suffixes without disclosure."""
+
+    labels = host.split(".")
+    values = [host]
+    values.append(".".join(labels[-2:]) if len(labels) >= 2 else host)
+    values.append(".".join(labels[-3:]) if len(labels) >= 3 else host)
+    return "".join(
+        hashlib.sha256(value.encode("ascii")).hexdigest()[:8] for value in values
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class StoredMediaAsset:
     """Internal verified metadata.
@@ -539,7 +551,7 @@ class SecureMediaAssetStore:
         if host not in self._allowed_hosts and not wildcard_match:
             raise MediaIngressRejected(
                 "download host is not allowlisted",
-                audit_detail=hashlib.sha256(host.encode("ascii")).hexdigest()[:12],
+                audit_detail=_host_audit_fingerprint(host),
             )
         return host, 443
 

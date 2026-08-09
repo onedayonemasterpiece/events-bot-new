@@ -10,6 +10,9 @@
   expiry and integrity failures while signed URLs, file IDs/names and provider
   identifiers remain absent from responses and audit logs. Foreign-principal
   assets and raw path/`file_*` strings still fail before provider I/O.
+  Dynamic denied hosts now fingerprint both the full hostname and stable DNS
+  suffixes, allowing an exact policy repair without storing a signed URL or
+  disclosing the temporary provider hostname.
 
 - Accepted VK's production video-story CDN under the same strict HTTPS,
   public-DNS, no-redirect media boundary, so a valid story returned from

@@ -45,6 +45,12 @@ capabilities, but no `ast_*` asset was created and no message was sent.
   ChatGPT file-parameter object. The connector had already rewritten the
   conversation upload to the required object; the rejection occurred inside
   media ingress before download.
+- 2026-08-09 — the first coded retry returned `FILE_HOST_NOT_ALLOWED`. A
+  controlled `*.oaiusercontent.com` policy probe remained denied and produced
+  a different full-host fingerprint, proving that ChatGPT rotates temporary
+  download hostnames outside that assumed suffix. No bytes/provider calls were
+  made. The next diagnostic records only one-way full/two-label/three-label
+  fingerprints so the stable DNS policy boundary can be identified safely.
 
 ## Root Cause
 
