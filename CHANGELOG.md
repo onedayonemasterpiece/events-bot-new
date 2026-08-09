@@ -5,7 +5,9 @@
 - Fixed closure materialization so the two superseded rail/probe evidence
   blockers are cleared consistently from both plan and action records; a
   converted reviewed nonblocking plan can no longer retain a stale
-  `blocker_id` for machine consumers.
+  `blocker_id` for machine consumers. The final manifest and receipt now also
+  expose authoritative total/blocking unresolved counts instead of relying on
+  an inherited pre-closure counter.
 - Fixed breakpoint evidence rasters on clean Actions runners so optional
   remote fonts cannot make Playwright's internal `document.fonts.ready` wait
   outlive an already-terminal CSSOM probe. The decoder now records the

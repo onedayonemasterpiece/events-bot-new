@@ -828,4 +828,6 @@ When the rail and aggregate probe evidence gates are converted, their plan and
 action records both clear `blocker_id`, `blocker_reason`, and `blocked_states`.
 The validator rejects any stale blocker identity on those reviewed nonblocking
 plans, so a machine consumer cannot mistake a closed evidence gap for an active
-one.
+one. The closure manifest and receipt expose `unresolved_records` and
+`blocking_unresolved_records`; these are the authoritative post-closure counts,
+while legacy inherited counters remain historical compatibility fields.
