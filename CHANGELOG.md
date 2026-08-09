@@ -35,6 +35,13 @@
   target/callback values are runner-masked before navigation. Activation also
   requires the exact workflow/event broker allowlists and equality of runtime,
   target, backend and content/index identities across the two live proofs.
+  The byte/side-effect observer spans pre-Auth navigation through the event
+  route, counts direct/relay probes and discarded retries exactly once, merges
+  mobile Auth/RLS bytes, waits for pending measurements before Search and
+  blocks pre-submit Search/Storage/receipt activity. The Edge HEAD contract is
+  deployed separately from Fly, and broker replay uses the full
+  repository/workflow/run/platform/persona identity with a completion-safe wait
+  and minute ciphertext erasure.
 
 - Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
   by promoting its 30 lazy card images to eager loading only inside the

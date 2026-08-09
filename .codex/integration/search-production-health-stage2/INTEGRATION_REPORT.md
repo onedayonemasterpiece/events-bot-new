@@ -19,15 +19,19 @@
 | mobile transport | `583ea5d0a` | `c27b983c8` | real Appium preflight/scroll/card open/cleanup |
 | broker | `a22f01b62` | `1e8188427` | platform identity, typed admission, migration |
 | reporter | `70754d633`, `ec02e0fc2` | `a557a6d0a` | platform disposition and REST mutation |
-| integration hardening | current branch | this report | legacy/full qualification compatibility, Appium auth/RLS, bounded release wait, reporter history/labels/aggregate, docs |
+| broker purpose/replay | `b3db5eff1`, `7954b1f98` | `ef00d10d9`, `330e20bcb` | distinct qualification persona, exact SQL identity, bounded replay and pg_cron erasure |
+| whole-cell observer | `b72cedeba` | `c07da8303` | pre-Auth through event-route physical POST/bytes/forbidden traffic boundary |
+| integration hardening | current branch | this report | Appium secret-log containment, Edge activation gate, reporter history/labels/aggregate and canonical docs |
 
 ## Deterministic acceptance
 
 Required before live:
 
-- Search production-health aggregate suite: **104/104 PASS**;
-- legacy Search harness: **30/30 PASS**;
-- broker Python/security **44/44 PASS**, Edge contract **5/5 PASS** and Auth
+- Search production-health aggregate suite: **128/128 PASS**;
+- legacy Search harness: **31/31 PASS**;
+- focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
+  security and static source/release regression **135/135 PASS**; Edge contract
+  group **25/25 PASS** and Auth
   Node **16/16 PASS**;
 - static source-binding/release regression: **87/87 PASS**;
 - workflow YAML and shell/node syntax;
@@ -38,23 +42,38 @@ Required before live:
 ## Production activation gate
 
 1. Merge #451 into current `main` after green checks.
-2. Apply migration `20260809143602_static_site_auth_broker_platform_claims.sql`.
-3. Add both `search-production-health.yml@refs/heads/main` and
-   `search-release-qualification.yml@refs/heads/main` to the broker workflow allowlist.
-4. Deploy exact merged `origin/main` through `scripts/deploy_fly_main.sh` with validation profile `none`.
-5. Run manual `browser_android`, then manual `browser_ios`; no retry after side effects.
-6. Only after both are terminal HEALTHY/PASS set `SEARCH_PRODUCTION_HEALTH_ENABLED=true`.
-7. Update the Search incident regression record and issue #431 with exact run IDs.
+2. Apply migration `20260809143602_static_site_auth_broker_platform_claims.sql`;
+   verify the widened identity, v1 compatibility and named minute `pg_cron`
+   ciphertext-erasure job.
+3. Add legacy, `search-production-health.yml@refs/heads/main` and
+   `search-release-qualification.yml@refs/heads/main` to the broker workflow
+   allowlist; set the exact event allowlist to
+   `workflow_dispatch,schedule,repository_dispatch`; verify the three cached
+   health personas plus distinct `search-cold-browser` account.
+4. Deploy `supabase/functions/event-search` from exact merged `origin/main` via
+   the pinned Supabase CLI and verify its side-effect-free HEAD contract.
+5. Deploy exact merged `origin/main` through `scripts/deploy_fly_main.sh` with
+   validation profile `none`.
+6. Run manual `browser_android`, then manual `browser_ios`. Debugging runs are
+   allowed by the owner, but every run remains one Search POST per selected
+   platform and each failure is investigated rather than blindly retried.
+7. Before enabling automation, require both platform sets HEALTHY/PASS and exact
+   equality of target fingerprint/immutable tuple, site runtime SHA, backend
+   revision and content/index generation ids across the accepted proofs.
+8. Set `SEARCH_PRODUCTION_HEALTH_ENABLED=true`, then update the Search incident
+   regression record and issue #431 with exact run IDs.
 
 Current disposition: `STAGE2_IMPLEMENTED_LIVE_ACCEPTANCE_PENDING / PRODUCT_HEALTH_UNCONFIRMED`.
 
-The current hardening pass additionally proves one physical POST is metered
-once, accepts real cache-hit execution, rejects real skeleton/placeholder UI,
+The current hardening pass additionally proves one physical POST is observed
+once from pre-Auth through event navigation, accepts bounded cache-write
+telemetry outcomes, rejects real skeleton/placeholder UI,
 aligns the Appium preflight/diagnostic receipt, preserves failed-journey bytes,
 gates cleanup, rereads pointer on failure, suppresses superseded issue mutation,
 keeps pre-runner UNKNOWN streaks, refuses missing-artifact BROKEN proof, pins
 Appium drivers, makes full qualification synchronous, and provides a bounded
-encrypted durable broker idempotency replay window. It also verifies the
+encrypted durable broker idempotency replay window with the full SQL identity
+and minute ciphertext erasure. It also verifies the
 active Edge contract with a side-effect-free HEAD before Auth/Search, enables
 the iOS Safari console bucket, rejects mobile redirect chains, and keeps an
 adapter-level physical Search observer alive through final event-page
@@ -62,5 +81,8 @@ diagnostics so the complete journey proves exactly one Search POST. Unknown
 pre-runner cells retain the exact sanitized summary schema with explicit
 closed null/zero values. Mobile protocol receipts also ingest CDP
 `redirectResponse` for the document chain and correlate terminal
-`loadingFinished.encodedDataLength` when Content-Length is absent. These are deterministic results;
+`loadingFinished.encodedDataLength` when Content-Length is absent. Direct and
+relay transport probes, discarded retries, Auth/RLS, Search and post-navigation
+traffic are counted exactly once; pending measurements and the hard cap are
+closed before the one Search dispatch. These are deterministic results;
 live acceptance remains `0 / 2` and no production state has been changed.
