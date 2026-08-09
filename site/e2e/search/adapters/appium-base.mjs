@@ -10,6 +10,7 @@ import { dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard,
   performNativeDocumentSwipe, prepareIosSafariWebContext,
   withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
 import { SupabaseClientObservedByteMeter } from '../production-health-meter.mjs';
+import { command as webdriverCommand } from 'webdriver';
 
 const IOS_SEARCH_INPUT_LABELS = Object.freeze([
   'Что хочется сделать?',
@@ -115,6 +116,18 @@ export async function runRealTouchScroll({ readScrollY, lastCardVisible, gesture
     ...(lastGesture ? { last_gesture: lastGesture } : {}) };
 }
 
+export function installAppiumClassicLogCommands(driver) {
+  if (!driver || typeof driver.addCommand !== 'function') {
+    throw new TypeError('mobile_classic_log_adapter_missing');
+  }
+  if (typeof driver.getLogs === 'function') return driver;
+  driver.addCommand('getLogs', webdriverCommand('POST', '/session/:sessionId/log', {
+    command: 'getLogs',
+    parameters: [{ name: 'type', type: 'string', required: true }],
+  }));
+  return driver;
+}
+
 export async function createAppiumSearchAdapter(options = {}) {
   const platform = options.platform;
   if (!['android', 'ios'].includes(platform)) throw new Error(`search_mobile_platform:${platform}`);
@@ -131,6 +144,10 @@ export async function createAppiumSearchAdapter(options = {}) {
         connectionRetryCount: 0,
         capabilities: options.capabilities,
       });
+      // WebdriverIO 9 removed deprecated JSONWP log commands even when the
+      // session is intentionally WebDriver Classic. Appium still exposes the
+      // exact endpoint used for Chrome performance and Safari log buckets.
+      installAppiumClassicLogCommands(driver);
     } catch (error) {
       const receipt = await buildAppiumSessionFailureReceipt({
         error, platform, startedAt,

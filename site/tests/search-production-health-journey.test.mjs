@@ -1424,7 +1424,13 @@ test('Playwright diagnostics ignore failed decorative subresources but retain do
   assert.equal((await adapter.healthDiagnostics()).failed_requests, 0);
   fail('https://project.supabase.co/functions/v1/event-search', 'fetch');
   fail('https://kenigevents.ru/_review/token/poisk/', 'document');
-  assert.equal((await adapter.healthDiagnostics()).failed_requests, 2);
+  const diagnostics = await adapter.healthDiagnostics();
+  assert.equal(diagnostics.failed_requests, 2);
+  assert.equal(diagnostics.failed_edge_requests, 1);
+  assert.equal(diagnostics.failed_document_requests, 1);
+  assert.equal(diagnostics.failed_auth_requests, 0);
+  assert.equal(diagnostics.failed_rest_requests, 0);
+  assert.equal(diagnostics.failed_rpc_requests, 0);
 });
 
 test('Playwright card open preserves Search activity and independently counts later Search POSTs', async () => {

@@ -30,6 +30,20 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 run `31332306409` proved the Android Bash/Appium/context fixes far
+  enough to complete the side-effect-free transport preflight, then stopped
+  before callback/Auth/Search. Targeted review against WebdriverIO's current
+  official contract found that standalone v9 removes deprecated JSONWP
+  `getLogs` even with Classic forced; the adapter had treated the absent method
+  as an unavailable Android performance bucket. It now installs only the exact
+  Appium log command through pinned `webdriver@9.30.0`. Browser again completed
+  one HTTP-200 Search with five matching rendered cards, zero LLM and cache
+  hit, but stopped before scroll on two closed critical request failures. The
+  prior artifact exposed only a total, so browser diagnostics now retain
+  allowlisted document/Auth/Edge/REST/RPC counts and an internal sanitized
+  failure code for the next bounded proof. No Android Search POST was made and
+  this run is not terminal acceptance.
+
 - 2026-08-09 live run `31331701360` proved the merged browser correction:
   browser finished `HEALTHY/PASS` on one real vector-only POST (HTTP 200), five
   response IDs exactly matching five rendered cards, zero LLM/pagination, an

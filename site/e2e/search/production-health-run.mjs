@@ -189,6 +189,11 @@ async function retainFailedJourneyEvidence(adapter, runtime = {}) {
       console_errors: Number(diagnostics.console_errors || 0),
       failed_requests: Number(diagnostics.failed_requests || authoritativeRuntime.network?.failed_requests || 0),
       error_responses: Number(diagnostics.error_responses || 0),
+      failed_document_requests: Number(diagnostics.failed_document_requests || 0),
+      failed_auth_requests: Number(diagnostics.failed_auth_requests || 0),
+      failed_edge_requests: Number(diagnostics.failed_edge_requests || 0),
+      failed_rest_requests: Number(diagnostics.failed_rest_requests || 0),
+      failed_rpc_requests: Number(diagnostics.failed_rpc_requests || 0),
     },
     meter: retainedMeter,
   };
@@ -275,6 +280,7 @@ export async function runProductionHealthCell(options = {}) {
   let pointerRereadAttempted = false;
   let failureClass = releaseActive === true ? null : PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
   let backendRevisionMismatch = false;
+  let failureCode = null;
   let phase = releaseActive === true ? 'preflight' : 'release_gate';
   let cleanupStatus = 'PENDING';
 
@@ -316,6 +322,9 @@ export async function runProductionHealthCell(options = {}) {
       targetSuperseded = supersession.target_superseded === true;
     }
   } catch (error) {
+    const candidateFailureCode = String(error?.message || '').split(':')[0];
+    failureCode = /^[a-z][a-z0-9_]{2,95}$/u.test(candidateFailureCode)
+      ? candidateFailureCode : 'search_health_unclassified_failure';
     if (phase === 'preflight' && error?.searchReceipt?.schema_version === 'mobile-preflight-failure-v1') {
       preflight = error.searchReceipt;
     }
@@ -377,6 +386,7 @@ export async function runProductionHealthCell(options = {}) {
     const value = {
       platform, ...outcome, target_immutable: targetImmutable, target_superseded: targetSuperseded,
       expected_search_backend_revision: options.expectedSearchBackendRevision || null,
+      failure_code: failureCode,
       preflight, auth, journey, meter, cleanup_status: cleanupStatus,
       workflow_run_id: options.workflowRunId,
       tested_at: testedAt,
@@ -664,6 +674,7 @@ export async function runProductionHealthCli(env = process.env) {
     schema_version: 'search_production_health_cli_v1', platform: result.platform,
     product_health: result.product_health, execution_status: result.execution_status,
     failure_class: result.failure_class, target_repo_sha: result.target.target_repo_sha,
+    failure_code: result.failure_code,
     target_superseded: result.target.target_superseded,
     physical_post_count: result.search.physical_post_count,
     observed_supabase_bytes: result.supabase_observed_bytes.total_bytes,
