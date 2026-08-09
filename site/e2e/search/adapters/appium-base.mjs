@@ -319,14 +319,23 @@ export async function createAppiumSearchAdapter(options = {}) {
       // actual verify request is sent to Supabase. Correlate the closed Auth
       // category, never the callback link's unrelated origin.
       if (callbackTracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }) > 0) {
-        await driver.waitUntil(async () => {
-          const logs = await driver.getLogs(networkType).catch(() => null);
-          if (!Array.isArray(logs)) return false;
-          observePostBoundarySearch(logs);
-          callbackTracker.consume(logs);
-          return callbackTracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }) === 0;
-        }, { timeout: timeoutMs, interval: 100,
-          timeoutMsg: 'mobile_auth_terminal_bytes_timeout' });
+        try {
+          await driver.waitUntil(async () => {
+            const logs = await driver.getLogs(networkType).catch(() => null);
+            if (!Array.isArray(logs)) return false;
+            observePostBoundarySearch(logs);
+            callbackTracker.consume(logs);
+            return callbackTracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }) === 0;
+          }, { timeout: timeoutMs, interval: 100,
+            timeoutMsg: 'mobile_auth_terminal_bytes_timeout' });
+        } catch {
+          const pending = callbackTracker.pendingTerminalSummary({ pathPrefix: '/auth/v1' });
+          const pathClass = ['verify', 'user', 'token'].find((key) => pending[key] === pending.total)
+            || 'mixed';
+          const state = pending.response_seen > 0
+            ? (pending.received_data > 0 ? 'response_data_seen' : 'response_seen') : 'request_only';
+          throw new Error(`mobile_auth_terminal_bytes_timeout_${pathClass}_${state}`);
+        }
       }
       callbackAuthObservedBytes += callbackTracker.responses()
         .filter((item) => item.pathname === '/auth/v1' || item.pathname.startsWith('/auth/v1/'))

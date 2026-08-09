@@ -1066,6 +1066,10 @@ Android performance receipt сохраняет request id только внут�
 `Network.loadingFailed`. Во втором случае учитывается только сумма фактически
 полученных `Network.dataReceived.encodedDataLength`, после чего request считается
 закрытым. Raw URL, request id, response body и `errorText` наружу не выходят.
+Если terminal closure всё же не наступил, failure code содержит только два
+закрытых измерения: класс Auth path (`verify`, `user`, `token`, `mixed`) и
+достигнутую фазу (`request_only`, `response_seen`, `response_data_seen`). Это
+диагностирует реальный Chrome/Appium protocol boundary без raw network artifact.
 
 ### 16.9 Migration from current workflow
 

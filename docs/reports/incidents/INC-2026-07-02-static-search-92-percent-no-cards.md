@@ -30,6 +30,15 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 run `31333753972` again produced a complete browser
+  `HEALTHY/PASS`, but Android reproduced
+  `mobile_auth_terminal_bytes_timeout` before Search. Handling
+  `Network.loadingFailed` was correct contract hardening but did not close the
+  live pending record, so the prior cancellation hypothesis was incomplete.
+  The next bounded diagnostic keeps the same zero-Search fail-closed behavior
+  and emits only Auth path class plus request/response/data phase; no request
+  id, URL, token, body, or raw protocol/error text is retained.
+
 - 2026-08-09 run `31333074131` produced the first current-contour complete
   browser acceptance: `HEALTHY/PASS`, exactly one HTTP-200 Search POST, five
   response IDs equal to five rendered cards, real scroll, same-origin event
@@ -37,12 +46,13 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
   client-observed Supabase bytes. Android passed emulator/Appium/WebView
   preflight and reached the authorised callback, but made zero Search POSTs and
   stopped as `UNKNOWN_ANDROID_INFRA/mobile_auth_terminal_bytes_timeout`.
-  Root-cause review against the CDP terminal-event contract found that the
+  Contract review against the CDP terminal-event contract found that the
   tracker handled `Network.loadingFinished` but ignored `Network.loadingFailed`;
-  a cancelled background Auth request therefore remained pending forever. The
-  tracker now closes that branch using only summed `Network.dataReceived`
-  encoded bytes and drops request ids, URLs, bodies and raw error text. This run
-  is browser evidence only and is not terminal mobile acceptance.
+  that cancellation branch could therefore remain pending forever. The tracker
+  now closes it using only summed `Network.dataReceived` encoded bytes and drops
+  request ids, URLs, bodies and raw error text. Run `31333753972` subsequently
+  showed that this was valid hardening but not the complete live root cause.
+  This run is browser evidence only and is not terminal mobile acceptance.
 
 - 2026-08-09 run `31332306409` proved the Android Bash/Appium/context fixes far
   enough to complete the side-effect-free transport preflight, then stopped
