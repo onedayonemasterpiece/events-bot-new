@@ -317,7 +317,9 @@ const base={
 const actionContract=(input)=>{
   const action=input.kind==='search-submit'&&!input.selector
     ? {...input,selector:'[data-search-form]',scope:'page'}
-    : input;
+    : input.kind==='scroll-to-selector'
+      ? {...input,scope:'page'}
+      : input;
   return {
   ...action,
   target_requirement:NO_ELEMENT_TARGET_ACTIONS.has(action.kind)
@@ -361,8 +363,8 @@ export const BEHAVIOR_PACKET_PLANS=Object.freeze([
   plan('menu-service-plane','mobile-menu','/','[data-mobile-discovery-menu][data-reference4-fullscreen]',[
     step('open',[{kind:'click',selector:':scope > summary'}]),step('service',[{kind:'click',selector:'[data-reference4-service-open]'}]),step('main-after-back',[{kind:'click',selector:'[data-reference4-service-back]'}]),
   ],{capture_scope:'page'}),
-  plan('menu-short-scroll','mobile-menu','/','[data-mobile-discovery-menu][data-reference4-fullscreen]',[
-    step('open-top',[{kind:'click',selector:':scope > summary'}]),step('open-bottom',[{kind:'scroll-element',selector:'[data-reference4-list]',edge:'end'}]),
+  plan('menu-short-scroll','mobile-menu','/','.mobile-discovery-menu__panel',[
+    step('open-top',[{kind:'click',selector:'[data-mobile-discovery-menu][data-reference4-fullscreen] > summary',scope:'page'}]),step('open-bottom',[{kind:'scroll-element',edge:'end'}]),
   ],{capture_scope:'page',viewport:{width:390,height:678},breakpoint_probe_ids:['breakpoint.0d1227004996eb64','breakpoint.7dcef72ba1661e9b','breakpoint.d9fbb20bb6ae1e3d']}),
   plan('menu-tab-return','mobile-menu','/','[data-mobile-discovery-menu][data-reference4-fullscreen]',[
     step('open-focus-entry',[{kind:'click',selector:':scope > summary'}],true,{focus:'visible'}),

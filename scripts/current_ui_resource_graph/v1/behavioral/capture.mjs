@@ -13,6 +13,10 @@ const wait=(ms)=>new Promise((done)=>setTimeout(done,ms));
 const FONT_SETTLE_TIMEOUT_MS=4000;
 const SCREENSHOT_TIMEOUT_MS=30000;
 const CONTROLLED_ROUTE_TIMEOUT_MS=20000;
+// Playwright otherwise re-waits without a bound inside screenshot() even
+// after our explicit document.fonts.ready guard has timed out.  The packet
+// records that timeout and captures the actually rendered fallback instead.
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
 async function bounded(label,promise,timeoutMs){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(`${label} exceeded ${timeoutMs}ms`)),timeoutMs);})]);}finally{clearTimeout(timer);}}
 async function settleFontsBounded(page){try{await bounded('font settle',page.evaluate(()=>document.fonts?.ready),FONT_SETTLE_TIMEOUT_MS);return {status:'ready',timeout_ms:FONT_SETTLE_TIMEOUT_MS};}catch{return {status:'timed-out-continued',timeout_ms:FONT_SETTLE_TIMEOUT_MS};}}
 async function captureStablePagePngBounded({page,path,imageComparator,label}){
@@ -144,7 +148,9 @@ async function semanticSnapshot(page,root){
     const rect=node.getBoundingClientRect();const style=getComputedStyle(node);const active=document.activeElement;
     const focusRect=active?.getBoundingClientRect?.();const focusStyle=active instanceof Element?getComputedStyle(active):null;
     const focusKey=active instanceof Element?JSON.stringify([active.tagName.toLowerCase(),active.id||'',active.getAttribute('role')||'',[...active.attributes].map((item)=>item.name).filter((name)=>name.startsWith('data-')).sort()]):null;
-    const signature=JSON.stringify({attrs:[...node.attributes].map((item)=>[item.name,item.value]).sort(),classes:[...node.classList].sort(),child_count:node.childElementCount,text_length:(node.textContent||'').length,html_length:node.innerHTML.length,details:[...node.querySelectorAll('details')].map((item)=>item.open),root_scroll:[node.scrollLeft,node.scrollTop,node.scrollWidth,node.scrollHeight],window_scroll:[scrollX,scrollY],viewport:[innerWidth,innerHeight],focus:focusKey});
+    const semanticAttrs=['aria-checked','aria-pressed','aria-expanded','aria-selected','aria-busy'];
+    const descendant_states=[...node.querySelectorAll('[aria-checked],[aria-pressed],[aria-expanded],[aria-selected],[aria-busy],details,[hidden]')].slice(0,120).map((item)=>({tag:item.tagName.toLowerCase(),attrs:semanticAttrs.map((name)=>[name,item.getAttribute(name)]).filter(([,value])=>value!==null),open:item instanceof HTMLDetailsElement?item.open:null,hidden:item instanceof HTMLElement?item.hidden:null}));
+    const signature=JSON.stringify({attrs:[...node.attributes].map((item)=>[item.name,item.value]).sort(),classes:[...node.classList].sort(),child_count:node.childElementCount,text_length:(node.textContent||'').length,html_length:node.innerHTML.length,details:[...node.querySelectorAll('details')].map((item)=>item.open),descendant_states,root_scroll:[node.scrollLeft,node.scrollTop,node.scrollWidth,node.scrollHeight],window_scroll:[scrollX,scrollY],viewport:[innerWidth,innerHeight],focus:focusKey});
     return {signature,root:{visible:!node.hidden&&style.display!=='none'&&style.visibility!=='hidden'&&rect.width>0&&rect.height>0,width:rect.width,height:rect.height,scroll_left:node.scrollLeft,scroll_top:node.scrollTop,scroll_width:node.scrollWidth,scroll_height:node.scrollHeight,client_width:node.clientWidth,client_height:node.clientHeight,child_count:node.childElementCount},window_scroll:{x:scrollX,y:scrollY},viewport:{width:innerWidth,height:innerHeight},focus:{key:focusKey,within_root:Boolean(active&&(active===node||node.contains(active))),visible:Boolean(focusRect&&focusStyle&&focusStyle.display!=='none'&&focusStyle.visibility!=='hidden'&&focusRect.width>0&&focusRect.height>0)}};
   },await root.elementHandle());
 }

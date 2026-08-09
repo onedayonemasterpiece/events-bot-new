@@ -35,7 +35,16 @@
   packet observations or exact blocker IDs one by one; plan/action/page records
   retain reachability and coverage refs. Manifest and receipt counts are
   evidence-derived, while the corrected 67/57/10/124 Actions contract and
-  value-oriented secret scan remain fail-closed.
+  value-oriented secret scan remain fail-closed. The short-viewport Reference4
+  packet now scrolls the actual menu panel rather than the fixed, clipped list
+  plane, so its top/bottom phases carry a real 56px scroll transition. Runtime
+  transition signatures now include bounded standard descendant ARIA/open/
+  hidden state, preventing equal-length sibling radio changes from being
+  misclassified as no-ops. `scroll-to-selector` actions are now contractually
+  page-scoped, matching their actual executor and the mobile V23 group targets.
+  Screenshot capture uses Playwright's documented no-second-font-wait switch
+  only after the decoder's own bounded `document.fonts.ready` probe; a timeout
+  remains explicit in each packet while the rendered fallback stays capturable.
 
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,

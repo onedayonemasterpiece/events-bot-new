@@ -645,7 +645,10 @@ fail-closed reconciliation receipt, not a claim that a family screenshot
 captured 293 transitions.
 
 Captured evidence remains plane-qualified as controlled exact-source runtime.
-It includes mobile menu/disclosure/focus-return behavior, rail edges and the
+The short-viewport Reference4 packet scrolls the actual
+`.mobile-discovery-menu__panel` by its observed 56px range; the fixed-height
+inner list is not misreported as a scroll surface. It includes mobile
+menu/disclosure/focus-return behavior, rail edges and the
 exact observed absence of a working native `End`/`Home` alternative,
 sticky/fixed collisions, separate Editorial stacked
 and Split inline CTA anatomy, all three unresolved transport treatments,
@@ -658,6 +661,15 @@ the popular personalized shelf, Weather, Exhibitions gallery, EventCard,
 ListingEventCard and mobile-listing media, auth runtime and personalization
 runtime. Each is bound to an executable packet or an exact explicit blocker;
 a source test is never relabelled as runtime capture.
+Semantic transition checks include bounded standard descendant
+`aria-checked`, `aria-pressed`, `aria-expanded`, `aria-selected`, `aria-busy`,
+`open`, and `hidden` state, so equal-length radio/state replacements still
+produce an evidence-bearing transition without retaining full HTML.
+Font settling is probed and recorded for at most four seconds before each
+packet raster. If it times out, Playwright's internal unbounded second font
+wait is disabled and the actually rendered fallback is captured with
+`font_settle.status=timed-out-continued`; it is not relabelled as a loaded-font
+render.
 
 Transport disclosure packets use real exact treatment components with a
 controlled `PreviewEvent` fixture assembled only from distinct trips returned
