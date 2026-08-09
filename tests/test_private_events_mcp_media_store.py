@@ -112,6 +112,18 @@ def test_ssrf_url_matrix_rejected_before_fetch(tmp_path, url):
     assert fetcher.calls == []
 
 
+def test_nonallowlisted_host_has_stable_safe_code_and_fingerprinted_audit_reason(
+    tmp_path,
+):
+    store, fetcher = make_store(tmp_path)
+    with pytest.raises(MediaIngressRejected) as caught:
+        ingest(store, File(download_url="https://foreign-files.example.test/a"))
+    assert caught.value.error_code == "FILE_HOST_NOT_ALLOWED"
+    assert caught.value.audit_reason_code.startswith("file_host_not_allowed_")
+    assert "foreign-files.example.test" not in caught.value.audit_reason_code
+    assert fetcher.calls == []
+
+
 @pytest.mark.parametrize(
     "address",
     [

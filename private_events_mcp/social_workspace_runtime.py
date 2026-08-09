@@ -1969,8 +1969,11 @@ class SocialWorkspaceRuntime:
                         outcome="succeeded", reason="verified_asset_bound", media_items=1)
             return result
         except Exception as exc:
+            audit_reason = getattr(
+                exc, "audit_reason_code", type(exc).__name__
+            )
             self._audit(principal, platform=platform, operation="asset_stage",
-                        outcome="denied", reason=type(exc).__name__)
+                        outcome="denied", reason=str(audit_reason))
             raise
 
     async def asset_status(

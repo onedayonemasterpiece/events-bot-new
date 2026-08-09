@@ -158,6 +158,13 @@ call as a closed `file` object with required `download_url` and `file_id` plus
 optional `mime_type` and `file_name`. Those values are untrusted transport
 hints, not durable asset truth.
 
+ChatGPT may display a local path, `sandbox:` URI or opaque `file_*` identifier
+in the conversation UI, but none of those strings is a valid direct tool
+argument. The connector must materialize the selected upload into the closed
+file object above. A string/path-only value fails as `FILE_REF_UNRESOLVED` and
+must never be copied into `social_action_prepare`; the successful stage result
+is the only source of an `ast_*` reference.
+
 This is not an arbitrary URL downloader. There is no tool accepting a URL,
 filesystem path, raw provider method, Telegram/VK native file identifier or
 caller-declared digest/size. The server accepts only HTTPS `download_url` values
@@ -178,6 +185,15 @@ hours; aggregate retained bytes and dimensions/pixels are also bounded. Every
 provider upload reopens the stored file, checks ownership and TTL, requires a
 regular file and recomputes the digest before reading bytes. Expired assets are
 unusable and removed by bounded cleanup.
+
+Asset-stage failures return only a bounded `structuredContent.error_code` and
+`retry_safe=false`: `FILE_REF_UNRESOLVED`, `FILE_HOST_NOT_ALLOWED`,
+`FILE_PRINCIPAL_MISMATCH`, `WORKSPACE_NOT_BOUND`, `MIME_NOT_ALLOWED`,
+`FILE_TOO_LARGE`, `FILE_EXPIRED`, `FILE_INTEGRITY_FAILED`, or
+`FILE_FETCH_FAILED`. The text never contains the signed download URL, file ID,
+filename, provider ID or native path. The audit ledger records the same safe
+reason; a host-policy denial may append only a one-way hostname fingerprint so
+operators can correct an exact allowlist without logging the temporary URL.
 
 ### Story reads, publication and statistics
 
@@ -610,7 +626,9 @@ Record all of the following without secrets:
 17. one ChatGPT-selected image stages through `fileParams`; status reports the
     server-detected MIME, exact size, SHA-256, dimensions and expiry, and neither
     the response nor logs/artifacts contain its download URL, file ID/name or
-    local path;
+    local path; a path/string-only input returns `FILE_REF_UNRESOLVED`, and any
+    real-shape rejection returns one of the documented safe codes rather than
+    the generic `social workspace request rejected`;
 18. wrong host/private DNS, redirect, oversize, quota exhaustion, MIME spoof,
     decompression/pixel bomb, changed digest, expired ref, second file and video
     all fail before provider upload; the initial release accepts only verified
