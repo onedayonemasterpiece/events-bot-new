@@ -60,7 +60,8 @@ function assertVectorResponse(response) {
   if (Number(response.provider_attempts?.llm) !== 0 || response.llm?.requested || response.llm?.used) {
     throw new Error('search_health_llm_activity_forbidden');
   }
-  if (response.requested_execution_mode !== 'cold_vector' || response.actual_execution_mode !== 'cold_vector') {
+  if (response.requested_execution_mode !== 'cold_vector'
+    || !['cold_vector', 'cached_vector'].includes(response.actual_execution_mode)) {
     throw new Error('search_health_not_normal_vector');
   }
 }

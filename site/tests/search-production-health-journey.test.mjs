@@ -22,7 +22,11 @@ import {
   runProductionHealthCell,
 } from '../e2e/search/production-health-run.mjs';
 import { createBuiltInMobileHooks } from '../e2e/search/production-health-run.mjs';
-import { verifyAuthenticatedOwnerRuntimeProbe } from '../e2e/search/adapters/runtime-probe.mjs';
+import {
+  installSearchRuntimeProbe,
+  snapshotSearchRuntimeProbe,
+  verifyAuthenticatedOwnerRuntimeProbe,
+} from '../e2e/search/adapters/runtime-probe.mjs';
 import {
   createAcceptedTargetRun,
   normalizeAcceptedTargetResolverResult,
@@ -129,6 +133,61 @@ test('production health journey sends exact UI intent and one normal vector-only
     assert.equal(result.provider_attempts.llm, 0);
     assert.equal(result.event_route.http_status, 200);
     assert.equal(JSON.stringify(result).includes(PRODUCTION_HEALTH_UI_QUERY), false);
+  }
+});
+
+test('normal vector health accepts a cache hit reported as actual cached_vector', async () => {
+  const result = await runProductionHealthJourney({
+    adapter: fakeJourneyAdapter({ cache: 'hit', actualMode: 'cached_vector' }),
+    targetUrl: 'https://kenigevents.ru/',
+  });
+  assert.equal(result.cache_state, 'hit');
+  assert.equal(result.search_post_count, 1);
+});
+
+test('transport instrumentation records one physical Search once when its raw fetch was wrapped first', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const originalClients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      search_contract_version: 'event_search_v2',
+      requested_execution_mode: 'cold_vector', actual_execution_mode: 'cold_vector',
+      result_cache_status: 'miss', items: [{ event_id: 1 }],
+      request_counters: { embedding_provider_attempts: 1, vector_rpc_attempts: 1, llm_provider_attempts: 0 },
+    }), { status: 200, headers: { 'content-type': 'application/json', 'content-length': '256' } });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'https://kenigevents.ru/poisk/' } });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => ({
+      dataset: { supabaseUrl: 'https://project.supabase.co', supabaseRelayUrl: '' },
+    }) } });
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = new Map();
+    installSearchRuntimeProbe({ production_health: true });
+    const transport = {
+      request(input, init) { return globalThis.fetch(input, init); },
+      outcomeHistory: () => [],
+    };
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__.set('search', { transport });
+    installSearchRuntimeProbe({ production_health: true });
+    await transport.request('https://project.supabase.co/functions/v1/event-search', {
+      method: 'POST', body: JSON.stringify({ query: 'not retained' }),
+    });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const snapshot = snapshotSearchRuntimeProbe();
+      if (snapshot.responses.length === 1 && snapshot.meter.pending_measurements === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const snapshot = snapshotSearchRuntimeProbe();
+    assert.equal(snapshot.requests.length, 1);
+    assert.equal(snapshot.responses.length, 1);
+    assert.equal(snapshot.meter.categories.edge, 256);
+  } finally {
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
   }
 });
 

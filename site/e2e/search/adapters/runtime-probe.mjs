@@ -9,7 +9,7 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
   const count = (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0 ? Number(value) : 0;
   const state = globalThis[key] || {
     policy: {}, requests: [], responses: [], routes: [], route_ids: [], sequence: 0,
-    wrapped: 'none', measure_global: true,
+    wrapped: 'none', measure_global: true, transport_active: false,
     network: { storage_requests: 0, receipt_rpc_requests: 0, failed_requests: 0 },
     meter: {
       categories: { auth: 0, edge: 0, direct_rest: 0, direct_rpc: 0 },
@@ -211,6 +211,14 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     const original = owner?.[property];
     if (typeof original !== 'function' || original.__keSearchHarnessWrapped) return false;
     const wrapped = async function searchHealthTransport(input, init = {}) {
+      // A client may capture the init-time global wrapper as its raw fetch
+      // before its resilient transport is registered. Once that transport is
+      // instrumented it is the sole physical-request boundary; the captured
+      // global wrapper becomes a transparent fallback instead of recording the
+      // same Search a second time.
+      if (!transport && state.transport_active === true) {
+        return original.call(this, input, init);
+      }
       const url = absoluteUrl(input);
       const method = String(init?.method || input?.method || 'GET').toUpperCase();
       const isSearch = Boolean(url?.pathname.endsWith(searchPath) && method === 'POST');
@@ -267,6 +275,7 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     if (wrappedTransport || [...clients.values()].some((client) => (
       client?.transport?.request?.__keSearchHarnessWrapped || client?.transport?.fetch?.__keSearchHarnessWrapped
     ))) {
+      state.transport_active = true;
       state.measure_global = false;
     }
   }
