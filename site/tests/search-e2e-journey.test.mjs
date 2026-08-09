@@ -93,6 +93,21 @@ test('mobile touch scrolling reaches a production-length final card beyond one g
   assert.equal(receipt.gesture_count, gestures);
 });
 
+test('mobile touch scrolling reaches a tall production card beyond the old 24-gesture ceiling', async () => {
+  let scrollY = 0;
+  let gestures = 0;
+  const receipt = await runRealTouchScroll({
+    readScrollY: async () => scrollY,
+    lastCardVisible: async () => scrollY >= 8_400,
+    gesture: async () => { gestures += 1; scrollY += 300; },
+    wait: async () => {},
+  });
+  assert.equal(receipt.card_visible_after, true);
+  assert.equal(receipt.delta_y, 8_400);
+  assert.equal(gestures, 28);
+  assert.equal(receipt.gesture_count, 28);
+});
+
 test('failed mobile scroll retains only a numeric/boolean gesture receipt for sanitized diagnosis', () => {
   assert.throws(() => assertRealScroll({
     performed: true, delta_y: 0, card_visible_after: false, gesture_count: 24,
