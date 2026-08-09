@@ -49,6 +49,15 @@
 
 ### Fixed
 
+- Fixed the shared OTP/Search iOS Safari startup transport after production
+  health runs `31337291226` and `31337643487` reproduced the same fresh-
+  simulator first-run sheet before Auth or Search. The neutral mobile helper
+  now reuses its existing source reducer to distinguish one exact native
+  search-choice sheet from a WDA alert, revalidates and clicks only the unique
+  `Продолжить` button, fails closed on ambiguity, and retains only closed
+  counters plus the exact safe infrastructure code. No Search-specific Safari
+  workaround or raw native hierarchy was added.
+
 - Scoped Appium `Network.loadingFailed` diagnostics after live run
   `31336453210` to the target document and allowlisted Supabase
   Auth/Edge/REST/RPC requests, matching the browser contract. Android in that

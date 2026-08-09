@@ -210,6 +210,13 @@ function journeyFailure(error) {
   return PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_REQUEST;
 }
 
+function closedFailureCode(error, fallback = 'search_health_unclassified_failure') {
+  const message = String(error?.message || error?.name || fallback);
+  const safari = message.match(/^safari_first_run_ui:([a-z][a-z0-9_]{2,63})$/u);
+  const candidate = safari ? `safari_first_run_ui_${safari[1]}` : message.split(':')[0];
+  return /^[a-z][a-z0-9_]{2,95}$/u.test(candidate) ? candidate : fallback;
+}
+
 function isAdapterInfrastructureFailure(error) {
   const message = String(error?.message || '');
   return /^(?:search_browser_(?:crashed|session_lost)(?:_[a-z0-9]+)*|mobile_android_cdp_(?:route_unavailable|script_receipt_missing)|mobile_[a-z0-9_]*(?:network_log_unavailable|diagnostics_unavailable|session_lost)|webdriver_session_error)$/iu.test(message)
@@ -322,9 +329,7 @@ export async function runProductionHealthCell(options = {}) {
       targetSuperseded = supersession.target_superseded === true;
     }
   } catch (error) {
-    const candidateFailureCode = String(error?.message || '').split(':')[0];
-    failureCode = /^[a-z][a-z0-9_]{2,95}$/u.test(candidateFailureCode)
-      ? candidateFailureCode : 'search_health_unclassified_failure';
+    failureCode = closedFailureCode(error);
     if (phase === 'preflight' && error?.searchReceipt?.schema_version === 'mobile-preflight-failure-v1') {
       preflight = error.searchReceipt;
     }
@@ -687,7 +692,7 @@ export async function runProductionHealthCli(env = process.env) {
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (isMain) {
   runProductionHealthCli().then((code) => { process.exitCode = code; }).catch(async (error) => {
-    const code = String(error?.message || 'search_health_runner_failed').split(':')[0];
+    const code = closedFailureCode(error, 'search_health_runner_failed');
     const platform = String(process.env.E2E_SEARCH_PLATFORM || 'browser').toLowerCase();
     const failureClass = code.startsWith('search_evidence_')
       ? PRODUCTION_HEALTH_RESULTS.EVIDENCE_REDACTION_FAILED

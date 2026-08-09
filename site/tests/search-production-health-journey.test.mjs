@@ -984,6 +984,40 @@ test('mobile preflight failure preserves only a closed Appium diagnostic receipt
   assert.doesNotMatch(JSON.stringify(result), /raw secret/u);
 });
 
+test('mobile Safari preflight preserves the exact closed infrastructure code', async () => {
+  const receipt = {
+    schema_version: 'mobile-preflight-failure-v1',
+    failure_class: 'safari_first_run_ui_search_choice_action_missing',
+    safari_ui: {
+      known_dialog_count: 1, continue_button_count: 0, active_app_owner: 'safari',
+      source_inspected: true, application_container_count: 1, alert_container_count: 0,
+      sheet_container_count: 1, title_match_count: 1, continue_match_count: 1,
+      settings_match_count: 1, matched_static_text_count: 1, matched_button_count: 2,
+      matched_other_type_count: 0,
+    },
+    cleanup_confirmed: true,
+    retry_safe: true,
+    side_effects: {
+      schema_version: 'mobile-preflight-side-effects-v1', startup_attempt: 1,
+      broker_session_issued: false, auth_callback_started: false, navigation_count: 0,
+      fetch_count: 0, search_post_count: 0, webdriver_client_session_created: true,
+      webdriver_client_session_deleted: true,
+    },
+  };
+  const error = new Error('safari_first_run_ui:search_choice_action_missing');
+  error.searchReceipt = receipt;
+  const result = await runProductionHealthCell({
+    platform: 'ios', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => { throw error; },
+    issueSession: async () => { throw new Error('issuance_forbidden'); },
+  });
+  assert.equal(result.failure_class, 'UNKNOWN_IOS_INFRA');
+  assert.equal(result.failure_code, 'safari_first_run_ui_search_choice_action_missing');
+  assert.equal(result.preflight.failure_class, 'safari_first_run_ui_search_choice_action_missing');
+  assert.equal(result.preflight.safari_ui.sheet_container_count, 1);
+  assert.doesNotMatch(JSON.stringify(result.preflight), /Выбор|Продолжить|Настройки/u);
+});
+
 test('cleanup failure prevents a healthy PASS and leaves closed failure evidence', async () => {
   const adapter = fakeJourneyAdapter();
   adapter.preflight = async () => preflight;

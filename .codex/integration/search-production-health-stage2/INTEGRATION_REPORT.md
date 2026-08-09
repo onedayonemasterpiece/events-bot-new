@@ -7,9 +7,10 @@
   `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`.
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
 - PR #451 merged to `main` as `ad0a1f3bb12a63805aec65f52489151e3f382b83`.
-- Live acceptance workflows so far: `0 / 2` accepted; bounded diagnostic runs
-  through `31335122827` supplied browser product proof and isolated the
-  remaining Android evidence boundary without making an Android Search POST.
+- Live acceptance workflows so far: `1 / 2` accepted. Run `31337041139`
+  completed browser+Android `HEALTHY/PASS` on an unchanged immutable product.
+  Browser+iOS runs `31337291226` and `31337643487` stopped side-effect-free in
+  the fresh-simulator Safari first-run sheet before broker/Auth/Search.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -31,8 +32,8 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **145/145 PASS** after the current
-  Android Auth byte-observer and disposable-probe regressions;
+- Search production-health aggregate suite: **147/147 PASS** after the shared
+  OTP/Search Safari native-sheet and closed failure-evidence regressions;
 - legacy Search harness: **32/32 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
   security and static source/release regression **135/135 PASS**; Edge contract
@@ -75,6 +76,14 @@ Required before live:
    regression record and issue #431 with exact run IDs.
 
 Current disposition: `STAGE2_IMPLEMENTED_LIVE_ACCEPTANCE_PENDING / PRODUCT_HEALTH_UNCONFIRMED`.
+
+Acceptance is now `1/2`: run `31337041139` is the accepted browser+Android
+proof. Runs `31337291226` and `31337643487` repeated an iOS-only infrastructure
+failure with zero broker/Auth/Search operations. The shared OTP/Search Safari
+transport now handles the allowlisted first-run UI as either one exact WDA
+alert or one exact native sheet; a fresh merged-SHA browser+iOS workflow is the
+remaining live gate. `SEARCH_PRODUCTION_HEALTH_ENABLED` stays absent until that
+proof matches the first run's immutable product identity.
 
 Steps 1–5 were completed from exact merged `main`: the v2 broker migration and
 minute cleanup are active, broker event/workflow allowlists and distinct

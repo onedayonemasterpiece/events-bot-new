@@ -40,11 +40,38 @@ async function waitForNativeAndWebContexts(driver, {
 
 const closedFailureClass = (error) => {
   const message = String(error?.message || error);
+  const safari = message.match(/^safari_first_run_ui:([a-z][a-z0-9_]{2,63})$/u);
+  if (safari) return `safari_first_run_ui_${safari[1]}`;
   if (/native_context_missing/iu.test(message)) return 'native_context_missing';
   if (/web_context_missing|webview|chromium/iu.test(message)) return 'web_context_missing';
   if (/viewport/iu.test(message)) return 'native_viewport_invalid';
   if (/capability|platform|automation|browser/iu.test(message)) return 'capability_mismatch';
   return 'mobile_preflight_failed';
+};
+
+const closedSafariUiEvidence = (error) => {
+  if (!/^safari_first_run_ui:[a-z][a-z0-9_]{2,63}$/u.test(String(error?.message || error))) return null;
+  const inspection = error?.evidence?.last_inspection;
+  const probe = inspection?.contract_probe;
+  const source = probe?.native_source;
+  const count = (value) => Number.isSafeInteger(Number(value)) && Number(value) >= 0
+    ? Number(value) : 0;
+  return Object.freeze({
+    known_dialog_count: count(inspection?.known_dialog_count),
+    continue_button_count: count(inspection?.continue_button_count),
+    active_app_owner: ['springboard', 'safari', 'other', 'unknown'].includes(probe?.active_app_owner)
+      ? probe.active_app_owner : 'unknown',
+    source_inspected: source?.source_inspected === true,
+    application_container_count: count(source?.application_container_count),
+    alert_container_count: count(source?.alert_container_count),
+    sheet_container_count: count(source?.sheet_container_count),
+    title_match_count: count(source?.title_match_count),
+    continue_match_count: count(source?.continue_match_count),
+    settings_match_count: count(source?.settings_match_count),
+    matched_static_text_count: count(source?.matched_static_text_count),
+    matched_button_count: count(source?.matched_button_count),
+    matched_other_type_count: count(source?.matched_other_type_count),
+  });
 };
 
 export function buildZeroSideEffectReceipt({ attempt = 1, driverSessionCreated = false,
@@ -80,6 +107,7 @@ export function buildMobilePreflightFailureReceipt({ platform, error, attempt = 
   driverSessionCreated = false, driverSessionDeleted = false } = {}) {
   const cleanupConfirmed = driverSessionCreated !== true || driverSessionDeleted === true;
   const retrySafe = Number(attempt) === 1 && cleanupConfirmed === true;
+  const safariUi = closedSafariUiEvidence(error);
   return Object.freeze({
     schema_version: 'mobile-preflight-failure-v1',
     platform: ['android', 'ios'].includes(platform) ? platform : 'unknown',
@@ -87,6 +115,7 @@ export function buildMobilePreflightFailureReceipt({ platform, error, attempt = 
     failure_class: closedFailureClass(error),
     cleanup_confirmed: cleanupConfirmed,
     retry_safe: retrySafe,
+    ...(safariUi ? { safari_ui: safariUi } : {}),
     side_effects: buildZeroSideEffectReceipt({ attempt, driverSessionCreated, driverSessionDeleted }),
   });
 }

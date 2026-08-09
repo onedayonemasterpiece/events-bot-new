@@ -365,7 +365,7 @@ test('Safari native inspection uses exact predicate title and same-alert button 
     getAlertText: async () => 'Safe body text\nВыбор поисковой системы\nMore safe body text',
     getAlertButtons: async () => ['Настройки', 'Продолжить'],
   });
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
   assert.ok(calls.every((call) => call.using === '-ios predicate string'));
   assert.match(calls[0].predicate, /name == 'Выбор поисковой системы'/u);
   assert.match(calls[0].predicate, /visible == 1/u);
@@ -430,6 +430,87 @@ test('Safari native inspection captures the startup owner and source even when n
   assert.equal(state.contract_probe.active_app_owner, 'safari');
   assert.equal(state.contract_probe.native_source.source_inspected, true);
   assert.equal(state.contract_probe.native_source.application_container_count, 1);
+});
+
+test('Safari native inspection recognizes one exact first-run sheet without treating it as a WDA alert', async () => {
+  const source = '<XCUIElementTypeApplication name="Safari"><XCUIElementTypeSheet><XCUIElementTypeStaticText name="Выбор поисковой системы"/><XCUIElementTypeButton label="Настройки"/><XCUIElementTypeButton label="Продолжить"/></XCUIElementTypeSheet></XCUIElementTypeApplication>';
+  const state = await inspectSafariNativeUiProtocol({
+    findElements: async (_using, predicate) => {
+      if (/XCUIElementTypeButton/u.test(predicate)) return [{ ELEMENT: 'continue-button' }];
+      return [{ ELEMENT: 'exact-title' }];
+    },
+    getAlertText: async () => { throw new Error('no WDA alert'); },
+    getAlertButtons: async () => [],
+    getActiveAppInfo: async () => ({ bundleId: 'com.apple.mobilesafari' }),
+    getNativeSourceSummary: async () => summarizeKnownSafariNativeSource(source),
+  });
+  assert.deepEqual(state.action_token, { kind: 'native_exact_button', label: 'Продолжить' });
+  assert.equal(state.known_dialog_count, 1);
+  assert.equal(state.continue_button_count, 1);
+  assert.equal(state.unknown_blocking_dialog_count, 0);
+  assert.equal(state.contract_probe.current_alert_present, false);
+  assert.equal(state.contract_probe.native_source.sheet_container_count, 1);
+});
+
+test('Safari native inspection fails closed for an ambiguous first-run sheet', async () => {
+  const source = '<XCUIElementTypeApplication name="Safari"><XCUIElementTypeSheet><XCUIElementTypeStaticText name="Выбор поисковой системы"/><XCUIElementTypeButton label="Продолжить"/><XCUIElementTypeButton label="Продолжить"/></XCUIElementTypeSheet></XCUIElementTypeApplication>';
+  const state = await inspectSafariNativeUiProtocol({
+    findElements: async (_using, predicate) => /XCUIElementTypeButton/u.test(predicate)
+      ? [{ ELEMENT: 'continue-1' }, { ELEMENT: 'continue-2' }]
+      : [{ ELEMENT: 'exact-title' }],
+    getAlertText: async () => { throw new Error('no WDA alert'); },
+    getAlertButtons: async () => [],
+    getActiveAppInfo: async () => ({ bundleId: 'com.apple.mobilesafari' }),
+    getNativeSourceSummary: async () => summarizeKnownSafariNativeSource(source),
+  });
+  assert.equal(state.action_token, null);
+  assert.ok(state.unknown_blocking_dialog_count > 0 || state.continue_button_count > 1);
+});
+
+test('Safari inspection ignores a retained pre-dismissal source summary after live exact elements disappear', async () => {
+  const staleSource = summarizeKnownSafariNativeSource('<XCUIElementTypeApplication name="Safari"><XCUIElementTypeSheet><XCUIElementTypeStaticText name="Выбор поисковой системы"/><XCUIElementTypeButton label="Продолжить"/></XCUIElementTypeSheet></XCUIElementTypeApplication>');
+  const state = await inspectSafariNativeUiProtocol({
+    findElements: async () => [],
+    getAlertText: async () => { throw new Error('no WDA alert'); },
+    getAlertButtons: async () => [],
+    getActiveAppInfo: async () => ({ bundleId: 'com.apple.mobilesafari' }),
+    getNativeSourceSummary: async () => staleSource,
+  });
+  assert.equal(state.known_dialog_count, 0);
+  assert.equal(state.blocking_dialog_count, 0);
+  assert.equal(state.unknown_blocking_dialog_count, 0);
+});
+
+test('shared iOS startup clicks only the exact native first-run sheet button and never persists its source', async () => {
+  const calls = [];
+  let dismissed = false;
+  const source = '<XCUIElementTypeApplication name="Safari"><XCUIElementTypeSheet><XCUIElementTypeStaticText name="Выбор поисковой системы"/><XCUIElementTypeButton label="Настройки"/><XCUIElementTypeButton label="Продолжить"/></XCUIElementTypeSheet></XCUIElementTypeApplication>';
+  const driver = {
+    updateSettings: async (settings) => calls.push(['settings', settings]),
+    getContext: async () => 'NATIVE_APP',
+    getContexts: async () => ['NATIVE_APP', 'WEBVIEW_1'],
+    switchContext: async (context) => calls.push(['context', context]),
+    findElements: async (_using, predicate) => {
+      if (dismissed) return [];
+      if (/XCUIElementTypeButton/u.test(predicate)) return [{ ELEMENT: 'continue-button' }];
+      return [{ ELEMENT: 'exact-title' }];
+    },
+    getAlertText: async () => { throw new Error('no WDA alert'); },
+    executeScript: async (command) => {
+      if (command === 'mobile: activeAppInfo') return { bundleId: 'com.apple.mobilesafari' };
+      if (command === 'mobile: alert') throw new Error('no WDA alert');
+      throw new Error('unexpected_execute');
+    },
+    getPageSource: async () => dismissed ? '<XCUIElementTypeApplication name="Safari"/>' : source,
+    elementClick: async (elementId) => { calls.push(['click', elementId]); dismissed = true; },
+    waitUntil: async (predicate) => {
+      if (!await predicate()) throw new Error('unexpected_webview_timeout');
+    },
+  };
+  const receipt = await prepareIosSafariWebContext(driver);
+  assert.equal(receipt.dismissed, true);
+  assert.deepEqual(calls.filter(([kind]) => kind === 'click'), [['click', 'continue-button']]);
+  assert.doesNotMatch(JSON.stringify(receipt), /Выбор|Продолжить|Настройки|XCUIElementType/u);
 });
 
 test('same-named action in a different current alert remains unknown and non-actionable', async () => {

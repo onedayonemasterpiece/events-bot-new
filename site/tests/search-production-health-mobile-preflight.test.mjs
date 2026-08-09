@@ -351,6 +351,51 @@ test('retry requires attempt one, a deleted Appium session and an explicit zero-
   assert.equal(isSafeMobilePreflightRetryReceipt(leaked), false);
 });
 
+test('iOS Safari first-run failure keeps its closed reason and allowlisted native counters', () => {
+  const error = new Error('safari_first_run_ui:search_choice_action_missing');
+  error.evidence = {
+    last_inspection: {
+      known_dialog_count: 1,
+      continue_button_count: 0,
+      contract_probe: {
+        active_app_owner: 'safari',
+        native_source: {
+          source_inspected: true,
+          application_container_count: 1,
+          alert_container_count: 0,
+          sheet_container_count: 1,
+          title_match_count: 1,
+          continue_match_count: 1,
+          settings_match_count: 1,
+          matched_static_text_count: 1,
+          matched_button_count: 2,
+          matched_other_type_count: 0,
+        },
+      },
+    },
+  };
+  const receipt = buildMobilePreflightFailureReceipt({
+    platform: 'ios', error, attempt: 1, driverSessionCreated: true, driverSessionDeleted: true,
+  });
+  assert.equal(receipt.failure_class, 'safari_first_run_ui_search_choice_action_missing');
+  assert.deepEqual(receipt.safari_ui, {
+    known_dialog_count: 1,
+    continue_button_count: 0,
+    active_app_owner: 'safari',
+    source_inspected: true,
+    application_container_count: 1,
+    alert_container_count: 0,
+    sheet_container_count: 1,
+    title_match_count: 1,
+    continue_match_count: 1,
+    settings_match_count: 1,
+    matched_static_text_count: 1,
+    matched_button_count: 2,
+    matched_other_type_count: 0,
+  });
+  assert.doesNotMatch(JSON.stringify(receipt), /Выбор|Продолжить|Настройки|raw/u);
+});
+
 test('adapter deletes an iOS session when Safari preparation fails before returning a receipt', async () => {
   const driver = preflightDriver('ios');
   const adapter = await createAppiumSearchAdapter({
