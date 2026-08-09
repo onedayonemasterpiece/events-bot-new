@@ -7,9 +7,9 @@ LEGACY_SOCIAL_SCOPES = frozenset(
     {"telegram:read", "telegram:publish", "vk:read", "vk:publish"}
 )
 GRANULAR_SOCIAL_SCOPES = SOCIAL_WORKSPACE_SCOPES
-# Legacy scopes remain valid only for the pre-existing four legacy social tools.
-# They are deliberately not aliases for any granular workspace capability: the
-# workspace requires its exact ``platform:suffix`` scope for every operation.
+# Legacy scopes remain durable same-provider read/write capability families for
+# existing ChatGPT connectors. They never cross provider or read/write
+# boundaries; unknown future granular capabilities still fail closed.
 SOCIAL_SCOPES = LEGACY_SOCIAL_SCOPES | GRANULAR_SOCIAL_SCOPES
 
 SOCIAL_MUTATION_SCOPES = frozenset(
@@ -69,6 +69,19 @@ def legacy_social_scope_for(required_scope: str) -> str | None:
     if required_scope in SOCIAL_MUTATION_SCOPES:
         return f"{platform}:publish"
     return None
+
+
+def social_scopes_authorized(
+    required_scopes: frozenset[str], granted_scopes: frozenset[str]
+) -> bool:
+    """Check exact scopes, then one fail-closed stable social family fallback."""
+
+    if required_scopes.issubset(granted_scopes):
+        return True
+    if len(required_scopes) != 1:
+        return False
+    legacy_scope = legacy_social_scope_for(next(iter(required_scopes)))
+    return legacy_scope is not None and legacy_scope in granted_scopes
 
 CHATGPT_DEFAULT_SCOPES = READ_SCOPES
 CODEX_DEFAULT_SCOPES = READ_SCOPES

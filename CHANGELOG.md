@@ -8,6 +8,10 @@
   across routine bootstrap-token rotation and made the four original Telegram/
   VK read/publish scopes stable same-provider compatibility families for later
   typed tools, so ordinary MCP updates no longer require a renamed connector.
+  The credential generator now rejects secret-bearing/noncanonical origins and
+  deploy-env line injection, fresh social profiles include VK notification
+  intake, runtime prepare/commit honors the stable scope families end-to-end,
+  and oversized provider cursor state fails closed before persistence.
 
 - Raised the mobile Search native-touch ceiling from 24 to 40 bounded gestures
   after two Android Chrome receipts proved valid W3C swipes and positive DOM

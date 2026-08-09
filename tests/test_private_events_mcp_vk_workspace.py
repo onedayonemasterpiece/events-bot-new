@@ -297,6 +297,24 @@ async def test_exact_post_link_resolution_and_bounded_comment_notifications(work
 
 
 @pytest.mark.asyncio
+async def test_notification_cursor_rejects_oversized_provider_state_before_persisting(
+    workspace,
+) -> None:
+    adapter, transport, refs, _, _ = workspace
+    original_invoke = transport.invoke
+
+    async def oversized_cursor(**call: Any) -> Any:
+        if call["method"] == "notifications.get":
+            return {"items": [], "next_from": "X" * 100_000}
+        return await original_invoke(**call)
+
+    transport.invoke = oversized_cursor
+    with pytest.raises(VKWorkspaceError, match="cursor_invalid"):
+        await adapter.read(read_request("list_notifications", limit=25))
+    assert not any(kind == "cursor" for kind, _ref in refs.values)
+
+
+@pytest.mark.asyncio
 async def test_runtime_notification_hint_to_exact_thread_chain_uses_only_public_refs(
     workspace, tmp_path,
 ) -> None:

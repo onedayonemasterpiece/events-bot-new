@@ -42,6 +42,7 @@ from private_events_mcp.social_workspace import (
 VK_API_VERSION = "5.199"
 _TRUST = "untrusted_external_data"
 _MAX_RESULT_PAGE = 25
+_MAX_PROVIDER_CURSOR_BYTES = 512
 _MAX_EDITORIAL_TOTAL = 100
 _MAX_TEXT = 4096
 _SAFE_HANDLE = re.compile(r"^[A-Za-z0-9_.-]{2,128}$")
@@ -727,11 +728,23 @@ class VKWorkspaceAdapter:
             str(state.get("read_access") or ""),
         )
         start_from = state.get("start_from")
-        if actual != expected or not isinstance(start_from, str) or not start_from:
+        if (
+            actual != expected
+            or not isinstance(start_from, str)
+            or not start_from
+            or len(start_from.encode("utf-8")) > _MAX_PROVIDER_CURSOR_BYTES
+            or any(ord(character) < 0x20 for character in start_from)
+        ):
             raise VKWorkspaceError("cursor_context_mismatch")
         return start_from
 
     def _notification_cursor(self, request: SocialReadRequest, start_from: str) -> str:
+        if (
+            not start_from
+            or len(start_from.encode("utf-8")) > _MAX_PROVIDER_CURSOR_BYTES
+            or any(ord(character) < 0x20 for character in start_from)
+        ):
+            raise VKWorkspaceError("cursor_invalid")
         operation, resource, query, sample, read_access = self._cursor_context(request)
         try:
             return self._refs.mint(

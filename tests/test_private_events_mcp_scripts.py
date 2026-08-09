@@ -98,8 +98,37 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     )
     assert "telegram:post:publish" in social["chatgpt"]["oauth_scopes"]
     assert "telegram:dm:send" in social["chatgpt"]["oauth_scopes"]
+    assert "vk:notifications:read" in social["chatgpt"]["oauth_scopes"]
+    assert "vk:notifications:read" in social["chatgpt"]["available_optional_scopes"]
     assert "vk:story:write" not in social["chatgpt"]["oauth_scopes"]
     assert "telegram:publish" not in social["chatgpt"]["oauth_scopes"]
+
+
+@pytest.mark.parametrize(
+    "unsafe_origin",
+    [
+        "https://user:stdout-secret@events.example",
+        "https://events.example?token=stdout-secret",
+        "https://events.example#stdout-secret",
+        "https://events.example:444",
+    ],
+)
+def test_generator_rejects_noncanonical_or_secret_bearing_origins_without_output(
+    tmp_path: Path, unsafe_origin: str
+) -> None:
+    output = tmp_path / "rejected-origin"
+    completed = run_generator(
+        "--new-install",
+        "--base-url",
+        unsafe_origin,
+        "--output-dir",
+        str(output),
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert not output.exists()
+    assert "stdout-secret" not in completed.stdout
+    assert "stdout-secret" not in completed.stderr
 
 
 def test_generator_requires_one_explicit_identity_mode(tmp_path: Path) -> None:
@@ -141,6 +170,8 @@ def test_bootstrap_rotation_preserves_every_stable_identity_value(
     )
     source = original_dir / "chatgpt-private-app-credentials.json"
     before = json.loads(source.read_text(encoding="utf-8"))
+    before["deploy"]["PRIVATE_EVENTS_MCP_FUTURE_SAFE_FIELD"] = "future-safe-value"
+    source.write_text(json.dumps(before), encoding="utf-8")
 
     rotated_dir = tmp_path / "rotated"
     completed = run_generator(
@@ -238,6 +269,40 @@ def test_bootstrap_rotation_rejects_incomplete_full_credentials_without_output(
     assert not output.exists()
     assert secret not in completed.stdout
     assert secret not in completed.stderr
+
+
+def test_bootstrap_rotation_rejects_unknown_deploy_env_injection_without_output(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "source"
+    run_generator(
+        "--new-install",
+        "--base-url",
+        "https://events.example",
+        "--output-dir",
+        str(source_dir),
+    )
+    full = json.loads(
+        (source_dir / "chatgpt-private-app-credentials.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    full["deploy"]["PRIVATE_EVENTS_MCP_FUTURE_SAFE_FIELD"] = (
+        "safe-prefix\nINJECTED_ENV=must-not-appear"
+    )
+    poisoned = tmp_path / "poisoned.json"
+    poisoned.write_text(json.dumps(full), encoding="utf-8")
+    output = tmp_path / "rejected-injection"
+    completed = run_generator(
+        "--rotate-bootstrap-only",
+        str(poisoned),
+        "--output-dir",
+        str(output),
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert not output.exists()
+    assert "must-not-appear" not in completed.stdout
 
 
 def test_bootstrap_rotation_rejects_symlinks_and_source_output_overlap(

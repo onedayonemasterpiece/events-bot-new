@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Any
 
-from .access_policy import legacy_social_scope_for
+from .access_policy import social_scopes_authorized
 from .crypto import AccessIdentity
 from .repository import (
     DatabaseUnavailableError,
@@ -232,11 +232,7 @@ class MCPProtocol:
                     "isError": True,
                 },
             )
-        authorized = required_scopes.issubset(identity.scopes)
-        if not authorized and len(required_scopes) == 1:
-            legacy_scope = legacy_social_scope_for(next(iter(required_scopes)))
-            authorized = legacy_scope is not None and legacy_scope in identity.scopes
-        if not authorized:
+        if not social_scopes_authorized(required_scopes, identity.scopes):
             if tool.denial_handler is not None:
                 await tool.denial_handler(arguments, context, "insufficient_scope")
             return self._response(

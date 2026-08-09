@@ -241,6 +241,9 @@ operation ref so concurrent or mutated replays cannot duplicate provider work.
 Encrypted provider refs, sample/cursor state and action receipts survive process
 restart; an interrupted unreceipted operation becomes non-retryable
 `outcome_unknown` rather than being executed again.
+Provider continuation state is validated before use and capped before encrypted
+SQLite persistence; an oversized VK `next_from` value fails closed instead of
+growing the auth/state database.
 
 `social_comment_hints_list` uses only the fixed `notifications.get` method,
 requires the dedicated notification-reader actor and scope, returns at most 25
@@ -309,7 +312,8 @@ python scripts/generate_private_events_mcp_credentials.py \
 
 Without `--enable-chatgpt-social`, the ChatGPT profile requests only the three
 evidence read scopes. With it, the profile contains the granular social scopes
-and `offline_access`; runtime switches still remain off until explicitly set.
+including `vk:notifications:read`, plus `offline_access`; runtime switches still
+remain off until explicitly set.
 An already installed connector with the four original provider-level social
 scopes does not need a new name or identity: the compatibility families above
 cover later typed tools within the same provider/read-write boundary.
@@ -341,6 +345,10 @@ social-approval value and all unknown forward-compatible fields value-for-value
 at the JSON data level. It refuses incomplete/inconsistent full bundles,
 source/output overlap, symlinked source or output paths, and mode-changing
 options such as `--base-url` or `--enable-chatgpt-social`.
+The base URL must be a canonical HTTPS origin with no credentials, query,
+fragment or explicit port. Every deploy field, including a forward-compatible
+unknown field retained during rotation, must have a valid environment name and
+a single-line NUL-free string value before `fly-secrets.env` can be written.
 
 Both modes require a fresh output path under an existing non-symlink parent.
 The generator creates the output directory as `0700` and every artifact with

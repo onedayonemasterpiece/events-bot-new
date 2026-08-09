@@ -46,6 +46,20 @@ def context(*, client: str = "chatgpt", subject: str = "alice", resource: str = 
     )
 
 
+def scoped_context(*scopes: str) -> ToolCallContext:
+    return ToolCallContext(
+        AccessIdentity(
+            "alice",
+            "chatgpt",
+            frozenset(scopes),
+            "https://mcp",
+            "jti-scoped",
+            int(time.time()) + 3600,
+        ),
+        "https://mcp",
+    )
+
+
 class FakeAdapter:
     def __init__(self) -> None:
         self.executions = 0
@@ -189,6 +203,49 @@ async def test_exact_user_dm_prepare_external_approve_commit_and_replay(runtime)
     with pytest.raises(SocialWorkspaceRuntimeError):
         await service.commit({"preparation_ref": prepared["preparation_ref"], **approval,
                               "action_digest": prepared["action_digest"]}, context())
+    assert adapter.executions == 1
+
+
+@pytest.mark.asyncio
+async def test_legacy_publish_scope_runs_typed_prepare_approval_commit_end_to_end(
+    runtime,
+) -> None:
+    service, adapter, _store = runtime
+    legacy = scoped_context("telegram:publish")
+    principal = RuntimePrincipal.from_context(legacy)
+    target = service._mint_ref("target", "native-user-legacy", "telegram", principal)
+    intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "send_message",
+            "idempotency_key": "legacy-typed-dm-123",
+            "target_ref": target,
+            "content": {"text": "Hello", "entities": [], "media": []},
+        }
+    )
+    prepared = await service.prepare(intent, legacy)
+    approval = service.approve_preparation(
+        preparation_ref=prepared["preparation_ref"],
+        operator_principal="operator@example.test",
+        operator_nonce="legacy-typed-dm-nonce-123456",
+    )
+    result = await service.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            **approval,
+            "action_digest": prepared["action_digest"],
+        },
+        legacy,
+    )
+    assert result["status"] == "succeeded"
+    assert adapter.executions == 1
+
+    cross_provider = scoped_context("vk:publish")
+    with pytest.raises(SocialWorkspaceRuntimeError, match="scope is missing"):
+        await service.prepare(intent, cross_provider)
+    read_only = scoped_context("telegram:read")
+    with pytest.raises(SocialWorkspaceRuntimeError, match="scope is missing"):
+        await service.prepare(intent, read_only)
     assert adapter.executions == 1
 
 

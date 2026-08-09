@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 from dataclasses import replace
 
 import pytest
@@ -143,6 +144,22 @@ def test_vk_bindings_are_encrypted_and_survive_restart(tmp_path) -> None:
     )
     assert second.resolve("target", ref)["group_id"] == 123
     assert b'"group_id"' not in path.read_bytes()
+
+
+def test_durable_provider_binding_rejects_oversized_state_before_persisting(
+    tmp_path,
+) -> None:
+    path = tmp_path / "auth.sqlite"
+    refs = DurableVKOpaqueRefStore(
+        SQLiteProviderCoordinator(str(path)), "signing-key-for-tests-123456789"
+    )
+    with pytest.raises(ProviderBindingError, match="exceeds size limit"):
+        refs.mint("cursor", {"start_from": "X" * 100_000})
+    with sqlite3.connect(path) as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM social_provider_binding"
+        ).fetchone()[0]
+    assert count == 0
 
 
 @pytest.mark.asyncio

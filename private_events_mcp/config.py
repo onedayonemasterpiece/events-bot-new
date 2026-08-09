@@ -53,10 +53,23 @@ def _int(name: str, default: int, *, low: int, high: int) -> int:
 
 def _normalise_base_url(value: str) -> str:
     value = value.strip().rstrip("/")
-    parsed = urlsplit(value)
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(
+            "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must be an absolute URL"
+        ) from exc
     if parsed.scheme not in {"https", "http"} or not parsed.netloc:
         raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must be an absolute URL")
-    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+    if (
+        parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or (parsed.scheme == "https" and port is not None)
+    ):
         raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host")
     if parsed.scheme != "https" and parsed.hostname not in {"127.0.0.1", "localhost"}:
         raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must use HTTPS")

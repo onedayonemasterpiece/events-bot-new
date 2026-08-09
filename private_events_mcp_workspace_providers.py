@@ -46,6 +46,9 @@ class ProviderBindingError(RuntimeError):
     """Sanitized production binding error."""
 
 
+_MAX_PROVIDER_BINDING_ENVELOPE_BYTES = 64 * 1024
+
+
 def _bounded_ref(prefix: str) -> str:
     return f"{prefix}_{secrets.token_urlsafe(24)}"
 
@@ -121,6 +124,8 @@ class _DurableEncryptedMap:
 
     def put(self, key: str, value: Any) -> None:
         encoded = _seal_binding(self.signing_key, value)
+        if len(encoded.encode("ascii")) > _MAX_PROVIDER_BINDING_ENVELOPE_BYTES:
+            raise ProviderBindingError("provider binding exceeds size limit")
         now = self.state.now_ms()
         with self.state._lock, self.state._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")

@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Any, Protocol
 from urllib.parse import urlencode
 
+from .access_policy import social_scopes_authorized
 from .auth_store import OAuthStateStore
 from .social_workspace import (
     SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
@@ -1045,7 +1046,7 @@ class SocialWorkspaceRuntime:
 
     async def prepare(self, intent: SocialActionIntent, context: ToolCallContext) -> dict[str, Any]:
         principal = RuntimePrincipal.from_context(context)
-        if not intent.required_scopes.issubset(principal.scopes):
+        if not social_scopes_authorized(intent.required_scopes, principal.scopes):
             self._audit(principal, platform=intent.platform.value, operation="prepare",
                         outcome="denied", reason="missing_scope", target_ref=intent.target_ref)
             raise SocialWorkspaceRuntimeError("required social action scope is missing")
@@ -1310,7 +1311,9 @@ class SocialWorkspaceRuntime:
                 if approval["consumed_at"] is not None:
                     raise SocialWorkspaceRuntimeError("approval receipt was already consumed")
                 intent = self._intent_from_row(prep)
-                if not intent.required_scopes.issubset(principal.scopes):
+                if not social_scopes_authorized(
+                    intent.required_scopes, principal.scopes
+                ):
                     raise SocialWorkspaceRuntimeError("required social action scope is missing")
                 target_ref = self._action_budget_target_ref(intent, conn)
                 self._consume_budget_on_conn(conn, principal, intent.platform.value,

@@ -5,14 +5,15 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import stat
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-
 _MAX_CREDENTIAL_BYTES = 1024 * 1024
+_ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$")
 _DEPLOY_KEYS = frozenset(
     {
         "PRIVATE_EVENTS_MCP_ENABLED",
@@ -37,11 +38,30 @@ def token(prefix: str, bytes_count: int) -> str:
 
 
 def validate_base_url(value: str) -> str:
-    value = value.strip().rstrip("/")
-    parsed = urlsplit(value)
-    if parsed.scheme != "https" or not parsed.netloc or parsed.path not in {"", "/"}:
-        raise argparse.ArgumentTypeError("base URL must be an HTTPS origin without a path")
-    return value
+    value = value.strip()
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("base URL must be a canonical HTTPS origin") from exc
+    hostname = parsed.hostname
+    if (
+        parsed.scheme != "https"
+        or hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or port is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or parsed.netloc.casefold() != hostname.casefold()
+        or re.fullmatch(
+            r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", hostname
+        )
+        is None
+    ):
+        raise argparse.ArgumentTypeError("base URL must be a canonical HTTPS origin")
+    return f"https://{hostname.casefold()}"
 
 
 def write_private_text(path: Path, content: str) -> None:
@@ -158,6 +178,11 @@ def _validate_full_credentials(value: Any) -> None:
         raise ValueError("existing credentials are missing full deploy fields")
     for key in _DEPLOY_KEYS:
         _required_text(deploy, key, "deploy")
+    for key, item in deploy.items():
+        if not isinstance(key, str) or _ENV_NAME_RE.fullmatch(key) is None:
+            raise ValueError("existing credentials have an invalid deploy environment name")
+        if not isinstance(item, str) or any(marker in item for marker in ("\0", "\n", "\r")):
+            raise ValueError(f"existing credentials have invalid deploy.{key}")
     for key in (
         "mcp_url",
         "oauth_client_id",
@@ -248,6 +273,7 @@ def _build_new_credentials(
                 )
             )
         chatgpt_scopes.append("offline_access")
+        chatgpt_scopes.append("vk:notifications:read")
     chatgpt = {
         "name": "Events Bot — private production evidence",
         "description": (
@@ -283,6 +309,7 @@ def _build_new_credentials(
                     "audience",
                 )
             ],
+            "vk:notifications:read",
         ],
         "notes": [
             "The bootstrap operator token is entered once in the authorization browser page.",
@@ -378,7 +405,9 @@ def main() -> int:
             "bootstrap operator token."
         ),
     )
-    parser.add_argument("--base-url", type=validate_base_url)
+    # Validate after parsing so argparse never reflects a secret-bearing invalid
+    # URL value into stderr.
+    parser.add_argument("--base-url")
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument(
         "--enable-chatgpt-social",
@@ -394,8 +423,12 @@ def main() -> int:
     if args.new_install:
         if args.base_url is None:
             parser.error("--new-install requires --base-url")
+        try:
+            base_url = validate_base_url(args.base_url)
+        except argparse.ArgumentTypeError:
+            parser.error("--base-url must be a canonical HTTPS origin")
         credentials = _build_new_credentials(
-            args.base_url, enable_chatgpt_social=args.enable_chatgpt_social
+            base_url, enable_chatgpt_social=args.enable_chatgpt_social
         )
         receipt_mode = "new_install"
     else:
