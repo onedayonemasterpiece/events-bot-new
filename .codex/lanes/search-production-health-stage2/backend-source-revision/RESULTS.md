@@ -81,3 +81,14 @@ Green validation:
 - The revision is deliberately a repository-derived deployable-source digest, not a provider deployment ID, git SHA, or compiled-byte hash.
 - Release operators must regenerate and commit the generated constant before deploying Edge changes; default PR CI now enforces `--check`.
 - Live Edge deployment and live probe validation remain outside this lane by instruction.
+
+## Reviewer follow-up
+
+- Commit `6841a0813d8f9f732e0c88d0b3d9c6ab2f12da14` narrows the
+  HEAD-to-POST race guard: only a syntactically valid observed digest that
+  differs from the expected digest becomes `BLOCKED_RELEASE_NOT_ACTIVE`.
+  Missing or malformed revision metadata on a received Edge 4xx/5xx response
+  preserves `BROKEN_SEARCH_REQUEST` rather than suppressing a product failure.
+- Deterministic tests prove both paths make one HEAD and one Search POST with no
+  retry. Focused journey suite passed 49/49; the full deterministic production
+  health suite passed 133/133; `git diff --check` passed.
