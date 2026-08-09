@@ -58,7 +58,7 @@ const frozenHealthPlan = {
     card_http_200_count: 1,
   },
   accepted_variability: {
-    cache_states: ACCEPTED_HEALTH_CACHE_STATES,
+    cache_status: 'telemetry_only',
     content_drift: true,
     index_drift: true,
   },
@@ -234,7 +234,6 @@ export function evaluateProductionHealthObservation(observation = {}) {
     || paginationRequests !== 0
     || receiptRpcCalls !== 0
     || storageImageRequests !== 0
-    || !ACCEPTED_HEALTH_CACHE_STATES.includes(String(observation.cache_state || '').toLowerCase())
   ) {
     return classified(PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_REQUEST);
   }

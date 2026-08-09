@@ -103,7 +103,6 @@ const infraFailure = (platform) => ({
 })[platform];
 
 const combinedObservedMeter = (issued, journey) => {
-  if (issued?.meter_cumulative_with_journey === true && journey?.meter) return journey.meter;
   const authMeter = typeof issued?.meterSnapshot === 'function' ? issued.meterSnapshot() : issued?.meter;
   return Promise.resolve(authMeter).then((value) => (
     mergeSupabaseClientByteSnapshots(value || emptyMeter(), journey?.meter || emptyMeter())
@@ -121,7 +120,9 @@ const searchRequestsFromRuntime = (runtime) => (Array.isArray(runtime?.requests)
 
 async function retainFailedJourneyEvidence(adapter, runtime = {}) {
   let persistent = null;
+  let physical = null;
   try { persistent = await adapter?.failedJourneyEvidence?.() || null; } catch { /* closed fallback below */ }
+  try { physical = await adapter?.physicalActivity?.() || null; } catch { /* best-known closed counters below */ }
   const authoritativeRuntime = persistent?.activity || runtime;
   const requests = searchRequestsFromRuntime(authoritativeRuntime);
   const responses = Array.isArray(authoritativeRuntime?.responses) ? authoritativeRuntime.responses : [];
@@ -135,9 +136,13 @@ async function retainFailedJourneyEvidence(adapter, runtime = {}) {
   const renderedIds = Array.isArray(state.rendered_ids) ? state.rendered_ids.map(String) : [];
   const responseIds = Array.isArray(response.response_ids) ? response.response_ids.map(String) : [];
   const postNavigationSearchPostCount = Number(persistent?.post_navigation_search_post_count || 0);
-  const physicalSearchPostCount = requests.length
+  const fallbackPhysicalSearchPostCount = requests.length
     + (Number.isSafeInteger(postNavigationSearchPostCount) && postNavigationSearchPostCount >= 0
       ? postNavigationSearchPostCount : 0);
+  const observedPhysicalSearchPostCount = Number(physical?.search_posts);
+  const physicalSearchPostCount = Number.isSafeInteger(observedPhysicalSearchPostCount)
+    && observedPhysicalSearchPostCount >= 0
+    ? observedPhysicalSearchPostCount : fallbackPhysicalSearchPostCount;
   let retainedMeter = authoritativeRuntime.meter || emptyMeter();
   if (persistent?.post_navigation_meter) {
     try {
@@ -164,8 +169,10 @@ async function retainFailedJourneyEvidence(adapter, runtime = {}) {
     forbidden_activity: {
       llm_calls: Number(response.provider_attempts?.llm || 0),
       pagination_requests: Math.max(0, requests.length - 1),
-      receipt_rpc_calls: Number(authoritativeRuntime.network?.receipt_rpc_requests || 0),
-      storage_image_requests: Number(authoritativeRuntime.network?.storage_requests || 0),
+      receipt_rpc_calls: Number(physical?.receipt_rpc_requests
+        ?? authoritativeRuntime.network?.receipt_rpc_requests ?? 0),
+      storage_image_requests: Number(physical?.storage_requests
+        ?? authoritativeRuntime.network?.storage_requests ?? 0),
     },
     diagnostics: {
       console_errors: Number(diagnostics.console_errors || 0),
@@ -190,7 +197,7 @@ function journeyFailure(error) {
 function isAdapterInfrastructureFailure(error) {
   const message = String(error?.message || '');
   return /^(?:search_browser_(?:crashed|session_lost)(?:_[a-z0-9]+)*|mobile_[a-z0-9_]*(?:network_log_unavailable|diagnostics_unavailable|session_lost)|webdriver_session_error)$/iu.test(message)
-    || /(?:mobile_auth_terminal_bytes_timeout|mobile_post_navigation_(?:terminal_bytes_missing|meter_(?:origin_)?missing)|search_post_navigation_meter_(?:failed|origin_missing))/iu.test(message)
+    || /(?:mobile_auth_terminal_bytes_timeout|mobile_post_navigation_(?:terminal_bytes_missing|meter_(?:origin_)?missing)|search_(?:post_navigation_meter_(?:failed|origin_missing|missing)|post_navigation_observation_missing|physical_observation_missing))/iu.test(message)
     || /(?:invalid session id|no such window|target page, context or browser has been closed|browser has been closed|web view not found)/iu.test(message);
 }
 
@@ -420,6 +427,7 @@ export async function createBuiltInBrowserHooks(env, meter, dependencies = {}) {
       return adapterModule.createPlaywrightSearchAdapter({
         browserName: env.E2E_SEARCH_BROWSER || 'chromium', headless: env.E2E_HEADLESS !== '0',
         timeoutMs: env.E2E_SEARCH_TIMEOUT_MS, productionHealth: true,
+        supabaseOrigins: [supabaseUrl, env.PERSONALIZATION_SUPABASE_RELAY_URL].filter(Boolean),
       });
     },
     async issueSession({ platform, target }) {
@@ -475,6 +483,8 @@ export async function createBuiltInMobileHooks(env, platform, dependencies = {})
     deviceName: env.E2E_DEVICE_NAME,
     platformVersion: env.E2E_PLATFORM_VERSION, timeoutMs: env.E2E_SEARCH_TIMEOUT_MS,
     appiumLogPath: env.E2E_APPIUM_LOG_PATH,
+    supabaseOrigins: [env.PERSONALIZATION_SUPABASE_URL,
+      env.PERSONALIZATION_SUPABASE_RELAY_URL].filter(Boolean),
     env,
   };
   return {
@@ -504,7 +514,6 @@ export async function createBuiltInMobileHooks(env, platform, dependencies = {})
       credential.actionLink = '';
       const issued = {
         actionLink: callback,
-        meter_cumulative_with_journey: true,
         async verifyAuth(adapter) {
           if (typeof adapter?.verifyAuthenticatedOwner !== 'function') {
             throw new Error('search_health_authenticated_owner_probe_missing');

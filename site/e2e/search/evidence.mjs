@@ -142,7 +142,7 @@ export function productionHealthEvidenceRecord(input = {}) {
       vector_only: journey.request_contract?.use_llm_verifier === false,
       limit: safeCount(journey.request_contract?.limit),
       explicit_execution_mode: journey.request_contract?.explicit_execution_mode === true,
-      cache_state: closedText(journey.cache_state, /^(?:hit|miss|stored|bypass)$/u),
+      cache_state: closedText(journey.cache_state, /^[a-z0-9][a-z0-9_-]{0,31}$/u),
       provider_attempts: {
         embedding: safeCount(journey.provider_attempts?.embedding),
         vector: safeCount(journey.provider_attempts?.vector),

@@ -84,15 +84,39 @@ export async function createPlaywrightSearchAdapter(options = {}) {
   let postBoundaryLastActivityAt = 0;
   let preNavigationSearchActivity = null;
   let preNavigationResultState = null;
+  let wholeCellOrigins = [...new Set((options.supabaseOrigins || []).map((value) => new URL(value).origin))];
+  const wholeCellRequests = [];
+  const wholeCellActiveRequests = new Map();
+  const wholeCellResponses = [];
+  let wholeCellLastActivityAt = Date.now();
   const diagnostics = { console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0 };
   const bindPage = (value) => {
     value.on('console', (message) => { if (message.type() === 'error') diagnostics.console_errors += 1; });
-    value.on('requestfailed', () => { diagnostics.failed_requests += 1; });
+    value.on('request', (request) => {
+      try {
+        const url = new URL(request.url());
+        const record = { origin: url.origin, pathname: url.pathname,
+          method: String(request.method() || 'GET').toUpperCase() };
+        wholeCellRequests.push(record);
+        wholeCellActiveRequests.set(request, record);
+        wholeCellLastActivityAt = Date.now();
+      } catch { /* malformed browser metadata is excluded */ }
+    });
+    const finish = (request) => {
+      if (wholeCellActiveRequests.delete(request)) wholeCellLastActivityAt = Date.now();
+    };
+    value.on('requestfinished', finish);
+    value.on('requestfailed', (request) => { diagnostics.failed_requests += 1; finish(request); });
     value.on('response', (response) => {
       let path = '';
       try { path = new URL(response.url()).pathname; } catch { /* ignored */ }
       if (response.status() >= 400 && /^\/(?:auth|functions|rest)\/v1(?:\/|$)/u.test(path)) diagnostics.error_responses += 1;
       if (/^\/storage\/v1(?:\/|$)/u.test(path)) diagnostics.storage_requests += 1;
+      try {
+        const url = new URL(response.url());
+        wholeCellResponses.push({ origin: url.origin, pathname: url.pathname, response, measured: null });
+        wholeCellLastActivityAt = Date.now();
+      } catch { /* malformed browser metadata is excluded */ }
     });
     return value;
   };
@@ -169,7 +193,7 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       await root.waitFor({ state: 'attached', timeout: timeoutMs });
       await page.waitForFunction(() => document.querySelector('[data-authorized-search]')?.classList.contains('is-authorized'), null, { timeout: timeoutMs });
       await page.evaluate(installSearchRuntimeProbe, configuredPolicy);
-      return root.evaluate((node) => {
+      const inspected = await root.evaluate((node) => {
         const input = node.querySelector('[data-search-input]');
         return {
           enabled: node.dataset.searchEnabled === 'true',
@@ -177,14 +201,53 @@ export async function createPlaywrightSearchAdapter(options = {}) {
           transport: String(node.dataset.searchTransport || ''),
           input_tag: String(input?.tagName || '').toLowerCase(),
           enter_key_hint: String(input?.enterKeyHint || input?.getAttribute('enterkeyhint') || ''),
+          observer_origins: [node.dataset.supabaseUrl, node.dataset.supabaseRelayUrl]
+            .filter(Boolean).map((value) => new URL(value, location.href).origin),
         };
       });
+      wholeCellOrigins = [...new Set([...wholeCellOrigins, ...(inspected.observer_origins || [])])];
+      delete inspected.observer_origins;
+      return inspected;
     },
     async configureRequestPolicy(policy) {
       configuredPolicy = { ...policy };
       await page.evaluate(installSearchRuntimeProbe, configuredPolicy);
     },
     async activity() { return page.evaluate(snapshotSearchRuntimeProbe); },
+    async awaitPhysicalIdle() {
+      const quietMs = Math.max(25, Number(options.physicalQuietMs || 200));
+      const deadline = Date.now() + timeoutMs;
+      while (true) {
+        const relevantActive = [...wholeCellActiveRequests.values()]
+          .some((item) => wholeCellOrigins.includes(item.origin));
+        if (!relevantActive && Date.now() - wholeCellLastActivityAt >= quietMs) return;
+        if (Date.now() >= deadline) throw new Error('search_physical_observation_missing');
+        await page.waitForTimeout(Math.min(25, quietMs));
+      }
+    },
+    async physicalActivity() {
+      if (wholeCellOrigins.length < 1) throw new Error('search_physical_observation_missing');
+      const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: wholeCellOrigins });
+      for (const item of wholeCellResponses) {
+        if (!wholeCellOrigins.includes(item.origin)) continue;
+        if (!item.measured) {
+          const headers = await item.response.allHeaders?.() || item.response.headers?.() || {};
+          const hasLength = Object.keys(headers).some((key) => key.toLowerCase() === 'content-length');
+          const body = hasLength ? null : await item.response.body();
+          item.measured = { headers, body };
+        }
+        meter.recordResponse({ url: `${item.origin}${item.pathname}`, ...item.measured });
+      }
+      const requests = wholeCellRequests.filter((item) => wholeCellOrigins.includes(item.origin));
+      return Object.freeze({
+        search_posts: requests.filter((item) => item.method === 'POST'
+          && item.pathname === '/functions/v1/event-search').length,
+        storage_requests: requests.filter((item) => item.pathname === '/storage/v1'
+          || item.pathname.startsWith('/storage/v1/')).length,
+        receipt_rpc_requests: requests.filter((item) => /^\/rest\/v1\/rpc\/get_event_search_receipt(?:_|$)/u.test(item.pathname)).length,
+        meter: meter.snapshot(),
+      });
+    },
     async healthDiagnostics() { return { ...diagnostics }; },
     async typeQuery(value) {
       const input = page.locator('[data-search-input]');

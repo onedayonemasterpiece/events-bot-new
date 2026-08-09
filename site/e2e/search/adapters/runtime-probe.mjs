@@ -17,9 +17,6 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     },
   };
   globalThis[key] = state;
-  if (!(state.physically_measured_responses instanceof WeakSet)) {
-    state.physically_measured_responses = new WeakSet();
-  }
   if (!(state.physically_observed_failures instanceof WeakSet)) {
     state.physically_observed_failures = new WeakSet();
   }
@@ -228,20 +225,7 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
       const method = String(init?.method || input?.method || 'GET').toUpperCase();
       const isSearch = Boolean(url?.pathname.endsWith(searchPath) && method === 'POST');
       if (!transport && state.transport_active === true) {
-        // Once resilient transport is active this captured raw fetch is the
-        // physical boundary. It observes route probes and every discarded
-        // retry/alternate response. The high-level wrapper below retains the
-        // semantic Search receipt but skips responses already measured here.
-        try {
-          const physicalResponse = await original.call(this, input, init);
-          state.physically_measured_responses.add(physicalResponse);
-          scheduleMeasure(url, physicalResponse);
-          return physicalResponse;
-        } catch (error) {
-          state.network.failed_requests += 1;
-          if (error && typeof error === 'object') state.physically_observed_failures.add(error);
-          throw error;
-        }
+        return original.call(this, input, init);
       }
       const nextInit = isSearch ? patchBody(init) : init;
       let sequence = 0;
@@ -254,8 +238,7 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
       let response;
       try {
         response = await original.call(this, input, nextInit);
-        if ((transport || state.measure_global)
-          && !state.physically_measured_responses.has(response)) {
+        if ((transport && state.physical_transport_active !== true) || state.measure_global) {
           scheduleMeasure(url, response);
         }
       } catch (error) {
@@ -289,11 +272,34 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     return true;
   };
 
+  const wrapPhysicalFetch = (transport) => {
+    const original = transport?.rawFetch;
+    if (typeof original !== 'function') return original?.__keSearchPhysicalWrapped === true;
+    if (original.__keSearchPhysicalWrapped) return true;
+    const wrapped = async function searchHealthPhysicalFetch(input, init = {}) {
+      const url = absoluteUrl(input);
+      try {
+        const response = await original.call(this, input, init);
+        scheduleMeasure(url, response);
+        return response;
+      } catch (error) {
+        state.network.failed_requests += 1;
+        if (error && typeof error === 'object') state.physically_observed_failures.add(error);
+        throw error;
+      }
+    };
+    wrapped.__keSearchPhysicalWrapped = true;
+    transport.rawFetch = wrapped;
+    return true;
+  };
+
   if (!globalThis.fetch?.__keSearchHarnessWrapped) wrap(globalThis, 'fetch', 'window_fetch', false);
   const clients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
   let wrappedTransport = false;
   if (clients instanceof Map) {
     for (const client of clients.values()) {
+      state.physical_transport_active = wrapPhysicalFetch(client?.transport)
+        || state.physical_transport_active === true;
       const property = typeof client?.transport?.request === 'function' ? 'request' : 'fetch';
       wrappedTransport = wrap(client?.transport, property, property === 'request'
         ? 'resilient_transport_request' : 'resilient_transport_legacy_fetch', true) || wrappedTransport;

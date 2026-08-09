@@ -65,6 +65,8 @@ function fakeJourneyAdapter(overrides = {}) {
   let latePostRecorded = false;
   let terminalMinimumCardCount = null;
   let submitCalls = 0;
+  let opened = false;
+  let physicalPosts = 0;
   let preNavigationActivity = null;
   let preNavigationResults = null;
   const state = {
@@ -99,13 +101,27 @@ function fakeJourneyAdapter(overrides = {}) {
     get terminalMinimumCardCount() { return terminalMinimumCardCount; },
     get submitCalls() { return submitCalls; },
     async configureRequestPolicy(value) { policy = value; },
-    async open() {},
+    async open() { opened = true; },
     async inspectSurface() { return { enabled: true, authorized: true, input_tag: 'textarea', enter_key_hint: 'search' }; },
     async activity() { activityCalls += 1; return structuredClone(state); },
+    async awaitPhysicalIdle() {},
+    async physicalActivity() {
+      const pageInitBytes = opened ? Number(overrides.pageInitBytes || 0) : 0;
+      const searchBytes = submitCalls > 0 ? Number(overrides.bytes ?? 2048) : 0;
+      const postBytes = navigationOpened ? Number(overrides.postNavigationBytes || 0) : 0;
+      const bytes = pageInitBytes + searchBytes + postBytes;
+      return {
+        search_posts: physicalPosts,
+        storage_requests: Number(state.network.storage_requests || 0),
+        receipt_rpc_requests: Number(state.network.receipt_rpc_requests || 0),
+        meter: meter(bytes),
+      };
+    },
     async healthDiagnostics() {
       if (navigationOpened && overrides.latePostAfterNavigation && !latePostRecorded) {
         latePostRecorded = true;
         postNavigationSearchPostCount += 1;
+        physicalPosts += 1;
       }
       if (navigationOpened && overrides.finalDiagnosticsFailure) {
         throw new Error(overrides.finalDiagnosticsError || 'search_browser_crashed_after_navigation');
@@ -122,6 +138,7 @@ function fakeJourneyAdapter(overrides = {}) {
       };
       const times = overrides.postCount ?? 1;
       for (let index = 0; index < times; index += 1) {
+        physicalPosts += 1;
         state.requests.push({ sequence: index + 1, method: 'POST', path: '/functions/v1/event-search', route: 'direct', body_contract: body });
         state.responses.push({ ...response, sequence: index + 1 });
         state.routes.push({ operation_id: `op-${index}`, policy: 'selected-once', route: 'direct', initial_route: 'direct', kind: 'success', status: 200 });
@@ -142,6 +159,7 @@ function fakeJourneyAdapter(overrides = {}) {
       if (overrides.postAfterOpen) {
         state.requests.push({ method: 'POST', path: '/functions/v1/event-search', body_contract: {} });
         postNavigationSearchPostCount += 1;
+        physicalPosts += 1;
       }
       if (overrides.resetActivityOnOpen) {
         state.requests.length = 0;
@@ -218,7 +236,7 @@ test('production health journey merges post-navigation Supabase bytes and enforc
 });
 
 test('page-init Auth/RLS hard cap blocks before physical Search dispatch', async () => {
-  const adapter = fakeJourneyAdapter({ bytes: SUPABASE_CLIENT_BYTE_HARD_LIMIT + 1 });
+  const adapter = fakeJourneyAdapter({ pageInitBytes: SUPABASE_CLIENT_BYTE_HARD_LIMIT + 1 });
   await assert.rejects(() => runProductionHealthJourney({
     adapter,
     targetUrl: 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/',
@@ -234,6 +252,25 @@ test('normal vector health accepts a cache hit reported as actual cached_vector'
   });
   assert.equal(result.cache_state, 'hit');
   assert.equal(result.search_post_count, 1);
+});
+
+test('cache write status remains telemetry and never overrides a valid Search result', async () => {
+  for (const cache of ['store_failed', 'skipped', 'other_bounded_status']) {
+    const result = await runProductionHealthJourney({
+      adapter: fakeJourneyAdapter({ cache }), targetUrl: 'https://kenigevents.ru/',
+    });
+    assert.equal(result.cache_state, cache);
+  }
+  const adapter = fakeJourneyAdapter({ cache: 'store_failed' });
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const cell = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => adapter,
+    issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+  });
+  assert.equal(cell.product_health, 'HEALTHY');
+  assert.equal(cell.search.cache_state, 'store_failed');
 });
 
 test('production health fails closed when any required sanitized response identity is absent', async () => {
@@ -360,11 +397,12 @@ test('cold resilient route selection meters its physical functions probe without
     installSearchRuntimeProbe({ production_health: true });
     const transport = {
       async request(input, init) {
-        await globalThis.fetch('https://project.supabase.co/functions/v1/transport-probe', { method: 'HEAD' });
-        await globalThis.fetch('https://project.supabase.co/rest/v1/safe_read');
-        await globalThis.fetch('https://relay.example/rest/v1/safe_read');
-        return globalThis.fetch(input, init);
+        await this.rawFetch('https://project.supabase.co/functions/v1/transport-probe', { method: 'HEAD' });
+        await this.rawFetch('https://project.supabase.co/rest/v1/safe_read');
+        await this.rawFetch('https://relay.example/rest/v1/safe_read');
+        return this.rawFetch(input, init);
       },
+      rawFetch: globalThis.fetch,
       outcomeHistory: () => [],
     };
     globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__.set('search', { transport });
@@ -387,6 +425,112 @@ test('cold resilient route selection meters its physical functions probe without
     delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
     globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
     globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  }
+});
+
+test('real ResilientSupabaseTransport transformed Response meters probe and Search exactly once', async () => {
+  const { createResilientSupabaseTransport } = await import('../src/lib/resilientSupabaseTransport.ts');
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const originalClients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+  try {
+    const rawFetch = async (input, init = {}) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/functions/v1/transport-probe') {
+        const nonce = JSON.parse(String(init.body || '{}')).nonce;
+        return new Response(JSON.stringify({ nonce, schema: 1 }), { status: 200,
+          headers: { 'content-type': 'application/json', 'content-length': '128' } });
+      }
+      return new Response(JSON.stringify({
+        schema_version: 'event_search_v2', search_contract_version: 'event_search_v2',
+        request_id: 'real-transport-request', requested_execution_mode: 'cold_vector',
+        actual_execution_mode: 'cold_vector', result_cache_status: 'miss',
+        catalog_revision: 'a'.repeat(64), corpus_revision: 'b'.repeat(64),
+        search_document_revision: 'c'.repeat(64), items: [{ event_id: 1 }],
+        request_counters: { embedding_provider_attempts: 1, vector_rpc_attempts: 1, llm_provider_attempts: 0 },
+      }), { status: 200, headers: { 'content-type': 'application/json', 'content-length': '512' } });
+    };
+    const transport = createResilientSupabaseTransport({
+      directUrl: 'https://project.supabase.co', publishableKey: 'publishable-test-key',
+      fetchImpl: rawFetch, sessionStorage: null, probeStaggerMs: 0,
+    });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'https://kenigevents.ru/poisk/' } });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => ({
+      dataset: { supabaseUrl: 'https://project.supabase.co', supabaseRelayUrl: '' },
+    }) } });
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = new Map([['real', { transport }]]);
+    installSearchRuntimeProbe({ production_health: true });
+    const response = await transport.request('https://project.supabase.co/functions/v1/event-search', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: 'never retained', client_request_id: crypto.randomUUID() }),
+    });
+    assert.equal(response.status, 200);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const snapshot = snapshotSearchRuntimeProbe();
+      if (snapshot.responses.length === 1 && snapshot.meter.pending_measurements === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const snapshot = snapshotSearchRuntimeProbe();
+    assert.equal(snapshot.requests.length, 1);
+    assert.equal(snapshot.responses.length, 1);
+    assert.equal(snapshot.meter.categories.edge, 640);
+  } finally {
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  }
+});
+
+test('real ResilientSupabaseTransport meters discarded safe-read response and alternate exactly once', async () => {
+  const { createResilientSupabaseTransport } = await import('../src/lib/resilientSupabaseTransport.ts');
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const originalClients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+  try {
+    const rawFetch = async (input, init = {}) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/rest/v1/rpc/transport_probe_v1') {
+        const nonce = JSON.parse(String(init.body || '{}')).p_nonce;
+        return new Response(JSON.stringify({ nonce, schema: 1 }), { status: 200,
+          headers: { 'content-type': 'application/json', 'content-length': '128' } });
+      }
+      if (url.origin === 'https://project.supabase.co') {
+        return new Response(JSON.stringify({ message: 'discarded' }), { status: 503,
+          headers: { 'content-type': 'application/json', 'content-length': '256' } });
+      }
+      return new Response('[]', { status: 200,
+        headers: { 'content-type': 'application/json', 'content-length': '512' } });
+    };
+    const transport = createResilientSupabaseTransport({
+      directUrl: 'https://project.supabase.co', relayUrl: 'https://relay.example',
+      publishableKey: 'publishable-test-key', fetchImpl: rawFetch,
+      sessionStorage: null, probeStaggerMs: 1000,
+    });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'https://kenigevents.ru/poisk/' } });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => ({
+      dataset: { supabaseUrl: 'https://project.supabase.co', supabaseRelayUrl: 'https://relay.example' },
+    }) } });
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = new Map([['real-safe-read', { transport }]]);
+    installSearchRuntimeProbe({ production_health: true });
+    const response = await transport.request('https://project.supabase.co/rest/v1/user_saved_event?select=user_id', {
+      method: 'GET', headers: { accept: 'application/json' },
+    });
+    assert.equal(response.status, 200);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (snapshotSearchRuntimeProbe().meter.pending_measurements === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const snapshot = snapshotSearchRuntimeProbe();
+    assert.equal(snapshot.meter.categories.direct_rpc, 128);
+    assert.equal(snapshot.meter.categories.direct_rest, 768);
+  } finally {
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
     Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
     Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
   }
@@ -430,7 +574,6 @@ test('production health journey fails closed on duplicates, canary body, LLM, ex
   await assert.rejects(() => runProductionHealthJourney({ adapter: fakeJourneyAdapter({ postCount: 2 }), targetUrl: 'https://kenigevents.ru/' }), /duplicate_post/u);
   await assert.rejects(() => runProductionHealthJourney({ adapter: fakeJourneyAdapter({ executionModePresent: true }), targetUrl: 'https://kenigevents.ru/' }), /request_contract_invalid/u);
   await assert.rejects(() => runProductionHealthJourney({ adapter: fakeJourneyAdapter({ llm: 1 }), targetUrl: 'https://kenigevents.ru/' }), /llm_activity_forbidden/u);
-  await assert.rejects(() => runProductionHealthJourney({ adapter: fakeJourneyAdapter({ cache: 'bypass' }), targetUrl: 'https://kenigevents.ru/' }), /cache_state/u);
   await assert.rejects(() => runProductionHealthJourney({ adapter: fakeJourneyAdapter({ ids: ['1', '2', '3', '4', '5', '6'] }), targetUrl: 'https://kenigevents.ru/' }), /result_render_invalid/u);
   await assert.rejects(() => runProductionHealthJourney({ adapter: fakeJourneyAdapter({ receiptRpcRequests: 1 }), targetUrl: 'https://kenigevents.ru/' }), /receipt_rpc_forbidden/u);
   await assert.rejects(() => runProductionHealthJourney({ adapter: fakeJourneyAdapter({ storageRequests: 1 }), targetUrl: 'https://kenigevents.ru/' }), /storage_forbidden/u);
@@ -506,6 +649,22 @@ test('cell preflights before issuance, uses one adapter, rereads pointer without
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('cell merges issued verified Auth bytes with the new-page journey delta', async () => {
+  const adapter = fakeJourneyAdapter({ bytes: 2048, pageInitBytes: 1024 });
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const result = await runProductionHealthCell({
+    platform: 'android', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => adapter,
+    issueSession: async () => ({
+      authReceipt, meter_cumulative_with_journey: true,
+      meterSnapshot: () => meter(4096), attach: async () => {}, cleanup: async () => {},
+    }),
+  });
+  assert.equal(result.execution_status, 'PASS');
+  assert.equal(result.supabase_observed_bytes.total_bytes, 7168);
 });
 
 test('failed side-effect-free preflight never issues Auth or Search and is not a product incident', async () => {
@@ -695,6 +854,9 @@ test('post-preflight Appium log/session loss is platform infrastructure, never p
     ['ios', 'mobile_post_navigation_terminal_bytes_missing', 'UNKNOWN_IOS_INFRA'],
     ['browser', 'search_post_navigation_meter_failed', 'UNKNOWN_RUNNER_BROWSER'],
     ['browser', 'search_post_navigation_meter_origin_missing', 'UNKNOWN_RUNNER_BROWSER'],
+    ['browser', 'search_post_navigation_meter_missing', 'UNKNOWN_RUNNER_BROWSER'],
+    ['browser', 'search_post_navigation_observation_missing', 'UNKNOWN_RUNNER_BROWSER'],
+    ['ios', 'search_physical_observation_missing', 'UNKNOWN_IOS_INFRA'],
   ]) {
     const adapter = fakeJourneyAdapter({
       finalDiagnosticsFailure: true, finalDiagnosticsError: message, resetActivityOnOpen: true,
@@ -1008,6 +1170,32 @@ test('Playwright target open rejects an otherwise same-final-URL redirect chain'
   );
 });
 
+test('Playwright physical observer waits for delayed page-init bytes before pre-submit gate', async () => {
+  const listeners = new Map();
+  const page = {
+    on(name, listener) { const values = listeners.get(name) || new Set(); values.add(listener); listeners.set(name, values); },
+    off(name, listener) { listeners.get(name)?.delete(listener); },
+    viewportSize: () => ({ width: 1280, height: 720 }), url: () => 'about:blank',
+    async waitForTimeout(ms) { await new Promise((resolve) => setTimeout(resolve, ms)); },
+  };
+  const adapter = await createPlaywrightSearchAdapter({ page, productionHealth: true,
+    supabaseOrigins: ['https://project.supabase.co'], physicalQuietMs: 30 });
+  setTimeout(() => {
+    const request = { method: () => 'GET', url: () => 'https://project.supabase.co/auth/v1/user' };
+    for (const listener of listeners.get('request') || []) listener(request);
+    for (const listener of listeners.get('response') || []) listener({
+      url: () => 'https://project.supabase.co/auth/v1/user', status: () => 200,
+      allHeaders: async () => ({ 'content-length': String(SUPABASE_CLIENT_BYTE_HARD_LIMIT + 1) }),
+      body: async () => { throw new Error('body must not be fetched'); },
+    });
+    for (const listener of listeners.get('requestfinished') || []) listener(request);
+  }, 10);
+  await adapter.awaitPhysicalIdle();
+  const activity = await adapter.physicalActivity();
+  assert.equal(activity.search_posts, 0);
+  assert.equal(activity.meter.hard_limit_exceeded, true);
+});
+
 test('Playwright card open preserves Search activity and independently counts later Search POSTs', async () => {
   let currentUrl = 'https://kenigevents.ru/poisk/';
   const listeners = new Map();
@@ -1064,7 +1252,7 @@ test('Playwright card open preserves Search activity and independently counts la
   assert.deepEqual(receipt.search_page_activity_before_navigation, searchActivity);
   assert.equal(receipt.same_origin, true);
   assert.equal(receipt.http_status, 200);
-  assert.equal(listeners.get('request')?.size || 0, 1);
+  assert.equal(listeners.get('request')?.size || 0, 2);
   emitRequest('https://project.supabase.co/functions/v1/event-search?late=yes', 'POST');
   for (const listener of listeners.get('response') || []) {
     listener({
@@ -1090,7 +1278,7 @@ test('Playwright card open preserves Search activity and independently counts la
   assert.equal(postNavigationMeter.total_bytes, 5120);
   assert.equal(postNavigationMeter.categories.direct_rest, 4096);
   assert.equal(postNavigationMeter.categories.auth, 1024);
-  assert.equal(listeners.get('request')?.size || 0, 0);
+  assert.equal(listeners.get('request')?.size || 0, 1);
   assert.equal(listeners.get('response')?.size || 0, 1); // one permanent diagnostics listener remains
   assert.doesNotMatch(JSON.stringify(receipt), /not-retained/u);
 });

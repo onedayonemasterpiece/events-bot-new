@@ -1,13 +1,12 @@
 import {
   activityDelta,
-  assertCacheState,
   assertOneSubmitOnePost,
   assertRealScroll,
   assertResponseRenderedIds,
   assertRoute,
   assertUniqueCards,
 } from './acceptance.mjs';
-import { mergeSupabaseClientByteSnapshots } from './production-health-meter.mjs';
+import { subtractSupabaseClientByteSnapshots } from './production-health-meter.mjs';
 export const PRODUCTION_HEALTH_UI_QUERY = 'куда сходить в Калининграде';
 export const PRODUCTION_HEALTH_CACHE_STATES = Object.freeze(['hit', 'miss', 'stored']);
 export const PRODUCTION_HEALTH_REQUEST_POLICY = Object.freeze({
@@ -19,7 +18,7 @@ const requiredMethods = [
   'open', 'inspectSurface', 'configureRequestPolicy', 'activity', 'healthDiagnostics',
   'typeQuery', 'submitWithSearchIntent', 'waitForTerminal', 'snapshotResults',
   'realScrollResults', 'openFirstResult', 'postNavigationSearchPostCount',
-  'postNavigationMeterSnapshot',
+  'postNavigationMeterSnapshot', 'awaitPhysicalIdle', 'physicalActivity',
 ];
 
 const finiteDelta = (after, before, key) => {
@@ -54,7 +53,9 @@ function assertVectorResponse(response) {
   if (!response || response.http_status < 200 || response.http_status >= 300) {
     throw new Error('search_health_response_http_invalid');
   }
-  assertCacheState(response, PRODUCTION_HEALTH_CACHE_STATES, 'production_health');
+  if (!/^[a-z0-9][a-z0-9_-]{0,31}$/u.test(String(response.result_cache_status || ''))) {
+    throw new Error('search_health_cache_telemetry_invalid');
+  }
   if (response.provider_attempts_present !== true || response.provider_attempts_source !== 'request_counters') {
     throw new Error('search_health_request_counters_missing');
   }
@@ -109,14 +110,25 @@ function assertNoSearchErrors(before, after) {
 export async function runProductionHealthJourney({ adapter, targetUrl, now = () => performance.now() }) {
   assertAdapter(adapter);
   await adapter.configureRequestPolicy(PRODUCTION_HEALTH_REQUEST_POLICY);
+  await adapter.awaitPhysicalIdle();
+  const physicalStart = await adapter.physicalActivity();
   await adapter.open(targetUrl);
   const surface = await adapter.inspectSurface();
   assertSurface(surface);
 
   // Snapshot after auth/surface initialization. Only the following UI intent
   // may contribute a Search POST to this journey.
+  await adapter.awaitPhysicalIdle();
+  const physicalBefore = await adapter.physicalActivity();
   const before = await adapter.activity();
-  if (before.meter?.hard_limit_exceeded === true) {
+  if (Number(before.meter?.pending_measurements || 0) !== 0) {
+    throw new Error('search_physical_observation_missing');
+  }
+  if (physicalBefore.search_posts !== 0 || physicalBefore.storage_requests !== 0
+    || physicalBefore.receipt_rpc_requests !== 0) {
+    throw new Error('search_physical_pre_submit_activity_forbidden');
+  }
+  if (physicalBefore.meter?.hard_limit_exceeded === true) {
     throw new Error('search_health_supabase_hard_limit_exceeded');
   }
   const diagnosticsBefore = await adapter.healthDiagnostics();
@@ -183,8 +195,13 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
     || postNavigationSearchPostCount !== 0) {
     throw new Error('search_health_post_navigation_search_forbidden');
   }
-  const postNavigationMeter = await adapter.postNavigationMeterSnapshot();
-  const finalMeter = mergeSupabaseClientByteSnapshots(finalActivity.meter, postNavigationMeter);
+  await adapter.postNavigationMeterSnapshot();
+  await adapter.awaitPhysicalIdle();
+  const physicalFinal = await adapter.physicalActivity();
+  if (physicalFinal.search_posts !== 1) throw new Error('search_health_request_count_invalid');
+  if (physicalFinal.storage_requests !== 0) throw new Error('search_health_storage_forbidden');
+  if (physicalFinal.receipt_rpc_requests !== 0) throw new Error('search_health_receipt_rpc_forbidden');
+  const finalMeter = subtractSupabaseClientByteSnapshots(physicalFinal.meter, physicalStart.meter);
   if (finalMeter.hard_limit_exceeded === true) {
     throw new Error('search_health_supabase_hard_limit_exceeded');
   }

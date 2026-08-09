@@ -25,6 +25,8 @@ export function assertCanonicalCandidateEventDestination({ searchUrl, eventUrl, 
 /** Stateful sanitizer; protocol request IDs remain inside this closure only. */
 export function createSanitizedNavigationResponseTracker() {
   const responses = [];
+  const requests = [];
+  const seenRequestIds = new Set();
   const responseByRequestId = new Map();
   const terminalBytesByRequestId = new Map();
   const untrackedTerminalRecords = [];
@@ -32,6 +34,12 @@ export function createSanitizedNavigationResponseTracker() {
     const url = safeUrl(request?.url);
     const identity = String(requestId || '');
     if (!url || !identity) return;
+    if (!seenRequestIds.has(identity)) {
+      seenRequestIds.add(identity);
+      requests.push({ origin: url.origin, pathname: url.pathname,
+        method: String(request?.method || 'GET').toUpperCase(),
+        resource_type: String(resourceType || '').toLowerCase() });
+    }
     responseByRequestId.set(identity, {
       item: { origin: url.origin, pathname: url.pathname,
         resource_type: String(resourceType || '').toLowerCase() },
@@ -123,6 +131,7 @@ export function createSanitizedNavigationResponseTracker() {
   const tracker = Object.freeze({
     consume,
     responses: () => responses.map((item) => Object.freeze({ ...item })),
+    requests: () => requests.map((item) => Object.freeze({ ...item })),
     pendingTerminalCount(filter = {}) {
       let count = 0;
       for (const record of responseByRequestId.values()) {

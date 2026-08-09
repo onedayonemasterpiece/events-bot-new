@@ -521,7 +521,8 @@ test('adapter opens the captured first result and binds the browser navigation t
     },
     async waitUntil(fn) { if (!await fn()) throw new Error('wait_failed'); },
   };
-  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver,
+    supabaseOrigins: ['https://project.supabase.co'], physicalQuietMs: 25 });
   const receipt = await adapter.openFirstResult();
   assert.equal(receipt.schema_version, 'mobile-card-open-v1');
   assert.equal(receipt.same_origin, true);
@@ -536,6 +537,10 @@ test('adapter opens the captured first result and binds the browser navigation t
   assert.equal(postNavigationMeter.total_bytes, 2816);
   assert.equal(postNavigationMeter.categories.edge, 768);
   assert.equal(postNavigationMeter.categories.direct_rest, 2048);
+  await adapter.awaitPhysicalIdle();
+  const physical = await adapter.physicalActivity();
+  assert.equal(physical.search_posts, 2);
+  assert.equal(physical.meter.total_bytes, 2816);
 });
 
 test('Appium failed evidence preserves the pre-navigation snapshot when final logs disappear', async () => {

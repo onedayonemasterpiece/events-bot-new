@@ -168,8 +168,14 @@ export async function createAppiumSearchAdapter(options = {}) {
   let postBoundaryMeterSnapshot = null;
   let preNavigationSearchActivity = null;
   let preNavigationResultState = null;
+  const wholeCellResponseTracker = createSanitizedNavigationResponseTracker();
+  const wholeCellSearchRequestIds = new Set();
+  let wholeCellSearchPostCount = 0;
+  let wholeCellOrigins = [...new Set((options.supabaseOrigins || []).map((value) => new URL(value).origin))];
 
   const observePostBoundarySearch = (logs) => {
+    wholeCellResponseTracker.consume(logs);
+    wholeCellSearchPostCount += countEventSearchPostRequests(logs, wholeCellSearchRequestIds);
     if (!postBoundarySearchObservationActive) return;
     postBoundarySearchPostCount += countEventSearchPostRequests(
       logs, postBoundarySearchRequestIds,
@@ -280,6 +286,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
       const initialLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_auth_network_log_unavailable');
+      observePostBoundarySearch(initialLogs);
       await driver.url(actionLink);
       await driver.waitUntil(async () => new URL(await driver.getUrl()).origin === new URL(returnTarget).origin,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_timeout' });
@@ -288,6 +295,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_session_not_restored' });
       const callbackLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(callbackLogs)) throw new Error('mobile_auth_network_log_unavailable');
+      observePostBoundarySearch(callbackLogs);
       const callbackTracker = createSanitizedNavigationResponseTracker();
       callbackTracker.consume(callbackLogs);
       // The issued callback can be a same-origin token_hash bridge while the
@@ -297,6 +305,7 @@ export async function createAppiumSearchAdapter(options = {}) {
         await driver.waitUntil(async () => {
           const logs = await driver.getLogs(networkType).catch(() => null);
           if (!Array.isArray(logs)) return false;
+          observePostBoundarySearch(logs);
           callbackTracker.consume(logs);
           return callbackTracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }) === 0;
         }, { timeout: timeoutMs, interval: 100,
@@ -312,6 +321,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
       const initialLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_target_network_log_unavailable');
+      observePostBoundarySearch(initialLogs);
       accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
       await driver.url(targetUrl);
       await driver.waitUntil(async () => (await driver.getUrl()) === targetUrl,
@@ -320,6 +330,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.waitUntil(async () => {
         const logs = await driver.getLogs(networkType).catch(() => null);
         if (!Array.isArray(logs)) return false;
+        observePostBoundarySearch(logs);
         accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
         responses.push(...extractSanitizedNavigationResponses(logs));
         try {
@@ -341,18 +352,64 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.execute(installSearchRuntimeProbe, configuredPolicy);
       lifecycle.search_surface_ready = true;
       lifecycle.failure_stage = 'search_journey';
-      return driver.execute(() => {
+      const inspected = await driver.execute(() => {
         const root = document.querySelector('[data-authorized-search]'); const input = root?.querySelector('[data-search-input]');
         return { enabled: root?.dataset.searchEnabled === 'true', authorized: root?.classList.contains('is-authorized') === true,
           transport: String(root?.dataset.searchTransport || ''), input_tag: String(input?.tagName || '').toLowerCase(),
-          enter_key_hint: String(input?.enterKeyHint || input?.getAttribute('enterkeyhint') || '') };
+          enter_key_hint: String(input?.enterKeyHint || input?.getAttribute('enterkeyhint') || ''),
+          observer_origins: [root?.dataset.supabaseUrl, root?.dataset.supabaseRelayUrl]
+            .filter(Boolean).map((value) => new URL(value, location.href).origin) };
       });
+      wholeCellOrigins = [...new Set([...wholeCellOrigins, ...(inspected.observer_origins || [])])];
+      delete inspected.observer_origins;
+      return inspected;
     },
     async configureRequestPolicy(policy) {
       configuredPolicy = { ...policy };
       await driver.execute(installSearchRuntimeProbe, configuredPolicy);
     },
     async activity() { return driver.execute(snapshotSearchRuntimeProbe); },
+    async awaitPhysicalIdle() {
+      if (wholeCellOrigins.length < 1) throw new Error('search_physical_observation_missing');
+      const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
+      const quietMs = Math.max(25, Number(options.physicalQuietMs || 200));
+      const deadline = Date.now() + timeoutMs;
+      let quietSince = null;
+      const pending = () => wholeCellOrigins.reduce((sum, origin) => (
+        sum + ['/auth/v1', '/functions/v1', '/rest/v1'].reduce((value, prefix) => (
+          value + wholeCellResponseTracker.pendingTerminalCount({ origin, pathPrefix: prefix })
+        ), 0)
+      ), 0);
+      while (pending() > 0 || quietSince === null || Date.now() - quietSince < quietMs) {
+        if (Date.now() >= deadline) throw new Error('search_physical_observation_missing');
+        if (typeof driver.pause === 'function') await driver.pause(Math.min(50, quietMs));
+        else await new Promise((resolve) => setTimeout(resolve, Math.min(50, quietMs)));
+        const logs = await driver.getLogs?.(networkType).catch(() => null);
+        if (!Array.isArray(logs)) throw new Error('search_physical_observation_missing');
+        observePostBoundarySearch(logs);
+        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
+        if (logs.length > 0) quietSince = null;
+        else if (quietSince === null) quietSince = Date.now();
+      }
+    },
+    async physicalActivity() {
+      if (wholeCellOrigins.length < 1) throw new Error('search_physical_observation_missing');
+      const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: wholeCellOrigins });
+      for (const response of wholeCellResponseTracker.responses()) {
+        if (!wholeCellOrigins.includes(response.origin)) continue;
+        meter.recordResponse({ url: `${response.origin}${response.pathname}`,
+          headers: { 'content-length': String(Number(response.encoded_bytes || 0)) }, body: null });
+      }
+      const requests = wholeCellResponseTracker.requests()
+        .filter((item) => wholeCellOrigins.includes(item.origin));
+      return Object.freeze({
+        search_posts: wholeCellSearchPostCount,
+        storage_requests: requests.filter((item) => item.pathname === '/storage/v1'
+          || item.pathname.startsWith('/storage/v1/')).length,
+        receipt_rpc_requests: requests.filter((item) => /^\/rest\/v1\/rpc\/get_event_search_receipt(?:_|$)/u.test(item.pathname)).length,
+        meter: meter.snapshot(),
+      });
+    },
     async healthDiagnostics() {
       await syncClosedDriverDiagnostics();
       const runtime = await driver.execute(snapshotSearchRuntimeProbe);

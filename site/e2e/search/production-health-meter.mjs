@@ -157,6 +157,28 @@ export function mergeSupabaseClientByteSnapshots(...snapshots) {
   return meterSnapshot(categories, sources, excludedRequests);
 }
 
+export function subtractSupabaseClientByteSnapshots(after, before) {
+  const categories = {};
+  const sources = {};
+  for (const key of ['auth', 'edge', 'direct_rest', 'direct_rpc']) {
+    const value = Number(after?.categories?.[key]) - Number(before?.categories?.[key]);
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error('search_health_meter_snapshot_invalid');
+    categories[key] = value;
+  }
+  for (const key of ['content_length', 'received_body']) {
+    const value = Number(after?.sources?.[key]) - Number(before?.sources?.[key]);
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error('search_health_meter_snapshot_invalid');
+    sources[key] = value;
+  }
+  const excluded = Number(after?.excluded_requests) - Number(before?.excluded_requests);
+  if (!Number.isSafeInteger(excluded) || excluded < 0) throw new Error('search_health_meter_snapshot_invalid');
+  return mergeSupabaseClientByteSnapshots({
+    schema_version: 'supabase_client_observed_bytes_v1',
+    measurement_basis: 'client_observed_response_bytes',
+    categories, sources, excluded_requests: excluded,
+  });
+}
+
 /** Measure an already-received response without changing the response body. */
 export async function recordSupabaseFetchResponse(meter, url, response) {
   if (!(meter instanceof SupabaseClientObservedByteMeter) || !response) {
