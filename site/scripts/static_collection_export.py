@@ -672,6 +672,11 @@ def unusual_shadow_manifest(
         ),
         key=lambda row: (abs(float(row["family_margin"])), int(row["event_id"])),
     )[:20]
+    for row in family_disputes:
+        row["warning_codes"] = [
+            *(row.get("warning_codes") or []),
+            "family_assignment_review_sample",
+        ]
     review_by_event: dict[int, dict[str, Any]] = {}
     for row in [*included_review, *excluded_review, *mandatory_review, *family_disputes]:
         review_by_event[int(row["event_id"])] = row

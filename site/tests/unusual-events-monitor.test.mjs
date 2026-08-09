@@ -130,6 +130,19 @@ test('READY requires exact two-viewport parity while an honest blocked empty rec
   assert.equal(blocked.status, 'BLOCKED');
 });
 
+test('WATCH with READY content remains eligible for exact browser parity', () => {
+  const normalized = normalizeUnusualHealth(health({ health_status:'WATCH' }));
+  const viewports = UNUSUAL_BROWSER_VIEWPORTS.map((viewport) => viewportReceipt(normalized, { viewport }));
+  const receipt = buildUnusualBrowserReceipt(
+    normalized,
+    viewports,
+    '2026-08-09T00:00:00Z',
+    '2026-08-09T00:01:00Z',
+  );
+  assert.equal(receipt.page_manifest_match, true);
+  assert.equal(receipt.status, 'READY');
+});
+
 test('receipt contains only bounded identity and never contains the candidate bearer URL', () => {
   const normalized = normalizeUnusualHealth(health());
   const receipt = buildUnusualBrowserReceipt(

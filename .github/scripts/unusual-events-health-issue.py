@@ -25,7 +25,9 @@ def _load(path: Path) -> dict[str, Any]:
     return value
 
 
-def build_issue_plan(health: Mapping[str, Any]) -> dict[str, Any]:
+def build_issue_plan(
+    health: Mapping[str, Any], *, run_url: str | None = None
+) -> dict[str, Any]:
     if health.get("schema_version") != HEALTH_SCHEMA:
         raise ValueError("health_schema_invalid")
     status = str(health.get("health_status") or "")
@@ -64,6 +66,14 @@ def build_issue_plan(health: Mapping[str, Any]) -> dict[str, Any]:
         "",
         "Contract: `docs/features/unusual-events/unusual-events-production-health-v1.schema.json`",
     ]
+    clean_run_url = str(run_url or "").strip()
+    if clean_run_url:
+        if not re.fullmatch(
+            r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/[0-9]+",
+            clean_run_url,
+        ):
+            raise ValueError("run_url_invalid")
+        body_lines.extend(["", f"[Current workflow run and artifacts]({clean_run_url})"])
     return {
         "schema_version": PLAN_SCHEMA,
         "fingerprint": FINGERPRINT,
@@ -147,8 +157,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--repository")
+    parser.add_argument("--run-url")
     args = parser.parse_args(argv)
-    plan = build_issue_plan(_load(args.health))
+    plan = build_issue_plan(_load(args.health), run_url=args.run_url)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if args.apply:

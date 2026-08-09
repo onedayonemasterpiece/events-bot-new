@@ -258,6 +258,27 @@ outbox state machine:
   --correlation-id static-site:manual:<ticket>
 ```
 
+An operator may request the Unusual weekly cacheless proof through this same
+command by adding `--semantic-cache-mode cold`; ordinary requests default to
+`warm`. Cold is rejected for automatic/Smart Update triggers. The mode is bound
+to the request watermark, input fingerprint, recoverable remote handoff,
+Kaggle input/config/result and success receipt. Cold omits the prior shared-BGE
+NPZ/receipt plus Unusual/collection semantic caches and last-good inputs, so the
+kernel must report `encoded_event_count=event_count` and
+`reused_event_count=0`. It does not omit the independent related-chain cache and
+does not create a second job, kernel lane or lease.
+
+Every production-candidate collection pass also writes bounded
+`unusual-events-health.json/.md`, candidates, review pack and manifest diff from
+the existing semantic artifacts without another model call. The trusted runner
+checks their exact hashes and identity, persists them atomically in
+`/data/static_site_builder`, and binds the summary/hashes into
+`static_site_build_result_v2` and `static_site_success_receipt_v2` before
+scratch cleanup. `scripts/resolve_unusual_events_health.py` reads only that
+durable receipt/state and returns pending rather than mixing files from a
+different run. The daily GitHub monitor may enqueue through this operator CLI
+and poll the resolver; it must never invoke the Kaggle runner directly.
+
 `INC-2026-07-19-static-site-stale-builder-lease` is a mandatory regression
 contract for this handoff: successful publication, ledger terminal state and
 exact-owner resource release must converge even when terminal callbacks are

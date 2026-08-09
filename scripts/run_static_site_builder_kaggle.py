@@ -449,6 +449,36 @@ def persist_semantic_outputs(
                 args.collection_batch_last_good,
                 'collection_last_good_sha256',
             ),
+            (
+                'unusual-events-health.json',
+                str(product_parent / 'unusual-events-health.json'),
+                'unusual_events_health_sha256',
+            ),
+            (
+                'unusual-events-health.md',
+                str(product_parent / 'unusual-events-health.md'),
+                'unusual_events_health_markdown_sha256',
+            ),
+            (
+                'unusual-events-manifest.json',
+                str(product_parent / 'unusual-events-manifest.json'),
+                'unusual_events_manifest_sha256',
+            ),
+            (
+                'unusual-events-candidates.json',
+                str(product_parent / 'unusual-events-candidates.json'),
+                'unusual_events_candidates_sha256',
+            ),
+            (
+                'unusual-events-review-pack.md',
+                str(product_parent / 'unusual-events-review-pack.md'),
+                'unusual_events_review_pack_sha256',
+            ),
+            (
+                'unusual-events-manifest-diff.json',
+                str(product_parent / 'unusual-events-manifest-diff.json'),
+                'unusual_events_manifest_diff_sha256',
+            ),
         ])
     for filename, target_value, hash_key in outputs:
         if not target_value:
@@ -548,16 +578,39 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_report_sha256') or ''))
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_markdown_sha256') or ''))
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_qa_summary_sha256') or ''))
+                or semantic.get('unusual_health_status') not in {'HEALTHY', 'WATCH', 'INCIDENT'}
+                or semantic.get('unusual_content_readiness') not in {'READY', 'NOT_READY', 'BLOCKED'}
             ):
                 raise RuntimeError('Kaggle collection semantic result metadata mismatch')
             for filename, hash_key in (
                 ('static-collections-product-quality.json', 'collection_product_quality_report_sha256'),
                 ('static-collections-product-quality.md', 'collection_product_quality_markdown_sha256'),
                 ('qa-summary.json', 'collection_product_quality_qa_summary_sha256'),
+                ('unusual-events-health.json', 'unusual_events_health_sha256'),
+                ('unusual-events-health.md', 'unusual_events_health_markdown_sha256'),
+                ('unusual-events-manifest.json', 'unusual_events_manifest_sha256'),
+                ('unusual-events-candidates.json', 'unusual_events_candidates_sha256'),
+                ('unusual-events-review-pack.md', 'unusual_events_review_pack_sha256'),
+                ('unusual-events-manifest-diff.json', 'unusual_events_manifest_diff_sha256'),
             ):
                 report_path = out_dir / filename
                 if not report_path.is_file() or sha256_file(report_path) != semantic.get(hash_key):
-                    raise RuntimeError(f'Kaggle collection product-quality output mismatch: {filename}')
+                    raise RuntimeError(f'Kaggle collection evidence output mismatch: {filename}')
+            health_path = out_dir / 'unusual-events-health.json'
+            if health_path.stat().st_size > 256 * 1024:
+                raise RuntimeError('Kaggle unusual health output is unbounded')
+            health = json.loads(health_path.read_text(encoding='utf-8'))
+            if (
+                health.get('schema_version') != 'unusual-events-health-v1'
+                or health.get('health_status') != semantic.get('unusual_health_status')
+                or health.get('content_readiness') != semantic.get('unusual_content_readiness')
+                or health.get('run_id') != args.run_id
+                or health.get('repo_sha') != args.repo_sha
+                or (health.get('source') or {}).get('build_id') != args.build_id
+                or (health.get('publication') or {}).get('manifest_sha256')
+                != semantic.get('unusual_events_manifest_sha256')
+            ):
+                raise RuntimeError('Kaggle unusual health identity/summary mismatch')
         elif args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False):
             semantic = result.get('semantic')
             if (
@@ -689,6 +742,13 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
     shutil.copy2(
         collection_product_quality,
         staged_site / 'scripts' / collection_product_quality.name,
+    )
+    unusual_health = ROOT / 'scripts' / 'unusual_events_health.py'
+    if not unusual_health.is_file():
+        raise FileNotFoundError(unusual_health)
+    shutil.copy2(
+        unusual_health,
+        staged_site / 'scripts' / unusual_health.name,
     )
     if args.db and not args.export_in_kaggle:
         cold_semantic_root = work_dir / 'cold-semantic-cache'

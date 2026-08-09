@@ -198,6 +198,7 @@ def _builder_parts(builder: Mapping[str, Any], errors: list[dict[str, str]]) -> 
         "snapshot_sha256": snapshot_sha,
         "snapshot_id": snapshot_id,
         "semantic": semantic,
+        "started_at": _iso(builder.get("started_at")),
         "finished_at": _iso(_value(builder.get("finished_at"), builder.get("effective_date"))),
         "published": bool(builder.get("published")),
     }
@@ -275,12 +276,25 @@ def _concept(row: Mapping[str, Any], event_id: int | None) -> str:
 
 def _support_row(row: Mapping[str, Any]) -> dict[str, Any]:
     event_id = _row_id(row)
+    reasons_value = _value(
+        row.get("reason_codes"),
+        row.get("reasons"),
+        row.get("reason"),
+        row.get("exclusion_reason"),
+        row.get("decision"),
+        [],
+    )
+    reasons = [
+        _text(value, limit=100)
+        for value in (reasons_value if isinstance(reasons_value, list) else [reasons_value])
+        if _text(value, limit=100)
+    ][:MAX_REASONS]
     return {
         "event_id": event_id,
         "concept_id": _concept(row, event_id) or None,
         "family": _text(_value(row.get("family"), row.get("primary_family")), limit=80) or None,
         "score": _number(_value(row.get("unusual_score"), row.get("score"), row.get("confidence"))),
-        "reason": _text(_value(row.get("reason"), row.get("exclusion_reason"), row.get("decision")), limit=120) or None,
+        "reason": ", ".join(reasons)[:240] or None,
     }
 
 
@@ -372,9 +386,27 @@ def _normalize_feed(
     if len(selected) < target and len(selected) >= minimum:
         _add(warnings, "feed.under_target", "Selected feed is above minimum but below the provisional target.")
     candidate_rows = _rows(_value(manifest.get("candidate_items"), manifest.get("shadow_items"), []))
+    decisions = _rows(manifest.get("decisions"))
+    decision_exclusions = [row for row in decisions if row.get("include") is False]
     near_rows = _rows(_value(manifest.get("near_threshold"), manifest.get("near_threshold_items"), []))
+    if not near_rows:
+        near_rows = [
+            row for row in decision_exclusions
+            if not any(
+                str(reason).startswith("incident_hard_negative")
+                or reason == "duplicate_concept"
+                for reason in (row.get("reason_codes") or [])
+            )
+        ]
     exclusion_rows = _rows(_value(manifest.get("exclusions"), manifest.get("excluded_items"), []))
+    if not exclusion_rows:
+        exclusion_rows = decision_exclusions
     duplicate_rows = _rows(_value(manifest.get("duplicates"), manifest.get("duplicate_items"), []))
+    if not duplicate_rows:
+        duplicate_rows = [
+            row for row in decision_exclusions
+            if "duplicate_concept" in (row.get("reason_codes") or [])
+        ]
     declared_expired = _rows(_value(manifest.get("expired"), manifest.get("expired_items"), []))
     visible_contract = [
         {
@@ -414,6 +446,88 @@ def _normalize_feed(
     }
 
 
+def _wilson(numerator: int, denominator: int) -> dict[str, float] | None:
+    if denominator <= 0 or numerator < 0 or numerator > denominator:
+        return None
+    z = 1.959963984540054
+    observed = numerator / denominator
+    scale = 1 + z * z / denominator
+    centre = (observed + z * z / (2 * denominator)) / scale
+    radius = z * math.sqrt(
+        observed * (1 - observed) / denominator
+        + z * z / (4 * denominator * denominator)
+    ) / scale
+    return {
+        "lower": round(max(0.0, centre - radius), 8),
+        "upper": round(min(1.0, centre + radius), 8),
+        "confidence": 0.95,
+    }
+
+
+def _measure(
+    observed: Mapping[str, Any],
+    *names: str,
+    exact_denominator: int | None = None,
+) -> dict[str, Any]:
+    raw: Any = None
+    chosen = names[0]
+    for name in names:
+        if name in observed:
+            raw = observed.get(name)
+            chosen = name
+            break
+    nested = _mapping(raw)
+    value = _number(_value(nested.get("value"), raw if not nested else None))
+    numerator = _int(
+        _value(
+            nested.get("numerator"),
+            observed.get(f"{chosen}_numerator"),
+        )
+    )
+    denominator = _int(
+        _value(
+            nested.get("denominator"),
+            observed.get(f"{chosen}_denominator"),
+        )
+    )
+    reason = _text(
+        _value(
+            nested.get("reason"),
+            observed.get(f"{chosen}_reason"),
+        ),
+        limit=160,
+    ) or None
+    if numerator is not None and denominator is not None and denominator > 0:
+        computed = round(numerator / denominator, 8)
+        if value is None:
+            value = computed
+        elif abs(value - computed) > 1e-6:
+            value = None
+            reason = "numerator_denominator_mismatch"
+    if exact_denominator is not None and denominator != exact_denominator:
+        value = None
+        reason = f"exact_denominator_{exact_denominator}_required"
+    interval = _mapping(nested.get("wilson_95"))
+    wilson = (
+        {
+            "lower": _number(interval.get("lower")),
+            "upper": _number(interval.get("upper")),
+            "confidence": _number(_value(interval.get("confidence"), 0.95)),
+        }
+        if interval
+        else _wilson(numerator, denominator)
+        if numerator is not None and denominator is not None
+        else None
+    )
+    return {
+        "value": value,
+        "numerator": numerator,
+        "denominator": denominator,
+        "wilson_95": wilson,
+        "reason": reason or ("not_measured" if value is None else None),
+    }
+
+
 def _quality(manifest: Mapping[str, Any]) -> dict[str, Any]:
     gate = _mapping(manifest.get("quality_gate"))
     observed = _mapping(_value(gate.get("observed"), gate.get("metrics")))
@@ -429,10 +543,34 @@ def _quality(manifest: Mapping[str, Any]) -> dict[str, Any]:
         if len(safe_metrics) >= 32:
             break
     status = _text(_value(gate.get("status"), gate.get("approval_status"), manifest.get("evaluation_approval_status"))).lower()
+    measures = {
+        "precision_at_20": _measure(
+            observed,
+            "precision_at_20",
+            "editorial_precision_at_20",
+            exact_denominator=20,
+        ),
+        "confirmed_positive_recall": _measure(
+            observed,
+            "confirmed_positive_recall",
+            "confirmed_recall",
+        ),
+        "hard_negative_false_positive_rate": _measure(
+            observed,
+            "hard_negative_false_positive_rate",
+            "hard_negative_fpr",
+        ),
+        "family_top1_accuracy": _measure(observed, "family_top1_accuracy"),
+        "family_top3_recall": _measure(observed, "family_top3_recall"),
+        "regression_pass_rate": _measure(observed, "regression_pass_rate"),
+        "family_coverage": _measure(observed, "family_coverage"),
+        "identical_input_flip_rate": _measure(observed, "identical_input_flip_rate"),
+    }
     return {
         "status": status or "unknown",
         "evidence_kind": _text(_value(observed.get("evidence_kind"), gate.get("evidence_kind")), limit=120) or None,
         "metrics": safe_metrics,
+        "measures": measures,
     }
 
 
@@ -448,6 +586,8 @@ def _empty_health(
     return {
         "schema_version": HEALTH_SCHEMA,
         "generated_at": generated_at,
+        "started_at": None,
+        "completed_at": generated_at,
         "health_status": "INCIDENT",
         "content_readiness": "BLOCKED",
         "repo_sha": None,
@@ -462,6 +602,19 @@ def _empty_health(
             "snapshot_sha256": None,
             "input_fingerprint": None,
             "as_of_date": None,
+        },
+        "catalog": {
+            "revision": None,
+            "sha256": None,
+            "input_event_count": None,
+            "eligible_event_count": None,
+        },
+        "semantic_configuration": {
+            "revision_sha256": None,
+            "policy_version": None,
+            "taxonomy_version": None,
+            "prototype_bank_sha256": None,
+            "classifier_sha256": None,
         },
         "bge": {
             "receipt_schema": None,
@@ -502,8 +655,15 @@ def _empty_health(
             "expected": False,
             "indexable": False,
             "canonical_path": "/neobychnoe/",
+            "manifest_reference": "unusual-events-manifest.json",
+            "previous_accepted_baseline_reference": None,
         },
-        "quality": {"status": "unavailable", "evidence_kind": None, "metrics": {}},
+        "quality": {
+            "status": "unavailable",
+            "evidence_kind": None,
+            "metrics": {},
+            "measures": _quality({})["measures"],
+        },
         "feed": {
             "selected_count": 0,
             "target_count": target,
@@ -519,6 +679,33 @@ def _empty_health(
             "duplicates": [],
             "expired": [],
             "visible_output_sha256": visible_hash,
+        },
+        "counts": {
+            "input_event_count": None,
+            "eligible_event_count": None,
+            "encoded_count": None,
+            "reused_embedding_count": None,
+            "provider_calls": None,
+            "candidate_count": 0,
+            "selected_count": 0,
+            "target_count": target,
+            "minimum_publish_count": minimum,
+            "duplicate_concept_count": 0,
+            "expired_count": 0,
+            "cancelled_count": None,
+            "ineligible_count": None,
+        },
+        "drift": {
+            "baseline_status": "unavailable",
+            "previous_accepted_baseline_reference": None,
+            "lifecycle_adjusted_churn": None,
+            "family_distribution_drift": None,
+            "score_distribution_drift": None,
+            "near_threshold_share": None,
+            "largest_family_share": None,
+            "largest_source_share": None,
+            "largest_venue_share": None,
+            "identical_input_flip_rate": None,
         },
         "findings": {"errors": [{"code": _text(code, limit=120), "message": _text(message)}], "warnings": []},
         "closure": {"required_consecutive_runs": 2, "consecutive_healthy_ready_runs": 0, "eligible_to_close": False},
@@ -562,6 +749,16 @@ def evaluate_health(
         warnings=warnings,
     )
     quality = _quality(unusual_manifest)
+    baseline_reference = _text(
+        _value(
+            unusual_manifest.get("previous_accepted_baseline_reference"),
+            unusual_manifest.get("baseline_reference"),
+            _mapping(unusual_manifest.get("quality_gate")).get(
+                "baseline_reference"
+            ),
+        ),
+        limit=200,
+    ) or None
     delivery = _text(_value(unusual_manifest.get("delivery_status"), unusual_manifest.get("status"))).lower()
     accepted_quality = quality["status"] in {"approved", "pass", "ready"}
     fallback = delivery == "last_good_fallback"
@@ -571,6 +768,12 @@ def evaluate_health(
         _add(errors, "publication.blocked", "Unusual publication is explicitly blocked.")
     if fallback:
         _add(warnings, "publication.last_good_fallback", "Publication is using a compatible last-good fallback.")
+    if accepted_quality and baseline_reference is None:
+        _add(
+            warnings,
+            "drift.baseline_missing",
+            "No owner-accepted baseline is bound; drift cannot be approved.",
+        )
     migration_value = unusual_manifest.get("migration")
     migration = bool(_mapping(migration_value).get("enabled")) if isinstance(migration_value, Mapping) else bool(migration_value)
     if migration:
@@ -644,9 +847,88 @@ def evaluate_health(
     manifest_prototype = _sha(_value(unusual_manifest.get("prototype_bank_sha256"), unusual_manifest.get("prototype_bank_hash")))
     manifest_classifier = _sha(_value(unusual_manifest.get("classifier_sha256"), unusual_manifest.get("classifier_hash")))
     as_of = _text(_value(unusual_manifest.get("as_of_date"), _mapping(unusual_manifest.get("build")).get("as_of_date")), limit=32) or None
+    policy_version = _text(unusual_manifest.get("policy_version"), limit=120) or None
+    taxonomy_version = _text(unusual_manifest.get("taxonomy_version"), limit=120) or None
+    semantic_configuration_revision = _stable_hash(
+        {
+            "model_id": bge.get("model_id"),
+            "model_revision": bge.get("model_revision"),
+            "embedding_dim": bge.get("embedding_dim"),
+            "encoder_contract": bge.get("encoder_contract"),
+            "document_kind": bge.get("document_kind"),
+            "document_version": bge.get("document_version"),
+            "prototype_bank_sha256": manifest_prototype,
+            "classifier_sha256": manifest_classifier,
+            "policy_version": policy_version,
+            "taxonomy_version": taxonomy_version,
+        }
+    )
+    quality_metrics = _mapping(quality.get("metrics"))
+    family_counts: dict[str, int] = {}
+    for row in feed.get("selected") or []:
+        family = str(_mapping(row).get("family") or "unknown")
+        family_counts[family] = family_counts.get(family, 0) + 1
+    largest_family_share = (
+        round(max(family_counts.values()) / feed["selected_count"], 8)
+        if family_counts and feed["selected_count"]
+        else None
+    )
+    input_count = _int(_value(semantic.get("event_count"), bge.get("event_count")))
+    eligible_count = _int(
+        _value(semantic.get("artifact_event_count"), bge.get("event_count"))
+    )
+    duplicate_count = _int(quality_metrics.get("duplicate_concept_count"))
+    if duplicate_count is None:
+        duplicate_count = len(feed.get("duplicates") or [])
+    counts = {
+        "input_event_count": input_count,
+        "eligible_event_count": eligible_count,
+        "encoded_count": bge.get("encoded_event_count"),
+        "reused_embedding_count": bge.get("reused_event_count"),
+        "provider_calls": bge.get("provider_calls"),
+        "candidate_count": feed["candidate_count"],
+        "selected_count": feed["selected_count"],
+        "target_count": target_count,
+        "minimum_publish_count": minimum_count,
+        "duplicate_concept_count": duplicate_count,
+        "expired_count": len(feed.get("expired") or []),
+        "cancelled_count": _int(quality_metrics.get("cancelled_count")),
+        "ineligible_count": _int(quality_metrics.get("ineligible_count")),
+    }
+    flip_measure = _mapping(
+        _mapping(quality.get("measures")).get("identical_input_flip_rate")
+    )
+    drift = {
+        "baseline_status": "bound" if baseline_reference else "missing",
+        "previous_accepted_baseline_reference": baseline_reference,
+        "lifecycle_adjusted_churn": _number(
+            quality_metrics.get("lifecycle_adjusted_churn")
+        ),
+        "family_distribution_drift": _number(
+            quality_metrics.get("family_distribution_drift")
+        ),
+        "score_distribution_drift": _number(
+            quality_metrics.get("score_distribution_drift")
+        ),
+        "near_threshold_share": _number(
+            quality_metrics.get("near_threshold_share")
+        ),
+        "largest_family_share": _number(
+            _value(quality_metrics.get("largest_family_share"), largest_family_share)
+        ),
+        "largest_source_share": _number(
+            quality_metrics.get("largest_source_share")
+        ),
+        "largest_venue_share": _number(
+            quality_metrics.get("largest_venue_share")
+        ),
+        "identical_input_flip_rate": _number(flip_measure.get("value")),
+    }
     result = {
         "schema_version": HEALTH_SCHEMA,
         "generated_at": now,
+        "started_at": builder.get("started_at") or _iso(bge_build.get("generated_at")),
+        "completed_at": builder.get("finished_at") or now,
         "health_status": health_status,
         "content_readiness": content_readiness,
         "repo_sha": builder.get("repo_sha"),
@@ -661,6 +943,19 @@ def evaluate_health(
             "snapshot_sha256": builder.get("snapshot_sha256"),
             "input_fingerprint": builder.get("input_fingerprint"),
             "as_of_date": as_of,
+        },
+        "catalog": {
+            "revision": builder.get("snapshot_id"),
+            "sha256": builder.get("snapshot_sha256"),
+            "input_event_count": input_count,
+            "eligible_event_count": eligible_count,
+        },
+        "semantic_configuration": {
+            "revision_sha256": semantic_configuration_revision,
+            "policy_version": policy_version,
+            "taxonomy_version": taxonomy_version,
+            "prototype_bank_sha256": manifest_prototype,
+            "classifier_sha256": manifest_classifier,
         },
         "bge": {
             "receipt_schema": bge_receipt.get("schema_version"),
@@ -691,9 +986,13 @@ def evaluate_health(
             "expected": not errors and accepted_quality and delivery not in {"blocked", "disabled", "shadow", "failed", "not_approved"} and feed["selected_count"] >= minimum_count,
             "indexable": unusual_manifest.get("indexable") is True,
             "canonical_path": "/neobychnoe/",
+            "manifest_reference": "unusual-events-manifest.json",
+            "previous_accepted_baseline_reference": baseline_reference,
         },
         "quality": quality,
         "feed": feed,
+        "counts": counts,
+        "drift": drift,
         "findings": {"errors": errors, "warnings": warnings},
         "closure": {
             "required_consecutive_runs": 2,
@@ -707,6 +1006,10 @@ def evaluate_health(
 def render_markdown(health: Mapping[str, Any]) -> str:
     source = _mapping(health.get("source"))
     feed = _mapping(health.get("feed"))
+    counts = _mapping(health.get("counts"))
+    bge = _mapping(health.get("bge"))
+    measures = _mapping(_mapping(health.get("quality")).get("measures"))
+    drift = _mapping(health.get("drift"))
     closure = _mapping(health.get("closure"))
     findings = _mapping(health.get("findings"))
     lines = [
@@ -716,11 +1019,44 @@ def render_markdown(health: Mapping[str, Any]) -> str:
         f"- Content readiness: **{health.get('content_readiness')}**",
         f"- Build: `{source.get('build_id') or 'unavailable'}`",
         f"- Run: `{source.get('run_id') or 'unavailable'}`",
+        f"- Catalog: input **{counts.get('input_event_count')}**, eligible **{counts.get('eligible_event_count')}**",
+        f"- Candidates: **{feed.get('candidate_count', 0)}**",
         f"- Feed: **{feed.get('selected_count', 0)}** / target {feed.get('target_count')} (minimum {feed.get('minimum_publish_count')})",
+        f"- BGE: `{bge.get('model_id') or 'unavailable'}` @ `{bge.get('model_revision') or 'unavailable'}`; encoded **{counts.get('encoded_count')}**, reused **{counts.get('reused_embedding_count')}**, provider calls **{counts.get('provider_calls')}**",
+        f"- Baseline: **{drift.get('baseline_status') or 'unavailable'}**",
         f"- Closure streak: **{closure.get('consecutive_healthy_ready_runs', 0)} / {closure.get('required_consecutive_runs', 2)}**",
         "",
-        "## Findings",
+        "## Quality",
+        "",
     ]
+    for key in (
+        "precision_at_20",
+        "confirmed_positive_recall",
+        "hard_negative_false_positive_rate",
+        "family_top1_accuracy",
+        "family_top3_recall",
+        "regression_pass_rate",
+        "family_coverage",
+        "identical_input_flip_rate",
+    ):
+        measure = _mapping(measures.get(key))
+        lines.append(
+            f"- `{key}`: **{measure.get('value')}** "
+            f"({measure.get('numerator')}/{measure.get('denominator')}; "
+            f"{measure.get('reason') or 'measured'})"
+        )
+    lines.extend(["", "## Selected events", ""])
+    selected = _rows(feed.get("selected"))
+    if not selected:
+        lines.append("- None; publication is fail-closed.")
+    else:
+        for row in selected[:MAX_SELECTED]:
+            lines.append(
+                f"- `{row.get('event_id')}` — {_text(row.get('title'), limit=180)} "
+                f"(`{row.get('family') or 'unknown'}`, score={row.get('score')}, "
+                f"reasons={', '.join(row.get('reasons') or []) or 'none'})"
+            )
+    lines.extend(["", "## Findings"])
     all_findings = list(findings.get("errors") or []) + list(findings.get("warnings") or [])
     if not all_findings:
         lines.append("- None.")
@@ -729,6 +1065,41 @@ def render_markdown(health: Mapping[str, Any]) -> str:
             lines.append(f"- `{_text(_mapping(item).get('code'), limit=120)}` — {_text(_mapping(item).get('message'))}")
     lines.extend(["", "Canonical contract: `docs/features/unusual-events/unusual-events-production-health-v1.schema.json`", ""])
     return "\n".join(lines)
+
+
+def apply_browser_evidence(
+    health: Mapping[str, Any], browser_receipt: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Fold only browser disposition into health; never copy target URLs."""
+
+    if health.get("schema_version") != HEALTH_SCHEMA:
+        raise ContractError("browser_health_schema_invalid")
+    if browser_receipt.get("schema_version") != "unusual-events-browser-receipt-v1":
+        raise ContractError("browser_receipt_schema_invalid")
+    if (
+        browser_receipt.get("run_id") != health.get("run_id")
+        or browser_receipt.get("repo_sha") != health.get("repo_sha")
+    ):
+        raise ContractError("browser_receipt_identity_mismatch")
+    result = json.loads(json.dumps(health, ensure_ascii=False, allow_nan=False))
+    errors = result.setdefault("findings", {}).setdefault("errors", [])
+    publication = _mapping(result.get("publication"))
+    readiness = str(result.get("content_readiness") or "")
+    mechanics = browser_receipt.get("browser_mechanics_passed") is True
+    manifest_match = browser_receipt.get("page_manifest_match") is True
+    if not mechanics:
+        _add(errors, "browser.mechanics_failed", "Mobile/desktop browser verification failed.")
+    if publication.get("expected") is True and readiness == "READY" and not manifest_match:
+        _add(errors, "browser.manifest_mismatch", "Published page does not match the prepared manifest.")
+    if not mechanics or (publication.get("expected") is True and readiness == "READY" and not manifest_match):
+        result["health_status"] = "INCIDENT"
+        result["content_readiness"] = "BLOCKED"
+        result["closure"] = {
+            "required_consecutive_runs": 2,
+            "consecutive_healthy_ready_runs": 0,
+            "eligible_to_close": False,
+        }
+    return result
 
 
 def _bundle_artifact(bundle: Mapping[str, Any], key: str) -> tuple[dict[str, Any], str | None]:
@@ -755,12 +1126,31 @@ def evaluate_bundle(
     request_id = str(bundle.get("request_id") or "")
     if not ID_RE.fullmatch(request_id):
         raise ContractError("resolver_request_id_invalid")
+    run_mode = str(bundle.get("run_mode") or "")
+    if run_mode not in {"warm", "cold"}:
+        raise ContractError("resolver_run_mode_invalid")
     bge, bge_sha = _bundle_artifact(bundle, "bge_receipt")
     manifest, manifest_sha = _bundle_artifact(bundle, "unusual_manifest")
     cache, cache_sha = _bundle_artifact(bundle, "unusual_cache")
     builder, _ = _bundle_artifact(bundle, "builder_receipt")
     if str(builder.get("run_id") or "") != request_id:
         raise ContractError("resolver_builder_run_id_mismatch")
+    if str(builder.get("semantic_cache_mode") or "") != run_mode:
+        raise ContractError("resolver_builder_run_mode_mismatch")
+    if run_mode == "cold":
+        staged = builder.get("semantic_cache_inputs_staged")
+        if staged != []:
+            raise ContractError("resolver_cold_cache_inputs_staged")
+        metadata = _mapping(bge.get("metadata"))
+        event_count = _int(metadata.get("event_count"))
+        encoded = _int(metadata.get("encoded_event_count"))
+        reused = _int(metadata.get("reused_event_count"))
+        if (
+            event_count is None
+            or encoded != event_count
+            or reused != 0
+        ):
+            raise ContractError("resolver_cold_bge_reuse_detected")
     return evaluate_health(
         bge_receipt=bge,
         unusual_manifest=manifest,
@@ -810,6 +1200,11 @@ def _parser() -> argparse.ArgumentParser:
     request = sub.add_parser("validate-request", help="Validate same-pipeline request acknowledgement.")
     request.add_argument("--input", type=Path, required=True)
     request.add_argument("--expected-mode", choices=("warm", "cold"))
+    browser = sub.add_parser("apply-browser", help="Bind browser receipt disposition to health.")
+    browser.add_argument("--health", type=Path, required=True)
+    browser.add_argument("--browser-receipt", type=Path, required=True)
+    browser.add_argument("--output", type=Path, required=True)
+    browser.add_argument("--markdown-output", type=Path)
     for target in (evaluate, bundle, blocked):
         target.add_argument("--output", type=Path, required=True)
         target.add_argument("--markdown-output", type=Path)
@@ -826,6 +1221,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         request_id = validate_request(_load_json(args.input), expected_mode=args.expected_mode)
         print(request_id)
         return 0
+    if args.command == "apply-browser":
+        health = apply_browser_evidence(
+            _load_json(args.health), _load_json(args.browser_receipt)
+        )
+        _write_json(args.output, health)
+        markdown = render_markdown(health)
+        if args.markdown_output:
+            args.markdown_output.parent.mkdir(parents=True, exist_ok=True)
+            args.markdown_output.write_text(markdown, encoding="utf-8")
+        else:
+            print(markdown)
+        return 2 if health["health_status"] == "INCIDENT" else 0
     generated_at = _iso(args.generated_at) if args.generated_at else datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
         if args.command == "blocked":

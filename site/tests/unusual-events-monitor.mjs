@@ -374,7 +374,9 @@ export function buildUnusualBrowserReceipt(health, viewports, startedAt, complet
   }));
   const browserMechanicsPassed = boundedViewports.length === UNUSUAL_BROWSER_VIEWPORTS.length
     && boundedViewports.every((entry) => entry.passed);
-  const upstreamHealthy = ['HEALTHY', 'READY', 'PASS', 'PASSED', 'OK'].includes(health.health_status);
+  // WATCH is an accepted non-incident state (for example a feed between the
+  // publication minimum and target). It must still prove exact browser parity.
+  const upstreamHealthy = ['HEALTHY', 'WATCH', 'READY', 'PASS', 'PASSED', 'OK'].includes(health.health_status);
   const readyContract = health.publication.expected
     && upstreamHealthy
     && health.content_readiness === 'READY'

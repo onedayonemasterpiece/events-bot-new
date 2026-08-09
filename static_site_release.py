@@ -1975,6 +1975,30 @@ def validate_production_candidate_result(
             or not re.fullmatch(r"[0-9a-f]{64}", str(semantic.get("manifest_sha256") or ""))
         ):
             raise StaticSitePermanentError("static_site_result_semantic_metadata_mismatch")
+        unusual_health_hashes = (
+            "unusual_events_health_sha256",
+            "unusual_events_health_markdown_sha256",
+            "unusual_events_manifest_sha256",
+            "unusual_events_candidates_sha256",
+            "unusual_events_review_pack_sha256",
+            "unusual_events_manifest_diff_sha256",
+        )
+        if any(key in semantic for key in unusual_health_hashes):
+            if (
+                semantic.get("unusual_health_status")
+                not in {"HEALTHY", "WATCH", "INCIDENT"}
+                or semantic.get("unusual_content_readiness")
+                not in {"READY", "NOT_READY", "BLOCKED"}
+                or any(
+                    not re.fullmatch(
+                        r"[0-9a-f]{64}", str(semantic.get(key) or "")
+                    )
+                    for key in unusual_health_hashes
+                )
+            ):
+                raise StaticSitePermanentError(
+                    "static_site_result_unusual_health_metadata_mismatch"
+                )
     service_share = (
         result.get("service_share")
         if isinstance(result.get("service_share"), Mapping)

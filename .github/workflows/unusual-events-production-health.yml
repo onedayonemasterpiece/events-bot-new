@@ -6,16 +6,27 @@ on:
     paths:
       - ".github/scripts/unusual-events-health-*"
       - ".github/workflows/unusual-events-production-health.yml"
-      - "docs/features/unusual-events/unusual-events-health-*.json"
-      - "docs/features/unusual-events/unusual-events-production-health-v1.schema.json"
-      - "scripts/unusual_events_health*.py"
-      - "tests/test_unusual_events_health*.py"
+      - "docs/features/unusual-events/**"
+      - "kaggle/StaticSiteBuilder/static_site_builder.py"
+      - "main.py"
+      - "scripts/request_static_site_build.py"
+      - "scripts/resolve_unusual_events_health.py"
+      - "scripts/run_static_site_builder_kaggle.py"
+      - "scripts/unusual_events_health.py"
+      - "site/scripts/static_collection_export.py"
+      - "site/scripts/unusual_event_semantics.py"
+      - "site/tests/unusual-events-*"
+      - "tests/test_resolve_unusual_events_health.py"
+      - "tests/test_unusual_event*"
+      - "tests/test_static_site_semantic_cache_mode.py"
   schedule:
-    - cron: "23 4 * * *"
+    # Europe/Kaliningrad 07:23. The canonical local-midnight builder normally
+    # has already completed; bounded polling prevents a race.
+    - cron: "23 5 * * *"
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Same-pipeline builder cache mode; auto requests cold only on Sunday.
+        description: Same-pipeline semantic cache mode; auto is cold on Sunday.
         required: true
         default: auto
         type: choice
@@ -26,56 +37,59 @@ permissions:
 
 concurrency:
   group: unusual-events-production-health-${{ github.event.pull_request.number || 'production' }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   contract-tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: "3.12"
-      - name: Run bounded health contract tests
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: "22.22.0" }
+      - name: Run bounded health and browser contract tests
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check 'pytest==8.4.1'
-          python -m py_compile scripts/unusual_events_health.py .github/scripts/unusual-events-health-issue.py
+          python -m pip install --disable-pip-version-check 'pytest==8.4.1' 'jsonschema==4.25.0'
+          python -m py_compile \
+            scripts/unusual_events_health.py \
+            scripts/resolve_unusual_events_health.py \
+            .github/scripts/unusual-events-health-issue.py
           python -m json.tool docs/features/unusual-events/unusual-events-health-policy-v1.json >/dev/null
           python -m json.tool docs/features/unusual-events/unusual-events-health-resolver-v1.schema.json >/dev/null
           python -m json.tool docs/features/unusual-events/unusual-events-production-health-v1.schema.json >/dev/null
-          python -m pytest -q tests/test_unusual_events_health.py
+          python -m pytest -q tests/test_unusual_events_health.py tests/test_resolve_unusual_events_health.py tests/test_static_site_semantic_cache_mode.py
+          node --test site/tests/unusual-events-monitor.test.mjs
 
   production-health:
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     needs: contract-tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 110
+    environment: { name: unusual-events-monitor }
     permissions:
       actions: read
       contents: read
       issues: write
     env:
-      FLY_API_TOKEN: ${{ secrets.UNUSUAL_EVENTS_HEALTH_FLY_TOKEN }}
-      UNUSUAL_EVENTS_FLY_APP: ${{ vars.UNUSUAL_EVENTS_HEALTH_FLY_APP }}
-      UNUSUAL_EVENTS_HEALTH_ROLLOUT_ENABLED: ${{ vars.UNUSUAL_EVENTS_HEALTH_ROLLOUT_ENABLED }}
-      UNUSUAL_EVENTS_HEALTH_REQUEST_COMMAND: ${{ vars.UNUSUAL_EVENTS_HEALTH_REQUEST_COMMAND }}
-      UNUSUAL_EVENTS_HEALTH_RESOLVER_COMMAND: ${{ vars.UNUSUAL_EVENTS_HEALTH_RESOLVER_COMMAND }}
-      UNUSUAL_EVENTS_HEALTH_SAME_PIPELINE_COLD_SUPPORTED: ${{ vars.UNUSUAL_EVENTS_HEALTH_SAME_PIPELINE_COLD_SUPPORTED }}
-      UNUSUAL_EVENTS_BASE_URL: ${{ vars.UNUSUAL_EVENTS_BASE_URL }}
-      HEALTH_FILE: artifacts/health.json
-      SCREENSHOT_DIR: artifacts/browser
-      BROWSER_RECEIPT: artifacts/browser-receipt.json
+      FLY_API_TOKEN: ${{ secrets.UNUSUAL_EVENTS_FLY_SSH_TOKEN }}
+      FLY_APP_NAME: ${{ vars.UNUSUAL_EVENTS_FLY_APP_NAME }}
+      UNUSUAL_EVENTS_MONITOR_ENABLED: ${{ vars.UNUSUAL_EVENTS_MONITOR_ENABLED }}
+      UNUSUAL_EVENTS_HEALTH_FILE: artifacts/health.json
+      UNUSUAL_EVENTS_SCREENSHOT_DIR: artifacts/browser
+      UNUSUAL_EVENTS_BROWSER_RECEIPT: artifacts/browser-receipt.json
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: "3.12"
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: "22.22.0", cache: npm, cache-dependency-path: site/package-lock.json }
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
 
-      - name: Restore the previous bounded health result
+      - name: Restore previous bounded health state
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -89,9 +103,8 @@ jobs:
             unzip -q "$RUNNER_TEMP/unusual-health-state.zip" -d previous
           fi
 
-      - name: Resolve requested same-pipeline mode
+      - name: Resolve daily warm or weekly cold mode
         id: mode
-        shell: bash
         env:
           MANUAL_MODE: ${{ inputs.run_mode || 'auto' }}
         run: |
@@ -102,13 +115,14 @@ jobs:
           fi
           [[ "$mode" == warm || "$mode" == cold ]]
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "effective_date=$(TZ=Europe/Kaliningrad date +%F)" >> "$GITHUB_OUTPUT"
 
-      - name: Request and resolve the existing StaticSiteBuilder pipeline
+      - name: Resolve or request the existing StaticSiteBuilder pipeline
         id: collect
         continue-on-error: true
-        shell: bash
         env:
           RUN_MODE: ${{ steps.mode.outputs.mode }}
+          EFFECTIVE_DATE: ${{ steps.mode.outputs.effective_date }}
         run: |
           set -euo pipefail
           mkdir -p raw artifacts
@@ -116,28 +130,61 @@ jobs:
             python scripts/unusual_events_health.py blocked \
               --code "$1" --message "$2" \
               --output artifacts/health.json --markdown-output artifacts/health.md || true
-            return 0
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
           }
-          if [[ "${UNUSUAL_EVENTS_HEALTH_ROLLOUT_ENABLED:-}" != true ]]; then
-            blocked rollout_gate_closed "The production health request gate is not enabled."
+          if [[ "${UNUSUAL_EVENTS_MONITOR_ENABLED:-}" != true ]]; then
+            blocked rollout_gate_closed "The production Unusual monitor environment is not enabled."
             exit 0
           fi
-          if [[ "$RUN_MODE" == cold && "${UNUSUAL_EVENTS_HEALTH_SAME_PIPELINE_COLD_SUPPORTED:-}" != true ]]; then
-            blocked same_pipeline_cold_unsupported "The existing builder has no integrated cacheless health request yet; no direct Kaggle launch was attempted."
+          if [[ -z "${FLY_APP_NAME:-}" || -z "${FLY_API_TOKEN:-}" ]]; then
+            blocked same_pipeline_configuration_missing "The dedicated Fly app name or SSH token is missing."
             exit 0
           fi
-          if [[ -z "${UNUSUAL_EVENTS_FLY_APP:-}" || -z "${FLY_API_TOKEN:-}" || -z "${UNUSUAL_EVENTS_HEALTH_REQUEST_COMMAND:-}" || -z "${UNUSUAL_EVENTS_HEALTH_RESOLVER_COMMAND:-}" ]]; then
-            blocked same_pipeline_configuration_missing "Fly app, token, request command, or resolver command is missing."
+
+          ssh_json() {
+            NO_COLOR=1 flyctl ssh console --app "$FLY_APP_NAME" --pty=false --command "$1"
+          }
+          resolver="python3 scripts/resolve_unusual_events_health.py --db /data/db.sqlite --artifact-root /data/static_site_builder --expect-mode $RUN_MODE --expect-effective-date $EFFECTIVE_DATE --expect-repo-sha $GITHUB_SHA"
+          initial_run=''
+          if ssh_json "$resolver" > raw/resolver-initial.json 2> raw/resolver-poll.stderr; then
+            initial_run="$(python -c 'import json; print(json.load(open("raw/resolver-initial.json"))["request_id"])')"
+            if [[ "$RUN_MODE" == warm ]]; then
+              cp raw/resolver-initial.json raw/resolver.json
+            fi
+          else
+            rm -f raw/resolver-initial.json
+          fi
+
+          if [[ ! -s raw/resolver.json ]]; then
+            correlation="unusual-health:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
+            request="python3 scripts/request_static_site_build.py --db /data/db.sqlite --reason github_unusual_events_health --correlation-id $correlation --semantic-cache-mode $RUN_MODE"
+            if ! ssh_json "$request" > raw/request-ack.json 2> raw/request.stderr; then
+              blocked same_pipeline_request_failed "The existing StaticSiteBuilder request was not accepted."
+              exit 0
+            fi
+            python - <<'PY'
+          import json, os
+          value=json.load(open('raw/request-ack.json'))
+          if value.get('ok') is not True or value.get('semantic_cache_mode') != os.environ['RUN_MODE']:
+              raise SystemExit('invalid same-pipeline request acknowledgement')
+          PY
+            after=''
+            if [[ -n "$initial_run" ]]; then after=" --after-run-id $initial_run"; fi
+            for attempt in $(seq 1 120); do
+              if ssh_json "$resolver$after" > raw/resolver.next 2> raw/resolver-poll.stderr; then
+                mv raw/resolver.next raw/resolver.json
+                break
+              fi
+              rm -f raw/resolver.next
+              sleep 45
+            done
+          fi
+          if [[ ! -s raw/resolver.json ]]; then
+            blocked same_pipeline_timeout "No exact fresh StaticSiteBuilder receipt arrived within the bounded wait."
             exit 0
           fi
-          flyctl ssh console --app "$UNUSUAL_EVENTS_FLY_APP" --command "$UNUSUAL_EVENTS_HEALTH_REQUEST_COMMAND $RUN_MODE" > raw/request.json
-          request_id="$(python scripts/unusual_events_health.py validate-request --input raw/request.json --expected-mode "$RUN_MODE")"
-          resolver_command="${UNUSUAL_EVENTS_HEALTH_RESOLVER_COMMAND//\{request_id\}/$request_id}"
-          flyctl ssh console --app "$UNUSUAL_EVENTS_FLY_APP" --command "$resolver_command" > raw/resolver.json
-          args=(
-            evaluate-bundle --input raw/resolver.json
-            --output artifacts/health.json --markdown-output artifacts/health.md
-          )
+
+          args=(evaluate-bundle --input raw/resolver.json --output artifacts/health.json --markdown-output artifacts/health.md)
           previous="$(find previous -type f -name health.json -print -quit 2>/dev/null || true)"
           if [[ -n "$previous" ]]; then args+=(--previous-health "$previous"); fi
           set +e
@@ -146,31 +193,136 @@ jobs:
           set -e
           echo "$rc" > artifacts/evaluator-exit-code.txt
 
-      - name: Produce honest evidence when collection itself failed
+          for pair in \
+            unusual-events-candidates.json:unusual-events-candidates.json \
+            unusual-events-review-pack.md:unusual-events-review-pack.md \
+            unusual-events-manifest-diff.json:unusual-events-manifest-diff.json; do
+            remote="${pair%%:*}"; local="${pair##*:}"
+            ssh_json "cat /data/static_site_builder/$remote" > "artifacts/$local"
+          done
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          bundle=json.load(open('raw/resolver.json'))
+          semantic=bundle['artifacts']['builder_receipt']['payload']['semantic']
+          pairs={
+            'unusual-events-candidates.json':'unusual_events_candidates_sha256',
+            'unusual-events-review-pack.md':'unusual_events_review_pack_sha256',
+            'unusual-events-manifest-diff.json':'unusual_events_manifest_diff_sha256',
+          }
+          for filename,key in pairs.items():
+              digest=hashlib.sha256((Path('artifacts')/filename).read_bytes()).hexdigest()
+              if digest != semantic.get(key): raise SystemExit(f'evidence hash mismatch:{filename}')
+          PY
+          rm -f raw/request.stderr raw/resolver-poll.stderr
+          echo "resolved=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install pinned Chromium
+        if: ${{ steps.collect.outputs.resolved == 'true' }}
+        run: |
+          npm --prefix site ci --no-audit --no-fund
+          cd site && npx playwright install --with-deps chromium
+
+      - name: Resolve immutable candidate without persisting its bearer URL
+        id: candidate
+        if: ${{ steps.collect.outputs.resolved == 'true' }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          NO_COLOR=1 flyctl ssh console --app "$FLY_APP_NAME" --pty=false \
+            --command "python3 scripts/request_static_site_build.py --db /data/db.sqlite --show-current-review" \
+            > raw/current-review.json
+          python - <<'PY'
+          import json, os
+          health=json.load(open('artifacts/health.json'))
+          review=json.load(open('raw/current-review.json'))
+          if review.get('ok') is not True: raise SystemExit('current candidate unavailable')
+          source=health['source']
+          for key in ('build_id','run_id','repo_sha'):
+              if review.get(key) != source.get(key): raise SystemExit(f'candidate identity mismatch:{key}')
+          url=str(review.get('public_url') or '')
+          if not url.startswith('https://kenigevents.ru/_review/'):
+              raise SystemExit('candidate URL boundary mismatch')
+          with open(os.environ['GITHUB_ENV'],'a') as output:
+              output.write(f'UNUSUAL_EVENTS_BASE_URL={url}\n')
+          print(f'::add-mask::{url}')
+          for part in url.split('/'):
+              if len(part) >= 16: print(f'::add-mask::{part}')
+          PY
+          rm -f raw/current-review.json
+
+      - name: Verify mobile and desktop page parity
+        id: browser
+        if: ${{ steps.collect.outputs.resolved == 'true' && steps.candidate.outcome == 'success' }}
+        continue-on-error: true
+        run: node site/tests/unusual-events.playwright.mjs
+
+      - name: Bind browser disposition or record missing candidate evidence
+        if: ${{ steps.collect.outputs.resolved == 'true' }}
+        run: |
+          set -euo pipefail
+          if [[ ! -s artifacts/browser-receipt.json ]]; then
+            python - <<'PY'
+          import json
+          health=json.load(open('artifacts/health.json'))
+          receipt={
+            'schema_version':'unusual-events-browser-receipt-v1',
+            'run_id':health.get('run_id'),
+            'repo_sha':health.get('repo_sha'),
+            'browser_mechanics_passed':False,
+            'page_manifest_match':False,
+          }
+          json.dump(receipt,open('artifacts/browser-receipt.json','w'),indent=2)
+          PY
+          fi
+          set +e
+          python scripts/unusual_events_health.py apply-browser \
+            --health artifacts/health.json \
+            --browser-receipt artifacts/browser-receipt.json \
+            --output artifacts/health.next.json \
+            --markdown-output artifacts/health.md
+          echo "$?" > artifacts/browser-binding-exit-code.txt
+          set -e
+          mv artifacts/health.next.json artifacts/health.json
+
+      - name: Produce issue plan and Step Summary
         if: ${{ always() }}
-        shell: bash
         run: |
           set -euo pipefail
           if [[ ! -s artifacts/health.json ]]; then
             python scripts/unusual_events_health.py blocked \
               --code same_pipeline_collection_failed \
-              --message "The Fly SSH request/resolver did not produce a valid bounded health contract." \
+              --message "The Fly request/resolver did not produce a valid bounded health contract." \
               --output artifacts/health.json --markdown-output artifacts/health.md || true
           fi
           python .github/scripts/unusual-events-health-issue.py \
-            --health artifacts/health.json --output artifacts/issue-plan.json
+            --health artifacts/health.json --output artifacts/issue-plan.json \
+            --run-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           cat artifacts/health.md >> "$GITHUB_STEP_SUMMARY"
+          printf '\n[Workflow run and artifacts](%s/%s/actions/runs/%s)\n' \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Apply persistent issue plan
+      - name: Apply one persistent issue lifecycle plan
         if: ${{ always() && hashFiles('artifacts/issue-plan.json') != '' }}
         continue-on-error: true
         run: >-
           python .github/scripts/unusual-events-health-issue.py
           --health artifacts/health.json
           --output artifacts/issue-plan.json
+          --run-url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           --apply --repository "$GITHUB_REPOSITORY"
 
-      - name: Upload bounded health, summary, and issue plan
+      - name: Prove candidate bearer data was not artifacted
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          rm -rf raw
+          if grep -R -E '/_review/[A-Za-z0-9_-]{16,}|https?://[^ ]+[?&](token|key|signature|sig|auth|bearer)=' artifacts --exclude='*.png'; then
+            echo 'candidate bearer material found in evidence' >&2
+            exit 1
+          fi
+
+      - name: Upload bounded reports and browser evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -178,8 +330,13 @@ jobs:
           path: |
             artifacts/health.json
             artifacts/health.md
+            artifacts/unusual-events-candidates.json
+            artifacts/unusual-events-review-pack.md
+            artifacts/unusual-events-manifest-diff.json
+            artifacts/browser-receipt.json
+            artifacts/browser/*.png
             artifacts/issue-plan.json
-            artifacts/evaluator-exit-code.txt
+            artifacts/*-exit-code.txt
           if-no-files-found: error
           retention-days: 90
 
@@ -188,11 +345,8 @@ jobs:
         run: |
           python - <<'PY'
           import json
-          from pathlib import Path
-          health = json.loads(Path('artifacts/health.json').read_text())
-          status = health.get('health_status')
-          if status == 'INCIDENT':
-              raise SystemExit(2)
-          if status not in {'HEALTHY', 'WATCH'}:
-              raise SystemExit('unknown health status')
+          health=json.load(open('artifacts/health.json'))
+          status=health.get('health_status')
+          if status == 'INCIDENT': raise SystemExit(2)
+          if status not in {'HEALTHY','WATCH'}: raise SystemExit('unknown health status')
           PY

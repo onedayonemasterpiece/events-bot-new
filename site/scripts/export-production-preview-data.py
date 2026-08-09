@@ -6168,23 +6168,29 @@ def build_collection_semantic_outputs(
         f"- Publication selected: **{int(unusual_manifest.get('selected_count') or 0)}** / minimum **{int(unusual_manifest.get('minimum_publish_count') or 0)}**",
         f"- Gate: **{(unusual_manifest.get('quality_gate') or {}).get('status', 'unknown')}** — `{(unusual_manifest.get('quality_gate') or {}).get('reason', 'unknown')}`",
         "",
-        "| # | Decision | ID | Title | Date | Score | Margin | Family | Reason |",
-        "|---:|---|---:|---|---|---:|---:|---|---|",
+        "| # | Decision | ID | Title | Date | URL | Score | Margin | Family | Rules / reason | Warnings |",
+        "|---:|---|---:|---|---|---|---:|---:|---|---|---|",
     ]
     for index, row in enumerate(review_rows, 1):
         title = str(row.get("title") or "").replace("|", "\\|").replace("\n", " ")[:160]
         reasons = ", ".join(str(value) for value in row.get("reason_codes") or [])[:200]
+        warnings = ", ".join(str(value) for value in row.get("warning_codes") or [])[:160]
+        path = str(row.get("path") or "")
+        safe_path = path if path.startswith("/") and not path.startswith("//") and "://" not in path else ""
+        event_link = f"[{safe_path}]({safe_path})" if safe_path else "missing"
         review_lines.append(
-            "| {index} | {decision} | {event_id} | {title} | {date} | {score} | {margin} | {family} | {reasons} |".format(
+            "| {index} | {decision} | {event_id} | {title} | {date} | {event_link} | {score} | {margin} | {family} | {reasons} | {warnings} |".format(
                 index=index,
                 decision="include-review" if row.get("include") is True else "exclude",
                 event_id=int(row.get("event_id") or 0),
                 title=title,
                 date=str(row.get("date") or ""),
+                event_link=event_link,
                 score=row.get("score"),
                 margin=row.get("margin"),
                 family=str(row.get("family") or "unknown"),
                 reasons=reasons,
+                warnings=warnings,
             )
         )
     review_pack_path = out_dir / "unusual-events-review-pack.md"

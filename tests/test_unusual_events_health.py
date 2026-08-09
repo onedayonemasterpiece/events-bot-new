@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from scripts import unusual_events_health as health
 
@@ -94,7 +95,15 @@ def _artifacts(*, count: int = 20, run: str = "run-1", build: str = "build-1"):
         "delivery_status": "approved",
         "quality_gate": {
             "status": "approved",
-            "metrics": {"precision_at_20": 0.9, "provider_calls": 0},
+            "baseline_reference": "owner-baseline-v1",
+            "metrics": {
+                "precision_at_20": {
+                    "value": 0.9,
+                    "numerator": 18,
+                    "denominator": 20,
+                },
+                "provider_calls": 0,
+            },
         },
         "provider_calls": 0,
         "prototype_bank_hash": _sha("6"),
@@ -124,6 +133,9 @@ def _artifacts(*, count: int = 20, run: str = "run-1", build: str = "build-1"):
         "input_fingerprint": fingerprint,
         "snapshot": {"snapshot_id": "snapshot-1", "snapshot_sha256": snapshot},
         "finished_at": "2026-08-09T12:10:00Z",
+        "started_at": "2026-08-09T12:00:00Z",
+        "semantic_cache_mode": "warm",
+        "semantic_cache_inputs_staged": ["static_event_bge_vectors.npz"],
         "semantic": {
             "status": "validated",
             "provider_calls": 0,
@@ -172,10 +184,38 @@ def test_healthy_ready_contract_is_bounded_and_contains_no_persisted_urls():
     assert result["feed"]["selected"][0]["start_date"] == "2026-08-20"
     assert result["feed"]["selected"][0]["image_required"] is True
     assert len(result["feed"]["near_threshold"]) == 1
+    assert result["feed"]["exclusions"][0]["reason"] == "hard_negative"
     assert result["publication"]["manifest_sha256"] == _sha("b")
     assert result["contracts"]["visible_output_sha256"] == result["feed"]["visible_output_sha256"]
+    assert result["started_at"] == "2026-08-09T12:00:00Z"
+    assert result["completed_at"] == "2026-08-09T12:10:00Z"
+    assert result["catalog"]["eligible_event_count"] == 20
+    assert result["counts"]["candidate_count"] == 24
+    assert result["quality"]["measures"]["precision_at_20"]["denominator"] == 20
+    assert result["drift"]["baseline_status"] == "bound"
     assert "http://" not in json.dumps(result)
     assert "https://" not in json.dumps(result)
+
+
+def test_support_rows_preserve_bounded_reason_code_lists():
+    bge, manifest, cache, builder, hashes = _artifacts()
+    manifest["exclusions"] = [
+        {
+            "event_id": 26,
+            "reason_codes": ["duplicate_concept", "family_cap"],
+        }
+    ]
+
+    result = health.evaluate_health(
+        bge_receipt=bge,
+        unusual_manifest=manifest,
+        unusual_cache=cache,
+        builder_receipt=builder,
+        artifact_sha256s=hashes,
+        generated_at="2026-08-09T13:00:00Z",
+    )
+
+    assert result["feed"]["exclusions"][0]["reason"] == "duplicate_concept, family_cap"
 
 
 def test_watch_is_ready_between_minimum_and_target():
@@ -275,6 +315,30 @@ def test_resolver_bundle_requires_same_pipeline_run_identity():
         )
 
 
+def test_resolver_bundle_requires_exact_builder_cache_mode():
+    bge, manifest, cache, builder, hashes = _artifacts()
+    bundle = {
+        "schema_version": health.INPUT_SCHEMA,
+        "request_id": builder["run_id"],
+        "run_mode": "cold",
+        "artifacts": {
+            "bge_receipt": {"sha256": hashes["bge_receipt"], "payload": bge},
+            "unusual_manifest": {"sha256": hashes["unusual_manifest"], "payload": manifest},
+            "unusual_cache": {"sha256": hashes["unusual_cache"], "payload": cache},
+            "builder_receipt": {"sha256": _sha("b"), "payload": builder},
+        },
+    }
+
+    with pytest.raises(health.ContractError, match="resolver_builder_run_mode_mismatch"):
+        health.evaluate_bundle(
+            bundle,
+            target_count=20,
+            minimum_count=12,
+            previous_health=None,
+            generated_at="2026-08-09T13:00:00Z",
+        )
+
+
 def test_request_acknowledgement_is_strict():
     assert health.validate_request(
         {
@@ -318,6 +382,17 @@ def test_issue_plan_opens_on_watch_and_closes_only_after_closure_gate():
     assert "http" not in close_plan["body"]
 
 
+def test_issue_plan_accepts_only_a_canonical_github_actions_run_link():
+    issue = _load_issue_helper()
+    watch = _evaluate(count=12)
+    url = "https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/12345"
+
+    plan = issue.build_issue_plan(watch, run_url=url)
+    assert url in plan["body"]
+    with pytest.raises(ValueError, match="run_url_invalid"):
+        issue.build_issue_plan(watch, run_url="https://example.invalid/run/12345")
+
+
 def test_blocked_cli_is_incident_and_returns_two(tmp_path: Path):
     output = tmp_path / "health.json"
     markdown = tmp_path / "health.md"
@@ -342,6 +417,45 @@ def test_blocked_cli_is_incident_and_returns_two(tmp_path: Path):
     assert payload["health_status"] == "INCIDENT"
     assert payload["content_readiness"] == "BLOCKED"
     assert "same_pipeline_cold_unsupported" in markdown.read_text()
+
+
+def test_browser_failure_turns_ready_health_into_incident_blocked():
+    current = _evaluate()
+    result = health.apply_browser_evidence(
+        current,
+        {
+            "schema_version": "unusual-events-browser-receipt-v1",
+            "run_id": current["run_id"],
+            "repo_sha": current["repo_sha"],
+            "browser_mechanics_passed": True,
+            "page_manifest_match": False,
+        },
+    )
+
+    assert result["health_status"] == "INCIDENT"
+    assert result["content_readiness"] == "BLOCKED"
+    assert result["closure"]["eligible_to_close"] is False
+    assert "browser.manifest_mismatch" in {
+        row["code"] for row in result["findings"]["errors"]
+    }
+
+
+def test_blocked_empty_page_mechanics_do_not_invent_an_extra_browser_incident():
+    current = _evaluate(count=11)
+    result = health.apply_browser_evidence(
+        current,
+        {
+            "schema_version": "unusual-events-browser-receipt-v1",
+            "run_id": current["run_id"],
+            "repo_sha": current["repo_sha"],
+            "browser_mechanics_passed": True,
+            "page_manifest_match": False,
+        },
+    )
+
+    assert {row["code"] for row in result["findings"]["errors"]} == {
+        row["code"] for row in current["findings"]["errors"]
+    }
 
 
 @pytest.mark.parametrize(("count", "expected_status", "expected_rc"), [(12, "WATCH", 0), (11, "INCIDENT", 2)])
@@ -388,3 +502,20 @@ def test_machine_contract_files_are_json_objects():
     ):
         value = json.loads((ROOT / "docs/features/unusual-events" / name).read_text())
         assert isinstance(value, dict)
+
+
+def test_healthy_and_blocked_health_outputs_match_the_published_schema():
+    schema = json.loads(
+        (ROOT / "docs/features/unusual-events/unusual-events-production-health-v1.schema.json").read_text()
+    )
+    validator = Draft202012Validator(schema)
+    validator.validate(_evaluate())
+    validator.validate(
+        health._empty_health(
+            code="blocked",
+            message="not ready",
+            generated_at="2026-08-09T13:00:00Z",
+            target=20,
+            minimum=12,
+        )
+    )

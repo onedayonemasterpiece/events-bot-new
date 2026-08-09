@@ -23839,6 +23839,10 @@ async def _finish_static_site_candidate(
                 "checks": result.get("checks"),
                 "semantic": result.get("semantic"),
                 "service_share": result.get("service_share"),
+                "semantic_cache_mode": result.get("semantic_cache_mode"),
+                "semantic_cache_inputs_staged": result.get(
+                    "semantic_cache_inputs_staged"
+                ),
                 "input_fingerprint": input_fingerprint,
                 "source": result.get("source"),
                 "publication": (
@@ -23874,7 +23878,14 @@ async def _finish_static_site_candidate(
         "run_id": run_id,
         "repo_sha": repo_sha,
         "snapshot_id": snapshot_metadata.snapshot_id,
+        "snapshot_sha256": snapshot_metadata.sha256,
         "input_fingerprint": input_fingerprint,
+        "semantic_cache_mode": result.get("semantic_cache_mode"),
+        "semantic_cache_inputs_staged": result.get(
+            "semantic_cache_inputs_staged"
+        ),
+        "started_at": result.get("started_at"),
+        "finished_at": result.get("finished_at"),
         "source": result.get("source"),
         "effective_date": clock.effective_date,
         "result_sha256": result_sha256,

@@ -392,6 +392,81 @@ parallel red-dot implementations are forbidden.
   absolute maximum of 30 cards. Deferred rows do not refill the feed by
   bypassing those caps; an honest underfilled feed is preferred.
 
+## Production health evidence and daily monitor
+
+The only production health source is the existing coalesced StaticSiteBuilder.
+The Kaggle kernel normalizes the already-produced collection BGE receipt,
+Unusual manifest and score cache; it does not instantiate an encoder or call a
+model for monitoring. Before the ephemeral `output-*` directory is removed,
+the Fly runner validates exact build/run/repo/snapshot/fingerprint and SHA-256
+identity and atomically persists these bounded files under
+`/data/static_site_builder/`:
+
+- `unusual-events-health.json` / `unusual-events-health.md`;
+- `unusual-events-manifest.json` and `unusual_events_cache.json`;
+- `unusual-events-candidates.json`;
+- `unusual-events-review-pack.md`;
+- `unusual-events-manifest-diff.json`.
+
+The machine contract is `unusual-events-health-v1`, validated by
+[`unusual-events-production-health-v1.schema.json`](unusual-events-production-health-v1.schema.json).
+It contains the catalog/code/model/config identities, input/eligible/encoded/
+reused/provider counts, ordered publication projection, selected explanations,
+bounded near-threshold/exclusion/duplicate evidence, exact numerator and
+denominator for every available quality measure, Wilson intervals, drift,
+manifest/baseline references, operational status and the independent content
+readiness. It stores same-origin relative event paths only and never contains a
+secret-candidate URL or source text. `precision_at_20.value` is necessarily
+`null` unless its denominator is exactly 20.
+
+`scripts/resolve_unusual_events_health.py` is a read-only resolver over
+`static_site_build_state.last_success_receipt_json` and those durable files. It
+returns `unusual-events-health-resolver-v1` only when all hashes and requested
+repo SHA, warm/cold and effective-date identity match; exit 75 means evidence is still pending. GitHub
+Actions never launches Kaggle directly. If a fresh receipt is absent it invokes
+the fixed Fly SSH command for `scripts/request_static_site_build.py`, which
+enqueues the same singleton outbox job and preserves its lease, recovery and
+debounce rules.
+
+The operator-only `semantic_cache_mode` is part of the durable request,
+watermark, input fingerprint, handoff, Kaggle config and result:
+
+- `warm` stages the prior BGE NPZ/receipt and Unusual/collection semantic
+  caches, and validates the encoded/reused ratio;
+- `cold` stages none of those semantic inputs, requires every event to be
+  encoded with `reused=0`, and still uses the same job, snapshot, exact lease
+  and pinned model. The independent related-chain cache is not a semantic BGE
+  input and remains staged.
+
+[`.github/workflows/unusual-events-production-health.yml`](../../../.github/workflows/unusual-events-production-health.yml)
+runs once daily at 05:23 UTC (07:23 Europe/Kaliningrad), uses warm mode on
+ordinary days and cold mode on Sunday, and also supports explicit manual
+warm/cold dispatch. Pull requests execute bounded schema/unit/browser contract
+tests only. Production requires GitHub environment `unusual-events-monitor`,
+variable `UNUSUAL_EVENTS_FLY_APP_NAME`, variable
+`UNUSUAL_EVENTS_MONITOR_ENABLED=true`, and dedicated secret
+`UNUSUAL_EVENTS_FLY_SSH_TOKEN`; do not reuse Search or Telegram credentials.
+
+For an exact immutable candidate the workflow checks `/neobychnoe/` in real
+Chromium at 390×844 and 1728×900, binds a sanitized browser receipt back into
+health, uploads the reports/review/diff/screenshots, and writes the complete
+bounded summary. The candidate URL is masked before use and deleted before
+artifact upload. `INCIDENT` fails the job; `WATCH` remains technically green
+but creates or updates one marker-deduplicated issue. That issue can close only
+after two distinct consecutive `HEALTHY/READY` receipts. An absent accepted
+baseline is `WATCH` at best; it is never automatically accepted from runtime
+history.
+
+Current engineering review of the 2026-08-09 production snapshot is deliberately
+not an approval: 401 eligible inputs produced 249 high-recall candidates and a
+20-concept review shortlist, but the publication manifest contains 0 selected
+items against target 20/minimum 12. The two incident regressions are excluded
+and two duplicate occurrences are detected, while the shortlist still includes
+ordinary-looking concerts, screenings, exhibitions and a sports event. With no
+independent acceptance holdout or owner-accepted baseline the truthful outcome
+is `INCIDENT/BLOCKED`; the next content action is owner adjudication of a new
+immutable holdout/baseline followed by calibration without using that holdout.
+
 ## Rollout, Kaggle canary and rollback
 
 Rollout is ordered and cannot be shortened by a green local fixture test:
