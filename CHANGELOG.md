@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed Current UI Behavioral Decoder v1.1 reviewed materialization so exact readiness blockers are emitted once even when the source supplement already contains the same blocker record.
+
 ### Fixed
 
 - Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
