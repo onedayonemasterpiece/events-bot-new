@@ -67,6 +67,7 @@ ADOPT_REMOTE_LIVE_EXIT = 75
 ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
 BUILD_ID_RE = re.compile(r'(?:preview|production)-[A-Za-z0-9][A-Za-z0-9._-]{0,191}')
 SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-[A-Za-z0-9_-]+')
+SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
@@ -83,6 +84,41 @@ def collection_semantic_compute_required(args: argparse.Namespace) -> bool:
     return bool(
         getattr(args, 'collection_semantic_compute', False)
         or getattr(args, 'profile', 'preview') == 'production-candidate'
+    )
+
+
+def semantic_cache_mode(args: argparse.Namespace) -> str:
+    mode = str(getattr(args, 'semantic_cache_mode', 'warm') or 'warm').strip().lower()
+    if mode not in SEMANTIC_CACHE_MODES:
+        raise ValueError(f'unsupported semantic cache mode: {mode!r}')
+    return mode
+
+
+def semantic_cache_input_candidates(
+    args: argparse.Namespace,
+) -> tuple[tuple[str, str], ...]:
+    """Return reusable semantic inputs; cold deliberately returns none."""
+
+    if semantic_cache_mode(args) == 'cold':
+        return ()
+    if not (
+        collection_semantic_compute_required(args)
+        or args.related_mode == 'bge'
+        or getattr(args, 'unusual_enabled', False)
+    ):
+        return ()
+    return (
+        (getattr(args, 'bge_vector_cache', ''), 'static_event_bge_vectors.npz'),
+        (
+            getattr(args, 'bge_vector_receipt', ''),
+            'static_event_bge_vectors.receipt.json',
+        ),
+        (getattr(args, 'unusual_cache', ''), 'unusual_events_cache.json'),
+        (getattr(args, 'unusual_last_good', ''), 'unusual_events_last_good.json'),
+        (
+            getattr(args, 'collection_batch_last_good', ''),
+            'collection-batch-last-good.json',
+        ),
     )
 
 
@@ -413,6 +449,36 @@ def persist_semantic_outputs(
                 args.collection_batch_last_good,
                 'collection_last_good_sha256',
             ),
+            (
+                'unusual-events-health.json',
+                str(product_parent / 'unusual-events-health.json'),
+                'unusual_events_health_sha256',
+            ),
+            (
+                'unusual-events-health.md',
+                str(product_parent / 'unusual-events-health.md'),
+                'unusual_events_health_markdown_sha256',
+            ),
+            (
+                'unusual-events-manifest.json',
+                str(product_parent / 'unusual-events-manifest.json'),
+                'unusual_events_manifest_sha256',
+            ),
+            (
+                'unusual-events-candidates.json',
+                str(product_parent / 'unusual-events-candidates.json'),
+                'unusual_events_candidates_sha256',
+            ),
+            (
+                'unusual-events-review-pack.md',
+                str(product_parent / 'unusual-events-review-pack.md'),
+                'unusual_events_review_pack_sha256',
+            ),
+            (
+                'unusual-events-manifest-diff.json',
+                str(product_parent / 'unusual-events-manifest-diff.json'),
+                'unusual_events_manifest_diff_sha256',
+            ),
         ])
     for filename, target_value, hash_key in outputs:
         if not target_value:
@@ -461,6 +527,14 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
     result = json.loads(result_path.read_text(encoding='utf-8'))
     if result.get('ok') is not True or result.get('build_id') != args.build_id:
         raise RuntimeError('Kaggle result build identity/status mismatch')
+    result_cache_mode = str(result.get('semantic_cache_mode') or 'warm').strip().lower()
+    if result_cache_mode != semantic_cache_mode(args):
+        raise RuntimeError('Kaggle result semantic cache mode mismatch')
+    result_staged_inputs = result.get('semantic_cache_inputs_staged') or []
+    if not isinstance(result_staged_inputs, list) or (
+        result_cache_mode == 'cold' and result_staged_inputs
+    ):
+        raise RuntimeError('Kaggle result semantic cache staging evidence mismatch')
     if args.profile == 'production-candidate':
         expected = {
             'run_id': args.run_id,
@@ -504,16 +578,39 @@ def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_report_sha256') or ''))
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_markdown_sha256') or ''))
                 or not re.fullmatch(r'[0-9a-f]{64}', str(semantic.get('collection_product_quality_qa_summary_sha256') or ''))
+                or semantic.get('unusual_health_status') not in {'HEALTHY', 'WATCH', 'INCIDENT'}
+                or semantic.get('unusual_content_readiness') not in {'READY', 'NOT_READY', 'BLOCKED'}
             ):
                 raise RuntimeError('Kaggle collection semantic result metadata mismatch')
             for filename, hash_key in (
                 ('static-collections-product-quality.json', 'collection_product_quality_report_sha256'),
                 ('static-collections-product-quality.md', 'collection_product_quality_markdown_sha256'),
                 ('qa-summary.json', 'collection_product_quality_qa_summary_sha256'),
+                ('unusual-events-health.json', 'unusual_events_health_sha256'),
+                ('unusual-events-health.md', 'unusual_events_health_markdown_sha256'),
+                ('unusual-events-manifest.json', 'unusual_events_manifest_sha256'),
+                ('unusual-events-candidates.json', 'unusual_events_candidates_sha256'),
+                ('unusual-events-review-pack.md', 'unusual_events_review_pack_sha256'),
+                ('unusual-events-manifest-diff.json', 'unusual_events_manifest_diff_sha256'),
             ):
                 report_path = out_dir / filename
                 if not report_path.is_file() or sha256_file(report_path) != semantic.get(hash_key):
-                    raise RuntimeError(f'Kaggle collection product-quality output mismatch: {filename}')
+                    raise RuntimeError(f'Kaggle collection evidence output mismatch: {filename}')
+            health_path = out_dir / 'unusual-events-health.json'
+            if health_path.stat().st_size > 256 * 1024:
+                raise RuntimeError('Kaggle unusual health output is unbounded')
+            health = json.loads(health_path.read_text(encoding='utf-8'))
+            if (
+                health.get('schema_version') != 'unusual-events-health-v1'
+                or health.get('health_status') != semantic.get('unusual_health_status')
+                or health.get('content_readiness') != semantic.get('unusual_content_readiness')
+                or health.get('run_id') != args.run_id
+                or health.get('repo_sha') != args.repo_sha
+                or (health.get('source') or {}).get('build_id') != args.build_id
+                or (health.get('publication') or {}).get('manifest_sha256')
+                != semantic.get('unusual_events_manifest_sha256')
+            ):
+                raise RuntimeError('Kaggle unusual health identity/summary mismatch')
         elif args.related_mode == 'bge' or getattr(args, 'unusual_enabled', False):
             semantic = result.get('semantic')
             if (
@@ -646,7 +743,23 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
         collection_product_quality,
         staged_site / 'scripts' / collection_product_quality.name,
     )
+    unusual_health = ROOT / 'scripts' / 'unusual_events_health.py'
+    if not unusual_health.is_file():
+        raise FileNotFoundError(unusual_health)
+    shutil.copy2(
+        unusual_health,
+        staged_site / 'scripts' / unusual_health.name,
+    )
     if args.db and not args.export_in_kaggle:
+        cold_semantic_root = work_dir / 'cold-semantic-cache'
+        if semantic_cache_mode(args) == 'cold':
+            cold_semantic_root.mkdir(parents=True, exist_ok=True)
+
+        def semantic_path(argument: str | Path, filename: str) -> Path:
+            if semantic_cache_mode(args) == 'cold':
+                return cold_semantic_root / filename
+            return Path(argument).resolve()
+
         exporter = staged_site / 'scripts' / 'export-production-preview-data.py'
         cmd = [
             sys.executable,
@@ -676,12 +789,12 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
             '--site-origin', args.public_site_origin,
             '--base-path', args.build_id or '',
             '--ics-base-url', args.ics_base_url,
-            '--bge-vector-cache', str(Path(getattr(args, 'bge_vector_cache', ARTIFACT_ROOT / 'static_event_bge_vectors.npz')).resolve()),
-            '--bge-vector-receipt', str(Path(getattr(args, 'bge_vector_receipt', ARTIFACT_ROOT / 'static_event_bge_vectors.receipt.json')).resolve()),
+            '--bge-vector-cache', str(semantic_path(getattr(args, 'bge_vector_cache', ARTIFACT_ROOT / 'static_event_bge_vectors.npz'), 'static_event_bge_vectors.npz')),
+            '--bge-vector-receipt', str(semantic_path(getattr(args, 'bge_vector_receipt', ARTIFACT_ROOT / 'static_event_bge_vectors.receipt.json'), 'static_event_bge_vectors.receipt.json')),
             '--bge-model-revision', getattr(args, 'bge_model_revision', '5617a9f61b028005a4858fdac845db406aefb181'),
             '--bge-batch-size', str(getattr(args, 'bge_batch_size', 8)),
-            '--unusual-cache', str(Path(getattr(args, 'unusual_cache', ARTIFACT_ROOT / 'unusual_events_cache.json')).resolve()),
-            '--unusual-last-good', str(Path(getattr(args, 'unusual_last_good', ARTIFACT_ROOT / 'unusual_events_last_good.json')).resolve()),
+            '--unusual-cache', str(semantic_path(getattr(args, 'unusual_cache', ARTIFACT_ROOT / 'unusual_events_cache.json'), 'unusual_events_cache.json')),
+            '--unusual-last-good', str(semantic_path(getattr(args, 'unusual_last_good', ARTIFACT_ROOT / 'unusual_events_last_good.json'), 'unusual_events_last_good.json')),
         ])
         if collection_semantic_compute_required(args):
             cmd.extend([
@@ -689,7 +802,7 @@ def prepare_site_source(args: argparse.Namespace, work_dir: Path) -> Path:
                 '--collection-batch-output',
                 str(staged_site / 'src' / 'data' / 'collection-batch-v1.json'),
                 '--collection-batch-last-good',
-                str(Path(getattr(args, 'collection_batch_last_good', ARTIFACT_ROOT / 'collection-batch-last-good.json')).resolve()),
+                str(semantic_path(getattr(args, 'collection_batch_last_good', ARTIFACT_ROOT / 'collection-batch-last-good.json'), 'collection-batch-last-good.json')),
                 '--collection-product-snapshot-output',
                 str(staged_site / 'src' / 'data' / 'static-collection-product-snapshot-v1.json'),
                 '--collection-product-source-scope',
@@ -1100,6 +1213,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'unusual_enabled': bool(getattr(args, 'unusual_enabled', False)),
         'unusual_migration': bool(getattr(args, 'unusual_migration', False)),
         'collection_semantic_compute': collection_semantic_compute_required(args),
+        'semantic_cache_mode': semantic_cache_mode(args),
         'queued_at': datetime.now(timezone.utc).isoformat(),
         'payload_mode': 'dataset_source',
     }
@@ -1112,24 +1226,13 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         shutil.copy2(Path(args.related_cache).resolve(), dataset_dir / 'event_related_chain_cache.json')
     if search_receipt_source:
         shutil.copy2(search_receipt_source, dataset_dir / 'event-search-corpus-receipt.json')
-    semantic_inputs = (
-        (
-            (getattr(args, 'bge_vector_cache', ''), 'static_event_bge_vectors.npz'),
-            (getattr(args, 'bge_vector_receipt', ''), 'static_event_bge_vectors.receipt.json'),
-            (getattr(args, 'unusual_cache', ''), 'unusual_events_cache.json'),
-            (getattr(args, 'unusual_last_good', ''), 'unusual_events_last_good.json'),
-            (getattr(args, 'collection_batch_last_good', ''), 'collection-batch-last-good.json'),
-        )
-        if (
-            collection_semantic_compute_required(args)
-            or args.related_mode == 'bge'
-            or getattr(args, 'unusual_enabled', False)
-        )
-        else ()
-    )
+    semantic_inputs = semantic_cache_input_candidates(args)
+    staged_semantic_inputs: list[str] = []
     for source_value, filename in semantic_inputs:
         if source_value and Path(source_value).is_file():
             shutil.copy2(Path(source_value).resolve(), dataset_dir / filename)
+            staged_semantic_inputs.append(filename)
+    config['semantic_cache_inputs_staged'] = sorted(staged_semantic_inputs)
     # Deliberately avoid `.tar.gz` filename: Kaggle dataset ingestion auto-extracts
     # archives and may reject/disappear datasets containing Astro dynamic route
     # paths like `[slug].astro`. The file content is gzip tar; only the extension is
@@ -1272,6 +1375,12 @@ def main() -> int:
     parser.add_argument('--current-date', default=os.getenv('STATIC_SITE_CURRENT_DATE', ''))
     parser.add_argument('--current-datetime', default=os.getenv('STATIC_SITE_CURRENT_DATETIME', ''))
     parser.add_argument('--input-fingerprint', default=os.getenv('STATIC_SITE_INPUT_FINGERPRINT', ''))
+    parser.add_argument(
+        '--semantic-cache-mode',
+        choices=['warm', 'cold'],
+        default='warm',
+        help='Warm stages prior BGE/unusual/collection caches; cold recomputes without staging them.',
+    )
     parser.add_argument('--focus-date-from', default=os.getenv('STATIC_SITE_FOCUS_DATE_FROM', ''))
     parser.add_argument('--focus-date-to', default=os.getenv('STATIC_SITE_FOCUS_DATE_TO', ''))
     parser.add_argument('--build-id', default=os.getenv('STATIC_SITE_BUILD_ID'))

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
+if (process.env.UNUSUAL_EVENTS_HEALTH_FILE) {
+  const { runUnusualEventsBrowserMonitor } = await import('./unusual-events-monitor.mjs');
+  await runUnusualEventsBrowserMonitor();
+} else {
+
 const mode = String(process.env.UNUSUAL_EVENTS_PLAYWRIGHT_MODE || 'product').trim().toLowerCase();
 if (!['product', 'lab', 'all'].includes(mode)) {
   throw new Error('UNUSUAL_EVENTS_PLAYWRIGHT_MODE must be product, lab, or all');
@@ -176,4 +181,5 @@ try {
   }
 } finally {
   await browser.close();
+}
 }

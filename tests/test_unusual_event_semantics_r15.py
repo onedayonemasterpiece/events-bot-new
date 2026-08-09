@@ -22,6 +22,7 @@ from unusual_event_semantics import (  # noqa: E402
     FAMILY_IDS,
     ORDINARY_CORPUS_POLICY,
     _classify,
+    _quality_gate,
     evaluate_unusual_quality_fixture,
     load_unusual_classifier,
     load_unusual_prototype_bank,
@@ -591,3 +592,125 @@ def test_quality_fixture_deduplicates_publication_and_abstains_ineligible_rows()
     assert evaluation["editorial_ranked_count"] == 1
     assert evaluation["confirmed_unusual_sample_size"] == 2
     assert evaluation["confirmed_unusual_recall"] == 1.0
+    assert evaluation["editorial_precision_at_20"] is None
+    assert evaluation["editorial_precision_at_20_numerator"] == 1
+    assert evaluation["editorial_precision_at_20_denominator"] == 1
+    assert evaluation["editorial_precision_at_20_k"] == 20
+    assert evaluation["editorial_precision_at_20_sample_status"] == (
+        "insufficient_ranked_candidates"
+    )
+    assert evaluation["editorial_precision_at_20_wilson_interval"] is None
+    assert evaluation["expected_family_top1_accuracy"] is None
+    assert evaluation["expected_family_top1_accuracy_numerator"] == 0
+    assert evaluation["expected_family_top1_accuracy_denominator"] == 0
+    assert evaluation["expected_family_top3_recall"] is None
+    assert evaluation["expected_family_top3_recall_numerator"] == 0
+    assert evaluation["expected_family_top3_recall_denominator"] == 0
+    assert evaluation["expected_family_label_coverage"] == 0.0
+    assert evaluation["expected_family_label_coverage_numerator"] == 0
+    assert evaluation["expected_family_label_coverage_denominator"] == 3
+    assert evaluation["expected_family_taxonomy_coverage"] == 0.0
+    assert evaluation["expected_family_taxonomy_coverage_numerator"] == 0
+    assert evaluation["expected_family_taxonomy_coverage_denominator"] == 15
+
+    quality = _quality_gate(
+        {
+            **evaluation,
+            # A partial precision must not become approval evidence even if a
+            # caller incorrectly supplies a perfect scalar.
+            "editorial_precision_at_20": 1.0,
+        },
+        classifier,
+        vector_metadata=artifact["metadata"],
+        bank_hash=artifact["metadata"]["prototype_bank_sha256"],
+        classifier_hash=artifact["metadata"]["classifier_sha256"],
+    )
+    assert quality["checks"]["editorial_precision_at_20_sample"] is False
+    assert quality["checks"]["editorial_precision_at_20"] is False
+
+
+def test_quality_fixture_emits_exact_p20_and_expected_family_metrics():
+    rows = [event(event_id, f"Core {event_id}") for event_id in range(1, 21)]
+    rows.append(event(99, "Ordinary baseline"))
+    artifact, bank, classifier = _artifact(rows)
+    artifact["metadata"]["build"]["evidence_kind"] = "real_bge_canary"
+    from static_event_bge import stable_hash
+
+    unhashed = dict(artifact["metadata"])
+    unhashed.pop("artifact_sha256")
+    artifact["metadata"]["artifact_sha256"] = stable_hash(
+        {
+            "metadata": unhashed,
+            "event_vectors": artifact["event_vectors"],
+            "prototype_vectors": artifact["prototype_vectors"],
+        }
+    )
+    cases = [
+        {
+            "event_id": event_id,
+            "label": "positive",
+            "concept_id": f"gold.{event_id}",
+            "eligible": True,
+            "expected_family": (
+                "open_dialogue" if event_id <= 10 else "after_hours"
+            ),
+        }
+        for event_id in range(1, 21)
+    ]
+    cases.append(
+        {
+            "event_id": 99,
+            "label": "hard_negative",
+            "concept_id": None,
+            "eligible": True,
+            "expected_family": None,
+        }
+    )
+    evaluation = evaluate_unusual_quality_fixture(
+        {"schema_version": "unusual-events-golden-v1", "cases": cases},
+        artifact,
+        bank,
+        classifier,
+    )
+
+    assert evaluation["editorial_ranked_count"] == 20
+    assert evaluation["editorial_precision_at_20"] == 1.0
+    assert evaluation["editorial_precision_at_20_numerator"] == 20
+    assert evaluation["editorial_precision_at_20_denominator"] == 20
+    assert evaluation["editorial_precision_at_20_k"] == 20
+    assert evaluation["editorial_precision_at_20_sample_status"] == "complete"
+    assert evaluation["editorial_precision_at_20_wilson_interval"] == {
+        "confidence_level": 0.95,
+        "lower": pytest.approx(0.838875),
+        "upper": 1.0,
+    }
+
+    assert evaluation["expected_family_top1_accuracy"] == 0.5
+    assert evaluation["expected_family_top1_accuracy_numerator"] == 10
+    assert evaluation["expected_family_top1_accuracy_denominator"] == 20
+    assert evaluation["expected_family_top3_recall"] == 1.0
+    assert evaluation["expected_family_top3_recall_numerator"] == 20
+    assert evaluation["expected_family_top3_recall_denominator"] == 20
+    assert evaluation["expected_family_label_coverage"] == 1.0
+    assert evaluation["expected_family_label_coverage_numerator"] == 20
+    assert evaluation["expected_family_label_coverage_denominator"] == 20
+    assert evaluation["expected_family_taxonomy_coverage"] == 0.133333
+    assert evaluation["expected_family_taxonomy_coverage_numerator"] == 2
+    assert evaluation["expected_family_taxonomy_coverage_denominator"] == 15
+    matrix = evaluation["expected_family_confusion_matrix"]
+    assert matrix["open_dialogue"]["open_dialogue"] == 10
+    assert matrix["after_hours"]["open_dialogue"] == 10
+    assert sum(sum(row.values()) for row in matrix.values()) == 20
+
+    quality = _quality_gate(
+        evaluation,
+        classifier,
+        vector_metadata=artifact["metadata"],
+        bank_hash=artifact["metadata"]["prototype_bank_sha256"],
+        classifier_hash=artifact["metadata"]["classifier_sha256"],
+    )
+    assert quality["checks"]["editorial_precision_at_20_sample"] is True
+    assert quality["checks"]["editorial_precision_at_20"] is True
+    assert not any(
+        name.startswith("expected_family") for name in quality["checks"]
+    )

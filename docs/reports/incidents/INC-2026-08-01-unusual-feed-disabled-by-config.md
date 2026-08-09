@@ -130,10 +130,14 @@ current product demonstration. A fresh current-catalog canary is required.
 - [x] Prove flag/config and route/promotion history.
 - [x] Distinguish expired review candidate from public-root rollout.
 - [x] Separate mandatory semantic compute/quality receipt from per-label
-  publication state in the data-prep candidate; production deploy is pending.
-- [ ] Repair non-approved/empty last-good and migration validation.
-- [ ] Repair the stale JS source-contract assertion.
+  publication state in the data-prep candidate.
+- [x] Keep non-approved/empty output fail-closed and distinguish it from a
+  compatible accepted last-good; no empty result is promoted.
+- [x] Repair the stale JS source-contract assertion.
+- [x] Add bounded same-pipeline health, warm/cold request identity, durable
+  resolver, daily monitor, persistent issue plan and exact two-viewport check.
 - [ ] Run fresh production-snapshot BGE candidate and warm cache-reuse run.
+- [ ] Run the operator cold/cacheless proof and the merged GitHub workflow.
 - [ ] Restore a stable owner-approved demonstration URL.
 - [ ] Obtain explicit owner acceptance before any public-root rollout.
 
@@ -160,6 +164,26 @@ current product demonstration. A fresh current-catalog canary is required.
 - deploy path: pending
 - fresh BGE run/receipt: pending
 - stable route browser check: pending
+
+### Current-catalog recovery evidence 2026-08-09
+
+- Read-only production SQLite snapshot SHA-256:
+  `25e956b38a072c9320ea783540fed12ab57db91ea82ce6311b85af02fa6bfe24`.
+- A real local pinned-BGE warm pass over the snapshot covered 401/401 events,
+  encoded 0, reused 401, used 75 prototypes and made 0 provider calls.
+- The restored explainable head found 249 candidates and a deterministic
+  20-concept review shortlist. Publication remained empty (0; target 20,
+  minimum 12) because the independent acceptance holdout is absent. Two
+  incident hard negatives were excluded by document hash and two duplicate
+  occurrences were detected.
+- Engineering/editorial review found ordinary-looking boundary candidates,
+  including ordinary concerts, a screening, an exhibition and a sports event.
+  This evidence is therefore `INCIDENT/BLOCKED`, not an owner baseline or a
+  release acceptance.
+- Focused integration verification currently passes 145 Python tests and 15
+  Node contract/component tests. A real merged Fly/Kaggle warm+cold ledger,
+  immutable candidate screenshots, Actions artifacts and issue URL remain
+  mandatory before this incident can close.
 
 ## Prevention
 

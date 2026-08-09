@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kenigevents:unusual-events-health-resolver-v1",
+  "title": "Same-pipeline Unusual health resolver envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "run_mode", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "unusual-events-health-resolver-v1"},
+    "request_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]{0,239}$"},
+    "run_mode": {"enum": ["warm", "cold"]},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bge_receipt", "unusual_manifest", "unusual_cache", "builder_receipt"],
+      "properties": {
+        "bge_receipt": {"$ref": "#/$defs/artifact"},
+        "unusual_manifest": {"$ref": "#/$defs/artifact"},
+        "unusual_cache": {"$ref": "#/$defs/artifact"},
+        "builder_receipt": {"$ref": "#/$defs/artifact"}
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "payload"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "payload": {"type": "object"}
+      }
+    }
+  }
+}

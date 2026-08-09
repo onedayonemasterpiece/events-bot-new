@@ -38,6 +38,7 @@ SOURCE_IGNORED_PARTS = {
 SITE_SOURCE_REPO_CONTRACTS = (
     Path('docs/testing/transport-fault-profiles.v1.yml'),
 )
+SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
 
 
 def sha256_file(path: Path) -> str:
@@ -154,6 +155,18 @@ def validate_build_clock(config: dict) -> dict:
     if config.get('profile') == 'production-candidate' and not re.fullmatch(r'[0-9a-f]{64}', fingerprint):
         raise RuntimeError('production input fingerprint missing')
     return clock
+
+
+def validate_semantic_cache_contract(config: dict) -> dict[str, object]:
+    mode = str(config.get('semantic_cache_mode') or 'warm').strip().lower()
+    if mode not in SEMANTIC_CACHE_MODES:
+        raise RuntimeError(f'unsupported semantic cache mode: {mode!r}')
+    staged = config.get('semantic_cache_inputs_staged') or []
+    if not isinstance(staged, list) or any(not isinstance(item, str) for item in staged):
+        raise RuntimeError('semantic cache staging evidence is invalid')
+    if mode == 'cold' and staged:
+        raise RuntimeError('cold semantic cache mode must not stage prior semantic inputs')
+    return {'mode': mode, 'inputs_staged': sorted(staged)}
 
 def _load_status_loader(search_roots: list[Path] | None = None):
     """Load the callback helper from the mounted private status dataset.
@@ -487,6 +500,7 @@ def export_preview_data_if_configured(config: dict) -> None:
     cache_path = WORKING / cache_filename
     if input_cache and not cache_path.exists():
         shutil.copy2(input_cache, cache_path)
+    semantic_cache = validate_semantic_cache_contract(config)
     cache_inputs = {
         'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
@@ -497,7 +511,9 @@ def export_preview_data_if_configured(config: dict) -> None:
     semantic_paths: dict[str, Path] = {}
     for config_key, default_name in cache_inputs.items():
         filename = str(config.get(config_key) or default_name).strip()
-        input_path = find_input_file(filename)
+        input_path = (
+            find_input_file(filename) if semantic_cache['mode'] == 'warm' else None
+        )
         working_path = WORKING / filename
         if input_path and not working_path.exists():
             shutil.copy2(input_path, working_path)
@@ -682,6 +698,115 @@ def read_collection_semantic_receipt(config: dict) -> dict:
         'collection_product_normalized_output_sha256': product_snapshot.get('normalized_output_sha256'),
         'collection_product_provider_calls': product_snapshot.get('provider_calls'),
         **product_quality,
+    }
+
+
+def write_unusual_health_evidence(config: dict, semantic_result: dict) -> dict:
+    """Normalize the already-built collection artifacts; never score or encode."""
+
+    if not config.get('collection_semantic_compute'):
+        return semantic_result
+    script_path = SITE_DIR / 'scripts' / 'unusual_events_health.py'
+    if not script_path.is_file():
+        raise RuntimeError('Unusual production-health adapter is missing')
+    spec = importlib.util.spec_from_file_location(
+        'events_bot_unusual_events_health', script_path
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError('Unusual production-health adapter cannot be loaded')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    bge_path = WORKING / str(
+        config.get('bge_vector_receipt_filename')
+        or 'static_event_bge_vectors.receipt.json'
+    )
+    manifest_path = SITE_DIR / 'src' / 'data' / 'unusual-events.json'
+    cache_path = WORKING / str(
+        config.get('unusual_cache_filename') or 'unusual_events_cache.json'
+    )
+    for required in (bge_path, manifest_path, cache_path):
+        if not required.is_file():
+            raise RuntimeError(f'Unusual health input missing: {required.name}')
+    bge_receipt = json.loads(bge_path.read_text(encoding='utf-8'))
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    unusual_cache = json.loads(cache_path.read_text(encoding='utf-8'))
+    snapshot = config.get('snapshot') if isinstance(config.get('snapshot'), dict) else {}
+    builder_receipt = {
+        'schema_version': 'static_site_build_result_v2',
+        'ok': True,
+        'profile': 'production-candidate',
+        'repo_sha': config.get('repo_sha'),
+        'run_id': config.get('run_id'),
+        'build_id': config.get('build_id'),
+        'input_fingerprint': config.get('input_fingerprint'),
+        'snapshot': {
+            'snapshot_id': snapshot.get('snapshot_id'),
+            'snapshot_sha256': snapshot.get('sha256'),
+        },
+        'semantic': semantic_result,
+        'started_at': config.get('queued_at'),
+        'finished_at': datetime.now(timezone.utc).isoformat(),
+        'published': False,
+    }
+    health = module.evaluate_health(
+        bge_receipt=bge_receipt,
+        unusual_manifest=manifest,
+        unusual_cache=unusual_cache,
+        builder_receipt=builder_receipt,
+        artifact_sha256s={
+            'bge_receipt': sha256_file(bge_path),
+            'unusual_manifest': sha256_file(manifest_path),
+            'unusual_cache': sha256_file(cache_path),
+        },
+        target_count=20,
+        minimum_count=12,
+        previous_health=None,
+        generated_at=None,
+    )
+    health_path = WORKING / 'unusual-events-health.json'
+    health_path.write_text(
+        json.dumps(health, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
+        encoding='utf-8',
+    )
+    if health_path.stat().st_size > 256 * 1024:
+        raise RuntimeError('Unusual health evidence exceeds 256 KiB')
+    health_markdown_path = WORKING / 'unusual-events-health.md'
+    health_markdown_path.write_text(module.render_markdown(health), encoding='utf-8')
+    manifest_output = WORKING / 'unusual-events-manifest.json'
+    shutil.copy2(manifest_path, manifest_output)
+    evidence_files = {
+        'unusual_events_candidates_sha256': (
+            SITE_DIR / 'src' / 'data' / 'unusual-events-candidates.json',
+            WORKING / 'unusual-events-candidates.json',
+        ),
+        'unusual_events_review_pack_sha256': (
+            SITE_DIR / 'src' / 'data' / 'unusual-events-review-pack.md',
+            WORKING / 'unusual-events-review-pack.md',
+        ),
+        'unusual_events_manifest_diff_sha256': (
+            SITE_DIR / 'src' / 'data' / 'unusual-events-manifest-diff.json',
+            WORKING / 'unusual-events-manifest-diff.json',
+        ),
+    }
+    hashes = {
+        'unusual_events_health_sha256': sha256_file(health_path),
+        'unusual_events_health_markdown_sha256': sha256_file(health_markdown_path),
+        'unusual_events_manifest_sha256': sha256_file(manifest_output),
+    }
+    for key, (source, target) in evidence_files.items():
+        if not source.is_file():
+            raise RuntimeError(f'Unusual evidence missing: {source.name}')
+        shutil.copy2(source, target)
+        hashes[key] = sha256_file(target)
+    return {
+        **semantic_result,
+        **hashes,
+        'unusual_health_status': health.get('health_status'),
+        'unusual_content_readiness': health.get('content_readiness'),
+        'unusual_selected_count': (health.get('feed') or {}).get('selected_count'),
+        'unusual_candidate_count': (health.get('feed') or {}).get('candidate_count'),
+        'unusual_target_count': (health.get('feed') or {}).get('target_count'),
+        'unusual_minimum_publish_count': (health.get('feed') or {}).get('minimum_publish_count'),
     }
 
 
@@ -946,6 +1071,7 @@ def main() -> int:
         # terminal report instead of leaving a misleading "running" ledger.
         init_status()
         config = read_config()
+        semantic_cache_contract = validate_semantic_cache_contract(config)
         if (
             config.get('profile') == 'production-candidate'
             and not config.get('collection_semantic_compute')
@@ -1024,6 +1150,13 @@ def main() -> int:
                 **collection_semantic,
                 'status': 'validated',
             }
+            # Health is a bounded normalization of the artifacts produced just
+            # above.  It must stay inside this kernel so the host can bind and
+            # persist the exact evidence before deleting the terminal output.
+            semantic_result = write_unusual_health_evidence(
+                config,
+                semantic_result,
+            )
         apply_public_authorized_search_env(env, config)
         apply_public_interest_clubs_env(env)
         apply_secret_candidate_research_env(env, config)
@@ -1171,6 +1304,8 @@ def main() -> int:
             'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
             'event_count': event_count, 'artifacts': artifacts, 'failure_class': None,
             'input_fingerprint': config.get('input_fingerprint'),
+            'semantic_cache_mode': semantic_cache_contract['mode'],
+            'semantic_cache_inputs_staged': semantic_cache_contract['inputs_staged'],
             'build_clock': build_clock,
             **result_details,
         }
@@ -1186,6 +1321,13 @@ def main() -> int:
             'started_at': started, 'finished_at': datetime.now(timezone.utc).isoformat(),
             'failure_class': 'permanent_input' if isinstance(exc, (ValueError, FileNotFoundError)) else 'retryable_build',
             'input_fingerprint': locals().get('config', {}).get('input_fingerprint'),
+            'semantic_cache_mode': (
+                locals().get('semantic_cache_contract', {}).get('mode')
+                or str(locals().get('config', {}).get('semantic_cache_mode') or 'warm')
+            ),
+            'semantic_cache_inputs_staged': locals().get(
+                'semantic_cache_contract', {}
+            ).get('inputs_staged', []),
             'build_clock': locals().get('config', {}).get('build_clock'),
             'error_type': exc.__class__.__name__, 'error': str(exc)[:1000],
         }

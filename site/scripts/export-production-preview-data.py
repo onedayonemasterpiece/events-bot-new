@@ -6064,7 +6064,9 @@ def build_collection_semantic_outputs(
             + "; ".join(physical_validation.get("errors") or [])
         )
 
-    candidates = collection_module.score_semantic_candidates(artifact, policy)
+    scoring_policy = dict(policy)
+    scoring_policy["_prototype_rows"] = list(unusual_bank.get("prototypes") or [])
+    candidates = collection_module.score_semantic_candidates(artifact, scoring_policy)
     catalog_hash = collection_module.stable_hash(catalog_ledger)
     batch = collection_module.build_collection_batch_payload(
         events=events,
@@ -6098,10 +6100,17 @@ def build_collection_semantic_outputs(
         batch,
     )
 
-    unusual_candidates = (candidates.get("unusual") or {}).get("item_ids") or []
+    unusual_result = candidates.get("unusual") or {}
+    unusual_candidates = unusual_result.get("item_ids") or []
+    incident_regressions = collection_module.load_object(
+        collection_module.DEFAULT_UNUSUAL_INCIDENT_REGRESSIONS_PATH
+    )
     unusual_manifest = collection_module.unusual_shadow_manifest(
         events=events,
         candidate_ids=unusual_candidates,
+        candidate_scores=unusual_result.get("scores") or {},
+        incident_regressions=incident_regressions,
+        selection_policy=(policy.get("labels") or {}).get("unusual") or {},
         generated_at=str(build_metadata.get("generated_at") or ""),
         build_metadata=build_metadata,
         artifact=artifact,
@@ -6111,14 +6120,98 @@ def build_collection_semantic_outputs(
     unusual_cache = {
         "schema_version": "unusual-event-score-cache-v1",
         "status": "blocked",
-        "reason": "collection_document_recalibration_required",
+        "reason": "independent_acceptance_holdout_missing",
         "model_revision": (artifact.get("metadata") or {}).get("model_revision"),
         "prototype_bank_hash": (artifact.get("metadata") or {}).get("prototype_bank_sha256"),
         "input_fingerprint": build_metadata.get("input_fingerprint"),
         "candidate_event_ids": sorted(int(value) for value in unusual_candidates),
+        "selected_event_ids": list(unusual_manifest.get("selected_event_ids") or []),
+        "selected_concept_ids": list(unusual_manifest.get("selected_concept_ids") or []),
+        "review_shortlist_event_ids": list(unusual_manifest.get("review_shortlist_event_ids") or []),
+        "review_shortlist_concept_ids": list(unusual_manifest.get("review_shortlist_concept_ids") or []),
+        "candidate_count": int(unusual_manifest.get("candidate_count") or 0),
+        "selected_count": int(unusual_manifest.get("selected_count") or 0),
+        "review_shortlist_count": int(unusual_manifest.get("review_shortlist_count") or 0),
+        "target_count": int(unusual_manifest.get("target_count") or 0),
+        "minimum_publish_count": int(unusual_manifest.get("minimum_publish_count") or 0),
+        "decisions": list(unusual_manifest.get("decisions") or []),
         "provider_calls": 0,
     }
     _atomic_write_json(unusual_cache_path, unusual_cache)
+    unusual_candidates_path = out_dir / "unusual-events-candidates.json"
+    _atomic_write_json(
+        unusual_candidates_path,
+        {
+            "schema_version": "unusual-events-candidates-v1",
+            "run_id": build_metadata.get("run_id"),
+            "build_id": build_metadata.get("build_id"),
+            "repo_sha": build_metadata.get("repo_sha"),
+            "input_fingerprint": build_metadata.get("input_fingerprint"),
+            "generated_at": build_metadata.get("generated_at"),
+            "candidate_count": unusual_manifest.get("candidate_count"),
+            "selected_count": unusual_manifest.get("selected_count"),
+            "review_shortlist_count": unusual_manifest.get("review_shortlist_count"),
+            "review_shortlist_event_ids": unusual_manifest.get("review_shortlist_event_ids") or [],
+            "decisions": unusual_manifest.get("decisions") or [],
+        },
+    )
+    review_rows = list(unusual_manifest.get("decisions") or [])
+    review_lines = [
+        "# Необычное — current-catalog review pack",
+        "",
+        "> Автоматическая инженерно-редакционная проверка. Это не owner approval и не accepted baseline.",
+        "",
+        f"- Build: `{build_metadata.get('build_id') or 'unknown'}`",
+        f"- Run: `{build_metadata.get('run_id') or 'unknown'}`",
+        f"- Candidates: **{int(unusual_manifest.get('candidate_count') or 0)}**",
+        f"- Provisional review shortlist: **{int(unusual_manifest.get('review_shortlist_count') or 0)}** / target **{int(unusual_manifest.get('target_count') or 0)}**",
+        f"- Publication selected: **{int(unusual_manifest.get('selected_count') or 0)}** / minimum **{int(unusual_manifest.get('minimum_publish_count') or 0)}**",
+        f"- Gate: **{(unusual_manifest.get('quality_gate') or {}).get('status', 'unknown')}** — `{(unusual_manifest.get('quality_gate') or {}).get('reason', 'unknown')}`",
+        "",
+        "| # | Decision | ID | Title | Date | URL | Score | Margin | Family | Rules / reason | Warnings |",
+        "|---:|---|---:|---|---|---|---:|---:|---|---|---|",
+    ]
+    for index, row in enumerate(review_rows, 1):
+        title = str(row.get("title") or "").replace("|", "\\|").replace("\n", " ")[:160]
+        reasons = ", ".join(str(value) for value in row.get("reason_codes") or [])[:200]
+        warnings = ", ".join(str(value) for value in row.get("warning_codes") or [])[:160]
+        path = str(row.get("path") or "")
+        safe_path = path if path.startswith("/") and not path.startswith("//") and "://" not in path else ""
+        event_link = f"[{safe_path}]({safe_path})" if safe_path else "missing"
+        review_lines.append(
+            "| {index} | {decision} | {event_id} | {title} | {date} | {event_link} | {score} | {margin} | {family} | {reasons} | {warnings} |".format(
+                index=index,
+                decision="include-review" if row.get("include") is True else "exclude",
+                event_id=int(row.get("event_id") or 0),
+                title=title,
+                date=str(row.get("date") or ""),
+                event_link=event_link,
+                score=row.get("score"),
+                margin=row.get("margin"),
+                family=str(row.get("family") or "unknown"),
+                reasons=reasons,
+                warnings=warnings,
+            )
+        )
+    review_pack_path = out_dir / "unusual-events-review-pack.md"
+    temporary_review = review_pack_path.with_name(f".{review_pack_path.name}.tmp")
+    temporary_review.write_text("\n".join(review_lines) + "\n", encoding="utf-8")
+    os.replace(temporary_review, review_pack_path)
+    manifest_diff_path = out_dir / "unusual-events-manifest-diff.json"
+    _atomic_write_json(
+        manifest_diff_path,
+        {
+            "schema_version": "unusual-events-manifest-diff-v1",
+            "baseline_status": "owner_accepted_baseline_absent",
+            "baseline_reference": None,
+            "current_manifest_sha256": hashlib.sha256(unusual_path.read_bytes()).hexdigest(),
+            "added_event_ids": [],
+            "removed_event_ids": [],
+            "unchanged_event_ids": [],
+            "comparison_status": "blocked",
+            "reason": "independent owner-accepted publication baseline is absent",
+        },
+    )
     metadata = artifact.get("metadata") or {}
     encoded_events = int(metadata.get("encoded_event_count") or 0)
     encoded_prototypes = int(metadata.get("encoded_prototype_count") or 0)
@@ -6138,6 +6231,14 @@ def build_collection_semantic_outputs(
         "encoded_event_count": encoded_events,
         "encoded_prototype_count": encoded_prototypes,
         "manifest_sha256": hashlib.sha256(unusual_path.read_bytes()).hexdigest(),
+        "candidate_count": int(unusual_manifest.get("candidate_count") or 0),
+        "selected_count": int(unusual_manifest.get("selected_count") or 0),
+        "review_shortlist_count": int(unusual_manifest.get("review_shortlist_count") or 0),
+        "target_count": int(unusual_manifest.get("target_count") or 0),
+        "minimum_publish_count": int(unusual_manifest.get("minimum_publish_count") or 0),
+        "candidates_sha256": hashlib.sha256(unusual_candidates_path.read_bytes()).hexdigest(),
+        "review_pack_sha256": hashlib.sha256(review_pack_path.read_bytes()).hexdigest(),
+        "manifest_diff_sha256": hashlib.sha256(manifest_diff_path.read_bytes()).hexdigest(),
         "vector_cache_sha256": hashlib.sha256(vector_cache_path.read_bytes()).hexdigest(),
         "vector_receipt_sha256": hashlib.sha256(vector_receipt_path.read_bytes()).hexdigest(),
         "unusual_cache_sha256": hashlib.sha256(unusual_cache_path.read_bytes()).hexdigest(),
@@ -6599,6 +6700,8 @@ def main() -> int:
             out_dir=out_dir,
             build_metadata={
                 "build_id": args.build_id or args.base_path or "local-static-build",
+                "run_id": args.run_id or args.build_id or args.base_path or "local-static-build",
+                "repo_sha": args.repo_sha or None,
                 "generated_at": generated_at,
                 "as_of_date": effective_date,
                 "source_snapshot_id": args.snapshot_id or None,

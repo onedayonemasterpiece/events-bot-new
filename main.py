@@ -276,13 +276,13 @@ from static_site_release import (
     event_public_revision,
     freshness_state as static_site_freshness_state,
     iso_utc as static_site_iso_utc,
-    make_request_payload as make_static_site_request_payload,
+    make_request_payload as _make_static_site_request_payload,
     max_attempts as static_site_max_attempts,
-    merge_request_payload as merge_static_site_request_payload,
+    merge_request_payload as _merge_static_site_request_payload,
     publish_secret_candidate_archive,
     prune_immutable_snapshots,
     prune_static_site_outputs,
-    request_watermark as static_site_request_watermark,
+    request_watermark as _static_site_request_watermark,
     resolve_checked_static_site_artifact,
     resolve_current_secret_candidate,
     recoverable_static_site_build,
@@ -14622,6 +14622,61 @@ def _sqlite_parse_datetime(value: Any) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+STATIC_SITE_SEMANTIC_CACHE_MODES = frozenset({"warm", "cold"})
+
+
+def _normalize_static_site_semantic_cache_mode(value: Any) -> str:
+    mode = str(value or "warm").strip().lower() or "warm"
+    if mode not in STATIC_SITE_SEMANTIC_CACHE_MODES:
+        raise ValueError(f"unsupported semantic_cache_mode={mode!r}")
+    return mode
+
+
+def static_site_request_watermark(payload: Mapping[str, Any]) -> str:
+    """Bind cache reuse policy without changing the shared release schema."""
+
+    evidence = {
+        "base_request_watermark": _static_site_request_watermark(payload),
+        "semantic_cache_mode": _normalize_static_site_semantic_cache_mode(
+            payload.get("semantic_cache_mode")
+        ),
+    }
+    raw = json.dumps(evidence, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def make_static_site_request_payload(
+    *, semantic_cache_mode: str = "warm", **kwargs: Any
+) -> dict[str, Any]:
+    mode = _normalize_static_site_semantic_cache_mode(semantic_cache_mode)
+    trigger = str(kwargs.get("trigger") or "smart_update").strip()
+    if mode == "cold" and trigger != "operator_request":
+        raise ValueError("cold semantic cache mode requires an explicit operator request")
+    payload = _make_static_site_request_payload(**kwargs)
+    payload["semantic_cache_mode"] = mode
+    payload["target_watermark"] = static_site_request_watermark(payload)
+    return payload
+
+
+def merge_static_site_request_payload(
+    current: Mapping[str, Any] | None, incoming: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """Merge normally, with cold dominating so an operator recompute is not lost."""
+
+    merged = _merge_static_site_request_payload(current, incoming)
+    explicit_modes = [
+        _normalize_static_site_semantic_cache_mode(source.get("semantic_cache_mode"))
+        for source in (current, incoming)
+        if isinstance(source, Mapping) and "semantic_cache_mode" in source
+    ]
+    if explicit_modes:
+        merged["semantic_cache_mode"] = (
+            "cold" if "cold" in explicit_modes else "warm"
+        )
+        merged["target_watermark"] = static_site_request_watermark(merged)
+    return merged
+
+
 def _static_site_daily_share_date(payload: Any) -> str | None:
     if not isinstance(payload, Mapping):
         return None
@@ -16325,6 +16380,7 @@ async def enqueue_static_site_build_request(
     delay_seconds: int = 0,
     trigger: str = "operator_request",
     force_rebuild: bool = False,
+    semantic_cache_mode: str = "warm",
 ) -> str:
     """Durably enqueue an on-demand secret-preview build in the same outbox.
 
@@ -16350,6 +16406,13 @@ async def enqueue_static_site_build_request(
             ids.append(event_id)
     if force_rebuild and trigger != "operator_request":
         raise ValueError("force_rebuild is restricted to explicit operator requests")
+    semantic_cache_mode = _normalize_static_site_semantic_cache_mode(
+        semantic_cache_mode
+    )
+    if semantic_cache_mode == "cold" and trigger != "operator_request":
+        raise ValueError(
+            "cold semantic cache mode is restricted to explicit operator requests"
+        )
     clock = resolve_static_site_build_clock(
         current_date=(os.getenv("STATIC_SITE_CURRENT_DATE") or "").strip() or None,
         current_datetime=(os.getenv("STATIC_SITE_CURRENT_DATETIME") or "").strip() or None,
@@ -16373,6 +16436,7 @@ async def enqueue_static_site_build_request(
         expected_search_v3_hash=(os.getenv("STATIC_SITE_EXPECTED_SEARCH_V3_HASH") or "").strip() or None,
         expected_related_v1_hash=(os.getenv("STATIC_SITE_EXPECTED_RELATED_V1_HASH") or "").strip() or None,
         force_rebuild=force_rebuild,
+        semantic_cache_mode=semantic_cache_mode,
     )
     payload["effective_build_date"] = clock.effective_date
     payload["build_time_zone"] = clock.time_zone
@@ -23229,7 +23293,11 @@ def _static_site_build_kaggle_command(
     search_corpus_receipt_path: str | None = None,
     image_source_manifest_path: str | None = None,
     image_source_manifest_sha256: str | None = None,
+    semantic_cache_mode: str = "warm",
 ) -> list[str]:
+    semantic_cache_mode = _normalize_static_site_semantic_cache_mode(
+        semantic_cache_mode
+    )
     related_mode = (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse"
     if related_mode not in {"sparse", "pgvector", "bge"}:
         raise ValueError(f"unsupported STATIC_SITE_RELATED_MODE={related_mode!r}")
@@ -23325,6 +23393,8 @@ def _static_site_build_kaggle_command(
         "--poll-interval",
         str(_env_int("STATIC_SITE_KAGGLE_POLL_INTERVAL", 30)),
         "--download-output",
+        "--semantic-cache-mode",
+        semantic_cache_mode,
     ]
     if current_datetime:
         cmd.extend(["--current-datetime", current_datetime])
@@ -23769,6 +23839,10 @@ async def _finish_static_site_candidate(
                 "checks": result.get("checks"),
                 "semantic": result.get("semantic"),
                 "service_share": result.get("service_share"),
+                "semantic_cache_mode": result.get("semantic_cache_mode"),
+                "semantic_cache_inputs_staged": result.get(
+                    "semantic_cache_inputs_staged"
+                ),
                 "input_fingerprint": input_fingerprint,
                 "source": result.get("source"),
                 "publication": (
@@ -23804,7 +23878,14 @@ async def _finish_static_site_candidate(
         "run_id": run_id,
         "repo_sha": repo_sha,
         "snapshot_id": snapshot_metadata.snapshot_id,
+        "snapshot_sha256": snapshot_metadata.sha256,
         "input_fingerprint": input_fingerprint,
+        "semantic_cache_mode": result.get("semantic_cache_mode"),
+        "semantic_cache_inputs_staged": result.get(
+            "semantic_cache_inputs_staged"
+        ),
+        "started_at": result.get("started_at"),
+        "finished_at": result.get("finished_at"),
         "source": result.get("source"),
         "effective_date": clock.effective_date,
         "result_sha256": result_sha256,
@@ -23925,6 +24006,9 @@ async def _recover_previous_static_site_attempt(
     related_corpus_revision = str(
         handoff.get("related_corpus_revision") or ""
     ).strip()
+    semantic_cache_mode = _normalize_static_site_semantic_cache_mode(
+        handoff.get("semantic_cache_mode")
+    )
     if (
         not all(required.values())
         or required["run_id"] != claim.run_id
@@ -23993,6 +24077,7 @@ async def _recover_previous_static_site_attempt(
             if current_source_identity is not None
             else None
         ),
+        semantic_cache_mode=semantic_cache_mode,
     )
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -24204,6 +24289,19 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     force_rebuild = bool(request_payload.get("force_rebuild"))
     if force_rebuild and request_payload.get("trigger") != "operator_request":
         raise StaticSitePermanentError("force_rebuild_requires_operator_request")
+    try:
+        semantic_cache_mode = _normalize_static_site_semantic_cache_mode(
+            request_payload.get("semantic_cache_mode")
+        )
+    except ValueError as exc:
+        raise StaticSitePermanentError("semantic_cache_mode_invalid") from exc
+    if (
+        semantic_cache_mode == "cold"
+        and request_payload.get("trigger") != "operator_request"
+    ):
+        raise StaticSitePermanentError(
+            "cold_semantic_cache_mode_requires_operator_request"
+        )
     clock = resolve_static_site_build_clock(
         current_date=(os.getenv("STATIC_SITE_CURRENT_DATE") or "").strip() or None,
         current_datetime=(os.getenv("STATIC_SITE_CURRENT_DATETIME") or "").strip() or None,
@@ -24359,6 +24457,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         "bge_document_kind": "related_v1",
         "bge_document_version": "event-related-doc-v1",
         "collection_semantic_compute": True,
+        "semantic_cache_mode": semantic_cache_mode,
         "collection_document_kind": "collection_semantics_v1",
         "collection_document_version": "collection-semantics-doc-v1",
         "collection_batch_schema": "collection-batch-v1",
@@ -24482,6 +24581,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     "status": outcome,
                     "input_fingerprint": input_fingerprint,
                     "related_corpus_revision": related_corpus_revision or None,
+                    "semantic_cache_mode": semantic_cache_mode,
                     "effective_date": clock.effective_date,
                     "time_zone": clock.time_zone,
                     "previous_run_id": claim.previous_run_id,
@@ -24509,6 +24609,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     "status": "single_flight_deferred",
                     "input_fingerprint": input_fingerprint,
                     "related_corpus_revision": related_corpus_revision or None,
+                    "semantic_cache_mode": semantic_cache_mode,
                     "effective_date": clock.effective_date,
                     "blocking_run_id": claim.blocking_run_id,
                     "blocking_fingerprint": claim.blocking_fingerprint,
@@ -24552,6 +24653,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     "manifest_path": str(manifest_path),
                     "input_fingerprint": input_fingerprint,
                     "related_corpus_revision": related_corpus_revision or None,
+                    "semantic_cache_mode": semantic_cache_mode,
                     "effective_date": clock.effective_date,
                     "current_datetime": clock.current_datetime,
                     "prepared_at": static_site_iso_utc(),
@@ -24590,13 +24692,15 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 if image_source_identity is not None
                 else None
             ),
+            semantic_cache_mode=semantic_cache_mode,
         )
         logging.info(
-            "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s sync_pgvector=%s gemma_verify=%s",
+            "static_site_build: launching Kaggle builder owner_event_id=%s build_id=%s limit=%s related_mode=%s semantic_cache_mode=%s sync_pgvector=%s gemma_verify=%s",
             event_id,
             build_id,
             limit,
             (os.getenv("STATIC_SITE_RELATED_MODE") or "sparse").strip().lower() or "sparse",
+            semantic_cache_mode,
             _env_flag("STATIC_SITE_SYNC_PGVECTOR_VECTORS"),
             _env_flag("STATIC_SITE_GEMMA_RELATED_VERIFY"),
         )

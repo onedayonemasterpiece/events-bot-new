@@ -3,6 +3,17 @@
 ## [Unreleased]
 - **Static site pages / first-party action-map research**: added the supplied full and concise research on semantic component-level interaction signals, including the `ALWAYS` / `CAMPAIGN_ONLY` / `DO_NOT_COLLECT` evidence policy; this is research input only, with no runtime telemetry change.
 
+- Added production health for the auto-built «Необычное» collection on the
+  existing StaticSiteBuilder path: bounded hash-bound health/review/diff
+  evidence, a read-only durable resolver, operator-only warm/cold semantic cache
+  modes, daily/weekly GitHub monitoring, persistent WATCH/INCIDENT issue
+  lifecycle, and exact Chromium parity at 390×844 and 1728×900.
+- Fixed current Unusual recovery so the shared collection BGE output produces
+  explainable family/score/concept decisions, excludes the two incident hard
+  negatives, detects concept duplicates, preserves exact precision@20 and
+  expected-family metrics, and remains honestly blocked without an independent
+  acceptance holdout instead of publishing an unproved or empty healthy feed.
+
 - Completed Current UI Behavioral Decoder v1.1 evidence closure on Actions run
   `31327863197`: all 293 breakpoint/container probes now have terminal runtime
   dispositions (236 PASS, 39 MISMATCH, 18 UNREACHABLE_WITH_REASON), all ten

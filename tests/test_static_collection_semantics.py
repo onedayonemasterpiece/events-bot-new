@@ -393,7 +393,7 @@ def test_static_site_preview_validates_collection_batch_against_current_slice(
     assert receipt["collection_product_quality_status"] == "WATCH"
 
 
-def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
+def test_runner_persists_collection_and_bounded_unusual_health_outputs(
     tmp_path,
 ):
     from types import SimpleNamespace
@@ -410,6 +410,12 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
         "static-collections-product-quality.json": b"quality-json",
         "static-collections-product-quality.md": b"quality-markdown",
         "qa-summary.json": b"qa-summary",
+        "unusual-events-health.json": b"health-json",
+        "unusual-events-health.md": b"health-markdown",
+        "unusual-events-manifest.json": b"manifest-json",
+        "unusual-events-candidates.json": b"candidates-json",
+        "unusual-events-review-pack.md": b"review-markdown",
+        "unusual-events-manifest-diff.json": b"manifest-diff-json",
     }.items():
         (out_dir / name).write_bytes(content)
     sha = runner.sha256_file
@@ -431,6 +437,24 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
             ),
             "collection_product_quality_qa_summary_sha256": sha(
                 out_dir / "qa-summary.json"
+            ),
+            "unusual_events_health_sha256": sha(
+                out_dir / "unusual-events-health.json"
+            ),
+            "unusual_events_health_markdown_sha256": sha(
+                out_dir / "unusual-events-health.md"
+            ),
+            "unusual_events_manifest_sha256": sha(
+                out_dir / "unusual-events-manifest.json"
+            ),
+            "unusual_events_candidates_sha256": sha(
+                out_dir / "unusual-events-candidates.json"
+            ),
+            "unusual_events_review_pack_sha256": sha(
+                out_dir / "unusual-events-review-pack.md"
+            ),
+            "unusual_events_manifest_diff_sha256": sha(
+                out_dir / "unusual-events-manifest-diff.json"
             ),
         }
     }
@@ -458,4 +482,10 @@ def test_runner_persists_collection_receipt_without_requiring_unusual_outputs(
     assert (product_parent / "static-collections-product-quality.json").read_bytes() == b"quality-json"
     assert (product_parent / "static-collections-product-quality.md").read_bytes() == b"quality-markdown"
     assert (product_parent / "qa-summary.json").read_bytes() == b"qa-summary"
+    assert (product_parent / "unusual-events-health.json").read_bytes() == b"health-json"
+    assert (product_parent / "unusual-events-health.md").read_bytes() == b"health-markdown"
+    assert (product_parent / "unusual-events-manifest.json").read_bytes() == b"manifest-json"
+    assert (product_parent / "unusual-events-candidates.json").read_bytes() == b"candidates-json"
+    assert (product_parent / "unusual-events-review-pack.md").read_bytes() == b"review-markdown"
+    assert (product_parent / "unusual-events-manifest-diff.json").read_bytes() == b"manifest-diff-json"
     assert not Path(args.unusual_cache).exists()

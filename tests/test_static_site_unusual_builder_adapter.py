@@ -133,6 +133,85 @@ def test_kaggle_runner_stages_daily_share_renderer_with_site_payload():
     assert "staged_site / 'scripts' / service_share_renderer.name" in source
 
 
+def test_kaggle_kernel_writes_bounded_unusual_health_and_review_evidence(
+    tmp_path: Path, monkeypatch
+):
+    builder = load_kaggle_builder()
+    site_dir = tmp_path / "site"
+    data_dir = site_dir / "src" / "data"
+    scripts_dir = site_dir / "scripts"
+    working = tmp_path / "working"
+    data_dir.mkdir(parents=True)
+    scripts_dir.mkdir(parents=True)
+    working.mkdir()
+    (scripts_dir / "unusual_events_health.py").write_text(
+        "def evaluate_health(**kwargs):\n"
+        "    return {\n"
+        "      'schema_version':'unusual-events-health-v1',\n"
+        "      'health_status':'INCIDENT',\n"
+        "      'content_readiness':'BLOCKED',\n"
+        "      'run_id':kwargs['builder_receipt']['run_id'],\n"
+        "      'repo_sha':kwargs['builder_receipt']['repo_sha'],\n"
+        "      'source':{'build_id':kwargs['builder_receipt']['build_id']},\n"
+        "      'publication':{'manifest_sha256':kwargs['artifact_sha256s']['unusual_manifest']},\n"
+        "      'feed':{'selected_count':0,'candidate_count':9,'target_count':20,'minimum_publish_count':12}\n"
+        "    }\n"
+        "def render_markdown(health):\n"
+        "    return '# health\\n'\n",
+        encoding="utf-8",
+    )
+    for name, payload in {
+        "unusual-events.json": {"schema_version": "static_unusual_events_v1"},
+        "unusual-events-candidates.json": {"schema_version": "unusual-events-candidates-v1"},
+        "unusual-events-manifest-diff.json": {"schema_version": "unusual-events-manifest-diff-v1"},
+    }.items():
+        (data_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+    (data_dir / "unusual-events-review-pack.md").write_text(
+        "# review\n", encoding="utf-8"
+    )
+    (working / "static_event_bge_vectors.receipt.json").write_text(
+        json.dumps({"schema_version": "static-collection-bge-cache-receipt-v1"}),
+        encoding="utf-8",
+    )
+    (working / "unusual_events_cache.json").write_text(
+        json.dumps({"schema_version": "unusual-event-score-cache-v1"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(builder, "SITE_DIR", site_dir)
+    monkeypatch.setattr(builder, "WORKING", working)
+
+    result = builder.write_unusual_health_evidence(
+        {
+            "collection_semantic_compute": True,
+            "repo_sha": "a" * 40,
+            "run_id": "run-1",
+            "build_id": "production-test",
+            "input_fingerprint": "b" * 64,
+            "snapshot": {"snapshot_id": "snap", "sha256": "c" * 64},
+        },
+        {"status": "validated"},
+    )
+
+    assert result["unusual_health_status"] == "INCIDENT"
+    assert result["unusual_content_readiness"] == "BLOCKED"
+    assert result["unusual_candidate_count"] == 9
+    for filename, hash_key in {
+        "unusual-events-health.json": "unusual_events_health_sha256",
+        "unusual-events-health.md": "unusual_events_health_markdown_sha256",
+        "unusual-events-manifest.json": "unusual_events_manifest_sha256",
+        "unusual-events-candidates.json": "unusual_events_candidates_sha256",
+        "unusual-events-review-pack.md": "unusual_events_review_pack_sha256",
+        "unusual-events-manifest-diff.json": "unusual_events_manifest_diff_sha256",
+    }.items():
+        assert result[hash_key] == builder.sha256_file(working / filename)
+
+
+def test_kaggle_runner_stages_unusual_health_adapter_with_site_payload():
+    source = KAGGLE_RUNNER.read_text(encoding="utf-8")
+    assert "unusual_health = ROOT / 'scripts' / 'unusual_events_health.py'" in source
+    assert "staged_site / 'scripts' / unusual_health.name" in source
+
+
 def test_exporter_projects_hashable_structured_semantic_eligibility():
     module = load_exporter()
     canonical = module._structured_unusual_semantic_record(
