@@ -34,8 +34,9 @@
 
 ### Added
 
-- Completed the immutable Current UI Decoder v1 handoff: all 155 indexed page
-  and component rasters were manually reviewed, the hash-bound review ledger
+- Completed the corrective immutable Current UI Decoder v1 r2 handoff: all 157
+  indexed page and component rasters plus 135 raster-backed page records were
+  manually reviewed, the hash-bound review ledger
   advanced the narrow evidence verdict to
   `GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION`, permanent heavy evidence was
   published as a GitHub Release asset, and the 107-component compact catalog
