@@ -41,12 +41,97 @@ test('Android preflight proves real Chrome/UiAutomator2 without navigation or ne
   assert.deepEqual(receipt.context_classes, ['native', 'webview']);
   assert.equal(receipt.transport, 'real_android_chrome');
   assert.equal(receipt.automation_name, 'UiAutomator2');
+  assert.equal(receipt.side_effect_free, true);
+  assert.equal(receipt.browser_ready, true);
+  assert.equal(receipt.transport_ready, true);
+  assert.equal(receipt.viewport_ready, true);
+  assert.equal(receipt.auth_requests, 0);
+  assert.equal(receipt.search_posts, 0);
+  assert.equal(receipt.otp_requests, 0);
+  assert.equal(receipt.supabase_requests, 0);
   assert.equal(receipt.side_effects.navigation_count, 0);
   assert.equal(receipt.side_effects.fetch_count, 0);
   assert.equal(receipt.side_effects.search_post_count, 0);
   assert.equal(receipt.continuation_handle, 'in_process_adapter');
   assert.equal(receipt.session_identifier_serialized, false);
   assert.doesNotMatch(JSON.stringify(receipt), /CHROMIUM|sessionId|deviceName/iu);
+});
+
+test('Appium health diagnostics expose only cumulative closed runtime and driver counts', async () => {
+  const driver = preflightDriver('android');
+  let networkRead = 0;
+  driver.execute = async (fn) => {
+    if (fn?.name === 'snapshotSearchRuntimeProbe') return {
+      network: { failed_requests: 1, storage_requests: 1 },
+    };
+    return true;
+  };
+  driver.getLogs = async (type) => {
+    if (type === 'browser') return [{ level: 'SEVERE', message: 'raw console secret' }];
+    if (type !== 'performance' || networkRead++ > 0) return [];
+    return [
+      { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+        requestId: 'storage-1', request: { url: 'https://example.test/storage/v1/object/private/raw', method: 'GET' },
+      } }) },
+      { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+        requestId: 'fn-1', response: { url: 'https://example.test/functions/v1/event-search?raw=yes', status: 503 },
+      } }) },
+      { message: JSON.stringify({ method: 'Network.loadingFailed', params: {
+        requestId: 'failed-1', errorText: 'raw network secret',
+      } }) },
+    ];
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  const first = await adapter.healthDiagnostics();
+  assert.deepEqual(first, {
+    console_errors: 1, failed_requests: 1, error_responses: 1, storage_requests: 1,
+  });
+  assert.doesNotMatch(JSON.stringify(first), /raw|secret|event-search/u);
+  assert.deepEqual(await adapter.healthDiagnostics(), first);
+});
+
+test('Appium result snapshot counts actual skeleton cards and id-less placeholders', async () => {
+  const eventCard = {
+    getAttribute(name) { return name === 'data-event-id' ? '42' : ''; },
+    getBoundingClientRect() { return { width: 10, height: 10, top: 0, bottom: 10 }; },
+  };
+  const placeholder = {
+    getAttribute() { return ''; },
+    getBoundingClientRect() { return { width: 10, height: 10, top: 0, bottom: 10 }; },
+  };
+  const results = { hidden: false, querySelector() { return null; } };
+  const driver = {
+    capabilities: {},
+    async execute(fn) {
+      const prior = { document: globalThis.document, getComputedStyle: globalThis.getComputedStyle,
+        innerHeight: globalThis.innerHeight };
+      globalThis.document = {
+        querySelector(selector) {
+          if (selector === '[data-search-results]') return results;
+          if (selector === '[data-search-status]') return { getAttribute() { return null; } };
+          if (selector === '[data-search-submit]') return { getAttribute() { return 'false'; } };
+          return null;
+        },
+        querySelectorAll(selector) {
+          if (selector.includes('.authorized-search__skeleton-card')) return [{}];
+          if (selector.includes('[data-event-id]')) return [eventCard];
+          if (selector.includes('[data-event-card]')) return [eventCard, placeholder];
+          return [];
+        },
+      };
+      globalThis.getComputedStyle = () => ({ display: 'block', visibility: 'visible' });
+      globalThis.innerHeight = 800;
+      try { return fn(); } finally {
+        globalThis.document = prior.document;
+        globalThis.getComputedStyle = prior.getComputedStyle;
+        globalThis.innerHeight = prior.innerHeight;
+      }
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  const snapshot = await adapter.snapshotResults();
+  assert.equal(snapshot.skeleton_count, 1);
+  assert.equal(snapshot.placeholder_count, 1);
 });
 
 test('iOS preflight uses the Safari preparation hook then proves Mobile Safari/XCUITest/WDA', async () => {
@@ -167,12 +252,20 @@ test('adapter opens the captured first result and binds the browser navigation t
     async execute() { return { href: 'https://kenigevents.ru/events/42?secret=yes', same_origin: true }; },
     async getUrl() { return currentUrl; },
     async getLogs(type) {
+      if (type === 'browser') return [];
       assert.equal(type, 'performance');
       logReads += 1;
       if (logReads === 1) return [];
-      return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
-        type: 'Document', response: { status: 200, url: 'https://kenigevents.ru/events/42?secret=yes' },
-      } }) }];
+      if (logReads === 2) return [
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          type: 'Document', requestId: 'document-42',
+          response: { status: 200, url: 'https://kenigevents.ru/events/42?secret=yes' },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+          requestId: 'storage-after-open', request: { method: 'GET', url: 'https://assets.example/storage/v1/object/42' },
+        } }) },
+      ];
+      return [];
     },
     async $(selector) {
       assert.match(selector, /data-search-results/u);
@@ -186,6 +279,7 @@ test('adapter opens the captured first result and binds the browser navigation t
     schema_version: 'mobile-card-open-v1', same_origin: true, http_status: 200,
     destination_class: 'event_detail', network_source: 'performance', raw_url_retained: false,
   });
+  assert.equal((await adapter.healthDiagnostics()).storage_requests, 1);
 });
 
 test('navigation receipt rejects cross-origin and non-200 document evidence', () => {

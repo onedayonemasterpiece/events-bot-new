@@ -23,7 +23,11 @@ function pageResultSnapshot() {
   const results = document.querySelector('[data-search-results]');
   const status = document.querySelector('[data-search-status]');
   const submit = document.querySelector('[data-search-submit]');
-  const cards = Array.from(document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]'));
+  const allCards = Array.from(document.querySelectorAll('[data-search-results] [data-event-card], [data-search-results] [data-search-vector-card]'));
+  const cards = allCards.filter((node) => String(node.getAttribute('data-event-id') || ''));
+  const skeletons = new Set(document.querySelectorAll(
+    '[data-search-skeletons]:not([hidden]) .authorized-search__skeleton-card, [data-search-results] .authorized-search__skeleton-card, [data-search-results] [data-skeleton]',
+  ));
   const isVisible = (node) => { const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
     return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0 && rect.top < innerHeight && rect.bottom > 0; };
   const renderedIds = cards.map((node) => String(node.getAttribute('data-event-id') || '')).filter(Boolean);
@@ -35,7 +39,59 @@ function pageResultSnapshot() {
   return { terminal: !error && submit?.getAttribute('aria-busy') !== 'true' && Boolean(results && !results.hidden && cards.length),
     error, cards_visible: cards.some(isVisible), visible_card_count: cards.filter(isVisible).length,
     rendered_ids: renderedIds, rendered_families: renderedFamilies,
+    skeleton_count: skeletons.size,
+    placeholder_count: allCards.filter((node) => !String(node.getAttribute('data-event-id') || '')).length,
     card_renderer_unavailable: Boolean(results?.querySelector('[data-search-card-render-unavailable]')) };
+}
+
+const closedLogLevelError = (value) => ['SEVERE', 'ERROR'].includes(String(value || '').toUpperCase());
+
+function accumulateClosedDriverDiagnostics(logs, diagnostics, seen) {
+  const visited = new WeakSet();
+  const record = (kind, identity) => {
+    const key = `${kind}:${String(identity || '')}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      diagnostics[kind] += 1;
+    }
+  };
+  const visit = (value, depth = 0) => {
+    if (depth > 10 || value == null) return;
+    if (typeof value === 'string') {
+      const text = value.trim();
+      if (!text.startsWith('{') && !text.startsWith('[')) return;
+      try { visit(JSON.parse(text), depth + 1); } catch { /* non-protocol log */ }
+      return;
+    }
+    if (typeof value !== 'object' || visited.has(value)) return;
+    visited.add(value);
+    if (Array.isArray(value)) { value.forEach((item) => visit(item, depth + 1)); return; }
+    const method = String(value.method || '');
+    const params = value.params && typeof value.params === 'object' ? value.params : {};
+    const requestId = String(params.requestId || params.timestamp || value.timestamp || 'unidentified');
+    if (method === 'Network.loadingFailed') record('failed_requests', requestId);
+    if (method === 'Network.requestWillBeSent' || method === 'Network.responseReceived') {
+      const rawUrl = method === 'Network.requestWillBeSent'
+        ? params.request?.url : params.response?.url;
+      let path = '';
+      try { path = new URL(String(rawUrl)).pathname; } catch { /* malformed URL is ignored */ }
+      if (/^\/storage\/v1(?:\/|$)/u.test(path)) record('storage_requests', requestId);
+      const status = Number(params.response?.status || 0);
+      if (method === 'Network.responseReceived' && status >= 400
+        && /^\/(?:auth|functions|rest)\/v1(?:\/|$)/u.test(path)) {
+        record('error_responses', requestId);
+      }
+    }
+    if ((method === 'Runtime.consoleAPICalled' && String(params.type).toLowerCase() === 'error')
+      || (method === 'Log.entryAdded' && closedLogLevelError(params.entry?.level))) {
+      record('console_errors', requestId);
+    }
+    if (!method && closedLogLevelError(value.level)) {
+      record('console_errors', `${value.timestamp || 'untimestamped'}:${String(value.level).toUpperCase()}`);
+    }
+    Object.values(value).forEach((child) => visit(child, depth + 1));
+  };
+  visit(logs);
 }
 
 export async function runRealTouchScroll({ readScrollY, lastCardVisible, gesture, wait, maxGestures = 40 }) {
@@ -96,6 +152,22 @@ export async function createAppiumSearchAdapter(options = {}) {
   let configuredPolicy = {};
   let nativeKeyboardObserved = false;
   let closed = false;
+  const driverDiagnostics = {
+    console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0,
+  };
+  const driverDiagnosticIds = new Set();
+
+  const syncClosedDriverDiagnostics = async () => {
+    const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
+    const consoleType = platform === 'android' ? 'browser' : 'safariConsole';
+    const networkLogs = await driver.getLogs?.(networkType).catch(() => null);
+    const consoleLogs = await driver.getLogs?.(consoleType).catch(() => null);
+    if (!Array.isArray(networkLogs) || !Array.isArray(consoleLogs)) {
+      throw new Error('mobile_health_diagnostics_unavailable');
+    }
+    accumulateClosedDriverDiagnostics(networkLogs, driverDiagnostics, driverDiagnosticIds);
+    accumulateClosedDriverDiagnostics(consoleLogs, driverDiagnostics, driverDiagnosticIds);
+  };
 
   const deleteDriverSession = async () => {
     if (closed) return true;
@@ -205,6 +277,18 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.execute(installSearchRuntimeProbe, configuredPolicy);
     },
     async activity() { return driver.execute(snapshotSearchRuntimeProbe); },
+    async healthDiagnostics() {
+      await syncClosedDriverDiagnostics();
+      const runtime = await driver.execute(snapshotSearchRuntimeProbe);
+      return {
+        console_errors: driverDiagnostics.console_errors,
+        failed_requests: Math.max(driverDiagnostics.failed_requests,
+          Number(runtime?.network?.failed_requests || 0)),
+        error_responses: driverDiagnostics.error_responses,
+        storage_requests: Math.max(driverDiagnostics.storage_requests,
+          Number(runtime?.network?.storage_requests || 0)),
+      };
+    },
     async verifyAuthenticatedOwner() {
       await driver.execute(installSearchRuntimeProbe, { ...configuredPolicy, production_health: true });
       const receipt = await driver.execute(verifyAuthenticatedOwnerRuntimeProbe);
@@ -300,6 +384,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       const logType = platform === 'android' ? 'performance' : 'safariNetwork';
       const initialLogs = await driver.getLogs(logType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_navigation_network_log_unavailable');
+      accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
       lifecycle.first_card_captured = true;
       lifecycle.failure_stage = 'search_first_card_open';
       await (await driver.$('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]')).click();
@@ -311,6 +396,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.waitUntil(async () => {
         const logs = await driver.getLogs(logType).catch(() => null);
         if (!Array.isArray(logs)) return false;
+        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
         responses.push(...extractSanitizedNavigationResponses(logs));
         return responses.some((item) => item.origin === expectedUrl.origin
           && item.pathname === expectedUrl.pathname && item.status === 200
