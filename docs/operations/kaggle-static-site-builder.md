@@ -88,7 +88,14 @@ The production rail is a durable state machine, not a local process lock:
    points to that exact job. If a newer pending follow-up already exists, the
    generic coalesce supersession rule must not discard the older exact active
    job: its recovery/adoption runs first, then the follow-up consumes the newly
-   accumulated effects.
+   accumulated effects. A deploy can make that terminal handoff intentionally
+   non-adoptable because its repo/source identity differs from the running
+   image. In that case replacement is still forbidden until the exact Kaggle
+   ledger proves a terminal status. The host then releases only resources
+   owned by that run, records a failed `cross_deploy_recovery_rejected` claim,
+   redacts/deletes its handoff inputs, and only afterwards may create a fresh
+   current-image run. A live or terminal-unknown cross-deploy handoff remains
+   deferred under the same single-flight contract.
 6. Review publication remains create-only under a fresh secret prefix. After full
    result/manifest/object verification, the durable internal current-review
    receipt advances atomically. Failed, no-op and artifact-only runs preserve
@@ -284,7 +291,8 @@ contract for this handoff: successful publication, ledger terminal state and
 exact-owner resource release must converge even when terminal callbacks are
 lost or Smart Update briefly holds the SQLite writer lock. The same contract
 also forbids startup catch-up from erasing an active recoverable handoff when
-it rearms an error outbox row.
+it rearms an error outbox row, and requires terminal cross-deploy handoffs to
+be retired by exact run identity before any replacement push.
 
 All operator/bot link-producing paths must use
 `static_site_release.resolve_current_secret_candidate`; historical named
