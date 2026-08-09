@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Accepted VK's production video-story CDN under the same strict HTTPS,
+  public-DNS, no-redirect media boundary, so a valid story returned from
+  `stories.get` is no longer rejected before its opaque media ref is minted.
+
 - Aligned every Private Events MCP media byte/store/TTL/download/dimension
   budget with its documented `PRIVATE_EVENTS_MCP_MEDIA_*` environment name
   and made invalid media-budget values fail closed instead of being silently

@@ -70,6 +70,7 @@ _OWNER_BINDING = re.compile(r"^[a-f0-9]{64}$")
 _CONTENT_DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
 _STORY_UPLOAD_RESULT = re.compile(r"^[^\x00]{8,8192}$", re.DOTALL)
 _VK_CDN_SUFFIXES = (
+    ".okcdn.ru",
     ".userapi.com",
     ".vk.com",
     ".vk.me",

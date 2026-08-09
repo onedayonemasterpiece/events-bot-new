@@ -21,6 +21,13 @@ from private_events_mcp_vk_adapter import (
     VKActor,
     VKWorkspaceAdapter,
     VKWorkspaceError,
+    _validated_vk_https_url,
+)
+from private_events_mcp_vk_transport import (
+    VKMediaTransportError,
+)
+from private_events_mcp_vk_transport import (
+    _validated_url as _validated_vk_transport_url,
 )
 from private_events_mcp_vk_upload import (
     VKAssetMaterialization,
@@ -28,7 +35,6 @@ from private_events_mcp_vk_upload import (
     VKStoryMediaMaterialization,
     VKUploadPurpose,
 )
-
 
 OWNER_BINDING = "a" * 64
 IMAGE_BYTES = b"verified-image-bytes"
@@ -429,6 +435,22 @@ async def test_official_story_shape_visual_read_and_nested_aggregate_stats() -> 
         "shares": 2,
     }
     assert set(stats["basic_metrics"]) == {"views", "reactions", "comments", "shares"}
+
+
+def test_vk_story_media_accepts_provider_observed_okcdn_host_only() -> None:
+    observed = "https://vkvd740.okcdn.ru/?sig=opaque"
+    assert _validated_vk_https_url(observed) == observed
+    assert _validated_vk_transport_url(observed) == ("vkvd740.okcdn.ru", 443)
+
+    for malicious in (
+        "https://vkvd740.okcdn.ru.evil.example/story.mp4",
+        "https://okcdn.ru@evil.example/story.mp4",
+        "http://vkvd740.okcdn.ru/story.mp4",
+    ):
+        with pytest.raises(VKWorkspaceError):
+            _validated_vk_https_url(malicious)
+        with pytest.raises(VKMediaTransportError):
+            _validated_vk_transport_url(malicious)
 
 
 @pytest.mark.asyncio

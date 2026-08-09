@@ -192,6 +192,10 @@ metadata and returns a JPEG thumbnail no larger than 768×768 and 64 KiB as a
 standard MCP image content block. It never returns the provider URL, original
 file, native identifier or local path. Video media may be listed as metadata,
 but visual video retrieval remains unavailable in this image-only release.
+VK story media URLs are accepted only from the fixed provider CDN suffixes
+observed in VK API responses, including VK-hosted `*.okcdn.ru` video assets;
+they still require HTTPS, public DNS, no userinfo and no redirects, and the
+provider URL is never returned to the MCP client.
 Viewer names, profile/user IDs, recent-viewer lists and other viewer identities
 are excluded; the adapters do not mark stories read or call viewer-list methods.
 
