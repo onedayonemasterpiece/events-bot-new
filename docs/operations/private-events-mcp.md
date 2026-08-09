@@ -274,12 +274,14 @@ PRIVATE_EVENTS_MCP_REPOSITORY_SLUG=onedayonemasterpiece/events-bot-new
 PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE=/app/.static-site-repo-sha
 ```
 
-Generate new material after merge from a clean exact-main checkout into a new
-owner-only directory outside Git:
+For a genuinely new installation, generate one stable endpoint/OAuth identity
+after merge from a clean exact-main checkout into a new owner-only directory
+outside Git. The identity-changing mode is deliberately explicit:
 
 ```bash
 umask 077
 python scripts/generate_private_events_mcp_credentials.py \
+  --new-install \
   --base-url https://events-bot-new-wngqia.fly.dev \
   --output-dir /secure/new-private-events-mcp-credentials \
   --enable-chatgpt-social
@@ -288,9 +290,42 @@ python scripts/generate_private_events_mcp_credentials.py \
 Without `--enable-chatgpt-social`, the ChatGPT profile requests only the three
 evidence read scopes. With it, the profile contains the granular social scopes
 and `offline_access`; runtime switches still remain off until explicitly set.
-The generator creates a new `0700` directory and exclusive `0600` files. Its
-stdout contains only a public origin, redacted path and fingerprint. Never reuse
-earlier chat-bundle credentials or print the generated endpoint.
+The generator has no implicit/default generation mode. `--new-install` creates
+a new private path, ChatGPT client ID/secret, Codex client ID, signing key,
+social-approval token and bootstrap token. Do not use it for routine bootstrap
+rotation: changing those stable values can invalidate an installed connector,
+refresh-token/signing state and saved endpoint configuration. Use a complete
+new identity only for an initial install or an explicit full-identity response
+such as a compromised private path.
+
+After the first successful browser connection, rotate only the one-time
+bootstrap operator token from the **full** credentials JSON produced for the
+installed identity:
+
+```bash
+umask 077
+python scripts/generate_private_events_mcp_credentials.py \
+  --rotate-bootstrap-only \
+  /secure/new-private-events-mcp-credentials/chatgpt-private-app-credentials.json \
+  --output-dir /secure/private-events-mcp-bootstrap-rotation-20260809
+```
+
+This mode changes exactly three consistent copies of the same value:
+`deploy.PRIVATE_EVENTS_MCP_OPERATOR_TOKEN`,
+`chatgpt.bootstrap_operator_token`, and `codex.bootstrap_operator_token`.
+It preserves every URL/path, OAuth client value, signing/state path, scope,
+social-approval value and all unknown forward-compatible fields value-for-value
+at the JSON data level. It refuses incomplete/inconsistent full bundles,
+source/output overlap, symlinked source or output paths, and mode-changing
+options such as `--base-url` or `--enable-chatgpt-social`.
+
+Both modes require a fresh output path under an existing non-symlink parent.
+The generator creates the output directory as `0700` and every artifact with
+`O_EXCL`/no-follow semantics and exact `0600` permissions. Source credentials
+must remain owner-only and outside Git. Stdout contains only artifact paths, a
+public origin, redacted path, mode and endpoint fingerprints; it never contains
+the private endpoint, bootstrap token, client secret, signing key, private path
+or social-approval token.
 
 The legacy `PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON` policy applies only to the
 narrow compatibility adapters when the universal workspace is off. It is not a
