@@ -2,12 +2,14 @@
 set -euo pipefail
 
 appium_pid=''
+export E2E_APPIUM_LOG_PATH="${RUNNER_TEMP}/appium-search-health-android.log"
+export E2E_APPIUM_STATUS_READY=0
 cleanup_appium() {
   if [[ -n "${appium_pid:-}" ]]; then
     kill "$appium_pid" || true
     wait "$appium_pid" || true
   fi
-  rm -f "${RUNNER_TEMP}/appium-search-health-android.log" \
+  rm -f "$E2E_APPIUM_LOG_PATH" \
     "${RUNNER_TEMP}/appium-search-health-log-filters.json"
 }
 trap cleanup_appium EXIT
@@ -20,7 +22,7 @@ npx appium --base-path /wd/hub --port 4723 \
   --log-level error --log-no-colors \
   --log-filters "${RUNNER_TEMP}/appium-search-health-log-filters.json" \
   --allow-insecure uiautomator2:chromedriver_autodownload \
-  > "${RUNNER_TEMP}/appium-search-health-android.log" 2>&1 &
+  > "$E2E_APPIUM_LOG_PATH" 2>&1 &
 appium_pid=$!
 ready=0
 for _ in $(seq 1 60); do
@@ -31,4 +33,5 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 test "$ready" = 1
+export E2E_APPIUM_STATUS_READY=1
 node e2e/search/production-health-run.mjs

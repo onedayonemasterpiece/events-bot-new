@@ -30,6 +30,19 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 live run `31331701360` proved the merged browser correction:
+  browser finished `HEALTHY/PASS` on one real vector-only POST (HTTP 200), five
+  response IDs exactly matching five rendered cards, zero LLM/pagination, an
+  opened same-origin event route and 9,217 observed Supabase bytes. Android now
+  correctly entered the checked-in Bash wrapper, booted the API-35 emulator and
+  started Appium, but stopped in side-effect-free mobile infrastructure before
+  broker/Auth/Search as `UNKNOWN_ANDROID_INFRA`. The fresh Chrome/WebView
+  context was previously sampled only once and session-start diagnostics were
+  discarded with the raw Appium log. Preflight now bounded-waits for both
+  contexts and publishes only a closed Appium/Chrome startup classification.
+  This run is a valid browser product proof but not the required Android
+  terminal proof; the incident remains open.
+
 - 2026-08-09 follow-up live run `31331011185` confirmed the first Android shell
   fix was incomplete: `android-emulator-runner` invokes each line separately
   with `/bin/sh -c`, so an inline Bash heredoc did not group the script. The

@@ -316,6 +316,9 @@ export async function runProductionHealthCell(options = {}) {
       targetSuperseded = supersession.target_superseded === true;
     }
   } catch (error) {
+    if (phase === 'preflight' && error?.searchReceipt?.schema_version === 'mobile-preflight-failure-v1') {
+      preflight = error.searchReceipt;
+    }
     if (isAdapterInfrastructureFailure(error)) failureClass = infraFailure(platform);
     else if (phase === 'preflight') failureClass = infraFailure(platform);
     else if (phase === 'issuance') failureClass = PRODUCTION_HEALTH_RESULTS.UNKNOWN_AUTH_BROKER;
@@ -664,6 +667,7 @@ export async function runProductionHealthCli(env = process.env) {
     target_superseded: result.target.target_superseded,
     physical_post_count: result.search.physical_post_count,
     observed_supabase_bytes: result.supabase_observed_bytes.total_bytes,
+    preflight_failure_class: result.preflight.failure_class || result.preflight.error_class || null,
     redaction_status: result.redaction.status,
   })}\n`);
   return result.execution_status === 'PASS' ? 0 : 1;

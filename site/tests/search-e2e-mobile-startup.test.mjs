@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { buildAppiumSessionFailureReceipt,
+import { buildAppiumSessionFailureReceipt, summarizeAndroidAppiumSessionStartup,
   summarizeAppiumSessionStartup } from '../e2e/mobile-web/appium-startup-receipt.mjs';
 import { isSafeMobilePreflightRetryReceipt } from '../e2e/mobile-web/appium-preflight.mjs';
 import { closedMobileStartupRetryReceipt,
@@ -73,6 +73,33 @@ test('attempt-one session creation failure has the explicit zero-side-effect ret
   assert.equal(receipt.side_effects.webdriver_client_session_created, false);
   assert.equal(isSafeMobilePreflightRetryReceipt(receipt), true);
   assert.doesNotMatch(JSON.stringify(receipt), /raw endpoint/u);
+});
+
+test('Android Appium log is reduced to closed Chrome startup diagnostics', async () => {
+  const path = join(await mkdtemp(join(tmpdir(), 'search-android-appium-')), 'appium.log');
+  await writeFile(path, [
+    'private target https://example.test/_review/secret/poisk/',
+    'No Chromedriver found that can automate Chrome 140',
+  ].join('\n'));
+  const receipt = await buildAppiumSessionFailureReceipt({
+    error: new Error('raw webdriver response'), platform: 'android', logPath: path,
+    startedAt: 1_000, endedAt: 2_000, appiumServerReady: true, startupAttempt: 1,
+  });
+  assert.equal(receipt.log_inspected, true);
+  assert.equal(receipt.chromedriver_discovery_attempted, true);
+  assert.equal(receipt.chromedriver_missing, true);
+  assert.equal(receipt.chromedriver_download_failed, false);
+  assert.doesNotMatch(JSON.stringify(receipt), /private target|example\.test|Chrome 140|raw webdriver/u);
+  assert.deepEqual(summarizeAndroidAppiumSessionStartup('failed to connect to socket localabstract:chrome_devtools_remote'), {
+    log_inspected: true,
+    log_truncated: false,
+    chromedriver_discovery_attempted: false,
+    chromedriver_missing: false,
+    chromedriver_download_failed: false,
+    chrome_session_failed: false,
+    web_context_failed: true,
+    uiautomator_server_failed: false,
+  });
 });
 
 test('only an iOS session-creation failure before callback and Search traffic is retryable', () => {

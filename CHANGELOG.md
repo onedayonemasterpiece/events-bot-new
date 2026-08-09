@@ -37,6 +37,14 @@
 
 ### Fixed
 
+- Fixed the remaining Android production-health preflight ambiguity exposed by
+  live run `31331701360`: a fresh emulator may publish Chrome's DevTools/WebView
+  context after the WebDriver session is ready, so the side-effect-free
+  preflight now bounded-waits for native + web contexts instead of sampling
+  once. Session-create failures retain only a closed Appium/Chrome diagnostic
+  receipt; private URLs, capabilities, raw errors and server logs remain
+  excluded and the run still stops before broker/Auth/Search.
+
 - Fixed two follow-ups exposed by live Search health run `31331011185`.
   `android-emulator-runner` executes every multiline `script` line separately
   through POSIX `sh`, so Android now calls one checked-in strict-Bash wrapper
