@@ -25,6 +25,14 @@
   Пока provider не публикует отдельный non-secret Edge deploy SHA,
   `search_backend_revision` — точное ожидаемое значение response
   `search_contract_version`; выдумывать byte SHA запрещено.
+- Изменения `supabase/functions/event-search/` не доставляются Fly deploy. Их
+  governed release выполняется отдельно из того же clean exact `origin/main`
+  через pinned local Supabase CLI и project ref:
+  `supabase functions deploy event-search --project-ref <ref> --no-verify-jwt --use-api`.
+  После deploy обязательны side-effect-free `HEAD /functions/v1/event-search`
+  с publishable `apikey`, exact `x-search-contract-version` и нулём Auth/Search
+  POST. Только затем deploy/health marker может ссылаться на эту backend
+  revision. Edge failure не компенсируется повторным Fly deploy.
 - Перед активацией Search production-health broker policy должна одновременно
   разрешать exact main refs legacy/health/qualification workflows и event
   classes `workflow_dispatch,schedule,repository_dispatch`. После двух manual

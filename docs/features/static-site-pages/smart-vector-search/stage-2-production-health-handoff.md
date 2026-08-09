@@ -60,7 +60,9 @@ pagination или полный scheduled mobile/release matrix в production-hea
 
 Перед live остаются только production gates: применить broker migration,
 добавить новые workflow refs и exact events
-`workflow_dispatch,schedule,repository_dispatch` в broker allowlist, deploy exact merged main,
+`workflow_dispatch,schedule,repository_dispatch` в broker allowlist, отдельно
+deploy `supabase/functions/event-search` из exact merged main и подтвердить его
+side-effect-free HEAD receipt, затем deploy Fly exact merged main,
 выполнить два manual workflows и затем включить automatic variable.
 
 ## Production environment/secrets

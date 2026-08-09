@@ -1070,7 +1070,9 @@ replay (сверх in-process coalescing),
 explicit deploy marker, две schedule, manual profiles и typed reporter.
 Automatic schedule/dispatch остаются default-off. Перед первым live run
 migration broker claims должна быть
-применена, Fly broker — задеплоен из exact `origin/main`, а новый workflow ref —
+применена, `supabase/functions/event-search` отдельно задеплоен из exact
+`origin/main` и подтверждён HEAD receipt, Fly broker — задеплоен из того же
+exact `origin/main`, а новый workflow ref —
 добавлен в broker allowlist вместе с exact event allowlist
 `workflow_dispatch,schedule,repository_dispatch`. Затем допускаются максимум
 два полных workflow:
