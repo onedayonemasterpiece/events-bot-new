@@ -293,6 +293,10 @@ def _selected_row(row: Mapping[str, Any], errors: list[dict[str, str]]) -> dict[
     if path and (not path.startswith("/") or path.startswith("//") or "://" in path):
         _add(errors, "feed.absolute_url", "Selected rows may persist only same-origin relative paths.")
         path = ""
+    if not title:
+        _add(errors, "feed.title", "Every selected item needs a title.")
+    if not path:
+        _add(errors, "feed.path", "Every selected item needs a same-origin relative path.")
     raw_families = row.get("families")
     family = _text(
         _value(
@@ -345,8 +349,11 @@ def _normalize_feed(
         raw_selected = []
     if len(raw_selected) > MAX_SELECTED:
         _add(errors, "feed.maximum", "Unusual manifest exceeds the absolute 30-card limit.")
-    selected = [_selected_row(row, errors) for row in _rows(raw_selected[:MAX_SELECTED])]
-    if len(selected) != len(raw_selected[:MAX_SELECTED]):
+    if len(raw_selected) > target:
+        _add(errors, "feed.above_target", "Unusual manifest exceeds the configured target count.")
+    bounded_selected = raw_selected[: min(MAX_SELECTED, target)]
+    selected = [_selected_row(row, errors) for row in _rows(bounded_selected)]
+    if len(selected) != len(bounded_selected):
         _add(errors, "feed.item_shape", "Every selected item must be an object.")
     event_ids = [row["event_id"] for row in selected]
     concept_ids = [row["concept_id"] for row in selected]
@@ -681,7 +688,7 @@ def evaluate_health(
             "migration": migration,
             "last_good_fallback": fallback,
             "builder_published": builder.get("published", False),
-            "expected": accepted_quality and delivery not in {"blocked", "disabled", "shadow", "failed", "not_approved"} and feed["selected_count"] >= minimum_count,
+            "expected": not errors and accepted_quality and delivery not in {"blocked", "disabled", "shadow", "failed", "not_approved"} and feed["selected_count"] >= minimum_count,
             "indexable": unusual_manifest.get("indexable") is True,
             "canonical_path": "/neobychnoe/",
         },
