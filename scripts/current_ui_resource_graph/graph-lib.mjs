@@ -9,7 +9,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { extractAstroStateFacts, extractStateAwareFacts, inlineScriptImports } from './v1/source-state.mjs';
-import { captureComponentScopedEvidence } from './v1/evidence.mjs';
+import { captureComponentScopedEvidence, capturePlaywrightStablePair } from './v1/evidence.mjs';
 
 export const SCHEMA = 'current_ui_resource_graph_v0';
 const MAX_SCREENSHOT_BYTES = 192 * 1024;
@@ -1161,6 +1161,8 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
   const requireFromSite = createRequire(join(resolve(siteRoot), 'package.json'));
   const { chromium } = requireFromSite('playwright');
   const sharp = requireFromSite('sharp');
+  const playwrightCoreBundlePath = requireFromSite.resolve('playwright-core/lib/utilsBundle').replace(/utilsBundle\.js$/u, 'coreBundle.js');
+  const imageComparator = requireFromSite(playwrightCoreBundlePath).utils.getComparator('image/jpeg');
   const files = manifestHtmlFiles(manifest);
   if (files.length !== runtimeObservations.length) throw new Error('Browser selection cannot map runtime inventory to manifest');
   const byFamily = new Map();
@@ -1272,8 +1274,12 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         const filename = `${safeFamily}-${selectedPage.observation.route_hash.slice(0, 12)}-${viewport.width}x${viewport.height}.jpg`;
         const path = join(screenshotDir, filename);
         const screenshotOptions = { type: 'jpeg', quality: 65, fullPage: false, animations: 'disabled', caret: 'hide', scale: 'css' };
-        const firstScreenshot = await page.screenshot(screenshotOptions);
-        const stableScreenshot = await page.screenshot(screenshotOptions);
+        const stablePair = await capturePlaywrightStablePair({
+          capture: () => page.screenshot(screenshotOptions), comparator: imageComparator,
+          label: `Browser screenshot ${selectedPage.observation.route_hash.slice(0, 12)}`,
+        });
+        const firstScreenshot = stablePair.first;
+        const stableScreenshot = stablePair.accepted;
         const differenceHash = async (bytes) => {
           const { data } = await sharp(bytes).greyscale().resize(9, 8, { fit: 'fill', kernel: 'lanczos3' }).raw().toBuffer({ resolveWithObject: true });
           let bits = '';
@@ -1282,7 +1288,6 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         };
         const firstPerceptualDhash = await differenceHash(firstScreenshot);
         const perceptualDhash = await differenceHash(stableScreenshot);
-        if (firstPerceptualDhash !== perceptualDhash) throw new Error(`Browser pixels failed perceptual two-frame stability: ${selectedPage.observation.route_hash.slice(0, 12)}`);
         writeFileSync(path, stableScreenshot);
         const size = statSync(path).size;
         if (size > MAX_SCREENSHOT_BYTES) throw new Error(`Screenshot exceeds deterministic byte reservation: ${filename}`);
@@ -1291,10 +1296,11 @@ export async function captureBrowserEvidence({ candidateBase, manifest, runtimeO
         screenshots.push({ id: `screenshot.${sha256(`${selectedPage.observation.route_hash}\0${viewport.width}`).slice(0, 16)}`, page_family: selectedPage.pageFamily, selection: selectedPage.selection, route_hash: selectedPage.observation.route_hash, screenshot_path: relativePath, viewport,
           first_sha256: sha256(firstScreenshot), screenshot_sha256: sha256(stableScreenshot), perceptual_dhash_64: perceptualDhash,
           first_perceptual_dhash_64: firstPerceptualDhash, pixel_exact_stable: firstScreenshot.equals(stableScreenshot),
-          pixel_stability: 'two_consecutive_equal_perceptual_dhash_64', raw_raster_role: 'noncanonical_visual_evidence', source: 'exact_candidate_browser' });
+          screenshot_stability_attempts: stablePair.attempts, screenshot_comparator: stablePair.comparator,
+          pixel_stability: 'playwright_pixelmatch_consecutive_frames', raw_raster_role: 'noncanonical_visual_evidence', source: 'exact_candidate_browser' });
         componentEvidence.push(...await captureComponentScopedEvidence({
           page, pageFamily: selectedPage.pageFamily, routeHash: selectedPage.observation.route_hash,
-          viewport, outputDir, budget, sharp, plane: 'latest_checked_kaggle_candidate',
+          viewport, outputDir, budget, sharp, imageComparator, plane: 'latest_checked_kaggle_candidate',
         }));
         const uiFamilies = families.filter((item) => item.runtime_observations.includes(selectedPage.observation.id)).map((item) => item.id).sort();
         viewportEvidence.push({ page_family: selectedPage.pageFamily, ui_families: uiFamilies, route_hash: selectedPage.observation.route_hash, viewport, structure: computed.structure_hash, computed, screenshot_path: relativePath, selection: selectedPage.selection });

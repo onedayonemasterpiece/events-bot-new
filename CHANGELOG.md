@@ -128,11 +128,14 @@
 ### Fixed
 
 - Fixed browser evidence stability to follow the declared Playwright visual
-  contract: sequential page/generic-component frames must have equal 64-bit
-  perceptual dHash while both raw SHA-256 values and exact-equality status are
-  retained. Controlled isolated PNG specimens remain byte-stable. This avoids
-  rejecting visually stable antialiased JPEG frames without weakening human
-  review or perceptual fail-closed checks.
+  contract: capture now retries a bounded sequence until two consecutive
+  frames match the pinned Playwright `pixelmatch` YIQ threshold instead of
+  requiring equality of a coarse dHash. Raw SHA-256 values, diagnostic dHashes,
+  attempt counts and exact-equality status remain retained; controlled isolated
+  PNG specimens remain byte-stable. Generic evidence also stops treating the
+  full `[data-desktop-clean-event]` page surface as a component root. This
+  avoids rejecting stable CTA lab pages without weakening human review or the
+  perceptual fail-closed gate.
 
 - Fixed the production candidate's legacy preview gate after the dated real
   `Море внутри` rail canary expired. The gate still checks its rendered row

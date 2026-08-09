@@ -5,8 +5,30 @@ import { join } from 'node:path';
 export const COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION = 1024 * 1024;
 export const COMPONENT_EVIDENCE_LIMIT_PER_PAGE = 3;
 export const COMPONENT_BREAKPOINT_CONTEXTS = Object.freeze([390, 420, 540, 700, 720, 1728]);
+export const PLAYWRIGHT_SCREENSHOT_COMPARISON = Object.freeze({
+  comparator: 'pixelmatch', threshold: 0.2, maxDiffPixels: 0, maximumAttempts: 8,
+});
 
 function sha(value) { return createHash('sha256').update(value).digest('hex'); }
+
+export async function capturePlaywrightStablePair({ capture, comparator, label, maximumAttempts = PLAYWRIGHT_SCREENSHOT_COMPARISON.maximumAttempts }) {
+  if (typeof capture !== 'function' || typeof comparator !== 'function') throw new Error('Stable screenshot capture requires a capture function and Playwright comparator');
+  let previous = await capture();
+  const attemptedSha256 = [sha(previous)];
+  let lastDifference = null;
+  for (let attempt = 2; attempt <= maximumAttempts; attempt += 1) {
+    const current = await capture();
+    attemptedSha256.push(sha(current));
+    lastDifference = comparator(previous, current, PLAYWRIGHT_SCREENSHOT_COMPARISON);
+    if (!lastDifference) return {
+      first: previous, accepted: current, attempts: attempt, attempted_sha256: attemptedSha256,
+      comparator: PLAYWRIGHT_SCREENSHOT_COMPARISON,
+    };
+    previous = current;
+  }
+  const boundedDifference = String(lastDifference?.errorMessage || 'visual difference remained').slice(0, 240);
+  throw new Error(`${label} failed Playwright perceptual consecutive-frame stability after ${maximumAttempts} attempts: ${boundedDifference}`);
+}
 
 export function sanitizeEvidenceString(value, maxLength = 160) {
   if (value === null || value === undefined) return null;
@@ -32,15 +54,16 @@ export function assertSafeComponentEvidence(record) {
 }
 
 export async function captureComponentScopedEvidence({
-  page, pageFamily, routeHash, viewport, outputDir, budget, sharp, plane = 'latest_checked_kaggle_candidate',
+  page, pageFamily, routeHash, viewport, outputDir, budget, sharp, imageComparator, plane = 'latest_checked_kaggle_candidate',
 }) {
   if (typeof sharp !== 'function') throw new Error('Component evidence requires the pinned image decoder');
+  if (typeof imageComparator !== 'function') throw new Error('Component evidence requires the pinned Playwright image comparator');
   const componentSelectors = [
     '[data-event-transport-schedule]', '[data-event-bus-schedule]', '[data-kaup-transport]',
     '.event-token-layout[data-medallion-layout]', '[data-focus-egg-artifact]', '[data-artifact-collection]',
     '[data-artifact-collection-unavailable]', '[data-amber-artifact]', '[data-desktop-action-panel]',
     '[data-media-frame]', '[data-authorized-event-search]', '[data-favorites-surface]',
-    '.event-card', '.listing-event-card', '[data-mobile-listing-row]', '[data-desktop-clean-event]',
+    '.event-card', '.listing-event-card', '[data-mobile-listing-row]',
   ];
   const selector = componentSelectors.join(',');
   const candidates = await page.locator(selector).evaluateAll((nodes) => nodes.filter((node) => {
@@ -98,8 +121,12 @@ export async function captureComponentScopedEvidence({
     const locator = page.locator(selector).nth(candidate.matched_index);
     const filename = `component-${routeHash.slice(0, 12)}-${viewport.width}x${viewport.height}-${order}.jpg`;
     const path = join(dir, filename);
-    const buffer = await locator.screenshot({ type: 'jpeg', quality: 60, animations: 'disabled', caret: 'hide', scale: 'css' });
-    const confirm = await locator.screenshot({ type: 'jpeg', quality: 60, animations: 'disabled', caret: 'hide', scale: 'css' });
+    const screenshotOptions = { type: 'jpeg', quality: 60, animations: 'disabled', caret: 'hide', scale: 'css' };
+    const stablePair = await capturePlaywrightStablePair({
+      capture: () => locator.screenshot(screenshotOptions), comparator: imageComparator,
+      label: `Component screenshot ${filename}`,
+    });
+    const buffer = stablePair.first; const confirm = stablePair.accepted;
     const differenceHash = async (bytes) => {
       const { data } = await sharp(bytes).greyscale().resize(9, 8, { fit: 'fill', kernel: 'lanczos3' }).raw().toBuffer({ resolveWithObject: true });
       let bits = '';
@@ -107,9 +134,8 @@ export async function captureComponentScopedEvidence({
       return BigInt(`0b${bits}`).toString(16).padStart(16, '0');
     };
     const firstDhash = await differenceHash(buffer); const confirmDhash = await differenceHash(confirm);
-    if (firstDhash !== confirmDhash) throw new Error(`Component screenshot failed perceptual two-frame stability contract: ${filename}`);
-    if (buffer.length > COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION) throw new Error(`Component screenshot exceeds deterministic byte reservation: ${filename}`);
-    writeFileSync(path, buffer); budget.claim(buffer.length, `component-screenshots/${filename}`);
+    if (Math.max(buffer.length, confirm.length) > COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION) throw new Error(`Component screenshot exceeds deterministic byte reservation: ${filename}`);
+    writeFileSync(path, confirm); budget.claim(confirm.length, `component-screenshots/${filename}`);
     const clean = JSON.parse(JSON.stringify(candidate, (_key, value) => typeof value === 'string' ? sanitizeEvidenceString(value) : value));
     const record = {
       id: `component-evidence.${sha(`${routeHash}\0${viewport.width}\0${order}`).slice(0, 16)}`,
@@ -119,9 +145,10 @@ export async function captureComponentScopedEvidence({
       dom_summary: { attributes: clean.attributes, redacted_attribute_names: clean.redacted_attribute_names, child_count_not_retained: true, full_html_retained: false },
       geometry: clean.geometry, computed: clean.computed, css_variables: clean.css_variables,
       accessibility: clean.accessibility, font_status: clean.font_status, state: clean.state,
-      screenshot_path: `component-screenshots/${filename}`, screenshot_bytes: statSync(path).size, screenshot_sha256: sha(buffer),
-      screenshot_confirm_sha256: sha(confirm), screenshot_perceptual_dhash_64: firstDhash,
-      screenshot_confirm_perceptual_dhash_64: confirmDhash, screenshot_exact_stable: buffer.equals(confirm), screenshot_perceptually_stable: true,
+      screenshot_path: `component-screenshots/${filename}`, screenshot_bytes: statSync(path).size, screenshot_sha256: sha(confirm),
+      screenshot_previous_sha256: sha(buffer), screenshot_perceptual_dhash_64: confirmDhash,
+      screenshot_previous_perceptual_dhash_64: firstDhash, screenshot_exact_stable: buffer.equals(confirm), screenshot_perceptually_stable: true,
+      screenshot_stability_attempts: stablePair.attempts, screenshot_comparator: stablePair.comparator,
       component_binding: clean.binding, binding_status: clean.binding ? 'exact-runtime-marker-to-source-binding' : 'requires-source-or-specimen-marker-reconciliation',
       override_source: 'computed-cascade-observed-source-unresolved',
       proof_label: plane === 'current_root_prelaunch' ? 'public-root-browser-element' : 'exact-candidate-browser-element',
