@@ -86,18 +86,20 @@ def test_corrected_packet_registry_has_truthful_semantic_coverage():
     }
 
     assert payload['rail']['execution_status'] == 'explicit-blocker'
-    assert payload['rail']['blocks_ready'] is True
-    assert payload['rail']['runtime_probe']['focusable'] is True
-    assert payload['rail']['runtime_probe']['observed_scroll_left'] == 0
+    assert payload['rail']['blocks_ready'] is False
+    assert payload['rail']['home_end_required'] is False
+    assert payload['rail']['semantic_contract'] == 'ordinary-focusable-horizontal-content-list-not-composite'
+    assert payload['rail']['superseded_by'] == 'rail-keyboard.event-6767-390x844'
 
     assert payload['sticky']['visible_root_required'] is True
     assert all(step['expect'].get('root_geometry') == 'nonzero' for step in payload['sticky']['steps'])
 
     blocker = payload['breakpointBlocker']
     assert blocker['execution_status'] == 'explicit-blocker'
-    assert blocker['blocks_ready'] is True
+    assert blocker['blocks_ready'] is False
     assert blocker['breakpoint_probe_ids'] == payload['breakpointIds']
-    assert blocker['blocked_states'] == ['per-probe-runtime-transition-unobserved']
+    assert blocker['blocked_states'] == []
+    assert blocker['superseded_by'] == 'breakpoint-probe-observations.jsonl'
 
 
 def test_capture_is_bounded_and_emits_per_plan_progress():

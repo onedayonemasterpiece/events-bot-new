@@ -743,3 +743,76 @@ native `End`/`Home` behavior, and the complete 293-row breakpoint/container
 matrix lacks one truthful runtime probe per row. The separate CTA anatomies,
 transport treatments and 25 reviewed visual conflicts remain AS-IS evidence;
 no merge, normalization or winner is selected.
+
+### Behavioral v1.1 terminal closure
+
+The follow-up closure does not reinterpret the earlier reviewed artifact. It
+uses its exact manifest SHA-256
+`c6c62cee8bea4e9440ff85bc75c46bc85cf5abf3e2fdcd4c7357c6ece916436f`
+as an immutable append-only base, rebuilds the exact `ef7aa62` source in a
+disposable harness, and executes every source-derived breakpoint/container
+probe in Chromium. The canonical evidence is
+`breakpoint-probe-observations.jsonl`; every one of its 293 IDs has exactly one
+terminal status: `PASS`, `MISMATCH`, or `UNREACHABLE_WITH_REASON`. A mismatch or
+reasoned unreachable state is evidence completion, not a UI acceptance or a
+silent PASS. Only a missing/nonterminal ID may keep the evidence gate open.
+
+The source parser preserves the original matrix identities and exact at-rule
+offsets/fingerprints. The runtime record binds source rule and threshold,
+requested and actual viewport/container dimensions, exact CSSOM evidence,
+consumer/root, expected and actual branch, marker, bounding boxes, computed
+styles, overflow/clipping, and focus/visibility where applicable. Numeric
+features run at threshold−1, threshold and threshold+1; nonnumeric motion and
+pointer/hover queries retain explicit matching/control environments. Marker
+evaluation alone cannot produce PASS: a real exact-source consumer, affected
+selector and cascade reconciliation are required. Named container probes use
+the measured content box, name and type. The local two-run gate closes all
+293 IDs across 32 source paths (272 media / 21 container; 273 numeric / 20
+nonnumeric) with 236 PASS, 39 MISMATCH and 18
+UNREACHABLE_WITH_REASON. The semantic terminal digest is identical across the
+two runs; PNG bytes and volatile aggregate selector counts are explicitly not
+part of that semantic equality.
+
+Raster generation stays bounded. It selects only unique visible mismatch or
+ambiguous signatures and never creates one raster per source probe. Every new
+raster is indexed by path/bytes/SHA-256 and must be opened individually at
+full resolution before it may enter `manual-visual-review-ledger.jsonl`. The
+materializer also updates `breakpoint-and-container-matrix.jsonl`,
+`behavior-specimen-observations.jsonl`, `automation-evidence-ledger.jsonl`,
+`visual-review-ledger.jsonl`, `unresolved.jsonl`, the audit, manifest, receipt,
+and durable artifact index. Perceptual comparison and dHash remain diagnostic;
+neither replaces human review.
+
+The exact rail is a normal horizontally scrollable content list:
+`div.rail-window[tabindex="0"]` has no composite role, roving tabindex, or
+`aria-activedescendant`; its link and Like button are ordinary descendants.
+The canonical mobile-shell contract specifies physical swipe/edge behavior but
+does not require Home/End. The closure therefore records native Home/End no-op
+as a non-required enhancement rather than an evidence blocker. A fresh
+keyboard-only packet uses Tab/Shift+Tab without programmatic focus, captures
+visible focus on the rail and Like action, toggles Like with Space/Enter, and
+observes ArrowLeft/ArrowRight at start, middle, end and held boundaries. It
+also retains two current product conformance gaps without repairing them: exact
+Chromium skips the `display:contents` event link during sequential traversal,
+and `not_interested` has only a hidden `tabindex=-1` control reached from the
+pointer/touch gesture path. Once captured, those are nonblocking implementation
+findings rather than evidence gaps.
+
+Research synthesis R-07 was already published by
+[lovekgd-design-system PR 28](https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/28)
+on main commit
+[`f9cb3c931d6f2200f0a4221f5130b3a6299f7005`](https://github.com/onedayonemasterpiece/lovekgd-design-system/commit/f9cb3c931d6f2200f0a4221f5130b3a6299f7005).
+The direct canonical path is
+`docs/research/ui-normalization-2026-08/07-cross-research-synthesis-and-adoption.md`
+(SHA-256
+`cc1997ec4ab024a6fcba3e9b6d5c7632e0a367ed15b80ea2347e4f5bac01d944`),
+with its direct R-07 entry in
+`docs/research/ui-normalization-2026-08/README.md`. This closure records that
+publication identity only; it does not rewrite R-01…R-07.
+
+The final closure receipt may say
+`READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after the Actions capture,
+all newly indexed full-resolution reviews, permanent Release provenance, and
+independent audit pass. This status still does not authorize fixing the rail,
+defragmenting components, choosing experiment winners, creating tokens,
+changing Penpot, or starting normalization automatically.

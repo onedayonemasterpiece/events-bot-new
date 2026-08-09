@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Added a fail-closed Behavioral Decoder v1.1 closure pipeline that executes
+  all 293 breakpoint/container probes in exact-source Chromium, records only
+  `PASS`, `MISMATCH`, or `UNREACHABLE_WITH_REASON`, selects bounded unique
+  mismatch rasters, requires file-level full-resolution review for every new
+  raster, and binds terminal observations, automation/manual ledgers,
+  manifests, receipts, durable artifact provenance, and independent audit.
+- Reclassified mobile listing rail Home/End from a circular evidence blocker
+  to a non-required, nonblocking observation for the current ordinary
+  focusable overflow list. The exact keyboard packet now records sequential
+  focus, visible rail/Like focus, Space/Enter Like activation, Arrow boundary
+  states, the skipped `display:contents` event link, and the drag-only
+  `not_interested` conformance gap without changing production UI.
 - Fixed Current UI Behavioral Decoder v1.1 reviewed materialization so exact readiness blockers are emitted once even when the source supplement already contains the same blocker record.
 
 ### Fixed

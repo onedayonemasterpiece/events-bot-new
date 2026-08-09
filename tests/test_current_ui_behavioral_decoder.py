@@ -135,7 +135,7 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
     plans = [json.loads(line) for line in (final / 'behavior-specimen-plan.jsonl').read_text().splitlines()]
     assert sum(row['capture_status'] == 'captured-not-reviewed' for row in plans) == 57
     assert sum(row['capture_status'] == 'explicit-blocker' for row in plans) == 10
-    assert sum(row.get('blocks_ready') is True for row in plans) == 2
+    assert sum(row.get('blocks_ready') is True for row in plans) == 0
     reviews = [json.loads(line) for line in (final / 'visual-review-ledger.jsonl').read_text().splitlines()]
     assert len(reviews) == 124
     assert all(row['review_status'] == 'pending-human-full-resolution-review' for row in reviews)
@@ -154,9 +154,9 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
     )
     assert all(row['runtime_evidence_status'] != 'coverage-missing' for row in dynamic_rows)
 
-    # A complete file-level review is necessary but cannot erase exact
-    # blocks_ready findings.  The materializer must remain fail-closed without
-    # demanding READY-only Actions/Release/audit metadata.
+    # A complete legacy file-level review is necessary but cannot substitute
+    # the 293-probe and rail closure. The legacy materializer remains
+    # fail-closed without demanding READY-only Actions/Release/audit metadata.
     observations = [
         json.loads(line)
         for line in (capture / 'behavior-specimen-observations.jsonl').read_text().splitlines()
@@ -201,18 +201,11 @@ def test_capture_materializer_stays_incomplete_before_full_resolution_review(tmp
         for row in reviewed_unresolved
         if row.get('blocks_ready') is True
     }
-    assert {
-        'behavior-packet.rail-keyboard-home-end',
-        'behavior-packet.breakpoint-container-runtime-coverage-gap',
-    } <= blocking_plan_ids
+    assert blocking_plan_ids == {None}
     assert len(reviewed_receipt['blockers']) == len(set(reviewed_receipt['blockers']))
-    assert [
-        blocker for blocker in reviewed_receipt['blockers']
-        if blocker.startswith('unresolved.behavior-blocker.')
-    ] == [
-        'unresolved.behavior-blocker.864db42986f38970b1',
-        'unresolved.behavior-blocker.fdec1149e1f0d6b359',
-    ]
+    assert 'unresolved.behavioral-terminal-closure-pending' in reviewed_receipt['blockers']
+    assert 'unresolved.behavior-blocker.864db42986f38970b1' not in reviewed_receipt['blockers']
+    assert 'unresolved.behavior-blocker.fdec1149e1f0d6b359' not in reviewed_receipt['blockers']
     assert len({row['id'] for row in reviewed_unresolved}) == len(reviewed_unresolved)
     assert reviewed_manifest['human_visual_review']['completed'] is True
     assert reviewed_manifest['human_visual_review']['reviewed_raster_count'] == 124
@@ -252,7 +245,11 @@ def test_behavior_capture_workflow_is_fixed_identity_and_review_pending():
     source = workflow_path.read_text()
     assert 'ef7aa62e45c60f7a12da6160f490719c0721ec03' in source
     assert 'e77fc2457fadfdffb46ed2d90304ebb91e89a715' in source
+    assert 'c6c62cee8bea4e9440ff85bc75c46bc85cf5abf3e2fdcd4c7357c6ece916436f' in source
     assert 'CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW' in source
+    assert '.counts.terminal_probes == 293' in source
+    assert '.counts.new_rasters == 10' in source
+    assert 'closure-validate.mjs' in source
     assert 'retention-days: 30' in source
     assert 'READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS' not in source
     assert 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' in source
