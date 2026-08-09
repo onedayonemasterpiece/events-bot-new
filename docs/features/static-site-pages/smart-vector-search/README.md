@@ -1237,3 +1237,15 @@ XCUITest завершил Search-only async `getUser`/owner-RLS callback чер�
 `UNKNOWN_IOS_INFRA`, а не `BROKEN_AUTH_INTEGRATION`. В этом run iOS сделал ноль
 Search POST, browser остался `HEALTHY/PASS`; следующий merged-SHA iOS proof всё
 ещё обязателен.
+
+Merged-main run
+[`31341154421`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31341154421)
+подтвердил исправление timeout: iOS завершил callback, `getUser` и owner-RLS.
+Затем обнаружился лишний переход: callback уже открыл exact clean Search URL,
+но journey повторно вызвал `driver.url` с тем же адресом. XCUITest оставил
+документ на месте, однако не создал второй `safariNetwork` document response,
+поэтому HTTP receipt истёк до Search (`physical_post_count=0`). Теперь adapter
+переиспользует закрытый sanitized 2xx receipt callback landing; если он не был
+получен, выполняется один реальный reload для fail-closed HTTP proof. Browser в
+этом run снова `HEALTHY/PASS` (one POST, 5 IDs/cards, route 200), но terminal
+browser+iOS proof всё ещё требуется.

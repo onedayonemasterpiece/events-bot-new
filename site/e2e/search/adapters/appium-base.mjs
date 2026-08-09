@@ -322,6 +322,7 @@ export async function createAppiumSearchAdapter(options = {}) {
   let nativeKeyboardObserved = false;
   let closed = false;
   let callbackAuthObservedBytes = 0;
+  let callbackLandingResponses = [];
   const driverDiagnostics = {
     console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0,
   };
@@ -590,6 +591,11 @@ export async function createAppiumSearchAdapter(options = {}) {
           .filter((item) => item.pathname === '/auth/v1' || item.pathname.startsWith('/auth/v1/'))
           .reduce((sum, item) => sum + Number(item.encoded_bytes || 0), 0)
         : Number(androidAuthBytes || 0);
+      // The no-mail callback intentionally lands on the exact Search target in
+      // the same Safari session. Keep its already-sanitized document receipt:
+      // issuing driver.url(target) again is a no-op on XCUITest and therefore
+      // produces no second safariNetwork document event to prove HTTP status.
+      callbackLandingResponses = callbackTracker.responses();
       lifecycle.auth_callback_authorized = true;
       lifecycle.failure_stage = 'search_surface';
     },
@@ -600,7 +606,24 @@ export async function createAppiumSearchAdapter(options = {}) {
       observePostBoundarySearch(initialLogs);
       accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds,
         driverDiagnosticRequests, wholeCellOrigins);
-      await driver.url(targetUrl);
+      callbackLandingResponses.push(...extractSanitizedNavigationResponses(initialLogs));
+      const currentUrl = await driver.getUrl();
+      if (currentUrl === targetUrl) {
+        try {
+          lifecycle.target_navigation_receipt = buildExactTargetNavigationReceipt({
+            expectedUrl: targetUrl, finalUrl: currentUrl,
+            responses: callbackLandingResponses, networkSource: networkType,
+          });
+          return;
+        } catch (error) {
+          // A missing callback document receipt is an instrumentation gap, so
+          // force one real reload below. Never hide an observed redirect or
+          // cross-origin document behind a later successful navigation.
+          if (String(error?.message) !== 'search_target_http_invalid') throw error;
+        }
+      }
+      if (currentUrl === targetUrl && typeof driver.refresh === 'function') await driver.refresh();
+      else await driver.url(targetUrl);
       await driver.waitUntil(async () => (await driver.getUrl()) === targetUrl,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_target_redirected' });
       const responses = [];

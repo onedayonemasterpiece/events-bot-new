@@ -20,6 +20,12 @@
   effects and the second session passed Safari/callback. It then exposed an
   effective 1 ms XCUITest async-script timeout before the owner proof could
   settle; the adapter now explicitly sets the documented bounded 15 seconds.
+  Merged-main run `31341154421` then passed that boundary and completed iOS
+  callback plus owner proof. It exposed one remaining duplicated operation: the
+  callback had already loaded the exact clean Search target, so navigating to
+  the identical URL produced no second Safari document event and timed out the
+  HTTP receipt with zero Search POSTs. The adapter now reuses the callback's
+  sanitized exact-target 2xx receipt and retains a real reload fallback.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -41,7 +47,7 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **151/151 PASS** after the shared
+- Search production-health aggregate suite: **152/152 PASS** after the shared
   OTP/Search Safari native-sheet, pre-side-effect retry, async owner-proof and
   closed failure-evidence regressions;
 - legacy Search harness: **32/32 PASS**;

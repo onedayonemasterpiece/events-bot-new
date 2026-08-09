@@ -31,6 +31,20 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 ## Timeline
 
 - 2026-08-09 merged-main browser+iOS workflow
+  [`31341154421`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31341154421)
+  proved the explicit 15-second async owner proof: iOS completed callback,
+  `getUser` and owner-RLS with zero Search POSTs. The next boundary failed as
+  `search_target_http_invalid` because the callback had already landed on the
+  exact clean Search URL and the journey issued the same `driver.url` again;
+  XCUITest treated it as a no-op and emitted no second `safariNetwork` document
+  response. Browser remained `HEALTHY/PASS` with one Search POST, five matching
+  cards and route 200. The mobile adapter now reuses the callback landing's
+  sanitized exact-target 2xx receipt (the same one-session OTP transport) and
+  only performs a real reload when no closed callback document receipt exists.
+  Acceptance remains `1/2` and automation remains disabled pending a fresh
+  merged-main browser+iOS proof.
+
+- 2026-08-09 merged-main browser+iOS workflow
   [`31340311566`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31340311566)
   proved that the common OTP pre-side-effect recovery is now active in Search:
   attempt 1 reproduced the 300-second WebDriver session timeout, emitted zero
