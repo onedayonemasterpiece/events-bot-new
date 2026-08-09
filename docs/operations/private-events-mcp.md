@@ -1,8 +1,10 @@
 # Private Events MCP for ChatGPT and Codex
 
-Status: integrated release candidate; disabled by default. Production social
-activation requires exact-main deployment, fresh credentials, capability probes,
-independent review, and the live acceptance gate below.
+Status: integrated release candidate; disabled by default. The initial
+media/story gate is image-only. Production social activation requires exact-main
+deployment, capability probes, independent review, and the live acceptance gate
+below; video remains unsupported until a separately verified validator and both
+provider implementations are merged and accepted.
 
 ## Purpose and client boundary
 
@@ -67,9 +69,9 @@ vk:notifications:read
 
 `<provider>` is `telegram` or `vk`. Granting a scope does not bypass a runtime
 kill switch, current provider rights, request budgets, or human approval.
-The two `story:*` names are reserved in the policy vocabulary, but are not
-requested by the credential generator and have no activatable production tool
-until the authenticated upload/storage gate is implemented.
+The two `story:*` scopes become usable only when the authenticated media store,
+the media/story switch and the matching provider role are all active. The
+initial production contract accepts images only; a video MIME/role fails closed.
 The original connector scopes `telegram:read|publish` and `vk:read|publish`
 remain stable provider-level compatibility families. On the ChatGPT resource,
 `*:read` authorizes later typed reads for the same provider and `*:publish`
@@ -118,8 +120,11 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_content_item` | fetch one bound item |
 | `social_content_thread` | comments or reaction summaries |
 | `social_comment_hints_list` | bounded recent VK comment/mention notifications as untrusted investigation hints |
+| `social_content_stories` | bounded Telegram/VK story metadata page through opaque target refs; media refs are not visual reads, with no mark-read/viewer identities |
 | `social_content_editorial_sample` | purpose-bound editorial sample, at most 25 items/page and 100 cumulatively |
-| `social_content_analytics` | bounded aggregate statistics/audience counts where the credential is entitled |
+| `social_content_analytics` | bounded aggregate post/story statistics or audience counts where the credential is entitled |
+| `social_asset_stage` | ingest one ChatGPT `fileParams` image into immutable short-lived server storage |
+| `social_asset_status` | return only verified MIME/size/digest/dimensions/expiry and lifecycle state for an opaque asset ref |
 | `social_action_prepare` | freeze exact typed action/content/target/media digest; no provider call |
 | `social_action_commit` | consume server-recorded human approval, then make the sole provider attempt |
 | `social_action_status` | reconcile durable success/failure/outcome-unknown state |
@@ -142,6 +147,71 @@ bulk indexer:
   `untrusted_external_data`, and not persisted as a corpus;
 - the response records sample size, date range and truncation/exclusion facts;
 - no member graph, commenter identity or arbitrary linked-page fetch occurs.
+
+### ChatGPT file ingress and immutable assets
+
+`social_asset_stage` is the only media ingress. Its public input is exactly
+`{platform, file, role}` and its tool descriptor declares
+`_meta["openai/fileParams"]=["file"]`. ChatGPT supplies one selected file per
+call as a closed `file` object with required `download_url` and `file_id` plus
+optional `mime_type` and `file_name`. Those values are untrusted transport
+hints, not durable asset truth.
+
+This is not an arbitrary URL downloader. There is no tool accepting a URL,
+filesystem path, raw provider method, Telegram/VK native file identifier or
+caller-declared digest/size. The server accepts only HTTPS `download_url` values
+inside `fileParams`, requires a configured exact-host/explicit-wildcard
+allowlist, resolves only public addresses, rejects redirects and streams into a
+bounded temporary file. The initial gate detects and verifies JPEG, PNG or WebP
+image bytes independently of the hint; audio, document, animation and **video**
+roles/MIME types are rejected even if the provider could otherwise accept them.
+
+A successful stage returns only an owner- and provider-bound opaque `asset_ref`.
+The server atomically stores an immutable read-only file and a manifest binding
+its actual SHA-256 digest, detected MIME, byte length, dimensions and expiry.
+`file_id`, `file_name`, download URL and internal path are never returned or
+persisted as usable source values. `social_asset_status` can disclose only the
+opaque ref, lifecycle state, trust marker, verified metadata and a sanitized
+error code. The default TTL is one hour and configuration cannot exceed 24
+hours; aggregate retained bytes and dimensions/pixels are also bounded. Every
+provider upload reopens the stored file, checks ownership and TTL, requires a
+regular file and recomputes the digest before reading bytes. Expired assets are
+unusable and removed by bounded cleanup.
+
+### Story reads, publication and statistics
+
+`social_content_stories` reads one bounded page for an opaque Telegram/VK target.
+`social_content_item` may read one returned story ref, and
+`social_content_analytics` may return item-level or bounded target-level story
+aggregates. Results contain opaque refs, bounded story text/metadata and
+aggregate counters only. A returned media `asset_ref` is metadata-only: the
+initial release has no `social_asset_preview`/`social_asset_read` tool and does
+not claim that ChatGPT can visually inspect or download provider story media.
+Those possible tool names are interface placeholders that must remain absent
+until authenticated bytes, authorization and redaction are separately
+implemented and proven. Viewer names, profile/user IDs, recent-viewer lists and
+other viewer identities are excluded; the adapters do not mark stories read or
+call viewer-list methods.
+
+An image story uses the existing typed `story` action with exactly one ready
+image `asset_ref` and one opaque target. Preparation freezes the exact target,
+provider, asset digest/MIME/size/dimensions/expiry, resolved story policy,
+idempotency key and human-readable preview. It performs no provider upload.
+After the operator approves that exact preview in the separate browser page,
+commit atomically consumes the approval, revalidates the feature/rights/budget,
+reopens and rehashes the immutable bytes, performs at most one provider upload
+and reads back the created story. A changed, expired or missing asset fails
+before provider transport. Provider timeout is `outcome_unknown` and is never
+blindly retried.
+
+Telegram uses its fixed typed story methods through the dedicated MCP Telethon
+role. VK uses fixed story upload/save/read/statistics methods through separate
+story-editor, story-reader and analytics-reader roles. Neither adapter exposes a
+native method selector, multipart endpoint, upload URL or provider credential to
+ChatGPT. Video is explicitly denied by the image-only contract; it is not a
+hidden or placeholder-enabled capability. Any later video support requires a
+separate code/config/schema change, review and production acceptance for each
+provider.
 
 ### Communication and mutation
 
@@ -185,11 +255,12 @@ PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED
 ```
 
 Child switches cannot enable a disabled master/provider. Media/story activation
-is currently rejected by configuration: there is no authenticated byte-bound
-upload route yet, so `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED=1`
-fails startup validation instead of exposing placeholder asset/story tools.
-The generator does not request story scopes. Text in a social message is never
-treated as a media URL to fetch.
+requires a configured media root, a nonempty ChatGPT download-host allowlist and
+the matching injected provider roles. Missing/invalid storage or provider
+capability fails startup/advertisement instead of exposing placeholder tools.
+The credential generator retains the original provider-level read/publish
+families rather than minting a new connector identity. Text in a social message
+is never treated as a media URL to fetch.
 
 ## Provider boundary
 
@@ -215,6 +286,13 @@ caller-issued operation refs, and preserves timeout/lost-fence outcomes for
 reconciliation. Encrypted target/item/cursor bindings and operation receipts are
 kept in the isolated auth database, so an approval or reconciliation does not
 lose its provider binding on process restart.
+
+The same dedicated role may advertise image/story capability only after its
+live `CanSendStory`-equivalent rights probe and the server media-store injection
+pass. It receives only an already verified server-owned asset handle, never a
+ChatGPT URL or client-supplied path. Story reads and aggregate statistics omit
+viewer collections and do not mark a story read. There is no fallback to a bot,
+E2E, S22 or general-purpose human session for story work.
 
 ### VK
 
@@ -245,6 +323,14 @@ Provider continuation state is validated before use and capped before encrypted
 SQLite persistence; an oversized VK `next_from` value fails closed instead of
 growing the auth/state database.
 
+Image/story operations preserve the same separation: community publication,
+story editing, story reads and story aggregate analytics are authorized by
+their dedicated actor roles and fixed capability sets. A generic token or
+`main.vk_api` fallback cannot satisfy a missing role. The adapter receives a
+verified local asset stream and never exposes or accepts a raw VK upload-server
+URL/method. Story metrics are aggregate views/likes/replies/shares where VK
+returns them; viewer/member identities are discarded.
+
 `social_comment_hints_list` uses only the fixed `notifications.get` method,
 requires the dedicated notification-reader actor and scope, returns at most 25
 hints per page, and accepts a maximum 48-hour date window. A hint is untrusted
@@ -271,6 +357,11 @@ store hashes and bounded public summaries, not credentials or private message
 bodies; the exact approval preview is encrypted at rest. The isolated
 OAuth/social state DB is created mode `0600` and remains
 separate from `/data/db.sqlite`; provider bindings are encrypted before storage.
+Media files live in a separate owner-only root, are immutable after the atomic
+move, expire independently from OAuth state and are addressed only by random
+opaque refs. Manifests keep verified technical metadata and a keyed owner/file
+binding; ChatGPT download URLs, original names and provider viewer identities
+do not enter logs, receipts or durable social state.
 Publication attempts are charged before transport against durable UTC-day
 global/principal/target/action limits. Forward is charged to its destination;
 item-only actions are charged to the item's bound source target rather than a
@@ -296,6 +387,31 @@ PRIVATE_EVENTS_MCP_REPOSITORY_ROOT=/app
 PRIVATE_EVENTS_MCP_REPOSITORY_SLUG=onedayonemasterpiece/events-bot-new
 PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE=/app/.static-site-repo-sha
 ```
+
+Image ingress/storage uses nonsecret bounded settings. The allowlist is
+mandatory when media/story is enabled and has no implicit host default because
+ChatGPT file-download hostnames are an operationally observed dependency, not a
+stable name promised by the connector contract:
+
+```text
+PRIVATE_EVENTS_MCP_MEDIA_ROOT=/data/private-events-mcp-media
+PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS=<comma-separated exact hosts or explicit *.suffix entries>
+PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES=31457280
+PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES=134217728
+PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS=3600
+PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS=20
+PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH=8192
+PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT=8192
+PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS=40000000
+```
+
+TTL configuration is capped at `86400`. The initial fileParams stage accepts at
+most one image per call. Telegram continues to use only
+`TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP`; VK story work uses only the
+blank-by-default `PRIVATE_EVENTS_MCP_VK_STORY_READER_TOKEN` and
+`PRIVATE_EVENTS_MCP_VK_STORY_EDITOR_TOKEN` roles (and the dedicated analytics
+role for statistics). Store all credential values in the runtime secret store,
+not `.env.example`, docs, chat or command output.
 
 For a genuinely new installation, generate one stable endpoint/OAuth identity
 after merge from a clean exact-main checkout into a new owner-only directory
@@ -324,6 +440,22 @@ rotation: changing those stable values can invalidate an installed connector,
 refresh-token/signing state and saved endpoint configuration. Use a complete
 new identity only for an initial install or an explicit full-identity response
 such as a compromised private path.
+
+### Upgrade the existing ChatGPT connection
+
+For an already installed connector, preserve the exact endpoint/private path,
+ChatGPT client ID/secret, OAuth resource/audience, signing key/state and
+connector name. After the exact-main deploy, open the **existing** ChatGPT
+connection and choose **Refresh**, complete its existing OAuth flow if prompted,
+then start a **new chat** so ChatGPT obtains the refreshed tool catalogue. Old
+chats may retain an earlier catalogue.
+
+Never delete/re-add the connection and never rename it for a normal media/story
+upgrade. Never run `--new-install` to make these tools appear. A replacement
+identity is reserved for initial installation or a deliberate full-identity
+incident response (for example, a compromised private path/signing identity).
+Refresh is not an activation bypass: scopes, runtime switches, media allowlist,
+provider roles and browser approval remain independently mandatory.
 
 After the first successful browser connection, rotate only the one-time
 bootstrap operator token from the **full** credentials JSON produced for the
@@ -374,27 +506,49 @@ read-target setting and cannot enable Saved or arbitrary users.
 - MCP disabled: parse no MCP/provider secrets, build no adapter and attach no
   route.
 
-The overlay installer copies the provider-neutral package plus the three root
-provider modules, patches `main_part2.py` (or the single valid app module), and
-merges private fixtures without replacing an existing `tests/conftest.py`.
+The overlay installer copies the provider-neutral package plus all four
+top-level adapter/provider modules, patches `main_part2.py` (or the single valid
+app module), and merges private fixtures without replacing an existing
+`tests/conftest.py`.
 
 ## Local verification
 
 ```bash
 PYTHONPATH=. python -m compileall -q \
   private_events_mcp \
-  private_events_mcp_provider_adapters.py \
-  private_events_mcp_telegram_adapter.py \
-  private_events_mcp_vk_adapter.py \
-  private_events_mcp_workspace_providers.py \
+  private_events_mcp*.py \
   tests scripts main_part2.py
 PYTHONPATH=. pytest -q tests/test_private_events_mcp_*.py
 
 git diff --check
 ```
 
-The repository CI runs the MCP compile/test gate explicitly. Independent review
-must use the exact proposed head SHA.
+The repository CI runs this explicit complete Private Events MCP test glob,
+compiles the package plus every top-level MCP adapter/workspace-provider module,
+and runs `git diff --check` without removing any existing repository job. A full
+release requires every existing GitHub Actions job to be green. Independent
+review must use the exact proposed head SHA.
+
+The optional live smoke is nonmutating unless its write gate is supplied:
+
+```bash
+# catalogue only; prints sanitized counts/fingerprints, never credentials/URLs
+python scripts/smoke_private_events_mcp_media.py \
+  --credentials /secure/chatgpt-private-app-credentials.json
+
+# bounded reads require explicit opaque refs
+python scripts/smoke_private_events_mcp_media.py \
+  --credentials /secure/chatgpt-private-app-credentials.json \
+  --platform telegram --target-ref '<opaque-target-ref>' --read-stories
+```
+
+Preparing an image story additionally requires `--allow-write`, explicit
+target/asset refs, an idempotency key and a fresh owner-only receipt path.
+Committing requires `--allow-write` and that owner-only preparation receipt.
+The script never approves: the operator must inspect and confirm the exact
+separate browser page between prepare and commit. It never prints access/refresh
+tokens, credential values, private URLs, raw provider payloads or the approval
+URL.
 
 ## Production acceptance gate
 
@@ -438,7 +592,41 @@ Record all of the following without secrets:
 15. webhook latency/errors, scheduler/jobs, runtime-log mirror, disk free space
     and auth DB permissions show no regression; the auth/provider state file is
     `0600` from creation and daily attempt budget rows use the current UTC date.
+16. the existing ChatGPT connection was refreshed in place and a new chat sees
+    the image/story tools; endpoint, client/resource/audience, signing identity
+    and connector name are unchanged, while Codex still lists exactly seven
+    evidence tools and no social/file tool;
+17. one ChatGPT-selected image stages through `fileParams`; status reports the
+    server-detected MIME, exact size, SHA-256, dimensions and expiry, and neither
+    the response nor logs/artifacts contain its download URL, file ID/name or
+    local path;
+18. wrong host/private DNS, redirect, oversize, quota exhaustion, MIME spoof,
+    decompression/pixel bomb, changed digest, expired ref, second file and video
+    all fail before provider upload; the initial release accepts only verified
+    JPEG/PNG/WebP images;
+19. for Telegram and VK separately, one approved safe-target image story follows
+    `stage -> prepare -> exact browser approval -> commit -> provider read-back`;
+    the approval page shows the exact provider/target/action and immutable asset
+    digest/MIME/size/dimensions/expiry, and no upload occurs before approval;
+20. bounded story list/item/statistics reads return only metadata, opaque
+    story/media refs and aggregate counters; the catalogue has no
+    `social_asset_preview`/`social_asset_read`, no provider story-media download
+    occurs, viewer identities are absent, the trace has no viewer-list/mark-read
+    operation, and provider role attribution matches the dedicated Telegram MCP
+    or VK story/analytics credential;
+21. restart preserves valid immutable refs/receipts, expired cleanup remains
+    bounded, retained bytes stay within quota, and disabling only the media/story
+    switch removes asset/story tools without changing the connector identity or
+    the seven evidence tools.
 
-Rollback: turn `PRIVATE_EVENTS_MCP_ENABLED=0` (or the universal social master
-switch off for a social-only rollback) and redeploy the exact approved main SHA.
-The isolated OAuth/social state database may remain on the volume.
+Rollback order: first turn
+`PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED=0` to remove all
+asset/story tools and redeploy the exact approved main SHA. If the issue is
+broader, turn the universal social master off; turn
+`PRIVATE_EVENTS_MCP_ENABLED=0` only for a complete MCP rollback. Preserve the
+existing endpoint/client/resource/signing identity throughout a routine
+rollback—do not delete/re-add/rename the ChatGPT connection. The isolated
+OAuth/social DB may remain on the volume. The media root contains only
+short-lived immutable files and may be drained by the bounded expiry cleanup
+after the feature is off; do not manually reuse its refs or copy it into the
+event database.
