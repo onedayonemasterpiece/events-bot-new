@@ -1,0 +1,181 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { buildSameOriginNavigationReceipt,
+  extractSanitizedNavigationResponses } from '../e2e/mobile-web/appium-network-receipt.mjs';
+import { buildMobilePreflightFailureReceipt, isSafeMobilePreflightRetryReceipt,
+  runAppiumTransportPreflight } from '../e2e/mobile-web/appium-preflight.mjs';
+import { createAppiumSearchAdapter } from '../e2e/search/adapters/appium-base.mjs';
+
+function preflightDriver(platform = 'android') {
+  const events = [];
+  let current = platform === 'android' ? 'CHROMIUM' : 'WEBVIEW_1';
+  return {
+    events,
+    capabilities: platform === 'android' ? {
+      platformName: 'Android', browserName: 'Chrome', browserVersion: '140.0.1',
+      platformVersion: '16', automationName: 'UiAutomator2',
+    } : {
+      platformName: 'iOS', browserName: 'Safari', browserVersion: '18.5',
+      platformVersion: '18.5', automationName: 'XCUITest', bundleId: 'com.apple.mobilesafari',
+    },
+    async getContext() { events.push('getContext'); return current; },
+    async getContexts() { events.push('getContexts'); return ['NATIVE_APP', platform === 'android' ? 'CHROMIUM' : 'WEBVIEW_1']; },
+    async switchContext(value) { events.push(`switch:${value}`); current = value; },
+    async getWindowSize() { events.push('viewport'); return { width: 390, height: 844 }; },
+    async execute() { events.push('storage-purge'); return true; },
+    async deleteCookies() { events.push('cookies-purge'); },
+    async deleteSession() { events.push('deleteSession'); },
+  };
+}
+
+test('Android preflight proves real Chrome/UiAutomator2 without navigation or network activity', async () => {
+  const driver = preflightDriver('android');
+  driver.url = async () => { throw new Error('navigation_forbidden'); };
+  driver.getLogs = async () => { throw new Error('network_probe_forbidden'); };
+  const receipt = await runAppiumTransportPreflight(driver, {
+    platform: 'android', expectedCapabilities: { platformVersion: '16' },
+    env: { E2E_APPIUM_VERSION: '3.0.2', E2E_APPIUM_DRIVER_VERSION: '4.2.1' },
+  });
+  assert.deepEqual(receipt.native_viewport, { width: 390, height: 844 });
+  assert.deepEqual(receipt.context_classes, ['native', 'webview']);
+  assert.equal(receipt.transport, 'real_android_chrome');
+  assert.equal(receipt.automation_name, 'UiAutomator2');
+  assert.equal(receipt.side_effects.navigation_count, 0);
+  assert.equal(receipt.side_effects.fetch_count, 0);
+  assert.equal(receipt.side_effects.search_post_count, 0);
+  assert.equal(receipt.continuation_handle, 'in_process_adapter');
+  assert.equal(receipt.session_identifier_serialized, false);
+  assert.doesNotMatch(JSON.stringify(receipt), /CHROMIUM|sessionId|deviceName/iu);
+});
+
+test('iOS preflight uses the Safari preparation hook then proves Mobile Safari/XCUITest/WDA', async () => {
+  const driver = preflightDriver('ios');
+  let prepared = 0;
+  const receipt = await runAppiumTransportPreflight(driver, {
+    platform: 'ios', expectedCapabilities: { 'appium:platformVersion': '18.5' },
+    iosPrepare: async () => { prepared += 1; },
+    env: { E2E_XCODE_VERSION: '16.4', E2E_WDA_SHA: 'abc123' },
+  });
+  assert.equal(prepared, 1);
+  assert.equal(receipt.transport, 'real_ios_mobile_safari');
+  assert.equal(receipt.automation_name, 'XCUITest');
+  assert.equal(receipt.wda_session_proven, true);
+  assert.equal(receipt.xcode_version, '16.4');
+  assert.equal(receipt.wda_version, 'abc123');
+});
+
+test('retry requires attempt one, a deleted Appium session and an explicit zero-side-effect receipt', () => {
+  const safe = buildMobilePreflightFailureReceipt({
+    platform: 'ios', error: new Error('mobile_preflight_web_context_missing'),
+    attempt: 1, driverSessionCreated: true, driverSessionDeleted: true,
+  });
+  assert.equal(safe.retry_safe, true);
+  assert.equal(isSafeMobilePreflightRetryReceipt(safe), true);
+  assert.equal(isSafeMobilePreflightRetryReceipt({ ...safe, startup_attempt: 2 }), false);
+  assert.equal(isSafeMobilePreflightRetryReceipt({ ...safe,
+    side_effects: { ...safe.side_effects, broker_session_issued: true } }), false);
+  const leaked = buildMobilePreflightFailureReceipt({
+    platform: 'ios', error: new Error('fail'), attempt: 1,
+    driverSessionCreated: true, driverSessionDeleted: false,
+  });
+  assert.equal(leaked.retry_safe, false);
+  assert.equal(isSafeMobilePreflightRetryReceipt(leaked), false);
+});
+
+test('adapter deletes an iOS session when Safari preparation fails before returning a receipt', async () => {
+  const driver = preflightDriver('ios');
+  const adapter = await createAppiumSearchAdapter({
+    platform: 'ios', driver,
+    capabilities: { platformName: 'iOS', 'appium:automationName': 'XCUITest' },
+    iosPrepare: async () => { throw new Error('safari_web_context_timeout raw target'); },
+  });
+  await assert.rejects(() => adapter.preflight(), (error) => {
+    assert.equal(error.searchReceipt.schema_version, 'mobile-preflight-failure-v1');
+    assert.equal(error.searchReceipt.cleanup_confirmed, true);
+    assert.equal(error.searchReceipt.retry_safe, true);
+    assert.doesNotMatch(JSON.stringify(error.searchReceipt), /raw target/u);
+    return true;
+  });
+  assert.equal(driver.events.at(-1), 'deleteSession');
+});
+
+test('adapter continues the same successful session and purges local auth before deletion', async () => {
+  const driver = preflightDriver('android');
+  const adapter = await createAppiumSearchAdapter({
+    platform: 'android', driver,
+    capabilities: { platformName: 'Android', browserName: 'Chrome',
+      'appium:automationName': 'UiAutomator2', platformVersion: '16' },
+  });
+  const receipt = await adapter.preflight();
+  const diagnostics = await adapter.diagnostics();
+  assert.equal(receipt.same_session_continuation, true);
+  assert.equal(diagnostics.transport_preflight_passed, true);
+  const cleanup = await adapter.close();
+  assert.deepEqual(cleanup, { auth_local_purge_confirmed: true, webdriver_session_deleted: true });
+  assert.ok(driver.events.indexOf('storage-purge') < driver.events.indexOf('deleteSession'));
+  assert.ok(driver.events.indexOf('cookies-purge') < driver.events.indexOf('deleteSession'));
+});
+
+test('first-card navigation receipt proves same-origin HTTP 200 without retaining URL or query', async () => {
+  const rawLogs = [{ message: JSON.stringify({ message: {
+    method: 'Network.responseReceived', params: { type: 'Document', response: {
+      status: 200, url: 'https://kenigevents.ru/events/example?token=must-not-survive',
+    } },
+  } }) }];
+  const responses = extractSanitizedNavigationResponses(rawLogs);
+  assert.deepEqual(responses, [{ origin: 'https://kenigevents.ru', pathname: '/events/example',
+    status: 200, resource_type: 'document' }]);
+  const receipt = buildSameOriginNavigationReceipt({
+    beforeUrl: 'https://kenigevents.ru/search',
+    expectedUrl: 'https://kenigevents.ru/events/example?private=yes',
+    finalUrl: 'https://kenigevents.ru/events/example',
+    responses, networkSource: 'safariNetwork',
+  });
+  assert.equal(receipt.same_origin, true);
+  assert.equal(receipt.http_status, 200);
+  assert.equal(receipt.network_source, 'safariNetwork');
+  assert.doesNotMatch(JSON.stringify(receipt), /example|private|token|kenigevents/iu);
+});
+
+test('adapter opens the captured first result and binds the browser navigation to driver network logs', async () => {
+  let currentUrl = 'https://kenigevents.ru/search';
+  let logReads = 0;
+  const driver = {
+    capabilities: {},
+    async execute() { return { href: 'https://kenigevents.ru/events/42?secret=yes', same_origin: true }; },
+    async getUrl() { return currentUrl; },
+    async getLogs(type) {
+      assert.equal(type, 'performance');
+      logReads += 1;
+      if (logReads === 1) return [];
+      return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
+        type: 'Document', response: { status: 200, url: 'https://kenigevents.ru/events/42?secret=yes' },
+      } }) }];
+    },
+    async $(selector) {
+      assert.match(selector, /data-search-results/u);
+      return { click: async () => { currentUrl = 'https://kenigevents.ru/events/42'; } };
+    },
+    async waitUntil(fn) { if (!await fn()) throw new Error('wait_failed'); },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  const receipt = await adapter.openFirstResult();
+  assert.deepEqual(receipt, {
+    schema_version: 'mobile-card-open-v1', same_origin: true, http_status: 200,
+    destination_class: 'event_detail', network_source: 'performance', raw_url_retained: false,
+  });
+});
+
+test('navigation receipt rejects cross-origin and non-200 document evidence', () => {
+  assert.throws(() => buildSameOriginNavigationReceipt({
+    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: 'https://evil.example/event',
+    finalUrl: 'https://evil.example/event', responses: [],
+  }), /cross_origin/u);
+  assert.throws(() => buildSameOriginNavigationReceipt({
+    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: 'https://kenigevents.ru/events/1',
+    finalUrl: 'https://kenigevents.ru/events/1',
+    responses: [{ origin: 'https://kenigevents.ru', pathname: '/events/1', status: 404,
+      resource_type: 'document' }],
+  }), /http_200_missing/u);
+});

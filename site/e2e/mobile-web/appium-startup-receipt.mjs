@@ -1,4 +1,5 @@
 import { open } from 'node:fs/promises';
+import { buildZeroSideEffectReceipt } from './appium-preflight.mjs';
 
 const MAX_LOG_CHARS = 2_000_000;
 
@@ -50,14 +51,21 @@ export async function buildAppiumSessionFailureReceipt({ error, platform, starte
   endedAt = Date.now(), logPath, appiumServerReady = false, startupAttempt = 1 } = {}) {
   let log = { source: '', truncated: false };
   if (platform === 'ios' && logPath) log = await readBoundedLogTail(logPath);
+  const attempt = [1, 2].includes(Number(startupAttempt)) ? Number(startupAttempt) : 0;
   return {
+    schema_version: 'mobile-preflight-failure-v1',
+    platform: ['android', 'ios'].includes(platform) ? platform : 'unknown',
     failure_stage: 'webdriver_session_create',
     auth_callback_started: false,
     webdriver_client_session_created: false,
     appium_server_ready: appiumServerReady === true,
-    startup_attempt: [1, 2].includes(Number(startupAttempt)) ? Number(startupAttempt) : 0,
+    startup_attempt: attempt,
     elapsed_ms: Math.max(0, Math.round(Number(endedAt) - Number(startedAt))),
     error_class: closedErrorClass(error),
+    cleanup_confirmed: true,
+    retry_safe: attempt === 1,
+    side_effects: buildZeroSideEffectReceipt({ attempt, driverSessionCreated: false,
+      driverSessionDeleted: false }),
     ...summarizeAppiumSessionStartup(log.source, { truncated: log.truncated }),
   };
 }

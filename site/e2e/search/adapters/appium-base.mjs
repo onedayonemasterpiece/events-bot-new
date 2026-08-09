@@ -1,5 +1,9 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime-probe.mjs';
 import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
+import { buildSameOriginNavigationReceipt,
+  extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
+import { buildMobilePreflightFailureReceipt,
+  runAppiumTransportPreflight } from '../../mobile-web/appium-preflight.mjs';
 import { dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard,
   performNativeDocumentSwipe, prepareIosSafariWebContext,
   withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
@@ -56,7 +60,6 @@ export async function createAppiumSearchAdapter(options = {}) {
   if (!['android', 'ios'].includes(platform)) throw new Error(`search_mobile_platform:${platform}`);
   const timeoutMs = Number(options.timeoutMs || 60_000);
   let driver = options.driver || null;
-  let ownsDriver = false;
   if (!driver) {
     const { remote } = await import('webdriverio');
     const startedAt = Date.now();
@@ -79,28 +82,91 @@ export async function createAppiumSearchAdapter(options = {}) {
       failure.searchReceipt = receipt;
       throw failure;
     }
-    ownsDriver = true;
   }
   const lifecycle = {
     failure_stage: 'webdriver_session_created',
     auth_callback_started: false, auth_callback_authorized: false,
     webdriver_client_session_created: true, native_safari_stable: platform !== 'ios',
-    webview_attached: platform !== 'ios', search_surface_ready: false,
+    webview_attached: platform !== 'ios', transport_preflight_passed: false,
+    search_surface_ready: false,
     startup_attempt: [1, 2].includes(Number(process.env.E2E_APPIUM_STARTUP_ATTEMPT))
       ? Number(process.env.E2E_APPIUM_STARTUP_ATTEMPT) : 1,
   };
-  if (platform === 'ios') {
-    lifecycle.failure_stage = 'native_safari_webview_prepare';
-    await prepareIosSafariWebContext(driver);
-    lifecycle.native_safari_stable = true;
-    lifecycle.webview_attached = true;
-    lifecycle.failure_stage = 'auth_callback_not_started';
-  }
   let configuredPolicy = {};
   let nativeKeyboardObserved = false;
+  let closed = false;
+
+  const deleteDriverSession = async () => {
+    if (closed) return true;
+    await driver.deleteSession();
+    closed = true;
+    lifecycle.webdriver_client_session_deleted = true;
+    return true;
+  };
+
+  const purgeLocalAuthState = async () => {
+    const originalContext = await driver.getContext().catch(() => null);
+    const contexts = await driver.getContexts().catch(() => []);
+    const webContext = contexts.find((value) => {
+      const normalized = String(value).toUpperCase();
+      return normalized.includes('WEBVIEW') || normalized.includes('CHROMIUM');
+    });
+    if (!webContext) return lifecycle.auth_callback_started !== true;
+    if (String(originalContext).toUpperCase() !== String(webContext).toUpperCase()) {
+      await driver.switchContext(webContext);
+    }
+    try {
+      const purged = await driver.execute(() => {
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+          return localStorage.length === 0 && sessionStorage.length === 0;
+        } catch { return false; }
+      });
+      await driver.deleteCookies?.().catch(() => undefined);
+      return purged === true;
+    } finally {
+      if (originalContext && String(originalContext).toUpperCase() !== String(webContext).toUpperCase()) {
+        await driver.switchContext(originalContext).catch(() => undefined);
+      }
+    }
+  };
 
   const adapter = {
     async diagnostics() { return structuredClone(lifecycle); },
+    async preflight() {
+      if (lifecycle.transport_preflight_passed && lifecycle.transport_preflight_receipt) {
+        return structuredClone(lifecycle.transport_preflight_receipt);
+      }
+      lifecycle.failure_stage = platform === 'ios'
+        ? 'native_safari_webview_prepare' : 'mobile_transport_preflight';
+      try {
+        const receipt = await runAppiumTransportPreflight(driver, {
+          platform,
+          expectedCapabilities: options.capabilities,
+          startupAttempt: lifecycle.startup_attempt,
+          env: options.env || process.env,
+          iosPrepare: platform === 'ios'
+            ? (options.iosPrepare || prepareIosSafariWebContext) : null,
+        });
+        lifecycle.native_safari_stable = platform === 'ios' ? true : lifecycle.native_safari_stable;
+        lifecycle.webview_attached = true;
+        lifecycle.transport_preflight_passed = true;
+        lifecycle.transport_preflight_receipt = receipt;
+        lifecycle.failure_stage = 'auth_callback_not_started';
+        return structuredClone(receipt);
+      } catch (error) {
+        let deleted = false;
+        try { deleted = await deleteDriverSession(); } catch { deleted = false; }
+        const receipt = buildMobilePreflightFailureReceipt({
+          platform, error, attempt: lifecycle.startup_attempt,
+          driverSessionCreated: true, driverSessionDeleted: deleted,
+        });
+        const failure = error instanceof Error ? error : new Error('mobile_preflight_failed');
+        failure.searchReceipt = receipt;
+        throw failure;
+      }
+    },
     async bootstrapSession(actionLink, returnTarget) {
       lifecycle.failure_stage = 'auth_callback';
       lifecycle.auth_callback_started = true;
@@ -206,6 +272,50 @@ export async function createAppiumSearchAdapter(options = {}) {
         }),
       });
     },
+    async openFirstResult() {
+      lifecycle.failure_stage = 'search_first_card_capture';
+      const captured = await driver.execute(() => {
+        const selector = '[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]';
+        const card = document.querySelector(selector);
+        const rawHref = card?.getAttribute('data-card-href')
+          || card?.querySelector('a[href]')?.getAttribute('href');
+        if (!card || !rawHref) return null;
+        try {
+          const target = new URL(rawHref, location.href);
+          return { href: target.href, same_origin: target.origin === location.origin };
+        } catch { return null; }
+      });
+      if (!captured?.href || captured.same_origin !== true) throw new Error('mobile_first_card_route_invalid');
+      const beforeUrl = await driver.getUrl();
+      const expectedUrl = new URL(captured.href, beforeUrl);
+      if (expectedUrl.origin !== new URL(beforeUrl).origin) throw new Error('mobile_card_route_cross_origin');
+      const logType = platform === 'android' ? 'performance' : 'safariNetwork';
+      const initialLogs = await driver.getLogs(logType).catch(() => null);
+      if (!Array.isArray(initialLogs)) throw new Error('mobile_navigation_network_log_unavailable');
+      lifecycle.first_card_captured = true;
+      lifecycle.failure_stage = 'search_first_card_open';
+      await (await driver.$('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]')).click();
+      await driver.waitUntil(async () => {
+        const current = new URL(await driver.getUrl());
+        return current.origin === expectedUrl.origin && current.pathname === expectedUrl.pathname;
+      }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'mobile_first_card_navigation_timeout' });
+      const responses = [];
+      await driver.waitUntil(async () => {
+        const logs = await driver.getLogs(logType).catch(() => null);
+        if (!Array.isArray(logs)) return false;
+        responses.push(...extractSanitizedNavigationResponses(logs));
+        return responses.some((item) => item.origin === expectedUrl.origin
+          && item.pathname === expectedUrl.pathname && item.status === 200
+          && (!item.resource_type || item.resource_type === 'document'));
+      }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'mobile_first_card_http_200_timeout' });
+      const receipt = buildSameOriginNavigationReceipt({
+        beforeUrl, expectedUrl: expectedUrl.href, finalUrl: await driver.getUrl(),
+        responses, networkSource: logType,
+      });
+      lifecycle.first_card_opened = true;
+      lifecycle.failure_stage = 'search_first_card_opened';
+      return receipt;
+    },
     async showMoreState() {
       return driver.execute(() => { const node = document.querySelector('[data-search-more]');
         return { visible: Boolean(node && !node.hidden && getComputedStyle(node).display !== 'none'), enabled: Boolean(node && !node.disabled) }; });
@@ -219,7 +329,20 @@ export async function createAppiumSearchAdapter(options = {}) {
       }), { timeout: Math.min(timeoutMs, 10_000), interval: 100, timeoutMsg: 'search_validation_timeout' });
       return { visible: true, kind: 'error' };
     },
-    async close() { if (ownsDriver) await driver.deleteSession(); },
+    async close() {
+      if (closed) return { auth_local_purge_confirmed: true, webdriver_session_deleted: true };
+      lifecycle.failure_stage = 'auth_local_purge';
+      let purged = false;
+      try { purged = await purgeLocalAuthState(); } catch { purged = false; }
+      let deleted = false;
+      try { deleted = await deleteDriverSession(); } finally {
+        lifecycle.auth_local_purge_confirmed = purged;
+        lifecycle.webdriver_client_session_deleted = deleted;
+        lifecycle.failure_stage = 'closed';
+      }
+      if (!purged) throw new Error('mobile_auth_local_purge_unconfirmed');
+      return { auth_local_purge_confirmed: true, webdriver_session_deleted: deleted };
+    },
   };
   return adapter;
 }

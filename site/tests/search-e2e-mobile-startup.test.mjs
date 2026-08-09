@@ -6,6 +6,7 @@ import { test } from 'node:test';
 
 import { buildAppiumSessionFailureReceipt,
   summarizeAppiumSessionStartup } from '../e2e/mobile-web/appium-startup-receipt.mjs';
+import { isSafeMobilePreflightRetryReceipt } from '../e2e/mobile-web/appium-preflight.mjs';
 import { closedMobileStartupRetryReceipt,
   isRetryableMobileStartupResult,
   readPriorMobileStartupReceipt } from '../e2e/search/mobile-startup-retry.mjs';
@@ -56,7 +57,22 @@ test('session-create failure receipt exposes only retry-safe bounded metadata', 
   assert.equal(receipt.elapsed_ms, 300_000);
   assert.equal(receipt.startup_attempt, 2);
   assert.equal(receipt.error_class, 'webdriver_client_request_timeout');
+  assert.equal(receipt.schema_version, 'mobile-preflight-failure-v1');
+  assert.equal(receipt.cleanup_confirmed, true);
+  assert.equal(receipt.retry_safe, false);
+  assert.equal(receipt.side_effects.broker_session_issued, false);
   assert.equal(JSON.stringify(receipt).includes('secret URL'), false);
+});
+
+test('attempt-one session creation failure has the explicit zero-side-effect retry proof', async () => {
+  const receipt = await buildAppiumSessionFailureReceipt({
+    error: new Error('connection refused raw endpoint'), platform: 'android',
+    startedAt: 1_000, endedAt: 1_500, appiumServerReady: true, startupAttempt: 1,
+  });
+  assert.equal(receipt.retry_safe, true);
+  assert.equal(receipt.side_effects.webdriver_client_session_created, false);
+  assert.equal(isSafeMobilePreflightRetryReceipt(receipt), true);
+  assert.doesNotMatch(JSON.stringify(receipt), /raw endpoint/u);
 });
 
 test('only an iOS session-creation failure before callback and Search traffic is retryable', () => {
