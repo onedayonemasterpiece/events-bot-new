@@ -38,6 +38,14 @@
 
 ### Fixed
 
+- Fixed the next Android live-health failure exposed by run `31333074131`.
+  Chrome performance logs terminate a cancelled/failed request with
+  `Network.loadingFailed`, not `Network.loadingFinished`; the sanitized Appium
+  tracker now closes that request with the sum of its already received
+  `Network.dataReceived` bytes. This prevents an authorised callback's
+  background Auth cancellation from timing out before Search, without retaining
+  request ids, URLs, response bodies or raw network errors.
+
 - Fixed live Search health diagnostics exposed by run `31332306409`.
   Standalone WebdriverIO `9.30.0` removes deprecated JSONWP log commands even
   for a forced Classic session, so the Appium adapter now installs only the

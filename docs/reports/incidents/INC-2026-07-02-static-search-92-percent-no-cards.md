@@ -30,6 +30,20 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 run `31333074131` produced the first current-contour complete
+  browser acceptance: `HEALTHY/PASS`, exactly one HTTP-200 Search POST, five
+  response IDs equal to five rendered cards, real scroll, same-origin event
+  route HTTP 200, zero LLM/pagination/receipt/storage activity, and 9,342
+  client-observed Supabase bytes. Android passed emulator/Appium/WebView
+  preflight and reached the authorised callback, but made zero Search POSTs and
+  stopped as `UNKNOWN_ANDROID_INFRA/mobile_auth_terminal_bytes_timeout`.
+  Root-cause review against the CDP terminal-event contract found that the
+  tracker handled `Network.loadingFinished` but ignored `Network.loadingFailed`;
+  a cancelled background Auth request therefore remained pending forever. The
+  tracker now closes that branch using only summed `Network.dataReceived`
+  encoded bytes and drops request ids, URLs, bodies and raw error text. This run
+  is browser evidence only and is not terminal mobile acceptance.
+
 - 2026-08-09 run `31332306409` proved the Android Bash/Appium/context fixes far
   enough to complete the side-effect-free transport preflight, then stopped
   before callback/Auth/Search. Targeted review against WebdriverIO's current
