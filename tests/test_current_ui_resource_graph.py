@@ -1062,10 +1062,15 @@ def test_browser_capture_freezes_fixture_clock_and_waits_for_stable_layout():
     assert "image.decode()" in source
     assert "near-viewport media did not settle" in source
     assert "Browser layout did not stabilize" in source
-    assert "previousScreenshot?.equals(currentScreenshot)" in source
-    assert "Browser pixels did not stabilize" in source
+    assert "firstPerceptualDhash !== perceptualDhash" in source
+    assert "Browser pixels failed perceptual two-frame stability" in source
+    assert "pixel_exact_stable: firstScreenshot.equals(stableScreenshot)" in source
     assert "perceptual_dhash_64" in source
     assert "raw_raster_role: 'noncanonical_visual_evidence'" in source
     assert "Screenshot exceeds deterministic byte reservation" in source
     decoder = DECODER.read_text(encoding="utf-8")
     assert "cross_run_acceptance: 'equal_perceptual_dhash_64'" in decoder
+    component_evidence = (REPO / "scripts/current_ui_resource_graph/v1/evidence.mjs").read_text(encoding="utf-8")
+    assert "firstDhash !== confirmDhash" in component_evidence
+    assert "screenshot_exact_stable: buffer.equals(confirm)" in component_evidence
+    assert "Component screenshot failed perceptual two-frame stability contract" in component_evidence

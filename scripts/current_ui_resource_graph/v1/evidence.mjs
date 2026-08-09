@@ -32,8 +32,9 @@ export function assertSafeComponentEvidence(record) {
 }
 
 export async function captureComponentScopedEvidence({
-  page, pageFamily, routeHash, viewport, outputDir, budget, plane = 'latest_checked_kaggle_candidate',
+  page, pageFamily, routeHash, viewport, outputDir, budget, sharp, plane = 'latest_checked_kaggle_candidate',
 }) {
+  if (typeof sharp !== 'function') throw new Error('Component evidence requires the pinned image decoder');
   const componentSelectors = [
     '[data-event-transport-schedule]', '[data-event-bus-schedule]', '[data-kaup-transport]',
     '.event-token-layout[data-medallion-layout]', '[data-focus-egg-artifact]', '[data-artifact-collection]',
@@ -99,7 +100,14 @@ export async function captureComponentScopedEvidence({
     const path = join(dir, filename);
     const buffer = await locator.screenshot({ type: 'jpeg', quality: 60, animations: 'disabled', caret: 'hide', scale: 'css' });
     const confirm = await locator.screenshot({ type: 'jpeg', quality: 60, animations: 'disabled', caret: 'hide', scale: 'css' });
-    if (!buffer.equals(confirm)) throw new Error(`Component screenshot failed two-frame stability contract: ${filename}`);
+    const differenceHash = async (bytes) => {
+      const { data } = await sharp(bytes).greyscale().resize(9, 8, { fit: 'fill', kernel: 'lanczos3' }).raw().toBuffer({ resolveWithObject: true });
+      let bits = '';
+      for (let y = 0; y < 8; y += 1) for (let x = 0; x < 8; x += 1) bits += data[y * 9 + x] > data[y * 9 + x + 1] ? '1' : '0';
+      return BigInt(`0b${bits}`).toString(16).padStart(16, '0');
+    };
+    const firstDhash = await differenceHash(buffer); const confirmDhash = await differenceHash(confirm);
+    if (firstDhash !== confirmDhash) throw new Error(`Component screenshot failed perceptual two-frame stability contract: ${filename}`);
     if (buffer.length > COMPONENT_EVIDENCE_SCREENSHOT_RESERVATION) throw new Error(`Component screenshot exceeds deterministic byte reservation: ${filename}`);
     writeFileSync(path, buffer); budget.claim(buffer.length, `component-screenshots/${filename}`);
     const clean = JSON.parse(JSON.stringify(candidate, (_key, value) => typeof value === 'string' ? sanitizeEvidenceString(value) : value));
@@ -112,6 +120,8 @@ export async function captureComponentScopedEvidence({
       geometry: clean.geometry, computed: clean.computed, css_variables: clean.css_variables,
       accessibility: clean.accessibility, font_status: clean.font_status, state: clean.state,
       screenshot_path: `component-screenshots/${filename}`, screenshot_bytes: statSync(path).size, screenshot_sha256: sha(buffer),
+      screenshot_confirm_sha256: sha(confirm), screenshot_perceptual_dhash_64: firstDhash,
+      screenshot_confirm_perceptual_dhash_64: confirmDhash, screenshot_exact_stable: buffer.equals(confirm), screenshot_perceptually_stable: true,
       component_binding: clean.binding, binding_status: clean.binding ? 'exact-runtime-marker-to-source-binding' : 'requires-source-or-specimen-marker-reconciliation',
       override_source: 'computed-cascade-observed-source-unresolved',
       proof_label: plane === 'current_root_prelaunch' ? 'public-root-browser-element' : 'exact-candidate-browser-element',
