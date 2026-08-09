@@ -25,6 +25,12 @@ export const DEFAULT_PERSONA_ENV = Object.freeze({
 
 const activeScopes = new Set();
 const ALLOWED_SCOPE_KINDS = new Set(['test', 'worker', 'job', 'device']);
+export const SEARCH_HEALTH_PLATFORMS = Object.freeze(['browser', 'android', 'ios']);
+const SEARCH_HEALTH_PERSONAS = Object.freeze({
+  browser: 'search-cached-browser',
+  android: 'search-cached-android',
+  ios: 'search-cached-ios',
+});
 
 export class AuthSessionFixtureBlockedError extends Error {
   constructor(reason, cause) {
@@ -229,27 +235,67 @@ export function createAuthSessionBrokerIssuer(options = {}) {
   if (!oidcToken) throw blocked('BROKER_OIDC_TOKEN_MISSING');
   const fetchImpl = options.fetchImpl || globalThis.fetch?.bind(globalThis);
   if (typeof fetchImpl !== 'function') throw blocked('FETCH_UNAVAILABLE');
+  const inflight = new Map();
   return Object.freeze({
     kind: 'github_oidc_broker',
-    async issue({ personaId, redirectTo, runId }) {
-      const response = await fetchImpl(endpoint, {
-        method: 'POST',
-        redirect: 'error',
-        headers: {
-          accept: 'application/json',
-          authorization: `Bearer ${oidcToken}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ persona_id: personaId, redirect_to: redirectTo, run_id: runId }),
-      });
-      if (!response?.ok) throw blocked(`BROKER_REJECTED_${Number(response?.status || 0)}`);
-      let payload;
-      try {
-        payload = await response.json();
-      } catch (error) {
-        throw blocked('BROKER_RESPONSE_INVALID', error);
+    async issue({ personaId, platform, redirectTo }) {
+      const normalizedPlatform = String(platform || '').trim();
+      if (!SEARCH_HEALTH_PLATFORMS.includes(normalizedPlatform)) {
+        throw blocked('BROKER_PLATFORM_INVALID');
       }
-      return normalizeIssuerResult(payload);
+      // The persona is a compatibility assertion for existing callers only.
+      // It never crosses the broker boundary; the server derives it from the
+      // validated platform and its own policy.
+      if (personaId !== undefined
+        && String(personaId || '').trim() !== SEARCH_HEALTH_PERSONAS[normalizedPlatform]) {
+        throw blocked('BROKER_PERSONA_PLATFORM_MISMATCH');
+      }
+      const redirect = String(redirectTo || '');
+      const identity = `${normalizedPlatform}:${createHash('sha256').update(redirect).digest('hex')}`;
+      const existing = inflight.get(identity);
+      if (existing) return existing;
+
+      const operation = (async () => {
+        const response = await fetchImpl(endpoint, {
+          method: 'POST',
+          redirect: 'error',
+          headers: {
+            accept: 'application/json',
+            authorization: `Bearer ${oidcToken}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ platform: normalizedPlatform, redirect_to: redirect }),
+        });
+        let payload;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          throw blocked('BROKER_RESPONSE_INVALID', error);
+        }
+        if (!response?.ok) {
+          const code = String(payload?.error || '').replace(/[^a-z0-9_]/gu, '').toUpperCase();
+          const error = blocked(code ? `BROKER_${code}` : `BROKER_REJECTED_${Number(response?.status || 0)}`);
+          error.claim = String(payload?.claim || '');
+          error.productHealth = String(payload?.product_health || 'UNKNOWN');
+          error.executionStatus = String(payload?.execution_status || 'BLOCKED');
+          error.failureClass = String(payload?.failure_class || 'UNKNOWN');
+          throw error;
+        }
+        if (payload?.claim !== 'new' || payload?.platform !== normalizedPlatform) {
+          throw blocked('BROKER_IDENTITY_RESPONSE_MISMATCH');
+        }
+        return {
+          ...normalizeIssuerResult(payload),
+          claim: 'new',
+          platform: normalizedPlatform,
+        };
+      })();
+      inflight.set(identity, operation);
+      try {
+        return await operation;
+      } finally {
+        if (inflight.get(identity) === operation) inflight.delete(identity);
+      }
     },
   });
 }
@@ -378,14 +424,16 @@ export async function createAuthSessionFixture(options = {}) {
     if (typeof issuer?.issue !== 'function' || !/^[a-z][a-z0-9_]{1,63}$/u.test(String(issuer.kind || ''))) {
       throw blocked('ISSUER_INVALID');
     }
-    const issued = normalizeIssuerResult(await issuer.issue({
+    const issueRequest = {
       personaId: persona.id,
       personaEmail: persona.email,
       redirectTo: target.href,
       runId: safeSegment(options.runId || 'local'),
       scopeKind,
       scopeId,
-    }));
+    };
+    if (options.platform !== undefined) issueRequest.platform = String(options.platform || '').trim();
+    const issued = normalizeIssuerResult(await issuer.issue(issueRequest));
     counters.adminCredentials = issued.counters.adminCredentialCount;
     counters.productOtpIssues += issued.counters.productOtpIssueCount;
     counters.externalMailSends += issued.counters.externalMailSendCount;

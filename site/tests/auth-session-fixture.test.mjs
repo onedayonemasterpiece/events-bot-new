@@ -313,29 +313,104 @@ test('issuer counters are exact and fail closed before session verification', as
   assert.equal(sessionClientCreated, false);
 });
 
-test('GitHub OIDC broker issuer sends only role/run/redirect and retains one-time action link', async () => {
+test('GitHub OIDC broker issuer sends only platform/redirect and retains one-time action link', async () => {
   let observed;
   const issuer = createAuthSessionBrokerIssuer({
     endpoint: 'https://broker.example.invalid/issue', oidcToken: 'signed-oidc-secret',
     fetchImpl: async (input, init) => {
       observed = { input: String(input), init, body: JSON.parse(init.body) };
       return Response.json({
-        email_otp: '456789', action_link: 'https://project.supabase.co/auth/v1/verify?token=one-time',
+        claim: 'new', platform: 'android', email_otp: '456789',
+        action_link: 'https://project.supabase.co/auth/v1/verify?token=one-time',
         counters: { admin_credential_count: 1, product_otp_issue_count: 0,
           external_mail_send_count: 0, external_mail_receipt_count: 0 },
       });
     },
   });
   const result = await issuer.issue({
-    personaId: 'search-cached', personaEmail: 'must-not-cross-broker-boundary@example.invalid',
-    redirectTo: 'https://kenigevents.ru/poisk/', runId: '123456789', scopeKind: 'job', scopeId: 'worker-0',
+    personaId: 'search-cached-android', personaEmail: 'must-not-cross-broker-boundary@example.invalid',
+    platform: 'android', redirectTo: 'https://kenigevents.ru/poisk/',
+    runId: '123456789', scopeKind: 'job', scopeId: 'worker-0',
   });
   assert.deepEqual(observed.body, {
-    persona_id: 'search-cached', redirect_to: 'https://kenigevents.ru/poisk/', run_id: '123456789',
+    platform: 'android', redirect_to: 'https://kenigevents.ru/poisk/',
   });
   assert.equal(observed.init.headers.authorization, 'Bearer signed-oidc-secret');
   assert.equal(result.actionLink, 'https://project.supabase.co/auth/v1/verify?token=one-time');
+  assert.equal(result.claim, 'new');
+  assert.equal(result.platform, 'android');
   assert.doesNotMatch(JSON.stringify(observed.body), /example\.invalid/u);
+});
+
+test('broker issuer coalesces identical in-process calls to one HTTP POST without caching', async () => {
+  let posts = 0;
+  let release;
+  const issuer = createAuthSessionBrokerIssuer({
+    endpoint: 'https://broker.example.invalid/issue', oidcToken: 'signed-oidc-secret',
+    fetchImpl: async () => {
+      posts += 1;
+      await new Promise((resolve) => { release = resolve; });
+      return Response.json({
+        claim: 'new', platform: 'browser', email_otp: '456789',
+        action_link: 'https://project.supabase.co/auth/v1/verify?token=one-time',
+        counters: { admin_credential_count: 1, product_otp_issue_count: 0,
+          external_mail_send_count: 0, external_mail_receipt_count: 0 },
+      });
+    },
+  });
+  const request = {
+    personaId: 'search-cached-browser', platform: 'browser',
+    redirectTo: 'https://kenigevents.ru/poisk/', runId: 'ignored-compatibility-field',
+  };
+  const first = issuer.issue(request);
+  const second = issuer.issue(request);
+  while (!release) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(posts, 1);
+  release();
+  assert.deepEqual(await first, await second);
+
+  // Completion removes the in-flight entry; there is deliberately no
+  // credential/session cache or escrow.
+  const third = issuer.issue(request);
+  while (posts < 2) await new Promise((resolve) => setTimeout(resolve, 0));
+  release();
+  await third;
+  assert.equal(posts, 2);
+});
+
+test('broker issuer preserves typed UNKNOWN infrastructure rejection', async () => {
+  const issuer = createAuthSessionBrokerIssuer({
+    endpoint: 'https://broker.example.invalid/issue', oidcToken: 'signed-oidc-secret',
+    fetchImpl: async () => Response.json({
+      error: 'persona_busy', claim: 'persona_busy', product_health: 'UNKNOWN',
+      execution_status: 'BLOCKED', failure_class: 'UNKNOWN',
+    }, { status: 423 }),
+  });
+  await assert.rejects(issuer.issue({
+    personaId: 'search-cached-ios', platform: 'ios', redirectTo: 'https://kenigevents.ru/poisk/',
+  }), (error) => {
+    assert.equal(error.reason, 'BROKER_PERSONA_BUSY');
+    assert.equal(error.claim, 'persona_busy');
+    assert.equal(error.productHealth, 'UNKNOWN');
+    assert.equal(error.executionStatus, 'BLOCKED');
+    assert.equal(error.failureClass, 'UNKNOWN');
+    return true;
+  });
+});
+
+test('broker issuer rejects invalid platform and caller persona mismatch before HTTP', async () => {
+  let posts = 0;
+  const issuer = createAuthSessionBrokerIssuer({
+    endpoint: 'https://broker.example.invalid/issue', oidcToken: 'signed-oidc-secret',
+    fetchImpl: async () => { posts += 1; return Response.json({}); },
+  });
+  await assert.rejects(issuer.issue({
+    personaId: 'search-cached-browser', platform: 'desktop', redirectTo: 'https://kenigevents.ru/poisk/',
+  }), /BROKER_PLATFORM_INVALID/u);
+  await assert.rejects(issuer.issue({
+    personaId: 'search-cached-ios', platform: 'android', redirectTo: 'https://kenigevents.ru/poisk/',
+  }), /BROKER_PERSONA_PLATFORM_MISMATCH/u);
+  assert.equal(posts, 0);
 });
 
 test('mobile callback converts the admin confirmation URL into the static token-hash contract', () => {

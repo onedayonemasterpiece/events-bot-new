@@ -87,20 +87,28 @@ async def handle(request: web.Request) -> web.Response:
 
     concurrency = request.app[BROKER_CONCURRENCY]
     if concurrency.locked():
-        return _json_response(429, {"error": "broker_busy"})
+        return _json_response(429, {
+            "error": "broker_busy",
+            "claim": "overload",
+            "product_health": "UNKNOWN",
+            "execution_status": "BLOCKED",
+            "failure_class": "UNKNOWN",
+        })
     async with concurrency:
         try:
             result = await asyncio.to_thread(broker.process, payload, token=token.strip())
             return _json_response(200, result)
         except broker.BrokerError as exc:
-            public = "unauthorized" if exc.status in {401, 403} else exc.code
-            return _json_response(exc.status, {"error": public})
+            return _json_response(exc.status, exc.public_payload())
 
 
 def register(app: web.Application, env: Mapping[str, str] = os.environ) -> bool:
     if not enabled(env):
         return False
     broker.policy_from_env(env)
-    app[BROKER_CONCURRENCY] = asyncio.Semaphore(2)
+    # One independent issuance for each Search health platform may overlap.
+    # Any fourth request is rejected without queueing so overload stays an
+    # infrastructure UNKNOWN rather than contaminating product health.
+    app[BROKER_CONCURRENCY] = asyncio.Semaphore(3)
     app.router.add_post(ROUTE, handle)
     return True

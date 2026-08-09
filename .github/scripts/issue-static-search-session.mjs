@@ -9,13 +9,7 @@ function required(name) {
   return value;
 }
 
-function personaFor(variant, platform) {
-  if (platform === 'android') return 'search-cached-android';
-  if (platform === 'ios') return 'search-cached-ios';
-  if (variant === 'cached_vector') return 'search-cached-browser';
-  if (variant === 'degraded_vector_fallback') return 'search-degraded-browser';
-  return 'search-cold-browser';
-}
+const PLATFORMS = new Set(['browser', 'android', 'ios']);
 
 async function githubOidcToken() {
   const requestUrl = new URL(required('ACTIONS_ID_TOKEN_REQUEST_URL'));
@@ -33,17 +27,17 @@ async function githubOidcToken() {
 
 async function main() {
   const targetUrl = required('E2E_SEARCH_TARGET_URL');
-  const variant = required('E2E_SEARCH_VARIANT');
   const platform = required('E2E_SEARCH_PLATFORM');
+  if (!PLATFORMS.has(platform)) throw new Error('search_platform_invalid');
   const oidcToken = await githubOidcToken();
   const issuer = createAuthSessionBrokerIssuer({
     endpoint: required('AUTH_SESSION_BROKER_URL'),
     oidcToken,
   });
   const credential = await issuer.issue({
-    personaId: personaFor(variant, platform),
+    personaId: `search-cached-${platform}`,
+    platform,
     redirectTo: targetUrl,
-    runId: required('GITHUB_RUN_ID'),
   });
   let actionLink = String(credential.actionLink || '');
   if (!actionLink.startsWith('https://') || /[\r\n]/u.test(actionLink)) {

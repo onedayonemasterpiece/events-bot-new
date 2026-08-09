@@ -31,7 +31,11 @@ def _env(**overrides: str) -> dict[str, str]:
         "AUTH_SESSION_BROKER_ALLOWED_ENVIRONMENTS": "search-e2e",
         "AUTH_SESSION_BROKER_ALLOWED_EVENTS": "schedule,workflow_dispatch,repository_dispatch",
         "AUTH_SESSION_BROKER_ALLOWED_RUNS": "github-claim-bound",
-        "AUTH_SESSION_BROKER_PERSONAS_JSON": '{"search-cached":"cached@example.invalid"}',
+        "AUTH_SESSION_BROKER_PERSONAS_JSON": (
+            '{"search-cached-browser":"browser@example.invalid",'
+            '"search-cached-android":"android@example.invalid",'
+            '"search-cached-ios":"ios@example.invalid"}'
+        ),
         "AUTH_SESSION_BROKER_ALLOWED_REDIRECTS": "https://kenigevents.ru/poisk/\nhttps://kenigevents.ru/_review/{secret-candidate}/poisk/",
         "AUTH_SESSION_BROKER_PER_RUN_PERSONA_LIMIT": "1",
         "AUTH_SESSION_BROKER_AUDIT_HMAC_KEY": "unit-test-audit-key-with-enough-entropy",
@@ -42,7 +46,7 @@ def _env(**overrides: str) -> dict[str, str]:
     return values
 
 
-async def _client(monkeypatch, *, result=None, error=None, capacity: int = 2) -> TestClient:
+async def _client(monkeypatch, *, result=None, error=None, capacity: int = 3) -> TestClient:
     def process(payload, *, token):
         assert payload == {"ok": True}
         assert token == "oidc"
@@ -136,8 +140,63 @@ async def test_route_rejects_when_process_local_broker_capacity_is_full(monkeypa
             headers={"Authorization": "Bearer oidc"},
         )
         assert response.status == 429
-        assert await response.json() == {"error": "broker_busy"}
+        assert await response.json() == {
+            "error": "broker_busy",
+            "claim": "overload",
+            "product_health": "UNKNOWN",
+            "execution_status": "BLOCKED",
+            "failure_class": "UNKNOWN",
+        }
     finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_http_admits_three_platforms_and_rejects_fourth_without_queueing(monkeypatch):
+    started = 0
+    lock = threading.Lock()
+    all_started = threading.Event()
+    release = threading.Event()
+
+    def process(payload, *, token):
+        nonlocal started
+        assert payload["platform"] in {"browser", "android", "ios"}
+        assert token == "oidc"
+        with lock:
+            started += 1
+            if started == 3:
+                all_started.set()
+        assert release.wait(timeout=3)
+        return {"platform": payload["platform"], "email_otp": "123456"}
+
+    monkeypatch.setattr(http_broker.broker, "process", process)
+    app = web.Application()
+    assert http_broker.register(app, _env()) is True
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    headers = {"Authorization": "Bearer oidc"}
+    try:
+        active = [
+            asyncio.create_task(client.post(
+                http_broker.ROUTE,
+                json={"platform": platform, "redirect_to": "https://kenigevents.ru/poisk/"},
+                headers=headers,
+            ))
+            for platform in ("browser", "android", "ios")
+        ]
+        assert await asyncio.to_thread(all_started.wait, 3)
+        fourth = await client.post(
+            http_broker.ROUTE,
+            json={"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
+            headers=headers,
+        )
+        assert fourth.status == 429
+        assert (await fourth.json())["failure_class"] == "UNKNOWN"
+        release.set()
+        responses = await asyncio.gather(*active)
+        assert [response.status for response in responses] == [200, 200, 200]
+    finally:
+        release.set()
         await client.close()
 
 

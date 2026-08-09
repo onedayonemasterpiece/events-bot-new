@@ -153,3 +153,20 @@ def test_broker_issue_claim_is_service_only_and_pii_free() -> None:
     assert "persona_id = p_persona_id" in duplicate_guard
     assert "return false;" in duplicate_guard
     assert "return true;" not in duplicate_guard
+
+    platform_claim = (
+        ROOT
+        / "supabase"
+        / "migrations"
+        / "20260809143602_static_site_auth_broker_platform_claims.sql"
+    ).read_text(encoding="utf-8")
+    assert "claim_static_site_auth_session_issue_v2" in platform_claim
+    assert "p_platform not in ('browser', 'android', 'ios')" in platform_claim
+    for outcome in ("new", "duplicate_inflight", "persona_busy"):
+        assert f"return '{outcome}';" in platform_claim
+    assert "security definer" in platform_claim
+    assert "set search_path = pg_catalog" in platform_claim
+    assert "from public, anon, authenticated" in platform_claim
+    assert "to service_role" in platform_claim
+    for forbidden in ("email_otp", "action_link", "access_token", "refresh_token"):
+        assert forbidden not in platform_claim

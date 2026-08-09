@@ -4,6 +4,8 @@ import base64
 import importlib.util
 import json
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import quote
 
@@ -80,14 +82,14 @@ def claims(**overrides: str) -> dict[str, str]:
 
 
 class Transport:
-    def __init__(self, *, admitted: bool = True):
-        self.admitted = admitted
+    def __init__(self, *, claim: str = "new"):
+        self.claim = claim
         self.calls: list[tuple[str, str, dict[str, str], bytes | None, float]] = []
 
     def __call__(self, method, url, headers, body, timeout):
         self.calls.append((method, url, dict(headers), body, timeout))
-        if url.endswith("/rpc/claim_static_site_auth_session_issue_v1"):
-            return 200, json.dumps({"admitted": self.admitted}).encode()
+        if url.endswith("/rpc/claim_static_site_auth_session_issue_v2"):
+            return 200, json.dumps(self.claim).encode()
         if url.endswith("/auth/v1/admin/generate_link"):
             redirect = json.loads(body)["redirect_to"]
             return 200, json.dumps({
@@ -105,11 +107,13 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
     transport = Transport()
     logs: list[dict] = []
     result = broker.process(
-        {"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/", "run_id": "123456789"},
+        {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
         token="opaque-signed-jwt", env=environment(), transport=transport,
         verifier=lambda _token, _env: claims(), audit_sink=logs.append,
     )
     assert result == {
+        "claim": "new",
+        "platform": "browser",
         "email_otp": "456789",
         "action_link": (
             "https://project.supabase.co/auth/v1/verify?token=secret&"
@@ -123,13 +127,17 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
         },
     }
     assert [call[1].rsplit("/", 1)[-1] for call in transport.calls] == [
-        "claim_static_site_auth_session_issue_v1", "generate_link"
+        "claim_static_site_auth_session_issue_v2", "generate_link"
     ]
     expected_key = environment()["AUTH_SESSION_BROKER_SUPABASE_SERVICE_ROLE_KEY"]
     assert transport.calls[0][2]["apikey"] == expected_key
     assert transport.calls[0][2]["authorization"] == f"Bearer {expected_key}"
     ledger = json.loads(transport.calls[0][3])
     assert ledger["p_run_id"] == "123456789"
+    assert ledger["p_run_attempt"] == 1
+    assert ledger["p_repository"] == "onedayonemasterpiece/events-bot-new"
+    assert ledger["p_workflow_ref"] == claims()["workflow_ref"]
+    assert ledger["p_platform"] == "browser"
     assert ledger["p_persona_id"] == "search-cached-browser"
     assert ledger["p_limit"] == 1
     raw_generate_link = json.loads(transport.calls[1][3])
@@ -146,6 +154,23 @@ def test_authorized_github_run_claims_once_and_returns_no_mail_issuer_contract()
     assert "123456789" not in serialized
     assert "token=secret" not in serialized
     assert expected_key not in serialized
+
+
+@pytest.mark.parametrize(("platform", "persona_id", "email"), [
+    ("browser", "search-cached-browser", "search-cached@example.invalid"),
+    ("android", "search-cached-android", "search-android@example.invalid"),
+    ("ios", "search-cached-ios", "search-ios@example.invalid"),
+])
+def test_each_platform_uses_only_its_dedicated_server_side_persona(platform, persona_id, email):
+    transport = Transport()
+    result = broker.process(
+        {"platform": platform, "redirect_to": "https://kenigevents.ru/poisk/"},
+        token="jwt", env=environment(), transport=transport,
+        verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
+    )
+    assert result["platform"] == platform
+    assert json.loads(transport.calls[0][3])["p_persona_id"] == persona_id
+    assert json.loads(transport.calls[1][3])["email"] == email
 
 
 def test_broker_accepts_sdk_wrapped_generate_link_shape_for_issuer_compatibility():
@@ -168,8 +193,7 @@ def test_broker_accepts_sdk_wrapped_generate_link_shape_for_issuer_compatibility
             return super().__call__(method, url, headers, body, timeout)
 
     result = broker.process(
-        {"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/",
-         "run_id": "123456789"},
+        {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
         token="jwt", env=environment(), transport=WrappedTransport(),
         verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
     )
@@ -193,8 +217,7 @@ def test_broker_rejects_generate_link_redirect_drift():
 
     with pytest.raises(broker.BrokerError, match="issuer_response_invalid"):
         broker.process(
-            {"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/",
-             "run_id": "123456789"},
+            {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
             token="jwt", env=environment(), transport=DriftedRedirectTransport(),
             verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
         )
@@ -212,22 +235,25 @@ def test_every_github_identity_dimension_is_fail_closed(claim_name, claim_value,
     transport = Transport()
     with pytest.raises(broker.BrokerError, match=code):
         broker.process(
-            {"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/",
-             "run_id": "not-allowlisted" if claim_name == "run_id" else "123456789"},
+            {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
             token="jwt", env=environment(), transport=transport,
             verifier=lambda _token, _env: claims(**{claim_name: claim_value}), audit_sink=lambda _row: None,
         )
     assert transport.calls == []
 
 
-def test_run_is_bound_to_verified_claim_and_persona_and_redirect_are_allowlisted():
+def test_platform_is_closed_and_spoofable_identity_fields_are_rejected():
     for request, code in [
-        ({"persona_id": "unknown", "redirect_to": "https://kenigevents.ru/poisk/", "run_id": "123456789"},
-         "persona_not_allowed"),
-        ({"persona_id": "search-cached-browser", "redirect_to": "https://attacker.invalid/poisk/", "run_id": "123456789"},
+        ({"platform": "desktop", "redirect_to": "https://kenigevents.ru/poisk/"},
+         "platform_not_allowed"),
+        ({"platform": "browser", "redirect_to": "https://attacker.invalid/poisk/"},
          "redirect_not_allowed"),
-        ({"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/", "run_id": "987654321"},
-         "run_claim_mismatch"),
+        ({"platform": "browser", "persona_id": "search-cached-android",
+          "redirect_to": "https://kenigevents.ru/poisk/"}, "request_identity_spoofed"),
+        ({"platform": "browser", "run_id": "987654321",
+          "redirect_to": "https://kenigevents.ru/poisk/"}, "request_identity_spoofed"),
+        ({"platform": "browser", "repository": "attacker/repo",
+          "redirect_to": "https://kenigevents.ru/poisk/"}, "request_identity_spoofed"),
     ]:
         with pytest.raises(broker.BrokerError, match=code):
             broker.process(request, token="jwt", env=environment(), transport=Transport(),
@@ -235,29 +261,40 @@ def test_run_is_bound_to_verified_claim_and_persona_and_redirect_are_allowlisted
 
     token = "Z" * 43
     result = broker.process(
-        {"persona_id": "search-cold-browser", "redirect_to": f"https://kenigevents.ru/_review/{token}/poisk/",
-         "run_id": "123456789"},
+        {"platform": "browser", "redirect_to": f"https://kenigevents.ru/_review/{token}/poisk/"},
         token="jwt", env=environment(), transport=Transport(), verifier=lambda _token, _env: claims(),
         audit_sink=lambda _row: None,
     )
     assert result["email_otp"] == "456789"
 
 
-def test_per_run_persona_ledger_rejection_never_generates_another_credential():
-    transport = Transport(admitted=False)
-    with pytest.raises(broker.BrokerError, match="issuance_limit_reached"):
+@pytest.mark.parametrize(("claim", "status"), [
+    ("duplicate_inflight", 409),
+    ("persona_busy", 423),
+])
+def test_typed_ledger_rejection_never_generates_another_credential(claim, status):
+    transport = Transport(claim=claim)
+    with pytest.raises(broker.BrokerError, match=claim) as caught:
         broker.process(
-            {"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/", "run_id": "123456789"},
+            {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
             token="jwt", env=environment(), transport=transport, verifier=lambda _token, _env: claims(),
             audit_sink=lambda _row: None,
         )
+    assert caught.value.status == status
+    assert caught.value.public_payload() == {
+        "error": claim,
+        "claim": claim,
+        "product_health": "UNKNOWN",
+        "execution_status": "BLOCKED",
+        "failure_class": "UNKNOWN",
+    }
     assert len(transport.calls) == 1
-    assert transport.calls[0][1].endswith("/rpc/claim_static_site_auth_session_issue_v1")
+    assert transport.calls[0][1].endswith("/rpc/claim_static_site_auth_session_issue_v2")
 
 
 def test_exact_run_allowlist_is_supported_but_wildcards_are_forbidden():
     broker.process(
-        {"persona_id": "search-cached-browser", "redirect_to": "https://kenigevents.ru/poisk/", "run_id": "123456789"},
+        {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"},
         token="jwt", env=environment(AUTH_SESSION_BROKER_ALLOWED_RUNS="123456789"), transport=Transport(),
         verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
     )
@@ -273,6 +310,65 @@ def test_exact_run_allowlist_is_supported_but_wildcards_are_forbidden():
 def test_broker_requires_dedicated_legacy_service_role_jwt(key):
     with pytest.raises(broker.BrokerError, match="supabase_service_role_key_invalid"):
         broker.policy_from_env(environment(AUTH_SESSION_BROKER_SUPABASE_SERVICE_ROLE_KEY=key))
+
+
+def test_platform_personas_are_server_derived_and_emails_must_be_unique():
+    policy = broker.policy_from_env(environment())
+    assert {
+        platform: persona.persona_id
+        for platform, persona in policy.platform_personas.items()
+    } == {
+        "browser": "search-cached-browser",
+        "android": "search-cached-android",
+        "ios": "search-cached-ios",
+    }
+    configured = json.loads(environment()["AUTH_SESSION_BROKER_PERSONAS_JSON"])
+    configured["search-cached-ios"] = configured["search-cached-android"]
+    with pytest.raises(broker.BrokerError, match="platform_personas_not_unique"):
+        broker.policy_from_env(environment(
+            AUTH_SESSION_BROKER_PERSONAS_JSON=json.dumps(configured),
+        ))
+    del configured["search-cached-ios"]
+    with pytest.raises(broker.BrokerError, match="platform_personas_invalid"):
+        broker.policy_from_env(environment(
+            AUTH_SESSION_BROKER_PERSONAS_JSON=json.dumps(configured),
+        ))
+
+
+def test_identical_concurrent_issue_is_coalesced_to_one_claim_and_generate_link():
+    transport = Transport()
+    verifier_count = 0
+    verifier_lock = threading.Lock()
+    both_verified = threading.Event()
+
+    def verifier(_token, _env):
+        nonlocal verifier_count
+        with verifier_lock:
+            verifier_count += 1
+            if verifier_count == 2:
+                both_verified.set()
+        return claims()
+
+    original_transport = transport.__call__
+
+    def delayed_transport(method, url, headers, body, timeout):
+        if url.endswith("/rpc/claim_static_site_auth_session_issue_v2"):
+            assert both_verified.wait(timeout=2)
+        return original_transport(method, url, headers, body, timeout)
+
+    request = {"platform": "browser", "redirect_to": "https://kenigevents.ru/poisk/"}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(
+            broker.process, request, token="jwt-a", env=environment(),
+            transport=delayed_transport, verifier=verifier, audit_sink=lambda _row: None,
+        )
+        second = pool.submit(
+            broker.process, request, token="jwt-b", env=environment(),
+            transport=delayed_transport, verifier=verifier, audit_sink=lambda _row: None,
+        )
+        assert first.result(timeout=3) == second.result(timeout=3)
+    assert sum(call[1].endswith("/rpc/claim_static_site_auth_session_issue_v2") for call in transport.calls) == 1
+    assert sum(call[1].endswith("/auth/v1/admin/generate_link") for call in transport.calls) == 1
 
 
 def test_http_handler_requires_bearer_token_and_never_echoes_internal_errors():

@@ -220,6 +220,43 @@ begin
 end;
 $$;
 
+-- Stage 2 broker claims bind the signed workflow identity to a closed platform
+-- and distinguish replay from a genuinely busy dedicated persona.
+do $$
+begin
+  if public.claim_static_site_auth_session_issue_v2(
+    'health-run-1', 1, 'browser', 'search-cached-browser',
+    'owner/repo', 'workflow@refs/heads/main', 1
+  ) <> 'new' then
+    raise exception 'first Stage 2 browser claim was not new';
+  end if;
+  if public.claim_static_site_auth_session_issue_v2(
+    'health-run-1', 1, 'browser', 'search-cached-browser',
+    'owner/repo', 'workflow@refs/heads/main', 1
+  ) <> 'duplicate_inflight' then
+    raise exception 'identical Stage 2 browser claim was not typed duplicate';
+  end if;
+  if public.claim_static_site_auth_session_issue_v2(
+    'health-run-2', 1, 'browser', 'search-cached-browser',
+    'owner/repo', 'workflow@refs/heads/main', 1
+  ) <> 'persona_busy' then
+    raise exception 'colliding Stage 2 browser claim was not typed busy';
+  end if;
+  if public.claim_static_site_auth_session_issue_v2(
+    'health-run-1', 1, 'android', 'search-cached-android',
+    'owner/repo', 'workflow@refs/heads/main', 1
+  ) <> 'new' then
+    raise exception 'dedicated Android persona was not independently admitted';
+  end if;
+  if public.claim_static_site_auth_session_issue_v2(
+    'health-run-1', 1, 'ios', 'search-cached-ios',
+    'owner/repo', 'workflow@refs/heads/main', 1
+  ) <> 'new' then
+    raise exception 'dedicated iOS persona was not independently admitted';
+  end if;
+end;
+$$;
+
 reset role;
 
 -- Owner one can read only owner one's sanitized receipt.
