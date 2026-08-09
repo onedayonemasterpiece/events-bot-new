@@ -30,6 +30,23 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-09 browser+iOS workflow
+  [`31338952963`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31338952963)
+  crossed the native-sheet fix but exposed two independent iOS infrastructure
+  boundaries. Attempt 1 timed out while creating the WebDriver session after
+  300 seconds and produced a closed `UNKNOWN_IOS_INFRA` receipt with zero
+  broker/Auth/Search operations. Production health had not actually wired the
+  already-proven OTP rule that permits one Appium/WDA restart only after such a
+  zero-side-effect, cleaned-session receipt; it now reuses that shared contract
+  and records only its closed retry metadata. The explicitly safe rerun then
+  passed native Safari/WebKit preflight and callback authorization with zero
+  Search POSTs, but Mobile Safari returned no usable result from the synchronous
+  Promise-based `getUser`/owner-RLS probe. That Search-specific proof now uses
+  WebDriver's asynchronous callback command inside the same neutral OTP/Search
+  Appium session. Browser stayed `HEALTHY/PASS`; iOS acceptance remains pending
+  a fresh merged-SHA run, so incident acceptance is still `1/2` and schedules
+  remain disabled.
+
 - 2026-08-09 merged-SHA browser+iOS run `31338416105` crossed the former
   `search_choice_action_missing` boundary. The exact native sheet was
   recognized and the final closed inspection after its single action reported

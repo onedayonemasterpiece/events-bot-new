@@ -11,6 +11,10 @@
   completed browser+Android `HEALTHY/PASS` on an unchanged immutable product.
   Browser+iOS runs `31337291226` and `31337643487` stopped side-effect-free in
   the fresh-simulator Safari first-run sheet before broker/Auth/Search.
+  Run `31338952963` then passed that common native startup path: attempt 1
+  stopped during side-effect-free WebDriver session creation and its safe rerun
+  passed Safari/callback but exposed the iOS synchronous Promise-return boundary
+  in the Search-only owner proof, still before any Search POST.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -32,8 +36,9 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **147/147 PASS** after the shared
-  OTP/Search Safari native-sheet and closed failure-evidence regressions;
+- Search production-health aggregate suite: **150/150 PASS** after the shared
+  OTP/Search Safari native-sheet, pre-side-effect retry, async owner-proof and
+  closed failure-evidence regressions;
 - legacy Search harness: **32/32 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
   security and static source/release regression **135/135 PASS**; Edge contract
@@ -90,6 +95,17 @@ five-second stable-dismissal window by re-reading the multi-second XCTest source
 for every absence sample. The shared helper now reuses the OTP pattern: one
 clean source snapshot plus fresh exact element queries. No broker/Auth/Search
 traffic occurred, so acceptance remains `1/2` pending one new iOS proof.
+
+Run `31338952963` then proved that shared native-sheet path on a fresh simulator.
+Attempt 1 timed out in WebDriver session creation with a closed zero-side-effect
+receipt; production health now invokes the same single pre-side-effect
+Appium/WDA retry boundary as OTP and records its safe receipt. The safe rerun
+passed Safari/WebKit preflight and callback authorization but iOS returned no
+closed result for the synchronous Promise-based owner-RLS probe. The Search-only
+probe now uses WebDriver's asynchronous callback inside the same shared session.
+It does not issue a second credential, product OTP or mail. Acceptance remains
+`1/2` until a fresh merged-SHA browser+iOS workflow passes and matches the first
+proof's immutable identity.
 
 Steps 1–5 were completed from exact merged `main`: the v2 broker migration and
 minute cleanup are active, broker event/workflow allowlists and distinct

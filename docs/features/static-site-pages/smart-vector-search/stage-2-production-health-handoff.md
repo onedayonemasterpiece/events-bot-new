@@ -12,8 +12,11 @@ PRODUCT_HEALTH_UNCONFIRMED
 ## Цель этапа 2
 
 Подключить подготовленный pure contract к существующему current accepted target
-resolver и выполнить не более двух полных live workflows за одну итерацию:
-browser + Android, затем browser + iOS. Не возвращать cached-repeat, LLM,
+resolver и получить два финальных acceptance proofs: browser + Android, затем
+browser + iOS. Это не лимит diagnostic work: evidence-driven manual runs можно
+повторять до качественного результата; ограничены ровно два автоматических
+production-health запуска в сутки и один Search POST на platform cell. Не
+возвращать cached-repeat, LLM,
 pagination или полный scheduled mobile/release matrix в production-health;
 минимальный Android/iOS user journey является обязательной частью health.
 

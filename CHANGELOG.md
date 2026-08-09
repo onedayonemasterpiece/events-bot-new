@@ -49,6 +49,18 @@
 
 ### Fixed
 
+- Reused the proven iOS OTP transport in Search production health after run
+  `31338952963`. The production workflow now performs the same single
+  pre-side-effect Appium/WDA restart only when the closed startup receipt proves
+  zero broker/Auth/Search/mail activity and a deleted first driver session. The
+  same neutral Safari/XCUITest session then completes the Search-only
+  `getUser`/owner-RLS proof through WebDriver's asynchronous script callback;
+  this avoids Mobile Safari returning an empty synchronous Promise result while
+  preserving one-time session issuance, zero product OTP/mail and fail-closed
+  cleanup. Terminal aggregation now also keeps an earlier-attempt successful
+  platform artifact when GitHub safely reruns only failed jobs and selects the
+  latest sanitized receipt for each retried platform.
+
 - Fixed the remaining bounded-dismissal race exposed by merged-SHA live run
   `31338416105`: the shared Safari helper now captures the clean-simulator
   native source once, exactly as the OTP adapter already does, while continuing

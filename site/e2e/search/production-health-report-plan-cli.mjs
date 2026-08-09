@@ -176,9 +176,17 @@ function parse(argv) {
 
 export async function runProductionHealthReporter(argv = process.argv.slice(2), env = process.env) {
   const options = parse(argv);
-  const currentRecords = await resultsBelow(options.evidenceRoot);
+  const currentRunId = String(env.GITHUB_RUN_ID || '');
+  const currentRecords = (await resultsBelow(options.evidenceRoot))
+    .filter((item) => String(item.workflow_run_id || '') === currentRunId)
+    .sort((left, right) => String(left.tested_at || '').localeCompare(String(right.tested_at || '')));
   const priorRecords = await resultsBelow(options.historyRoot);
   const priorAggregates = await aggregateSummariesBelow(options.historyRoot);
+  // GitHub's "rerun failed jobs" does not recreate artifacts for successful
+  // jobs. Current evidence can therefore contain browser attempt 1 and iOS
+  // attempts 1+2; sorted Map replacement deterministically keeps the latest
+  // sanitized receipt for each platform without treating an earlier success as
+  // missing.
   const currentByPlatform = new Map(currentRecords.map((item) => [item.platform, item]));
   const priorEvidence = priorRecords.map((item) => summaryFromRecord(item, {
     ...env,

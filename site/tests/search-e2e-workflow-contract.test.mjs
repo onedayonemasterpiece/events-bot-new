@@ -102,6 +102,15 @@ test('production health has only the two bounded schedules, manual profiles and 
   assert.match(androidRunner, /--log-level error --log-no-colors[\s\S]*--log-filters/u,
     'the checked-in Android Appium server must suppress command bodies and apply URL filters');
   assert.equal((source.match(/appium-search-health-log-filters\.json/gu) || []).length >= 2, true);
+  assert.match(source, /for attempt in 1 2/u);
+  assert.match(source, /E2E_APPIUM_STARTUP_ATTEMPT/u);
+  assert.match(source, /E2E_APPIUM_STATUS_READY/u);
+  assert.match(source, /E2E_APPIUM_LOG_PATH/u);
+  assert.match(source, /production-health-mobile-retry\.mjs/u);
+  assert.match(source, /Retrying one pre-side-effect Appium\/WDA infrastructure startup/u);
+  assert.match(source, /find "\$E2E_EVIDENCE_DIR" -mindepth 1 -delete/u);
+  assert.match(source, /pattern: search-production-health-\*-\$\{\{ github\.run_id \}\}-\*/u,
+    'terminal reporting must retain successful platform evidence from an earlier failed-job attempt');
   assert.equal((androidRunner.match(/appium-search-health-log-filters\.json/gu) || []).length >= 2, true);
   assert.doesNotMatch(source, /npx appium[^\n]*(?:--log-level (?:debug|info)|--show-debug-info)/u);
   assert.doesNotMatch(androidRunner, /npx appium[^\n]*(?:--log-level (?:debug|info)|--show-debug-info)/u);

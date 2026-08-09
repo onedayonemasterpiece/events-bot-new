@@ -35,6 +35,32 @@ test('terminal reporter plans current healthy platform and ignores skipped cells
   assert.deepEqual(value, [{ platform: 'browser', action: 'close_matching' }]);
 });
 
+test('failed-job rerun keeps prior successful platform and selects latest retried platform evidence', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'search-report-rerun-'));
+  await put(root, 'attempt-1-browser', {
+    ...record('browser', '124'), tested_at: '2026-08-09T16:00:00.000Z',
+  });
+  await put(root, 'attempt-1-ios', {
+    ...record('ios', '124', 'UNKNOWN_IOS_INFRA'), tested_at: '2026-08-09T16:01:00.000Z',
+  });
+  await put(root, 'attempt-2-ios', {
+    ...record('ios', '124'), tested_at: '2026-08-09T16:20:00.000Z',
+  });
+  const output = join(root, 'aggregate', 'summary.json');
+  const value = await runProductionHealthReporter(
+    ['--evidence-root', root, '--aggregate-output', output],
+    env('124', { BROWSER_RESULT: 'success', IOS_RESULT: 'success' }),
+  );
+  assert.deepEqual(value, [
+    { platform: 'browser', action: 'close_matching' },
+    { platform: 'ios', action: 'close_matching' },
+  ]);
+  const aggregate = JSON.parse(await readFile(output, 'utf8'));
+  assert.equal(aggregate.platform_count, 2);
+  assert.equal(aggregate.platforms.find((item) => item.platform === 'browser').evidence_available, true);
+  assert.equal(aggregate.platforms.find((item) => item.platform === 'ios').product_health, 'HEALTHY');
+});
+
 test('terminal reporter opens infrastructure plan only on third prior/current identical platform result', async () => {
   const root = await mkdtemp(join(tmpdir(), 'search-report-current-'));
   const history = await mkdtemp(join(tmpdir(), 'search-report-history-'));

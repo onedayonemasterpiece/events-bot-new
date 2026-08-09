@@ -1173,9 +1173,12 @@ migration broker claims должна быть
 `origin/main` и подтверждён HEAD receipt, Fly broker — задеплоен из того же
 exact `origin/main`, а новый workflow ref —
 добавлен в broker allowlist вместе с exact event allowlist
-`workflow_dispatch,schedule,repository_dispatch`. Затем допускаются максимум
-два полных workflow:
-browser+Android и browser+iOS. До их terminal evidence состояние остаётся
+`workflow_dispatch,schedule,repository_dispatch`. В production автоматически
+допускаются ровно два health workflow в сутки: morning browser+Android и
+evening browser+iOS. Manual diagnostic runs не ограничены двумя: их можно
+повторять до качественного результата, но каждая выбранная platform по-прежнему
+делает не более одного Search POST, а каждый failure расследуется вместо blind
+rerun. До terminal evidence обоих daily profiles состояние остаётся
 `PRODUCT_HEALTH_UNCONFIRMED`.
 
 Live acceptance на 2026-08-09: workflow
@@ -1206,3 +1209,18 @@ absence samples; четыре hierarchy reads заняли больше bounded 
 проверенный OTP adapter, получает clean-simulator source один раз, а после click
 проверяет исчезновение повторными live exact element queries. Следующий iOS
 live run остаётся обязательным; acceptance всё ещё `1/2`.
+
+Следующий merged-SHA workflow
+[`31338952963`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31338952963)
+подтвердил, что Search переиспользует общий OTP/Search native Safari startup,
+но attempt 1 попал в 300-секундный timeout создания WebDriver session до любых
+broker/Auth/Search операций. Production health теперь переиспользует и сам OTP
+retry boundary: ровно один restart Appium/WDA разрешён только для closed
+attempt-1 receipt с нулевыми side effects и подтверждённым driver cleanup.
+Безопасный rerun прошёл Safari/WebKit preflight и callback authorization, затем
+остановился с нулём Search POST: iOS вернул пустой результат синхронного
+Promise-based Search owner proof. Уникальная для Search проверка `getUser` +
+owner-RLS теперь выполняется через WebDriver async callback в той же общей
+mobile session; отдельного iOS Search adapter, OTP fallback или второй
+credential нет. Fresh merged-SHA browser+iOS live evidence всё ещё обязательно,
+поэтому acceptance остаётся `1/2`, а automation — default-off.
