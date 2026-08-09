@@ -179,6 +179,16 @@ export function normalizeAcceptedTargetResolverResult(input) {
   });
 }
 
+export function acceptedTargetImmutableEvidence(target) {
+  if (!(target instanceof NormalizedAcceptedTarget)) throw new Error('search_health_target_not_normalized');
+  return Object.freeze({
+    source: target.source,
+    accepted_release_id: target.accepted_release_id,
+    target_repo_sha: target.target_repo_sha,
+    immutable_identity: Object.freeze({ ...target.immutable_identity }),
+  });
+}
+
 const samePinnedTarget = (left, right) => (
   left.navigationUrl() === right.navigationUrl()
   && JSON.stringify(left.immutable_identity) === JSON.stringify(right.immutable_identity)

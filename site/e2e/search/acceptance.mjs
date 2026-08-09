@@ -1,5 +1,7 @@
 const SEARCH_PATH = '/functions/v1/event-search';
 
+import { searchProviderCounters } from './provider-counters.mjs';
+
 const boundedString = (value, max = 96) => String(value ?? '').slice(0, max);
 const asCount = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : 0;
 const stableId = (value) => {
@@ -37,7 +39,7 @@ function visibleItems(payload) {
 export function summarizeSearchPayload(payload, extras = {}) {
   if (!payload || typeof payload !== 'object') return null;
   const visible = visibleItems(payload);
-  const attempts = payload.provider_attempt_counters ?? payload.provider_attempts ?? {};
+  const attempts = searchProviderCounters(payload);
   const llm = payload.llm_verifier && typeof payload.llm_verifier === 'object' ? payload.llm_verifier : {};
   const requestedMode = payload.requested_execution_mode ?? payload.requested_mode ?? '';
   const actualMode = payload.actual_execution_mode ?? payload.execution_mode ?? '';
@@ -62,14 +64,12 @@ export function summarizeSearchPayload(payload, extras = {}) {
       ? Object.fromEntries(Object.entries(payload.policy_versions).filter(([key, value]) => /^[a-z0-9_.-]+$/iu.test(key) && typeof value === 'string').map(([key, value]) => [key, boundedString(value, 96)]))
       : {},
     provider_attempts: {
-      embedding: asCount(attempts.embedding ?? attempts.embedding_provider ?? payload.embedding_provider_attempts),
-      vector: asCount(attempts.vector ?? attempts.vector_rpc ?? payload.vector_attempts),
-      llm: asCount(attempts.llm ?? attempts.verifier ?? payload.llm_provider_attempts),
+      embedding: attempts.embedding,
+      vector: attempts.vector,
+      llm: attempts.llm,
     },
-    provider_attempts_present: Boolean(
-      (attempts && typeof attempts === 'object' && Object.keys(attempts).length > 0)
-      || payload.embedding_provider_attempts != null || payload.vector_attempts != null || payload.llm_provider_attempts != null,
-    ),
+    provider_attempts_present: attempts.present,
+    provider_attempts_source: attempts.source,
     llm: {
       requested: llm.requested === true,
       used: llm.used === true,

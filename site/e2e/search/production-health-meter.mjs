@@ -74,6 +74,25 @@ const budgetStatus = (bytes) => {
   return 'hard_limit_exceeded';
 };
 
+const meterSnapshot = (categories, sources, excludedRequests = 0) => {
+  const total = Object.values(categories).reduce((sum, value) => sum + value, 0);
+  const status = budgetStatus(total);
+  return Object.freeze({
+    schema_version: 'supabase_client_observed_bytes_v1',
+    measurement_basis: 'client_observed_response_bytes',
+    total_bytes: total,
+    target_bytes: SUPABASE_CLIENT_BYTE_TARGET,
+    hard_limit_bytes: SUPABASE_CLIENT_BYTE_HARD_LIMIT,
+    budget_status: status,
+    target_met: total <= SUPABASE_CLIENT_BYTE_TARGET,
+    cost_guard_passed: total <= SUPABASE_CLIENT_BYTE_HARD_LIMIT,
+    hard_limit_exceeded: status === 'hard_limit_exceeded',
+    categories: Object.freeze({ ...categories }),
+    sources: Object.freeze({ ...sources }),
+    excluded_requests: excludedRequests,
+  });
+};
+
 export class SupabaseClientObservedByteMeter {
   #origins;
   #categories = {
@@ -108,21 +127,57 @@ export class SupabaseClientObservedByteMeter {
   }
 
   snapshot() {
-    const total = Object.values(this.#categories).reduce((sum, value) => sum + value, 0);
-    const status = budgetStatus(total);
-    return Object.freeze({
-      schema_version: 'supabase_client_observed_bytes_v1',
-      measurement_basis: 'client_observed_response_bytes',
-      total_bytes: total,
-      target_bytes: SUPABASE_CLIENT_BYTE_TARGET,
-      hard_limit_bytes: SUPABASE_CLIENT_BYTE_HARD_LIMIT,
-      budget_status: status,
-      target_met: total <= SUPABASE_CLIENT_BYTE_TARGET,
-      cost_guard_passed: total <= SUPABASE_CLIENT_BYTE_HARD_LIMIT,
-      hard_limit_exceeded: status === 'hard_limit_exceeded',
-      categories: Object.freeze({ ...this.#categories }),
-      sources: Object.freeze({ ...this.#sources }),
-      excluded_requests: this.#excludedRequests,
-    });
+    return meterSnapshot(this.#categories, this.#sources, this.#excludedRequests);
   }
+}
+
+export function mergeSupabaseClientByteSnapshots(...snapshots) {
+  const categories = { auth: 0, edge: 0, direct_rest: 0, direct_rpc: 0 };
+  const sources = { content_length: 0, received_body: 0 };
+  let excludedRequests = 0;
+  for (const snapshot of snapshots.flat().filter(Boolean)) {
+    if (snapshot.schema_version !== 'supabase_client_observed_bytes_v1'
+      || snapshot.measurement_basis !== 'client_observed_response_bytes') {
+      throw new Error('search_health_meter_snapshot_invalid');
+    }
+    for (const key of Object.keys(categories)) {
+      const value = Number(snapshot.categories?.[key]);
+      if (!Number.isSafeInteger(value) || value < 0) throw new Error('search_health_meter_snapshot_invalid');
+      categories[key] += value;
+    }
+    for (const key of Object.keys(sources)) {
+      const value = Number(snapshot.sources?.[key]);
+      if (!Number.isSafeInteger(value) || value < 0) throw new Error('search_health_meter_snapshot_invalid');
+      sources[key] += value;
+    }
+    const excluded = Number(snapshot.excluded_requests);
+    if (!Number.isSafeInteger(excluded) || excluded < 0) throw new Error('search_health_meter_snapshot_invalid');
+    excludedRequests += excluded;
+  }
+  return meterSnapshot(categories, sources, excludedRequests);
+}
+
+/** Measure an already-received response without changing the response body. */
+export async function recordSupabaseFetchResponse(meter, url, response) {
+  if (!(meter instanceof SupabaseClientObservedByteMeter) || !response) {
+    throw new Error('search_health_meter_response_invalid');
+  }
+  const headerLength = contentLength(response.headers);
+  let body = null;
+  if (headerLength === null) body = await response.clone().arrayBuffer();
+  const recorded = meter.recordResponse({ url, headers: response.headers, body });
+  if (meter.snapshot().hard_limit_exceeded) throw new Error('search_health_supabase_hard_limit_exceeded');
+  return recorded;
+}
+
+export function createSupabaseMeteredFetch(fetchImpl, meter) {
+  if (typeof fetchImpl !== 'function' || !(meter instanceof SupabaseClientObservedByteMeter)) {
+    throw new Error('search_health_meter_fetch_invalid');
+  }
+  return async (input, init) => {
+    const response = await fetchImpl(input, init);
+    const rawUrl = input instanceof Request ? input.url : String(input);
+    await recordSupabaseFetchResponse(meter, rawUrl, response);
+    return response;
+  };
 }
