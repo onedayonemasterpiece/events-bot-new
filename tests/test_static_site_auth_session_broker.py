@@ -497,6 +497,59 @@ def test_identical_unconsumed_request_replays_after_process_state_loss_without_s
     assert len(replay_transport.calls) == 1
 
 
+def test_slow_cross_process_owner_completes_after_old_poll_window_without_second_issue(monkeypatch):
+    assert (
+        (broker._DURABLE_REPLAY_POLL_ATTEMPTS - 1) * broker._DURABLE_REPLAY_POLL_SECONDS
+        >= 3 * broker._SUPABASE_CALL_TIMEOUT_SECONDS + broker._DURABLE_REPLAY_POLL_MARGIN_SECONDS
+    )
+    policy = broker.policy_from_env(environment())
+    expected = {
+        "claim": "new",
+        "platform": "browser",
+        "email_otp": "456789",
+        "action_link": (
+            "https://project.supabase.co/auth/v1/verify?token=slow-owner&"
+            "redirect_to=https%3A%2F%2Fkenigevents.ru%2Fpoisk%2F"
+        ),
+        "counters": {
+            "admin_credential_count": 1,
+            "product_otp_issue_count": 0,
+            "external_mail_send_count": 0,
+            "external_mail_receipt_count": 0,
+        },
+    }
+    ciphertext = broker._seal_issued_result(expected, policy)
+
+    class SlowCrossProcessOwnerTransport(Transport):
+        def __init__(self):
+            super().__init__()
+            self.claim_calls = 0
+
+        def __call__(self, method, url, headers, body, timeout):
+            self.calls.append((method, url, dict(headers), body, timeout))
+            if not url.endswith("/rpc/claim_static_site_auth_session_issue_v2"):
+                raise AssertionError("duplicate claimant must never generate or complete")
+            self.claim_calls += 1
+            if self.claim_calls <= 20:
+                return 200, json.dumps({"claim": "duplicate_inflight"}).encode()
+            return 200, json.dumps({
+                "claim": "replay", "credential_ciphertext": ciphertext,
+            }).encode()
+
+    broker.reset_transient_issue_state_for_tests()
+    monkeypatch.setattr(broker.time, "sleep", lambda _seconds: None)
+    transport = SlowCrossProcessOwnerTransport()
+    replayed = broker.process(
+        {"purpose": "production_health", "platform": "browser",
+         "redirect_to": "https://kenigevents.ru/poisk/"},
+        token="cross-process-duplicate", env=environment(), transport=transport,
+        verifier=lambda _token, _env: claims(), audit_sink=lambda _row: None,
+    )
+    assert replayed == expected
+    assert transport.claim_calls == 21
+    assert all(not call[1].endswith("/auth/v1/admin/generate_link") for call in transport.calls)
+
+
 def test_http_handler_requires_bearer_token_and_never_echoes_internal_errors():
     response = broker.handler({"headers": {}, "body": "{}", "isBase64Encoded": False}, None)
     assert response["statusCode"] == 401

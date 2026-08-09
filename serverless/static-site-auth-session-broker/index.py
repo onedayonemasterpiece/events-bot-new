@@ -13,6 +13,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import threading
@@ -146,8 +147,19 @@ _ISSUE_FLIGHTS_LOCK = threading.Lock()
 _ISSUE_REPLAYS: dict[tuple[str, str, str, int, str, str], _IssueReplay] = {}
 _ISSUE_REPLAY_TTL_SECONDS = 30.0
 _ISSUE_REPLAY_MAX_ENTRIES = 12
-_DURABLE_REPLAY_POLL_ATTEMPTS = 20
+_SUPABASE_CALL_TIMEOUT_SECONDS = 5.0
 _DURABLE_REPLAY_POLL_SECONDS = 0.25
+_DURABLE_REPLAY_POLL_MARGIN_SECONDS = 2.0
+# A competing process may observe the row immediately after the owner's claim
+# starts. Cover the complete claim + generate_link + completion RPC budget and
+# an explicit scheduler/network margin before returning duplicate_inflight.
+_DURABLE_REPLAY_POLL_WINDOW_SECONDS = (
+    3 * _SUPABASE_CALL_TIMEOUT_SECONDS + _DURABLE_REPLAY_POLL_MARGIN_SECONDS
+)
+_DURABLE_REPLAY_POLL_ATTEMPTS = (
+    math.ceil(_DURABLE_REPLAY_POLL_WINDOW_SECONDS / _DURABLE_REPLAY_POLL_SECONDS) + 1
+)
+_COALESCED_ISSUE_WAIT_SECONDS = _DURABLE_REPLAY_POLL_WINDOW_SECONDS
 
 
 def reset_transient_issue_state_for_tests() -> None:
@@ -428,10 +440,14 @@ def _headers(policy: Policy) -> dict[str, str]:
     }
 
 
-def _json_call(path: str, payload: Mapping[str, Any], *, policy: Policy, transport: Transport) -> Any:
+def _json_call(
+    path: str, payload: Mapping[str, Any], *, policy: Policy, transport: Transport,
+    timeout_seconds: float = _SUPABASE_CALL_TIMEOUT_SECONDS,
+) -> Any:
     status, raw = transport(
         "POST", f"{policy.supabase_url}{path}", _headers(policy),
-        json.dumps(dict(payload), separators=(",", ":")).encode(), 5.0,
+        json.dumps(dict(payload), separators=(",", ":")).encode(),
+        timeout_seconds,
     )
     if status < 200 or status >= 300:
         raise BrokerError("supabase_request_rejected", status=503)
@@ -517,10 +533,15 @@ def _issue_authorized(
     }
     admission = ""
     replay_ciphertext = ""
+    replay_deadline = time.monotonic() + _DURABLE_REPLAY_POLL_WINDOW_SECONDS
     for poll in range(_DURABLE_REPLAY_POLL_ATTEMPTS):
+        remaining = replay_deadline - time.monotonic()
+        if remaining <= 0:
+            break
         raw_admission = _json_call(
             "/rest/v1/rpc/claim_static_site_auth_session_issue_v2",
             claim_payload, policy=policy, transport=transport,
+            timeout_seconds=min(_SUPABASE_CALL_TIMEOUT_SECONDS, remaining),
         )
         if isinstance(raw_admission, Mapping):
             admission = str(raw_admission.get("claim") or raw_admission.get("outcome") or "").strip().lower()
@@ -529,7 +550,10 @@ def _issue_authorized(
             admission = str(raw_admission or "").strip().lower()
         if admission != "duplicate_inflight" or poll + 1 >= _DURABLE_REPLAY_POLL_ATTEMPTS:
             break
-        time.sleep(_DURABLE_REPLAY_POLL_SECONDS)
+        remaining = replay_deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(_DURABLE_REPLAY_POLL_SECONDS, remaining))
 
     if admission == "replay":
         result = _unseal_issued_result(replay_ciphertext, policy)
@@ -643,7 +667,7 @@ def _coalesced_issue(
         return replayed
     assert flight is not None
     if not owner:
-        flight.ready.wait(timeout=15.0)
+        flight.ready.wait(timeout=_COALESCED_ISSUE_WAIT_SECONDS)
         if not flight.ready.is_set():
             raise BrokerError("coalesced_issue_timeout", status=503, claim="duplicate_inflight")
         if flight.error:

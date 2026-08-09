@@ -162,6 +162,7 @@ def test_broker_issue_claim_is_service_only_and_pii_free() -> None:
     ).read_text(encoding="utf-8")
     assert "claim_static_site_auth_session_issue_v2" in platform_claim
     assert "p_platform not in ('browser', 'android', 'ios')" in platform_claim
+    assert "primary key (\n    repository, workflow_ref, run_id, run_attempt, platform, persona_id\n  )" in platform_claim
     for outcome in ("new", "replay", "duplicate_inflight", "duplicate_consumed", "persona_busy"):
         assert f"'claim', '{outcome}'" in platform_claim
     assert "complete_static_site_auth_session_issue_v2" in platform_claim

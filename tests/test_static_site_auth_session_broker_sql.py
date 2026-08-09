@@ -36,13 +36,18 @@ def test_migration_first_rollout_keeps_deployed_v1_claim_executable() -> None:
             "run", "--rm", "--detach", "--name", container,
             "--env", "POSTGRES_PASSWORD=postgres", "postgres:17-alpine",
         )
-        for _ in range(60):
+        ready_since = None
+        for _ in range(80):
             ready = subprocess.run(
                 ["docker", "exec", container, "pg_isready", "-U", "postgres"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             if ready.returncode == 0:
-                break
+                ready_since = ready_since or time.monotonic()
+                if time.monotonic() - ready_since >= 1.0:
+                    break
+            else:
+                ready_since = None
             time.sleep(0.25)
         else:
             pytest.fail("ephemeral PostgreSQL did not become ready")
@@ -150,6 +155,44 @@ where jobname = 'static-site-auth-session-credential-cleanup';
         assert purpose_result.stdout.splitlines() == [
             "new", "t", "new", "t", "replay", "2", "UPDATE 2", "2", "t",
             "* * * * *|select public.cleanup_static_site_auth_session_issue_credentials_v1()",
+        ]
+
+        _docker(
+            "exec", "-i", container, "psql", "-q", "-v", "ON_ERROR_STOP=1", "-U", "postgres",
+            input_text="delete from public.static_site_auth_session_issue_claim;",
+        )
+        identity_result = _docker(
+            "exec", "-i", container, "psql", "-At", "-v", "ON_ERROR_STOP=1", "-U", "postgres",
+            input_text="""
+select public.claim_static_site_auth_session_issue_v2(
+  'identity-run', 1, 'browser', 'same-persona', 'owner/repo-a', 'owner/repo-a/w.yml@refs/heads/main', 3
+)->>'claim';
+select public.claim_static_site_auth_session_issue_v2(
+  'identity-run', 1, 'browser', 'same-persona', 'owner/repo-b', 'owner/repo-b/w.yml@refs/heads/main', 3
+)->>'claim';
+select pg_catalog.count(*) from public.static_site_auth_session_issue_claim;
+delete from public.static_site_auth_session_issue_claim;
+select public.claim_static_site_auth_session_issue_v2(
+  'identity-run', 1, 'browser', 'same-persona', 'owner/repo', 'owner/repo/a.yml@refs/heads/main', 3
+)->>'claim';
+select public.claim_static_site_auth_session_issue_v2(
+  'identity-run', 1, 'browser', 'same-persona', 'owner/repo', 'owner/repo/b.yml@refs/heads/main', 3
+)->>'claim';
+select pg_catalog.count(*) from public.static_site_auth_session_issue_claim;
+delete from public.static_site_auth_session_issue_claim;
+select public.claim_static_site_auth_session_issue_v2(
+  'identity-run', 1, 'browser', 'same-persona', 'owner/repo', 'owner/repo/w.yml@refs/heads/main', 3
+)->>'claim';
+select public.claim_static_site_auth_session_issue_v2(
+  'identity-run', 1, 'android', 'same-persona', 'owner/repo', 'owner/repo/w.yml@refs/heads/main', 3
+)->>'claim';
+select pg_catalog.count(*) from public.static_site_auth_session_issue_claim;
+""",
+        )
+        assert identity_result.stdout.splitlines() == [
+            "new", "new", "2", "DELETE 2",
+            "new", "new", "2", "DELETE 2",
+            "new", "new", "2",
         ]
     finally:
         subprocess.run(

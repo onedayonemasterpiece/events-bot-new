@@ -50,7 +50,11 @@ process are coalesced to one ledger call and one `generate_link`. To close the
 ordinary lost-HTTP-response window, a successful result may be replayed
 once from broker process memory for at most 30 seconds. In addition, the claim
 ledger accepts replay of a Fernet-encrypted result for at most two minutes. A
-named `pg_cron` job runs every minute and physically nulls expired ciphertext,
+cross-process duplicate polls the ledger for 17 seconds: the three five-second
+Supabase call budgets (claim, `generate_link`, completion) plus an explicit
+two-second margin. It can only receive the owner's encrypted replay and never
+calls `generate_link` itself. A named `pg_cron` job runs every minute and
+physically nulls expired ciphertext,
 independently of later broker traffic; the migration fails closed if Supabase
 Cron cannot be installed or resolved. The key is derived in memory from the
 broker-only audit secret; plaintext OTP/action link is never stored. Exact retries from another process or after restart receive

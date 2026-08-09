@@ -42,6 +42,18 @@ alter table public.static_site_auth_session_issue_claim
   add constraint static_site_auth_session_claim_platform_chk
   check (platform in ('browser', 'android', 'ios'));
 
+-- V2's durable identity includes every server-derived OIDC/platform dimension.
+-- The former shorter key could turn a different repository, workflow, or
+-- platform into a physical uniqueness error before the RPC returned a typed
+-- admission result. Existing rows are already unique under the shorter key,
+-- so widening it is migration-safe. The deployed v1 RPC remains conservative:
+-- its explicit duplicate guard still matches run-attempt/persona before insert.
+alter table public.static_site_auth_session_issue_claim
+  drop constraint if exists static_site_auth_session_issue_claim_pkey,
+  add constraint static_site_auth_session_issue_claim_pkey primary key (
+    repository, workflow_ref, run_id, run_attempt, platform, persona_id
+  );
+
 create or replace function public.claim_static_site_auth_session_issue_v2(
   p_run_id text,
   p_run_attempt integer,
