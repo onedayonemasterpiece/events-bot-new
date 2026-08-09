@@ -1,10 +1,10 @@
 # INC-2026-08-08 Private MCP OAuth redirect blocked by CSP
 
-Status: open
+Status: resolved
 Severity: sev2
 Service: Private Events MCP OAuth browser authorization
 Opened: 2026-08-08
-Closed: —
+Closed: 2026-08-09
 Owners: events-bot production / Private Events MCP
 Related incidents: —
 Related docs: `docs/operations/private-events-mcp.md`, `docs/operations/release-governance.md`
@@ -45,6 +45,13 @@ redirect chain after the form POST.
   callback origins for both ChatGPT and Codex authorization pages.
 - 2026-08-08T19:03Z — minimal dynamic callback-origin CSP fix passed the two
   OAuth round-trip tests locally.
+- 2026-08-09 — the operator completed a real ChatGPT connection and invoked
+  the private MCP, confirming that Chrome followed the validated callback.
+- 2026-08-09T07:51:00Z — PR #432 merged; exact main SHA
+  `7a5b3d61bf4787d85aa87904bc5bee5f3831e681` was deployed and accepted.
+- 2026-08-09T08:10Z — the bootstrap token alone was rotated and the same exact
+  main SHA was redeployed as Fly release `v1947`; the installed ChatGPT and
+  Codex identities, endpoint fingerprints and signing state were unchanged.
 
 ## Root Cause
 
@@ -137,8 +144,9 @@ retry until the CSP hotfix and credential rotation are deployed.
 
 ## Follow-up Actions
 
-- [ ] Complete one real ChatGPT browser connection after exact-main deploy.
-- [ ] Rotate the bootstrap token after the operator's first successful ChatGPT
+- [x] Complete one real ChatGPT browser connection after the CSP fix deploy;
+  later exact-main releases preserved that installed connector identity.
+- [x] Rotate the bootstrap token after the operator's first successful ChatGPT
   connection with `--rotate-bootstrap-only`; compare the sanitized endpoint
   fingerprints before staging and do not run `--new-install` for that step.
 - [x] Recover the operator-provided original connector bundle by equality-only
@@ -151,10 +159,33 @@ retry until the CSP hotfix and credential rotation are deployed.
 - interim recovery deploy: Fly release `v1945`, exact in-container SHA
   `0e1dad424811c2c2eedda2707b92263f8df1551b`; `/healthz` ready, DB `ok`, issues
   empty; superseded by the pending stable-identity code release
+- reviewed PR: #432, final reviewed head
+  `5cf37a222976954c1e97df05a452ea5ff5c2a6e6`; two independent reviews approved
+  the exact head; compileall and diff-check passed; private MCP suite:
+  `257 passed`
+- merged main SHA: `7a5b3d61bf4787d85aa87904bc5bee5f3831e681`
+- final Fly release: `v1947`; image
+  `deployment-01KZJS5HFJXJAFY6CM8Q2RH9ZH`; in-container SHA matched merged main
 - deploy path: `scripts/deploy_fly_main.sh`
-- regression checks: stable-identity/bootstrap-only generator regression added;
-  pending merged full suite and browser acceptance
-- post-deploy verification: pending
+- OAuth acceptance: ChatGPT received 22 enabled evidence/social tools; Codex
+  received exactly the seven evidence tools and no social surface; OAuth+PKCE,
+  900-second access expiry, two refresh rotations and spent-token rejection
+  passed; invalid bearer returned 401 with resource metadata, unsupported MCP
+  version and JSON-RPC batch returned 400
+- social acceptance: Telegram Saved resolved as `self` and a bounded read
+  returned data; VK notification intake returned a valid bounded empty page;
+  no mutation was prepared or committed during this release gate
+- bootstrap rotation: output directory was `0700`, all four artifacts were
+  `0600`, exactly the three operator/bootstrap copies changed, endpoint
+  fingerprints stayed stable and the previous bootstrap token returned 403
+- post-deploy verification: `/healthz` HTTP 200, ready, DB/scheduler/tasks ok,
+  issues empty; SQLite `quick_check=ok`; before/after read-suite DB SHA-256,
+  size and control row counts were identical; auth DB mode `0600`
+- canary logs: active `/data/runtime_logs/events-bot.log`; zero MCP errors, zero
+  webhook errors and zero matches for 12 runtime credential values. One
+  SQLAlchemy `CancelledError` occurred while the superseded machine connection
+  was closing during the rolling restart, immediately followed by the new
+  healthy startup; it was not an MCP or webhook failure.
 
 ## Prevention
 
