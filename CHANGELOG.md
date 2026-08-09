@@ -42,6 +42,9 @@
   deployed separately from Fly, and broker replay uses the full
   repository/workflow/run/platform/persona identity with a completion-safe wait
   and minute ciphertext erasure.
+  The deterministic suite explicitly enables Node's type stripping so its real
+  TypeScript transport boundary runs identically on the pinned CI Node 22.22.0
+  and newer Node 22 patch releases.
 
 - Stabilized the Behavioral Decoder home-feed packet on clean GitHub runners
   by promoting its 30 lazy card images to eager loading only inside the
