@@ -41,7 +41,7 @@
 - Added the real-component Current UI Decoder specimen and review pipeline:
   19 bounded disposable Astro wrappers (20 interaction captures), exact
   `PreviewEvent` transport/medallion fixtures, 26 real-route bindings across
-  49 contexts,
+  48 rendered contexts,
   element PNG/DOM/ARIA/computed/cascade/font evidence, and a fail-closed human
   review materializer that requires every raster, all six capsules, Actions
   provenance and permanent-storage hashes before the narrow
@@ -155,6 +155,12 @@
   box-less `display: contents` layout root. Visible locators are now re-resolved
   through Playwright's visibility filter for every action, and failed capture
   receipts retain the exact route/context label.
+
+- Fixed Amber artifact real-route verification to respect the pinned secret
+  candidate's non-production `tail` configuration: the active catalog and
+  mobile rail are captured as candidate-only evidence, while the hidden desktop
+  rail is not misreported as a rendered component and the production hard block
+  remains a separate source/config fact.
 
 - Fixed the production candidate's legacy preview gate after the dated real
   `Море внутри` rail canary expired. The gate still checks its rendered row

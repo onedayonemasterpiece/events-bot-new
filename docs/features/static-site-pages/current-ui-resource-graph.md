@@ -342,10 +342,19 @@ phase.
 The canonical capture run materializes a disposable Astro 6.4.8 harness from a
 reflink/copy of the exact candidate `site/src`; it never edits the pinned tree.
 The bounded registry has 19 controlled cases and 20 capture steps, plus 26
-exact real-route bindings across 49 viewport contexts. Rail, Kaup and medallions receive real
+exact real-route bindings across 48 rendered viewport contexts. Rail, Kaup and medallions receive real
 `PreviewEvent` fixtures and render the real component definitions. The bus
 `no-groups` branch has no valid exact-data fixture and is therefore recorded as
 `source-model-only`, not fabricated through data-module replacement.
+
+The exact secret candidate is a non-production `tail` research build for the
+Amber system. Its `/artefakty/` binding therefore verifies the active collection
+and its mobile `/vyhodnye/` binding verifies the rendered rail collectible; the
+desktop rail is intentionally omitted because that consumer is hidden above
+720px. These observations stay candidate-only with
+`production_state_claimed:false`. The separately modelled production contract
+continues to hard-block the rail and render only the unavailable collection
+shell; the candidate capture is never relabelled as production evidence.
 
 Every controlled isolated-specimen capture retains two byte-stable PNG buffers,
 SHA-256 and dHash,

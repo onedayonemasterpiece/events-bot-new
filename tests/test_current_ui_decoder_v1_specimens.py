@@ -208,8 +208,14 @@ console.log(JSON.stringify(r.real_route_verifications.map((row)=>({id:row.id,tem
     assert by_id["cta-lab-phone"]["template"] == "/lab/event-desktop/examples/cta-phone-invariant/"
     assert by_id["cta-lab-registration"]["template"] == "/lab/event-desktop/examples/cta-registration-invariant/"
     assert by_id["cta-lab-free"]["contexts"] == ["desktop"]
-    assert by_id["artifact-catalog"]["absent"] == ["[data-artifact-collection]"]
-    assert by_id["artifact-weekend"]["absent"] == ["[data-amber-artifact]"]
+    assert by_id["artifact-catalog"]["selectors"] == ["[data-artifact-collection]"]
+    assert by_id["artifact-catalog"]["absent"] == [
+        "[data-artifact-collection-unavailable]"
+    ]
+    assert by_id["artifact-weekend"]["selectors"] == ["[data-amber-artifact]"]
+    assert by_id["artifact-weekend"]["absent"] == []
+    assert by_id["artifact-weekend"]["contexts"] == ["mobile"]
+    assert sum(len(row["contexts"]) for row in observed) == 48
     assert by_id["medallions-2601"]["absent"] == ["[data-medallion-layout]"]
     assert by_id["medallions-2601"]["selectors"] == ["[data-medallion-layout]"]
     medallion_selectors = {
@@ -292,7 +298,7 @@ console.log(JSON.stringify({stable:JSON.stringify(a)===JSON.stringify(b),specime
     )
     assert observed["stable"] is True
     assert observed["specimens"] == 19
-    assert observed["pages"] == 49
+    assert observed["pages"] == 48
     assert observed["allSourceRefs"] is True and observed["allRouteRefs"] is True
     assert observed["review"] == ["pending"]
     assert observed["production"] == [False]
