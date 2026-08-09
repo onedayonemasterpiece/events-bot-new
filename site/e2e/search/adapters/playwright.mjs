@@ -78,6 +78,10 @@ export async function createPlaywrightSearchAdapter(options = {}) {
   let postBoundaryMeterSnapshot = null;
   let postBoundaryMeterError = null;
   const postBoundaryResponseTasks = new Set();
+  const postBoundaryActiveRequests = new Set();
+  let postBoundaryRequestFinishedObserver = null;
+  let postBoundaryRequestFailedObserver = null;
+  let postBoundaryLastActivityAt = 0;
   let preNavigationSearchActivity = null;
   let preNavigationResultState = null;
   const diagnostics = { console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0 };
@@ -100,8 +104,16 @@ export async function createPlaywrightSearchAdapter(options = {}) {
     if (postBoundaryResponseObserver && postBoundaryObserverPage) {
       postBoundaryObserverPage.off('response', postBoundaryResponseObserver);
     }
+    if (postBoundaryRequestFinishedObserver && postBoundaryObserverPage) {
+      postBoundaryObserverPage.off('requestfinished', postBoundaryRequestFinishedObserver);
+    }
+    if (postBoundaryRequestFailedObserver && postBoundaryObserverPage) {
+      postBoundaryObserverPage.off('requestfailed', postBoundaryRequestFailedObserver);
+    }
     postBoundaryRequestObserver = null;
     postBoundaryResponseObserver = null;
+    postBoundaryRequestFinishedObserver = null;
+    postBoundaryRequestFailedObserver = null;
     postBoundaryObserverPage = null;
   };
   const prepareContext = async (storageState) => {
@@ -234,6 +246,8 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       postBoundaryMeter = null;
       postBoundaryMeterSnapshot = null;
       postBoundaryMeterError = null;
+      postBoundaryActiveRequests.clear();
+      postBoundaryLastActivityAt = Date.now();
       const originValues = await page.evaluate(() => {
         const root = document.querySelector('[data-authorized-search]');
         return [root?.dataset?.supabaseUrl, root?.dataset?.supabaseRelayUrl]
@@ -246,6 +260,11 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       }
       const observeRequest = (request) => {
         try {
+          const requestClass = classifySupabaseClientUrl(request.url(), { supabaseOrigins });
+          if (requestClass !== SUPABASE_CLIENT_BYTE_CLASSES.EXCLUDED) {
+            postBoundaryActiveRequests.add(request);
+            postBoundaryLastActivityAt = Date.now();
+          }
           if (request.method() === 'POST'
             && new URL(request.url()).pathname === '/functions/v1/event-search') {
             postBoundarySearchPostCount += 1;
@@ -254,6 +273,7 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       };
       const observeResponse = (observedResponse) => {
         if (!postBoundaryMeter) return;
+        postBoundaryLastActivityAt = Date.now();
         const task = (async () => {
           const url = observedResponse.url();
           if (classifySupabaseClientUrl(url, { supabaseOrigins })
@@ -267,10 +287,17 @@ export async function createPlaywrightSearchAdapter(options = {}) {
         postBoundaryResponseTasks.add(task);
         task.finally(() => postBoundaryResponseTasks.delete(task));
       };
+      const finishRequest = (request) => {
+        if (postBoundaryActiveRequests.delete(request)) postBoundaryLastActivityAt = Date.now();
+      };
       page.on('request', observeRequest);
       page.on('response', observeResponse);
+      page.on('requestfinished', finishRequest);
+      page.on('requestfailed', finishRequest);
       postBoundaryRequestObserver = observeRequest;
       postBoundaryResponseObserver = observeResponse;
+      postBoundaryRequestFinishedObserver = finishRequest;
+      postBoundaryRequestFailedObserver = finishRequest;
       postBoundaryObserverPage = page;
       const searchPageActivity = await page.evaluate(snapshotSearchRuntimeProbe);
       preNavigationSearchActivity = searchPageActivity;
@@ -303,7 +330,15 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       if (!Number.isSafeInteger(postBoundarySearchPostCount)) {
         throw new Error('search_post_navigation_observation_missing');
       }
-      await Promise.all([...postBoundaryResponseTasks]);
+      const quietMs = Math.max(25, Number(options.postNavigationQuietMs || 200));
+      const deadline = Date.now() + timeoutMs;
+      while (true) {
+        await Promise.all([...postBoundaryResponseTasks]);
+        if (postBoundaryActiveRequests.size === 0 && postBoundaryResponseTasks.size === 0
+          && Date.now() - postBoundaryLastActivityAt >= quietMs) break;
+        if (Date.now() >= deadline) throw new Error('search_post_navigation_meter_failed');
+        await page.waitForTimeout(Math.min(25, quietMs));
+      }
       if (postBoundaryMeterError) throw new Error('search_post_navigation_meter_failed', { cause: postBoundaryMeterError });
       if (!postBoundaryMeter) throw new Error('search_post_navigation_meter_origin_missing');
       postBoundaryMeterSnapshot = postBoundaryMeter.snapshot();
@@ -317,9 +352,8 @@ export async function createPlaywrightSearchAdapter(options = {}) {
     },
     async failedJourneyEvidence() {
       if (!preNavigationSearchActivity) return null;
-      const count = postBoundaryRequestObserver
-        ? await adapter.postNavigationSearchPostCount()
-        : Number(postBoundarySearchPostCount || 0);
+      const count = Number(postBoundarySearchPostCount || 0);
+      stopPostBoundaryObservation();
       return Object.freeze({
         activity: structuredClone(preNavigationSearchActivity),
         results: structuredClone(preNavigationResultState),

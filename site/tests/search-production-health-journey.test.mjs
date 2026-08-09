@@ -64,6 +64,7 @@ function fakeJourneyAdapter(overrides = {}) {
   let postNavigationSearchPostCount = 0;
   let latePostRecorded = false;
   let terminalMinimumCardCount = null;
+  let submitCalls = 0;
   let preNavigationActivity = null;
   let preNavigationResults = null;
   const state = {
@@ -96,6 +97,7 @@ function fakeJourneyAdapter(overrides = {}) {
     get typed() { return typed; }, get policy() { return policy; },
     get activityCalls() { return activityCalls; },
     get terminalMinimumCardCount() { return terminalMinimumCardCount; },
+    get submitCalls() { return submitCalls; },
     async configureRequestPolicy(value) { policy = value; },
     async open() {},
     async inspectSurface() { return { enabled: true, authorized: true, input_tag: 'textarea', enter_key_hint: 'search' }; },
@@ -112,6 +114,7 @@ function fakeJourneyAdapter(overrides = {}) {
     },
     async typeQuery(value) { typed = value; },
     async submitWithSearchIntent() {
+      submitCalls += 1;
       const body = {
         limit: overrides.limit ?? 5, offset: overrides.offset ?? 0,
         use_llm_verifier: false, allow_llm_fallback: false,
@@ -214,6 +217,16 @@ test('production health journey merges post-navigation Supabase bytes and enforc
   }), /search_health_supabase_hard_limit_exceeded/u);
 });
 
+test('page-init Auth/RLS hard cap blocks before physical Search dispatch', async () => {
+  const adapter = fakeJourneyAdapter({ bytes: SUPABASE_CLIENT_BYTE_HARD_LIMIT + 1 });
+  await assert.rejects(() => runProductionHealthJourney({
+    adapter,
+    targetUrl: 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/',
+  }), /search_health_supabase_hard_limit_exceeded/u);
+  assert.equal(adapter.submitCalls, 0);
+  assert.equal((await adapter.activity()).requests.length, 0);
+});
+
 test('normal vector health accepts a cache hit reported as actual cached_vector', async () => {
   const result = await runProductionHealthJourney({
     adapter: fakeJourneyAdapter({ cache: 'hit', actualMode: 'cached_vector' }),
@@ -307,6 +320,103 @@ test('transport instrumentation records one physical Search once when its raw fe
     assert.equal(snapshot.requests.length, 1);
     assert.equal(snapshot.responses.length, 1);
     assert.equal(snapshot.meter.categories.edge, 256);
+  } finally {
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  }
+});
+
+test('cold resilient route selection meters its physical functions probe without double-counting Search', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const originalClients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+  try {
+    globalThis.fetch = async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/functions/v1/transport-probe') {
+        return new Response(null, { status: 204, headers: { 'content-length': '128' } });
+      }
+      if (url.pathname === '/rest/v1/safe_read') {
+        const bytes = url.origin === 'https://relay.example' ? 96 : 64;
+        return new Response('[]', { status: 200, headers: { 'content-length': String(bytes) } });
+      }
+      return new Response(JSON.stringify({
+        search_contract_version: 'event_search_v2',
+        requested_execution_mode: 'cold_vector', actual_execution_mode: 'cold_vector',
+        result_cache_status: 'miss', items: [{ event_id: 1 }],
+        request_counters: { embedding_provider_attempts: 1, vector_rpc_attempts: 1, llm_provider_attempts: 0 },
+      }), { status: 200, headers: { 'content-type': 'application/json', 'content-length': '256' } });
+    };
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'https://kenigevents.ru/poisk/' } });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => ({
+      dataset: { supabaseUrl: 'https://project.supabase.co', supabaseRelayUrl: 'https://relay.example' },
+    }) } });
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = new Map();
+    installSearchRuntimeProbe({ production_health: true });
+    const transport = {
+      async request(input, init) {
+        await globalThis.fetch('https://project.supabase.co/functions/v1/transport-probe', { method: 'HEAD' });
+        await globalThis.fetch('https://project.supabase.co/rest/v1/safe_read');
+        await globalThis.fetch('https://relay.example/rest/v1/safe_read');
+        return globalThis.fetch(input, init);
+      },
+      outcomeHistory: () => [],
+    };
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__.set('search', { transport });
+    installSearchRuntimeProbe({ production_health: true });
+    await transport.request('https://project.supabase.co/functions/v1/event-search', {
+      method: 'POST', body: JSON.stringify({ query: 'not retained' }),
+    });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const snapshot = snapshotSearchRuntimeProbe();
+      if (snapshot.responses.length === 1 && snapshot.meter.pending_measurements === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const snapshot = snapshotSearchRuntimeProbe();
+    assert.equal(snapshot.requests.length, 1);
+    assert.equal(snapshot.responses.length, 1);
+    assert.equal(snapshot.meter.categories.edge, 384);
+    assert.equal(snapshot.meter.categories.direct_rest, 160);
+    assert.equal(snapshot.network.failed_requests, 0);
+  } finally {
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  }
+});
+
+test('relay-origin receipt/storage traffic is forbidden-counted and metered like direct Supabase', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const originalClients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+  try {
+    globalThis.fetch = async () => new Response('{}', { status: 200,
+      headers: { 'content-type': 'application/json', 'content-length': '512' } });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'https://kenigevents.ru/poisk/' } });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => ({
+      dataset: { supabaseUrl: 'https://project.supabase.co', supabaseRelayUrl: 'https://relay.example' },
+    }) } });
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = new Map();
+    installSearchRuntimeProbe({ production_health: true });
+    await globalThis.fetch('https://relay.example/storage/v1/object/public/poster');
+    await globalThis.fetch('https://relay.example/rest/v1/rpc/get_event_search_receipt_v1');
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (snapshotSearchRuntimeProbe().meter.pending_measurements === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const snapshot = snapshotSearchRuntimeProbe();
+    assert.equal(snapshot.network.storage_requests, 1);
+    assert.equal(snapshot.network.receipt_rpc_requests, 1);
+    assert.equal(snapshot.meter.categories.direct_rpc, 512);
   } finally {
     delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
     globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
@@ -581,6 +691,10 @@ test('post-preflight Appium log/session loss is platform infrastructure, never p
   for (const [platform, message, expected] of [
     ['android', 'mobile_health_diagnostics_unavailable', 'UNKNOWN_ANDROID_INFRA'],
     ['ios', 'invalid session id', 'UNKNOWN_IOS_INFRA'],
+    ['android', 'mobile_auth_terminal_bytes_timeout', 'UNKNOWN_ANDROID_INFRA'],
+    ['ios', 'mobile_post_navigation_terminal_bytes_missing', 'UNKNOWN_IOS_INFRA'],
+    ['browser', 'search_post_navigation_meter_failed', 'UNKNOWN_RUNNER_BROWSER'],
+    ['browser', 'search_post_navigation_meter_origin_missing', 'UNKNOWN_RUNNER_BROWSER'],
   ]) {
     const adapter = fakeJourneyAdapter({
       finalDiagnosticsFailure: true, finalDiagnosticsError: message, resetActivityOnOpen: true,
@@ -897,6 +1011,11 @@ test('Playwright target open rejects an otherwise same-final-URL redirect chain'
 test('Playwright card open preserves Search activity and independently counts later Search POSTs', async () => {
   let currentUrl = 'https://kenigevents.ru/poisk/';
   const listeners = new Map();
+  const emitRequest = (url, method = 'GET') => {
+    const request = { method: () => method, url: () => url };
+    for (const listener of listeners.get('request') || []) listener(request);
+    for (const listener of listeners.get('requestfinished') || []) listener(request);
+  };
   const searchActivity = {
     requests: [{ method: 'POST', path: '/functions/v1/event-search' }],
     responses: [{}], routes: [{}], meter: meter(),
@@ -906,12 +1025,7 @@ test('Playwright card open preserves Search activity and independently counts la
     async count() { return 1; },
     async getAttribute() { return '/sobytiya/42/'; },
     async click() {
-      for (const listener of listeners.get('request') || []) {
-        listener({
-          method: () => 'POST',
-          url: () => 'https://project.supabase.co/functions/v1/event-search?not-retained=yes',
-        });
-      }
+      emitRequest('https://project.supabase.co/functions/v1/event-search?not-retained=yes', 'POST');
       currentUrl = 'https://kenigevents.ru/sobytiya/42/';
     },
   };
@@ -941,19 +1055,17 @@ test('Playwright card open preserves Search activity and independently counts la
         }),
       };
     },
+    async waitForTimeout(ms) { await new Promise((resolve) => setTimeout(resolve, ms)); },
   };
-  const adapter = await createPlaywrightSearchAdapter({ page, productionHealth: true });
+  const adapter = await createPlaywrightSearchAdapter({
+    page, productionHealth: true, postNavigationQuietMs: 30,
+  });
   const receipt = await adapter.openFirstResult();
   assert.deepEqual(receipt.search_page_activity_before_navigation, searchActivity);
   assert.equal(receipt.same_origin, true);
   assert.equal(receipt.http_status, 200);
   assert.equal(listeners.get('request')?.size || 0, 1);
-  for (const listener of listeners.get('request') || []) {
-    listener({
-      method: () => 'POST',
-      url: () => 'https://project.supabase.co/functions/v1/event-search?late=yes',
-    });
-  }
+  emitRequest('https://project.supabase.co/functions/v1/event-search?late=yes', 'POST');
   for (const listener of listeners.get('response') || []) {
     listener({
       url: () => 'https://project.supabase.co/rest/v1/user_saved_event',
@@ -962,13 +1074,55 @@ test('Playwright card open preserves Search activity and independently counts la
       body: async () => Buffer.alloc(4096),
     });
   }
+  setTimeout(() => {
+    emitRequest('https://project.supabase.co/auth/v1/user');
+    for (const listener of listeners.get('response') || []) {
+      listener({
+        url: () => 'https://project.supabase.co/auth/v1/user', status: () => 200,
+        allHeaders: async () => ({ 'content-length': '1024' }), body: async () => {
+          throw new Error('body must not be fetched with content-length');
+        },
+      });
+    }
+  }, 10);
   assert.equal(await adapter.postNavigationSearchPostCount(), 2);
   const postNavigationMeter = await adapter.postNavigationMeterSnapshot();
-  assert.equal(postNavigationMeter.total_bytes, 4096);
+  assert.equal(postNavigationMeter.total_bytes, 5120);
   assert.equal(postNavigationMeter.categories.direct_rest, 4096);
+  assert.equal(postNavigationMeter.categories.auth, 1024);
   assert.equal(listeners.get('request')?.size || 0, 0);
   assert.equal(listeners.get('response')?.size || 0, 1); // one permanent diagnostics listener remains
   assert.doesNotMatch(JSON.stringify(receipt), /not-retained/u);
+});
+
+test('Playwright failed evidence preserves the pre-navigation snapshot when meter finalization fails', async () => {
+  let currentUrl = 'https://kenigevents.ru/poisk/';
+  const listeners = new Map();
+  const activity = { requests: [{ method: 'POST', path: '/functions/v1/event-search' }],
+    responses: [{ request_id: 'request-before-crash' }], routes: [{}], meter: meter(2048) };
+  const link = { first() { return this; }, async count() { return 1; },
+    async getAttribute() { return '/sobytiya/42/'; }, async click() { currentUrl = 'https://kenigevents.ru/sobytiya/42/'; } };
+  const first = { first() { return this; }, async waitFor() {}, locator() { return link; } };
+  const page = {
+    on(name, listener) { const values = listeners.get(name) || new Set(); values.add(listener); listeners.set(name, values); },
+    off(name, listener) { listeners.get(name)?.delete(listener); },
+    viewportSize: () => ({ width: 1280, height: 720 }), url: () => currentUrl,
+    locator: () => first,
+    async evaluate(fn) {
+      if (String(fn).includes('supabaseRelayUrl')) return ['https://project.supabase.co'];
+      return structuredClone(activity);
+    },
+    async waitForNavigation() { return { status: () => 200, request: () => ({
+      url: () => 'https://kenigevents.ru/sobytiya/42/', redirectedFrom: () => null,
+    }) }; },
+    async waitForTimeout() { throw new Error('browser closed'); },
+  };
+  const adapter = await createPlaywrightSearchAdapter({ page, productionHealth: true, postNavigationQuietMs: 30 });
+  await adapter.openFirstResult();
+  const retained = await adapter.failedJourneyEvidence();
+  assert.equal(retained.activity.responses[0].request_id, 'request-before-crash');
+  assert.equal(retained.post_navigation_search_post_count, 0);
+  assert.equal(retained.post_navigation_meter, undefined);
 });
 
 test('Playwright rejects homepage and non-event same-origin 200 card destinations before click', async () => {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
-  countEventSearchPostRequests,
+  countEventSearchPostRequests, createSanitizedNavigationResponseTracker,
   extractSanitizedNavigationResponses } from '../e2e/mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt, isSafeMobilePreflightRetryReceipt,
   runAppiumTransportPreflight } from '../e2e/mobile-web/appium-preflight.mjs';
@@ -90,6 +90,45 @@ test('Appium health diagnostics expose only cumulative closed runtime and driver
   });
   assert.doesNotMatch(JSON.stringify(first), /raw|secret|event-search/u);
   assert.deepEqual(await adapter.healthDiagnostics(), first);
+});
+
+test('Appium target-open log drains remain in cumulative closed diagnostics', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  let reads = 0;
+  const driver = {
+    capabilities: {},
+    async getLogs(type) {
+      if (type === 'browser') return [];
+      reads += 1;
+      if (reads === 1) return [{ message: JSON.stringify({ method: 'Network.loadingFailed', params: {
+        requestId: 'target-failed', errorText: 'must not survive',
+      } }) }];
+      if (reads === 2) return [
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'target-doc', type: 'Document', response: { url: target, status: 200,
+            headers: { 'content-length': '1024' } },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'target-edge-503', type: 'Fetch', response: {
+            url: 'https://project.supabase.co/functions/v1/transport-probe', status: 503,
+          },
+        } }) },
+      ];
+      return [];
+    },
+    async url() {}, async getUrl() { return target; },
+    async waitUntil(fn) { if (!await fn()) throw new Error('wait_failed'); },
+    async execute(fn) {
+      if (fn?.name === 'snapshotSearchRuntimeProbe') return { network: {} };
+      return true;
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  await adapter.open(target);
+  const diagnostics = await adapter.healthDiagnostics();
+  assert.equal(diagnostics.failed_requests, 1);
+  assert.equal(diagnostics.error_responses, 1);
+  assert.doesNotMatch(JSON.stringify(diagnostics), /target|probe|survive/u);
 });
 
 test('Appium result snapshot counts actual skeleton cards and id-less placeholders', async () => {
@@ -369,6 +408,34 @@ test('CDP loadingFinished supplies terminal bytes while Content-Length keeps pre
   assert.doesNotMatch(JSON.stringify(responses), /auth-terminal|auth-declared/u);
 });
 
+test('CDP request start remains pending across drains until response terminal bytes arrive', () => {
+  const tracker = createSanitizedNavigationResponseTracker();
+  tracker.consume([{ message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+    requestId: 'auth-cross-drain', type: 'Fetch', request: {
+      method: 'GET', url: 'https://project.supabase.co/auth/v1/verify?secret=no',
+    },
+  } }) }]);
+  assert.equal(tracker.pendingTerminalCount({
+    origin: 'https://project.supabase.co', pathPrefix: '/auth/v1',
+  }), 1);
+  assert.deepEqual(tracker.responses(), []);
+
+  tracker.consume([{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
+    requestId: 'auth-cross-drain', type: 'Fetch', response: {
+      status: 200, url: 'https://project.supabase.co/auth/v1/verify?secret=no',
+      headers: {}, encodedDataLength: 64,
+    },
+  } }) }]);
+  assert.equal(tracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }), 1);
+
+  tracker.consume([{ message: JSON.stringify({ method: 'Network.loadingFinished', params: {
+    requestId: 'auth-cross-drain', encodedDataLength: 2048,
+  } }) }]);
+  assert.equal(tracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }), 0);
+  assert.equal(tracker.responses()[0].encoded_bytes, 2048);
+  assert.doesNotMatch(JSON.stringify(tracker.responses()), /cross-drain|secret/u);
+});
+
 test('mobile protocol receipt counts unique event-search POSTs without retaining request data', () => {
   const seen = new Set();
   const request = { message: JSON.stringify({ message: {
@@ -415,11 +482,23 @@ test('adapter opens the captured first result and binds the browser navigation t
             method: 'POST', url: 'https://project.supabase.co/functions/v1/event-search?late=yes',
           },
         } }) },
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'late-search', type: 'Fetch', response: {
+            status: 200, url: 'https://project.supabase.co/functions/v1/event-search?late=yes',
+            headers: { 'content-length': '512' },
+          },
+        } }) },
       ];
       if (logReads === 4) return [
         { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
           requestId: 'final-boundary-search', request: {
             method: 'POST', url: 'https://project.supabase.co/functions/v1/event-search?final=yes',
+          },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'final-boundary-search', type: 'Fetch', response: {
+            status: 200, url: 'https://project.supabase.co/functions/v1/event-search?final=yes',
+            headers: { 'content-length': '256' },
           },
         } }) },
         { message: JSON.stringify({ method: 'Network.responseReceived', params: {
@@ -454,8 +533,47 @@ test('adapter opens the captured first result and binds the browser navigation t
   assert.equal((await adapter.healthDiagnostics()).storage_requests, 1);
   assert.equal(await adapter.postNavigationSearchPostCount(), 2);
   const postNavigationMeter = await adapter.postNavigationMeterSnapshot();
-  assert.equal(postNavigationMeter.total_bytes, 2048);
+  assert.equal(postNavigationMeter.total_bytes, 2816);
+  assert.equal(postNavigationMeter.categories.edge, 768);
   assert.equal(postNavigationMeter.categories.direct_rest, 2048);
+});
+
+test('Appium failed evidence preserves the pre-navigation snapshot when final logs disappear', async () => {
+  let currentUrl = 'https://kenigevents.ru/poisk/';
+  let reads = 0;
+  let unavailable = false;
+  const activity = { requests: [{ method: 'POST', path: '/functions/v1/event-search' }],
+    responses: [{ request_id: 'mobile-before-log-loss' }], routes: [], meter: { total_bytes: 2048 } };
+  const driver = {
+    capabilities: {},
+    async execute(fn) {
+      if (fn?.name === 'snapshotSearchRuntimeProbe') return structuredClone(activity);
+      if (fn?.name === 'pageResultSnapshot') return { terminal: true, rendered_ids: ['42'] };
+      return { href: 'https://kenigevents.ru/sobytiya/42/', same_origin: true,
+        supabase_origins: ['https://project.supabase.co'] };
+    },
+    async getUrl() { return currentUrl; },
+    async getLogs(type) {
+      if (type === 'browser') return [];
+      if (unavailable) return null;
+      reads += 1;
+      if (reads === 1) return [];
+      return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
+        requestId: 'document-42', type: 'Document', response: {
+          status: 200, url: 'https://kenigevents.ru/sobytiya/42/', headers: { 'content-length': '1024' },
+        },
+      } }) }];
+    },
+    async $(selector) { assert.match(selector, /data-search-results/u); return { click: async () => { currentUrl = 'https://kenigevents.ru/sobytiya/42/'; } }; },
+    async waitUntil(fn) { if (!await fn()) throw new Error('wait_failed'); },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver, postNavigationQuietMs: 25 });
+  await adapter.openFirstResult();
+  unavailable = true;
+  const retained = await adapter.failedJourneyEvidence();
+  assert.equal(retained.activity.responses[0].request_id, 'mobile-before-log-loss');
+  assert.equal(retained.post_navigation_search_post_count, 0);
+  assert.equal(retained.post_navigation_meter, undefined);
 });
 
 test('navigation receipt rejects cross-origin and non-200 document evidence', () => {
@@ -548,18 +666,25 @@ test('mobile Auth callback waits across log drains for terminal bytes before own
     capabilities: {},
     async getLogs() {
       logs += 1;
-      if (logs === 2) return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
+      if (logs === 2) return [{ message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
+        requestId: 'auth-late-terminal', type: 'Fetch', request: { method: 'GET',
+          url: 'https://project.supabase.co/auth/v1/verify?token=secret' },
+      } }) }];
+      if (logs === 3) return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
         requestId: 'auth-late-terminal', type: 'Fetch', response: { status: 200,
           url: 'https://project.supabase.co/auth/v1/verify?token=secret', encodedDataLength: 64 },
       } }) }];
-      if (logs === 3) return [{ message: JSON.stringify({ method: 'Network.loadingFinished', params: {
+      if (logs === 4) return [{ message: JSON.stringify({ method: 'Network.loadingFinished', params: {
         requestId: 'auth-late-terminal', encodedDataLength: 2048,
       } }) }];
       return [];
     },
     async url() {}, async getUrl() { return target; },
     async waitUntil(predicate, options = {}) {
-      if (!await predicate()) throw new Error(options.timeoutMsg || 'wait_failed');
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        if (await predicate()) return;
+      }
+      throw new Error(options.timeoutMsg || 'wait_failed');
     },
     async execute(fn) {
       if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
@@ -575,7 +700,7 @@ test('mobile Auth callback waits across log drains for terminal bytes before own
     },
   };
   const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
-  await adapter.bootstrapSession('https://project.supabase.co/auth/v1/verify?token=secret', target);
+  await adapter.bootstrapSession(`${target}?token_hash=bridge-secret&type=magiclink`, target);
   const verified = await adapter.verifyAuthenticatedOwner();
   assert.equal(verified.meter.categories.auth, 2148);
   assert.equal(verified.meter.total_bytes, 2148);

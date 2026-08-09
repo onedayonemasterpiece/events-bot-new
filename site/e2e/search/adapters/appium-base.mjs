@@ -288,15 +288,17 @@ export async function createAppiumSearchAdapter(options = {}) {
       { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_session_not_restored' });
       const callbackLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(callbackLogs)) throw new Error('mobile_auth_network_log_unavailable');
-      const authOrigin = new URL(actionLink).origin;
       const callbackTracker = createSanitizedNavigationResponseTracker();
       callbackTracker.consume(callbackLogs);
-      if (callbackTracker.pendingTerminalCount({ origin: authOrigin, pathPrefix: '/auth/v1' }) > 0) {
+      // The issued callback can be a same-origin token_hash bridge while the
+      // actual verify request is sent to Supabase. Correlate the closed Auth
+      // category, never the callback link's unrelated origin.
+      if (callbackTracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }) > 0) {
         await driver.waitUntil(async () => {
           const logs = await driver.getLogs(networkType).catch(() => null);
           if (!Array.isArray(logs)) return false;
           callbackTracker.consume(logs);
-          return callbackTracker.pendingTerminalCount({ origin: authOrigin, pathPrefix: '/auth/v1' }) === 0;
+          return callbackTracker.pendingTerminalCount({ pathPrefix: '/auth/v1' }) === 0;
         }, { timeout: timeoutMs, interval: 100,
           timeoutMsg: 'mobile_auth_terminal_bytes_timeout' });
       }
@@ -310,6 +312,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
       const initialLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_target_network_log_unavailable');
+      accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
       await driver.url(targetUrl);
       await driver.waitUntil(async () => (await driver.getUrl()) === targetUrl,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_target_redirected' });
@@ -317,6 +320,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.waitUntil(async () => {
         const logs = await driver.getLogs(networkType).catch(() => null);
         if (!Array.isArray(logs)) return false;
+        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds);
         responses.push(...extractSanitizedNavigationResponses(logs));
         try {
           lifecycle.target_navigation_receipt = buildExactTargetNavigationReceipt({
@@ -521,14 +525,20 @@ export async function createAppiumSearchAdapter(options = {}) {
             + postBoundaryResponseTracker.pendingTerminalCount({ origin, pathPrefix: prefix }), 0,
         ), 0,
       );
-      if (pendingRelevantResponses() > 0) {
-        await driver.waitUntil(async () => {
-          const logs = await driver.getLogs?.(networkType).catch(() => null);
-          if (!Array.isArray(logs)) throw new Error('mobile_post_navigation_network_log_unavailable');
-          observePostBoundarySearch(logs);
-          return pendingRelevantResponses() === 0;
-        }, { timeout: timeoutMs, interval: 100,
-          timeoutMsg: 'mobile_post_navigation_terminal_bytes_missing' });
+      const quietMs = Math.max(25, Number(options.postNavigationQuietMs || 200));
+      const pollMs = Math.min(50, quietMs);
+      const deadline = Date.now() + timeoutMs;
+      let quietSince = finalNetworkLogs.length === 0 ? Date.now() : null;
+      while (pendingRelevantResponses() > 0 || quietSince === null
+        || Date.now() - quietSince < quietMs) {
+        if (Date.now() >= deadline) throw new Error('mobile_post_navigation_terminal_bytes_missing');
+        if (typeof driver.pause === 'function') await driver.pause(pollMs);
+        else await new Promise((resolve) => setTimeout(resolve, pollMs));
+        const logs = await driver.getLogs?.(networkType).catch(() => null);
+        if (!Array.isArray(logs)) throw new Error('mobile_post_navigation_network_log_unavailable');
+        observePostBoundarySearch(logs);
+        if (logs.length > 0) quietSince = null;
+        else if (quietSince === null) quietSince = Date.now();
       }
       for (const origin of postBoundarySupabaseOrigins) {
         for (const prefix of ['/auth/v1', '/functions/v1', '/rest/v1']) {
@@ -559,9 +569,14 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async failedJourneyEvidence() {
       if (!preNavigationSearchActivity) return null;
-      const count = postBoundarySearchObservationActive
-        ? await adapter.postNavigationSearchPostCount()
-        : Number(postBoundarySearchPostCount || 0);
+      let count = Number(postBoundarySearchPostCount || 0);
+      if (postBoundarySearchObservationActive) {
+        const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
+        const logs = await driver.getLogs?.(networkType).catch(() => null);
+        if (Array.isArray(logs)) observePostBoundarySearch(logs);
+        count = Number(postBoundarySearchPostCount || 0);
+        postBoundarySearchObservationActive = false;
+      }
       return Object.freeze({
         activity: structuredClone(preNavigationSearchActivity),
         results: structuredClone(preNavigationResultState),

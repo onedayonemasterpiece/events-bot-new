@@ -190,6 +190,7 @@ function journeyFailure(error) {
 function isAdapterInfrastructureFailure(error) {
   const message = String(error?.message || '');
   return /^(?:search_browser_(?:crashed|session_lost)(?:_[a-z0-9]+)*|mobile_[a-z0-9_]*(?:network_log_unavailable|diagnostics_unavailable|session_lost)|webdriver_session_error)$/iu.test(message)
+    || /(?:mobile_auth_terminal_bytes_timeout|mobile_post_navigation_(?:terminal_bytes_missing|meter_(?:origin_)?missing)|search_post_navigation_meter_(?:failed|origin_missing))/iu.test(message)
     || /(?:invalid session id|no such window|target page, context or browser has been closed|browser has been closed|web view not found)/iu.test(message);
 }
 

@@ -17,6 +17,12 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     },
   };
   globalThis[key] = state;
+  if (!(state.physically_measured_responses instanceof WeakSet)) {
+    state.physically_measured_responses = new WeakSet();
+  }
+  if (!(state.physically_observed_failures instanceof WeakSet)) {
+    state.physically_observed_failures = new WeakSet();
+  }
   state.policy = { ...nextPolicy };
 
   const absoluteUrl = (input) => {
@@ -59,9 +65,11 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
   const observeRequest = (url) => {
     if (!url) return;
     const root = document.querySelector('[data-authorized-search]');
-    let supabaseOrigin = '';
-    try { supabaseOrigin = new URL(root?.dataset.supabaseUrl || '', location.href).origin; } catch { /* none */ }
-    if (url.origin !== supabaseOrigin) return;
+    const origins = new Set();
+    for (const value of [root?.dataset.supabaseUrl, root?.dataset.supabaseRelayUrl]) {
+      try { if (value) origins.add(new URL(value, location.href).origin); } catch { /* none */ }
+    }
+    if (!origins.has(url.origin)) return;
     if (url.pathname === '/storage/v1' || url.pathname.startsWith('/storage/v1/')) state.network.storage_requests += 1;
     if (/^\/rest\/v1\/rpc\/get_event_search_receipt(?:_|$)/u.test(url.pathname)) state.network.receipt_rpc_requests += 1;
   };
@@ -216,12 +224,25 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
       // instrumented it is the sole physical-request boundary; the captured
       // global wrapper becomes a transparent fallback instead of recording the
       // same Search a second time.
-      if (!transport && state.transport_active === true) {
-        return original.call(this, input, init);
-      }
       const url = absoluteUrl(input);
       const method = String(init?.method || input?.method || 'GET').toUpperCase();
       const isSearch = Boolean(url?.pathname.endsWith(searchPath) && method === 'POST');
+      if (!transport && state.transport_active === true) {
+        // Once resilient transport is active this captured raw fetch is the
+        // physical boundary. It observes route probes and every discarded
+        // retry/alternate response. The high-level wrapper below retains the
+        // semantic Search receipt but skips responses already measured here.
+        try {
+          const physicalResponse = await original.call(this, input, init);
+          state.physically_measured_responses.add(physicalResponse);
+          scheduleMeasure(url, physicalResponse);
+          return physicalResponse;
+        } catch (error) {
+          state.network.failed_requests += 1;
+          if (error && typeof error === 'object') state.physically_observed_failures.add(error);
+          throw error;
+        }
+      }
       const nextInit = isSearch ? patchBody(init) : init;
       let sequence = 0;
       let route = 'unknown';
@@ -233,9 +254,14 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
       let response;
       try {
         response = await original.call(this, input, nextInit);
-        if (transport || state.measure_global) scheduleMeasure(url, response);
+        if ((transport || state.measure_global)
+          && !state.physically_measured_responses.has(response)) {
+          scheduleMeasure(url, response);
+        }
       } catch (error) {
-        state.network.failed_requests += 1;
+        if (!error || typeof error !== 'object' || !state.physically_observed_failures.has(error)) {
+          state.network.failed_requests += 1;
+        }
         throw error;
       }
       if (isSearch) {

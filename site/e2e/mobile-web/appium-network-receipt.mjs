@@ -28,8 +28,22 @@ export function createSanitizedNavigationResponseTracker() {
   const responseByRequestId = new Map();
   const terminalBytesByRequestId = new Map();
   const untrackedTerminalRecords = [];
+  const appendRequestStart = (request, resourceType, requestId) => {
+    const url = safeUrl(request?.url);
+    const identity = String(requestId || '');
+    if (!url || !identity) return;
+    responseByRequestId.set(identity, {
+      item: { origin: url.origin, pathname: url.pathname,
+        resource_type: String(resourceType || '').toLowerCase() },
+      has_declared_length: false,
+      response_seen: false,
+      terminal: false,
+    });
+  };
   const applyTerminalBytes = (record, encodedBytes) => {
     if (!record || record.has_declared_length) return;
+    // CDP loadingFinished.encodedDataLength is retained only as a conservative
+    // on-wire observed-byte count. This tracker never fetches a response body.
     if (encodedBytes > 0) record.item.encoded_bytes = encodedBytes;
     else delete record.item.encoded_bytes;
     record.terminal = true;
@@ -50,7 +64,9 @@ export function createSanitizedNavigationResponseTracker() {
     responses.push(item);
     const identity = String(requestId || '');
     if (terminalEligible) {
-      const record = { item, has_declared_length: hasDeclaredLength, terminal: hasDeclaredLength };
+      const record = responseByRequestId.get(identity) || {};
+      Object.assign(record, { item, has_declared_length: hasDeclaredLength,
+        response_seen: true, terminal: hasDeclaredLength });
       if (identity) {
         responseByRequestId.set(identity, record);
         if (terminalBytesByRequestId.has(identity)) {
@@ -79,6 +95,9 @@ export function createSanitizedNavigationResponseTracker() {
     if (method === 'Network.requestWillBeSent'
       && params.redirectResponse && typeof params.redirectResponse === 'object') {
       appendResponse(params.redirectResponse, params.type, params.requestId, false);
+    }
+    if (method === 'Network.requestWillBeSent') {
+      appendRequestStart(params.request, params.type, params.requestId);
     }
     if (method === 'Network.responseReceived') {
       const response = params.response && typeof params.response === 'object' ? params.response : {};

@@ -116,6 +116,9 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
   // Snapshot after auth/surface initialization. Only the following UI intent
   // may contribute a Search POST to this journey.
   const before = await adapter.activity();
+  if (before.meter?.hard_limit_exceeded === true) {
+    throw new Error('search_health_supabase_hard_limit_exceeded');
+  }
   const diagnosticsBefore = await adapter.healthDiagnostics();
   await adapter.typeQuery(PRODUCTION_HEALTH_UI_QUERY);
   const searchStartedAt = Number(now());
