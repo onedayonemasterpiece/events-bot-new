@@ -3,7 +3,7 @@
 ## Scope and safety boundary
 
 - Initial audited base: `origin/main@65926e63b436efcc275c8e4094473ab9ef1fd9e8`.
-- Final rebased base: `origin/main@4e073d6edd5b2da71deba5b3f3a7a238202b3c5b`.
+- Final rebased base: `origin/main@00a65ba6bbafe218422067ed5cf20a6a31a8c16a`.
 - Integration branch: `integration/search-production-health-stage1-20260809`.
 - Prohibited operations performed: **none**.
 - Live Search POSTs: `0`.
@@ -42,7 +42,7 @@ auth fixture, shared mobile transport, registry and canonical Search docs.
 | R08 workflows/default PR CI | Done | two manual dry workflows; deterministic CI step |
 | R09 bounded PR #436 decision | Done | README §16.10; useful preclaim guard, not merged/deployed/dependency |
 | R10 canonical docs + Stage 2 handoff | Done | README §16 and `stage-2-production-health-handoff.md` |
-| R11 deterministic acceptance/zero live | Done | 24/24 architecture + 29/29 existing harness; safety counters above |
+| R11 deterministic acceptance/zero live | Done | 25/25 architecture + 29/29 existing harness; safety counters above |
 | R12 clean pushed PR | Pending publisher step | branch is clean; push/PR follows final audit |
 
 ## Deterministic validation
@@ -51,7 +51,7 @@ Commands executed from the clean integration worktree:
 
 ```bash
 npm --prefix site run test:search-production-health
-# 24 pass, 0 fail/skip/todo
+# 25 pass, 0 fail/skip/todo
 
 npm --prefix site run test:search-e2e-harness
 # 29 pass, 0 fail/skip/todo
