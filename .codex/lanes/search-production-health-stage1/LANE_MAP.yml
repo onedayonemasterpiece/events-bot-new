@@ -1,0 +1,63 @@
+task: search-production-health-stage1
+base: origin/main@65926e63b436efcc275c8e4094473ab9ef1fd9e8
+final_rebase: origin/main@d2b7993b41187660efa13d6d9070fda0c0d5a6cd
+integration_branch: integration/search-production-health-stage1-20260809
+requirements:
+  R01: actual runtime/data path audit with exact code references
+  R02: four identity boundary and canonical field reuse
+  R03: deterministic CI, production health, release qualification split
+  R04: disable automatic Search production traffic and product-incident noise
+  R05: current accepted target resolver and per-run pinning contract
+  R06: typed result and incident taxonomy
+  R07: client-observed Supabase byte-metering and cost guards
+  R08: safe workflow structure and default PR CI coverage
+  R09: bounded PR436 analysis without merge/build/deploy
+  R10: canonical architecture and Stage 2 handoff
+  R11: deterministic acceptance and zero live/prod execution
+  R12: clean pushed PR
+  R13: fail-closed Fly runtime SHA to exact Kaggle source binding
+  R14: Stage-2 morning/evening mobile policy and platform-specific typed statuses
+lanes:
+  discovery_runtime:
+    mode: read_only
+    owns: [R01, R02, R05]
+  discovery_workflows:
+    mode: read_only
+    owns: [R03, R04, R08]
+  discovery_risk:
+    mode: read_only
+    owns: [R06, R07, R09]
+  core_contracts:
+    mode: write
+    depends_on: [discovery_runtime, discovery_risk]
+    owns: [site/e2e/search, site/tests/search-production-health-contract.test.mjs, site/tests/search-production-health-planner.test.mjs]
+  workflow_policy:
+    mode: write
+    depends_on: [discovery_workflows, core_contracts_interface]
+    owns: [.github/workflows, site/tests/search-production-health-workflow.test.mjs]
+  integration_docs:
+    mode: serial_integration
+    depends_on: [core_contracts, workflow_policy]
+    owns: [docs, CHANGELOG.md, site/package.json, final_validation, PR]
+  premerge_source_binding:
+    mode: worktree_worker
+    effort: high
+    depends_on: [discovery_runtime]
+    owns: [R13]
+    branch: agent/search-production-health-stage1/source-binding
+    worktree: /home/dev/.codex/worktrees/events-bot-new/search-stage1-source-binding
+    writable_files: [Dockerfile, main.py, static_site_release.py, scripts/run_static_site_builder_kaggle.py, kaggle/StaticSiteBuilder/static_site_builder.py, tests/test_static_site_build_handoff.py, tests/test_static_site_build_debounce.py, .codex/lanes/search-production-health-stage2/r02-source-binding/RESULTS.md]
+  premerge_mobile_contract:
+    mode: worktree_worker
+    effort: high
+    depends_on: [discovery_workflows, discovery_risk]
+    owns: [R14]
+    branch: agent/search-production-health-stage1/mobile-contract
+    worktree: /home/dev/.codex/worktrees/events-bot-new/search-stage1-mobile-contract
+    writable_files: [site/e2e/search/production-health-contract.mjs, site/e2e/search/production-health-planner.mjs, site/tests/search-production-health-contract.test.mjs, site/tests/search-production-health-planner.test.mjs, .codex/lanes/search-production-health-stage2/r14-mobile-contract/RESULTS.md]
+constraints:
+  live_search_calls: 0
+  production_supabase_calls: 0
+  production_deploys: 0
+  mobile_runs: 0
+  kaggle_builds: 0

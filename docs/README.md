@@ -76,6 +76,8 @@
 - Unified mobile header/bottom-nav/toast shell: `docs/features/static-site-pages/mobile-shell.md`
 - Selective desktop/mobile breadcrumb product contract: `docs/features/static-site-pages/breadcrumbs.md`
 - Free + children search/admission/audience contract: `docs/features/unsigned-personalization/audience-admission-discovery.md`
+- Smart Search и каноническая production-health архитектура:
+  `docs/features/static-site-pages/smart-vector-search/README.md`
 - Unusual-events static feed, shared BGE/scoring, concept notifications and
   rollout gates: `docs/features/unusual-events/README.md`
 

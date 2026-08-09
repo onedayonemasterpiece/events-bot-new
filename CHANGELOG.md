@@ -62,6 +62,23 @@
   budget, idempotency and read-back checks; edit/delete still require external
   approval, and older `awaiting_human_approval` preparations are never upgraded
   or executed automatically.
+- Separated Search product health from immutable release qualification and
+  manual harness debugging. The legacy cached/cold/LLM/mobile schedules,
+  static-build post-deploy trigger and generic issue reporter no longer create
+  automatic production Search traffic or classify runner/broker/revision drift
+  as product incidents. The deterministic current-target adapter now consumes
+  the canonical resolver's full immutable tuple, including `input_fingerprint`,
+  requires the exact trusted production origin, and verifies the opaque review
+  token against its accepted receipt hash. Stage-2 health policy now fixes the
+  two daily profiles to browser+Android and browser+iOS with one independent
+  no-mail session and one Search POST per platform; the full LLM/mobile matrix
+  remains manual release qualification.
+
+- Bound every StaticSiteBuilder Kaggle source archive to the clean Fly image
+  revision with a deterministic source manifest and tree digest. Runtime,
+  Kaggle result, accepted candidate and recovery now fail closed on source/SHA
+  mismatch; a mutable Fly environment fallback and cross-deploy handoff reuse
+  can no longer make a repeated metadata SHA stand in for the actual bytes.
 
 - Made Private Events MCP ChatGPT image staging diagnostically safe: rejected
   `fileParams` now return bounded structured reason codes for unresolved refs,
@@ -140,6 +157,13 @@
   and authenticated tool behavior are unchanged.
 
 ### Added
+
+- Added production-free Search health architecture contracts for current-target
+  pinning, typed product versus infrastructure outcomes, one-POST/zero-LLM/
+  zero-pagination planning, 48/96 KiB client-observed Supabase cost guards and
+  target supersession. Manual-only dry health and release-qualification
+  workflows plus default PR CI exercise these deterministic contracts; live
+  validation and schedules remain explicitly deferred to stage 2.
 
 - Added an append-only, requirements-aware Current UI Behavioral Decoder & Experiment Archaeology v1.1 source pass and two-stage exact-source capture workflow. It binds every behavioral record to the reviewed Decoder v1 manifest, emits separate provenance, complete media-policy, dynamic loading/skeleton, geometry, interaction, positioning, rail, overlay and experiment artifacts, and captures a closed 50-packet/99-raster matrix while remaining `CAPTURE_COMPLETE_NO_GO_PENDING_REVIEW`. A deep validator now checks output hashes plus plan/phase/action/raster references; only a one-to-one full-resolution human review ledger, independent audit and durable Actions/Release provenance can unlock `READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`. It does not change the immutable v1 snapshot, site runtime, tokens, normalization or Penpot.
 

@@ -15,5 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # the worker is not a general-purpose crawler.
 RUN python -m playwright install --with-deps chromium
 COPY . .
-RUN printf '%s\n' "$STATIC_SITE_IMAGE_REPO_SHA" > /app/.static-site-repo-sha
+RUN printf '%s\n' "$STATIC_SITE_IMAGE_REPO_SHA" > /app/.static-site-repo-sha \
+    && STATIC_SITE_IMAGE_REPO_SHA="$STATIC_SITE_IMAGE_REPO_SHA" python -c "import os; from pathlib import Path; from scripts.run_static_site_builder_kaggle import write_image_source_manifest; write_image_source_manifest(Path('/app/.static-site-source-manifest.json'), repo_sha=os.environ['STATIC_SITE_IMAGE_REPO_SHA'])"
 CMD ["python", "main.py"]

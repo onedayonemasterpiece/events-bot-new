@@ -537,6 +537,8 @@ features:
     golden_interest_facets: docs/features/unsigned-personalization/golden-interest-facets.md
     personal_feed_architecture: docs/features/unsigned-personalization/personal-feed-architecture.md
     authorized_event_search: docs/features/unsigned-personalization/authorized-event-search.md
+    smart_vector_search: docs/features/static-site-pages/smart-vector-search/README.md
+    search_production_health_stage2_handoff: docs/features/static-site-pages/smart-vector-search/stage-2-production-health-handoff.md
     semantic_vector_retrieval: docs/features/unsigned-personalization/semantic-vector-retrieval.md
     bots_and_automation: docs/features/unsigned-personalization/bots-and-automation.md
     production_integration: docs/features/unsigned-personalization/production-integration.md

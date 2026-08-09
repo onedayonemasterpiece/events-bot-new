@@ -48,6 +48,93 @@ def test_static_site_repo_sha_keeps_legacy_fallback_for_local_tests(tmp_path, mo
     assert main._resolve_static_site_repo_sha() == "c" * 40
 
 
+def test_static_site_repo_sha_rejects_legacy_fallback_in_fly(tmp_path, monkeypatch):
+    monkeypatch.setenv(
+        "STATIC_SITE_IMAGE_REPO_SHA_FILE", str(tmp_path / "missing-revision")
+    )
+    monkeypatch.setenv("STATIC_SITE_REPO_SHA", "c" * 40)
+    monkeypatch.setenv("FLY_APP_NAME", "events-bot-production")
+
+    with pytest.raises(main.StaticSitePermanentError, match="revision is absent"):
+        main._resolve_static_site_repo_sha()
+
+
+def test_static_site_image_source_identity_is_bound_to_repo_sha(
+    tmp_path, monkeypatch
+):
+    import hashlib
+    import json
+
+    repo_sha = "d" * 40
+    manifest = {
+        "schema_version": "static_site_image_source_manifest_v1",
+        "repo_sha": repo_sha,
+        "source_tree_sha256": "e" * 64,
+        "source_file_count": 7,
+    }
+    manifest_path = tmp_path / "source-manifest.json"
+    raw = (json.dumps(manifest, sort_keys=True) + "\n").encode()
+    manifest_path.write_bytes(raw)
+    monkeypatch.setenv("STATIC_SITE_IMAGE_SOURCE_MANIFEST_FILE", str(manifest_path))
+
+    identity = main._resolve_static_site_image_source_identity(repo_sha)
+    assert identity == {
+        "manifest_path": str(manifest_path.resolve()),
+        "image_source_manifest_sha256": hashlib.sha256(raw).hexdigest(),
+        "image_source_tree_sha256": "e" * 64,
+    }
+    with pytest.raises(main.StaticSitePermanentError, match="repo_sha_mismatch"):
+        main._resolve_static_site_image_source_identity("f" * 40)
+
+
+@pytest.mark.asyncio
+async def test_remote_recovery_rejects_cross_deploy_repo_sha_before_subprocess(
+    monkeypatch,
+):
+    fingerprint = "a" * 64
+    monkeypatch.setattr(
+        main,
+        "recoverable_static_site_build",
+        lambda *_args, **_kwargs: type(
+            "Claim",
+            (),
+            {
+                "run_id": "static-site:old-run",
+                "input_fingerprint": fingerprint,
+                "dataset_ref": "owner/exact-input",
+            },
+        )(),
+    )
+
+    async def forbidden_subprocess(*_args, **_kwargs):
+        raise AssertionError("cross-deploy recovery crossed the subprocess boundary")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", forbidden_subprocess)
+    handoff = {
+        "build_id": "production-old-run",
+        "run_id": "static-site:old-run",
+        "repo_sha": "b" * 40,
+        "candidate_token": "c" * 43,
+        "snapshot_path": "/data/old.sqlite",
+        "manifest_path": "/data/old.manifest.json",
+        "input_fingerprint": fingerprint,
+        "current_datetime": "2026-08-09T12:00:00+02:00",
+    }
+
+    with pytest.raises(
+        main.StaticSitePermanentError,
+        match="cross_deploy_repo_sha_mismatch",
+    ):
+        await main._recover_previous_static_site_attempt(
+            db=type("Database", (), {"path": "/data/db.sqlite"})(),
+            job_id=17,
+            request_payload={"remote_handoff": handoff},
+            limit=5000,
+            current_repo_sha="d" * 40,
+            current_source_identity=None,
+        )
+
+
 async def _seed_failed_static_build(
     db: Database,
     *,
