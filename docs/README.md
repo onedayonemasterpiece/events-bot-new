@@ -6,6 +6,8 @@
 
 - Машиночитаемая карта: `docs/routes.yml`
 - Статический сайт: `docs/features/static-site-pages/README.md`
+  - reviewed Current UI Decoder v1 и immutable design-system handoff:
+    `docs/features/static-site-pages/current-ui-resource-graph.md`;
   - аналитика и продуктовая статистика: `analytics/README.md`;
   - подборки и гастрономия: `podborki.md`, `gastronomy-collection.md`;
   - персонализация: `personalizaion/personalization-to-be.md` и Wave 0;

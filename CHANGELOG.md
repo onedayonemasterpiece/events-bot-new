@@ -17,6 +17,15 @@
 
 ### Added
 
+- Completed the immutable Current UI Decoder v1 handoff: all 155 indexed page
+  and component rasters were manually reviewed, the hash-bound review ledger
+  advanced the narrow evidence verdict to
+  `GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION`, permanent heavy evidence was
+  published as a GitHub Release asset, and the 107-component compact catalog
+  was merged into `lovekgd-design-system` with its own fail-closed validator.
+  All candidate contracts remain non-normative `NOT_MERGED`; no UI, CSS,
+  token, normalization or Penpot mutation is included.
+
 - Added a granular, provider-neutral ChatGPT social workspace to Private Events
   MCP while keeping the Codex resource fixed at exactly seven evidence tools.
   The workspace supports opaque target resolution (including Telegram Saved and

@@ -458,3 +458,54 @@ Even `GO` authorizes only the immutable evidence handoff. It does **not**
 authorize merge, split, normalization, tokenization, Penpot materialization, or
 Astro/CSS mutation. Those decisions start only in a separately approved
 defragmentation phase.
+
+## Completed reviewed handoff
+
+The two-stage capture and review cycle is complete for snapshot
+`decoder-v1-snapshot-20260808T124842-4786ac53bc`:
+
+- canonical capture run:
+  [`31291052330`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31291052330),
+  decoder head `ad2fb5a9c565b95aa746d7e6031edfe6e901d929`;
+- Actions artifact `9031552834`, digest
+  `sha256:69a969f834ff4553ca8357fc2974a972c5d87a0dd719239fe36bd6eba6a3aaa2`;
+- permanent heavy evidence:
+  [GitHub Release](https://github.com/onedayonemasterpiece/events-bot-new/releases/tag/current-ui-decoder-v1-snapshot-20260808T124842-4786ac53bc),
+  asset `507043428`, digest
+  `sha256:abbbb5bbe6cd472c3814a9586fa51375a708fc5cfe0319e3b9cfcd0cc4b2d279`;
+- human review ledger SHA-256
+  `a59884a7f423f2e2468c1a3fb863248ee38f3d19860c300eb662675dc5f71d91`;
+- 46 page rasters and 109 component rasters, **155/155 manually reviewed**;
+- reviewed compact manifest SHA-256
+  `18515f4d337ba18356e99d8233d0bf5dba988cedfa031bcf85a4b26d7277087e`;
+- official compact handoff merged through
+  [`lovekgd-design-system#26`](https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/26)
+  at commit
+  [`1ca65d165d01c10c9db323fd2c8ebf20f8f8b7ec`](https://github.com/onedayonemasterpiece/lovekgd-design-system/commit/1ca65d165d01c10c9db323fd2c8ebf20f8f8b7ec),
+  tree `c0440f6c168ecfb46bfac97ec45a1c0fff09e96e`;
+- design-system validation on merged `main`:
+  [snapshot run 31292505954](https://github.com/onedayonemasterpiece/lovekgd-design-system/actions/runs/31292505954)
+  and
+  [contract run 31292506001](https://github.com/onedayonemasterpiece/lovekgd-design-system/actions/runs/31292506001),
+  both successful.
+
+The reviewed compact receipt is `complete`, with `handoff_status: GO` and
+`GO_FOR_FAMILY_SCOPED_DEFRAGMENTATION`. It contains 107 logical component
+dispositions, 12 candidate AS-IS contracts and six reviewed reconciliation
+capsules. Candidate contracts remain `candidate-as-is-not-accepted`; every
+component/capsule decision remains `NOT_MERGED`, and
+`penpot-materialization-candidates.json` remains `not-materialized`.
+
+Manual review visibly confirmed both desktop Event Detail anatomies
+(editorial/landscape and split/portrait-poster), their separate stacked versus
+inline CTA placements, the large poster/primary companion and smaller remaining
+photo previews, rail/bus/KAUP transport blocks, medallions, and the distinct
+Amber and Focus Egg systems. The previously requested event IDs `7052`, `7301`,
+`7048` and `7186` were explicit-unreachable in this exact candidate manifest;
+the corresponding presentation formats were instead verified on other exact,
+hash-bound runtime representatives. No evidence record relabels those four IDs
+as captured.
+
+The machine-readable final receipt and complete review report live at
+`.codex/integration/current-ui-decoder-v1/`. This closes decoding only. It does
+not start defragmentation or normalization automatically.
