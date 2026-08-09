@@ -1,6 +1,6 @@
 task: search-production-health-stage1
 base: origin/main@65926e63b436efcc275c8e4094473ab9ef1fd9e8
-final_rebase: origin/main@150358ed88b5239753bf3669a1f1e311bf3f63cc
+final_rebase: origin/main@d2b7993b41187660efa13d6d9070fda0c0d5a6cd
 integration_branch: integration/search-production-health-stage1-20260809
 requirements:
   R01: actual runtime/data path audit with exact code references
