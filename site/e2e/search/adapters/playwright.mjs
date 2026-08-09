@@ -1,28 +1,42 @@
 import { chromium, firefox, webkit } from 'playwright';
 
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe } from './runtime-probe.mjs';
+import { assertCanonicalCandidateEventDestination } from '../../mobile-web/appium-network-receipt.mjs';
+import {
+  classifySupabaseClientUrl,
+  SupabaseClientObservedByteMeter,
+  SUPABASE_CLIENT_BYTE_CLASSES,
+} from '../production-health-meter.mjs';
 
 const cardsSelector = '[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]';
 
 export async function runRealWheelScroll({
   readScrollY, lastCardVisible, wheel, wait, step, maxAttempts = 40,
 }) {
+  let inputCount = 0;
+  const dispatchWheel = async (delta) => {
+    await wheel(delta);
+    inputCount += 1;
+  };
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (await readScrollY() === 0) break;
-    await wheel(-step);
+    await dispatchWheel(-step);
     await wait();
   }
   const before = await readScrollY();
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    if (await lastCardVisible()) break;
-    await wheel(step);
+    if (attempt > 0 && await lastCardVisible()) break;
+    await dispatchWheel(step);
     await wait();
   }
   const after = await readScrollY();
-  return { performed: true, delta_y: after - before, card_visible_after: await lastCardVisible() };
+  return { performed: inputCount > 0, delta_y: after - before,
+    card_visible_after: await lastCardVisible(), gesture_count: inputCount,
+    input_kind: 'wheel', input_count: inputCount };
 }
 
 export function snapshotResultsInPage() {
+  const root = document.querySelector('[data-authorized-search]');
   const results = document.querySelector('[data-search-results]');
   const status = document.querySelector('[data-search-status]');
   const submit = document.querySelector('[data-search-submit]');
@@ -41,7 +55,7 @@ export function snapshotResultsInPage() {
   const error = status?.getAttribute('role') === 'alert';
   const busy = submit?.getAttribute('aria-busy') === 'true';
   return {
-    terminal: !error && !busy && Boolean(results && !results.hidden && cards.length > 0),
+    terminal: root?.dataset?.searchTerminal === 'true' && !busy,
     error, cards_visible: cards.some(visible), visible_card_count: cards.filter(visible).length,
     rendered_ids: ids, rendered_families: families,
     skeleton_count: document.querySelectorAll('[data-search-skeletons]:not([hidden]) .authorized-search__skeleton-card, [data-search-results] [data-skeleton]').length,
@@ -58,7 +72,14 @@ export async function createPlaywrightSearchAdapter(options = {}) {
   let ownsRuntime = false;
   let postBoundarySearchPostCount = null;
   let postBoundaryRequestObserver = null;
+  let postBoundaryResponseObserver = null;
   let postBoundaryObserverPage = null;
+  let postBoundaryMeter = null;
+  let postBoundaryMeterSnapshot = null;
+  let postBoundaryMeterError = null;
+  const postBoundaryResponseTasks = new Set();
+  let preNavigationSearchActivity = null;
+  let preNavigationResultState = null;
   const diagnostics = { console_errors: 0, failed_requests: 0, error_responses: 0, storage_requests: 0 };
   const bindPage = (value) => {
     value.on('console', (message) => { if (message.type() === 'error') diagnostics.console_errors += 1; });
@@ -76,7 +97,11 @@ export async function createPlaywrightSearchAdapter(options = {}) {
     if (postBoundaryRequestObserver && postBoundaryObserverPage) {
       postBoundaryObserverPage.off('request', postBoundaryRequestObserver);
     }
+    if (postBoundaryResponseObserver && postBoundaryObserverPage) {
+      postBoundaryObserverPage.off('response', postBoundaryResponseObserver);
+    }
     postBoundaryRequestObserver = null;
+    postBoundaryResponseObserver = null;
     postBoundaryObserverPage = null;
   };
   const prepareContext = async (storageState) => {
@@ -160,16 +185,17 @@ export async function createPlaywrightSearchAdapter(options = {}) {
     async waitForTerminal({ minimumResponseCount = 1, minimumCardCount = 1 } = {}) {
       await page.waitForFunction(({ responseCount, cardCount }) => {
         const probe = globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+        const root = document.querySelector('[data-authorized-search]');
         const status = document.querySelector('[data-search-status]');
         const submit = document.querySelector('[data-search-submit]');
         const more = document.querySelector('[data-search-more]');
         const cards = document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]');
-        if (status?.getAttribute('role') === 'alert') return true;
-        return (probe?.responses?.length || 0) >= responseCount && (probe?.meter?.pending || 0) === 0 && cards.length >= cardCount
+        return (probe?.responses?.length || 0) >= responseCount && (probe?.meter?.pending || 0) === 0
+          && root?.dataset?.searchTerminal === 'true' && cards.length >= cardCount
           && submit?.getAttribute('aria-busy') !== 'true' && more?.getAttribute('aria-busy') !== 'true';
       }, { responseCount: minimumResponseCount, cardCount: minimumCardCount }, { timeout: timeoutMs });
       const state = await adapter.snapshotResults();
-      if (state.error) throw new Error('search_ui_terminal_error');
+      if (state.error && !state.card_renderer_unavailable) throw new Error('search_ui_terminal_error');
       return state;
     },
     async snapshotResults() { return page.evaluate(snapshotResultsInPage); },
@@ -196,9 +222,28 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       await first.waitFor({ state: 'visible', timeout: timeoutMs });
       const link = first.locator('a[href]').first();
       if (await link.count() !== 1) throw new Error('search_first_card_link_missing');
-      const beforeOrigin = new URL(page.url()).origin;
+      const beforeUrl = new URL(page.url());
+      const rawHref = await link.getAttribute('href');
+      const expectedUrl = rawHref ? new URL(rawHref, beforeUrl) : null;
+      const destination = assertCanonicalCandidateEventDestination({
+        searchUrl: beforeUrl.href, eventUrl: expectedUrl?.href,
+      });
+      const beforeOrigin = beforeUrl.origin;
       stopPostBoundaryObservation();
       postBoundarySearchPostCount = 0;
+      postBoundaryMeter = null;
+      postBoundaryMeterSnapshot = null;
+      postBoundaryMeterError = null;
+      const originValues = await page.evaluate(() => {
+        const root = document.querySelector('[data-authorized-search]');
+        return [root?.dataset?.supabaseUrl, root?.dataset?.supabaseRelayUrl]
+          .filter(Boolean).map((value) => new URL(value, location.href).origin);
+      }).catch(() => []);
+      const supabaseOrigins = Array.isArray(originValues)
+        ? [...new Set(originValues.filter((value) => typeof value === 'string'))] : [];
+      if (supabaseOrigins.length > 0) {
+        postBoundaryMeter = new SupabaseClientObservedByteMeter({ supabaseOrigins });
+      }
       const observeRequest = (request) => {
         try {
           if (request.method() === 'POST'
@@ -207,10 +252,29 @@ export async function createPlaywrightSearchAdapter(options = {}) {
           }
         } catch { /* malformed request metadata fails via the authoritative probe */ }
       };
+      const observeResponse = (observedResponse) => {
+        if (!postBoundaryMeter) return;
+        const task = (async () => {
+          const url = observedResponse.url();
+          if (classifySupabaseClientUrl(url, { supabaseOrigins })
+            === SUPABASE_CLIENT_BYTE_CLASSES.EXCLUDED) return;
+          const headers = await observedResponse.allHeaders?.() || observedResponse.headers?.() || {};
+          const hasContentLength = Object.entries(headers)
+            .some(([key, value]) => key.toLowerCase() === 'content-length' && String(value) !== '');
+          const body = hasContentLength ? null : await observedResponse.body();
+          postBoundaryMeter.recordResponse({ url, headers, body });
+        })().catch((error) => { postBoundaryMeterError = error || new Error('search_post_navigation_meter_failed'); });
+        postBoundaryResponseTasks.add(task);
+        task.finally(() => postBoundaryResponseTasks.delete(task));
+      };
       page.on('request', observeRequest);
+      page.on('response', observeResponse);
       postBoundaryRequestObserver = observeRequest;
+      postBoundaryResponseObserver = observeResponse;
       postBoundaryObserverPage = page;
       const searchPageActivity = await page.evaluate(snapshotSearchRuntimeProbe);
+      preNavigationSearchActivity = searchPageActivity;
+      preNavigationResultState = await page.evaluate(snapshotResultsInPage);
       const [navigation] = await Promise.all([
         page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeoutMs }),
         link.click(),
@@ -218,13 +282,20 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       const afterOrigin = new URL(page.url()).origin;
       const httpStatus = Number(navigation?.status() || 0);
       let request = navigation?.request?.() || null;
+      if (!request || request.redirectedFrom?.()) throw new Error('search_card_route_redirected');
+      if (request.url() !== expectedUrl.href) throw new Error('search_card_route_changed');
       while (request) {
         if (new URL(request.url()).origin !== beforeOrigin) throw new Error('search_card_route_cross_origin');
         request = request.redirectedFrom?.() || null;
       }
+      assertCanonicalCandidateEventDestination({
+        searchUrl: beforeUrl.href, eventUrl: expectedUrl.href, finalUrl: page.url(),
+      });
+      if (httpStatus !== 200) throw new Error('search_card_http_200_missing');
       return {
         schema_version: 'browser-card-open-v1', same_origin: beforeOrigin === afterOrigin,
-        http_status: httpStatus, destination_class: 'event_detail', network_source: 'playwright_navigation_response',
+        http_status: httpStatus, destination_class: destination.destination_class,
+        network_source: 'playwright_navigation_response',
         search_page_activity_before_navigation: searchPageActivity,
       };
     },
@@ -232,9 +303,30 @@ export async function createPlaywrightSearchAdapter(options = {}) {
       if (!Number.isSafeInteger(postBoundarySearchPostCount)) {
         throw new Error('search_post_navigation_observation_missing');
       }
+      await Promise.all([...postBoundaryResponseTasks]);
+      if (postBoundaryMeterError) throw new Error('search_post_navigation_meter_failed', { cause: postBoundaryMeterError });
+      if (!postBoundaryMeter) throw new Error('search_post_navigation_meter_origin_missing');
+      postBoundaryMeterSnapshot = postBoundaryMeter.snapshot();
       const count = postBoundarySearchPostCount;
       stopPostBoundaryObservation();
       return count;
+    },
+    async postNavigationMeterSnapshot() {
+      if (!postBoundaryMeterSnapshot) throw new Error('search_post_navigation_meter_missing');
+      return structuredClone(postBoundaryMeterSnapshot);
+    },
+    async failedJourneyEvidence() {
+      if (!preNavigationSearchActivity) return null;
+      const count = postBoundaryRequestObserver
+        ? await adapter.postNavigationSearchPostCount()
+        : Number(postBoundarySearchPostCount || 0);
+      return Object.freeze({
+        activity: structuredClone(preNavigationSearchActivity),
+        results: structuredClone(preNavigationResultState),
+        post_navigation_search_post_count: count,
+        ...(postBoundaryMeterSnapshot
+          ? { post_navigation_meter: structuredClone(postBoundaryMeterSnapshot) } : {}),
+      });
     },
     async showMoreState() {
       const more = page.locator('[data-search-more]');

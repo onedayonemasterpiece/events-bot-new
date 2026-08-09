@@ -1,13 +1,15 @@
 import { installSearchRuntimeProbe, snapshotSearchRuntimeProbe,
   verifyAuthenticatedOwnerRuntimeProbe } from './runtime-probe.mjs';
 import { buildAppiumSessionFailureReceipt } from '../../mobile-web/appium-startup-receipt.mjs';
-import { buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
-  countEventSearchPostRequests, extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
+import { assertCanonicalCandidateEventDestination, buildExactTargetNavigationReceipt, buildSameOriginNavigationReceipt,
+  countEventSearchPostRequests, createSanitizedNavigationResponseTracker,
+  extractSanitizedNavigationResponses } from '../../mobile-web/appium-network-receipt.mjs';
 import { buildMobilePreflightFailureReceipt,
   runAppiumTransportPreflight } from '../../mobile-web/appium-preflight.mjs';
 import { dismissNativeKeyboard, focusIosSafariWebInput, observeNativeKeyboard,
   performNativeDocumentSwipe, prepareIosSafariWebContext,
   withNativeAppContext } from '../../mobile-web/appium-browser.mjs';
+import { SupabaseClientObservedByteMeter } from '../production-health-meter.mjs';
 
 const IOS_SEARCH_INPUT_LABELS = Object.freeze([
   'Что хочется сделать?',
@@ -20,6 +22,7 @@ const IOS_SEARCH_KEYBOARD_DISMISS_LABELS = Object.freeze([
 ]);
 
 function pageResultSnapshot() {
+  const root = document.querySelector('[data-authorized-search]');
   const results = document.querySelector('[data-search-results]');
   const status = document.querySelector('[data-search-status]');
   const submit = document.querySelector('[data-search-submit]');
@@ -36,7 +39,7 @@ function pageResultSnapshot() {
     return members.length > 1 ? `family:${members.join(',')}` : `event:${node.getAttribute('data-event-id') || ''}`;
   });
   const error = status?.getAttribute('role') === 'alert';
-  return { terminal: !error && submit?.getAttribute('aria-busy') !== 'true' && Boolean(results && !results.hidden && cards.length),
+  return { terminal: root?.dataset?.searchTerminal === 'true' && submit?.getAttribute('aria-busy') !== 'true',
     error, cards_visible: cards.some(isVisible), visible_card_count: cards.filter(isVisible).length,
     rendered_ids: renderedIds, rendered_families: renderedFamilies,
     skeleton_count: skeletons.size,
@@ -160,12 +163,18 @@ export async function createAppiumSearchAdapter(options = {}) {
   let postBoundarySearchPostCount = null;
   let postBoundarySearchObservationActive = false;
   const postBoundarySearchRequestIds = new Set();
+  let postBoundaryResponseTracker = null;
+  let postBoundarySupabaseOrigins = [];
+  let postBoundaryMeterSnapshot = null;
+  let preNavigationSearchActivity = null;
+  let preNavigationResultState = null;
 
   const observePostBoundarySearch = (logs) => {
     if (!postBoundarySearchObservationActive) return;
     postBoundarySearchPostCount += countEventSearchPostRequests(
       logs, postBoundarySearchRequestIds,
     );
+    postBoundaryResponseTracker?.consume(logs);
   };
 
   const syncClosedDriverDiagnostics = async () => {
@@ -279,7 +288,19 @@ export async function createAppiumSearchAdapter(options = {}) {
       { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_auth_callback_session_not_restored' });
       const callbackLogs = await driver.getLogs(networkType).catch(() => null);
       if (!Array.isArray(callbackLogs)) throw new Error('mobile_auth_network_log_unavailable');
-      callbackAuthObservedBytes += extractSanitizedNavigationResponses(callbackLogs)
+      const authOrigin = new URL(actionLink).origin;
+      const callbackTracker = createSanitizedNavigationResponseTracker();
+      callbackTracker.consume(callbackLogs);
+      if (callbackTracker.pendingTerminalCount({ origin: authOrigin, pathPrefix: '/auth/v1' }) > 0) {
+        await driver.waitUntil(async () => {
+          const logs = await driver.getLogs(networkType).catch(() => null);
+          if (!Array.isArray(logs)) return false;
+          callbackTracker.consume(logs);
+          return callbackTracker.pendingTerminalCount({ origin: authOrigin, pathPrefix: '/auth/v1' }) === 0;
+        }, { timeout: timeoutMs, interval: 100,
+          timeoutMsg: 'mobile_auth_terminal_bytes_timeout' });
+      }
+      callbackAuthObservedBytes += callbackTracker.responses()
         .filter((item) => item.pathname === '/auth/v1' || item.pathname.startsWith('/auth/v1/'))
         .reduce((sum, item) => sum + Number(item.encoded_bytes || 0), 0);
       lifecycle.auth_callback_authorized = true;
@@ -381,18 +402,21 @@ export async function createAppiumSearchAdapter(options = {}) {
       let state = null;
       await driver.waitUntil(async () => {
         state = await driver.execute((responseCount, cardCount) => {
-          const probe = globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__; const status = document.querySelector('[data-search-status]');
+          const probe = globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__; const root = document.querySelector('[data-authorized-search]');
+          const status = document.querySelector('[data-search-status]');
           const submit = document.querySelector('[data-search-submit]'); const more = document.querySelector('[data-search-more]');
           const cards = document.querySelectorAll('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]');
           return { done: (probe?.responses?.length || 0) >= responseCount
-            && (probe?.meter?.pending || 0) === 0 && cards.length >= cardCount
+            && (probe?.meter?.pending || 0) === 0 && root?.dataset?.searchTerminal === 'true'
+            && cards.length >= cardCount
             && submit?.getAttribute('aria-busy') !== 'true' && more?.getAttribute('aria-busy') !== 'true',
           error: status?.getAttribute('role') === 'alert' };
         }, minimumResponseCount, minimumCardCount);
-        return state.error || state.done;
+        return state.done;
       }, { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_terminal_timeout' });
-      if (state?.error) throw new Error('search_ui_terminal_error');
-      return adapter.snapshotResults();
+      const snapshot = await adapter.snapshotResults();
+      if (state?.error && !snapshot.card_renderer_unavailable) throw new Error('search_ui_terminal_error');
+      return snapshot;
     },
     async snapshotResults() { return driver.execute(pageResultSnapshot); },
     async realScrollResults() {
@@ -425,21 +449,32 @@ export async function createAppiumSearchAdapter(options = {}) {
         if (!card || !rawHref) return null;
         try {
           const target = new URL(rawHref, location.href);
-          return { href: target.href, same_origin: target.origin === location.origin };
+          const origins = [document.querySelector('[data-authorized-search]')?.dataset?.supabaseUrl,
+            document.querySelector('[data-authorized-search]')?.dataset?.supabaseRelayUrl]
+            .filter(Boolean).map((value) => new URL(value, location.href).origin);
+          return { href: target.href, same_origin: target.origin === location.origin,
+            supabase_origins: [...new Set(origins)] };
         } catch { return null; }
       });
       if (!captured?.href || captured.same_origin !== true) throw new Error('mobile_first_card_route_invalid');
       const beforeUrl = await driver.getUrl();
       const expectedUrl = new URL(captured.href, beforeUrl);
       if (expectedUrl.origin !== new URL(beforeUrl).origin) throw new Error('mobile_card_route_cross_origin');
+      assertCanonicalCandidateEventDestination({ searchUrl: beforeUrl, eventUrl: expectedUrl.href });
       const logType = platform === 'android' ? 'performance' : 'safariNetwork';
       const initialLogs = await driver.getLogs(logType).catch(() => null);
       if (!Array.isArray(initialLogs)) throw new Error('mobile_navigation_network_log_unavailable');
       accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds);
       const searchPageActivity = await driver.execute(snapshotSearchRuntimeProbe);
+      preNavigationSearchActivity = searchPageActivity;
+      preNavigationResultState = await driver.execute(pageResultSnapshot);
       postBoundarySearchRequestIds.clear();
       postBoundarySearchPostCount = 0;
       postBoundarySearchObservationActive = true;
+      postBoundaryResponseTracker = createSanitizedNavigationResponseTracker();
+      postBoundarySupabaseOrigins = Array.isArray(captured.supabase_origins)
+        ? captured.supabase_origins.filter((value) => typeof value === 'string') : [];
+      postBoundaryMeterSnapshot = null;
       lifecycle.first_card_captured = true;
       lifecycle.failure_stage = 'search_first_card_open';
       await (await driver.$('[data-search-results] [data-event-card][data-event-id], [data-search-results] [data-search-vector-card][data-event-id]')).click();
@@ -480,8 +515,60 @@ export async function createAppiumSearchAdapter(options = {}) {
         throw new Error('mobile_post_navigation_network_log_unavailable');
       }
       observePostBoundarySearch(finalNetworkLogs);
+      const pendingRelevantResponses = () => postBoundarySupabaseOrigins.reduce(
+        (sum, origin) => sum + ['/auth/v1', '/functions/v1', '/rest/v1'].reduce(
+          (originSum, prefix) => originSum
+            + postBoundaryResponseTracker.pendingTerminalCount({ origin, pathPrefix: prefix }), 0,
+        ), 0,
+      );
+      if (pendingRelevantResponses() > 0) {
+        await driver.waitUntil(async () => {
+          const logs = await driver.getLogs?.(networkType).catch(() => null);
+          if (!Array.isArray(logs)) throw new Error('mobile_post_navigation_network_log_unavailable');
+          observePostBoundarySearch(logs);
+          return pendingRelevantResponses() === 0;
+        }, { timeout: timeoutMs, interval: 100,
+          timeoutMsg: 'mobile_post_navigation_terminal_bytes_missing' });
+      }
+      for (const origin of postBoundarySupabaseOrigins) {
+        for (const prefix of ['/auth/v1', '/functions/v1', '/rest/v1']) {
+          if (postBoundaryResponseTracker.pendingTerminalCount({ origin, pathPrefix: prefix }) > 0) {
+            throw new Error('mobile_post_navigation_terminal_bytes_missing');
+          }
+        }
+      }
+      if (postBoundarySupabaseOrigins.length < 1) {
+        throw new Error('mobile_post_navigation_meter_origin_missing');
+      }
+      const meter = new SupabaseClientObservedByteMeter({ supabaseOrigins: postBoundarySupabaseOrigins });
+      for (const response of postBoundaryResponseTracker.responses()) {
+        if (!postBoundarySupabaseOrigins.includes(response.origin)) continue;
+        meter.recordResponse({
+          url: `${response.origin}${response.pathname}`,
+          headers: { 'content-length': String(Number(response.encoded_bytes || 0)) },
+          body: null,
+        });
+      }
+      postBoundaryMeterSnapshot = meter.snapshot();
       postBoundarySearchObservationActive = false;
       return postBoundarySearchPostCount;
+    },
+    async postNavigationMeterSnapshot() {
+      if (!postBoundaryMeterSnapshot) throw new Error('mobile_post_navigation_meter_missing');
+      return structuredClone(postBoundaryMeterSnapshot);
+    },
+    async failedJourneyEvidence() {
+      if (!preNavigationSearchActivity) return null;
+      const count = postBoundarySearchObservationActive
+        ? await adapter.postNavigationSearchPostCount()
+        : Number(postBoundarySearchPostCount || 0);
+      return Object.freeze({
+        activity: structuredClone(preNavigationSearchActivity),
+        results: structuredClone(preNavigationResultState),
+        post_navigation_search_post_count: count,
+        ...(postBoundaryMeterSnapshot
+          ? { post_navigation_meter: structuredClone(postBoundaryMeterSnapshot) } : {}),
+      });
     },
     async showMoreState() {
       return driver.execute(() => { const node = document.querySelector('[data-search-more]');

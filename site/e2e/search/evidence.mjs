@@ -138,7 +138,7 @@ export function productionHealthEvidenceRecord(input = {}) {
     search: {
       expected_backend_revision: closedText(input.expected_search_backend_revision, /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u),
       ui_submission_count: safeCount(journey.search_post_count),
-      physical_post_count: safeCount(journey.search_post_count),
+      physical_post_count: safeCount(journey.physical_search_post_count ?? journey.search_post_count),
       vector_only: journey.request_contract?.use_llm_verifier === false,
       limit: safeCount(journey.request_contract?.limit),
       explicit_execution_mode: journey.request_contract?.explicit_execution_mode === true,

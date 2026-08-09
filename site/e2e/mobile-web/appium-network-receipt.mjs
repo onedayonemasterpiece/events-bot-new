@@ -2,16 +2,37 @@ const safeUrl = (raw) => {
   try { return new URL(String(raw)); } catch { return null; }
 };
 
-/** Reduce Chrome/Safari protocol logs to URL objects held only in memory. */
-export function extractSanitizedNavigationResponses(logs) {
+export function assertCanonicalCandidateEventDestination({ searchUrl, eventUrl, finalUrl } = {}) {
+  const search = safeUrl(searchUrl);
+  const expected = safeUrl(eventUrl);
+  const final = finalUrl == null ? expected : safeUrl(finalUrl);
+  if (!search || !expected || !final) throw new Error('search_card_event_path_invalid');
+  if (search.origin !== expected.origin || expected.origin !== final.origin) {
+    throw new Error('search_card_route_cross_origin');
+  }
+  const prefixMatch = search.pathname.match(/^(.*\/)poisk\/$/u);
+  if (!prefixMatch) throw new Error('search_card_candidate_prefix_invalid');
+  const expectedPrefix = `${prefixMatch[1]}sobytiya/`;
+  if (!expected.pathname.startsWith(expectedPrefix)
+    || !/^([^/]+)\/$/u.test(expected.pathname.slice(expectedPrefix.length))
+    || expected.search || expected.hash) {
+    throw new Error('search_card_event_path_invalid');
+  }
+  if (final.href !== expected.href) throw new Error('search_card_route_changed');
+  return Object.freeze({ destination_class: 'event_detail' });
+}
+
+/** Stateful sanitizer; protocol request IDs remain inside this closure only. */
+export function createSanitizedNavigationResponseTracker() {
   const responses = [];
   const responseByRequestId = new Map();
   const terminalBytesByRequestId = new Map();
-  const visited = new WeakSet();
+  const untrackedTerminalRecords = [];
   const applyTerminalBytes = (record, encodedBytes) => {
     if (!record || record.has_declared_length) return;
     if (encodedBytes > 0) record.item.encoded_bytes = encodedBytes;
     else delete record.item.encoded_bytes;
+    record.terminal = true;
   };
   const appendResponse = (response, resourceType, requestId, terminalEligible) => {
     const url = safeUrl(response?.url);
@@ -21,22 +42,28 @@ export function extractSanitizedNavigationResponses(logs) {
       ?? response?.headers?.['Content-Length']);
     const hasDeclaredLength = Number.isSafeInteger(declared) && declared >= 0;
     const partialEncoded = Number(response?.encodedDataLength);
-    const encodedBytes = hasDeclaredLength
-      ? declared : Number.isSafeInteger(partialEncoded) && partialEncoded >= 0 ? partialEncoded : 0;
+    const encodedBytes = hasDeclaredLength ? declared
+      : !terminalEligible && Number.isSafeInteger(partialEncoded) && partialEncoded >= 0 ? partialEncoded : 0;
     const item = { origin: url.origin, pathname: url.pathname, status,
       resource_type: String(resourceType || '').toLowerCase(),
       ...(encodedBytes > 0 ? { encoded_bytes: encodedBytes } : {}) };
     responses.push(item);
     const identity = String(requestId || '');
-    if (terminalEligible && identity) {
-      const record = { item, has_declared_length: hasDeclaredLength };
-      responseByRequestId.set(identity, record);
-      if (terminalBytesByRequestId.has(identity)) {
-        applyTerminalBytes(record, terminalBytesByRequestId.get(identity));
+    if (terminalEligible) {
+      const record = { item, has_declared_length: hasDeclaredLength, terminal: hasDeclaredLength };
+      if (identity) {
+        responseByRequestId.set(identity, record);
+        if (terminalBytesByRequestId.has(identity)) {
+          applyTerminalBytes(record, terminalBytesByRequestId.get(identity));
+        }
+      } else {
+        untrackedTerminalRecords.push(record);
       }
     }
   };
-  const visit = (value, depth = 0) => {
+  const consume = (logs) => {
+    const visited = new WeakSet();
+    const visit = (value, depth = 0) => {
     if (depth > 10 || value == null) return;
     if (typeof value === 'string') {
       const text = value.trim();
@@ -65,10 +92,37 @@ export function extractSanitizedNavigationResponses(logs) {
         applyTerminalBytes(responseByRequestId.get(identity), encodedBytes);
       }
     }
-    Object.values(value).forEach((child) => visit(child, depth + 1));
+      Object.values(value).forEach((child) => visit(child, depth + 1));
+    };
+    visit(logs);
+    return tracker;
   };
-  visit(logs);
-  return responses;
+  const matches = (item, { origin, pathPrefix } = {}) => (
+    (!origin || item.origin === origin)
+    && (!pathPrefix || item.pathname === pathPrefix || item.pathname.startsWith(`${pathPrefix}/`))
+  );
+  const tracker = Object.freeze({
+    consume,
+    responses: () => responses.map((item) => Object.freeze({ ...item })),
+    pendingTerminalCount(filter = {}) {
+      let count = 0;
+      for (const record of responseByRequestId.values()) {
+        if (!record.terminal && matches(record.item, filter)) count += 1;
+      }
+      for (const record of untrackedTerminalRecords) {
+        if (!record.terminal && matches(record.item, filter)) count += 1;
+      }
+      return count;
+    },
+  });
+  return tracker;
+}
+
+/** Reduce one Chrome/Safari protocol batch without retaining request IDs. */
+export function extractSanitizedNavigationResponses(logs) {
+  const tracker = createSanitizedNavigationResponseTracker();
+  tracker.consume(logs);
+  return tracker.responses();
 }
 
 /** Count unique physical event-search POSTs without retaining URL or body data. */
@@ -111,10 +165,12 @@ export function buildSameOriginNavigationReceipt({ beforeUrl, expectedUrl, final
   const expected = safeUrl(expectedUrl);
   const final = safeUrl(finalUrl);
   if (!before || !expected || !final) throw new Error('mobile_card_route_invalid');
+  const destination = assertCanonicalCandidateEventDestination({
+    searchUrl: before.href, eventUrl: expected.href, finalUrl: final.href,
+  });
   if (expected.origin !== before.origin || final.origin !== before.origin) {
     throw new Error('mobile_card_route_cross_origin');
   }
-  if (final.pathname !== expected.pathname) throw new Error('mobile_card_route_changed');
   const observed = Array.isArray(responses) ? responses : [];
   const documentResponses = observed.filter((item) => !item?.resource_type || item.resource_type === 'document');
   if (documentResponses.some((item) => Number(item?.status) >= 300 && Number(item?.status) < 400)) {
@@ -131,7 +187,7 @@ export function buildSameOriginNavigationReceipt({ beforeUrl, expectedUrl, final
     schema_version: 'mobile-card-open-v1',
     same_origin: true,
     http_status: 200,
-    destination_class: 'event_detail',
+    destination_class: destination.destination_class,
     network_source: networkSource === 'safariNetwork' ? 'safariNetwork' : 'performance',
     raw_url_retained: false,
   });

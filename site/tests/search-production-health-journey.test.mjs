@@ -55,6 +55,9 @@ function fakeJourneyAdapter(overrides = {}) {
   let navigationOpened = false;
   let postNavigationSearchPostCount = 0;
   let latePostRecorded = false;
+  let terminalMinimumCardCount = null;
+  let preNavigationActivity = null;
+  let preNavigationResults = null;
   const state = {
     requests: [], responses: [], routes: [],
     network: { storage_requests: 0, receipt_rpc_requests: 0, failed_requests: 0 },
@@ -72,10 +75,19 @@ function fakeJourneyAdapter(overrides = {}) {
     policy_versions: {}, provider_attempts: { embedding: 1, vector: 1, llm: overrides.llm ?? 0 },
     provider_attempts_present: true, provider_attempts_source: 'request_counters',
     llm: { requested: false, used: false, status: '' }, http_status: 200, route: 'direct',
+    ...(overrides.responseTelemetry || {}),
   };
+  const resultSnapshot = () => ({
+    terminal: true, error: overrides.resultError === true,
+    cards_visible: ids.length > 0, visible_card_count: ids.length,
+    rendered_ids: [...ids], rendered_families: ids.map((id) => `event:${id}`),
+    card_renderer_unavailable: overrides.rendererUnavailable === true,
+    skeleton_count: overrides.skeletons || 0, placeholder_count: overrides.placeholders || 0,
+  });
   return {
     get typed() { return typed; }, get policy() { return policy; },
     get activityCalls() { return activityCalls; },
+    get terminalMinimumCardCount() { return terminalMinimumCardCount; },
     async configureRequestPolicy(value) { policy = value; },
     async open() {},
     async inspectSurface() { return { enabled: true, authorized: true, input_tag: 'textarea', enter_key_hint: 'search' }; },
@@ -84,6 +96,9 @@ function fakeJourneyAdapter(overrides = {}) {
       if (navigationOpened && overrides.latePostAfterNavigation && !latePostRecorded) {
         latePostRecorded = true;
         postNavigationSearchPostCount += 1;
+      }
+      if (navigationOpened && overrides.finalDiagnosticsFailure) {
+        throw new Error(overrides.finalDiagnosticsError || 'search_browser_crashed_after_navigation');
       }
       return { ...diagnostics, ...(overrides.diagnostics || {}) };
     },
@@ -103,17 +118,15 @@ function fakeJourneyAdapter(overrides = {}) {
       state.network.storage_requests = overrides.storageRequests || 0;
       state.network.receipt_rpc_requests = overrides.receiptRpcRequests || 0;
     },
-    async waitForTerminal() {},
+    async waitForTerminal({ minimumCardCount }) { terminalMinimumCardCount = minimumCardCount; },
     async snapshotResults() {
-      return {
-        terminal: true, error: false, cards_visible: true, visible_card_count: ids.length,
-        rendered_ids: [...ids], rendered_families: ids.map((id) => `event:${id}`),
-        card_renderer_unavailable: false, skeleton_count: overrides.skeletons || 0, placeholder_count: 0,
-      };
+      return resultSnapshot();
     },
     async realScrollResults() { return { performed: true, delta_y: 640, card_visible_after: true, gesture_count: 1 }; },
     async openFirstResult() {
       const searchPageActivity = structuredClone(state);
+      preNavigationActivity = searchPageActivity;
+      preNavigationResults = resultSnapshot();
       navigationOpened = true;
       if (overrides.postAfterOpen) {
         state.requests.push({ method: 'POST', path: '/functions/v1/event-search', body_contract: {} });
@@ -130,6 +143,15 @@ function fakeJourneyAdapter(overrides = {}) {
       };
     },
     async postNavigationSearchPostCount() { return postNavigationSearchPostCount; },
+    async postNavigationMeterSnapshot() { return meter(overrides.postNavigationBytes ?? 0); },
+    async failedJourneyEvidence() {
+      return {
+        activity: structuredClone(preNavigationActivity || state),
+        results: structuredClone(preNavigationResults || resultSnapshot()),
+        post_navigation_search_post_count: postNavigationSearchPostCount,
+        post_navigation_meter: meter(overrides.postNavigationBytes ?? 0),
+      };
+    },
   };
 }
 
@@ -170,6 +192,20 @@ test('production health journey sends exact UI intent and one normal vector-only
   }
 });
 
+test('production health journey merges post-navigation Supabase bytes and enforces the hard cap', async () => {
+  const within = await runProductionHealthJourney({
+    adapter: fakeJourneyAdapter({ bytes: 40_000, postNavigationBytes: 20_000 }),
+    targetUrl: 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/',
+  });
+  assert.equal(within.meter.total_bytes, 60_000);
+  assert.equal(within.meter.budget_status, 'above_target');
+
+  await assert.rejects(() => runProductionHealthJourney({
+    adapter: fakeJourneyAdapter({ bytes: 90_000, postNavigationBytes: 9_000 }),
+    targetUrl: 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/',
+  }), /search_health_supabase_hard_limit_exceeded/u);
+});
+
 test('normal vector health accepts a cache hit reported as actual cached_vector', async () => {
   const result = await runProductionHealthJourney({
     adapter: fakeJourneyAdapter({ cache: 'hit', actualMode: 'cached_vector' }),
@@ -177,6 +213,42 @@ test('normal vector health accepts a cache hit reported as actual cached_vector'
   });
   assert.equal(result.cache_state, 'hit');
   assert.equal(result.search_post_count, 1);
+});
+
+test('production health fails closed when any required sanitized response identity is absent', async () => {
+  for (const field of [
+    'request_id', 'search_contract_version', 'catalog_revision',
+    'corpus_revision', 'search_document_revision',
+  ]) {
+    await assert.rejects(() => runProductionHealthJourney({
+      adapter: fakeJourneyAdapter({ responseTelemetry: { [field]: '' } }),
+      targetUrl: 'https://kenigevents.ru/',
+    }), /response_identity_invalid/u);
+  }
+});
+
+test('production journey waits for a terminal response rather than requiring a result card', async () => {
+  const adapter = fakeJourneyAdapter({ ids: [] });
+  await assert.rejects(() => runProductionHealthJourney({
+    adapter, targetUrl: 'https://kenigevents.ru/',
+  }), /no_results/u);
+  assert.equal(adapter.terminalMinimumCardCount, 0);
+});
+
+test('cell classifies terminal zero results separately from renderer and placeholder defects', async () => {
+  const run = async (overrides) => {
+    const adapter = fakeJourneyAdapter(overrides);
+    adapter.preflight = async () => preflight;
+    adapter.close = async () => {};
+    return runProductionHealthCell({
+      platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+      createAdapter: async () => adapter,
+      issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+    });
+  };
+  assert.equal((await run({ ids: [] })).failure_class, 'BROKEN_NO_RESULTS');
+  assert.equal((await run({ ids: [], rendererUnavailable: true })).failure_class, 'BROKEN_RESULT_RENDER');
+  assert.equal((await run({ ids: [], placeholders: 1 })).failure_class, 'BROKEN_RESULT_RENDER');
 });
 
 test('event navigation may reset the page probe after preserving the final Search-page activity', async () => {
@@ -497,6 +569,60 @@ test('failed journey retains physical POST, meter and supersession evidence', as
   assert.equal(reads, 2);
 });
 
+test('post-preflight Appium log/session loss is platform infrastructure, never product BROKEN', async () => {
+  for (const [platform, message, expected] of [
+    ['android', 'mobile_health_diagnostics_unavailable', 'UNKNOWN_ANDROID_INFRA'],
+    ['ios', 'invalid session id', 'UNKNOWN_IOS_INFRA'],
+  ]) {
+    const adapter = fakeJourneyAdapter({
+      finalDiagnosticsFailure: true, finalDiagnosticsError: message, resetActivityOnOpen: true,
+    });
+    adapter.preflight = async () => preflight;
+    adapter.close = async () => {};
+    const result = await runProductionHealthCell({
+      platform, targetRun: createAcceptedTargetRun(async () => targetRow()),
+      createAdapter: async () => adapter,
+      issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+    });
+    assert.equal(result.failure_class, expected);
+    assert.equal(result.product_health, 'UNCONFIRMED');
+    assert.equal(result.search.physical_post_count, 1);
+  }
+});
+
+test('post-navigation diagnostic failure retains the pre-navigation Search response and meter', async () => {
+  const adapter = fakeJourneyAdapter({ finalDiagnosticsFailure: true, resetActivityOnOpen: true, bytes: 36_000 });
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => adapter,
+    issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+  });
+  assert.equal(result.failure_class, 'UNKNOWN_RUNNER_BROWSER');
+  assert.equal(result.search.physical_post_count, 1);
+  assert.equal(result.search.response.request_id, 'request-1');
+  assert.equal(result.search.response_id_count, 2);
+  assert.equal(result.search.rendered_id_count, 2);
+  assert.equal(result.supabase_observed_bytes.total_bytes, 36_000);
+});
+
+test('late post-navigation Search failure retains total physical count two and original response', async () => {
+  const adapter = fakeJourneyAdapter({ latePostAfterNavigation: true, resetActivityOnOpen: true, bytes: 37_000 });
+  adapter.preflight = async () => preflight;
+  adapter.close = async () => {};
+  const result = await runProductionHealthCell({
+    platform: 'browser', targetRun: createAcceptedTargetRun(async () => targetRow()),
+    createAdapter: async () => adapter,
+    issueSession: async () => ({ authReceipt, attach: async () => {}, cleanup: async () => {} }),
+  });
+  assert.equal(result.search.physical_post_count, 2);
+  assert.equal(result.search.response.request_id, 'request-1');
+  assert.equal(result.search.response_id_count, 2);
+  assert.equal(result.search.rendered_id_count, 2);
+  assert.equal(result.supabase_observed_bytes.total_bytes, 37_000);
+});
+
 test('Auth traffic over the hard cap stops before the single Search and stays unconfirmed', async () => {
   let opened = 0;
   const adapter = fakeJourneyAdapter();
@@ -683,6 +809,7 @@ test('Playwright snapshot detects real skeleton markup and id-less placeholders'
   };
   Object.defineProperty(globalThis, 'document', { configurable: true, writable: true, value: {
     querySelector(selector) {
+      if (selector === '[data-authorized-search]') return { dataset: { searchTerminal: 'true' } };
       if (selector === '[data-search-results]') return resultNode;
       if (selector === '[data-search-status]') return { getAttribute: () => null };
       if (selector === '[data-search-submit]') return { getAttribute: () => 'false' };
@@ -702,6 +829,40 @@ test('Playwright snapshot detects real skeleton markup and id-less placeholders'
     const snapshot = snapshotResultsInPage();
     assert.equal(snapshot.skeleton_count, 1);
     assert.equal(snapshot.placeholder_count, 1);
+  } finally {
+    for (const [name, descriptor] of Object.entries(prior)) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+});
+
+test('Playwright DOM snapshot treats terminal zero-results and renderer-unavailable states as complete', () => {
+  const prior = {
+    document: Object.getOwnPropertyDescriptor(globalThis, 'document'),
+    getComputedStyle: Object.getOwnPropertyDescriptor(globalThis, 'getComputedStyle'),
+    innerHeight: Object.getOwnPropertyDescriptor(globalThis, 'innerHeight'),
+  };
+  const resultNode = { hidden: false, querySelector: (selector) => (
+    selector === '[data-search-card-render-unavailable]' ? {} : null
+  ) };
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: {
+    querySelector(selector) {
+      if (selector === '[data-authorized-search]') return { dataset: { searchTerminal: 'true' } };
+      if (selector === '[data-search-results]') return resultNode;
+      if (selector === '[data-search-status]') return { getAttribute: () => 'alert' };
+      if (selector === '[data-search-submit]') return { getAttribute: () => 'false' };
+      return null;
+    },
+    querySelectorAll: () => [],
+  } });
+  Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: () => ({ display: 'block', visibility: 'visible' }) });
+  Object.defineProperty(globalThis, 'innerHeight', { configurable: true, value: 800 });
+  try {
+    const snapshot = snapshotResultsInPage();
+    assert.equal(snapshot.terminal, true);
+    assert.equal(snapshot.rendered_ids.length, 0);
+    assert.equal(snapshot.card_renderer_unavailable, true);
   } finally {
     for (const [name, descriptor] of Object.entries(prior)) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -735,6 +896,7 @@ test('Playwright card open preserves Search activity and independently counts la
   const link = {
     first() { return this; },
     async count() { return 1; },
+    async getAttribute() { return '/sobytiya/42/'; },
     async click() {
       for (const listener of listeners.get('request') || []) {
         listener({
@@ -742,7 +904,7 @@ test('Playwright card open preserves Search activity and independently counts la
           url: () => 'https://project.supabase.co/functions/v1/event-search?not-retained=yes',
         });
       }
-      currentUrl = 'https://kenigevents.ru/events/42';
+      currentUrl = 'https://kenigevents.ru/sobytiya/42/';
     },
   };
   const first = {
@@ -759,12 +921,15 @@ test('Playwright card open preserves Search activity and independently counts la
     viewportSize: () => ({ width: 1280, height: 720 }),
     url: () => currentUrl,
     locator: () => first,
-    async evaluate() { return structuredClone(searchActivity); },
+    async evaluate(fn) {
+      if (String(fn).includes('supabaseRelayUrl')) return ['https://project.supabase.co'];
+      return structuredClone(searchActivity);
+    },
     async waitForNavigation() {
       return {
         status: () => 200,
         request: () => ({
-          url: () => 'https://kenigevents.ru/events/42', redirectedFrom: () => null,
+          url: () => 'https://kenigevents.ru/sobytiya/42/', redirectedFrom: () => null,
         }),
       };
     },
@@ -781,7 +946,40 @@ test('Playwright card open preserves Search activity and independently counts la
       url: () => 'https://project.supabase.co/functions/v1/event-search?late=yes',
     });
   }
+  for (const listener of listeners.get('response') || []) {
+    listener({
+      url: () => 'https://project.supabase.co/rest/v1/user_saved_event',
+      status: () => 200,
+      allHeaders: async () => ({}),
+      body: async () => Buffer.alloc(4096),
+    });
+  }
   assert.equal(await adapter.postNavigationSearchPostCount(), 2);
+  const postNavigationMeter = await adapter.postNavigationMeterSnapshot();
+  assert.equal(postNavigationMeter.total_bytes, 4096);
+  assert.equal(postNavigationMeter.categories.direct_rest, 4096);
   assert.equal(listeners.get('request')?.size || 0, 0);
+  assert.equal(listeners.get('response')?.size || 0, 1); // one permanent diagnostics listener remains
   assert.doesNotMatch(JSON.stringify(receipt), /not-retained/u);
+});
+
+test('Playwright rejects homepage and non-event same-origin 200 card destinations before click', async () => {
+  for (const href of ['/', '/mesta/example/']) {
+    let clicked = false;
+    const link = {
+      first() { return this; }, async count() { return 1; },
+      async getAttribute() { return href; },
+      async click() { clicked = true; },
+    };
+    const first = {
+      first() { return this; }, async waitFor() {}, locator() { return link; },
+    };
+    const page = {
+      on() {}, off() {}, viewportSize: () => ({ width: 1280, height: 720 }),
+      url: () => 'https://kenigevents.ru/poisk/', locator: () => first,
+    };
+    const adapter = await createPlaywrightSearchAdapter({ page, productionHealth: true });
+    await assert.rejects(() => adapter.openFirstResult(), /event_path|candidate_prefix/u);
+    assert.equal(clicked, false);
+  }
 });

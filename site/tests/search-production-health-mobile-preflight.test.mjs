@@ -233,16 +233,16 @@ test('mobile owner proof returns only closed Auth/RLS receipt and waits for zero
 test('first-card navigation receipt proves same-origin HTTP 200 without retaining URL or query', async () => {
   const rawLogs = [{ message: JSON.stringify({ message: {
     method: 'Network.responseReceived', params: { type: 'Document', response: {
-      status: 200, url: 'https://kenigevents.ru/events/example?token=must-not-survive',
+      status: 200, url: 'https://kenigevents.ru/sobytiya/example/?token=must-not-survive',
     } },
   } }) }];
   const responses = extractSanitizedNavigationResponses(rawLogs);
-  assert.deepEqual(responses, [{ origin: 'https://kenigevents.ru', pathname: '/events/example',
+  assert.deepEqual(responses, [{ origin: 'https://kenigevents.ru', pathname: '/sobytiya/example/',
     status: 200, resource_type: 'document' }]);
   const receipt = buildSameOriginNavigationReceipt({
-    beforeUrl: 'https://kenigevents.ru/search',
-    expectedUrl: 'https://kenigevents.ru/events/example?private=yes',
-    finalUrl: 'https://kenigevents.ru/events/example',
+    beforeUrl: 'https://kenigevents.ru/poisk/',
+    expectedUrl: 'https://kenigevents.ru/sobytiya/example/',
+    finalUrl: 'https://kenigevents.ru/sobytiya/example/',
     responses, networkSource: 'safariNetwork',
   });
   assert.equal(receipt.same_origin, true);
@@ -289,15 +289,25 @@ test('CDP redirectResponse exposes a document redirect that both target and card
   assert.throws(() => buildExactTargetNavigationReceipt({
     expectedUrl: target, finalUrl: target, responses: sameOriginRedirectResponses,
   }), /redirected/u);
+  const cardTarget = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/sobytiya/example/';
+  const cardResponses = extractSanitizedNavigationResponses([
+    rawLogs[0],
+    { message: JSON.stringify({ message: {
+      method: 'Network.responseReceived', params: {
+        requestId: 'document-chain', type: 'Document',
+        response: { status: 200, url: cardTarget },
+      },
+    } }) },
+  ]);
   assert.throws(() => buildSameOriginNavigationReceipt({
-    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: target,
-    finalUrl: target, responses,
+    beforeUrl: target, expectedUrl: cardTarget,
+    finalUrl: cardTarget, responses: cardResponses,
   }), /redirected|cross_origin/u);
   assert.doesNotMatch(JSON.stringify(responses), /secret/u);
 });
 
 test('CDP subresource redirectResponse remains harmless to exact target and card receipts', () => {
-  const target = 'https://kenigevents.ru/events/42';
+  const target = 'https://kenigevents.ru/sobytiya/42/';
   const rawLogs = [
     { message: JSON.stringify({ message: {
       method: 'Network.requestWillBeSent', params: {
@@ -320,7 +330,7 @@ test('CDP subresource redirectResponse remains harmless to exact target and card
     expectedUrl: target, finalUrl: target, responses,
   }).redirect_count, 0);
   assert.equal(buildSameOriginNavigationReceipt({
-    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: target,
+    beforeUrl: 'https://kenigevents.ru/poisk/', expectedUrl: target,
     finalUrl: target, responses,
   }).http_status, 200);
 });
@@ -378,11 +388,12 @@ test('mobile protocol receipt counts unique event-search POSTs without retaining
 });
 
 test('adapter opens the captured first result and binds the browser navigation to driver network logs', async () => {
-  let currentUrl = 'https://kenigevents.ru/search';
+  let currentUrl = 'https://kenigevents.ru/poisk/';
   let logReads = 0;
   const driver = {
     capabilities: {},
-    async execute() { return { href: 'https://kenigevents.ru/events/42?secret=yes', same_origin: true }; },
+    async execute() { return { href: 'https://kenigevents.ru/sobytiya/42/', same_origin: true,
+      supabase_origins: ['https://project.supabase.co'] }; },
     async getUrl() { return currentUrl; },
     async getLogs(type) {
       if (type === 'browser') return [];
@@ -392,7 +403,7 @@ test('adapter opens the captured first result and binds the browser navigation t
       if (logReads === 2) return [
         { message: JSON.stringify({ method: 'Network.responseReceived', params: {
           type: 'Document', requestId: 'document-42',
-          response: { status: 200, url: 'https://kenigevents.ru/events/42?secret=yes' },
+          response: { status: 200, url: 'https://kenigevents.ru/sobytiya/42/?secret=yes' },
         } }) },
         { message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {
           requestId: 'storage-after-open', request: { method: 'GET', url: 'https://assets.example/storage/v1/object/42' },
@@ -411,12 +422,23 @@ test('adapter opens the captured first result and binds the browser navigation t
             method: 'POST', url: 'https://project.supabase.co/functions/v1/event-search?final=yes',
           },
         } }) },
+        { message: JSON.stringify({ method: 'Network.responseReceived', params: {
+          requestId: 'late-rest', type: 'Fetch', response: {
+            status: 200, url: 'https://project.supabase.co/rest/v1/user_saved_event',
+            headers: {}, encodedDataLength: 64,
+          },
+        } }) },
+      ];
+      if (logReads === 5) return [
+        { message: JSON.stringify({ method: 'Network.loadingFinished', params: {
+          requestId: 'late-rest', encodedDataLength: 2048,
+        } }) },
       ];
       return [];
     },
     async $(selector) {
       assert.match(selector, /data-search-results/u);
-      return { click: async () => { currentUrl = 'https://kenigevents.ru/events/42'; } };
+      return { click: async () => { currentUrl = 'https://kenigevents.ru/sobytiya/42/'; } };
     },
     async waitUntil(fn) { if (!await fn()) throw new Error('wait_failed'); },
   };
@@ -431,27 +453,39 @@ test('adapter opens the captured first result and binds the browser navigation t
   assert.ok(receipt.search_page_activity_before_navigation);
   assert.equal((await adapter.healthDiagnostics()).storage_requests, 1);
   assert.equal(await adapter.postNavigationSearchPostCount(), 2);
+  const postNavigationMeter = await adapter.postNavigationMeterSnapshot();
+  assert.equal(postNavigationMeter.total_bytes, 2048);
+  assert.equal(postNavigationMeter.categories.direct_rest, 2048);
 });
 
 test('navigation receipt rejects cross-origin and non-200 document evidence', () => {
   assert.throws(() => buildSameOriginNavigationReceipt({
-    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: 'https://evil.example/event',
-    finalUrl: 'https://evil.example/event', responses: [],
+    beforeUrl: 'https://kenigevents.ru/poisk/', expectedUrl: 'https://evil.example/sobytiya/event/',
+    finalUrl: 'https://evil.example/sobytiya/event/', responses: [],
   }), /cross_origin/u);
   assert.throws(() => buildSameOriginNavigationReceipt({
-    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: 'https://kenigevents.ru/events/1',
-    finalUrl: 'https://kenigevents.ru/events/1',
-    responses: [{ origin: 'https://kenigevents.ru', pathname: '/events/1', status: 404,
+    beforeUrl: 'https://kenigevents.ru/poisk/', expectedUrl: 'https://kenigevents.ru/sobytiya/1/',
+    finalUrl: 'https://kenigevents.ru/sobytiya/1/',
+    responses: [{ origin: 'https://kenigevents.ru', pathname: '/sobytiya/1/', status: 404,
       resource_type: 'document' }],
   }), /http_200_missing/u);
   assert.throws(() => buildSameOriginNavigationReceipt({
-    beforeUrl: 'https://kenigevents.ru/search', expectedUrl: 'https://kenigevents.ru/events/1',
-    finalUrl: 'https://kenigevents.ru/events/1',
+    beforeUrl: 'https://kenigevents.ru/poisk/', expectedUrl: 'https://kenigevents.ru/sobytiya/1/',
+    finalUrl: 'https://kenigevents.ru/sobytiya/1/',
     responses: [
       { origin: 'https://evil.example', pathname: '/bounce', status: 302, resource_type: 'document' },
-      { origin: 'https://kenigevents.ru', pathname: '/events/1', status: 200, resource_type: 'document' },
+      { origin: 'https://kenigevents.ru', pathname: '/sobytiya/1/', status: 200, resource_type: 'document' },
     ],
   }), /redirected|cross_origin/u);
+  for (const badPath of ['/', '/mesta/example/']) {
+    assert.throws(() => buildSameOriginNavigationReceipt({
+      beforeUrl: 'https://kenigevents.ru/poisk/',
+      expectedUrl: `https://kenigevents.ru${badPath}`,
+      finalUrl: `https://kenigevents.ru${badPath}`,
+      responses: [{ origin: 'https://kenigevents.ru', pathname: badPath, status: 200,
+        resource_type: 'document' }],
+    }), /event_path|candidate_prefix/u);
+  }
 });
 
 
@@ -481,7 +515,7 @@ test('mobile pinned target receipt rejects redirect and requires exact 2xx docum
   }), /cross_origin/u);
 });
 
-test('mobile Auth callback response bytes join explicit getUser/RLS meter without retaining URL', async () => {
+test('mobile Auth callback rejects responseReceived partial bytes without terminal loadingFinished', async () => {
   const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
   let logs = 0;
   const driver = {
@@ -490,12 +524,43 @@ test('mobile Auth callback response bytes join explicit getUser/RLS meter withou
       logs += 1;
       if (logs !== 2) return [];
       return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
-        type: 'Document', response: { status: 303,
+        requestId: 'auth-partial', type: 'Fetch', response: { status: 200,
           url: 'https://project.supabase.co/auth/v1/verify?token=secret', encodedDataLength: 2048 },
       } }) }];
     },
     async url() {}, async getUrl() { return target; },
-    async waitUntil(predicate) { if (!await predicate()) throw new Error('wait_failed'); },
+    async waitUntil(predicate, options = {}) {
+      if (!await predicate()) throw new Error(options.timeoutMsg || 'wait_failed');
+    },
+    async execute() { return true; },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'android', driver });
+  await assert.rejects(
+    () => adapter.bootstrapSession('https://project.supabase.co/auth/v1/verify?token=secret', target),
+    /auth.*terminal|terminal.*auth/u,
+  );
+});
+
+test('mobile Auth callback waits across log drains for terminal bytes before owner proof', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  let logs = 0;
+  const driver = {
+    capabilities: {},
+    async getLogs() {
+      logs += 1;
+      if (logs === 2) return [{ message: JSON.stringify({ method: 'Network.responseReceived', params: {
+        requestId: 'auth-late-terminal', type: 'Fetch', response: { status: 200,
+          url: 'https://project.supabase.co/auth/v1/verify?token=secret', encodedDataLength: 64 },
+      } }) }];
+      if (logs === 3) return [{ message: JSON.stringify({ method: 'Network.loadingFinished', params: {
+        requestId: 'auth-late-terminal', encodedDataLength: 2048,
+      } }) }];
+      return [];
+    },
+    async url() {}, async getUrl() { return target; },
+    async waitUntil(predicate, options = {}) {
+      if (!await predicate()) throw new Error(options.timeoutMsg || 'wait_failed');
+    },
     async execute(fn) {
       if (fn?.name === 'verifyAuthenticatedOwnerRuntimeProbe') return {
         get_user_verified: true, protected_probe_verified: true, protected_probe_request_count: 1,

@@ -5,9 +5,9 @@ import {
   assertRealScroll,
   assertResponseRenderedIds,
   assertRoute,
-  assertTerminalState,
   assertUniqueCards,
 } from './acceptance.mjs';
+import { mergeSupabaseClientByteSnapshots } from './production-health-meter.mjs';
 export const PRODUCTION_HEALTH_UI_QUERY = 'куда сходить в Калининграде';
 export const PRODUCTION_HEALTH_CACHE_STATES = Object.freeze(['hit', 'miss', 'stored']);
 export const PRODUCTION_HEALTH_REQUEST_POLICY = Object.freeze({
@@ -19,6 +19,7 @@ const requiredMethods = [
   'open', 'inspectSurface', 'configureRequestPolicy', 'activity', 'healthDiagnostics',
   'typeQuery', 'submitWithSearchIntent', 'waitForTerminal', 'snapshotResults',
   'realScrollResults', 'openFirstResult', 'postNavigationSearchPostCount',
+  'postNavigationMeterSnapshot',
 ];
 
 const finiteDelta = (after, before, key) => {
@@ -64,16 +65,28 @@ function assertVectorResponse(response) {
     || !['cold_vector', 'cached_vector'].includes(response.actual_execution_mode)) {
     throw new Error('search_health_not_normal_vector');
   }
+  for (const field of [
+    'request_id', 'search_contract_version', 'catalog_revision',
+    'corpus_revision', 'search_document_revision',
+  ]) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(String(response[field] || ''))) {
+      throw new Error(`search_health_response_identity_invalid:${field}`);
+    }
+  }
 }
 
 function assertCards(response, state) {
-  assertTerminalState(state, 'production_health');
-  assertUniqueCards(state, 'production_health');
   const count = state?.rendered_ids?.length || 0;
-  if (count < 1) throw new Error('search_health_no_results');
-  if (count > 5 || state.skeleton_count !== 0 || state.placeholder_count !== 0) {
+  if (state?.terminal !== true) throw new Error('search_terminal_missing:production_health');
+  if (state.card_renderer_unavailable === true || count > 5
+    || state.skeleton_count !== 0 || state.placeholder_count !== 0) {
     throw new Error('search_health_result_render_invalid');
   }
+  if (count < 1) throw new Error('search_health_no_results');
+  if (state.error === true || state.cards_visible !== true || Number(state.visible_card_count || 0) < 1) {
+    throw new Error('search_cards_not_visible:production_health');
+  }
+  assertUniqueCards(state, 'production_health');
   if (!state.rendered_ids.every((id) => /^[1-9][0-9]*$/u.test(String(id)))) {
     throw new Error('search_health_result_id_invalid');
   }
@@ -107,7 +120,7 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
   await adapter.typeQuery(PRODUCTION_HEALTH_UI_QUERY);
   const searchStartedAt = Number(now());
   await adapter.submitWithSearchIntent();
-  await adapter.waitForTerminal({ minimumResponseCount: before.responses.length + 1, minimumCardCount: 1 });
+  await adapter.waitForTerminal({ minimumResponseCount: before.responses.length + 1, minimumCardCount: 0 });
   const searchLatencyMs = Math.max(0, Math.round(Number(now()) - searchStartedAt));
   const after = await adapter.activity();
   const delta = activityDelta(before, after);
@@ -167,6 +180,11 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
     || postNavigationSearchPostCount !== 0) {
     throw new Error('search_health_post_navigation_search_forbidden');
   }
+  const postNavigationMeter = await adapter.postNavigationMeterSnapshot();
+  const finalMeter = mergeSupabaseClientByteSnapshots(finalActivity.meter, postNavigationMeter);
+  if (finalMeter.hard_limit_exceeded === true) {
+    throw new Error('search_health_supabase_hard_limit_exceeded');
+  }
   return Object.freeze({
     schema_version: 'search_production_health_journey_v1',
     status: 'PASS',
@@ -210,6 +228,6 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
     diagnostics: Object.freeze({
       console_errors: 0, failed_requests: 0, error_responses: 0,
     }),
-    meter: finalActivity.meter,
+    meter: finalMeter,
   });
 }

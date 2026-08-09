@@ -109,18 +109,36 @@ const searchRequestsFromRuntime = (runtime) => (Array.isArray(runtime?.requests)
   .filter((item) => item?.method === 'POST' && item?.path === '/functions/v1/event-search');
 
 async function retainFailedJourneyEvidence(adapter, runtime = {}) {
-  const requests = searchRequestsFromRuntime(runtime);
-  const responses = Array.isArray(runtime?.responses) ? runtime.responses : [];
+  let persistent = null;
+  try { persistent = await adapter?.failedJourneyEvidence?.() || null; } catch { /* closed fallback below */ }
+  const authoritativeRuntime = persistent?.activity || runtime;
+  const requests = searchRequestsFromRuntime(authoritativeRuntime);
+  const responses = Array.isArray(authoritativeRuntime?.responses) ? authoritativeRuntime.responses : [];
   const response = responses.at(-1) || {};
-  let state = {};
+  let state = persistent?.results || {};
   let diagnostics = {};
-  try { state = await adapter?.snapshotResults?.() || {}; } catch { /* closed counters only */ }
+  if (!persistent?.results) {
+    try { state = await adapter?.snapshotResults?.() || {}; } catch { /* closed counters only */ }
+  }
   try { diagnostics = await adapter?.healthDiagnostics?.() || {}; } catch { /* closed counters only */ }
   const renderedIds = Array.isArray(state.rendered_ids) ? state.rendered_ids.map(String) : [];
   const responseIds = Array.isArray(response.response_ids) ? response.response_ids.map(String) : [];
+  const postNavigationSearchPostCount = Number(persistent?.post_navigation_search_post_count || 0);
+  const physicalSearchPostCount = requests.length
+    + (Number.isSafeInteger(postNavigationSearchPostCount) && postNavigationSearchPostCount >= 0
+      ? postNavigationSearchPostCount : 0);
+  let retainedMeter = authoritativeRuntime.meter || emptyMeter();
+  if (persistent?.post_navigation_meter) {
+    try {
+      retainedMeter = mergeSupabaseClientByteSnapshots(
+        retainedMeter, persistent.post_navigation_meter,
+      );
+    } catch { /* retain the last independently valid Search-page meter */ }
+  }
   return {
     schema_version: 'search_production_health_failed_journey_v1',
     search_post_count: requests.length,
+    physical_search_post_count: physicalSearchPostCount,
     request_contract: requests[0]?.body_contract || {},
     cache_state: response.result_cache_status,
     response_telemetry: {
@@ -135,15 +153,15 @@ async function retainFailedJourneyEvidence(adapter, runtime = {}) {
     forbidden_activity: {
       llm_calls: Number(response.provider_attempts?.llm || 0),
       pagination_requests: Math.max(0, requests.length - 1),
-      receipt_rpc_calls: Number(runtime.network?.receipt_rpc_requests || 0),
-      storage_image_requests: Number(runtime.network?.storage_requests || 0),
+      receipt_rpc_calls: Number(authoritativeRuntime.network?.receipt_rpc_requests || 0),
+      storage_image_requests: Number(authoritativeRuntime.network?.storage_requests || 0),
     },
     diagnostics: {
       console_errors: Number(diagnostics.console_errors || 0),
-      failed_requests: Number(diagnostics.failed_requests || runtime.network?.failed_requests || 0),
+      failed_requests: Number(diagnostics.failed_requests || authoritativeRuntime.network?.failed_requests || 0),
       error_responses: Number(diagnostics.error_responses || 0),
     },
-    meter: runtime.meter || emptyMeter(),
+    meter: retainedMeter,
   };
 }
 
@@ -156,6 +174,12 @@ function journeyFailure(error) {
   if (/event_route|real_scroll|route_/u.test(code)) return PRODUCTION_HEALTH_RESULTS.BROKEN_RESULT_ROUTE;
   if (/hard_limit/u.test(code)) return PRODUCTION_HEALTH_RESULTS.COST_GUARD_FAILED;
   return PRODUCTION_HEALTH_RESULTS.BROKEN_SEARCH_REQUEST;
+}
+
+function isAdapterInfrastructureFailure(error) {
+  const message = String(error?.message || '');
+  return /^(?:search_browser_(?:crashed|session_lost)(?:_[a-z0-9]+)*|mobile_[a-z0-9_]*(?:network_log_unavailable|diagnostics_unavailable|session_lost)|webdriver_session_error)$/iu.test(message)
+    || /(?:invalid session id|no such window|target page, context or browser has been closed|browser has been closed|web view not found)/iu.test(message);
 }
 
 /**
@@ -225,13 +249,15 @@ export async function runProductionHealthCell(options = {}) {
       targetSuperseded = supersession.target_superseded === true;
     }
   } catch (error) {
-    if (phase === 'preflight') failureClass = infraFailure(platform);
+    if (isAdapterInfrastructureFailure(error)) failureClass = infraFailure(platform);
+    else if (phase === 'preflight') failureClass = infraFailure(platform);
     else if (phase === 'issuance') failureClass = PRODUCTION_HEALTH_RESULTS.UNKNOWN_AUTH_BROKER;
     else if (phase === 'auth') failureClass = PRODUCTION_HEALTH_RESULTS.BROKEN_AUTH_INTEGRATION;
     else if (phase === 'pointer_reread') failureClass = PRODUCTION_HEALTH_RESULTS.BLOCKED_RELEASE_NOT_ACTIVE;
     else failureClass = journeyFailure(error);
     try {
-      const runtime = await adapter?.activity?.();
+      let runtime = {};
+      try { runtime = await adapter?.activity?.() || {}; } catch { /* persistent receipt may survive */ }
       const retained = await retainFailedJourneyEvidence(adapter, runtime);
       if (retained.search_post_count > 0 || runtime?.meter) journey = retained;
       const observed = await combinedObservedMeter(issued, retained);

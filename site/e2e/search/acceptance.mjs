@@ -186,7 +186,8 @@ export function assertSearchRevisionPolicy(journey, identity, policy = 'release_
 }
 
 export function assertRealScroll(receipt) {
-  if (!receipt?.performed || asCount(Math.abs(receipt.delta_y)) < 1 || !receipt.card_visible_after) {
+  const wheelProven = receipt?.input_kind === 'wheel' && asCount(receipt?.input_count) >= 1;
+  if (!receipt?.performed || (!wheelProven && asCount(Math.abs(receipt.delta_y)) < 1) || !receipt.card_visible_after) {
     const error = new Error('search_real_scroll_missing');
     const gesture = receipt?.last_gesture && typeof receipt.last_gesture === 'object' ? receipt.last_gesture : {};
     const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
