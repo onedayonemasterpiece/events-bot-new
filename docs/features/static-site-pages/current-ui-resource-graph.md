@@ -743,3 +743,123 @@ native `End`/`Home` behavior, and the complete 293-row breakpoint/container
 matrix lacks one truthful runtime probe per row. The separate CTA anatomies,
 transport treatments and 25 reviewed visual conflicts remain AS-IS evidence;
 no merge, normalization or winner is selected.
+
+### Behavioral v1.1 terminal closure
+
+The follow-up closure does not reinterpret the earlier reviewed artifact. It
+uses its exact manifest SHA-256
+`c6c62cee8bea4e9440ff85bc75c46bc85cf5abf3e2fdcd4c7357c6ece916436f`
+as an immutable append-only base, rebuilds the exact `ef7aa62` source in a
+disposable harness, and executes every source-derived breakpoint/container
+probe in Chromium. The canonical evidence is
+`breakpoint-probe-observations.jsonl`; every one of its 293 IDs has exactly one
+terminal status: `PASS`, `MISMATCH`, or `UNREACHABLE_WITH_REASON`. A mismatch or
+reasoned unreachable state is evidence completion, not a UI acceptance or a
+silent PASS. Only a missing/nonterminal ID may keep the evidence gate open.
+
+The source parser preserves the original matrix identities and exact at-rule
+offsets/fingerprints. The runtime record binds source rule and threshold,
+requested and actual viewport/container dimensions, exact CSSOM evidence,
+consumer/root, expected and actual branch, marker, bounding boxes, computed
+styles, overflow/clipping, and focus/visibility where applicable. Numeric
+features run at threshold−1, threshold and threshold+1; nonnumeric motion and
+pointer/hover queries retain explicit matching/control environments. Marker
+evaluation alone cannot produce PASS: a real exact-source consumer, affected
+selector and cascade reconciliation are required. Named container probes use
+the measured content box, name and type. The local two-run gate closes all
+293 IDs across 32 source paths (272 media / 21 container; 273 numeric / 20
+nonnumeric) with 236 PASS, 39 MISMATCH and 18
+UNREACHABLE_WITH_REASON. The semantic terminal digest is identical across the
+two runs; PNG bytes and volatile aggregate selector counts are explicitly not
+part of that semantic equality.
+
+Raster generation stays bounded. It selects only unique visible mismatch or
+ambiguous signatures and never creates one raster per source probe. Every new
+raster is indexed by path/bytes/SHA-256 and must be opened individually at
+full resolution before it may enter `manual-visual-review-ledger.jsonl`. The
+materializer also updates `breakpoint-and-container-matrix.jsonl`,
+`behavior-specimen-observations.jsonl`, `automation-evidence-ledger.jsonl`,
+`visual-review-ledger.jsonl`, `unresolved.jsonl`, the audit, manifest, receipt,
+and durable artifact index. Perceptual comparison and dHash remain diagnostic;
+neither replaces human review.
+
+Optional remote font delivery is not allowed to turn a terminal CSSOM probe
+into an unbounded screenshot wait. The breakpoint raster path uses the same
+Playwright 1.61 no-second-font-wait switch as the bounded behavioral capture:
+the evidence records the font actually rendered by Chromium (including a
+fallback when the optional remote face is not ready) rather than changing the
+site, waiting indefinitely, or relabeling the probe result.
+
+The exact rail is a normal horizontally scrollable content list:
+`div.rail-window[tabindex="0"]` has no composite role, roving tabindex, or
+`aria-activedescendant`; its link and Like button are ordinary descendants.
+The canonical mobile-shell contract specifies physical swipe/edge behavior but
+does not require Home/End. The closure therefore records native Home/End no-op
+as a non-required enhancement rather than an evidence blocker. A fresh
+keyboard-only packet uses Tab/Shift+Tab without programmatic focus, captures
+visible focus on the rail and Like action, toggles Like with Space/Enter, and
+observes ArrowLeft/ArrowRight at start, middle, end and held boundaries. It
+also retains two current product conformance gaps without repairing them: exact
+Chromium skips the `display:contents` event link during sequential traversal,
+and `not_interested` has only a hidden `tabindex=-1` control reached from the
+pointer/touch gesture path. Once captured, those are nonblocking implementation
+findings rather than evidence gaps.
+
+Research synthesis R-07 was already published by
+[lovekgd-design-system PR 28](https://github.com/onedayonemasterpiece/lovekgd-design-system/pull/28)
+on main commit
+[`f9cb3c931d6f2200f0a4221f5130b3a6299f7005`](https://github.com/onedayonemasterpiece/lovekgd-design-system/commit/f9cb3c931d6f2200f0a4221f5130b3a6299f7005).
+The direct canonical path is
+`docs/research/ui-normalization-2026-08/07-cross-research-synthesis-and-adoption.md`
+(SHA-256
+`cc1997ec4ab024a6fcba3e9b6d5c7632e0a367ed15b80ea2347e4f5bac01d944`),
+with its direct R-07 entry in
+`docs/research/ui-normalization-2026-08/README.md`. This closure records that
+publication identity only; it does not rewrite R-01…R-07.
+
+The final closure receipt may say
+`READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS` only after the Actions capture,
+all newly indexed full-resolution reviews, permanent Release provenance, and
+independent audit pass. This status still does not authorize fixing the rail,
+defragmenting components, choosing experiment winners, creating tokens,
+changing Penpot, or starting normalization automatically.
+
+When the rail and aggregate probe evidence gates are converted, their plan and
+action records both clear `blocker_id`, `blocker_reason`, and `blocked_states`.
+The validator rejects any stale blocker identity on those reviewed nonblocking
+plans, so a machine consumer cannot mistake a closed evidence gap for an active
+one. The closure manifest and receipt expose `unresolved_records` and
+`blocking_unresolved_records`; these are the authoritative post-closure counts,
+while legacy inherited counters remain historical compatibility fields.
+
+### Terminal closure receipt
+
+The canonical closure capture is
+[Actions run 31327863197](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31327863197)
+at capture head `14be44b108ab4bd0b20d6dd95a20bcc4250adb95`.
+Artifact `9042097413` is 3,015,654 bytes with SHA-256
+`8bb8712effaa0ba3b08a672a784d9e1b90d876c6ca6d039a417bfc0617723523`.
+It records 293/293 terminal probes: 236 PASS, 39 MISMATCH, and 18
+UNREACHABLE_WITH_REASON, with zero planned/unconfirmed IDs.
+
+All eight selected breakpoint rasters and both rail keyboard rasters from that
+run were opened individually at original resolution. The final combined ledger
+contains 134/134 reviewed rasters; its SHA-256 is
+`8dafd73a26c14aa6229fdd9d25eb82f14e8639cd47245666ee0cbe792a5e6864`.
+The independent audit is committed at
+`.codex/integration/current-ui-behavioral-decoder-v1-1-closure/INDEPENDENT_AUDIT.md`
+and reports PASS with no Critical/High/Medium findings.
+
+The durable
+[closure Release](https://github.com/onedayonemasterpiece/events-bot-new/releases/tag/current-ui-behavioral-decoder-v1-1-closure-run-31327863197)
+contains the immutable raw capture, the final reviewed compact supplement, and
+the external durable receipt. The reviewed supplement ZIP SHA-256 is
+`cd89640e1d808a293fda8704c7294160a1d918009b3b21fa3562fde66900f4ab`;
+the final manifest and receipt SHA-256 values are respectively
+`c676be4f2ad956b8a58c7707c8f71b7bb33afd771e506457309597e76d67d9a1`
+and `d981ad23280dd177d1fef8a59674fe754c5887c76a0981cd722a59c604780d9f`.
+The strict closure validator passes with 87 recorded findings and zero
+readiness blockers.
+
+Final evidence status: **`READY_FOR_PROJECT_NORMALIZATION_SYNTHESIS`**. This is
+an evidence-readiness boundary only; the strict STOP above remains in force.
