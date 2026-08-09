@@ -179,12 +179,18 @@ export const REAL_ROUTE_VERIFICATIONS = Object.freeze([
   })),
   realRoute({
     id: 'artifact-catalog', capsule_ids: ['06-artifacts'], event_id: null, route_template: '/artefakty/',
-    selectors: ['[data-artifact-collection-unavailable]'], expected_absent_selectors: ['[data-artifact-collection]'],
+    // The pinned secret candidate is the explicit non-production `tail`
+    // research build. Capture its active collection without promoting that
+    // candidate-only state to the production baseline.
+    selectors: ['[data-artifact-collection]'], expected_absent_selectors: ['[data-artifact-collection-unavailable]'],
     source_paths: ['src/pages/artefakty/index.astro', 'src/components/artifacts/ArtifactCollection.astro'],
   }),
   realRoute({
     id: 'artifact-weekend', capsule_ids: ['06-artifacts'], event_id: null, route_template: '/vyhodnye/',
-    selectors: ['[data-date-listing="weekend"]'], expected_absent_selectors: ['[data-amber-artifact]'],
+    selectors: ['[data-amber-artifact]'],
+    // AmberRailArtifact belongs only to the <=720px mobile rail. A desktop
+    // context would prove a hidden consumer, not a rendered component.
+    contexts: [{ name: 'mobile', viewport: { width: 390, height: 844 } }],
     source_paths: ['src/pages/vyhodnye/index.astro', 'src/components/listings/WeekendListingSurface.astro', 'src/components/listings/AmberRailArtifact.astro'],
   }),
   ...[
