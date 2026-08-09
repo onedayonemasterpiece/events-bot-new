@@ -6155,6 +6155,57 @@ def build_collection_semantic_outputs(
             "decisions": unusual_manifest.get("decisions") or [],
         },
     )
+    review_rows = list(unusual_manifest.get("decisions") or [])
+    review_lines = [
+        "# Необычное — current-catalog review pack",
+        "",
+        "> Автоматическая инженерно-редакционная проверка. Это не owner approval и не accepted baseline.",
+        "",
+        f"- Build: `{build_metadata.get('build_id') or 'unknown'}`",
+        f"- Run: `{build_metadata.get('run_id') or 'unknown'}`",
+        f"- Candidates: **{int(unusual_manifest.get('candidate_count') or 0)}**",
+        f"- Provisional review shortlist: **{int(unusual_manifest.get('review_shortlist_count') or 0)}** / target **{int(unusual_manifest.get('target_count') or 0)}**",
+        f"- Publication selected: **{int(unusual_manifest.get('selected_count') or 0)}** / minimum **{int(unusual_manifest.get('minimum_publish_count') or 0)}**",
+        f"- Gate: **{(unusual_manifest.get('quality_gate') or {}).get('status', 'unknown')}** — `{(unusual_manifest.get('quality_gate') or {}).get('reason', 'unknown')}`",
+        "",
+        "| # | Decision | ID | Title | Date | Score | Margin | Family | Reason |",
+        "|---:|---|---:|---|---|---:|---:|---|---|",
+    ]
+    for index, row in enumerate(review_rows, 1):
+        title = str(row.get("title") or "").replace("|", "\\|").replace("\n", " ")[:160]
+        reasons = ", ".join(str(value) for value in row.get("reason_codes") or [])[:200]
+        review_lines.append(
+            "| {index} | {decision} | {event_id} | {title} | {date} | {score} | {margin} | {family} | {reasons} |".format(
+                index=index,
+                decision="include-review" if row.get("include") is True else "exclude",
+                event_id=int(row.get("event_id") or 0),
+                title=title,
+                date=str(row.get("date") or ""),
+                score=row.get("score"),
+                margin=row.get("margin"),
+                family=str(row.get("family") or "unknown"),
+                reasons=reasons,
+            )
+        )
+    review_pack_path = out_dir / "unusual-events-review-pack.md"
+    temporary_review = review_pack_path.with_name(f".{review_pack_path.name}.tmp")
+    temporary_review.write_text("\n".join(review_lines) + "\n", encoding="utf-8")
+    os.replace(temporary_review, review_pack_path)
+    manifest_diff_path = out_dir / "unusual-events-manifest-diff.json"
+    _atomic_write_json(
+        manifest_diff_path,
+        {
+            "schema_version": "unusual-events-manifest-diff-v1",
+            "baseline_status": "owner_accepted_baseline_absent",
+            "baseline_reference": None,
+            "current_manifest_sha256": hashlib.sha256(unusual_path.read_bytes()).hexdigest(),
+            "added_event_ids": [],
+            "removed_event_ids": [],
+            "unchanged_event_ids": [],
+            "comparison_status": "blocked",
+            "reason": "independent owner-accepted publication baseline is absent",
+        },
+    )
     metadata = artifact.get("metadata") or {}
     encoded_events = int(metadata.get("encoded_event_count") or 0)
     encoded_prototypes = int(metadata.get("encoded_prototype_count") or 0)
@@ -6180,6 +6231,8 @@ def build_collection_semantic_outputs(
         "target_count": int(unusual_manifest.get("target_count") or 0),
         "minimum_publish_count": int(unusual_manifest.get("minimum_publish_count") or 0),
         "candidates_sha256": hashlib.sha256(unusual_candidates_path.read_bytes()).hexdigest(),
+        "review_pack_sha256": hashlib.sha256(review_pack_path.read_bytes()).hexdigest(),
+        "manifest_diff_sha256": hashlib.sha256(manifest_diff_path.read_bytes()).hexdigest(),
         "vector_cache_sha256": hashlib.sha256(vector_cache_path.read_bytes()).hexdigest(),
         "vector_receipt_sha256": hashlib.sha256(vector_receipt_path.read_bytes()).hexdigest(),
         "unusual_cache_sha256": hashlib.sha256(unusual_cache_path.read_bytes()).hexdigest(),
@@ -6641,6 +6694,8 @@ def main() -> int:
             out_dir=out_dir,
             build_metadata={
                 "build_id": args.build_id or args.base_path or "local-static-build",
+                "run_id": args.run_id or args.build_id or args.base_path or "local-static-build",
+                "repo_sha": args.repo_sha or None,
                 "generated_at": generated_at,
                 "as_of_date": effective_date,
                 "source_snapshot_id": args.snapshot_id or None,

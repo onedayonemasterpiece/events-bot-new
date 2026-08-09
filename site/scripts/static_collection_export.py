@@ -613,7 +613,7 @@ def unusual_shadow_manifest(
             "title": str(event.get("title") or "")[:300],
             "date": str(event.get("start_date") or ""),
             "end_date": str(event.get("end_date") or event.get("start_date") or ""),
-            "path": f"/events/{event.get('slug')}/" if event.get("slug") else None,
+            "path": f"/sobytiya/{event.get('slug')}/" if event.get("slug") else None,
             "score": score.get("positive"),
             "hard_negative_score": score.get("negative"),
             "margin": score.get("margin"),

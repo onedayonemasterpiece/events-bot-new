@@ -1,5 +1,18 @@
 # Необычные события
 
+[![Unusual events production health](https://github.com/onedayonemasterpiece/events-bot-new/actions/workflows/unusual-events-production-health.yml/badge.svg)](https://github.com/onedayonemasterpiece/events-bot-new/actions/workflows/unusual-events-production-health.yml)
+
+> **Current recovery status, 2026-08-09:** the production-candidate builder now
+> computes the shared collection BGE matrix on every run. A read-only current
+> production snapshot contains 401 eligible catalog events; the restored
+> explainable Unusual review head finds 249 high-recall candidates and creates a
+> deterministic 20-concept review shortlist. Publication remains deliberately
+> empty (`selected_count=0`) and `BLOCKED`: the independent acceptance holdout
+> and owner-accepted baseline do not exist, and current review still exposes
+> ordinary-looking boundary cases. The two incident hard negatives are now
+> excluded by exact document hash. This is real current-catalog evidence, not a
+> claim of owner approval or production readiness.
+
 > **Status, 2026-07-27:** exact code SHA
 > `123bcee460112ee9fe0b0a0176f51a07c92eed6a` passed the full Kaggle
 > production-candidate pipeline and was published only as an immutable
@@ -129,6 +142,29 @@ contract binds model/revision/dimension/document, prototype, classifier and
 as-of date, then validates a per-event content/vector/eligibility/concept hash.
 Thus an unchanged event retains its decision when an unrelated event changes.
 
+## Product count contract
+
+The versioned provisional policy lives in
+`site/scripts/static_collection_policy.v1.json` and the operational mirror in
+`unusual-events-health-policy-v1.json`:
+
+- target: **20** publication concepts;
+- minimum for publication: **12** concepts;
+- hard maximum: **30** concepts;
+- caps: 6 per family, 4 per venue and 8 per event type.
+
+Twenty matches the exact editorial `precision@20` surface and fits the current
+desktop grid without padding. Twelve is four complete three-card desktop rows
+and a meaningful mobile feed while leaving a strict gap below target. These
+numbers are provisional product configuration, not test literals. Changing
+them requires a policy revision, current-catalog review and owner acceptance.
+Zero or fewer than twelve published items can never be `HEALTHY/READY`.
+
+The high-recall candidate count and the provisional review shortlist are not
+publication counts. While the acceptance gate is blocked, `items=[]`,
+`selected_count=0` and the page renders the honest preparation state even when
+the review shortlist contains 20 rows.
+
 ## Scorer, evidence and activation gates
 
 `site/scripts/unusual_event_semantics.py` loads the versioned prototype bank and
@@ -139,7 +175,7 @@ own. The calibrated head must preserve positive and negative evidence, score
 margin, primary family, concept identity and a bounded reason code without
 copying private source text into public HTML.
 
-The frozen evaluation source is
+The frozen **calibration** source is
 [`tests/fixtures/unusual_events_golden_v1.json`](../../../tests/fixtures/unusual_events_golden_v1.json).
 It was copied from the read-only
 `artifacts/codex/unusual-events-20260727` snapshot and checked manual taxonomy.
@@ -152,7 +188,28 @@ metrics. Every row freezes `eligible` and an editorial `frozen_tier`
 (`core_unusual`, `adjacent`, `ordinary`, or `abstain`) as review provenance.
 The identical-rebuild flip metric compares two deterministic inference passes
 over the same vectors; it does not compare a newly calibrated classifier to
-the editorial tier label.
+the editorial tier label. This source was used to tune the legacy head and
+therefore is not an independent acceptance result. Its historical quality
+numbers may not approve `collection_semantics_v1`.
+
+Dataset roles are fail-closed:
+
+1. `unusual_events_golden_v1.json` — calibration only; thresholds may be tuned
+   here.
+2. independent acceptance holdout — owner-adjudicated, immutable and hash-bound;
+   currently absent and forbidden for threshold tuning.
+3. `unusual_events_semantic_regressions_v1.json` plus the production
+   `unusual_event_incident_regressions.v1.json` hash guards — incident
+   regressions only.
+4. current-catalog review sample — rolling engineering/editorial review; never
+   silently promoted into the holdout or accepted baseline.
+
+The evaluator reports expected-family top-1 accuracy, top-3 recall, confusion
+matrix, taxonomy coverage and labelled coverage with explicit numerators and
+denominators. Precision may be named `precision@20` only when `k=20`,
+`ranked_count=20` and `denominator=20`; otherwise it is `null` with
+`insufficient_ranked_supply`, and the gate fails. Proportions include 95%
+Wilson intervals so a small zero-error fixture is not presented as zero risk.
 
 The supplemental source-bound fixture
 `tests/fixtures/unusual_events_semantic_regressions_v1.json` freezes two
