@@ -995,6 +995,13 @@ terminal результате своей platform; cost/evidence имеют от
 Если sanitized evidence отсутствует, workflow output `BROKEN_*` не считается
 product proof и fail-closed классифицируется как platform `UNKNOWN_*`.
 
+Broker `persona_busy` также является `UNKNOWN_*`, а не Search failure. До
+успешного выпуска credential новый owner блокируется исходным crash lease;
+после выпуска active lease сокращается до двухминутного encrypted replay TTL.
+Это сохраняет cross-process lost-response replay, но не оставляет успешно
+завершившийся диагностический запуск владельцем persona на 20 минут. Повторный
+workflow всё равно сериализован общей GitHub concurrency group.
+
 ### 16.8 Egress budget и byte meter
 
 Действующий health contract:

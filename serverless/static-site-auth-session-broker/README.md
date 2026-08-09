@@ -65,6 +65,15 @@ evidence artifact, filesystem state or Actions cache. The workflow
 exports the masked one-time browser callback only through the current job's
 `GITHUB_ENV` and clears credential fields after use.
 
+An uncompleted owner retains the original 20-minute crash/admission bound.
+Once credential generation completes, the persona's active `expires_at` is
+shortened to the same two-minute encrypted replay window. Therefore a lost
+response remains safely replayable, but a completed diagnostic run cannot
+block the next globally serialized workflow for 20 minutes. A different run
+during those two minutes still receives `persona_busy`; GitHub concurrency
+prevents legitimate health/legacy jobs using the cached persona from
+overlapping.
+
 ## Deployment policy
 
 The production transport is the existing Fly aiohttp service, enabled only by

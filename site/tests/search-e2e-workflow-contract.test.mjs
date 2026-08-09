@@ -15,6 +15,7 @@ const candidateBuildUrl = new URL('../scripts/build-secret-candidate.mjs', impor
 const exporterUrl = new URL('../scripts/export-production-preview-data.py', import.meta.url);
 const browserRunnerUrl = new URL('../../.github/scripts/run-browser-static-search.mjs', import.meta.url);
 const targetResolverUrl = new URL('../../.github/scripts/resolve-static-search-target.sh', import.meta.url);
+const androidHealthRunnerUrl = new URL('../../.github/scripts/run-search-health-android.sh', import.meta.url);
 
 const formerSearchCrons = [
   '17,47 * * * *',
@@ -91,12 +92,19 @@ test('production health has only the two bounded schedules, manual profiles and 
   assert.match(source, /npm_config_prefix=\$RUNNER_TEMP\/appium-npm-search-health-android/u);
   assert.match(source, /APPIUM_HOME=\$RUNNER_TEMP\/appium-home-search-health-ios/u);
   assert.match(source, /npm_config_prefix=\$RUNNER_TEMP\/appium-npm-search-health-ios/u);
-  assert.match(YAML.stringify(parsed.jobs.android), /bash <<'BASH'[\s\S]*set -euo pipefail/u,
-    'android-emulator-runner invokes script through sh, so strict mode must run inside bash');
-  assert.equal((source.match(/--log-level error --log-no-colors\s+\\?\s*--log-filters/gu) || []).length, 2,
-    'both Appium servers must suppress command bodies and apply URL filters');
-  assert.equal((source.match(/appium-search-health-log-filters\.json/gu) || []).length >= 4, true);
+  assert.equal(parsed.jobs.android.steps.find((step) => step.id === 'run')?.with?.script,
+    'bash "$GITHUB_WORKSPACE/.github/scripts/run-search-health-android.sh"');
+  const androidRunner = await readFile(androidHealthRunnerUrl, 'utf8');
+  assert.match(androidRunner, /^#!\/usr\/bin\/env bash\nset -euo pipefail/u);
+  assert.match(androidRunner, /trap cleanup_appium EXIT[\s\S]*production-health-run\.mjs/u);
+  assert.equal((source.match(/--log-level error --log-no-colors\s+\\?\s*--log-filters/gu) || []).length, 1,
+    'the inline iOS Appium server must suppress command bodies and apply URL filters');
+  assert.match(androidRunner, /--log-level error --log-no-colors[\s\S]*--log-filters/u,
+    'the checked-in Android Appium server must suppress command bodies and apply URL filters');
+  assert.equal((source.match(/appium-search-health-log-filters\.json/gu) || []).length >= 2, true);
+  assert.equal((androidRunner.match(/appium-search-health-log-filters\.json/gu) || []).length >= 2, true);
   assert.doesNotMatch(source, /npx appium[^\n]*(?:--log-level (?:debug|info)|--show-debug-info)/u);
+  assert.doesNotMatch(androidRunner, /npx appium[^\n]*(?:--log-level (?:debug|info)|--show-debug-info)/u);
   for (const cron of formerSearchCrons) assert.equal(source.includes(cron), false, cron);
   assert.equal(parsed.on.workflow_run, undefined);
   assert.equal(parsed.on.workflow_call, undefined);
@@ -111,12 +119,16 @@ test('platform jobs invoke only the unified one-session runner and qualification
   const health = YAML.parse(healthSource);
   const qualification = YAML.parse(qualificationSource);
   assert.deepEqual(Object.keys(qualification.on).sort(), ['workflow_call', 'workflow_dispatch']);
-  for (const platform of ['browser', 'android', 'ios']) {
+  for (const platform of ['browser', 'ios']) {
     assert.ok(health.jobs[platform], platform);
     assert.match(YAML.stringify(health.jobs[platform]), /production-health-run\.mjs/u);
     assert.doesNotMatch(YAML.stringify(health.jobs[platform]), /issue-static-search-session|production-health-mobile-preflight/iu);
   }
-  assert.equal((healthSource.match(/production-health-run\.mjs/gu) || []).length, 3);
+  assert.ok(health.jobs.android, 'android');
+  assert.doesNotMatch(YAML.stringify(health.jobs.android), /issue-static-search-session|production-health-mobile-preflight/iu);
+  const androidRunner = await readFile(androidHealthRunnerUrl, 'utf8');
+  assert.match(androidRunner, /production-health-run\.mjs/u);
+  assert.equal((healthSource.match(/production-health-run\.mjs/gu) || []).length, 2);
   assert.equal(health.jobs['request-release-qualification'].uses, './.github/workflows/search-release-qualification.yml');
   assert.equal(health.jobs['request-release-qualification'].with.profile, 'full');
   assert.equal(health.jobs['request-release-qualification'].secrets, 'inherit');

@@ -48,9 +48,10 @@ Required before live:
 ## Production activation gate
 
 1. Merge #451 into current `main` after green checks.
-2. Apply migration `20260809143602_static_site_auth_broker_platform_claims.sql`;
-   verify the widened identity, v1 compatibility and named minute `pg_cron`
-   ciphertext-erasure job.
+2. Apply migrations `20260809143602_static_site_auth_broker_platform_claims.sql`
+   and `20260809191607_static_site_auth_broker_short_active_claim.sql` in
+   order; verify the widened identity, v1 compatibility, two-minute completed
+   claim lease and named minute `pg_cron` ciphertext-erasure job.
 3. Add legacy, `search-production-health.yml@refs/heads/main` and
    `search-release-qualification.yml@refs/heads/main` to the broker workflow
    allowlist; set the exact event allowlist to
@@ -84,6 +85,13 @@ cards, zero LLM/pagination and 9,162 observed bytes, then false-failed on two
 decorative subresource failures. Android booted but `/bin/sh` rejected
 `pipefail` before Appium or Search. Both causes now have deterministic fixes;
 clean live acceptance is still pending.
+
+Follow-up run `31331011185` then reached neither Search path: browser was
+correctly typed `UNKNOWN_AUTH_BROKER` because the completed prior claim still
+held the original 20-minute persona lease, and the Android action again split
+the inline script into separate `/bin/sh -c` commands. The next patch uses a
+single checked-in Bash wrapper and shortens only a successfully completed
+claim to the two-minute replay window; uncompleted owners remain fail-closed.
 
 The current hardening pass additionally proves one physical POST is observed
 once from pre-Auth through event navigation, accepts bounded cache-write
