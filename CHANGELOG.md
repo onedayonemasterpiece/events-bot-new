@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / VK transport:** fixed intermittent rejection of valid
+  VK dialog and other provider reads when aiohttp delivered compressed JSON in
+  multiple chunks; the transport now reads through EOF while retaining its
+  strict decoded-response byte cap. The full stable-scope ChatGPT/OpenCode tool
+  catalog now has a separate bounded metadata allowance, while ordinary tool
+  results retain the configured data-response cap.
+
 - **Private Events MCP / VK dialogs:** added a VK-only metadata dialog tool that
   lists all or unread conversations as opaque targets with display name, kind
   and unread count while excluding message bodies and native IDs. Returned

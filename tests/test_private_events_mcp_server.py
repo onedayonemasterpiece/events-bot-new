@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import re
 from dataclasses import replace
@@ -42,6 +43,12 @@ class _WorkspaceAdapter:
 
     async def reconcile(self, operation_ref):
         return {}
+
+    async def stage_asset(self, asset, *, role):
+        return "provider-asset"
+
+    async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+        return b"image"
 
 
 def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(
@@ -89,6 +96,9 @@ async def test_existing_chatgpt_legacy_scopes_see_typed_tools_without_codex_soci
         universal_social_private_read_enabled=True,
         universal_social_dm_enabled=True,
         universal_social_post_enabled=True,
+        universal_social_edit_delete_enabled=True,
+        universal_social_media_story_enabled=True,
+        media_allowed_hosts=("files.example",),
     )
     server = attach_private_events_mcp(
         web.Application(),
@@ -97,6 +107,7 @@ async def test_existing_chatgpt_legacy_scopes_see_typed_tools_without_codex_soci
             "telegram": _WorkspaceAdapter(),
             "vk": _WorkspaceAdapter(),
         },
+        asset_ingestor=object(),
     )
     assert server is not None
     legacy_read = AccessIdentity(
@@ -548,7 +559,10 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
         assert listed.status == 200
-        names = {tool["name"] for tool in (await listed.json())["result"]["tools"]}
+        listed_body = await listed.read()
+        assert len(listed_body) < 512 * 1024
+        listed_payload = json.loads(listed_body)
+        names = {tool["name"] for tool in listed_payload["result"]["tools"]}
         assert names == {
             "search",
             "fetch",
@@ -582,13 +596,23 @@ async def test_opencode_public_client_real_oauth_and_full_resource_contract(
         config,
         universal_social_enabled=True,
         universal_social_telegram_enabled=True,
+        universal_social_vk_enabled=True,
+        universal_social_private_read_enabled=True,
         universal_social_dm_enabled=True,
+        universal_social_post_enabled=True,
+        universal_social_edit_delete_enabled=True,
+        universal_social_media_story_enabled=True,
+        media_allowed_hosts=("files.example",),
     )
     app = web.Application()
     attach_private_events_mcp(
         app,
         universal,
-        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+        social_workspace_adapters={
+            "telegram": _WorkspaceAdapter(),
+            "vk": _WorkspaceAdapter(),
+        },
+        asset_ingestor=object(),
     )
     client = TestClient(TestServer(app))
     await client.start_server()
@@ -615,7 +639,7 @@ async def test_opencode_public_client_real_oauth_and_full_resource_contract(
             "resource": universal.resource,
             "scope": (
                 "events:read incidents:read operations:read offline_access "
-                "telegram:read telegram:publish"
+                "telegram:read telegram:publish vk:read vk:publish"
             ),
             "code_challenge": pkce_s256(verifier),
             "code_challenge_method": "S256",
@@ -679,8 +703,12 @@ async def test_opencode_public_client_real_oauth_and_full_resource_contract(
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
         assert listed.status == 200
-        names = {tool["name"] for tool in (await listed.json())["result"]["tools"]}
+        listed_body = await listed.read()
+        assert len(listed_body) < 512 * 1024
+        listed_payload = json.loads(listed_body)
+        names = {tool["name"] for tool in listed_payload["result"]["tools"]}
         assert "social_target_resolve" in names
+        assert "social_dialogs_list" in names
         assert "social_action_prepare" in names
 
         crossed = await client.post(

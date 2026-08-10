@@ -111,6 +111,13 @@ These tools are read-only, non-destructive and idempotent. The event SQLite file
 is opened with URI `mode=ro`, `PRAGMA query_only=ON`, bounded rows and a VM/time
 deadline. There is no raw SQL, shell, arbitrary outbound HTTP or write tool.
 
+The ordinary structured-result response cap remains
+`PRIVATE_EVENTS_MCP_MAX_RESPONSE_BYTES`. Authenticated `tools/list` metadata is
+separately bounded at 512 KiB (and is still charged to the shared hourly egress
+budget), because the full stable-scope ChatGPT/OpenCode catalog can exceed the
+ordinary 128 KiB data-result default. This does not raise provider-content,
+incident or evidence response limits.
+
 ## ChatGPT social workspace
 
 When the universal workspace is enabled, ChatGPT can discover only the tools

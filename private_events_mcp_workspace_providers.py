@@ -435,6 +435,28 @@ class DedicatedVKActorTransport:
             return "1" if value else "0"
         return str(value)
 
+    @staticmethod
+    async def _read_bounded_body(content: Any, limit: int) -> bytes:
+        """Read the complete decoded response without trusting chunk boundaries.
+
+        ``StreamReader.read(n)`` may return as soon as any bytes are available,
+        even when the response is not complete.  VK responses are commonly
+        compressed and split across several decoded chunks, so treating one
+        short read as EOF produced intermittent truncated JSON.  Keep the hard
+        decoded-byte cap while consuming the stream through its iterator.
+        """
+
+        chunks: list[bytes] = []
+        size = 0
+        async for chunk in content.iter_chunked(64 * 1024):
+            if not isinstance(chunk, bytes):
+                raise ProviderBindingError("VK provider response invalid")
+            size += len(chunk)
+            if size > limit:
+                raise ProviderBindingError("VK provider response too large")
+            chunks.append(chunk)
+        return b"".join(chunks)
+
     async def invoke(
         self,
         *,
@@ -463,9 +485,9 @@ class DedicatedVKActorTransport:
                 raise ProviderBindingError("VK provider unavailable")
             if response.content_length and response.content_length > self.response_cap_bytes:
                 raise ProviderBindingError("VK provider response too large")
-            body = await response.content.read(self.response_cap_bytes + 1)
-        if len(body) > self.response_cap_bytes:
-            raise ProviderBindingError("VK provider response too large")
+            body = await self._read_bounded_body(
+                response.content, self.response_cap_bytes
+            )
         try:
             payload = json.loads(body)
         except (UnicodeDecodeError, json.JSONDecodeError):

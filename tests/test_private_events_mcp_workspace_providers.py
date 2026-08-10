@@ -79,6 +79,37 @@ def test_vk_actor_transport_has_exact_credentials_and_no_fallback() -> None:
     assert no_role_token.permits(VKActor.PUBLIC_READER, "discover") is False
 
 
+@pytest.mark.asyncio
+async def test_vk_actor_transport_reads_all_fragmented_response_chunks() -> None:
+    class FragmentedContent:
+        async def iter_chunked(self, _size):
+            yield b'{"response":{"items":['
+            yield b'{"conversation":{"unread_count":1}}'
+            yield b']}}'
+
+    body = await DedicatedVKActorTransport._read_bounded_body(
+        FragmentedContent(), 1024
+    )
+    assert body == (
+        b'{"response":{"items":['
+        b'{"conversation":{"unread_count":1}}'
+        b']}}'
+    )
+
+
+@pytest.mark.asyncio
+async def test_vk_actor_transport_rejects_fragmented_response_over_cap() -> None:
+    class OversizedContent:
+        async def iter_chunked(self, _size):
+            yield b"1234"
+            yield b"5678"
+
+    with pytest.raises(ProviderBindingError, match="response too large"):
+        await DedicatedVKActorTransport._read_bounded_body(
+            OversizedContent(), 7
+        )
+
+
 def test_vk_inner_refs_are_opaque_and_detached() -> None:
     refs = InMemoryVKOpaqueRefStore()
     native = {"kind": "community", "group_id": 123, "nested": {"value": 1}}
