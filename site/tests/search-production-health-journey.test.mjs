@@ -481,6 +481,7 @@ test('real ResilientSupabaseTransport transformed Response meters probe and Sear
     const snapshot = snapshotSearchRuntimeProbe();
     assert.equal(snapshot.requests.length, 1);
     assert.equal(snapshot.responses.length, 1);
+    assert.equal(snapshot.physical.search_posts, 1);
     assert.equal(snapshot.meter.categories.edge, 640);
   } finally {
     delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
@@ -488,6 +489,65 @@ test('real ResilientSupabaseTransport transformed Response meters probe and Sear
     Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
     Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
   }
+});
+
+test('runtime physical receipt counts every raw Search dispatch instead of one logical transport request', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalLocation = globalThis.location;
+  const originalDocument = globalThis.document;
+  const originalClients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      search_contract_version: 'event_search_v2', search_backend_revision: backendRevision,
+      request_id: 'physical-retry-request', requested_execution_mode: 'cold_vector',
+      actual_execution_mode: 'cold_vector', result_cache_status: 'miss',
+      catalog_revision: 'a'.repeat(64), corpus_revision: 'b'.repeat(64),
+      search_document_revision: 'c'.repeat(64), items: [{ event_id: 1 }],
+      request_counters: { embedding_provider_attempts: 1, vector_rpc_attempts: 1, llm_provider_attempts: 0 },
+    }), { status: 200, headers: { 'content-type': 'application/json', 'content-length': '256' } });
+    Object.defineProperty(globalThis, 'location', { configurable: true,
+      value: { href: 'https://kenigevents.ru/poisk/' } });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { querySelector: () => ({
+      dataset: { supabaseUrl: 'https://project.supabase.co', supabaseRelayUrl: 'https://relay.example' },
+    }) } });
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    const transport = {
+      rawFetch: globalThis.fetch,
+      async request(input, init) {
+        await this.rawFetch(input, init);
+        return this.rawFetch('https://relay.example/functions/v1/event-search', init);
+      },
+      outcomeHistory: () => [],
+    };
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = new Map([['retry', { transport }]]);
+    installSearchRuntimeProbe({ production_health: true });
+    await transport.request('https://project.supabase.co/functions/v1/event-search', {
+      method: 'POST', body: JSON.stringify({ query: 'never retained' }),
+    });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const snapshot = snapshotSearchRuntimeProbe();
+      if (snapshot.responses.length === 1 && snapshot.meter.pending_measurements === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const snapshot = snapshotSearchRuntimeProbe();
+    assert.equal(snapshot.requests.length, 1);
+    assert.equal(snapshot.physical.search_posts, 2);
+  } finally {
+    delete globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
+    globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__ = originalClients;
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: originalLocation });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: originalDocument });
+  }
+});
+
+test('a complete 200 Search response with a missing physical receipt is infrastructure, not product failure', async () => {
+  const adapter = fakeJourneyAdapter();
+  adapter.physicalActivity = async () => ({
+    search_posts: 0, storage_requests: 0, receipt_rpc_requests: 0, meter: meter(2048),
+  });
+  await assert.rejects(() => runProductionHealthJourney({ adapter, targetUrl: 'https://kenigevents.ru/poisk/' }),
+    /search_physical_observation_missing/u);
 });
 
 test('real ResilientSupabaseTransport meters discarded safe-read response and alternate exactly once', async () => {

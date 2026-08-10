@@ -157,10 +157,15 @@ PR #436 не является зависимостью health activation. Его
 Текущий live gate: `1/2`. Run
 [`31337041139`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337041139)
 принят как browser+Android proof. Последний merged-main browser+iOS run
-[`31342584499`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31342584499)
-завершил callback/Auth/owner-RLS и измерил iOS traffic, но XCUITest не выдал
-usable main-document record; iOS остановился до Search, browser прошёл. После
-этого exact route proof использует описанный выше same-document HEAD fallback.
+[`31343651286`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31343651286)
+завершил callback/Auth/owner-RLS, один реальный Search, HTTP `200` и пять
+совпавших response/card IDs. XCUITest не выдал только fetch
+`requestWillBeSent`, поэтому старый внешний counter ложно записал `0` физических
+POST при наличии закрытого Search response. Общий OTP/Search transport не
+форкнут: runtime probe считает существующий `ResilientSupabaseTransport.rawFetch`
+и iOS объединяет этот closed receipt с общим Safari bucket. Отсутствующий
+physical receipt при уже полученном `200` теперь является
+`UNKNOWN_IOS_INFRA`, а не product failure.
 Нужен один fresh merged-main browser+iOS run с тем же immutable product
 identity; `SEARCH_PRODUCTION_HEALTH_ENABLED` до него остаётся отсутствующей.
 

@@ -1278,3 +1278,20 @@ Search/event URL. В WebDriver receipt выходят только status class/
 count/boolean equality; URL, callback credential и body не возвращаются.
 Redirect, другой final URL и non-2xx (для event — не `200`) остаются fail-closed.
 Acceptance всё ещё `1/2` до нового merged-main browser+iOS proof.
+
+Merged-main run
+[`31343651286`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31343651286)
+прошёл новый same-document HTTP proof и впервые выполнил весь iOS product
+Search: callback, `getUser`, owner-RLS, один логический vector request, HTTP
+`200`, пять response IDs и пять карточек с теми же backend/catalog/corpus
+revisions, что у browser. Он выявил следующий узкий observation gap:
+`safariNetwork` сохранил Search response/body bytes, но не выдал fetch
+`requestWillBeSent`, поэтому внешний physical counter остался `0` и ошибочно
+создал `BROKEN_SEARCH_REQUEST/search_health_request_count_invalid`. Search сам
+работал; это не продуктовый отказ. Не создавая отдельный iOS transport, общий
+runtime probe теперь считает непосредственно существующий
+`ResilientSupabaseTransport.rawFetch`: один raw direct/relay dispatch = один
+physical POST, а retry = отдельный POST. iOS использует максимум этого закрытого
+счётчика и общего OTP/XCUITest bucket; отсутствие обоих при уже полученном `200`
+классифицируется как `UNKNOWN_IOS_INFRA`. Acceptance остаётся `1/2` до fresh
+merged-main proof именно этого observation fix.

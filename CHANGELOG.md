@@ -56,6 +56,17 @@
 
 ### Fixed
 
+- Fixed the iOS physical Search counter exposed by merged-main run
+  `31343651286`. The reused OTP/XCUITest session completed Auth, one real
+  vector Search, five matching cards and the exact backend/content/index
+  receipts, but Safari omitted only the fetch `requestWillBeSent` entry and the
+  harness falsely reported zero physical POSTs. The shared in-page probe now
+  counts the actual `ResilientSupabaseTransport.rawFetch` boundary, including
+  direct/relay attempts, and the iOS adapter combines that closed counter with
+  the neutral Safari bucket instead of inventing a second transport. A complete
+  200 Search response with no physical receipt is now mobile infrastructure,
+  never a Search product incident.
+
 - Fixed the remaining iOS navigation-receipt boundary exposed by merged-main
   run `31342584499`. The shared XCUITest envelope parser now measured the real
   callback Auth traffic, but Mobile Safari still supplied no usable main-
