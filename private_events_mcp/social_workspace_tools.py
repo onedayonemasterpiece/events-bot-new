@@ -19,6 +19,7 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_AUDIENCE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_CAPABILITIES_SCHEMA,
     SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
@@ -417,6 +418,18 @@ def build_social_workspace_tools(
         "type": "string",
         "enum": list(read_access_values),
     }
+    dialog_schema = read_schema(SocialReadOperation.LIST_DIALOGS)
+    dialog_schema["properties"]["platform"] = {"const": "vk"}
+    dialog_schema["properties"]["read_access"] = {"const": "dialogs"}
+    dialog_schema["properties"]["limit"] = {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 25,
+    }
+    dialog_schema["properties"]["unread_only"] = {"type": "boolean"}
+    dialog_schema["required"] = sorted(
+        set(dialog_schema.get("required", ())) | {"platform", "operation", "read_access"}
+    )
     prepare_schema = copy.deepcopy(dict(SOCIAL_WORKSPACE_PREPARE_SCHEMA))
     prepare_schema["properties"]["platform"] = {
         "type": "string",
@@ -475,6 +488,11 @@ def build_social_workspace_tools(
                  "List bounded accessible targets as opaque references.",
                  read_schema(SocialReadOperation.SEARCH_TARGETS),
                  SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA, handler=targets_list,
+                 scope_selector=read_scope, **common),
+        ToolSpec("social_dialogs_list", "List VK dialogs",
+                 "List bounded VK dialog metadata, optionally unread-only, without message bodies.",
+                 dialog_schema,
+                 SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_search", "Search social content",
                  "Search bounded content with mandatory untrusted-data marking.",
@@ -575,12 +593,14 @@ def build_social_workspace_tools(
         "social_action_status",
     }
     feature_tools = {
+        "social_dialogs_list": "private_read",
         "social_content_stories": "media_story",
         "social_asset_stage": "media_story",
         "social_asset_status": "media_story",
         "social_asset_preview": "media_story",
     }
     provider_tools = {
+        "social_dialogs_list": "vk",
         "social_item_resolve": "vk",
         "social_comment_hints_list": "vk",
     }
@@ -631,6 +651,10 @@ def build_social_workspace_tools(
         ),
         "social_targets_search": discovery_options,
         "social_targets_list": discovery_options,
+        "social_dialogs_list": (
+            frozenset({"vk:read:dialogs"}),
+            frozenset({"vk:read"}),
+        ),
         "social_content_search": read_options,
         "social_content_feed": read_options,
         "social_content_item": read_options,

@@ -93,6 +93,7 @@ class FakeTransport:
         self.timeout_method: str | None = None
         self.captcha_method: str | None = None
         self.flagged_wall = False
+        self.last_message_peer = 101
 
     def permits(self, actor: VKActor, capability: str) -> bool:
         return (actor, capability) not in self.denied
@@ -165,8 +166,48 @@ class FakeTransport:
             return {"items": [{"id": 901, "peer_id": params["peer_id"], "date": 1_700_000_100, "text": "Your reminder"}]}
         if method == "messages.getById":
             message_id = int(str(params["message_ids"]).split(",")[0])
-            return {"items": [{"id": message_id, "peer_id": 101, "date": 1_700_000_100, "text": "You won tickets"}]}
+            return {"items": [{"id": message_id, "peer_id": self.last_message_peer, "date": 1_700_000_100, "text": "You won tickets"}]}
         if method == "messages.getConversations":
+            if params.get("extended") == 1:
+                return {
+                    "items": [
+                        {
+                            "conversation": {
+                                "peer": {"id": 101, "type": "user"},
+                                "unread_count": 1,
+                            },
+                            "last_message": {
+                                "text": "private body provider_secret must not cross",
+                                "id": 910,
+                            },
+                        },
+                        {
+                            "conversation": {
+                                "peer": {"id": 2_000_000_007, "type": "chat"},
+                                "chat_settings": {"title": "Ticket winners"},
+                                "unread_count": 2,
+                            },
+                            "last_message": {
+                                "text": "second private body must not cross",
+                                "id": 911,
+                            },
+                        },
+                        {
+                            "conversation": {
+                                "peer": {"id": -333, "type": "group"},
+                                "unread_count": 3,
+                            },
+                            "last_message": {
+                                "text": "third private body must not cross",
+                                "id": 912,
+                            },
+                        },
+                    ],
+                    "profiles": [
+                        {"id": 101, "first_name": "Ticket", "last_name": "Winner"}
+                    ],
+                    "groups": [{"id": 333, "name": "VK Tickets"}],
+                }
             return {"items": [{"conversation": {"peer": {"id": 101}}, "last_message": {"id": 902, "peer_id": 101, "date": 1_700_000_101, "text": "Conversation history"}}]}
         if method == "stories.get":
             return {
@@ -215,6 +256,7 @@ class FakeTransport:
         if method == "groups.getMembers":
             return {"count": 4321, "items": []}
         if method == "messages.send":
+            self.last_message_peer = params["peer_id"]
             return {"message_id": 901}
         if method == "wall.post":
             return {"post_id": 801}
@@ -541,6 +583,93 @@ async def test_exact_person_ticket_winner_dm_uses_random_id_and_read_after_write
 
 
 @pytest.mark.asyncio
+async def test_unread_dialog_listing_returns_sender_metadata_without_message_bodies(
+    workspace,
+) -> None:
+    adapter, transport, refs, _, _ = workspace
+    request = read_request(
+        "list_dialogs",
+        read_access="dialogs",
+        unread_only=True,
+        limit=20,
+    )
+    result = await adapter.read(request)
+    assert [(row["title"], row["kind"], row["unread_count"]) for row in result["results"]] == [
+        ("Ticket Winner", "user", 1),
+        ("Ticket winners", "chat", 2),
+        ("VK Tickets", "community", 3),
+    ]
+    encoded = json.dumps(result, ensure_ascii=False)
+    assert "last_message" not in encoded
+    assert "private body" not in encoded
+    assert "provider_secret" not in encoded
+    assert "peer_id" not in encoded
+    assert "user_id" not in encoded
+    assert "group_id" not in encoded
+    call = next(call for call in transport.calls if call["method"] == "messages.getConversations")
+    assert call["actor"] is VKActor.DIALOG_READER
+    assert call["params"] == {
+        "count": 20,
+        "offset": 0,
+        "filter": "unread",
+        "extended": 1,
+        "fields": "screen_name",
+    }
+    for row in result["results"]:
+        native = refs.resolve("target", row["target_ref"])
+        assert adapter._dialog_peer_id(native) is not None
+
+    first_page = await adapter.read(
+        read_request(
+            "list_dialogs",
+            read_access="dialogs",
+            unread_only=True,
+            limit=3,
+        )
+    )
+    with pytest.raises(VKWorkspaceError, match="cursor_context_mismatch"):
+        await adapter.read(
+            read_request(
+                "list_dialogs",
+                read_access="dialogs",
+                unread_only=False,
+                limit=3,
+                cursor=first_page["next_cursor"],
+            )
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "native",
+    [
+        {"kind": "chat", "peer_id": 2_000_000_007},
+        {"kind": "community", "group_id": 333, "owner_id": -333, "peer_id": -333},
+    ],
+)
+async def test_returned_dialog_targets_support_explicit_message_send(
+    workspace, native,
+) -> None:
+    adapter, transport, refs, _, _ = workspace
+    target_ref = refs.mint("target", native)
+    caps = await adapter.capabilities(target_ref)
+    assert "send_message" in caps["actions"]
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "send_message",
+            "idempotency_key": "dialog-reminder-" + str(abs(native["peer_id"])),
+            "target_ref": target_ref,
+            "content": {"text": "Reminder"},
+        }
+    )
+    receipt = await adapter.execute(intent)
+    assert receipt["status"] == "succeeded"
+    send = next(call for call in transport.calls if call["method"] == "messages.send")
+    assert send["params"]["peer_id"] == native["peer_id"]
+
+
+@pytest.mark.asyncio
 async def test_wall_dialog_search_discovery_comments_reactions_story_and_stats(workspace) -> None:
     adapter, _, refs, _, _ = workspace
     community = mint_target(refs)
@@ -718,8 +847,7 @@ async def test_private_conversation_routes_require_explicit_dialog_access_before
     adapter, transport, refs, _, _ = workspace
     own = refs.mint("target", {"kind": "self", "user_id": 777, "peer_id": 777})
     chat = refs.mint("target", {"kind": "chat", "peer_id": 2_000_000_001})
-    community = mint_target(refs)
-    for target_ref, access in ((own, "public"), (chat, "public"), (community, "dialogs")):
+    for target_ref, access in ((own, "public"), (chat, "public")):
         before = len(transport.calls)
         with pytest.raises(VKWorkspaceError, match="access_target_mismatch"):
             await adapter.read(read_request("list_items", target_ref=target_ref, read_access=access, limit=2))

@@ -51,13 +51,18 @@ def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(
         config,
         universal_social_enabled=True,
         universal_social_telegram_enabled=True,
+        universal_social_vk_enabled=True,
+        universal_social_private_read_enabled=True,
         universal_social_dm_enabled=True,
     )
     app = web.Application()
     server = attach_private_events_mcp(
         app,
         universal,
-        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+        social_workspace_adapters={
+            "telegram": _WorkspaceAdapter(),
+            "vk": _WorkspaceAdapter(),
+        },
     )
     assert server is not None
     chatgpt_names = {tool.name for tool in server.protocol.tools}
@@ -80,19 +85,24 @@ async def test_existing_chatgpt_legacy_scopes_see_typed_tools_without_codex_soci
         config,
         universal_social_enabled=True,
         universal_social_telegram_enabled=True,
+        universal_social_vk_enabled=True,
+        universal_social_private_read_enabled=True,
         universal_social_dm_enabled=True,
         universal_social_post_enabled=True,
     )
     server = attach_private_events_mcp(
         web.Application(),
         universal,
-        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+        social_workspace_adapters={
+            "telegram": _WorkspaceAdapter(),
+            "vk": _WorkspaceAdapter(),
+        },
     )
     assert server is not None
     legacy_read = AccessIdentity(
         "operator",
         universal.oauth_client_id,
-        frozenset({"telegram:read"}),
+        frozenset({"telegram:read", "vk:read"}),
         universal.resource,
         "legacy-read-jti",
         2_000_000_000,
@@ -112,6 +122,7 @@ async def test_existing_chatgpt_legacy_scopes_see_typed_tools_without_codex_soci
     publish_names = {tool["name"] for tool in publish_list["result"]["tools"]}
     assert "social_target_resolve" in read_names
     assert "social_content_feed" in read_names
+    assert "social_dialogs_list" in read_names
     assert "social_action_prepare" not in read_names
     assert "social_action_prepare" in publish_names
     assert "social_action_commit" in publish_names

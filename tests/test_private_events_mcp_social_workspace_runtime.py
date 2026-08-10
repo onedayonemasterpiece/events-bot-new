@@ -99,6 +99,21 @@ class FakeAdapter:
                 "display_name": "Exact Person", "canonical_handle": "exact_person"}
 
     async def read(self, request):
+        if request.operation is SocialReadOperation.LIST_DIALOGS:
+            return {
+                "results": [
+                    {
+                        "target_ref": "native-dialog-user-123",
+                        "kind": "user",
+                        "title": "Ticket Winner",
+                        "unread_count": 2,
+                        "text": "private body must be projected out",
+                        "provider_id": "must-not-leak",
+                        "trust": "untrusted_external_data",
+                    }
+                ],
+                "trust": "untrusted_external_data",
+            }
         if request.operation is SocialReadOperation.EDITORIAL_SAMPLE:
             self.editorial_cursors.append(request.cursor)
             self.editorial_sample_refs.append(request.sample_ref)
@@ -574,6 +589,7 @@ def test_vk_item_and_notification_tools_are_provider_and_scope_isolated(runtime)
     }
     assert "social_item_resolve" not in telegram_only
     assert "social_comment_hints_list" not in telegram_only
+    assert "social_dialogs_list" not in telegram_only
 
     service.adapters["vk"] = FakeAdapter()
     tools = {
@@ -581,10 +597,44 @@ def test_vk_item_and_notification_tools_are_provider_and_scope_isolated(runtime)
     }
     assert "social_item_resolve" in tools
     hints = tools["social_comment_hints_list"]
+    dialogs = tools["social_dialogs_list"]
     assert frozenset({"vk:notifications:read"}) in hints.scope_options
     assert hints.scope_selector(
         {"platform": "vk", "operation": "list_notifications", "limit": 25}
     ) == {"vk:notifications:read"}
+    assert set(dialogs.scope_options) == {
+        frozenset({"vk:read"}),
+        frozenset({"vk:read:dialogs"}),
+    }
+    assert dialogs.input_schema["properties"]["platform"] == {"const": "vk"}
+    assert dialogs.input_schema["properties"]["read_access"] == {"const": "dialogs"}
+
+
+@pytest.mark.asyncio
+async def test_vk_dialog_tool_returns_metadata_only_for_legacy_read_scope(runtime) -> None:
+    service, _adapter, _store = runtime
+    tool = next(
+        item
+        for item in build_social_workspace_tools(service)
+        if item.name == "social_dialogs_list"
+    )
+    output = await tool.handler(
+        {
+            "platform": "vk",
+            "operation": "list_dialogs",
+            "read_access": "dialogs",
+            "unread_only": True,
+            "limit": 20,
+        },
+        scoped_context("vk:read"),
+    )
+    assert output["results"][0]["title"] == "Ticket Winner"
+    assert output["results"][0]["unread_count"] == 2
+    assert output["results"][0]["target_ref"].startswith("tgt_")
+    encoded = json.dumps(output)
+    assert "private body" not in encoded
+    assert "provider_id" not in encoded
+    assert "native-dialog-user-123" not in encoded
 
 
 def test_catalog_omits_disabled_action_and_media_surfaces(runtime) -> None:
@@ -607,6 +657,7 @@ def test_catalog_omits_disabled_action_and_media_surfaces(runtime) -> None:
         "social_content_stories",
         "social_asset_stage",
         "social_asset_status",
+        "social_dialogs_list",
     } & names
     assert all(
         not any(

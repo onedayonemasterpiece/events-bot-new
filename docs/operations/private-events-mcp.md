@@ -122,7 +122,8 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_target_resolve` | resolve Saved/self, exact person, channel/group/community or known provider reference into an opaque bound ref |
 | `social_item_resolve` | resolve one canonical VK wall-post URL into bound item and source-target refs |
 | `social_targets_search` | bounded target search |
-| `social_targets_list` | bounded accessible dialogs/managed targets |
+| `social_targets_list` | bounded public/managed target discovery |
+| `social_dialogs_list` | VK-only metadata list of all or unread dialogs: opaque target, display name, kind and unread count, with no message body/native peer ID |
 | `social_content_search` | bounded keyword search |
 | `social_content_feed` | bounded target feed/history |
 | `social_content_item` | fetch one bound item |
@@ -344,7 +345,12 @@ Only configured actor/action capability sets are advertised. The transport uses
 fixed VK API 5.199 method paths, rejects redirects, bounds responses, and emits
 only sanitized provider error codes. Public-wall and private-dialog access are
 separate; a public scope cannot route to conversation history. Cursor context
-binds target, operation and access class. Writes bind the full intent digest and
+binds target, operation, access class and unread/all mode. `social_dialogs_list`
+uses the dialog-reader role and projects only an opaque target ref, display name,
+dialog kind and unread count. It never returns `last_message`, message text or a
+native peer ID. The returned user, group-chat or community dialog target can be
+used by a later explicitly requested `send_message`; actual history remains a
+separate `social_content_feed` call with dialog access. Writes bind the full intent digest and
 operation ref so concurrent or mutated replays cannot duplicate provider work.
 Encrypted provider refs, sample/cursor state and action receipts survive process
 restart; an interrupted unreceipted operation becomes non-retryable

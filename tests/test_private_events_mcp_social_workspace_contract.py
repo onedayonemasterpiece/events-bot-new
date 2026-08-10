@@ -20,6 +20,7 @@ from private_events_mcp.social_workspace import (
     SOCIAL_WORKSPACE_CAPABILITIES_SCHEMA,
     SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_COMMIT_SCHEMA,
+    SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
@@ -93,6 +94,7 @@ ALL_SCHEMAS = (
     SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_COMMIT_SCHEMA,
     SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATUS_SCHEMA,
     SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_SEND_MESSAGE_RECEIPT_SCHEMA,
@@ -260,6 +262,9 @@ def test_action_enum_and_granular_scope_architecture_are_exact() -> None:
     assert required_scope_for_action("vk", "delete") == {"vk:delete"}
     assert required_scope_for_read("telegram", "resolve_target") == {"telegram:discover"}
     assert required_scope_for_read("vk", "get_item", "private") == {"vk:read:private"}
+    assert required_scope_for_read("vk", "list_dialogs", "dialogs") == {
+        "vk:read:dialogs"
+    }
     assert required_scope_for_read("vk", "list_stories") == {"vk:story:read"}
     assert required_scope_for_read("vk", "get_statistics") == {"vk:analytics"}
     assert required_scope_for_read("vk", "get_audience") == {"vk:audience"}
@@ -270,6 +275,71 @@ def test_action_enum_and_granular_scope_architecture_are_exact() -> None:
         required_scope_for_read("telegram", "list_notifications")
     with pytest.raises(SocialWorkspaceValidationError):
         required_scope_for_read("vk", "get_item")
+
+
+def test_vk_dialog_listing_is_metadata_only_and_strictly_bound() -> None:
+    payload = {
+        "platform": "vk",
+        "operation": "list_dialogs",
+        "read_access": "dialogs",
+        "unread_only": True,
+        "limit": 20,
+    }
+    validate(payload, SOCIAL_WORKSPACE_READ_SCHEMA)
+    request = validate_read_request(payload)
+    assert request.unread_only is True
+    assert request.required_scopes == {"vk:read:dialogs"}
+    validate(
+        {
+            "results": [
+                {
+                    "target_ref": TARGET_REF,
+                    "kind": "user",
+                    "title": "Ticket winner",
+                    "unread_count": 2,
+                    "trust": "untrusted_external_data",
+                }
+            ],
+            "trust": "untrusted_external_data",
+        },
+        SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA,
+    )
+    with pytest.raises(ValidationError):
+        validate(
+            {
+                "results": [
+                    {
+                        "target_ref": TARGET_REF,
+                        "kind": "user",
+                        "title": "Ticket winner",
+                        "unread_count": 2,
+                        "text": "must never cross metadata-only boundary",
+                        "trust": "untrusted_external_data",
+                    }
+                ],
+                "trust": "untrusted_external_data",
+            },
+            SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA,
+        )
+    for mutation in (
+        {**payload, "platform": "telegram"},
+        {**payload, "read_access": "private"},
+        {**payload, "limit": 26},
+        {**payload, "target_ref": TARGET_REF},
+        {**payload, "unread_only": "yes"},
+    ):
+        with pytest.raises(SocialWorkspaceValidationError):
+            validate_read_request(mutation)
+    with pytest.raises(SocialWorkspaceValidationError):
+        validate_read_request(
+            {
+                "platform": "vk",
+                "operation": "list_items",
+                "target_ref": TARGET_REF,
+                "read_access": "dialogs",
+                "unread_only": True,
+            }
+        )
 
 
 def test_saved_messages_self_locator_has_no_value_and_resolves_only_self() -> None:
