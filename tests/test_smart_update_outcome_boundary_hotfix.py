@@ -8,7 +8,7 @@ import smart_event_update as su
 import smart_update_identity as identity
 from db import Database
 from models import Event, EventSource
-from smart_event_update import SmartUpdateResult
+from smart_event_update import SmartUpdateResult, SmartUpdateTerminalOutcome
 from smart_update_identity import (
     IdentityGateMode,
     MergeIdentityAction,
@@ -39,37 +39,25 @@ def test_outcome_contract_is_fail_closed_for_unknown_and_review_statuses() -> No
         )
 
 
-@pytest.mark.asyncio
-async def test_nonaccepted_result_is_diagnostic_only_for_callers(monkeypatch) -> None:
-    async def _review(*_args, **_kwargs):
-        return SmartUpdateResult(
-            status="review_required",
-            event_id=7024,
-            reason="source_binding_conflict",
-        )
-
-    monkeypatch.setattr(su, "_smart_event_update_impl", _review)
-    result = await su.smart_event_update(
-        object(),
-        SimpleNamespace(source_url="https://example.test/source"),
+def test_nonaccepted_result_is_diagnostic_only_for_callers() -> None:
+    result = SmartUpdateResult(
+        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+        diagnostic_event_id=7024,
+        reason="source_binding_conflict",
     )
 
-    assert result.status == "review_required"
-    assert result.event_id == 7024
+    assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+    assert result.event_id is None
+    assert result.diagnostic_event_id == 7024
     assert result.created is False
     assert result.merged is False
     assert not su.smart_update_result_allows_caller_side_effects(result)
 
 
-@pytest.mark.asyncio
-async def test_accepted_result_keeps_event_id(monkeypatch) -> None:
-    async def _created(*_args, **_kwargs):
-        return SmartUpdateResult(status="created", event_id=9001, created=True)
-
-    monkeypatch.setattr(su, "_smart_event_update_impl", _created)
-    result = await su.smart_event_update(
-        object(),
-        SimpleNamespace(source_url="https://example.test/source"),
+def test_accepted_result_keeps_event_id() -> None:
+    result = SmartUpdateResult(
+        outcome=SmartUpdateTerminalOutcome.CREATED,
+        event_id=9001,
     )
 
     assert result.status == "created"
@@ -113,7 +101,7 @@ def test_different_specific_ticket_occurrences_override_false_llm_allow() -> Non
         },
     )
 
-    assert verdict.action is MergeIdentityAction.REVIEW_REQUIRED
+    assert verdict.action is MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
     assert verdict.relation is MergeIdentityRelation.UNSAFE_TO_MERGE
     assert verdict.reason_code == "specific_ticket_occurrence_conflict"
     assert verdict.deterministic
@@ -268,10 +256,10 @@ async def test_official_parser_caller_has_zero_side_effects_after_review(
     async def _drafts(*_args, **_kwargs):
         return [draft], None
 
-    async def _review(*_args, **_kwargs):
+    async def _retry(*_args, **_kwargs):
         return SmartUpdateResult(
-            status="review_required",
-            event_id=7024,
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=7024,
             reason="specific_ticket_occurrence_conflict",
         )
 
@@ -296,7 +284,7 @@ async def test_official_parser_caller_has_zero_side_effects_after_review(
         "_ensure_telegraph_url",
         lambda *_args, **_kwargs: _forbidden("_ensure_telegraph_url"),
     )
-    monkeypatch.setattr(su, "_smart_event_update_impl", _review)
+    monkeypatch.setattr(su, "smart_event_update", _retry)
 
     theatre_event = SimpleNamespace(
         title="Кандидат",
@@ -317,7 +305,7 @@ async def test_official_parser_caller_has_zero_side_effects_after_review(
         ticket_status="available",
     )
 
-    event_id, was_added, status = await handlers.add_new_event_via_queue(
+    event_id, was_added, terminal = await handlers.add_new_event_via_queue(
         object(),
         None,
         theatre_event,
@@ -328,7 +316,7 @@ async def test_official_parser_caller_has_zero_side_effects_after_review(
 
     assert event_id is None
     assert was_added is False
-    assert status == "review_required"
+    assert terminal is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
     assert side_effects == []
 
 
@@ -359,14 +347,14 @@ async def test_vk_persist_caller_does_not_convert_review_into_success(
     )
     monkeypatch.setitem(sys.modules, "main", fake_main)
 
-    async def _review(*_args, **_kwargs):
+    async def _retry(*_args, **_kwargs):
         return SmartUpdateResult(
-            status="skipped_identity_gate",
-            event_id=3864,
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=3864,
             reason="festival_context_sibling",
         )
 
-    monkeypatch.setattr(su, "_smart_event_update_impl", _review)
+    monkeypatch.setattr(su, "smart_event_update", _retry)
 
     draft = SimpleNamespace(
         title="Кандидат",
@@ -392,14 +380,17 @@ async def test_vk_persist_caller_does_not_convert_review_into_success(
         organizer_names=[],
     )
 
-    with pytest.raises(RuntimeError, match="smart_update not accepted"):
-        await vk_intake.persist_event_and_pages(
-            draft,
-            [],
-            object(),
-            source_post_url="https://vk.com/wall-1_2",
-        )
+    persisted = await vk_intake.persist_event_and_pages(
+        draft,
+        [],
+        object(),
+        source_post_url="https://vk.com/wall-1_2",
+    )
 
+    assert persisted.event_id is None
+    assert persisted.smart_result is not None
+    assert persisted.smart_result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+    assert persisted.smart_result.diagnostic_event_id == 3864
     assert side_effects == []
 
 

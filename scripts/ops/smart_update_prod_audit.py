@@ -421,6 +421,123 @@ def collect_database(
             "final_transaction_duplicate_probe_evidence": final_duplicate_probes,
         }
 
+        state_outcomes = (
+            "CREATED",
+            "MERGED",
+            "NOOP_EXACT_REPLAY",
+            "REJECTED_PRODUCT_POLICY",
+            "RETRY_SCHEDULED",
+        )
+        state_metrics: dict[str, Any] = {
+            "table_present": "smart_update_candidate_state" in columns,
+            "attempt_table_present": "smart_update_attempt" in columns,
+            "by_outcome": {name: 0 for name in state_outcomes},
+            "candidates_total": 0,
+            "terminal_balance": 0,
+            "terminal_unresolved": 0,
+            "retry_due": 0,
+            "retry_exhausted": 0,
+            "accepted_event_contract_violations": 0,
+            "attempt_starts": 0,
+            "attempt_terminals": 0,
+            "attempt_unresolved": 0,
+            "attempt_orphaned": 0,
+        }
+        candidate_columns = columns.get("smart_update_candidate_state", set())
+        if {"current_outcome", "accepted_event_id"}.issubset(candidate_columns):
+            state_rows = qr.execute(
+                connection,
+                "smart_update_state.candidate_outcomes",
+                "SELECT current_outcome,COUNT(*) AS n "
+                "FROM smart_update_candidate_state GROUP BY current_outcome",
+            ).fetchall()
+            for row in state_rows:
+                outcome = str(row["current_outcome"] or "")
+                count = int(row["n"] or 0)
+                state_metrics["candidates_total"] += count
+                if outcome in state_metrics["by_outcome"]:
+                    state_metrics["by_outcome"][outcome] += count
+                else:
+                    state_metrics["terminal_unresolved"] += count
+            state_metrics["terminal_balance"] = sum(
+                state_metrics["by_outcome"].values()
+            )
+            state_metrics["accepted_event_contract_violations"] = int(
+                qr.execute(
+                    connection,
+                    "smart_update_state.accepted_event_contract",
+                    "SELECT COUNT(*) FROM smart_update_candidate_state WHERE "
+                    "(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY') "
+                    "AND accepted_event_id IS NULL) OR "
+                    "(current_outcome NOT IN ('CREATED','MERGED','NOOP_EXACT_REPLAY') "
+                    "AND accepted_event_id IS NOT NULL)",
+                ).fetchone()[0]
+                or 0
+            )
+            if "next_retry_at" in candidate_columns:
+                claim_due_sql = (
+                    " AND (claim_expires_at IS NULL OR claim_expires_at<=CURRENT_TIMESTAMP)"
+                    if "claim_expires_at" in candidate_columns
+                    else ""
+                )
+                state_metrics["retry_due"] = int(
+                    qr.execute(
+                        connection,
+                        "smart_update_state.retry_due",
+                        "SELECT COUNT(*) FROM smart_update_candidate_state "
+                        "WHERE current_outcome='RETRY_SCHEDULED' "
+                        "AND (next_retry_at IS NULL OR next_retry_at<=CURRENT_TIMESTAMP)"
+                        + claim_due_sql,
+                    ).fetchone()[0]
+                    or 0
+                )
+            if "retry_exhausted" in candidate_columns:
+                state_metrics["retry_exhausted"] = int(
+                    qr.execute(
+                        connection,
+                        "smart_update_state.retry_exhausted",
+                        "SELECT COUNT(*) FROM smart_update_candidate_state "
+                        "WHERE retry_exhausted=1",
+                    ).fetchone()[0]
+                    or 0
+                )
+        elif state_metrics["table_present"]:
+            add_gap(gaps, "smart_update_state", "candidate_state_columns_missing")
+        else:
+            add_gap(gaps, "smart_update_state", "candidate_state_schema_missing")
+
+        attempt_columns = columns.get("smart_update_attempt", set())
+        if {"candidate_state_id", "finished_at"}.issubset(attempt_columns):
+            attempt_row = qr.execute(
+                connection,
+                "smart_update_state.attempt_balance",
+                "SELECT COUNT(*) AS starts,"
+                "SUM(CASE WHEN finished_at IS NOT NULL THEN 1 ELSE 0 END) AS terminals "
+                "FROM smart_update_attempt",
+            ).fetchone()
+            state_metrics["attempt_starts"] = int(attempt_row["starts"] or 0)
+            state_metrics["attempt_terminals"] = int(attempt_row["terminals"] or 0)
+            state_metrics["attempt_unresolved"] = (
+                state_metrics["attempt_starts"] - state_metrics["attempt_terminals"]
+            )
+            if {"claimed_by", "claim_expires_at"}.issubset(candidate_columns):
+                state_metrics["attempt_orphaned"] = int(
+                    qr.execute(
+                        connection,
+                        "smart_update_state.attempt_orphaned",
+                        "SELECT COUNT(*) FROM smart_update_attempt a "
+                        "JOIN smart_update_candidate_state c ON c.id=a.candidate_state_id "
+                        "WHERE a.finished_at IS NULL AND "
+                        "(c.claimed_by IS NULL OR c.claim_expires_at<=CURRENT_TIMESTAMP)",
+                    ).fetchone()[0]
+                    or 0
+                )
+        elif state_metrics["attempt_table_present"]:
+            add_gap(gaps, "smart_update_state", "attempt_state_columns_missing")
+        else:
+            add_gap(gaps, "smart_update_state", "attempt_state_schema_missing")
+        metrics["smart_update_state"] = state_metrics
+
         changed = {str(event_id): sorted(state.get("changed_fields", set())) for event_id, state in sample_state.items() if state.get("changed_fields")}
         metrics["public_field_changes"] = {"events_with_evidence": len(changed), "by_field": dict(sorted(collections.Counter(f for fields in changed.values() for f in fields).items()))}
 
@@ -1385,7 +1502,16 @@ def build_bundle(args: argparse.Namespace) -> dict[str, Any]:
     if identity_metrics.get("critical_false_merge_evidence", 0):
         finding("FAIL", "critical_false_merge_evidence", {"count": identity_metrics["critical_false_merge_evidence"]})
     if identity_metrics.get("ambiguous_auto_merge_evidence", 0):
-        finding("FAIL", "ambiguity_auto_merged_instead_of_pending_review", {"count": identity_metrics["ambiguous_auto_merge_evidence"]})
+        finding("FAIL", "ambiguity_auto_merged_against_identity_evidence", {"count": identity_metrics["ambiguous_auto_merge_evidence"]})
+    state_metrics = db_metrics.get("smart_update_state", {})
+    if state_metrics.get("terminal_unresolved", 0):
+        finding("FAIL", "smart_update_terminal_unresolved", {"count": state_metrics["terminal_unresolved"]})
+    if state_metrics.get("accepted_event_contract_violations", 0):
+        finding("FAIL", "smart_update_accepted_event_contract_violation", {"count": state_metrics["accepted_event_contract_violations"]})
+    if state_metrics.get("attempt_orphaned", 0):
+        finding("FAIL", "smart_update_attempt_orphaned", {"count": state_metrics["attempt_orphaned"]})
+    if state_metrics.get("retry_exhausted", 0):
+        finding("FAIL", "smart_update_retry_exhausted", {"count": state_metrics["retry_exhausted"]})
     stale_total = sum(int(item.get("count", 0)) for item in db_metrics.get("joboutbox", {}).get("stale", []))
     if stale_total:
         finding("WATCH", "stale_outbox_work", {"count": stale_total})

@@ -2451,7 +2451,7 @@ async def _process_vk_inbox_row(
     added_posters_total = 0
     added_posters_by_event_id: dict[int, int] = {}
     partial_error: str | None = None
-    smart_retry_reason: str | None = None
+    smart_retry_reasons: list[str] = []
     semantic_rejections: list[str] = []
     inline_jobs_enabled = (os.getenv("VK_AUTO_IMPORT_INLINE_JOBS", "1") or "").strip().lower() in {
         "1",
@@ -2485,8 +2485,12 @@ async def _process_vk_inbox_row(
                 )
                 continue
             if smart_result.is_retry:
-                smart_retry_reason = smart_result.reason or "smart_update_retry"
-                break
+                # A roundup contains independent candidates. Keep the durable
+                # retry for this child while allowing valid siblings to finish.
+                smart_retry_reasons.append(
+                    smart_result.reason or "smart_update_retry"
+                )
+                continue
             if not smart_result.is_accepted or res.event_id is None:
                 raise RuntimeError("invalid typed Smart Update result at VK boundary")
 
@@ -2523,6 +2527,7 @@ async def _process_vk_inbox_row(
     if drafts:
         _tmark("persist_total", persist_total_sec)
 
+    smart_retry_reason = smart_retry_reasons[0] if smart_retry_reasons else None
     if smart_retry_reason and not imported_event_ids:
         report.inbox_deferred += 1
         report.errors.append(f"retry_scheduled {source_url}: {smart_retry_reason}")

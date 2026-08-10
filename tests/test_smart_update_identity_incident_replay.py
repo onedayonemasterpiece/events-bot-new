@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import func, select
 
 import smart_event_update as su
@@ -8,6 +9,23 @@ from db import Database
 from models import Event, EventIdentityDecisionLog
 from smart_event_update import EventCandidate, smart_event_update
 from smart_update_identity import IdentityVectorEvidence
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_test_databases(monkeypatch):
+    """Close SQLAlchemy/aiosqlite workers created by every test in this module."""
+
+    instances: list[Database] = []
+    original_init = Database.__init__
+
+    def tracked_init(instance, *args, **kwargs):
+        original_init(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(Database, "__init__", tracked_init)
+    yield
+    for instance in instances:
+        await instance.close()
 
 
 @pytest.fixture(autouse=True)
@@ -121,19 +139,30 @@ async def test_incident_exhibition_replay_vector_gate_prevents_public_duplicate(
         schedule_tasks=False,
     )
 
-    assert result.status in {"merged", "skipped_identity_gate"}
-    if result.status == "skipped_identity_gate":
-        assert result.reason == "vector_nearest_identity"
+    assert result.outcome in {
+        su.SmartUpdateTerminalOutcome.MERGED,
+        su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+    }
+    if result.outcome is su.SmartUpdateTerminalOutcome.MERGED:
+        assert result.event_id == canonical_id
+        assert result.diagnostic_event_id is None
+    else:
+        assert result.event_id is None
+        assert result.diagnostic_event_id == canonical_id
+        assert result.reason == (
+            "identity_gate_adjudicator_unavailable:vector_nearest_identity"
+        )
     async with db.get_session() as session:
         public_count = await session.scalar(
             select(func.count()).select_from(Event).where(Event.identity_status == "canonical")
         )
         logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
     assert public_count == 1
-    if result.status == "skipped_identity_gate":
+    if result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
         assert logs
         assert logs[-1].event_id == canonical_id
         assert logs[-1].decision == "veto_create"
+    await db.close()
 
 
 @pytest.mark.asyncio

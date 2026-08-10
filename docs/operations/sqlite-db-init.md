@@ -21,9 +21,11 @@ migration:
   accepted versus diagnostic IDs, replay payload/locator, retry budget, and
   claim lease;
 - `smart_update_attempt` is an append-only one-terminal-per-attempt ledger;
-- new identity-bearing source ownership is unique by canonical source plus
-  occurrence key, so one Telegram/VK carrier may contain several event
-  children.
+- `source_parser_recovery_request` stores idempotent source-level full-catalogue
+  catch-up requests for legacy official-parser losses;
+- new keyed source ownership is unique by canonical source plus candidate key,
+  with a canonical-source plus occurrence-key collision invariant, so one
+  Telegram/VK carrier may contain several event children.
 
 Legacy source rows remain null and are not blanket backfilled. Historical
 programme/context roles and producer child slots cannot be inferred safely.

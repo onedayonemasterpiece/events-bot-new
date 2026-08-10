@@ -3,12 +3,30 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 
 import smart_event_update as su
 from db import Database
 from models import Event, EventIdentityDecisionLog
 from smart_event_update import EventCandidate
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_test_databases(monkeypatch):
+    """Close SQLAlchemy/aiosqlite workers created by every test in this module."""
+
+    instances: list[Database] = []
+    original_init = Database.__init__
+
+    def tracked_init(instance, *args, **kwargs):
+        original_init(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(Database, "__init__", tracked_init)
+    yield
+    for instance in instances:
+        await instance.close()
 
 
 @pytest.fixture(autouse=True)
@@ -117,7 +135,9 @@ async def test_identity_gate_exception_records_single_fail_safe_row(tmp_path, mo
 
         result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_identity_gate"
+        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.event_id is None
+        assert result.reason == "identity_gate_uncertain:identity_gate_error"
         async with db.get_session() as session:
             rows = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
         assert len(rows) == 1
@@ -132,7 +152,7 @@ async def test_identity_gate_exception_records_single_fail_safe_row(tmp_path, mo
 
 
 @pytest.mark.asyncio
-async def test_low_risk_vector_error_fallback_is_persisted_for_rollout_metrics(tmp_path, monkeypatch):
+async def test_vector_error_schedules_retry_and_is_persisted_for_rollout_metrics(tmp_path, monkeypatch):
     from scripts.inspect.audit_identity_gate_rollout import build_rollout_payload
 
     db = Database(str(tmp_path / "db.sqlite"))
@@ -167,14 +187,16 @@ async def test_low_risk_vector_error_fallback_is_persisted_for_rollout_metrics(t
 
         result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "created"
+        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.event_id is None
+        assert result.reason == "identity_gate_uncertain:identity_gate_error"
         async with db.get_session() as session:
             rows = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
         assert len(rows) == 1
         payload = rows[0].decision_payload
-        assert rows[0].decision == "allow_create"
-        assert payload["vector"] is None
-        assert payload["suppressed_vector_error"]["error"].startswith("vector_recall_error")
+        assert rows[0].decision == "veto_create"
+        assert payload["fail_safe"] is True
+        assert payload["vector"]["error"].startswith("vector_recall_error")
         rollout = build_rollout_payload(db.path, current=date.today(), since_days=14)
         assert rollout["identity_gate_vector_error_count"] == 1
     finally:

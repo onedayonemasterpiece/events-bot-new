@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 
 from db import Database
 from models import Event, EventSource
@@ -8,6 +9,87 @@ from smart_event_update import (
     _filter_same_parser_source_occurrence_conflicts,
     smart_event_update,
 )
+from source_parsing.handlers import _parser_occurrence_key
+from source_parsing.commands import (
+    _claim_source_parser_recovery_requests,
+    _settle_source_parser_recovery_requests,
+)
+
+
+def test_official_parser_occurrence_key_splits_same_page_sessions_and_is_stable():
+    common = {
+        "source_type": "muzteatr",
+        "source_url": "https://muzteatr39.ru/action/brodskiy?utm_source=test",
+        "date_value": "2026-10-25",
+        "end_date_value": None,
+    }
+    first = _parser_occurrence_key(
+        **common,
+        time_value="14:00",
+        producer_ordinal=0,
+    )
+    replay = _parser_occurrence_key(
+        **common,
+        time_value="14.00",
+        producer_ordinal=0,
+    )
+    later_session = _parser_occurrence_key(
+        **common,
+        time_value="17:00",
+        producer_ordinal=1,
+    )
+    same_slot_sibling = _parser_occurrence_key(
+        **common,
+        time_value="14:00",
+        producer_ordinal=1,
+    )
+
+    assert first == replay
+    assert len({first, later_session, same_slot_sibling}) == 3
+
+
+@pytest.mark.asyncio
+async def test_parser_recovery_request_is_claimed_and_only_resolved_source_completes(
+    tmp_path,
+) -> None:
+    db = Database(str(tmp_path / "parser-recovery.sqlite"))
+    await db.init()
+    try:
+        async with db.raw_conn() as conn:
+            await conn.executemany(
+                "INSERT INTO source_parser_recovery_request("
+                "source_type,requested_since,status,next_run_at) "
+                "VALUES(?,?,'pending',CURRENT_TIMESTAMP)",
+                [
+                    ("dramteatr", "2026-08-04 00:00:00"),
+                    ("muzteatr", "2026-08-04 00:00:00"),
+                ],
+            )
+            await conn.commit()
+
+        claimed = await _claim_source_parser_recovery_requests(db)
+        assert claimed == ["dramteatr", "muzteatr"]
+        result = SimpleNamespace(
+            stats_by_source={
+                "dramteatr": SimpleNamespace(failed=0, retry_scheduled=0),
+                "muzteatr": SimpleNamespace(failed=1, retry_scheduled=2),
+            }
+        )
+        await _settle_source_parser_recovery_requests(db, claimed, result)
+
+        async with db.raw_conn() as conn:
+            cursor = await conn.execute(
+                "SELECT source_type,status,attempts,last_error "
+                "FROM source_parser_recovery_request ORDER BY source_type"
+            )
+            rows = await cursor.fetchall()
+            await cursor.close()
+        assert rows[0][0:3] == ("dramteatr", "done", 1)
+        assert rows[0][3] is None
+        assert rows[1][0:3] == ("muzteatr", "pending", 1)
+        assert "retry_scheduled=2" in str(rows[1][3])
+    finally:
+        await db.close()
 
 
 @pytest.mark.asyncio

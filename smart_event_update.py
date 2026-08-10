@@ -65,6 +65,7 @@ from smart_update_identity import (
     stable_candidate_identity,
 )
 from smart_update_state import (
+    CandidateAttemptInProgress,
     CandidateAttemptReceipt,
     SmartUpdateTerminalOutcome,
     begin_candidate_attempt,
@@ -595,6 +596,11 @@ class EventCandidate:
     # identity decision classified the candidate as distinct or uncertainty
     # exhausted its bounded attempts.
     force_create_distinct: bool = False
+    force_match_event_id: int | None = None
+    # Replay the original facade semantics after a durable retry claim.
+    replay_check_source_url: bool = True
+    replay_schedule_tasks: bool = True
+    replay_schedule_kwargs: dict[str, Any] | None = None
     # Only identity-bearing sources may participate in event matching. Linked
     # roundups/program pages are provenance context and must use context_only.
     source_role: str = "identity_bearing"
@@ -1831,7 +1837,19 @@ def _terminal_outcome_from_legacy_status(
     technical_reason = str(reason or "").casefold()
     if status in _LEGACY_PRODUCT_REJECT_STATUSES and not any(
         token in technical_reason
-        for token in ("provider", "schema", "unavailable", "llm_error", "gate_error")
+        for token in (
+            "provider",
+            "schema",
+            "unavailable",
+            "uncertain",
+            "timeout",
+            "invalid_json",
+            "llm_error",
+            "gate_error",
+            "processing_error",
+            "database",
+            "vector_error",
+        )
     ):
         return SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
     return SmartUpdateTerminalOutcome.RETRY_SCHEDULED
@@ -2332,7 +2350,6 @@ MERGE_IDENTITY_GATE_RESPONSE_FORMAT = {
                         "allow_merge",
                         "allow_safe_metadata_only",
                         "skip_merge_side_effects",
-                        "review_required",
                     ],
                 },
                 "relation": {
@@ -12875,7 +12892,7 @@ def _dedup_adjudicator_accept_merge(
     action = str(decision.get("action") or "").strip().lower()
     if action != "match":
         return False, "llm_create"
-    if match_event is None:
+    async def _create_from_prepared_candidate() -> SmartUpdateResult:
         return False, "no_match_event"
     reason_code = str(decision.get("reason_code") or "").strip()
     if reason_code not in _DEDUP_ADJUDICATOR_MERGE_CODES:
@@ -13177,7 +13194,7 @@ async def _llm_merge_identity_gate(
         "НЕ доказывают same_event. Нужен конкретный общий identity anchor: тот же показ/лекция/выставка, "
         "та же программа/название/персона в той же роли, та же билетная ссылка, та же афиша или явный текст "
         "источника, что это обновление уже существующего события.\n\n"
-        "Когда выбрать skip_merge_side_effects/review_required:\n"
+        "Когда выбрать skip_merge_side_effects:\n"
         "- candidate описывает выставку/длинный диапазон, а event_before — отдельную лекцию/встречу/показ, "
         "даже если дата открытия и музей совпадают;\n"
         "- candidate — точная single-date occurrence регулярного/сезонного события (например `10 июля 20:00`), "
@@ -13197,8 +13214,9 @@ async def _llm_merge_identity_gate(
         "Изменение времени может быть обычной коррекцией только при сильном общем anchor: та же конкретная "
         "билетная/источниковая ссылка, та же афиша или явно то же название/программа. Не считай смену времени "
         "коррекцией только потому, что дата и площадка совпали.\n\n"
-        "Если сомневаешься — выбирай skip_merge_side_effects или review_required. Лучше не добавить источник, "
-        "чем склеить разные события и испортить публичную карточку. Не придумывай фактов, опирайся только на данные.\n\n"
+        "Если сомневаешься — выбирай skip_merge_side_effects с relation=unknown. Автоматическая state machine "
+        "сама выполнит bounded retry и затем безопасный distinct create; human review здесь нет. Не придумывай "
+        "фактов, опирайся только на данные.\n\n"
         "Коды reason_code делай короткими snake_case, например: same_event_update, same_ticket_source_update, "
         "festival_sibling_not_same_event, long_running_vs_single_slot, unrelated_title_type_conflict, "
         "insufficient_identity_evidence.\n\n"
@@ -16089,6 +16107,7 @@ async def smart_event_update(
     check_source_url: bool = True,
     schedule_tasks: bool = True,
     schedule_kwargs: dict[str, Any] | None = None,
+    _lease_owner: str | None = None,
 ) -> SmartUpdateResult:
     try:
         intent = (
@@ -16102,6 +16121,9 @@ async def smart_event_update(
             reason="invalid_smart_update_intent",
         )
     candidate.intent = intent
+    candidate.replay_check_source_url = bool(check_source_url)
+    candidate.replay_schedule_tasks = bool(schedule_tasks)
+    candidate.replay_schedule_kwargs = dict(schedule_kwargs or {})
     if intent is SmartUpdateIntent.UPSERT_EVENT:
         candidate.source_role = "identity_bearing"
     else:
@@ -16112,7 +16134,14 @@ async def smart_event_update(
     candidate_key, occurrence_key = stable_candidate_identity(candidate)
     candidate.candidate_key = candidate_key
     candidate.occurrence_key = occurrence_key
-    source_fingerprint = input_packet_fingerprint(candidate)
+    # The public facade captures this before any normalization/LLM enrichment.
+    # Reuse it on an in-attempt CREATE_DISTINCT reroute so EventSource keeps the
+    # exact caller-packet fingerprint rather than a fingerprint of mutated
+    # working state.
+    source_fingerprint = (
+        str(candidate.source_fingerprint or "").strip()
+        or input_packet_fingerprint(candidate)
+    )
     candidate.source_fingerprint = source_fingerprint
     receipt: CandidateAttemptReceipt
     try:
@@ -16126,6 +16155,10 @@ async def smart_event_update(
             source_fingerprint=source_fingerprint,
             candidate_payload=asdict(candidate),
             max_attempts=int(os.getenv("SMART_UPDATE_MAX_ATTEMPTS", "3") or 3),
+            lease_owner=(
+                _lease_owner
+                or f"smart-update-direct:{os.getpid()}:{id(asyncio.current_task())}"
+            ),
         )
         candidate.smart_update_candidate_id = receipt.candidate_state_id
         previous_reason = str(receipt.previous_reason or "")
@@ -16134,11 +16167,25 @@ async def smart_event_update(
             for token in (
                 "identity_gate",
                 "merge_identity",
+                "dedup_adjudicator",
                 "specific_ticket_occurrence_conflict",
+                "final_transaction_duplicate_probe",
             )
         )
         candidate.force_create_distinct = previous_reason.startswith("create_distinct:") or (
             receipt.attempt >= receipt.max_attempts and identity_uncertainty
+        )
+        candidate.force_match_event_id = (
+            receipt.previous_diagnostic_event_id
+            if previous_reason.startswith(
+                ("merge_after_identity_gate:", "merge_after_final_probe:")
+            )
+            else None
+        )
+    except CandidateAttemptInProgress:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="candidate_attempt_in_progress",
         )
     except Exception:
         logger.exception("smart_update: durable candidate registration failed")
@@ -16166,14 +16213,14 @@ async def smart_event_update(
             )
         except IntegrityError as exc:
             # The partial unique indexes are the authoritative cross-process
-            # source ownership guard. Translate only their race failure; every
-            # unrelated integrity error remains visible to the caller.
+            # source ownership guard. Every integrity failure is technical and
+            # therefore remains a durable retry rather than escaping as a
+            # caller-level generic failure.
             message = str(getattr(exc, "orig", exc) or "").casefold()
-            if "event_source.canonical_source_url" not in message:
-                raise
+            binding_race = "event_source.canonical_source_url" in message
             canonical = canonicalize_identity_url(candidate.source_url)
             owner_id: int | None = None
-            if canonical:
+            if binding_race and canonical:
                 async with db.raw_conn() as conn:
                     cursor = await conn.execute(
                         "SELECT event_id FROM event_source WHERE canonical_source_url=? "
@@ -16187,7 +16234,11 @@ async def smart_event_update(
             result = SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 diagnostic_event_id=owner_id,
-                reason="source_binding_conflict",
+                reason=(
+                    "source_binding_conflict"
+                    if binding_race
+                    else "smart_update_integrity_error"
+                ),
             )
         except Exception:
             logger.exception("smart_update: processing failed; scheduling durable retry")
@@ -16207,6 +16258,12 @@ async def smart_event_update(
         )
     except Exception:
         logger.exception("smart_update: durable terminal acknowledgement failed")
+        if result.is_accepted:
+            # The domain write is already authoritative. Regressing the caller
+            # to RETRY would recreate the observed "imported pointer + failed
+            # queue status" incident. Candidate state remains RETRY_SCHEDULED
+            # from attempt start and exact replay will reconcile its ledger.
+            return result
         return SmartUpdateResult(
             outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
             diagnostic_event_id=result.event_id or result.diagnostic_event_id,
@@ -16253,6 +16310,101 @@ async def _attach_context_source(db: Database, candidate: EventCandidate) -> Sma
         event_id=target_event_id,
         added_sources=added,
         reason="context_provenance_attached" if added else "context_provenance_replay",
+    )
+
+
+async def _accept_final_probe_match(
+    db: Database,
+    session: Any,
+    *,
+    event: Event,
+    candidate: EventCandidate,
+    schedule_tasks: bool,
+    schedule_kwargs: dict[str, Any] | None,
+    enqueue_ticket_sites: Any,
+) -> SmartUpdateResult | None:
+    """Accept an authoritative last-moment duplicate without a second LLM pass.
+
+    The normal matcher/adjudicator has already run for this packet.  This path
+    exists only for a row that appeared or changed after that read.  The final
+    deterministic probe is deliberately strong, so reloading and re-running it
+    can safely converge the race by attaching the packet to the authoritative
+    Event instead of emitting a veto or scheduling a redundant second Smart
+    Update operation.
+    """
+
+    event_id = int(event.id or 0)
+    if event_id <= 0:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="final_probe_event_missing",
+        )
+    authoritative = await session.get(Event, event_id, populate_existing=True)
+    if authoritative is None:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=event_id,
+            reason="final_probe_event_missing",
+        )
+    if _pre_create_duplicate_probe(candidate, [authoritative]) is None:
+        # The authoritative reload disproved the stale duplicate signal. The
+        # caller remains in this transaction-local create operation and may
+        # insert the distinct Event; no retry or identity veto is needed.
+        return None
+
+    added_posters, _urls, _preview, _pruned, _photos_changed = await _apply_posters(
+        session,
+        event_id,
+        candidate.posters,
+        poster_scope_hashes=candidate.poster_scope_hashes,
+        event_title=authoritative.title,
+    )
+    added_sources, same_source = await _ensure_event_source(session, event_id, candidate)
+    await session.flush()
+    if candidate.source_text:
+        await _sync_source_texts(session, authoritative)
+    await enqueue_ticket_sites(session, event_id=event_id)
+    await _record_source_facts(
+        session,
+        event_id,
+        candidate,
+        [("Матчинг: authoritative final duplicate probe", "note")],
+    )
+    await session.commit()
+
+    canonical_changed = bool(added_posters or (added_sources and not same_source))
+    if canonical_changed:
+        try:
+            await _classify_topics(db, event_id)
+        except Exception:
+            logger.warning(
+                "smart_update: final probe topic classification failed event_id=%s",
+                event_id,
+                exc_info=True,
+            )
+    if schedule_tasks and canonical_changed:
+        try:
+            from main import schedule_event_update_tasks
+
+            async with db.get_session() as refresh_session:
+                refreshed = await refresh_session.get(Event, event_id)
+            if refreshed is not None:
+                task_kwargs = dict(schedule_kwargs or {})
+                task_kwargs["refresh_existing_vk"] = True
+                await schedule_event_update_tasks(db, refreshed, **task_kwargs)
+        except Exception:
+            logger.warning(
+                "smart_update: final probe scheduling failed event_id=%s",
+                event_id,
+                exc_info=True,
+            )
+    return SmartUpdateResult(
+        outcome=SmartUpdateTerminalOutcome.MERGED,
+        event_id=event_id,
+        merged=canonical_changed,
+        added_posters=added_posters,
+        added_sources=added_sources,
+        reason="final_transaction_duplicate_probe",
     )
 
 
@@ -16305,7 +16457,14 @@ async def retry_due_smart_update_candidates(
                 item.candidate_key,
             )
             continue
-        result = await smart_event_update(db, candidate)
+        result = await smart_event_update(
+            db,
+            candidate,
+            check_source_url=bool(candidate.replay_check_source_url),
+            schedule_tasks=bool(candidate.replay_schedule_tasks),
+            schedule_kwargs=dict(candidate.replay_schedule_kwargs or {}),
+            _lease_owner=owner,
+        )
         result_counts[result.outcome.value] += 1
     return result_counts
 
@@ -16353,7 +16512,7 @@ async def _exact_input_noop_event_id(
     except Exception:
         logger.warning("smart_update: exact input noop lookup failed", exc_info=True)
         # Observer failure cannot authorize LLM work or domain writes: the
-        # binding may already exist and must be reviewed once storage recovers.
+        # binding may already exist, so the durable facade must retry it.
         return None, True
 
 
@@ -16605,7 +16764,10 @@ async def _smart_event_update_impl(
             "smart_update.replay_review reason=source_binding_conflict source_alias=%s",
             hashlib.sha256(str(canonical_source_url or "").encode("utf-8")).hexdigest()[:12],
         )
-        return SmartUpdateResult(status="review_required", reason="source_binding_conflict")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="source_binding_conflict",
+        )
     if noop_event_id is not None:
         logger.info(
             "smart_update.noop event_id=%s source_role=%s source_alias=%s fingerprint=%s",
@@ -18168,7 +18330,144 @@ async def _smart_event_update_impl(
                 _clip_title(getattr(match_event, "title", None)),
             )
 
+    if candidate.force_match_event_id:
+        async with db.get_session() as session:
+            retry_match = await session.get(Event, int(candidate.force_match_event_id))
+        if retry_match is None:
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=candidate.force_match_event_id,
+                reason="identity_gate_match_disappeared",
+            )
+        match_event = retry_match
+        match_reason = "identity_gate_adjudicated_same_event"
+
     identity_gate_candidates: list[Event] = []
+    identity_gate_match: Event | None = None
+    identity_gate_reason: str | None = None
+    identity_gate_adjudicated = False
+
+    # Evaluate the create gate before the existing widened dedup stage. If the
+    # gate finds a concrete Event, that Event is folded into the *same* dedup
+    # adjudicator call below. This closes VETO_CREATE without adding a second
+    # provider call or a second identity stage.
+    if (
+        match_event is None
+        and SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF
+        and not candidate.force_create_distinct
+    ):
+        vector_evidence: IdentityVectorEvidence | None = None
+        try:
+            vector_evidence = await _smart_update_identity_vector_evidence(candidate)
+            if vector_evidence is not None and vector_evidence.error:
+                raise RuntimeError(
+                    "identity_vector_unavailable:"
+                    + str(vector_evidence.reason or vector_evidence.error)
+                )
+            gate_existing_events = list(shortlist)
+            if vector_evidence and vector_evidence.nearest_event_id is not None:
+                known_ids = {getattr(ev, "id", None) for ev in gate_existing_events}
+                if vector_evidence.nearest_event_id not in known_ids:
+                    async with db.get_session() as session:
+                        vector_event = await session.get(
+                            Event,
+                            vector_evidence.nearest_event_id,
+                        )
+                    if vector_event is not None:
+                        gate_existing_events.append(vector_event)
+            identity_gate_candidates = gate_existing_events
+            identity_verdict = build_identity_gate_verdict(
+                candidate,
+                gate_existing_events,
+                mode=SMART_UPDATE_IDENTITY_GATE_MODE,
+                vector_evidence=vector_evidence,
+            )
+            logger.info(
+                "smart_update.identity_gate mode=%s action=%s reason=%s matched_event_id=%s confidence=%.2f deterministic=%s fail_safe=%s source_kind=%s source_type=%s",
+                identity_verdict.mode.value,
+                identity_verdict.action.value,
+                identity_verdict.reason_code,
+                identity_verdict.matched_event_id,
+                identity_verdict.confidence,
+                identity_verdict.deterministic,
+                identity_verdict.fail_safe,
+                identity_verdict.candidate.source_flags.source_kind
+                if identity_verdict.candidate is not None
+                else None,
+                identity_verdict.candidate.source_flags.source_type
+                if identity_verdict.candidate is not None
+                else None,
+            )
+            await _record_identity_gate_decision(
+                db,
+                candidate,
+                decision=identity_verdict.action.value,
+                reason=identity_verdict.reason_code,
+                confidence=identity_verdict.confidence,
+                event_id=identity_verdict.matched_event_id,
+                payload={
+                    "mode": identity_verdict.mode.value,
+                    "reasons": list(identity_verdict.reasons),
+                    "deterministic": identity_verdict.deterministic,
+                    "fail_safe": identity_verdict.fail_safe,
+                    "vector": {
+                        "available": vector_evidence.available,
+                        "nearest_event_id": vector_evidence.nearest_event_id,
+                        "score": vector_evidence.score,
+                        "reason": vector_evidence.reason,
+                        "error": vector_evidence.error,
+                    }
+                    if vector_evidence is not None
+                    else None,
+                },
+            )
+            if identity_verdict.should_veto_create:
+                identity_gate_reason = identity_verdict.reason_code
+                matched_id = identity_verdict.matched_event_id
+                if matched_id is not None:
+                    async with db.get_session() as session:
+                        identity_gate_match = await session.get(Event, int(matched_id))
+                if identity_gate_match is None:
+                    return SmartUpdateResult(
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        diagnostic_event_id=matched_id,
+                        reason=f"identity_gate_uncertain:{identity_verdict.reason_code}",
+                    )
+        except Exception as exc:
+            logger.warning("smart_update: identity gate failed", exc_info=True)
+            identity_verdict = identity_gate_fail_safe_verdict(
+                mode=SMART_UPDATE_IDENTITY_GATE_MODE,
+                candidate=candidate,
+                reason=str(exc) or "identity gate error",
+            )
+            await _record_identity_gate_decision(
+                db,
+                candidate,
+                decision=identity_verdict.action.value,
+                reason=identity_verdict.reason_code,
+                confidence=identity_verdict.confidence,
+                event_id=identity_verdict.matched_event_id,
+                payload={
+                    "mode": identity_verdict.mode.value,
+                    "reasons": list(identity_verdict.reasons),
+                    "deterministic": identity_verdict.deterministic,
+                    "fail_safe": identity_verdict.fail_safe,
+                    "vector": {
+                        "available": vector_evidence.available,
+                        "nearest_event_id": vector_evidence.nearest_event_id,
+                        "score": vector_evidence.score,
+                        "reason": vector_evidence.reason,
+                        "error": vector_evidence.error,
+                    }
+                    if vector_evidence is not None
+                    else None,
+                },
+            )
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=identity_verdict.matched_event_id,
+                reason=f"identity_gate_uncertain:{identity_verdict.reason_code}",
+            )
 
     # LLM dedup adjudicator over WIDENED recall (INC-2026-05-30 opt 1).
     # Last-line, create-path only: even after every deterministic matcher + the
@@ -18180,10 +18479,14 @@ async def _smart_event_update_impl(
     if (
         SMART_UPDATE_DEDUP_ADJUDICATOR
         and match_event is None
+        and not candidate.force_create_distinct
         and not anchor_forced
         and not is_canonical_site
         and not SMART_UPDATE_LLM_DISABLED
-        and _title_has_meaningful_tokens(candidate.title)
+        and (
+            _title_has_meaningful_tokens(candidate.title)
+            or identity_gate_match is not None
+        )
     ):
         try:
             from datetime import timedelta
@@ -18208,12 +18511,42 @@ async def _smart_event_update_impl(
                 db, [ev.id for ev in wide_pool if ev.id]
             )
             blocked = _dedup_adjudicator_block_candidates(candidate, wide_pool, wide_posters)
+            if identity_gate_match is not None and all(
+                getattr(ev, "id", None) != getattr(identity_gate_match, "id", None)
+                for ev in blocked
+            ):
+                blocked.append(identity_gate_match)
+                if identity_gate_match.id not in wide_posters:
+                    wide_posters.update(
+                        await _fetch_event_posters_map(
+                            db,
+                            [int(identity_gate_match.id)],
+                        )
+                    )
             identity_gate_candidates = blocked or wide_pool[:10]
             if blocked:
                 decision = await _llm_dedup_adjudicator(
                     candidate, blocked, posters_map=wide_posters
                 )
+                if decision is None:
+                    # The widened stage ran because deterministic evidence found
+                    # plausible identity neighbours.  Provider/schema abstention
+                    # cannot silently authorize CREATE: keep the candidate in the
+                    # durable bounded retry path and create distinct only after
+                    # identity uncertainty exhausts its configured attempts.
+                    return SmartUpdateResult(
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        diagnostic_event_id=(
+                            int(identity_gate_match.id)
+                            if identity_gate_match is not None
+                            and identity_gate_match.id
+                            else None
+                        ),
+                        reason="dedup_adjudicator_unavailable",
+                    )
                 if decision:
+                    if identity_gate_match is not None:
+                        identity_gate_adjudicated = True
                     adj_id = decision.get("match_event_id")
                     adj_event = (
                         next((ev for ev in blocked if ev.id == adj_id), None) if adj_id else None
@@ -18253,8 +18586,30 @@ async def _smart_event_update_impl(
                         )
         except Exception:
             logger.warning(
-                "smart_update: dedup adjudicator failed (fallback to create)", exc_info=True
+                "smart_update: dedup adjudicator failed; scheduling retry", exc_info=True
             )
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=(
+                    int(identity_gate_match.id)
+                    if identity_gate_match is not None and identity_gate_match.id
+                    else None
+                ),
+                reason="dedup_adjudicator_unavailable",
+            )
+
+    if (
+        identity_gate_match is not None
+        and match_event is None
+        and not identity_gate_adjudicated
+    ):
+        # The gate found a concrete owner, but the existing adjudicator could
+        # not produce a typed same/distinct decision in this attempt.
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=int(identity_gate_match.id),
+            reason=f"identity_gate_adjudicator_unavailable:{identity_gate_reason or 'veto'}",
+        )
 
     # The compact semantics stage is explicitly candidate-routed, but it runs
     # for both create and ordinary merge paths. Provider/schema failure is an
@@ -18282,7 +18637,7 @@ async def _smart_event_update_impl(
                     exc_info=True,
                 )
 
-    if match_event is None:
+    async def _create_from_prepared_candidate() -> SmartUpdateResult:
         if candidate_location_unsupported_prose:
             logger.warning(
                 "smart_update.invalid reason=prose_location source_type=%s source_url=%s title=%s location=%s",
@@ -18292,129 +18647,6 @@ async def _smart_event_update_impl(
                 _clip_title(candidate.location_name, 120),
             )
             return SmartUpdateResult(status="invalid", reason="prose_location")
-
-        if (
-            SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF
-            and not candidate.force_create_distinct
-        ):
-            try:
-                vector_evidence = await _smart_update_identity_vector_evidence(candidate)
-                suppressed_vector_error: dict[str, Any] | None = None
-                if (
-                    vector_evidence is not None
-                    and vector_evidence.error
-                    and not str(candidate.source_type or "").startswith("parser:")
-                    and not _candidate_date_is_inferred(candidate, is_canonical_site=is_canonical_site)
-                ):
-                    # Failure policy: no auto-merge on infra failure, but low-risk
-                    # source-grounded non-parser candidates may continue through the
-                    # existing Smart Update create path. Parser/weak-date candidates
-                    # keep the error evidence so enforce mode can fail safe.
-                    logger.info(
-                        "smart_update.identity_gate vector_error_low_risk_fallback error=%s source_type=%s title=%s",
-                        vector_evidence.error,
-                        candidate.source_type,
-                        _clip_title(candidate.title),
-                    )
-                    suppressed_vector_error = {
-                        "error": vector_evidence.error,
-                        "reason": vector_evidence.reason,
-                        "available": vector_evidence.available,
-                        "nearest_event_id": vector_evidence.nearest_event_id,
-                        "score": vector_evidence.score,
-                        "policy": "low_risk_source_grounded_fallback",
-                    }
-                    vector_evidence = None
-                gate_existing_events = list(identity_gate_candidates or shortlist)
-                if vector_evidence and vector_evidence.nearest_event_id is not None:
-                    known_ids = {getattr(ev, "id", None) for ev in gate_existing_events}
-                    if vector_evidence.nearest_event_id not in known_ids:
-                        async with db.get_session() as session:
-                            vector_event = await session.get(Event, vector_evidence.nearest_event_id)
-                        if vector_event is not None:
-                            gate_existing_events.append(vector_event)
-                identity_verdict = build_identity_gate_verdict(
-                    candidate,
-                    gate_existing_events,
-                    mode=SMART_UPDATE_IDENTITY_GATE_MODE,
-                    vector_evidence=vector_evidence,
-                )
-                logger.info(
-                    "smart_update.identity_gate mode=%s action=%s reason=%s matched_event_id=%s confidence=%.2f deterministic=%s fail_safe=%s source_kind=%s source_type=%s",
-                    identity_verdict.mode.value,
-                    identity_verdict.action.value,
-                    identity_verdict.reason_code,
-                    identity_verdict.matched_event_id,
-                    identity_verdict.confidence,
-                    identity_verdict.deterministic,
-                    identity_verdict.fail_safe,
-                    identity_verdict.candidate.source_flags.source_kind
-                    if identity_verdict.candidate is not None
-                    else None,
-                    identity_verdict.candidate.source_flags.source_type
-                    if identity_verdict.candidate is not None
-                    else None,
-                )
-                await _record_identity_gate_decision(
-                    db,
-                    candidate,
-                    decision=identity_verdict.action.value,
-                    reason=identity_verdict.reason_code,
-                    confidence=identity_verdict.confidence,
-                    event_id=identity_verdict.matched_event_id,
-                    payload={
-                        "mode": identity_verdict.mode.value,
-                        "reasons": list(identity_verdict.reasons),
-                        "deterministic": identity_verdict.deterministic,
-                        "fail_safe": identity_verdict.fail_safe,
-                        "vector": {
-                            "available": identity_verdict.vector.available,
-                            "nearest_event_id": identity_verdict.vector.nearest_event_id,
-                            "score": identity_verdict.vector.score,
-                            "reason": identity_verdict.vector.reason,
-                            "error": identity_verdict.vector.error,
-                        } if identity_verdict.vector is not None else None,
-                        "suppressed_vector_error": suppressed_vector_error,
-                    },
-                )
-                if identity_verdict.should_veto_create:
-                    return SmartUpdateResult(
-                        status="skipped_identity_gate",
-                        reason=identity_verdict.reason_code,
-                    )
-            except Exception as exc:
-                logger.warning("smart_update: identity gate failed", exc_info=True)
-                identity_verdict = identity_gate_fail_safe_verdict(
-                    mode=SMART_UPDATE_IDENTITY_GATE_MODE,
-                    candidate=candidate,
-                    reason=str(exc) or "identity gate error",
-                )
-                await _record_identity_gate_decision(
-                    db,
-                    candidate,
-                    decision=identity_verdict.action.value,
-                    reason=identity_verdict.reason_code,
-                    confidence=identity_verdict.confidence,
-                    event_id=identity_verdict.matched_event_id,
-                    payload={
-                        "mode": identity_verdict.mode.value,
-                        "reasons": list(identity_verdict.reasons),
-                        "deterministic": identity_verdict.deterministic,
-                        "fail_safe": identity_verdict.fail_safe,
-                        "vector": {
-                            "available": identity_verdict.vector.available,
-                            "nearest_event_id": identity_verdict.vector.nearest_event_id,
-                            "score": identity_verdict.vector.score,
-                            "reason": identity_verdict.vector.reason,
-                            "error": identity_verdict.vector.error,
-                        } if identity_verdict.vector is not None else None,
-                    },
-                )
-                if identity_verdict.should_veto_create:
-                    return SmartUpdateResult(
-                        status="skipped_identity_gate",
-                        reason=identity_verdict.reason_code,
-                    )
 
         normalized_event_type = _normalize_event_type_value(
             candidate.title, candidate.raw_excerpt or candidate.source_text, candidate.event_type
@@ -19122,8 +19354,8 @@ async def _smart_event_update_impl(
                 )
                 if conflicting_binding is not None:
                     return SmartUpdateResult(
-                        status="review_required",
-                        event_id=conflicting_binding,
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        diagnostic_event_id=conflicting_binding,
                         reason="source_binding_conflict",
                     )
             final_lo, final_hi = _candidate_date_range(candidate)
@@ -19142,19 +19374,40 @@ async def _smart_event_update_impl(
                 final_res = await session.execute(final_stmt)
                 final_duplicate = _pre_create_duplicate_probe(candidate, list(final_res.scalars().all()))
                 if final_duplicate is not None and not candidate.force_create_distinct:
-                    await _record_identity_gate_decision(
+                    result = await _accept_final_probe_match(
                         db,
-                        candidate,
-                        decision="veto_create",
-                        reason="final_transaction_duplicate_probe",
-                        confidence=0.98,
-                        event_id=getattr(final_duplicate, "id", None),
-                        payload={"stage": "final_pre_insert_probe"},
+                        session,
+                        event=final_duplicate,
+                        candidate=candidate,
+                        schedule_tasks=schedule_tasks,
+                        schedule_kwargs=schedule_kwargs,
+                        enqueue_ticket_sites=_enqueue_ticket_sites_queue,
                     )
-                    return SmartUpdateResult(
-                        status="skipped_identity_gate",
-                        reason="final_transaction_duplicate_probe",
-                    )
+                    if result is None:
+                        final_duplicate = None
+                    elif result.outcome is SmartUpdateTerminalOutcome.MERGED:
+                        try:
+                            await _record_identity_gate_decision(
+                                db,
+                                candidate,
+                                decision="allow_merge",
+                                reason="final_transaction_duplicate_probe",
+                                confidence=0.98,
+                                event_id=result.event_id,
+                                payload={"stage": "final_pre_insert_probe"},
+                            )
+                        except Exception:
+                            # The canonical merge already committed. An
+                            # observer failure cannot regress its accepted
+                            # terminal into a retry/failed queue state.
+                            logger.warning(
+                                "smart_update: final probe audit log failed event_id=%s",
+                                result.event_id,
+                                exc_info=True,
+                            )
+                        return result
+                    else:
+                        return result
             session.add(new_event)
             # Keep create, accepted source attachment and collection decision
             # materialization in one transaction. flush supplies the event id.
@@ -19290,7 +19543,7 @@ async def _smart_event_update_impl(
             new_event.id,
             added_posters,
             int(bool(added_sources)),
-            match_reason if "match_reason" in locals() else None,
+            match_reason,
         )
         return SmartUpdateResult(
             status="created",
@@ -19299,9 +19552,12 @@ async def _smart_event_update_impl(
             merged=False,
             added_posters=added_posters,
             added_sources=added_sources,
-            reason=match_reason if "match_reason" in locals() else None,
+            reason=match_reason,
             queue_notes=list(queue_notes or []),
         )
+
+    if match_event is None:
+        return await _create_from_prepared_candidate()
 
     # Merge path
     existing = match_event
@@ -19440,20 +19696,40 @@ async def _smart_event_update_impl(
         if merge_identity_verdict.should_skip_side_effects:
             create_distinct = (
                 not merge_identity_verdict.fail_safe
-                and merge_identity_verdict.relation.value
-                in {"related_but_distinct", "festival_context_sibling", "unsafe_to_merge"}
+                and (
+                    merge_identity_verdict.relation.value
+                    in {
+                        "related_but_distinct",
+                        "festival_context_sibling",
+                        "unsafe_to_merge",
+                    }
+                    or merge_identity_verdict.reason_code
+                    == "specific_ticket_occurrence_conflict"
+                )
             )
+            if create_distinct:
+                # A known non-identity is a positive decision, not uncertainty.
+                # Reuse the already-prepared create path inside this same
+                # durable attempt with final-probe matching disabled. Early
+                # eventness, occurrence, matching and gate calls are not
+                # repeated; no new identity/provider stage or retry-worker
+                # delay is introduced.
+                candidate.force_create_distinct = True
+                distinct_reason = (
+                    f"create_distinct:{merge_identity_verdict.relation.value}:"
+                    f"{merge_identity_verdict.reason_code}"
+                )
+                result = await _create_from_prepared_candidate()
+                if result.is_accepted:
+                    result.reason = distinct_reason
+                    result.diagnostic_event_id = int(existing.id or 0) or None
+                return result
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 diagnostic_event_id=existing.id,
                 created=False,
                 merged=False,
-                reason=(
-                    f"create_distinct:{merge_identity_verdict.relation.value}:"
-                    f"{merge_identity_verdict.reason_code}"
-                    if create_distinct
-                    else merge_identity_verdict.reason_code
-                ),
+                reason=merge_identity_verdict.reason_code,
                 queue_notes=list(queue_notes or []),
             )
 
@@ -19470,7 +19746,11 @@ async def _smart_event_update_impl(
     async with db.get_session() as session:
         event_db = await session.get(Event, existing.id)
         if not event_db:
-            return SmartUpdateResult(status="error", reason="event_missing")
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=int(existing.id or 0) or None,
+                reason="event_missing",
+            )
         canonical_binding_url = canonicalize_identity_url(candidate.source_url)
         if canonical_binding_url:
             conflicting_binding = await _source_identity_binding_conflict(
@@ -19482,8 +19762,8 @@ async def _smart_event_update_impl(
             )
             if conflicting_binding is not None:
                 return SmartUpdateResult(
-                    status="review_required",
-                    event_id=conflicting_binding,
+                    outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                    diagnostic_event_id=conflicting_binding,
                     reason="source_binding_conflict",
                 )
         before_description = event_db.description or ""
@@ -21375,6 +21655,15 @@ async def _ensure_event_source(
                         EventSource.canonical_source_url == canonical_source_url,
                         EventSource.occurrence_key == candidate.occurrence_key,
                     ),
+                    # An evidence-backed replay may be the first touch that can
+                    # safely key a legacy binding on this same Event. Reuse and
+                    # upgrade that row rather than violating the older raw
+                    # ``(event_id, source_url)`` uniqueness constraint.
+                    and_(
+                        EventSource.canonical_source_url == canonical_source_url,
+                        EventSource.occurrence_key.is_(None),
+                        EventSource.candidate_key.is_(None),
+                    ),
                     EventSource.candidate_key == candidate.candidate_key,
                     and_(
                         EventSource.canonical_source_url.is_(None),
@@ -21479,6 +21768,14 @@ async def _source_identity_binding_conflict(
     ).scalar_one_or_none()
     if row is not None:
         return int(row)
+
+    # Every new Smart Update packet has a stable occurrence key. A legacy row
+    # without one cannot claim the whole carrier URL: official pages and social
+    # posts legitimately contain several event occurrences. Exact/same-event
+    # legacy bindings are still upgraded by ``_ensure_event_source`` after the
+    # normal match path accepts them.
+    if str(occurrence_key or "").strip():
+        return None
 
     # Legacy rows are deliberately not mass-classified. An unknown owner on a
     # different Event is evidence of ambiguity, so fail closed instead of

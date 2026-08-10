@@ -27,9 +27,12 @@ Callers must never treat it as persisted success. Free-form
 `review_required`, `skipped_identity_gate`, `skipped_context_only`, or terminal
 generic `failed` are not public outcomes.
 
-An exhausted infrastructure retry remains durable `RETRY_SCHEDULED` with no
-next-attempt time and an exhaustion flag; it is observable/recoverable and is
-never relabelled as a product rejection.
+The identity-uncertainty budget is bounded: its last attempt chooses the safer
+distinct create. A pure infrastructure/storage/provider failure has no safe
+semantic fallback, so it remains due as durable `RETRY_SCHEDULED`; its
+consecutive retry counter is clamped while the append-only attempt number keeps
+increasing. It is never hidden as exhausted work or relabelled as a product
+rejection.
 
 ## Intents
 
@@ -71,10 +74,12 @@ When the create gate finds a matched Event, that pair is passed through the
 existing adjudication operation: same merges, distinct creates, and transient
 failure retries. `VETO_CREATE` has no terminal product meaning.
 
-The final duplicate/race probe reloads the authoritative Event. A race rolls
-back the attempted canonical write and returns `RETRY_SCHEDULED`; the next
-attempt uses the normal match/merge/create operation. No SQLite transaction is
-held across an LLM await.
+The final duplicate/race probe reloads and revalidates the authoritative Event
+inside the same facade operation. A confirmed duplicate attaches the keyed
+source packet and returns `MERGED` without another LLM pass; a reload that
+disproves the stale match proceeds with distinct `CREATED`; a missing row or
+storage failure rolls back and remains `RETRY_SCHEDULED`. It never emits a
+veto. No SQLite transaction is held across an LLM await.
 
 ## Candidate and occurrence identity
 
@@ -99,9 +104,12 @@ The packet fingerprint is separate from both keys:
 
 `EventSource` stores nullable candidate/occurrence/state linkage. Legacy rows
 stay null because historical identity/context roles and child slots cannot be
-inferred safely. New identity-bearing uniqueness is scoped to canonical source
-plus occurrence key, not the source URL globally. Context provenance may be
-shared between targeted Events.
+inferred safely. New keyed ownership is unique by
+`(canonical_source_url, candidate_key)`; the accompanying
+`(canonical_source_url, occurrence_key)` invariant detects producer child-slot
+collisions. Neither treats the source URL alone as a new-row owner. Context
+provenance may be shared when its targeted producers supply different stable
+child keys.
 
 ## Durable attempts and balance
 
@@ -115,9 +123,16 @@ SQLite owns the cross-process authority:
   outcomes.
 
 Internal claim states may be pending/running, but they are not public
-terminals. Candidate registration makes an unresolved interruption durable for
-automatic retry. A process-local lock is only an optimization; DB claims and
-unique indexes are the authority.
+terminals. Candidate registration first projects `RETRY_SCHEDULED`, so an
+interrupted execution remains automatically recoverable. A process-local lock
+is only an optimization; DB claims and unique indexes are the authority.
+
+The Event/EventSource domain transaction never spans an LLM await. If a process
+loses the short attempt acknowledgement after an accepted domain commit, the
+caller keeps the accepted result (it must not regress an imported queue row to
+failed/deferred), candidate state remains durable retry, and the next exact
+packet replay closes the interrupted append-only row and converges to
+`NOOP_EXACT_REPLAY`.
 
 The structured funnel reports both current candidates and attempts. Its
 candidate balance is:
@@ -128,7 +143,28 @@ terminal_unresolved = 0
 ```
 
 `terminal_unresolved != 0`, duplicate active leases, key collisions, or an
-attempt without one terminal are readiness/incident failures.
+unfinished attempt whose lease has expired are readiness/incident failures.
+The production audit reports candidate balance, retry due/exhausted, accepted
+ID contract violations, attempt starts/terminals/unresolved, and orphaned
+attempts separately.
+
+Runtime controls are `SMART_UPDATE_MAX_ATTEMPTS` (identity retry budget),
+`SMART_UPDATE_RETRY_WORKER_ENABLED` (default on),
+`SMART_UPDATE_RETRY_INTERVAL_SECONDS` (default 60), and
+`SMART_UPDATE_RETRY_BATCH_SIZE` (default 25). Disabling the worker is an
+explicit operational override, not a terminal-state fallback.
+
+## Changed terminal outcomes
+
+| old boundary result | automatic result now |
+| --- | --- |
+| `review_required` / diagnostic `event_id` | `RETRY_SCHEDULED`, diagnostic ID isolated; known distinct evidence converges to `CREATED` |
+| create-gate `VETO_CREATE` / `skipped_identity_gate` | existing dedup adjudication in the same operation: `MERGED`, `CREATED`, or `RETRY_SCHEDULED` |
+| merge `skip_merge_side_effects` for a known sibling/conflict | distinct `CREATED` in the same facade attempt; no worker/delay dependency |
+| `skipped_context_only` | explicit `UPSERT_EVENT` or target-bound `ATTACH_CONTEXT` |
+| generic Smart Update `error`/caller `failed` | durable `RETRY_SCHEDULED` |
+| no-change/status aliases | `NOOP_EXACT_REPLAY` only for identical key plus fingerprint; accepted same-event no-change is `MERGED` |
+| confirmed non-event/out-of-region/past/policy exclusion | `REJECTED_PRODUCT_POLICY(reason)` |
 
 ## Caller and queue contract
 
@@ -136,6 +172,9 @@ All direct boundaries—official parsers, Telegram Monitoring, VK intake/auto,
 ticket sites, festival intake, and manual/forwarded ingestion—consume the typed
 result. They never branch on a free-form Smart Update status and never use a
 diagnostic ID for downstream work.
+
+The frozen AST inventory and migration gate are maintained in
+[`caller-inventory.md`](caller-inventory.md).
 
 - `CREATED`, `MERGED`, and `NOOP_EXACT_REPLAY` resolve a queue item
   successfully;
@@ -148,15 +187,31 @@ diagnostic ID for downstream work.
 ## Recovery
 
 `scripts/ops/recover_smart_update_identity_losses.py` provides bounded
-`--since`, `--dry-run`, and `--batch-size` recovery. It recovers due durable
-retry candidates and only conservatively rearms identifiable legacy technical
-losses. Confirmed product-policy rejects, imported rows, and unrelated failures
-are not reintroduced. The operation is idempotent; a second apply is a no-op.
+`--since`, `--dry-run`, and `--batch-size` recovery. It releases due durable
+candidate claims and conservatively rearms identifiable legacy technical losses
+across Telegram Monitoring, VK, ticket-site, festival, and official-parser
+surfaces. Telegram rows become idempotent force-message requests. Parser losses
+become one source-level `source_parser_recovery_request`; the scheduled parser
+claims it, bypasses the unchanged-page guard, performs a full current-catalogue
+refresh, and keeps an incomplete source due. Confirmed product-policy rejects,
+imported/rejected queue terminals, and unrelated failures are not reintroduced.
+The operation is idempotent; a second apply is a no-op.
+
+The final pre-migration production dry-run on 2026-08-10 selected 109 actionable
+rows in a 10,000-row batch: five Telegram identity/technical losses and 104 VK
+failed/due-deferred rows. One Telegram and 13 VK selections already had imported
+mappings, so accepted replay convergence is required. Four parser sources had
+102 failed item observations in 14 runs; because the additive parser recovery
+queue was not yet deployed, the report explicitly returned
+`deployment_required=true` instead of claiming those sources were requeued.
+Ticket and festival queues already had 14 and 41 available rows respectively.
+Durable candidate recovery was schema-unavailable, not a real zero. The strict
+read-only run changed zero rows.
 
 Before any production apply:
 
 1. run against a copied production snapshot;
-2. inspect the structured dry-run and funnel balance;
+2. inspect every per-surface structured dry-run section and funnel balance;
 3. run `PRAGMA quick_check`;
 4. obtain explicit approval for the production mutation.
 
@@ -169,9 +224,11 @@ The migration is idempotent in `Database.init()`:
 
 1. add candidate/occurrence/state columns to `event_source`;
 2. create candidate-state and attempt-ledger tables/checks/indexes;
-3. retain legacy null rows without blanket backfill;
-4. replace global new-row source ownership with occurrence-scoped uniqueness;
-5. fail readiness if a required invariant cannot be activated—never warn and
+3. create the source-level official-parser recovery-request queue;
+4. retain legacy null rows without blanket backfill;
+5. replace global new-row source ownership with candidate-key and
+   occurrence-key scoped uniqueness;
+6. fail readiness if a required invariant cannot be activated—never warn and
    continue without it.
 
 Rollback is code-first. Keep the additive schema and deploy a compatibility

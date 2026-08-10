@@ -477,7 +477,13 @@ async def process_qtickets_events(
             
             new_id, was_added, status = unpack_add_event_result(
                 await add_new_event_via_queue(
-                    db, bot, event, current_progress, len(events), poster_media=poster_media_list
+                    db,
+                    bot,
+                    event,
+                    current_progress,
+                    len(events),
+                    poster_media=poster_media_list,
+                    producer_ordinal=i,
                 )
             )
 

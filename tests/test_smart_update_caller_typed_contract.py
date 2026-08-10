@@ -22,12 +22,125 @@ SMART_RESULT_NAMES = {
     "smart_result",
     "context_result",
 }
+ACCEPTED_OUTCOMES = {"CREATED", "MERGED", "NOOP_EXACT_REPLAY"}
 
 
 def _trees():
     for relative in CALLER_FILES:
         source = (ROOT / relative).read_text(encoding="utf-8")
         yield relative, source, ast.parse(source)
+
+
+def _result_attribute(node: ast.AST, result_name: str, attribute: str) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == attribute
+        and isinstance(node.value, ast.Name)
+        and node.value.id == result_name
+    )
+
+
+def _accepted_outcome_comparison(node: ast.AST, result_name: str) -> bool:
+    if not isinstance(node, ast.Compare) or len(node.ops) != 1 or len(node.comparators) != 1:
+        return False
+    if not isinstance(node.ops[0], (ast.Is, ast.Eq)):
+        return False
+    left, right = node.left, node.comparators[0]
+    if not _result_attribute(left, result_name, "outcome"):
+        return False
+    return (
+        isinstance(right, ast.Attribute)
+        and right.attr in ACCEPTED_OUTCOMES
+        and isinstance(right.value, ast.Name)
+        and right.value.id == "SmartUpdateTerminalOutcome"
+    )
+
+
+def _condition_proves_accepted(node: ast.AST, result_name: str, *, truth: bool) -> bool:
+    if truth and _result_attribute(node, result_name, "is_accepted"):
+        return True
+    if (
+        not truth
+        and isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, ast.Not)
+        and _result_attribute(node.operand, result_name, "is_accepted")
+    ):
+        return True
+    if truth and _accepted_outcome_comparison(node, result_name):
+        return True
+    if isinstance(node, ast.BoolOp):
+        # Every term of an ``and`` is true in its body. For ``or`` no one term
+        # is guaranteed, so it cannot establish acceptance.
+        return isinstance(node.op, ast.And) and truth and any(
+            _condition_proves_accepted(value, result_name, truth=True)
+            for value in node.values
+        )
+    return False
+
+
+def _block_always_exits(statements: list[ast.stmt]) -> bool:
+    if not statements:
+        return False
+    tail = statements[-1]
+    if isinstance(tail, (ast.Return, ast.Raise, ast.Continue, ast.Break)):
+        return True
+    if isinstance(tail, ast.If):
+        return _block_always_exits(tail.body) and _block_always_exits(tail.orelse)
+    return False
+
+
+def _inside_observability_call(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
+    current = node
+    while current in parents:
+        current = parents[current]
+        if not isinstance(current, ast.Call):
+            continue
+        func = current.func
+        return (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id in {"logger", "logging"}
+        )
+    return False
+
+
+def _event_id_read_is_acceptance_dominated(
+    node: ast.Attribute,
+    *,
+    result_name: str,
+    parents: dict[ast.AST, ast.AST],
+) -> bool:
+    current: ast.AST = node
+    while current in parents:
+        parent = parents[current]
+        if isinstance(parent, ast.If):
+            if current in parent.body and _condition_proves_accepted(
+                parent.test, result_name, truth=True
+            ):
+                return True
+            if current in parent.orelse and _condition_proves_accepted(
+                parent.test, result_name, truth=False
+            ):
+                return True
+        # A preceding fail-closed guard such as
+        # ``if not result.is_accepted: return`` dominates later statements in
+        # the same lexical block.
+        for field in ("body", "orelse", "finalbody"):
+            statements = getattr(parent, field, None)
+            if not isinstance(statements, list) or current not in statements:
+                continue
+            index = statements.index(current)
+            for previous in statements[:index]:
+                if (
+                    isinstance(previous, ast.If)
+                    and _condition_proves_accepted(
+                        previous.test, result_name, truth=False
+                    )
+                    and _block_always_exits(previous.body)
+                ):
+                    return True
+        current = parent
+    return False
 
 
 def test_production_smart_update_callers_do_not_read_free_form_status() -> None:
@@ -60,11 +173,43 @@ def test_production_smart_update_callers_do_not_use_event_id_as_success_test() -
     assert violations == []
 
 
+def test_every_smart_result_event_id_side_effect_is_acceptance_dominated() -> None:
+    """Diagnostic IDs cannot cross any production side-effect boundary.
+
+    This is a structural proof over every direct caller, rather than a marker
+    assertion: each SmartUpdateResult.event_id read must be inside a typed
+    accepted branch (or after a fail-closed non-accepted exit). Logging is an
+    observer and is intentionally exempt.
+    """
+
+    violations: list[str] = []
+    for relative, _source, tree in _trees():
+        parents = {
+            child: parent
+            for parent in ast.walk(tree)
+            for child in ast.iter_child_nodes(parent)
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Attribute) or node.attr != "event_id":
+                continue
+            if not isinstance(node.value, ast.Name) or node.value.id not in SMART_RESULT_NAMES:
+                continue
+            if _inside_observability_call(node, parents):
+                continue
+            if not _event_id_read_is_acceptance_dominated(
+                node,
+                result_name=node.value.id,
+                parents=parents,
+            ):
+                violations.append(f"{relative}:{node.lineno}:{ast.unparse(node)}")
+    assert violations == []
+
+
 def test_all_direct_boundaries_use_typed_helpers_or_terminal_enum() -> None:
     expected_markers = {
         "source_parsing/handlers.py": ("update_result.is_accepted", "occurrence_key"),
         "source_parsing/telegram/handlers.py": (
-            "result.is_changed",
+            "result.is_accepted",
             "result.is_retry",
             "candidate.producer_ordinal",
         ),

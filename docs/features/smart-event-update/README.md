@@ -176,9 +176,9 @@ must re-render the calendar line even when the event body itself is unchanged.
 ### Canonical source identity and automatic terminals
 
 The canonical five-terminal result, `UPSERT_EVENT` / `ATTACH_CONTEXT` intents,
-stable producer-child and occurrence keys, occurrence-scoped EventSource
-uniqueness, durable attempt ledger, retry rules, caller/queue contract, funnel
-balance, recovery, migration, and rollback are specified in
+stable producer-child and occurrence keys, candidate-key/occurrence-scoped
+EventSource uniqueness, durable attempt ledger, retry rules, caller/queue
+contract, funnel balance, recovery, migration, and rollback are specified in
 [`identity-state-machine.md`](identity-state-machine.md).
 
 Exact replay means the same canonical source, candidate/occurrence key, and
@@ -781,11 +781,13 @@ every enabled create-path gate invocation, including allow/retry/distinct
 evidence and compact vector evidence. Newly created events also store
 `date_provenance`, `date_confidence`, `date_is_inferred`,
 `end_date_provenance`, and `end_date_confidence` derived from source/OCR
-grounding.  Immediately before inserting a new event row, Smart Update reruns a
-cheap duplicate probe at the final write boundary. If it finds a fresh race,
-the canonical write rolls back and the candidate remains durably
-`RETRY_SCHEDULED`; the next attempt reloads and resolves through the normal
-match/merge/create operation.
+grounding. Immediately before inserting a new event row, Smart Update reruns a
+cheap duplicate probe at the final write boundary. A fresh authoritative match
+is reloaded and revalidated in the same facade operation: a confirmed duplicate
+receives the keyed source packet and returns `MERGED`, while a stale/disproved
+match proceeds as distinct `CREATED`. Only a missing authoritative row or
+transient storage failure rolls back to durable `RETRY_SCHEDULED`; the probe
+never emits a veto/review terminal and does not add another LLM pass.
 
 The `/vystavki/` enforce rollout is monitored independently from page rendering
 with `scripts/inspect/audit_public_exhibition_duplicates.py`.  It scans the

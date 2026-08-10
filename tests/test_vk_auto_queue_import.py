@@ -588,7 +588,21 @@ async def test_vk_auto_import_keeps_valid_roundup_siblings_after_semantic_reject
         nonlocal calls
         calls += 1
         if calls == 2:
-            raise RuntimeError("smart_update rejected: create_bundle_grounding:llm_uncertain")
+            return vk_intake.PersistResult(
+                event_id=None,
+                telegraph_url="",
+                ics_supabase_url="",
+                ics_tg_url="",
+                event_date="2027-01-01",
+                event_end_date=None,
+                event_time="19:00",
+                event_type=None,
+                is_free=False,
+                smart_result=SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                    reason="past_event",
+                ),
+            )
         return vk_intake.PersistResult(
             event_id=1001,
             telegraph_url="",
@@ -661,7 +675,21 @@ async def test_vk_auto_import_continues_when_first_roundup_draft_is_rejected(
         nonlocal calls
         calls += 1
         if calls == 1:
-            raise RuntimeError("smart_update returned no event_id: status=invalid reason=occurrence_scope_review")
+            return vk_intake.PersistResult(
+                event_id=None,
+                telegraph_url="",
+                ics_supabase_url="",
+                ics_tg_url="",
+                event_date="2026-08-01",
+                event_end_date=None,
+                event_time="",
+                event_type=None,
+                is_free=False,
+                smart_result=SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                    reason="past_event",
+                ),
+            )
         return vk_intake.PersistResult(
             event_id=2002,
             telegraph_url="",

@@ -44,7 +44,7 @@ class MergeIdentityAction(str, Enum):
     ALLOW_MERGE = "allow_merge"
     ALLOW_SAFE_METADATA_ONLY = "allow_safe_metadata_only"
     SKIP_MERGE_SIDE_EFFECTS = "skip_merge_side_effects"
-    REVIEW_REQUIRED = "review_required"
+    AUTOMATIC_RESOLUTION_REQUIRED = "automatic_resolution_required"
 
 
 class MergeIdentityRelation(str, Enum):
@@ -158,14 +158,14 @@ class MergeIdentityGateVerdict:
     def should_skip_side_effects(self) -> bool:
         return self.mode is IdentityGateMode.ENFORCE and self.action in {
             MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
-            MergeIdentityAction.REVIEW_REQUIRED,
+            MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
         }
 
     @property
     def would_skip_side_effects(self) -> bool:
         return self.action in {
             MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
-            MergeIdentityAction.REVIEW_REQUIRED,
+            MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
         }
 
 
@@ -523,7 +523,7 @@ def build_merge_identity_gate_verdict(
     )
 
     if not llm_contract_valid:
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         relation = MergeIdentityRelation.UNKNOWN
         reason_code = "merge_identity_llm_unavailable"
         reasons = reasons or ("merge identity decision is unavailable or invalid",)
@@ -533,7 +533,7 @@ def build_merge_identity_gate_verdict(
     }:
         # Context sources may be attached to a caller-selected event for provenance,
         # but their text/link must never assert event identity or authorize a merge.
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         relation = MergeIdentityRelation.UNKNOWN
         reason_code = "context_only_cannot_assert_identity"
         reasons = tuple(dict.fromkeys((*reasons, "context-only source cannot assert SAME_EVENT")))
@@ -543,12 +543,18 @@ def build_merge_identity_gate_verdict(
         MergeIdentityRelation.UNSAFE_TO_MERGE,
     }:
         action = MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
-    elif action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
-        relation = relation if relation is not MergeIdentityRelation.UNKNOWN else MergeIdentityRelation.UNSAFE_TO_MERGE
+    elif action in {
+        MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
+        MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
+    }:
+        # Keep an explicit UNKNOWN as uncertainty. It must take the bounded
+        # retry path; rewriting UNKNOWN to UNSAFE_TO_MERGE would incorrectly
+        # turn an abstention into a positive CREATE_DISTINCT decision.
+        relation = relation
     elif relation in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE}:
         action = MergeIdentityAction.ALLOW_MERGE
     else:
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         reason_code = "merge_identity_uncertain"
         reasons = tuple(dict.fromkeys((*reasons, "identity relation is not affirmative")))
 
@@ -557,12 +563,18 @@ def build_merge_identity_gate_verdict(
         # either deterministic plumbing or its own result reports a blocker.
         if action not in {
             MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
-            MergeIdentityAction.REVIEW_REQUIRED,
+            MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
         }:
-            action = MergeIdentityAction.REVIEW_REQUIRED
+            action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
             relation = MergeIdentityRelation.UNSAFE_TO_MERGE
             reason_code = "merge_identity_blocking_conflict"
-            reasons = tuple(dict.fromkeys((*reasons, "blocking identity conflict requires review")))
+            reasons = tuple(dict.fromkeys((*reasons, "blocking identity conflict requires automatic resolution")))
+        elif llm_contract_valid and relation is MergeIdentityRelation.UNKNOWN:
+            # A valid semantic response that explicitly reports structural
+            # blockers is positive evidence that these are distinct. Invalid
+            # or unavailable LLM output remains UNKNOWN and is retried instead.
+            relation = MergeIdentityRelation.UNSAFE_TO_MERGE
+            reason_code = reason_code or "merge_identity_blocking_conflict"
 
     deterministic_code = _deterministic_merge_identity_veto_reason(candidate_subject, existing_subject)
     deterministic = False
@@ -574,7 +586,7 @@ def build_merge_identity_gate_verdict(
     if deterministic_code and (force_structural_veto or not has_strong_shared_anchor):
         # A high-confidence LLM can still allow genuinely same long-running events,
         # but not when it already says uncertainty/distinctness or has low confidence.
-        if action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
+        if action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED}:
             conflicts = tuple(dict.fromkeys((*conflicts, deterministic_code)))
         elif force_structural_veto or relation not in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE} or confidence < 0.9:
             action = MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
@@ -610,7 +622,7 @@ def build_merge_identity_gate_verdict(
             f"{existing_ticket_identity[0]}:{existing_ticket_identity[1]}:"
             f"{existing_ticket_identity[2]}:{existing_ticket_identity[3]}"
         )
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         relation = MergeIdentityRelation.UNSAFE_TO_MERGE
         reason_code = "specific_ticket_occurrence_conflict"
         deterministic = True
@@ -619,7 +631,7 @@ def build_merge_identity_gate_verdict(
             dict.fromkeys(
                 (
                     *reasons,
-                    "different explicit ticket occurrence identities require review",
+                    "different explicit ticket occurrence identities require automatic resolution",
                 )
             )
         )

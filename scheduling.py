@@ -3968,12 +3968,18 @@ def startup(
         ) -> None:
             del run_id
             from smart_event_update import retry_due_smart_update_candidates
+            from smart_update_state import smart_update_funnel_counts
 
             counters = await retry_due_smart_update_candidates(
                 db_obj,
                 limit=smart_update_retry_batch,
             )
-            logging.info("smart_update_retry_worker counters=%s", counters)
+            funnel = await smart_update_funnel_counts(db_obj)
+            logging.info(
+                "smart_update_retry_worker counters=%s funnel=%s",
+                counters,
+                funnel,
+            )
 
         _register_job(
             "smart_update_retry_worker",

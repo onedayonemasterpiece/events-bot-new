@@ -1132,6 +1132,7 @@ class SmartUpdateCandidateState(SQLModel, table=True):
     diagnostic_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
     reason: Optional[str] = None
     attempts: int = Field(default=0)
+    retry_attempts: int = Field(default=0)
     max_attempts: int = Field(default=3)
     retry_exhausted: bool = Field(default=False)
     next_retry_at: Optional[datetime] = Field(
@@ -2180,6 +2181,33 @@ class OpsRun(SQLModel, table=True):
     status: str = "running"
     metrics_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     details_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class SourceParserRecoveryRequest(SQLModel, table=True):
+    """Source-level replay request for legacy parser losses without item payloads."""
+
+    __tablename__ = "source_parser_recovery_request"
+    __table_args__ = (
+        Index("ix_source_parser_recovery_due", "status", "next_run_at"),
+        {"extend_existing": True},
+    )
+
+    source_type: str = Field(primary_key=True)
+    requested_since: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False)
+    )
+    status: str = "pending"
+    attempts: int = 0
+    next_run_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    last_error: Optional[str] = None
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
 
 
 class JobTask(str, Enum):

@@ -919,6 +919,7 @@ class Database:
                     diagnostic_event_id INTEGER,
                     reason TEXT,
                     attempts INTEGER NOT NULL DEFAULT 0,
+                    retry_attempts INTEGER NOT NULL DEFAULT 0,
                     max_attempts INTEGER NOT NULL DEFAULT 3,
                     retry_exhausted INTEGER NOT NULL DEFAULT 0,
                     next_retry_at TIMESTAMP,
@@ -935,6 +936,11 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_smart_update_candidate_due "
                 "ON smart_update_candidate_state(current_outcome, next_retry_at, claim_expires_at)"
+            )
+            await _add_column(
+                conn,
+                "smart_update_candidate_state",
+                "retry_attempts INTEGER NOT NULL DEFAULT 0",
             )
             await conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS ux_smart_update_candidate_source_occurrence "
@@ -964,6 +970,56 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_smart_update_attempt_terminal "
                 "ON smart_update_attempt(terminal_outcome, finished_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS source_parser_recovery_request(
+                    source_type TEXT PRIMARY KEY,
+                    requested_since TIMESTAMP NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending'
+                        CHECK(status IN ('pending','running','done','error')),
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    next_run_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_error TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_source_parser_recovery_due "
+                "ON source_parser_recovery_request(status,next_run_at)"
+            )
+            accepted_terminals_sql = "'CREATED','MERGED','NOOP_EXACT_REPLAY'"
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_candidate_terminal_insert "
+                "BEFORE INSERT ON smart_update_candidate_state FOR EACH ROW WHEN "
+                f"(NEW.current_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.current_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_candidate_terminal_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_candidate_terminal_update "
+                "BEFORE UPDATE OF current_outcome,accepted_event_id ON smart_update_candidate_state "
+                "FOR EACH ROW WHEN "
+                f"(NEW.current_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.current_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_candidate_terminal_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_attempt_terminal_insert "
+                "BEFORE INSERT ON smart_update_attempt FOR EACH ROW WHEN "
+                f"(NEW.terminal_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.terminal_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_attempt_terminal_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_attempt_terminal_update "
+                "BEFORE UPDATE OF terminal_outcome,accepted_event_id ON smart_update_attempt "
+                "FOR EACH ROW WHEN "
+                f"(NEW.terminal_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.terminal_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_attempt_terminal_contract'); END"
             )
             await conn.execute(
                 """
@@ -1049,6 +1105,23 @@ class Database:
                 "AND TRIM(COALESCE(NEW.canonical_source_url,''))='') "
                 "BEGIN SELECT RAISE(ABORT,'event_source_identity_contract'); END"
             )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_candidate_insert "
+                "BEFORE INSERT ON event_source FOR EACH ROW WHEN "
+                "((NEW.candidate_key IS NULL) != (NEW.occurrence_key IS NULL)) OR "
+                "(NEW.smart_update_candidate_id IS NOT NULL AND "
+                "(TRIM(COALESCE(NEW.candidate_key,''))='' OR TRIM(COALESCE(NEW.occurrence_key,''))='')) "
+                "BEGIN SELECT RAISE(ABORT,'event_source_candidate_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_candidate_update "
+                "BEFORE UPDATE OF candidate_key,occurrence_key,smart_update_candidate_id ON event_source "
+                "FOR EACH ROW WHEN "
+                "((NEW.candidate_key IS NULL) != (NEW.occurrence_key IS NULL)) OR "
+                "(NEW.smart_update_candidate_id IS NOT NULL AND "
+                "(TRIM(COALESCE(NEW.candidate_key,''))='' OR TRIM(COALESCE(NEW.occurrence_key,''))='')) "
+                "BEGIN SELECT RAISE(ABORT,'event_source_candidate_contract'); END"
+            )
             # A carrier URL may contain several independent occurrences.  The
             # previous global URL indexes encoded the false premise "one URL =
             # one Event"; replace them without rewriting/classifying legacy rows.
@@ -1077,6 +1150,33 @@ class Database:
                     + ":"
                     + hashlib.sha256(str(occurrence_conflict[1]).encode("utf-8")).hexdigest()[:12]
                 )
+            legacy_conflict_cursor = await conn.execute(
+                "SELECT canonical_source_url FROM event_source "
+                "WHERE source_role='identity_bearing' AND canonical_source_url IS NOT NULL "
+                "AND canonical_source_url<>'' AND occurrence_key IS NULL "
+                "GROUP BY canonical_source_url HAVING COUNT(*) > 1 LIMIT 1"
+            )
+            legacy_conflict = await legacy_conflict_cursor.fetchone()
+            await legacy_conflict_cursor.close()
+            if legacy_conflict is not None:
+                raise RuntimeError(
+                    "event_source_legacy_identity_conflict:"
+                    + hashlib.sha256(str(legacy_conflict[0]).encode("utf-8")).hexdigest()[:12]
+                )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_identity_canonical_legacy "
+                "ON event_source(canonical_source_url) "
+                "WHERE source_role='identity_bearing' "
+                "AND canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
+                "AND occurrence_key IS NULL"
+            )
+            await conn.execute("DROP INDEX IF EXISTS ux_event_source_smart_candidate")
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_smart_candidate "
+                "ON event_source(canonical_source_url,candidate_key) "
+                "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
+                "AND candidate_key IS NOT NULL AND candidate_key<>''"
+            )
 
             dbg("event_identity")
             await conn.execute(

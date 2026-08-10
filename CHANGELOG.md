@@ -48,10 +48,17 @@
   five-outcome facade, stable carrier-child keys, occurrence-scoped source
   bindings, durable balanced attempts and automatic retry; migrated parser,
   Telegram, VK, ticket, festival and manual callers; and added idempotent
-  recovery/audit tooling. Existing match/create, dedup, identity-gate and
-  occurrence-scope LLM calls are reused without a new model, provider, or LLM
-  stage. Production was audited read-only; no recovery apply or deploy is part
-  of this change.
+  recovery/audit tooling. The final duplicate race now reloads and merges the
+  authoritative Event in the same facade operation, while an accepted domain
+  commit cannot regress to caller-level retry solely because its attempt
+  acknowledgement was interrupted. Known distinct merge relations create a
+  separate Event immediately; official parsers key same-page sessions by stable
+  structured slot/ordinal and receive an idempotent source-level recovery queue.
+  Legacy recovery now covers Telegram Monitoring, VK, official parsers, ticket
+  and festival queues rather than VK alone. Existing match/create, dedup,
+  identity-gate and occurrence-scope LLM calls are reused without a new model,
+  provider, or LLM stage. Production was audited read-only; no recovery apply
+  or deploy is part of this change.
 
 - **my-data-hub daily statistics producer (default off)**: added a non-sensitive
   `events-bot.daily-statistics.v1` aggregate command with RFC 8785 canonical envelope

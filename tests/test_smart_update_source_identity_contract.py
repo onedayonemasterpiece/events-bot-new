@@ -11,7 +11,11 @@ from sqlalchemy.exc import IntegrityError
 import smart_event_update as su
 from db import Database
 from models import Event, EventSource, FestivalQueueItem
-from smart_event_update import EventCandidate
+from smart_event_update import (
+    EventCandidate,
+    SmartUpdateIntent,
+    SmartUpdateTerminalOutcome,
+)
 from smart_update_identity import (
     IdentityGateMode,
     MergeIdentityAction,
@@ -76,7 +80,7 @@ def test_merge_gate_fails_closed_without_valid_llm_and_context_cannot_assert_sam
         mode=IdentityGateMode.ENFORCE,
         llm_data=None,
     )
-    assert unavailable.action is MergeIdentityAction.REVIEW_REQUIRED
+    assert unavailable.action is MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
     assert unavailable.should_skip_side_effects
 
     context_claim = build_merge_identity_gate_verdict(
@@ -90,7 +94,7 @@ def test_merge_gate_fails_closed_without_valid_llm_and_context_cannot_assert_sam
             "reason_code": "same_event_update",
         },
     )
-    assert context_claim.action is MergeIdentityAction.REVIEW_REQUIRED
+    assert context_claim.action is MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
     assert context_claim.should_skip_side_effects
     assert context_claim.candidate is not None
     assert context_claim.candidate.source_url is None
@@ -107,7 +111,7 @@ def test_merge_gate_fails_closed_without_valid_llm_and_context_cannot_assert_sam
         },
         blocking_conflicts=["ticket_link"],
     )
-    assert blocked.action is MergeIdentityAction.REVIEW_REQUIRED
+    assert blocked.action is MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
     assert blocked.should_skip_side_effects
 
 
@@ -125,9 +129,17 @@ async def test_event_source_schema_is_additive_and_unique_index_is_conflict_safe
                 row[1]
                 for row in await (await conn.execute("PRAGMA index_list(event_source)")).fetchall()
             }
-        assert {"canonical_source_url", "source_role", "source_fingerprint"} <= cols
-        assert "ux_event_source_event_canonical" in indexes
-        assert "ux_event_source_identity_canonical" in indexes
+        assert {
+            "canonical_source_url",
+            "source_role",
+            "source_fingerprint",
+            "candidate_key",
+            "occurrence_key",
+            "smart_update_candidate_id",
+        } <= cols
+        assert "ux_event_source_identity_occurrence" in indexes
+        assert "ux_event_source_identity_canonical_legacy" in indexes
+        assert "ux_event_source_smart_candidate" in indexes
         async with fresh.raw_conn() as conn:
             with pytest.raises(sqlite3.IntegrityError):
                 await conn.execute(
@@ -172,21 +184,9 @@ async def test_event_source_schema_is_additive_and_unique_index_is_conflict_safe
     raw.close()
 
     conflicted = Database(str(conflict_path))
-    await conflicted.init()
     try:
-        async with conflicted.raw_conn() as conn:
-            indexes = {
-                row[1]
-                for row in await (await conn.execute("PRAGMA index_list(event_source)")).fetchall()
-            }
-            roles = [
-                row[0]
-                for row in await (
-                    await conn.execute("SELECT source_role FROM event_source ORDER BY id")
-                ).fetchall()
-            ]
-        assert "ux_event_source_identity_canonical" not in indexes
-        assert roles == ["identity_bearing", "identity_bearing"]
+        with pytest.raises(RuntimeError, match="event_source_legacy_identity_conflict"):
+            await conflicted.init()
     finally:
         await conflicted.close()
 
@@ -413,23 +413,16 @@ def test_pianissimo_concert_and_long_exhibition_are_review_not_merge() -> None:
         },
         blocking_conflicts=["title", "occurrence", "event_type", "ticket_link"],
     )
-    assert verdict.action is MergeIdentityAction.REVIEW_REQUIRED
+    assert verdict.action is MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
     assert verdict.should_skip_side_effects
 
 
 @pytest.mark.asyncio
-async def test_exact_context_replay_with_multiple_bindings_requires_review(tmp_path) -> None:
+async def test_explicit_context_intent_supports_multi_event_carrier_and_exact_replay(tmp_path) -> None:
     db = Database(str(tmp_path / "ambiguous-replay.sqlite"))
     await db.init()
     try:
-        candidate = EventCandidate(
-            source_type="telegram",
-            source_url="https://t.me/shared_roundup/9",
-            source_text="Общий дайджест",
-            source_role="context_only",
-        )
-        fingerprint = input_packet_fingerprint(candidate)
-        canonical = canonicalize_identity_url(candidate.source_url)
+        event_ids: list[int] = []
         async with db.get_session() as session:
             for idx in (1, 2):
                 event = Event(
@@ -442,28 +435,54 @@ async def test_exact_context_replay_with_multiple_bindings_requires_review(tmp_p
                 )
                 session.add(event)
                 await session.flush()
-                session.add(
-                    EventSource(
-                        event_id=int(event.id),
-                        source_type="telegram",
-                        source_url=f"{candidate.source_url}?item={idx}",
-                        canonical_source_url=canonical,
-                        source_role="context_only",
-                        source_fingerprint=fingerprint,
-                    )
-                )
+                event_ids.append(int(event.id))
             await session.commit()
 
-        result = await su.smart_event_update(db, candidate, schedule_tasks=False)
-        assert result.status == "review_required"
-        assert result.reason == "source_binding_conflict"
-        assert result.event_id is None
+        results = []
+        for event_id in event_ids:
+            results.append(
+                await su.smart_event_update(
+                    db,
+                    EventCandidate(
+                        intent=SmartUpdateIntent.ATTACH_CONTEXT,
+                        target_event_id=event_id,
+                        source_type="telegram",
+                        source_url="https://t.me/shared_roundup/9",
+                        source_text="Общий дайджест",
+                        occurrence_key=f"context:{event_id}",
+                    ),
+                    schedule_tasks=False,
+                )
+            )
+        assert all(
+            result.outcome is SmartUpdateTerminalOutcome.MERGED
+            for result in results
+        )
+        replay = await su.smart_event_update(
+            db,
+            EventCandidate(
+                intent=SmartUpdateIntent.ATTACH_CONTEXT,
+                target_event_id=event_ids[0],
+                source_type="telegram",
+                source_url="https://t.me/shared_roundup/9",
+                source_text="Общий дайджест",
+                occurrence_key=f"context:{event_ids[0]}",
+            ),
+            schedule_tasks=False,
+        )
+        assert replay.outcome is SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+        async with db.get_session() as session:
+            assert int(
+                await session.scalar(select(func.count()).select_from(EventSource))
+            ) == 2
     finally:
         await db.close()
 
 
 @pytest.mark.asyncio
-async def test_rejected_merge_does_not_enqueue_festival_side_effect(tmp_path, monkeypatch) -> None:
+async def test_distinct_create_enqueues_festival_only_after_identity_acceptance(
+    tmp_path, monkeypatch
+) -> None:
     db = Database(str(tmp_path / "festival-gate.sqlite"))
     await db.init()
     try:
@@ -503,8 +522,14 @@ async def test_rejected_merge_does_not_enqueue_festival_side_effect(tmp_path, mo
             dedup_links = []
             signals = ["festival"]
 
+        enqueue_event_counts: list[int] = []
+
         async def _enqueue(*_args, **_kwargs):
-            raise AssertionError("festival queue write happened before identity acceptance")
+            async with db.get_session() as session:
+                enqueue_event_counts.append(
+                    int(await session.scalar(select(func.count()).select_from(Event)))
+                )
+            return types.SimpleNamespace(id=1)
 
         fake_queue = types.ModuleType("festival_queue")
         fake_queue.detect_festival_context = lambda **_kwargs: _Decision()
@@ -536,8 +561,16 @@ async def test_rejected_merge_does_not_enqueue_festival_side_effect(tmp_path, mo
             check_source_url=False,
             schedule_tasks=False,
         )
-        assert result.status == "skipped_identity_gate"
+        assert result.outcome is SmartUpdateTerminalOutcome.CREATED
+        assert result.event_id is not None
+        assert result.event_id != int(event.id)
+        assert result.diagnostic_event_id == int(event.id)
+        assert result.reason and result.reason.startswith("create_distinct:")
+        assert enqueue_event_counts == [2]
         async with db.get_session() as session:
+            original = await session.get(Event, int(event.id))
+            assert original is not None
+            assert original.title == "Лекция"
             assert int(
                 (await session.execute(select(func.count(FestivalQueueItem.id)))).scalar_one()
             ) == 0

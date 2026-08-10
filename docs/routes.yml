@@ -728,6 +728,7 @@ features:
     status: implemented
     docs: docs/features/smart-event-update/README.md
     identity_state_machine: docs/features/smart-event-update/identity-state-machine.md
+    caller_inventory: docs/features/smart-event-update/caller-inventory.md
     entrypoints:
       - smart_update_state.py
       - smart_event_update.py

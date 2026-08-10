@@ -6633,7 +6633,7 @@ async def process_telegram_results(
                     check_source_url=False,
                 )
                 linked_added = 0
-                if result.is_changed:
+                if result.is_accepted:
                     for original_event_index in original_event_indexes:
                         event_ids_by_original_index[int(original_event_index)].add(
                             int(result.event_id)
@@ -6692,6 +6692,18 @@ async def process_telegram_results(
                                     linked_url,
                                     exc_info=True,
                                 )
+                if result.outcome is SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY:
+                    try:
+                        await _schedule_primary_import_event_tasks(
+                            db,
+                            int(result.event_id),
+                        )
+                    except Exception:
+                        logger.warning(
+                            "tg_monitor: failed to rearm exact-replay event tasks event_id=%s",
+                            result.event_id,
+                            exc_info=True,
+                        )
                 if result.outcome is SmartUpdateTerminalOutcome.CREATED:
                     report.events_created += 1
                     events_imported += 1

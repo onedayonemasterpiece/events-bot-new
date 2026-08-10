@@ -4,8 +4,12 @@
 The recovery is intentionally a queue/state transition, not a second identity
 implementation.  Durable ``RETRY_SCHEDULED`` candidates remain owned by the
 normal Smart Update retry worker; this tool only releases an expired claim.
-Legacy VK ``failed`` rows and *due* ``deferred`` rows are moved back to
-``pending``.  ``imported`` and ``rejected`` rows are never selected.
+Legacy Telegram incomplete identity scans are forced into the next monitor
+packet, VK ``failed``/due ``deferred`` rows are returned to ``pending``, and
+technical ticket/festival queue errors are rearmed.  Official source parsers
+are full-catalog producers, so their affected sources are reported for the
+ordinary scheduled full refresh rather than fabricating non-existent row
+payloads.  Accepted/product-policy terminal rows are never selected.
 
 Output is aggregate-only: source text, URLs, exception messages and payloads
 are neither printed nor copied.  Dry-run is the default and opens SQLite in
@@ -92,7 +96,7 @@ def _since_predicate(column: str, *, unix_epoch: bool = False) -> str:
 def _product_policy_predicate(columns: set[str]) -> str:
     evidence_columns = [
         name
-        for name in ("last_error", "last_result_json", "decision_reason", "reason")
+        for name in ("error", "last_error", "last_result_json", "decision_reason", "reason")
         if name in columns
     ]
     if not evidence_columns:
@@ -102,6 +106,22 @@ def _product_policy_predicate(columns: set[str]) -> str:
         "confirmed_product_reject",
         "product_policy_reject",
     )
+    clauses = [
+        f"lower(COALESCE({_quoted(column)}, '')) LIKE '%{marker}%'"
+        for column in evidence_columns
+        for marker in markers
+    ]
+    return "(" + " OR ".join(clauses) + ")"
+
+
+def _marker_predicate(columns: set[str], markers: Sequence[str]) -> str:
+    evidence_columns = [
+        name
+        for name in ("error", "last_error", "last_result_json", "decision_reason", "reason")
+        if name in columns
+    ]
+    if not evidence_columns:
+        return "0"
     clauses = [
         f"lower(COALESCE({_quoted(column)}, '')) LIKE '%{marker}%'"
         for column in evidence_columns
@@ -272,6 +292,317 @@ def _empty_vk(*, supported: bool) -> dict[str, Any]:
     }
 
 
+def _empty_telegram(*, supported: bool) -> dict[str, Any]:
+    return {
+        "eligible": 0,
+        "selected": 0,
+        "would_requeue": 0,
+        "requeued": 0,
+        "already_available": 0,
+        "selected_with_existing_imports": 0,
+        "excluded_product_policy": 0,
+        "schema_supported": supported,
+    }
+
+
+def _recover_legacy_telegram(
+    con: sqlite3.Connection,
+    *,
+    since: datetime,
+    now: datetime,
+    dry_run: bool,
+    limit: int,
+) -> dict[str, Any]:
+    scan_table = "telegram_scanned_message"
+    force_table = "telegram_source_force_message"
+    columns = _columns(con, scan_table)
+    force_columns = _columns(con, force_table)
+    required = {"source_id", "message_id", "processed_at", "status"}
+    if not required.issubset(columns) or not {"source_id", "message_id"}.issubset(
+        force_columns
+    ):
+        return _empty_telegram(supported=False)
+
+    technical_markers = (
+        "review_required",
+        "skipped_identity_gate",
+        "source_binding_conflict",
+        "identity_gate",
+        "merge_identity",
+        "dedup_adjudicator",
+        "retry_scheduled",
+        "smart_update_processing",
+        "database",
+        "vector_error",
+    )
+    technical = _marker_predicate(columns, technical_markers)
+    policy = _product_policy_predicate(columns)
+    base = (
+        "datetime(processed_at)>=datetime(?) AND ("
+        "lower(COALESCE(status,'')) IN ('retry_scheduled','partial_retry_scheduled','error') "
+        "OR (lower(COALESCE(status,'')) IN ('skipped','partial') AND "
+        f"{technical}))"
+    )
+    params = (_render_utc(since),)
+    eligible_where = f"({base}) AND NOT ({policy})"
+    eligible = _count(con, scan_table, eligible_where, params)
+    excluded = _count(con, scan_table, f"({base}) AND ({policy})", params)
+    if limit <= 0 or eligible == 0:
+        result = _empty_telegram(supported=True)
+        result.update(eligible=eligible, excluded_product_policy=excluded)
+        return result
+
+    imported_expr = (
+        "CASE WHEN COALESCE(events_imported,0)>0 THEN 1 ELSE 0 END"
+        if "events_imported" in columns
+        else "0"
+    )
+    rows = con.execute(
+        f"SELECT source_id,message_id,{imported_expr} AS has_existing_import,"
+        "CASE WHEN EXISTS(SELECT 1 FROM telegram_source_force_message f "
+        "WHERE f.source_id=telegram_scanned_message.source_id "
+        "AND f.message_id=telegram_scanned_message.message_id) THEN 1 ELSE 0 END "
+        f"AS already_forced FROM {_quoted(scan_table)} WHERE {eligible_where} "
+        "ORDER BY processed_at,source_id,message_id LIMIT ?",
+        (*params, int(limit)),
+    ).fetchall()
+    already_available = sum(int(row[3] or 0) for row in rows)
+    would_requeue = len(rows) - already_available
+    requeued = 0
+    if not dry_run:
+        created_at_supported = "created_at" in force_columns
+        for row in rows:
+            if int(row[3] or 0):
+                continue
+            if created_at_supported:
+                cursor = con.execute(
+                    "INSERT OR IGNORE INTO telegram_source_force_message"
+                    "(source_id,message_id,created_at) VALUES(?,?,?)",
+                    (int(row[0]), int(row[1]), _render_utc(now)),
+                )
+            else:
+                cursor = con.execute(
+                    "INSERT OR IGNORE INTO telegram_source_force_message"
+                    "(source_id,message_id) VALUES(?,?)",
+                    (int(row[0]), int(row[1])),
+                )
+            requeued += int(cursor.rowcount or 0)
+
+    return {
+        "eligible": eligible,
+        "selected": len(rows),
+        "would_requeue": would_requeue,
+        "requeued": requeued,
+        "already_available": already_available,
+        "selected_with_existing_imports": sum(int(row[2] or 0) for row in rows),
+        "excluded_product_policy": excluded,
+        "schema_supported": True,
+    }
+
+
+def _empty_queue(*, supported: bool) -> dict[str, Any]:
+    return {
+        "eligible": 0,
+        "selected": 0,
+        "would_requeue": 0,
+        "requeued": 0,
+        "already_available": 0,
+        "excluded_product_policy": 0,
+        "schema_supported": supported,
+    }
+
+
+def _recover_legacy_queue(
+    con: sqlite3.Connection,
+    *,
+    table: str,
+    ready_status: str,
+    since: datetime,
+    now: datetime,
+    dry_run: bool,
+    limit: int,
+) -> dict[str, Any]:
+    columns = _columns(con, table)
+    if not {"id", "status", "updated_at"}.issubset(columns):
+        return _empty_queue(supported=False)
+    policy = _product_policy_predicate(columns)
+    since_sql = _since_predicate("updated_at")
+    base = f"lower(COALESCE(status,''))='error' AND {since_sql}"
+    params = (_render_utc(since),)
+    eligible_where = f"({base}) AND NOT ({policy})"
+    eligible = _count(con, table, eligible_where, params)
+    excluded = _count(con, table, f"({base}) AND ({policy})", params)
+    already_available = _count(
+        con,
+        table,
+        f"lower(COALESCE(status,''))=? AND {since_sql}",
+        (ready_status.lower(), _render_utc(since)),
+    )
+    if limit <= 0 or eligible == 0:
+        result = _empty_queue(supported=True)
+        result.update(
+            eligible=eligible,
+            already_available=already_available,
+            excluded_product_policy=excluded,
+        )
+        return result
+
+    rows = con.execute(
+        f"SELECT id FROM {_quoted(table)} WHERE {eligible_where} ORDER BY updated_at,id LIMIT ?",
+        (*params, int(limit)),
+    ).fetchall()
+    requeued = 0
+    if not dry_run and rows:
+        ids = [int(row[0]) for row in rows]
+        placeholders = ",".join("?" for _ in ids)
+        assignments = ["status=?"]
+        values: list[Any] = [ready_status]
+        if "next_run_at" in columns:
+            assignments.append("next_run_at=?")
+            values.append(_render_utc(now))
+        if "last_error" in columns:
+            assignments.append("last_error=NULL")
+        if "attempts" in columns:
+            assignments.append("attempts=0")
+        cursor = con.execute(
+            f"UPDATE {_quoted(table)} SET {','.join(assignments)} "
+            f"WHERE id IN ({placeholders}) AND lower(COALESCE(status,''))='error' "
+            f"AND NOT ({policy})",
+            (*values, *ids),
+        )
+        requeued = int(cursor.rowcount or 0)
+    return {
+        "eligible": eligible,
+        "selected": len(rows),
+        "would_requeue": len(rows),
+        "requeued": requeued,
+        "already_available": already_available,
+        "excluded_product_policy": excluded,
+        "schema_supported": True,
+    }
+
+
+def _recover_source_parser_refresh(
+    con: sqlite3.Connection,
+    *,
+    since: datetime,
+    now: datetime,
+    dry_run: bool,
+    limit: int,
+) -> dict[str, Any]:
+    columns = _columns(con, "ops_run")
+    if not {"kind", "started_at", "details_json"}.issubset(columns):
+        return {
+            "runs_seen": 0,
+            "failed_items_observed": 0,
+            "retry_items_observed": 0,
+            "affected_sources": [],
+            "recovery_mode": "unavailable",
+            "eligible": 0,
+            "selected": 0,
+            "would_requeue": 0,
+            "requeued": 0,
+            "already_available": 0,
+            "queue_schema_supported": False,
+            "deployment_required": False,
+            "schema_supported": False,
+        }
+    rows = con.execute(
+        "SELECT details_json FROM ops_run WHERE kind='parse' "
+        "AND datetime(started_at)>=datetime(?)",
+        (_render_utc(since),),
+    ).fetchall()
+    failed = 0
+    retries = 0
+    sources: set[str] = set()
+    for row in rows:
+        raw = row[0]
+        try:
+            payload = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+        except Exception:
+            continue
+        source_payload = payload.get("sources") if isinstance(payload, dict) else None
+        if not isinstance(source_payload, dict):
+            continue
+        for source, values in source_payload.items():
+            if not isinstance(values, dict):
+                continue
+            source_failed = int(values.get("failed") or 0)
+            source_retries = int(values.get("retry_scheduled") or 0)
+            failed += source_failed
+            retries += source_retries
+            if source_failed or source_retries:
+                clean = str(source or "").strip().lower()
+                if clean and clean.replace("_", "").isalnum():
+                    sources.add(clean)
+    queue_columns = _columns(con, "source_parser_recovery_request")
+    queue_supported = {
+        "source_type",
+        "requested_since",
+        "status",
+        "attempts",
+        "next_run_at",
+    }.issubset(queue_columns)
+    affected = sorted(sources)
+    selected_sources = affected[: max(0, int(limit))] if queue_supported else []
+    already_available = 0
+    missing: list[str] = []
+    if queue_supported and selected_sources:
+        placeholders = ",".join("?" for _ in selected_sources)
+        active_rows = con.execute(
+            "SELECT source_type FROM source_parser_recovery_request "
+            f"WHERE source_type IN ({placeholders}) AND status IN ('pending','running')",
+            tuple(selected_sources),
+        ).fetchall()
+        active = {str(row[0]) for row in active_rows}
+        already_available = len(active)
+        missing = [source for source in selected_sources if source not in active]
+    requeued = 0
+    if queue_supported and not dry_run:
+        for source in missing:
+            cursor = con.execute(
+                """
+                INSERT INTO source_parser_recovery_request(
+                    source_type,requested_since,status,attempts,next_run_at,
+                    last_error,created_at,updated_at
+                ) VALUES(?,?,'pending',0,?,NULL,?,?)
+                ON CONFLICT(source_type) DO UPDATE SET
+                    requested_since=excluded.requested_since,
+                    status='pending',
+                    attempts=0,
+                    next_run_at=excluded.next_run_at,
+                    last_error=NULL,
+                    updated_at=excluded.updated_at
+                WHERE source_parser_recovery_request.status NOT IN ('pending','running')
+                """,
+                (
+                    source,
+                    _render_utc(since),
+                    _render_utc(now),
+                    _render_utc(now),
+                    _render_utc(now),
+                ),
+            )
+            requeued += int(cursor.rowcount or 0)
+    return {
+        "runs_seen": len(rows),
+        "failed_items_observed": failed,
+        "retry_items_observed": retries,
+        "affected_sources": affected,
+        "eligible": len(affected),
+        "selected": len(selected_sources),
+        "would_requeue": len(missing),
+        "requeued": requeued,
+        "already_available": already_available,
+        # Official parsers fetch complete current catalogues each scheduled run;
+        # requests therefore replay a source, not unavailable individual payloads.
+        "recovery_mode": "queued_full_catalog_refresh",
+        "queue_schema_supported": queue_supported,
+        "deployment_required": bool(affected and not queue_supported),
+        "schema_supported": True,
+    }
+
+
 def _recover_legacy_vk(
     con: sqlite3.Connection,
     *,
@@ -418,6 +749,22 @@ def run(
             limit=normalized_batch,
         )
         remaining = max(0, normalized_batch - int(durable["selected"]))
+        legacy_telegram = _recover_legacy_telegram(
+            con,
+            since=since_dt,
+            now=now_dt,
+            dry_run=dry_run,
+            limit=remaining,
+        )
+        remaining = max(0, remaining - int(legacy_telegram["selected"]))
+        source_parser = _recover_source_parser_refresh(
+            con,
+            since=since_dt,
+            now=now_dt,
+            dry_run=dry_run,
+            limit=remaining,
+        )
+        remaining = max(0, remaining - int(source_parser["selected"]))
         legacy_vk = _recover_legacy_vk(
             con,
             since=since_dt,
@@ -425,8 +772,37 @@ def run(
             dry_run=dry_run,
             limit=remaining,
         )
-        would_change = int(durable["would_requeue"]) + int(legacy_vk["would_requeue"])
-        changed = int(durable["requeued"]) + int(legacy_vk["requeued"])
+        remaining = max(0, remaining - int(legacy_vk["selected"]))
+        legacy_ticket_queue = _recover_legacy_queue(
+            con,
+            table="ticket_site_queue",
+            ready_status="active",
+            since=since_dt,
+            now=now_dt,
+            dry_run=dry_run,
+            limit=remaining,
+        )
+        remaining = max(0, remaining - int(legacy_ticket_queue["selected"]))
+        legacy_festival_queue = _recover_legacy_queue(
+            con,
+            table="festival_queue",
+            ready_status="pending",
+            since=since_dt,
+            now=now_dt,
+            dry_run=dry_run,
+            limit=remaining,
+        )
+        mutable_results = (
+            durable,
+            legacy_telegram,
+            source_parser,
+            legacy_vk,
+            legacy_ticket_queue,
+            legacy_festival_queue,
+        )
+        would_change = sum(int(item["would_requeue"]) for item in mutable_results)
+        changed = sum(int(item["requeued"]) for item in mutable_results)
+        selected_total = sum(int(item["selected"]) for item in mutable_results)
         if not dry_run:
             con.commit()
         result = {
@@ -440,20 +816,28 @@ def run(
                 "smart_update_candidate_state": bool(
                     durable["schema_supported"]
                 ),
+                "telegram_scanned_message": bool(
+                    legacy_telegram["schema_supported"]
+                ),
                 "vk_inbox": bool(legacy_vk["schema_supported"]),
+                "ticket_site_queue": bool(legacy_ticket_queue["schema_supported"]),
+                "festival_queue": bool(legacy_festival_queue["schema_supported"]),
+                "source_parser_ops_run": bool(source_parser["schema_supported"]),
+                "source_parser_recovery_request": bool(
+                    source_parser["queue_schema_supported"]
+                ),
             },
             "durable_candidates": durable,
+            "legacy_telegram": legacy_telegram,
             "legacy_vk": legacy_vk,
+            "legacy_ticket_queue": legacy_ticket_queue,
+            "legacy_festival_queue": legacy_festival_queue,
+            "source_parser": source_parser,
             "aggregate": {
-                "selected": int(durable["selected"]) + int(legacy_vk["selected"]),
+                "selected": selected_total,
                 "would_change": would_change,
                 "changed": changed,
-                "remaining_capacity": max(
-                    0,
-                    normalized_batch
-                    - int(durable["selected"])
-                    - int(legacy_vk["selected"]),
-                ),
+                "remaining_capacity": max(0, normalized_batch - selected_total),
             },
         }
         return result

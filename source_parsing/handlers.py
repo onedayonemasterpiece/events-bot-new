@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import re
@@ -1320,6 +1322,35 @@ async def schedule_existing_event_update(db: Database, event_id: int) -> None:
     )
 
 
+def _parser_occurrence_key(
+    *,
+    source_type: str | None,
+    source_url: str,
+    date_value: Any,
+    end_date_value: Any,
+    time_value: Any,
+    producer_ordinal: int,
+) -> str:
+    """Build one stable official-parser slot identity without prose fields."""
+
+    occurrence_material = {
+        "source_type": str(source_type or "theatre").strip().lower(),
+        "source_url": canonicalize_identity_url(source_url) or str(source_url),
+        "date": str(date_value or "").strip(),
+        "end_date": str(end_date_value or "").strip(),
+        "time": str(time_value or "00:00").strip().replace(".", ":"),
+        "producer_ordinal": int(producer_ordinal),
+    }
+    return "parser-slot:" + hashlib.sha256(
+        json.dumps(
+            occurrence_material,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 async def add_new_event_via_queue(
     db: Database,
     bot: Bot | None,
@@ -1327,6 +1358,7 @@ async def add_new_event_via_queue(
     progress_current: int,
     progress_total: int,
     poster_media: Sequence[PosterMedia] | None = None,
+    producer_ordinal: int | None = None,
 ) -> tuple[int | None, bool, SmartUpdateTerminalOutcome]:
     """Add a new event through the existing LLM queue system.
     
@@ -1451,7 +1483,6 @@ async def add_new_event_via_queue(
         # Use smart update (no VK posting here)
         try:
             import sys
-            import hashlib
             from datetime import datetime, timezone
             from models import Event
             from smart_event_update import (
@@ -1513,6 +1544,24 @@ async def add_new_event_via_queue(
             )
             fallback_hash = hashlib.sha256(fallback_key.encode("utf-8")).hexdigest()[:16]
             source_url = theatre_event.url or f"parser:{theatre_event.source_type}:{fallback_hash}"
+            # Parser catalogues regularly use one performance page for several
+            # dated/timed sessions.  URL ownership alone therefore identifies a
+            # carrier, not a source-local occurrence.  Keep the producer ordinal
+            # as a deterministic tie-breaker for two structured rows sharing the
+            # same slot, but never derive identity from mutable title/prose.
+            effective_producer_ordinal = (
+                int(producer_ordinal)
+                if producer_ordinal is not None
+                else max(0, int(progress_current) - 1)
+            )
+            parser_occurrence_key = _parser_occurrence_key(
+                source_type=theatre_event.source_type,
+                source_url=source_url,
+                date_value=draft.date,
+                end_date_value=draft.end_date or theatre_event.end_date,
+                time_value=draft.time,
+                producer_ordinal=effective_producer_ordinal,
+            )
 
             candidate = EventCandidate(
                 source_type=f"parser:{theatre_event.source_type}",
@@ -1541,11 +1590,8 @@ async def add_new_event_via_queue(
                 search_digest=draft.search_digest,
                 raw_excerpt=final_description,
                 posters=posters,
-                occurrence_key=(
-                    f"{theatre_event.source_type}:{theatre_event.url}"
-                    if theatre_event.url
-                    else None
-                ),
+                producer_ordinal=effective_producer_ordinal,
+                occurrence_key=parser_occurrence_key,
             )
 
             logger.info(
@@ -2664,6 +2710,7 @@ async def run_source_parsing(
                 "updated_events": int(stats.ticket_updated + stats.already_exists),
                 "failed": int(stats.failed),
                 "skipped": int(stats.skipped),
+                "retry_scheduled": int(stats.retry_scheduled),
             }
             for source, stats in (result.stats_by_source or {}).items()
         }
@@ -3181,6 +3228,7 @@ async def process_source_events(
                         current_progress,
                         total_count,
                         poster_media=poster_media_list,
+                        producer_ordinal=i,
                     )
                 )
 

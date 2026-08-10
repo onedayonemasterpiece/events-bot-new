@@ -99,6 +99,12 @@ Totals were 413 rows: 164 `allow_create`, 218 `allow_merge`, 13
 - Parser failure/skip totals were Dramteatr `44/4`, Muzteatr `32/0`, Sobor
   `2/0`, Tretyakov `0/4`, and Yantar Hall `3/4`. Parser event 5829 emitted
   eight source-binding conflicts on both August 8 and 9.
+- Telegram Monitoring was not healthy-by-omission: since August 4 its current
+  scan rows included 124 `skipped`, 43 `done`, and eight `partial` carriers.
+  A second schema-first read-only audit identified five concrete legacy
+  identity/technical-loss messages (16 extracted occurrences, one imported):
+  one deterministic same-source gate, one location conflict, one
+  long-running/single-slot conflict, and two merge blocking conflicts.
 - Ten recently updated QTickets rows were still `active`, with zero attempts
   and errors; the runtime scheduler repeatedly reported that
   `ENABLE_TICKET_SITES_QUEUE` was not enabled, so this is not health proof.
@@ -114,6 +120,44 @@ under
 The runtime file mirror covered only `2026-08-08T02:37:34Z` onward; older
 runtime claims rely on DB/ops evidence rather than pretending full log
 retention.
+
+### Final all-source recovery dry-run (read-only, 2026-08-10)
+
+The recovery command was executed against production as
+`--dry-run --since 2026-08-04 --batch-size 10000` with SQLite `mode=ro`,
+`query_only=1`, and `quick_check=ok`:
+
+| surface | eligible | selected | would change | changed |
+| --- | ---: | ---: | ---: | ---: |
+| durable candidate state | unavailable before migration | 0* | 0* | 0 |
+| Telegram Monitoring identity/technical losses | 5 | 5 | 5 | 0 |
+| legacy VK failed/deferred technical rows | 104 | 104 | 104 | 0 |
+| official parser affected sources | 4 | 0** | 0** | 0 |
+| ticket queue technical errors | 0 (14 already available) | 0 | 0 | 0 |
+| festival queue technical errors | 0 (41 already available) | 0 | 0 | 0 |
+| currently actionable aggregate | 109 | 109 | 109 | 0 |
+
+`*` The candidate-state table does not exist in the current production schema;
+the reported zero is schema-unavailable, not evidence of no durable work.
+`**` Four official-parser sources (`dramteatr`, `muzteatr`, `sobor`, and
+`yantarhall`) had 102 failed item observations in 14 parse runs. The new
+source-level recovery-request table is additive and not deployed, so the CLI
+correctly returned `deployment_required=true` and did not pretend to enqueue
+them. After migration, its apply mode creates idempotent full-catalogue refresh
+requests consumed automatically by the scheduled parser.
+
+One selected Telegram row and 13 selected VK rows already had imported
+pointers/mappings. Explicit imported/rejected/product-policy terminals were
+excluded where the legacy schema exposes that evidence. The full currently
+actionable batch fit with 9,891 rows remaining. No row was changed.
+
+Redacted evidence and manifest:
+`artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/d4c-all-source-recovery-dry-run/`;
+manifest SHA-256
+`cb75b598960968244353a8ff091436e21b5c624e8ccad128a54f5fd20e4adbf3`.
+The exact CLI source SHA-256 was
+`2cc2d19bd7024e12201fbb45574aa43c39cd6260c88e8dda50ab24e7ed485b78`;
+`mode=ro`, `query_only=1`, and `quick_check=ok` were independently verified.
 
 ## Timeline
 
@@ -200,13 +244,18 @@ retention.
 
 ## Corrective Actions
 
-- [ ] Make the five automatic outcomes the only public terminal result type.
-- [ ] Store accepted and diagnostic Event IDs in separate fields.
-- [ ] Persist candidate/occurrence identity plus balanced retry attempts.
-- [ ] Allow one carrier URL to bind multiple keyed occurrences.
-- [ ] Separate `UPSERT_EVENT` from target-bound `ATTACH_CONTEXT`.
-- [ ] Migrate every production caller and queue to the typed facade.
-- [ ] Add balanced funnel metrics and idempotent recovery.
+- [x] Make the five automatic outcomes the only public terminal result type.
+- [x] Store accepted and diagnostic Event IDs in separate fields.
+- [x] Persist candidate/occurrence identity plus balanced retry attempts and
+  cross-process leases.
+- [x] Allow one carrier URL to bind multiple keyed occurrences.
+- [x] Separate `UPSERT_EVENT` from target-bound `ATTACH_CONTEXT`.
+- [x] Migrate every discovered production caller and queue to the typed facade.
+- [x] Add balanced funnel/audit metrics and idempotent recovery.
+- [x] Rearm Telegram/VK legacy technical rows and enqueue actionable
+  source-level official-parser refreshes; retain ticket/festival queue recovery.
+- [x] Revalidate and accept a final-transaction duplicate in the same facade
+  operation without a second LLM pass.
 
 ## Follow-up Actions
 
@@ -220,10 +269,15 @@ retention.
 ## Release And Closure Evidence
 
 - implementation base: `d7731ab4235b325e9ca52d13c45fba83eaf5de0b`
-- PR / implementation SHA: pending
+- integration branch: `integration/smart-update-identity-state-machine`
+- core/caller/recovery implementation commits before final reconciliation:
+  `2d04b2812`, `5d30891f4`, `66c310599`
+- PR / final implementation SHA: pending final review
 - deployed SHA: not performed (explicitly out of scope)
 - production recovery apply: not performed (explicitly out of scope)
-- regression checks: pending implementation
+- local regression checks: production-boundary compile PASS; full relevant
+  suite `216 passed in 144.12s`; `git diff --check` PASS. Ignored log SHA-256
+  `4620444cf8666cd503840e0a9d4f1f073043b718164235b8c016fe856451e673`
 - post-deploy verification: pending
 
 ## Rollback
