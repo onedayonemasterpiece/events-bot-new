@@ -6,7 +6,7 @@
 - Requirements: `R01`, `R02`, `R03`, `R04`, `R06`
 - Status: **complete**
 - Base SHA: `d7731ab4235b325e9ca52d13c45fba83eaf5de0b`
-- Validated implementation head SHA: `65bb9dbec21f511314adc1e32bb6d92fbdafab15`
+- Validated implementation head SHA: `831336bf62e4fb3137d230db956ce785dd9d868d`
 - The RESULTS metadata is committed separately after the validated
   implementation head so this record can contain its exact SHA.
 
@@ -34,6 +34,16 @@
   capture NO-GO gates.
 - The canonical document is routed through the static-site, feature and root
   indexes plus `docs/routes.yml`; `[Unreleased]` is synchronized.
+- Closure correction added the immutable reviewed
+  `ProductAnalyticsEvidencePackage` to the canonical analysis-record contract,
+  including scope/quality/facts/limitations/finding/options/decision/artifact/
+  resource-link provenance and the non-automatic hotspot rule.
+- Product Atlas explicitly reuses page 50 for reviewed maps/evidence and page
+  40 for accepted findings/decisions, creates no page 45, imports only from a
+  concrete immutable analysis record via `Обновить Product Atlas`, keeps
+  Resource Graph deep links and forbids live/raw/background/hotspot automation.
+- `docs/routes.yml` now exposes the product-model, analysis and Product Atlas
+  entrypoints plus static-site analytics and action-map research routes.
 
 ## Commands and checks run
 
@@ -52,6 +62,14 @@
    passed.
 9. `git commit -m "docs: adopt first-party action-map contract"` — PASS,
    implementation commit `65bb9dbec21f511314adc1e32bb6d92fbdafab15`.
+10. Closure-correction inline `python3` scan — PASS: all relative links in the
+    three changed product-model docs resolve; PyYAML parsed all six required
+    product/static-site route keys and each target exists.
+11. Section-19 marker assertions — PASS for the package fields, immutable
+    provenance, chain/anti-hotspot rule, pages 50/40, no page 45, explicit
+    update command, no live/raw/background ingest and Resource Graph links.
+12. `git commit -m "docs: complete action-map evidence routing"` — PASS,
+    corrected implementation head `831336bf62e4fb3137d230db956ce785dd9d868d`.
 
 ## Changed files
 
@@ -65,6 +83,9 @@
 - `docs/features/static-site-pages/first-party-action-map.md`
 - `docs/features/static-site-pages/personalizaion/personalization-to-be.md`
 - `docs/features/static-site-pages/release-plan.md`
+- `docs/product-model/README.md`
+- `docs/product-model/analysis/README.md`
+- `docs/product-model/product-atlas-architecture.md`
 - `docs/routes.yml`
 
 ## Risks / limitations
