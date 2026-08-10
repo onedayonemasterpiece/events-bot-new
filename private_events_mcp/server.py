@@ -589,12 +589,12 @@ class PrivateEventsMCPServer:
                     return self._plain_error(400, "jsonrpc_object_required", correlation_id=correlation)
                 request_message = payload
                 method = str(request_message.get("method") or "")[:100]
-                # Discovery/initialization remain public so OAuth-capable MCP
-                # clients can learn the protected tool surface.  Executing a
-                # tool is a protected-resource request, however, and RFC 9728
-                # discovery starts from an HTTP 401 challenge rather than a
-                # successful JSON-RPC envelope containing an auth error.
-                if identity is None and method == "tools/call":
+                # This is a protected MCP resource.  Challenge every
+                # unauthenticated JSON-RPC request, including initialize and
+                # tools/list, so native OAuth clients start RFC 9728 discovery
+                # instead of mistaking a public initialization response for a
+                # successfully authenticated connection.
+                if identity is None:
                     return self._plain_error(
                         401,
                         "authentication_required",

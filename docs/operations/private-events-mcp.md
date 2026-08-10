@@ -654,10 +654,11 @@ Record all of the following without secrets:
 2. public/internal `/healthz` remains ready, DB check is healthy and
    `PRAGMA quick_check` is `ok`;
 3. ChatGPT confidential plus OpenCode/Codex public OAuth/PKCE flows, exact resource
-   metadata, access expiry and refresh rotation pass; an unauthenticated
-   `tools/call` returns HTTP 401 with the exact endpoint-specific
-   `WWW-Authenticate` resource-metadata challenge (public initialization and
-   catalogue discovery remain available);
+   metadata, access expiry and refresh rotation pass; every unauthenticated MCP
+   JSON-RPC request, including `initialize`, `tools/list` and `tools/call`, returns
+   HTTP 401 with the exact endpoint-specific `WWW-Authenticate` resource-metadata
+   challenge. This is required for OpenCode to start OAuth instead of accepting
+   anonymous initialization as a completed connection;
 4. Codex `tools/list` is exactly the seven evidence tools and direct social calls
    fail; ChatGPT/OpenCode list only granted and enabled workspace tools; neither
    full-resource client token is accepted on the Codex endpoint;
