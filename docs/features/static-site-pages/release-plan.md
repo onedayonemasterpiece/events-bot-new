@@ -519,6 +519,46 @@ Release owner фиксирует точные `T0` и `T0+10 days` в UTC и
 `Europe/Kaliningrad`, production SHA, snapshot id, build id, manifest hash и rollback
 target. Формулировка «через 10 дней» без этих полей не является scheduled cutover.
 
+## Default-off first-party action map: AM-0…AM-4
+
+Канонический contract: [First-party карта действий](first-party-action-map.md).
+Action map — отдельный временный diagnostic track и **не является обязательным
+условием публичного D0/D10 release**. Публичный static-site release использует
+default `ACTION_MAP_BUILD=off`; отсутствие active campaign не блокирует release.
+При этом первая обязательная работа track — доказать настоящий zero-cost OFF,
+а не откладывать OFF-path до реализации capture.
+
+| Phase | Scope | Mandatory exit evidence |
+|---|---|---|
+| **AM-0 — contracts** | принять product/architecture, registered `action_map_diagnostic` purpose/campaign/schema, Component Contract binding и read-only presentation receipt projection | approved immutable contracts; один `MeasurementQuestion`/`decision_use`; consent, privacy, owner, budget, TTL, expiry/stop conditions определены |
+| **AM-1 — OFF proof** | реализовать только default-OFF build boundary | manifest/HTML/bundle/browser/network/storage proofs: `0` chunk/import/attributes, `0` bytes/work/requests/writes/listeners/observers/timers; ordinary navigation работает при недоступном analytics route |
+| **AM-2 — bounded static pilot** | allowlisted mobile card, rail и event-detail CTA/favorite без зависимости от server profile | consent/route/sample/expiry fail closed; component-local bins, expected effect, batching/idempotency, global budgets и YDB TTL verified; strong actions reconciled and never duplicated |
+| **AM-3 — presentation/evaluation** | подключить opaque `presentation_receipt_id`, served-vs-DOM reconciliation и registered holdout where causal uplift is claimed | raw profile unavailable; `0` map-driven profile/rank mutations; rank/slot/model/experiment slices valid; active-vs-control INP/LCP/CLS and behavior parity PASS |
+| **AM-4 — reviewed evidence/close** | aggregate campaign and hand off one immutable `ProductAnalyticsEvidencePackage` | low-sample slices hidden/`INSUFFICIENT_DATA`; facts/limitations/finding/decision/follow-up reviewed; only aggregate package reaches Product Atlas/Resource Graph; OFF build republished and new navigation has no map assets |
+
+### Mandatory NO-GO gates
+
+Capture activation is **NO-GO** if any of the following is missing or failing:
+
+- terminal AM-1 OFF-build proof;
+- explicit `product_analytics` consent and registered unexpired campaign purpose;
+- build-time route/component/zone allowlist, deterministic sample and fail-closed
+  schema binding;
+- embedded expiry plus owner stop/server rejection and a published kill/close
+  procedure (remote loader is not permitted as an OFF substitute);
+- shared batch/byte/RU budget, local expiry and mandatory raw YDB TTL;
+- `0` raw action-map rows in Supabase and `0` browser-direct YDB writes;
+- prohibited-field/PII scanner, idempotency and authoritative-action reconciliation;
+- `0` action-map profile mutation/current-rank influence and active-vs-control
+  instrumentation-effect guardrail;
+- low-sample suppression and reviewed-evidence workflow.
+
+If an active campaign expires, violates privacy/performance/budget, or loses
+schema parity, ingest rejects packets and capture stops; owner publishes OFF.
+The unavoidable window for already-open/cached tabs is bounded by embedded
+expiry and server rejection. The next navigation after OFF publication must
+receive no action-map asset.
+
 ## Десятидневный Telegraph coexistence
 
 ### Конфигурационный контракт

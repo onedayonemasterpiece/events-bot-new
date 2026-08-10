@@ -22,6 +22,9 @@
 - Personalization data ownership (Fly/Supabase/YDB/Object Storage): `docs/architecture/personalization-data-ownership.md`
 - Сквозная аналитика и продуктовая статистика статического сайта:
   `docs/features/static-site-pages/analytics/README.md`
+- First-party карта действий статического сайта: canonical TO-BE contract
+  временной диагностики, read-only связи с персонализацией и zero-cost OFF:
+  `docs/features/static-site-pages/first-party-action-map.md`
 - Default-off producer суточных обезличенных агрегатов для my-data-hub:
   `docs/features/my-data-hub-daily-statistics/README.md`
 - Методология продуктовой модели — needs, Jobs, outcomes, journeys, capabilities,

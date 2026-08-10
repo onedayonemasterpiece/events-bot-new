@@ -12,6 +12,9 @@ sections:
     overview: docs/architecture/overview.md
     personalization_data_ownership: docs/architecture/personalization-data-ownership.md
   product:
+    product_model: docs/product-model/README.md
+    product_analysis: docs/product-model/analysis/README.md
+    product_atlas: docs/product-model/product-atlas-architecture.md
     my_data_hub_daily_statistics: docs/features/my-data-hub-daily-statistics/README.md
     mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
     prelaunch_registration: docs/features/static-site-pages/prelaunch.md
@@ -379,6 +382,9 @@ features:
   static_site_pages:
     status: secret_candidate_pipeline_root_promotion_blocked
     docs: docs/features/static-site-pages/README.md
+    analytics: docs/features/static-site-pages/analytics/README.md
+    first_party_action_map: docs/features/static-site-pages/first-party-action-map.md
+    first_party_action_map_research: docs/features/static-site-pages/first-party-action-map-research/README.md
     current_ui_resource_graph: docs/features/static-site-pages/current-ui-resource-graph.md
     collections_catalog: docs/features/static-site-pages/podborki.md
     gastronomy_collection: docs/features/static-site-pages/gastronomy-collection.md

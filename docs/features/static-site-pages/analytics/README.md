@@ -188,7 +188,10 @@ Transport, email provider, limiter, YDB RU, outbox age, build и error metrics �
 - полный referrer URL;
 - raw Search text;
 - текст feedback, содержимое письма и screenshot bytes;
-- координаты свайпа, движения мыши, последовательность клавиш;
+- raw/absolute pointer coordinates, координаты свайпа, trajectories движения
+  мыши и последовательность клавиш; исключение не распространяется на
+  немедленно вычисленный coarse component/semantic-zone-local bin внутри
+  зарегистрированной ограниченной `action_map_diagnostic` кампании;
 - embedding, полный interest profile или prompt/response LLM;
 - arbitrary DOM text и arbitrary JSON payload.
 
@@ -198,6 +201,7 @@ Transport, email provider, limiter, YDB RU, outbox age, build и error metrics �
 |---|---|---|
 | `essential_operational` | false-success prevention, security, terminal delivery receipt, bounded error class | Без маркетингового профилирования и без стабильного analytics actor, минимальный retention |
 | `product_analytics` | page/card exposure, depth, Hero Talk, keyboard cohort, Web Vitals | Только после принятого analytics consent; сайт полностью работает без него |
+| `action_map_diagnostic` | временные component/zone-local action summaries для одного зарегистрированного MeasurementQuestion | Purpose внутри `product_analytics`: только при действующем `product_analytics` consent, approved unexpired campaign manifest и deterministic sample; не активирует и не меняет персонализацию |
 | `personalization_activation` | durable interest/profile writes | Отдельный activation contract; page view/scroll/dwell не являются активацией |
 | `research_focus` | page score, NPS, focus feedback | Отдельный контур фокус-группы и условия участия |
 | `communications` | launch reminder, recommendations, transactional lifecycle | Purpose-specific consent/основание, не выводится из аналитики |
@@ -271,6 +275,71 @@ Yandex Metrica, PostHog, Umami Cloud или любой другой внешни
 - слабая телеметрия отправляется не чаще трёх bounded batches за сессию;
 - сильные действия отправляются сразу своим product command и не ждут analytics batch;
 - CTA/navigation никогда не ждут телеметрию.
+
+### 7.2. Зарегистрированная `action_map_diagnostic` кампания
+
+Канонический feature-specific contract: [First-party карта действий](../first-party-action-map.md).
+Карта — временный диагностический слой, а не постоянный clickstream и не
+источник профильных сигналов. Кампания имеет один зарегистрированный
+`MeasurementQuestion`, один `decision_use`, не более шести primary metrics,
+фиксированные denominator/slices/stop conditions и immutable manifest с
+`campaign_id`, route/component/zone allowlist, schema hash, sampling,
+`starts_at`, `expires_at`, limits и owner. Одновременно обязательны active
+build, eligible route, unexpired manifest, `product_analytics` consent,
+deterministic sample hit и поддерживаемый component binding.
+
+Логическая единица доставки — компактный `ActionMapViewSummary`:
+
+```text
+campaign_id + campaign-scoped ephemeral view_id
+render_context_id + opaque presentation_receipt_id
+release/page/layout/device/personalization mode
+aggregated exposure tuples
+aggregated action tuples: component/version/state + instance/slot/rank
+  + semantic zone/action + pointer type + coarse local bin
+  + expected/observed effect + repeat/optional performance buckets
+quality: dropped/unmapped/truncated counters
+```
+
+Browser сворачивает одинаковые observations в histogram/buckets и уничтожает
+точные промежуточные coordinates/timestamps. На сервер не передаются
+`pageX/pageY`, `screenX/screenY`, точные float coordinates, absolute document
+position или trajectory. Разрешён только coarse local bin (default `8×8`),
+вычисленный внутри versioned component/semantic zone; повышение точности требует
+новой зарегистрированной кампании.
+
+#### Zero-cost OFF, budget и TTL
+
+`ACTION_MAP_BUILD=off` — default. OFF-build не содержит action-map chunk,
+bootstrap/import/modulepreload, special HTML attributes, listeners, observers,
+timers, remote config fetch, IndexedDB work, request или payload fields. Поэтому
+OFF имеет `0` incremental transfer/execute/storage; включение и выключение —
+build/publish decision, не постоянно загруженный remote toggle.
+
+Активная карта потребляет общий лимит weak telemetry, а не создаёт новый
+firehose: default sample `5%` eligible views (`>10%` только новым approval),
+default duration `72h`, hard expiry `7d`, не более `64` observations/view,
+не более `2` map batches/session внутри общего лимита `3`, target `<4 KiB` и
+hard `<8 KiB` map bytes/session. Unsent local summary живёт не более `24h` или
+до campaign expiry; raw summary допускается только в изолированном YDB
+namespace с TTL `7d`; Supabase raw map rows остаются `0`. При pressure map
+summaries удаляются раньше core semantic facts.
+
+#### Reviewed evidence и low-sample policy
+
+Долгоживущий результат — immutable `ProductAnalyticsEvidencePackage`, а не raw
+stream: campaign/release/model/component scope, denominator и coverage,
+performance parity, facts, limitations, reviewed finding, options, owner
+decision, follow-up, aggregate snapshot, sanitized representative render и
+page/component maps. Связь обязательна:
+`MeasurementQuestion → evidence → finding → decision → follow-up`.
+Hotspot сам по себе не создаёт finding, UI issue или profile signal.
+
+Visual/comparative slice не публикуется при малом denominator. Начальный
+операционный минимум — `20` eligible exposed views на rendered slice; manifest
+может требовать больше. Меньшая/неполная выборка получает
+`INSUFFICIENT_DATA`, объединяется до безопасного component/surface aggregate
+либо не публикуется, но никогда не превращается в автоматический вывод.
 
 ## 8. Базовая воронка страницы и карточек
 
@@ -1027,6 +1096,24 @@ DataLens — основной интерактивный dashboard для вла
 - PWA browser and standalone sessions classified correctly;
 - Metrica blocked → first-party stats still work;
 - preview/synthetic actors do not enter production dashboard.
+
+Для default-OFF action map обязательна отдельная OFF-build proof suite:
+
+- build manifest: нет action-map entry/chunk;
+- HTML: нет action-map script/import/modulepreload и action-map-only attributes;
+- browser/network: `0` action-map requests и payload fields;
+- instrumented runtime: `0` action-map listeners/observers/timers/background tasks;
+- storage: не создаются action-map IndexedDB store/records;
+- bundle diff: `0` incremental bytes, кроме отдельно объяснённого общего build
+  metadata noise;
+- ordinary navigation работает при полном запрете analytics route и не читает
+  analytics DB/config.
+
+Active capture не может разрабатываться или включаться до terminal PASS этой
+suite. Для active build дополнительно проверяются consent/route/sample/expiry
+fail-closed gates, prohibited fields, budgets/TTL/idempotency, authoritative
+action reconciliation, `0` profile mutations/rank changes, low-sample hiding и
+active-vs-control INP/LCP/CLS parity.
 
 ## 31. Definition of Done новой функции
 
