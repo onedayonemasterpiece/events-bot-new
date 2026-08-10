@@ -11,12 +11,15 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     policy: {}, requests: [], responses: [], routes: [], route_ids: [], sequence: 0,
     wrapped: 'none', measure_global: true, transport_active: false,
     network: { storage_requests: 0, receipt_rpc_requests: 0, failed_requests: 0 },
+    physical: { search_posts: 0 },
     meter: {
       categories: { auth: 0, edge: 0, direct_rest: 0, direct_rpc: 0 },
       sources: { content_length: 0, received_body: 0 }, excluded_requests: 0, pending: 0,
     },
   };
   globalThis[key] = state;
+  if (!state.physical || typeof state.physical !== 'object') state.physical = { search_posts: 0 };
+  state.physical.search_posts = count(state.physical.search_posts);
   if (!(state.physically_observed_failures instanceof WeakSet)) {
     state.physically_observed_failures = new WeakSet();
   }
@@ -285,6 +288,14 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
     if (original.__keSearchPhysicalWrapped) return true;
     const wrapped = async function searchHealthPhysicalFetch(input, init = {}) {
       const url = absoluteUrl(input);
+      const method = String(init?.method || input?.method || 'GET').toUpperCase();
+      if (url?.pathname.endsWith(searchPath) && method === 'POST') {
+        // This is the transport's actual raw fetch boundary. Unlike the
+        // high-level request wrapper it counts direct/relay retries as separate
+        // physical dispatches and remains observable when XCUITest omits a
+        // Safari Network.requestWillBeSent entry for cross-origin fetches.
+        state.physical.search_posts = count(state.physical.search_posts) + 1;
+      }
       try {
         const response = await original.call(this, input, init);
         scheduleMeasure(url, response);
@@ -327,7 +338,8 @@ export function installSearchRuntimeProbe(nextPolicy = {}) {
 
 export function snapshotSearchRuntimeProbe() {
   const state = globalThis.__KENIGEVENTS_SEARCH_HARNESS_V1__;
-  if (!state) return { requests: [], responses: [], routes: [], wrapped: 'none', network: {}, meter: null };
+  if (!state) return { requests: [], responses: [], routes: [], wrapped: 'none',
+    network: {}, physical: { search_posts: 0 }, meter: null };
   const clients = globalThis.__KENIGEVENTS_RESILIENT_DATA_CLIENTS_V1__;
   if (clients instanceof Map) {
     for (const client of clients.values()) {
@@ -360,7 +372,8 @@ export function snapshotSearchRuntimeProbe() {
   meter.pending_measurements = Number(state.meter.pending || 0);
   return {
     requests: copy(state.requests), responses: copy([...state.responses].sort((a, b) => a.sequence - b.sequence)),
-    routes: copy(state.routes), wrapped: state.wrapped, network: copy(state.network), meter,
+    routes: copy(state.routes), wrapped: state.wrapped, network: copy(state.network),
+    physical: copy(state.physical), meter,
   };
 }
 

@@ -781,6 +781,29 @@ test('XCUITest safariNetwork event envelopes feed the shared response and POST r
   assert.equal(countEventSearchPostRequests(logs), 1);
 });
 
+test('iOS reuses the in-page raw transport counter when safariNetwork omits a fetch request start', async () => {
+  const driver = {
+    capabilities: {},
+    async getLogs(type) {
+      assert.ok(['safariNetwork', 'safariConsole'].includes(type));
+      return [];
+    },
+    async execute(fn) {
+      assert.equal(fn?.name, 'snapshotSearchRuntimeProbe');
+      return {
+        physical: { search_posts: 1 },
+        network: { failed_requests: 0, storage_requests: 0 },
+        meter: { total_bytes: 512, categories: { auth: 0, edge: 512, direct_rest: 0, direct_rpc: 0 } },
+      };
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'ios', driver,
+    supabaseOrigins: ['https://project.supabase.co'] });
+  await adapter.healthDiagnostics();
+  const physical = await adapter.physicalActivity();
+  assert.equal(physical.search_posts, 1);
+});
+
 test('CDP request start remains pending across drains until response terminal bytes arrive', () => {
   const tracker = createSanitizedNavigationResponseTracker();
   tracker.consume([{ message: JSON.stringify({ method: 'Network.requestWillBeSent', params: {

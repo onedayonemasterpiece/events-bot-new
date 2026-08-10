@@ -201,6 +201,7 @@ export async function runProductionHealthJourney({ adapter, targetUrl, now = () 
   await adapter.postNavigationMeterSnapshot();
   await adapter.awaitPhysicalIdle();
   const physicalFinal = await adapter.physicalActivity();
+  if (physicalFinal.search_posts === 0) throw new Error('search_physical_observation_missing');
   if (physicalFinal.search_posts !== 1) throw new Error('search_health_request_count_invalid');
   if (physicalFinal.storage_requests !== 0) throw new Error('search_health_storage_forbidden');
   if (physicalFinal.receipt_rpc_requests !== 0) throw new Error('search_health_receipt_rpc_forbidden');

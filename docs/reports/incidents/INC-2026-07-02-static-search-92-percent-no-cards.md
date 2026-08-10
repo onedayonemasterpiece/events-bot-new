@@ -30,6 +30,22 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 
 ## Timeline
 
+- 2026-08-10 merged-main browser+iOS workflow
+  [`31343651286`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31343651286)
+  proved the same OTP-native Safari session, same-document target proof and the
+  full iOS Search product path: Auth/owner-RLS passed, the backend returned HTTP
+  `200`, one vector result set and five IDs, and Mobile Safari rendered the same
+  five cards with exact accepted backend/catalog/corpus revisions. The cell was
+  nevertheless labelled `BROKEN_SEARCH_REQUEST` because `safariNetwork`
+  retained the response/bytes but omitted the fetch `requestWillBeSent`, leaving
+  the external physical counter at zero. This is instrumentation, not Search
+  breakage. The shared runtime probe now counts the existing
+  `ResilientSupabaseTransport.rawFetch` boundary (including each direct/relay
+  attempt), and iOS combines it with the neutral OTP/XCUITest log bucket. A
+  complete response without either physical receipt is infrastructure-unknown,
+  not a product incident. Acceptance remains `1/2` pending a fresh merged-main
+  proof of this correction; schedules stay disabled.
+
 - 2026-08-09 merged-main browser+iOS workflow
   [`31342584499`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31342584499)
   proved the XCUITest `{method,event}` correction was active: iOS completed the

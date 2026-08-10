@@ -415,6 +415,7 @@ export async function createAppiumSearchAdapter(options = {}) {
   const wholeCellResponseTracker = createSanitizedNavigationResponseTracker();
   const wholeCellSearchRequestIds = new Set();
   let wholeCellSearchPostCount = 0;
+  let iosRuntimeSearchPostCount = 0;
   let wholeCellOrigins = [...new Set((options.supabaseOrigins || []).map((value) => new URL(value).origin))];
   let androidPhysicalScriptIdentifier = '';
   let androidPhysicalLast = null;
@@ -491,6 +492,19 @@ export async function createAppiumSearchAdapter(options = {}) {
     );
     postBoundaryResponseTracker?.consume(logs);
   };
+
+  const captureIosRuntimePhysical = (runtime) => {
+    if (platform !== 'ios') return runtime;
+    const observed = Number(runtime?.physical?.search_posts);
+    if (Number.isSafeInteger(observed) && observed >= 0) {
+      iosRuntimeSearchPostCount = Math.max(iosRuntimeSearchPostCount, observed);
+    }
+    return runtime;
+  };
+
+  const snapshotRuntime = async () => captureIosRuntimePhysical(
+    await driver.execute(snapshotSearchRuntimeProbe),
+  );
 
   const syncClosedDriverDiagnostics = async () => {
     const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
@@ -770,7 +784,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       configuredPolicy = { ...policy };
       await driver.execute(installSearchRuntimeProbe, configuredPolicy);
     },
-    async activity() { return driver.execute(snapshotSearchRuntimeProbe); },
+    async activity() { return snapshotRuntime(); },
     async awaitPhysicalIdle() {
       if (wholeCellOrigins.length < 1) throw new Error('search_physical_observation_missing');
       const networkType = platform === 'android' ? 'performance' : 'safariNetwork';
@@ -810,6 +824,14 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async physicalActivity() {
       if (wholeCellOrigins.length < 1) throw new Error('search_physical_observation_missing');
+      if (platform === 'ios') {
+        // The shared Search-page probe wraps the actual ResilientTransport
+        // rawFetch boundary. Sample it before every assertion so a pre-submit
+        // dispatch cannot slip between the Safari log drain and this receipt.
+        // After event navigation the page probe is gone, but the maximum is
+        // retained in the adapter for the final whole-cell assertion.
+        await snapshotRuntime().catch(() => undefined);
+      }
       if (platform === 'android' && androidPhysicalScriptIdentifier) {
         await snapshotAndroidPhysical({ required: true });
         const requests = wholeCellResponseTracker.requests()
@@ -833,7 +855,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       const requests = wholeCellResponseTracker.requests()
         .filter((item) => wholeCellOrigins.includes(item.origin));
       return Object.freeze({
-        search_posts: wholeCellSearchPostCount,
+        search_posts: Math.max(wholeCellSearchPostCount, iosRuntimeSearchPostCount),
         storage_requests: requests.filter((item) => item.pathname === '/storage/v1'
           || item.pathname.startsWith('/storage/v1/')).length,
         receipt_rpc_requests: requests.filter((item) => /^\/rest\/v1\/rpc\/get_event_search_receipt(?:_|$)/u.test(item.pathname)).length,
@@ -842,7 +864,7 @@ export async function createAppiumSearchAdapter(options = {}) {
     },
     async healthDiagnostics() {
       await syncClosedDriverDiagnostics();
-      const runtime = await driver.execute(snapshotSearchRuntimeProbe);
+      const runtime = await snapshotRuntime();
       return {
         console_errors: driverDiagnostics.console_errors,
         failed_requests: Math.max(driverDiagnostics.failed_requests,
@@ -885,7 +907,7 @@ export async function createAppiumSearchAdapter(options = {}) {
         throw new Error('mobile_auth_async_script_result_invalid');
       }
       const receipt = outcome.receipt;
-      const snapshot = await driver.execute(snapshotSearchRuntimeProbe);
+      const snapshot = await snapshotRuntime();
       return { receipt, meter: meterWithCallbackAuthBytes(snapshot.meter) };
     },
     async typeQuery(value) {
@@ -991,7 +1013,7 @@ export async function createAppiumSearchAdapter(options = {}) {
       if (!Array.isArray(initialLogs)) throw new Error('mobile_navigation_network_log_unavailable');
       accumulateClosedDriverDiagnostics(initialLogs, driverDiagnostics, driverDiagnosticIds,
         driverDiagnosticRequests, wholeCellOrigins);
-      const searchPageActivity = await driver.execute(snapshotSearchRuntimeProbe);
+      const searchPageActivity = await snapshotRuntime();
       preNavigationSearchActivity = searchPageActivity;
       preNavigationResultState = await driver.execute(pageResultSnapshot);
       postBoundarySearchRequestIds.clear();
