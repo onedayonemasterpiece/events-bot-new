@@ -42,9 +42,39 @@ def test_enabled_config_requires_distinct_static_codex_client(monkeypatch) -> No
     with pytest.raises(ValueError, match="must be distinct"):
         PrivateEventsMCPConfig.from_env()
 
-    monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client"
+    )
     config = PrivateEventsMCPConfig.from_env()
-    assert config.oauth_client_ids == frozenset({"chatgpt-client", "codex-public-client"})
+    assert config.oauth_client_ids == frozenset(
+        {"chatgpt-client", "codex-public-client"}
+    )
+
+
+def test_optional_static_opencode_client_is_public_distinct_and_registered(
+    monkeypatch,
+) -> None:
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client"
+    )
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID", "opencode-public-client"
+    )
+
+    config = PrivateEventsMCPConfig.from_env()
+
+    assert config.opencode_oauth_client_id == "opencode-public-client"
+    assert config.oauth_client_ids == frozenset(
+        {"chatgpt-client", "codex-public-client", "opencode-public-client"}
+    )
+    assert config.resource_for_client("opencode-public-client") == config.resource
+
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID", "codex-public-client"
+    )
+    with pytest.raises(ValueError, match="must be distinct"):
+        PrivateEventsMCPConfig.from_env()
 
 
 def test_disabled_config_does_not_parse_mcp_only_client_values(monkeypatch) -> None:
@@ -56,7 +86,9 @@ def test_disabled_config_does_not_parse_mcp_only_client_values(monkeypatch) -> N
 
 def test_disabled_media_story_does_not_parse_stale_media_limits(monkeypatch) -> None:
     _enabled_env(monkeypatch)
-    monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client"
+    )
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES", "not-an-integer")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES", "-1")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS", "never")
@@ -157,7 +189,9 @@ def test_enabled_config_rejects_noncanonical_or_secret_bearing_origin(
     monkeypatch, unsafe_origin: str
 ) -> None:
     _enabled_env(monkeypatch)
-    monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client"
+    )
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", unsafe_origin)
     with pytest.raises(ValueError, match="PUBLIC_BASE_URL"):
         PrivateEventsMCPConfig.from_env()
@@ -167,7 +201,9 @@ def test_universal_social_flags_are_strictly_parented_and_provider_bound(
     monkeypatch,
 ) -> None:
     _enabled_env(monkeypatch)
-    monkeypatch.setenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client"
+    )
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED", "1")
     with pytest.raises(ValueError, match="UNIVERSAL_SOCIAL_ENABLED"):
         PrivateEventsMCPConfig.from_env()

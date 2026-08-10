@@ -119,15 +119,13 @@ def _canonical_hostname(value: str) -> str:
         # WHATWG clients interpret legacy decimal/octal/hex numeric host forms
         # as IPv4 even when Python's strict ipaddress parser rejects them.
         if labels and all(
-            re.fullmatch(r"(?:0[xX][0-9A-Fa-f]+|[0-9]+)", label)
-            for label in labels
+            re.fullmatch(r"(?:0[xX][0-9A-Fa-f]+|[0-9]+)", label) for label in labels
         ):
             raise ValueError("invalid hostname") from None
         if any(
             not label
             or len(label) > 63
-            or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
-            is None
+            or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label) is None
             for label in labels
         ):
             raise ValueError("invalid hostname") from None
@@ -139,7 +137,9 @@ def _normalise_base_url(value: str) -> str:
         character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
         for character in value
     ):
-        raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host")
+        raise ValueError(
+            "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host"
+        )
     try:
         parsed = urlsplit(value)
         port = parsed.port
@@ -158,14 +158,18 @@ def _normalise_base_url(value: str) -> str:
         or parsed.fragment
         or (parsed.scheme == "https" and port is not None)
     ):
-        raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host")
+        raise ValueError(
+            "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host"
+        )
     if parsed.scheme != "https" and parsed.hostname not in {"127.0.0.1", "localhost"}:
         raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must use HTTPS")
     authority = f"[{hostname}]" if ":" in hostname else hostname
     if port is not None:
         authority = f"{authority}:{port}"
     if parsed.netloc.casefold() != authority.casefold():
-        raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host")
+        raise ValueError(
+            "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL must contain only scheme and host"
+        )
     return f"{parsed.scheme}://{authority}"
 
 
@@ -185,6 +189,7 @@ class PrivateEventsMCPConfig:
     oauth_client_id: str
     oauth_client_secret: str
     codex_oauth_client_id: str
+    opencode_oauth_client_id: str
     operator_token: str
     signing_key: str
     repository_root: str
@@ -243,23 +248,34 @@ class PrivateEventsMCPConfig:
             # Parse and validate the public origin only when routes will be
             # attached; otherwise an unrelated malformed value must not break
             # the existing webhook/health application during startup.
-            public_base_url=_normalise_base_url(base) if enabled and base else base.rstrip("/"),
+            public_base_url=_normalise_base_url(base)
+            if enabled and base
+            else base.rstrip("/"),
             path_secret=(os.getenv("PRIVATE_EVENTS_MCP_PATH_SECRET") or "").strip(),
             database_path=(os.getenv("DB_PATH") or "/data/db.sqlite").strip(),
             auth_database_path=(
                 os.getenv("PRIVATE_EVENTS_MCP_AUTH_DB_PATH")
                 or "/data/private-events-mcp-auth.sqlite"
             ).strip(),
-            oauth_client_id=(os.getenv("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID") or "").strip(),
+            oauth_client_id=(
+                os.getenv("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID") or ""
+            ).strip(),
             oauth_client_secret=(
                 os.getenv("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET") or ""
             ).strip(),
             codex_oauth_client_id=(
                 os.getenv("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID") or ""
             ).strip(),
-            operator_token=(os.getenv("PRIVATE_EVENTS_MCP_OPERATOR_TOKEN") or "").strip(),
+            opencode_oauth_client_id=(
+                os.getenv("PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID") or ""
+            ).strip(),
+            operator_token=(
+                os.getenv("PRIVATE_EVENTS_MCP_OPERATOR_TOKEN") or ""
+            ).strip(),
             signing_key=(os.getenv("PRIVATE_EVENTS_MCP_SIGNING_KEY") or "").strip(),
-            repository_root=(os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_ROOT") or "/app").strip(),
+            repository_root=(
+                os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_ROOT") or "/app"
+            ).strip(),
             repository_slug=(
                 os.getenv("PRIVATE_EVENTS_MCP_REPOSITORY_SLUG")
                 or "onedayonemasterpiece/events-bot-new"
@@ -453,13 +469,24 @@ class PrivateEventsMCPConfig:
             raise ValueError("PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL is required")
         _normalise_base_url(self.public_base_url)
         if not _SECRET_RE.fullmatch(self.path_secret):
-            raise ValueError("PRIVATE_EVENTS_MCP_PATH_SECRET must be 24+ URL-safe characters")
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_PATH_SECRET must be 24+ URL-safe characters"
+            )
         if not _CLIENT_ID_RE.fullmatch(self.oauth_client_id):
             raise ValueError("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID is invalid")
         if not _CLIENT_ID_RE.fullmatch(self.codex_oauth_client_id):
             raise ValueError("PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID is invalid")
-        if self.codex_oauth_client_id == self.oauth_client_id:
-            raise ValueError("ChatGPT and Codex OAuth client IDs must be distinct")
+        if self.opencode_oauth_client_id and not _CLIENT_ID_RE.fullmatch(
+            self.opencode_oauth_client_id
+        ):
+            raise ValueError("PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID is invalid")
+        client_ids = [self.oauth_client_id, self.codex_oauth_client_id]
+        if self.opencode_oauth_client_id:
+            client_ids.append(self.opencode_oauth_client_id)
+        if len(client_ids) != len(set(client_ids)):
+            raise ValueError(
+                "ChatGPT, Codex and OpenCode OAuth client IDs must be distinct"
+            )
         for name, value, minimum in (
             ("PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET", self.oauth_client_secret, 32),
             ("PRIVATE_EVENTS_MCP_OPERATOR_TOKEN", self.operator_token, 32),
@@ -472,7 +499,9 @@ class PrivateEventsMCPConfig:
         if not self.auth_database_path or self.auth_database_path == self.database_path:
             raise ValueError("OAuth state must use a separate SQLite file")
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", self.repository_slug):
-            raise ValueError("PRIVATE_EVENTS_MCP_REPOSITORY_SLUG must be owner/repository")
+            raise ValueError(
+                "PRIVATE_EVENTS_MCP_REPOSITORY_SLUG must be owner/repository"
+            )
         # Local import keeps disabled startup inert while making an enabled
         # malformed alias policy fail before any route is attached.
         from .social import TargetAliasPolicy
@@ -489,12 +518,16 @@ class PrivateEventsMCPConfig:
             self.universal_social_edit_delete_enabled,
             self.universal_social_media_story_enabled,
         )
-        if not self.universal_social_enabled and any((*provider_flags, *capability_flags)):
+        if not self.universal_social_enabled and any(
+            (*provider_flags, *capability_flags)
+        ):
             raise ValueError(
                 "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED is required for social workspace flags"
             )
         if self.universal_social_enabled and not any(provider_flags):
-            raise ValueError("universal social workspace requires at least one provider")
+            raise ValueError(
+                "universal social workspace requires at least one provider"
+            )
         if self.universal_social_enabled and len(self.social_approval_token) < 32:
             raise ValueError(
                 "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN must contain at least 32 characters"
@@ -506,7 +539,9 @@ class PrivateEventsMCPConfig:
                     "PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES"
                 )
             if not self.media_root or not Path(self.media_root).is_absolute():
-                raise ValueError("PRIVATE_EVENTS_MCP_MEDIA_ROOT must be an absolute path")
+                raise ValueError(
+                    "PRIVATE_EVENTS_MCP_MEDIA_ROOT must be an absolute path"
+                )
             if not self.media_allowed_hosts:
                 raise ValueError(
                     "authenticated upload storage requires "
@@ -593,13 +628,23 @@ class PrivateEventsMCPConfig:
     def oauth_client_ids(self) -> frozenset[str]:
         """Static bearer-client registry; dynamic registration is unsupported."""
 
-        return frozenset((self.oauth_client_id, self.codex_oauth_client_id))
+        return frozenset(
+            client_id
+            for client_id in (
+                self.oauth_client_id,
+                self.codex_oauth_client_id,
+                self.opencode_oauth_client_id,
+            )
+            if client_id
+        )
 
     def resource_for_client(self, client_id: str) -> str:
         if client_id == self.oauth_client_id:
             return self.resource
         if client_id == self.codex_oauth_client_id:
             return self.codex_resource
+        if self.opencode_oauth_client_id and client_id == self.opencode_oauth_client_id:
+            return self.resource
         raise ValueError("Unknown OAuth client")
 
     @property

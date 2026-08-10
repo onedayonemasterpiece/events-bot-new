@@ -22,6 +22,8 @@ from .access_policy import (
     GRANULAR_SOCIAL_SCOPES,
     LEGACY_PUBLISH_SCOPES,
     LEGACY_SOCIAL_SCOPES,
+    OPENCODE_DEFAULT_SCOPES,
+    OPENCODE_MAX_SCOPES,
     SOCIAL_SCOPES,
 )
 from .auth_store import OAuthStateStore, OAuthStoreError
@@ -45,9 +47,7 @@ ALL_SCOPES = CHATGPT_MAX_SCOPES | CODEX_MAX_SCOPES
 SUBJECT = "events-bot-owner"
 _PKCE_CHALLENGE_RE = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _PKCE_VERIFIER_RE = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
-_CODEX_CALLBACK_PATH_RE = re.compile(
-    r"^/callback/(?!\.{1,2}$)[A-Za-z0-9._~-]{1,160}$"
-)
+_CODEX_CALLBACK_PATH_RE = re.compile(r"^/callback/(?!\.{1,2}$)[A-Za-z0-9._~-]{1,160}$")
 
 
 class OAuthHTTPError(ValueError):
@@ -83,9 +83,10 @@ class PrivateOAuthServer:
     """Minimal single-operator OAuth 2.1 authorization server.
 
     This is deliberately a predefined-client implementation: ChatGPT is a
-    static confidential client and Codex is a static public client. Every
-    authorization-code exchange additionally requires PKCE S256. It is not a
-    general identity provider and does not expose dynamic client registration.
+    static confidential client, while Codex and OpenCode are distinct static
+    public clients. Every authorization-code exchange additionally requires
+    PKCE S256. It is not a general identity provider and does not expose dynamic
+    client registration.
     """
 
     def __init__(self, config: PrivateEventsMCPConfig) -> None:
@@ -95,7 +96,9 @@ class PrivateOAuthServer:
         self.failure_limiter = SlidingWindowLimiter()
 
     @staticmethod
-    def _json_response(payload: Mapping[str, Any], *, status: int = 200) -> web.Response:
+    def _json_response(
+        payload: Mapping[str, Any], *, status: int = 200
+    ) -> web.Response:
         response = web.json_response(dict(payload), status=status)
         response.headers.update(
             {
@@ -146,10 +149,14 @@ class PrivateOAuthServer:
             "service_documentation": self.config.documentation_url,
         }
 
-    async def handle_protected_resource_metadata(self, _request: web.Request) -> web.Response:
+    async def handle_protected_resource_metadata(
+        self, _request: web.Request
+    ) -> web.Response:
         return self._json_response(self.protected_resource_metadata())
 
-    async def handle_authorization_server_metadata(self, _request: web.Request) -> web.Response:
+    async def handle_authorization_server_metadata(
+        self, _request: web.Request
+    ) -> web.Response:
         return self._json_response(self.authorization_server_metadata())
 
     @staticmethod
@@ -177,6 +184,16 @@ class PrivateOAuthServer:
                 frozenset({self.config.codex_resource}),
                 CODEX_MAX_SCOPES,
                 CODEX_DEFAULT_SCOPES,
+            )
+        if self.config.opencode_oauth_client_id and constant_time_equal(
+            client_id, self.config.opencode_oauth_client_id
+        ):
+            return OAuthClient(
+                client_id,
+                "none",
+                frozenset({self.config.resource}),
+                OPENCODE_MAX_SCOPES,
+                OPENCODE_DEFAULT_SCOPES,
             )
         raise OAuthHTTPError("unauthorized_client", "Unknown OAuth client")
 
@@ -215,17 +232,15 @@ class PrivateOAuthServer:
         The callback nonce is a single URL-safe path segment, never a query.
         """
 
-        if (
-            not value.startswith("http://127.0.0.1:")
-            or "?" in value
-            or "#" in value
-        ):
+        if not value.startswith("http://127.0.0.1:") or "?" in value or "#" in value:
             raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed")
         try:
             parsed = urlsplit(value)
             port = parsed.port
         except ValueError as exc:
-            raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed") from exc
+            raise OAuthHTTPError(
+                "invalid_request", "Redirect URI is not allowed"
+            ) from exc
         if (
             parsed.scheme != "http"
             or parsed.hostname != "127.0.0.1"
@@ -241,24 +256,43 @@ class PrivateOAuthServer:
             raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed")
         return value
 
+    @staticmethod
+    def _validate_opencode_redirect_uri(value: str) -> str:
+        """Accept only OpenCode's configured fixed IPv4 loopback callback."""
+
+        if value != "http://127.0.0.1:19876/mcp/oauth/callback":
+            raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed")
+        return value
+
     def _validate_redirect_uri(self, value: str, client: OAuthClient) -> str:
         if client.client_id == self.config.oauth_client_id:
             return self._validate_chatgpt_redirect_uri(value)
         if client.client_id == self.config.codex_oauth_client_id:
             return self._validate_codex_redirect_uri(value)
+        if (
+            self.config.opencode_oauth_client_id
+            and client.client_id == self.config.opencode_oauth_client_id
+        ):
+            return self._validate_opencode_redirect_uri(value)
         raise OAuthHTTPError("unauthorized_client", "Unknown OAuth client")
 
-    def _parse_authorization_request(self, params: Mapping[str, str]) -> AuthorizationRequest:
+    def _parse_authorization_request(
+        self, params: Mapping[str, str]
+    ) -> AuthorizationRequest:
         response_type = params.get("response_type", "")
         client_id = params.get("client_id", "")
         client = self._client(client_id)
-        redirect_uri = self._validate_redirect_uri(params.get("redirect_uri", ""), client)
+        redirect_uri = self._validate_redirect_uri(
+            params.get("redirect_uri", ""), client
+        )
         state = params.get("state", "")
         resource = self._validate_resource(params.get("resource", ""), client)
         code_challenge = params.get("code_challenge", "")
         method = params.get("code_challenge_method", "")
         if response_type != "code":
-            raise OAuthHTTPError("unsupported_response_type", "Only authorization code is supported")
+            raise OAuthHTTPError(
+                "unsupported_response_type", "Only authorization code is supported"
+            )
         if not state or len(state) > 2048:
             raise OAuthHTTPError("invalid_request", "State is required")
         if method != "S256" or not _PKCE_CHALLENGE_RE.fullmatch(code_challenge):
@@ -304,7 +338,9 @@ class PrivateOAuthServer:
                 expected_type="oauth-request+jwt",
             )
         except TokenValidationError as exc:
-            raise OAuthHTTPError("invalid_request", "Authorization request expired") from exc
+            raise OAuthHTTPError(
+                "invalid_request", "Authorization request expired"
+            ) from exc
         return self._parse_authorization_request(
             {
                 "response_type": str(payload.get("response_type") or ""),
@@ -314,7 +350,9 @@ class PrivateOAuthServer:
                 "resource": str(payload.get("resource") or ""),
                 "scope": str(payload.get("scope") or ""),
                 "code_challenge": str(payload.get("code_challenge") or ""),
-                "code_challenge_method": str(payload.get("code_challenge_method") or ""),
+                "code_challenge_method": str(
+                    payload.get("code_challenge_method") or ""
+                ),
             }
         )
 
@@ -349,11 +387,12 @@ class PrivateOAuthServer:
             else f"http://127.0.0.1:{callback.port}"
         )
         scopes = ", ".join(sorted(auth_request.scopes))
-        client_name = (
-            "ChatGPT"
-            if auth_request.client_id == self.config.oauth_client_id
-            else "Codex"
-        )
+        if auth_request.client_id == self.config.oauth_client_id:
+            client_name = "ChatGPT"
+        elif auth_request.client_id == self.config.codex_oauth_client_id:
+            client_name = "Codex"
+        else:
+            client_name = "OpenCode"
         social = auth_request.scopes & SOCIAL_SCOPES
         capability_text = (
             "Будет предоставлен доступ к событиям, incident reports и операционным "
@@ -371,7 +410,7 @@ class PrivateOAuthServer:
             if legacy:
                 capability_text += (
                     " Также запрошены стабильные provider-level social scopes для "
-                    "совместимости существующего ChatGPT connector."
+                    "совместимости существующих ChatGPT/OpenCode клиентов."
                 )
             warnings: list[str] = []
             if social & APPROVAL_REQUIRED_SOCIAL_SCOPES:
@@ -388,9 +427,7 @@ class PrivateOAuthServer:
                 )
             if warnings:
                 social_warning = (
-                    '<p><strong>Внимание:</strong> '
-                    + " ".join(warnings)
-                    + "</p>"
+                    "<p><strong>Внимание:</strong> " + " ".join(warnings) + "</p>"
                 )
         body = f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -445,7 +482,9 @@ class PrivateOAuthServer:
                     client_fingerprint=secret_hash(auth_request.client_id)[:12],
                     details={"remote": remote},
                 )
-                raise OAuthHTTPError("access_denied", "Неверный операторский токен", 403)
+                raise OAuthHTTPError(
+                    "access_denied", "Неверный операторский токен", 403
+                )
             code = random_token(32)
             now = int(time.time())
             await asyncio.to_thread(
@@ -482,34 +521,50 @@ class PrivateOAuthServer:
         parsed = urlsplit(url)
         query = list(parse_qsl(parsed.query, keep_blank_values=True))
         query.extend(values.items())
-        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), ""))
+        return urlunsplit(
+            (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), "")
+        )
 
-    def _authenticate_client(self, request: web.Request, form: Mapping[str, Any]) -> OAuthClient:
+    def _authenticate_client(
+        self, request: web.Request, form: Mapping[str, Any]
+    ) -> OAuthClient:
         form_client_id = str(form.get("client_id") or "")
         has_form_secret = "client_secret" in form
         client_secret = str(form.get("client_secret") or "")
         header = request.headers.get("Authorization", "")
         if header:
             if not header.startswith("Basic ") or has_form_secret:
-                raise OAuthHTTPError("invalid_client", "Invalid client authentication", 401)
+                raise OAuthHTTPError(
+                    "invalid_client", "Invalid client authentication", 401
+                )
             try:
-                raw = base64.b64decode(header[6:].strip(), validate=True).decode("utf-8")
+                raw = base64.b64decode(header[6:].strip(), validate=True).decode(
+                    "utf-8"
+                )
                 header_id, header_secret = raw.split(":", 1)
             except Exception as exc:
-                raise OAuthHTTPError("invalid_client", "Invalid client authentication", 401) from exc
+                raise OAuthHTTPError(
+                    "invalid_client", "Invalid client authentication", 401
+                ) from exc
             if form_client_id and not constant_time_equal(form_client_id, header_id):
-                raise OAuthHTTPError("invalid_client", "Invalid client authentication", 401)
+                raise OAuthHTTPError(
+                    "invalid_client", "Invalid client authentication", 401
+                )
             client = self._client_for_token_endpoint(header_id)
             if client.token_endpoint_auth_method == "none" or not constant_time_equal(
                 header_secret, self.config.oauth_client_secret
             ):
-                raise OAuthHTTPError("invalid_client", "Invalid client authentication", 401)
+                raise OAuthHTTPError(
+                    "invalid_client", "Invalid client authentication", 401
+                )
             return client
 
         client = self._client_for_token_endpoint(form_client_id)
         if client.token_endpoint_auth_method == "none":
             if has_form_secret:
-                raise OAuthHTTPError("invalid_client", "Invalid client authentication", 401)
+                raise OAuthHTTPError(
+                    "invalid_client", "Invalid client authentication", 401
+                )
             return client
         if not constant_time_equal(client_secret, self.config.oauth_client_secret):
             raise OAuthHTTPError("invalid_client", "Invalid client authentication", 401)
@@ -521,7 +576,9 @@ class PrivateOAuthServer:
         except OAuthHTTPError as exc:
             # Token endpoints report unknown registrations as invalid_client,
             # not authorization-endpoint unauthorized_client.
-            raise OAuthHTTPError("invalid_client", "Invalid client authentication", 401) from exc
+            raise OAuthHTTPError(
+                "invalid_client", "Invalid client authentication", 401
+            ) from exc
 
     def _token_payload(
         self,
@@ -562,7 +619,9 @@ class PrivateOAuthServer:
                 )
                 verifier = str(form.get("code_verifier") or "")
                 if not code or not _PKCE_VERIFIER_RE.fullmatch(verifier):
-                    raise OAuthHTTPError("invalid_request", "Code and PKCE verifier are required")
+                    raise OAuthHTTPError(
+                        "invalid_request", "Code and PKCE verifier are required"
+                    )
                 try:
                     grant = await asyncio.to_thread(
                         self.store.consume_authorization_code,
@@ -574,7 +633,9 @@ class PrivateOAuthServer:
                         allowed_scopes=client.allowed_scopes,
                     )
                 except OAuthStoreError as exc:
-                    raise OAuthHTTPError(str(exc), "Authorization code is invalid") from exc
+                    raise OAuthHTTPError(
+                        str(exc), "Authorization code is invalid"
+                    ) from exc
                 payload = self._token_payload(
                     subject=grant.subject,
                     client_id=grant.client_id,
@@ -607,7 +668,9 @@ class PrivateOAuthServer:
                 if not old_token:
                     raise OAuthHTTPError("invalid_request", "Refresh token is required")
                 requested_raw = str(form.get("scope") or "").strip()
-                requested = self._parse_scopes(requested_raw, client) if requested_raw else None
+                requested = (
+                    self._parse_scopes(requested_raw, client) if requested_raw else None
+                )
                 new_refresh = random_token(48)
                 try:
                     grant = await asyncio.to_thread(
@@ -647,7 +710,9 @@ class PrivateOAuthServer:
                 status=exc.status,
             )
             if exc.status == 401:
-                response.headers["WWW-Authenticate"] = 'Basic realm="private-events-mcp"'
+                response.headers["WWW-Authenticate"] = (
+                    'Basic realm="private-events-mcp"'
+                )
             return response
 
     def verify_authorization_header(

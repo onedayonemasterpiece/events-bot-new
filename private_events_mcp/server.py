@@ -151,7 +151,14 @@ class PrivateEventsMCPServer:
             challenge=self.oauth.challenge(),
             tool_timeout_seconds=max(1.0, config.query_timeout_ms / 1000.0 * 5.0),
             resource=config.resource,
-            allowed_client_ids=frozenset({config.oauth_client_id}),
+            allowed_client_ids=frozenset(
+                client_id
+                for client_id in (
+                    config.oauth_client_id,
+                    config.opencode_oauth_client_id,
+                )
+                if client_id
+            ),
             policy_fingerprint=self.target_policy.fingerprint,
             instructions=(
                 "Access to canonical event and incident evidence. Social tools, when enabled "
@@ -462,18 +469,27 @@ class PrivateEventsMCPServer:
         if origin and origin not in {self.public_origin, "https://chatgpt.com"}:
             raise web.HTTPForbidden(text="invalid_origin")
 
-    def _endpoint_contract(self, path: str) -> tuple[str, str, MCPProtocol, frozenset[str], str]:
+    def _endpoint_contract(
+        self, path: str
+    ) -> tuple[str, frozenset[str], MCPProtocol, frozenset[str], str]:
         if path == self.config.codex_mcp_path:
             return (
                 self.config.codex_resource,
-                self.config.codex_oauth_client_id,
+                frozenset({self.config.codex_oauth_client_id}),
                 self.codex_protocol,
                 CODEX_MAX_SCOPES,
                 self.config.codex_resource_metadata_url,
             )
         return (
             self.config.resource,
-            self.config.oauth_client_id,
+            frozenset(
+                client_id
+                for client_id in (
+                    self.config.oauth_client_id,
+                    self.config.opencode_oauth_client_id,
+                )
+                if client_id
+            ),
             self.protocol,
             CHATGPT_MAX_SCOPES,
             self.config.resource_metadata_url,
@@ -484,14 +500,14 @@ class PrivateEventsMCPServer:
         if not header:
             return None, False
         try:
-            resource, client_id, _protocol, max_scopes, _metadata = self._endpoint_contract(
+            resource, client_ids, _protocol, max_scopes, _metadata = self._endpoint_contract(
                 request.path
             )
             identity = self.oauth.verify_authorization_header(
                 header,
                 expected_resource=resource,
             )
-            if identity.client_id != client_id or not identity.scopes.issubset(max_scopes):
+            if identity.client_id not in client_ids or not identity.scopes.issubset(max_scopes):
                 raise TokenValidationError("wrong_client_or_scope")
             return identity, False
         except TokenValidationError:

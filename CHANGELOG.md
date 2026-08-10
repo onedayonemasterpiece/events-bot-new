@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / OpenCode OAuth:** added a distinct static public
+  OpenCode PKCE client on the full ChatGPT resource with an exact Windows
+  loopback callback, client/resource/token isolation from ChatGPT and Codex,
+  stable social capability scopes, an owner-only configuration artifact and an
+  existing-identity-preserving generator mode. Codex remains exactly seven
+  read-only tools; OpenCode local-file media still requires the separately
+  authenticated streaming bridge rather than accepting Windows paths.
+
 - **my-data-hub daily statistics producer (default off)**: added a non-sensitive
   `events-bot.daily-statistics.v1` aggregate command with RFC 8785 canonical envelope
   and payload hashes, a restart-safe exact-byte filesystem outbox, bounded retries,

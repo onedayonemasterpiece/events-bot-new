@@ -1,4 +1,4 @@
-# Private Events MCP for ChatGPT and Codex
+# Private Events MCP for ChatGPT, OpenCode and Codex
 
 Status: integrated release candidate; disabled by default. The initial
 media/story gate is image-only. Production social activation requires exact-main
@@ -15,7 +15,7 @@ Two OAuth resources deliberately expose different products:
 
 - **Codex** receives exactly the seven read-only event, incident and operational
   evidence tools. It receives no social scope, tool or provider credential.
-- **ChatGPT** receives those seven evidence tools and, only when granular scopes
+- **ChatGPT and OpenCode** receive those seven evidence tools and, only when scopes
   and runtime kill switches permit it, a provider-neutral Telegram/VK workspace
   for targeted editorial research and operator-requested communication.
 
@@ -27,7 +27,7 @@ MAX remains outside the current scope.
 ## Endpoints and OAuth
 
 ```text
-https://<origin>/_private/<secret>/mcp        # ChatGPT resource
+https://<origin>/_private/<secret>/mcp        # ChatGPT + OpenCode resource
 https://<origin>/_private/<secret>/codex/mcp  # Codex resource
 ```
 
@@ -36,6 +36,8 @@ Data tools require OAuth authorization-code + PKCE S256. The server provides:
 
 - one predefined confidential ChatGPT client (`client_secret_basic`/post);
 - one distinct predefined public Codex client (`none`, mandatory S256);
+- one optional distinct public OpenCode client (`none`, mandatory S256) with
+  exact `http://127.0.0.1:19876/mcp/oauth/callback` redirect binding;
 - exact client/resource/audience binding;
 - exact ChatGPT callback validation and literal Codex loopback callbacks only;
 - 15-minute signed access tokens;
@@ -45,7 +47,7 @@ Data tools require OAuth authorization-code + PKCE S256. The server provides:
 
 Omitted scopes default to only `events:read incidents:read operations:read`.
 Codex can receive those scopes plus `offline_access`, and nothing social.
-ChatGPT social scopes are granular by provider and action class:
+ChatGPT/OpenCode social scopes are granular by provider and action class:
 
 ```text
 <provider>:discover
@@ -82,15 +84,16 @@ committed immediately without a second browser confirmation. Edit/delete of
 existing content retain the independent server-side preview/approval step.
 Codex can never
 receive these scopes. This lets normal MCP tool evolution preserve the existing
-connector URL, client identity and name; only a genuinely new capability family
-requires new OAuth consent.
+connector URL and ChatGPT identity/name. OpenCode has a separate public client
+identity on the same full resource, so its tokens cannot be used as ChatGPT or
+Codex tokens. Only a genuinely new capability family requires new OAuth consent.
 
 After the first successful connection rotate the one-time bootstrap operator
 token. Do not issue or share access/refresh tokens manually.
 
 ## Evidence tools
 
-Codex exposes exactly these seven tools; ChatGPT retains them unchanged:
+Codex exposes exactly these seven tools; ChatGPT and OpenCode retain them unchanged:
 
 | Tool | Scope | Contract |
 |---|---|---|
@@ -404,6 +407,7 @@ PRIVATE_EVENTS_MCP_PATH_SECRET=<fresh>
 PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID=<fresh ChatGPT id>
 PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET=<fresh>
 PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID=<fresh public Codex id>
+PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID=<optional public OpenCode id>
 PRIVATE_EVENTS_MCP_OPERATOR_TOKEN=<fresh bootstrap token>
 PRIVATE_EVENTS_MCP_SIGNING_KEY=<fresh>
 PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN=<fresh; operator browser only>
@@ -470,7 +474,7 @@ An already installed connector with the four original provider-level social
 scopes does not need a new name or identity: the compatibility families above
 cover later typed tools within the same provider/read-write boundary.
 The generator has no implicit/default generation mode. `--new-install` creates
-a new private path, ChatGPT client ID/secret, Codex client ID, signing key,
+a new private path, ChatGPT client ID/secret, Codex/OpenCode public client IDs, signing key,
 social-approval token and bootstrap token. Do not use it for routine bootstrap
 rotation: changing those stable values can invalidate an installed connector,
 refresh-token/signing state and saved endpoint configuration. Use a complete
@@ -506,9 +510,10 @@ python scripts/generate_private_events_mcp_credentials.py \
   --output-dir /secure/private-events-mcp-bootstrap-rotation-20260809
 ```
 
-This mode changes exactly three consistent copies of the same value:
-`deploy.PRIVATE_EVENTS_MCP_OPERATOR_TOKEN`,
-`chatgpt.bootstrap_operator_token`, and `codex.bootstrap_operator_token`.
+This mode changes the consistent bootstrap-token copies in deploy, ChatGPT,
+Codex and, when present, OpenCode:
+`deploy.PRIVATE_EVENTS_MCP_OPERATOR_TOKEN`, `chatgpt.bootstrap_operator_token`,
+`codex.bootstrap_operator_token` and `opencode.bootstrap_operator_token`.
 It preserves every URL/path, OAuth client value, signing/state path, scope,
 social-approval value and all unknown forward-compatible fields value-for-value
 at the JSON data level. It refuses incomplete/inconsistent full bundles,
@@ -521,13 +526,57 @@ Every deploy field, including a forward-compatible
 unknown field retained during rotation, must have a valid environment name and
 a single-line NUL-free string value before `fly-secrets.env` can be written.
 
-Both modes require a fresh output path under an existing non-symlink parent.
+All modes require a fresh output path under an existing non-symlink parent.
 The generator creates the output directory as `0700` and every artifact with
 `O_EXCL`/no-follow semantics and exact `0600` permissions. Source credentials
 must remain owner-only and outside Git. Stdout contains only artifact paths, a
 public origin, redacted path, mode and endpoint fingerprints; it never contains
 the private endpoint, bootstrap token, client secret, signing key, private path
 or social-approval token.
+
+### Connect OpenCode on Windows
+
+OpenCode is a separate static public OAuth client on the full ChatGPT resource;
+never reuse the ChatGPT confidential client secret or the Codex read-only
+client ID. For an existing stable deployment, add only the OpenCode registration
+without changing the path, issuer, signing key or existing clients:
+
+```bash
+umask 077
+python scripts/generate_private_events_mcp_credentials.py \
+  --add-opencode-client \
+  /secure/current/chatgpt-private-app-credentials.json \
+  --output-dir /secure/private-events-mcp-opencode-20260810
+```
+
+The owner-only `opencode-private-mcp-config.json` contains a ready stable-format
+`opencode_config` block. Merge its `mcp.eventsBot` entry into the Windows global
+config at `%USERPROFILE%\.config\opencode\opencode.json` (or use a project-root
+`opencode.json`). Then run:
+
+```powershell
+opencode mcp auth eventsBot
+opencode mcp list
+opencode mcp debug eventsBot
+```
+
+The browser page accepts the bootstrap operator token once and redirects only
+to `http://127.0.0.1:19876/mcp/oauth/callback`; port 19876 must be free. The
+OpenCode config includes only the public client ID—there is no client secret.
+These fields and commands follow the current official
+[OpenCode MCP OAuth contract](https://opencode.ai/docs/mcp-servers/) and
+[global configuration path](https://opencode.ai/docs/config/).
+The requested stable scopes are the three evidence reads, `offline_access`, and
+provider-level `telegram:read|publish vk:read|publish`, which map only within the
+same provider/read-write family. Runtime feature flags and provider rights still
+apply. OAuth tokens are stored by OpenCode outside the project config.
+
+OpenCode does not implement ChatGPT's `openai/fileParams` rewrite. Therefore a
+plain MCP connection supports event/incident tools and text/social operations,
+but a Windows local image path is not a valid `social_asset_stage.file`. Local
+media requires the separate authenticated streaming bridge that returns the
+same principal-bound `ast_*`; never pass a Windows path or raw file ID to the
+remote server.
 
 The legacy `PRIVATE_EVENTS_MCP_SOCIAL_TARGETS_JSON` policy applies only to the
 narrow compatibility adapters when the universal workspace is off. It is not a
@@ -604,13 +653,14 @@ Record all of the following without secrets:
 1. merged main SHA, Fly release and in-container immutable SHA are identical;
 2. public/internal `/healthz` remains ready, DB check is healthy and
    `PRAGMA quick_check` is `ok`;
-3. ChatGPT confidential and Codex public OAuth/PKCE flows, exact resource
+3. ChatGPT confidential plus OpenCode/Codex public OAuth/PKCE flows, exact resource
    metadata, access expiry and refresh rotation pass; an unauthenticated
    `tools/call` returns HTTP 401 with the exact endpoint-specific
    `WWW-Authenticate` resource-metadata challenge (public initialization and
    catalogue discovery remain available);
 4. Codex `tools/list` is exactly the seven evidence tools and direct social calls
-   fail; ChatGPT lists only granted and enabled workspace tools;
+   fail; ChatGPT/OpenCode list only granted and enabled workspace tools; neither
+   full-resource client token is accepted on the Codex endpoint;
 5. real event `search -> fetch`, `events_search -> event_get`, incident evidence
    and `operations_snapshot` pass; the event DB digest/row state is unchanged;
 6. unsupported MCP protocol version and JSON-RPC batch return HTTP 400;

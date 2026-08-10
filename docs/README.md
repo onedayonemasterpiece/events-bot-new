@@ -35,7 +35,7 @@
 - Эксплуатация: `docs/operations/` (как запускать/поддерживать)
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
-- Private read-only Events MCP / OAuth activation gate: `docs/operations/private-events-mcp.md`
+- Private Events MCP / OAuth for ChatGPT, OpenCode and read-only Codex: `docs/operations/private-events-mcp.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
 - Event-media automatic gate: `docs/features/event-media/README.md`
 - Telegram vertical-video quality, SHA cache, Yandex CDN and ranking:
