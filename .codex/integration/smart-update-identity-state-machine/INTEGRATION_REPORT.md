@@ -2,7 +2,10 @@
 
 ## Scope and constraints
 
-- Base: `origin/main` at `d7731ab4235b325e9ca52d13c45fba83eaf5de0b`.
+- Initial frozen audit/inventory base: `origin/main` at
+  `d7731ab4235b325e9ca52d13c45fba83eaf5de0b`.
+- Final focused branch base after rebase: `origin/main` at
+  `96784bd572c03b965f303366c4ff0bb85d1b9a3f`.
 - Integration branch: `integration/smart-update-identity-state-machine`.
 - Incident contracts:
   `INC-2026-08-04-smart-update-identity-source-replay-corruption` and
@@ -23,9 +26,9 @@
 | D1 caller map | PRE-1, PRE-2, ART-8 | read-only / medium | read-only latest-main checkout | merged as documentation | no write head | `docs/features/smart-event-update/caller-inventory.md`; ignored D1 artifact |
 | D2 production baseline | PRE-3, ART-3 | read-only production / maximum-risk | no writable branch | accepted | no repo commit | D2 report SHA `6c61dd6c56649df15dfb5b75727dfbd1249948be8e041e565dae0e75f49d6617` |
 | D3 architecture | IMPL-1–10 design, ART-4–5 | read-only / maximum-risk | no writable branch | accepted | no repo commit | ignored `d3/architecture.md` |
-| CORE-IMPL | IMPL-1–6, IMPL-9, TEST-1–10, TEST-13 | worktree worker / high | `agent/smart-update-identity/core-impl`; `/home/dev/.codex/worktrees/events-bot-new/smart-update-core-impl` | merged | worker `8118b0085`; cherry-pick `2d04b2812` | typed state, schema, keys, leases, retries, exact replay |
-| CALLERS-IMPL | IMPL-7–8, TEST-11–12 | worktree worker / high | `agent/smart-update-identity/smart-update-callers-impl`; `/home/dev/.codex/worktrees/events-bot-new/smart-update-callers-impl` | merged | worker `13c588699`; cherry-pick `5d30891f4` | all six production boundaries + AST contract |
-| RECOVERY-CLI | IMPL-10, TEST-14, ART-7 | worktree worker / high | `lane/recovery-smart-update-identity`; `/home/dev/.codex/worktrees/events-bot-new/recovery-smart-update-identity` | merged + reconciled | worker `c63cc37d3`; cherry-pick `66c310599` | durable + Telegram/VK/parser/ticket/festival recovery; final production read-only D4c dry-run |
+| CORE-IMPL | IMPL-1–6, IMPL-9, TEST-1–10, TEST-13 | worktree worker / high | `agent/smart-update-identity/core-impl`; `/home/dev/.codex/worktrees/events-bot-new/smart-update-core-impl` | merged | worker `8118b0085`; rebased integration `c0488d9ba` | typed state, schema, keys, leases, retries, exact replay |
+| CALLERS-IMPL | IMPL-7–8, TEST-11–12 | worktree worker / high | `agent/smart-update-identity/smart-update-callers-impl`; `/home/dev/.codex/worktrees/events-bot-new/smart-update-callers-impl` | merged | worker `13c588699`; rebased integration `fb84b2308` | all six production boundaries + AST contract |
+| RECOVERY-CLI | IMPL-10, TEST-14, ART-7 | worktree worker / high | `lane/recovery-smart-update-identity`; `/home/dev/.codex/worktrees/events-bot-new/recovery-smart-update-identity` | merged + reconciled | worker `c63cc37d3`; rebased integration `be65b0ca3` | durable + Telegram/VK/parser/ticket/festival recovery; final production read-only D4c dry-run |
 | Integrator | all integration, ART-1–9, constraints | serial integrator / maximum-risk | this branch/worktree | in review | final SHA pending | parser occurrence keys, immediate known-distinct create, all-source recovery, caller dominance proof, final validation/CI |
 | Checklist reviewer | all requirements | read-only reviewer / high | pending final diff | pending | pending | final closure table below will be reconciled to reviewer findings |
 
@@ -103,8 +106,9 @@ metadata commits were not required for runtime delivery.
   `2cc2d19bd7024e12201fbb45574aa43c39cd6260c88e8dda50ab24e7ed485b78`,
   manifest SHA
   `cb75b598960968244353a8ff091436e21b5c624e8ccad128a54f5fd20e4adbf3`.
-- Local relevant suite: `216 passed in 144.12s`; ignored log SHA-256
-  `4620444cf8666cd503840e0a9d4f1f073043b718164235b8c016fe856451e673`.
+- Post-rebase local relevant suite: `216 passed in 140.53s`; ignored log
+  SHA-256
+  `369baa7a28dbe428a6afb6f4f848e9e909313a21cc791af523127aac0cca9041`.
 - Production boundary compile: passed for core, schema, every caller, recovery,
   and audit script.
 - `git diff --check`: passed.

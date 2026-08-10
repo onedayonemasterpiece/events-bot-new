@@ -268,16 +268,19 @@ The exact CLI source SHA-256 was
 
 ## Release And Closure Evidence
 
-- implementation base: `d7731ab4235b325e9ca52d13c45fba83eaf5de0b`
+- initial audit/inventory base: `d7731ab4235b325e9ca52d13c45fba83eaf5de0b`
+- final focused branch base: `origin/main`
+  `96784bd572c03b965f303366c4ff0bb85d1b9a3f`
 - integration branch: `integration/smart-update-identity-state-machine`
-- core/caller/recovery implementation commits before final reconciliation:
-  `2d04b2812`, `5d30891f4`, `66c310599`
-- PR / final implementation SHA: pending final review
+- rebased core/caller/recovery commits: `c0488d9ba`, `fb84b2308`,
+  `be65b0ca3`; reconciliation commit: `3899970f4`
+- PR / final implementation SHA: pending final checklist and draft PR
 - deployed SHA: not performed (explicitly out of scope)
 - production recovery apply: not performed (explicitly out of scope)
-- local regression checks: production-boundary compile PASS; full relevant
-  suite `216 passed in 144.12s`; `git diff --check` PASS. Ignored log SHA-256
-  `4620444cf8666cd503840e0a9d4f1f073043b718164235b8c016fe856451e673`
+- post-rebase local regression checks: production-boundary compile PASS; full
+  relevant suite `216 passed in 140.53s`; `git diff --check` PASS. Ignored log
+  SHA-256
+  `369baa7a28dbe428a6afb6f4f848e9e909313a21cc791af523127aac0cca9041`
 - post-deploy verification: pending
 
 ## Rollback
