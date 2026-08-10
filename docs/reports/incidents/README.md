@@ -22,6 +22,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-10-private-mcp-vk-dialog-metadata.md`
+  - Scope: Private Events MCP metadata-only VK unread/all dialog listing and
+    typed writes to opaque dialog targets.
+  - Must not regress: listing unread senders returns only a display name, dialog
+    kind, unread count and opaque target ref—never message bodies or native IDs;
+    returned targets remain usable for an explicit typed DM, while Codex stays
+    exactly seven evidence tools.
+
 - `INC-2026-08-09-private-mcp-chatgpt-fileparams-ingest.md`
   - Scope: real ChatGPT conversation fileParams ingestion, principal-bound
     asset staging and Telegram Saved Messages image publication.

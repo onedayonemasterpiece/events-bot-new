@@ -100,6 +100,20 @@ receipt is `FAIL_FAULT_NOT_ACTIVE`, not PASS.
 | [tests/e2e/features/release_smoke_smart_update.feature](../../tests/e2e/features/release_smoke_smart_update.feature) | Smoke релиза: /tg (trust+festival), VK auto import (limit=10), псевдо‑фестиваль «Масленица» из holidays, Telegram Monitoring (>=10), Telegraph‑картинки (Supabase WebP / Catbox fallback), ticket-sites queue (Pyramida), /start→«Добавить событие» (Smart Update source-log), добавление фестиваля | Live UI (VK/TG/Kaggle/Telegraph) | Перед запуском обновить ENV/доступы и убедиться, что есть реальные события/посты в окне сканирования; сценарий по «Масленице» использует VK посты: wall-53460968_11095, _11053, _11099, wall-41284227_7045; часть сценариев помечена `@manual` (даты /parse, ручные флоу) |
 | [tests/e2e/features/release_multisource_control.feature](../../tests/e2e/features/release_multisource_control.feature) | Контроль multi-source (VK+TG+/parse) под дату релиза | Live + DB‑проверки | Шаблон/ручной сценарий для финальной валидации “один event_id из трёх источников”; требует актуальных данных в БД |
 
+### Private Events MCP: VK dialog metadata
+
+- With the existing ChatGPT/OpenCode connection and `vk:read` (or
+  `vk:read:dialogs`), call `social_dialogs_list` with `read_access=dialogs` and
+  `unread_only=true`.
+- The result may contain only display name, dialog kind, unread count and opaque
+  `tgt_*`; fail if `last_message`, message text or a native peer/user/group ID is
+  present.
+- With a separately explicit operator request, one returned safe target must
+  complete typed `send_message` prepare/commit and read-after-write. Do not send
+  as part of the metadata-only unread-list smoke.
+- Disable the private-read flag and verify the tool disappears; Codex must still
+  list exactly seven non-social evidence tools.
+
 ## Live-only чеклист
 
 - Перед прогоном сценариев на реальных постах очищать следы прошлых запусков (события/сканы/очереди).

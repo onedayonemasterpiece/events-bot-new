@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / VK dialogs:** added a VK-only metadata dialog tool that
+  lists all or unread conversations as opaque targets with display name, kind
+  and unread count while excluding message bodies and native IDs. Returned
+  user, group-chat and community dialog targets support explicitly requested
+  typed messages through the dedicated messenger role; existing ChatGPT and
+  OpenCode OAuth identities/scopes remain stable and Codex remains exact-seven.
+
 - **Private Events MCP / OpenCode loopback callback:** allow the static public
   OpenCode client to select any available unprivileged `127.0.0.1` port while
   retaining the exact `/mcp/oauth/callback` path, S256 PKCE and authorization-code

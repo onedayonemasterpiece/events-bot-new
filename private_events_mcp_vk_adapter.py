@@ -192,7 +192,13 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "wall_likes": _policy(VKActor.PUBLIC_READER, "read_public", "likes.getList", ["type", "owner_id", "item_id", "count"], ["extended"]),
     "dialog_history": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getHistory", ["peer_id", "count"], ["offset", "start_message_id", "rev"]),
     "message_item": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getById", ["message_ids"]),
-    "conversations": _policy(VKActor.DIALOG_READER, "dialogs", "messages.getConversations", ["count"], ["offset", "filter"]),
+    "conversations": _policy(
+        VKActor.DIALOG_READER,
+        "dialogs",
+        "messages.getConversations",
+        ["count"],
+        ["offset", "filter", "extended", "fields"],
+    ),
     "stories": _policy(VKActor.STORY_READER, "story_read", "stories.get", ["owner_id"], ["extended", "fields"]),
     "story_item": _policy(VKActor.STORY_READER, "story_read", "stories.getById", ["stories"], ["extended", "fields"]),
     "story_stats": _policy(VKActor.ANALYTICS_READER, "analytics", "stories.getStats", ["owner_id", "story_id"]),
@@ -669,7 +675,10 @@ class VKWorkspaceAdapter:
     def _cursor_context(request: SocialReadRequest, sample_ref: str | None = None) -> tuple[str, str, str, str, str]:
         resource = request.target_ref or request.item_ref or "none"
         resource_fingerprint = hashlib.sha256(resource.encode()).hexdigest()
-        query_fingerprint = hashlib.sha256((request.query or "").encode()).hexdigest()
+        query_binding = request.query or ""
+        if request.operation is SocialReadOperation.LIST_DIALOGS:
+            query_binding += "\0unread=" + ("1" if request.unread_only else "0")
+        query_fingerprint = hashlib.sha256(query_binding.encode()).hexdigest()
         read_access = request.read_access.value if request.read_access is not None else "none"
         return request.operation.value, resource_fingerprint, query_fingerprint, sample_ref or request.sample_ref or "none", read_access
 
@@ -740,7 +749,25 @@ class VKWorkspaceAdapter:
     @staticmethod
     def _valid_message_binding(native: Mapping[str, Any]) -> bool:
         peer_id, message_id = _int(native.get("peer_id")), _int(native.get("message_id"))
-        return peer_id is not None and peer_id > 0 and message_id is not None and message_id > 0
+        return peer_id not in {None, 0} and message_id is not None and message_id > 0
+
+    @classmethod
+    def _dialog_peer_id(cls, native: Mapping[str, Any]) -> int | None:
+        kind = str(native.get("kind") or "")
+        peer_id = _int(native.get("peer_id"))
+        if kind == SocialTargetKind.USER.value and cls._valid_user_binding(native):
+            return peer_id
+        if (
+            kind == SocialTargetKind.CHAT.value
+            and peer_id is not None
+            and peer_id > 2_000_000_000
+        ):
+            return peer_id
+        if kind == SocialTargetKind.COMMUNITY.value and cls._valid_community_binding(native):
+            owner_id = _int(native.get("owner_id"))
+            if peer_id in {None, owner_id}:
+                return owner_id
+        return None
 
     @staticmethod
     def _wall_native(owner_id: int, post_id: int) -> dict[str, Any]:
@@ -787,7 +814,13 @@ class VKWorkspaceAdapter:
         if self._permitted(VKActor.PUBLIC_READER, "search_public") or self._permitted(VKActor.DIALOG_READER, "search_newsfeed"):
             reads.add(SocialReadOperation.SEARCH_ITEMS)
         if self._permitted(VKActor.DIALOG_READER, "dialogs"):
-            reads.update({SocialReadOperation.LIST_ITEMS, SocialReadOperation.GET_ITEM})
+            reads.update(
+                {
+                    SocialReadOperation.LIST_DIALOGS,
+                    SocialReadOperation.LIST_ITEMS,
+                    SocialReadOperation.GET_ITEM,
+                }
+            )
         if self._permitted(VKActor.STORY_READER, "story_read"):
             reads.add(SocialReadOperation.LIST_STORIES)
         if self._permitted(VKActor.ANALYTICS_READER, "analytics"):
@@ -815,12 +848,15 @@ class VKWorkspaceAdapter:
         if target_ref is not None:
             native = self._resolve_ref("target", target_ref)
             actions.clear()
-            if kind is SocialTargetKind.USER and self._valid_user_binding(native):
+            if self._dialog_peer_id(native) is not None:
                 if self._permitted(VKActor.USER_MESSENGER, "dm_send"):
                     actions.add(SocialAction.SEND_MESSAGE)
-                if self._permitted(VKActor.USER_MESSENGER, "forward"):
+                if (
+                    kind is not SocialTargetKind.COMMUNITY
+                    and self._permitted(VKActor.USER_MESSENGER, "forward")
+                ):
                     actions.add(SocialAction.FORWARD)
-            elif kind is SocialTargetKind.COMMUNITY and self._valid_community_binding(native):
+            if kind is SocialTargetKind.COMMUNITY and self._valid_community_binding(native):
                 community_checks = {
                     SocialAction.PUBLISH: "post_publish", SocialAction.SCHEDULE: "post_publish",
                     SocialAction.EDIT: "edit", SocialAction.DELETE: "delete",
@@ -1259,6 +1295,100 @@ class VKWorkspaceAdapter:
             })
         return {"results": results, "trust": _TRUST}
 
+    async def _dialogs(self, request: SocialReadRequest) -> Mapping[str, Any]:
+        """Return dialog identity metadata without projecting message content."""
+
+        if request.read_access is not SocialReadAccess.DIALOGS:
+            raise VKWorkspaceError("access_target_mismatch")
+        limit = min(request.limit, _MAX_RESULT_PAGE)
+        offset = self._offset(request)
+        response = await self._call(
+            "conversations",
+            {
+                "count": limit,
+                "offset": offset,
+                "filter": "unread" if request.unread_only else "all",
+                "extended": 1,
+                "fields": "screen_name",
+            },
+        )
+        if not isinstance(response, Mapping):
+            raise VKWorkspaceError("provider_response_invalid")
+        profiles = {
+            _int(raw.get("id")): raw
+            for raw in response.get("profiles", [])
+            if isinstance(raw, Mapping) and _int(raw.get("id")) is not None
+        }
+        groups = {
+            _int(raw.get("id")): raw
+            for raw in response.get("groups", [])
+            if isinstance(raw, Mapping) and _int(raw.get("id")) is not None
+        }
+        provider_items = _items(response)
+        results: list[dict[str, Any]] = []
+        for entry in provider_items:
+            conversation = entry.get("conversation")
+            if not isinstance(conversation, Mapping):
+                continue
+            peer = conversation.get("peer")
+            if not isinstance(peer, Mapping):
+                continue
+            peer_id = _int(peer.get("id"))
+            peer_type = str(peer.get("type") or "")
+            unread_count = _int(conversation.get("unread_count"))
+            if unread_count is None or unread_count < 0:
+                unread_count = 0
+            if request.unread_only and unread_count == 0:
+                continue
+
+            native: dict[str, Any]
+            title: str
+            kind: SocialTargetKind
+            if peer_type == "user" and peer_id is not None and peer_id > 0:
+                profile = profiles.get(peer_id, {})
+                first = str(profile.get("first_name") or "").strip()
+                last = str(profile.get("last_name") or "").strip()
+                title = " ".join(part for part in (first, last) if part) or "VK user"
+                kind = SocialTargetKind.USER
+                native = {"kind": kind.value, "user_id": peer_id, "peer_id": peer_id}
+            elif peer_type == "group" and peer_id is not None and peer_id < 0:
+                group_id = abs(peer_id)
+                group = groups.get(group_id, {})
+                title = str(group.get("name") or "VK community").strip()
+                kind = SocialTargetKind.COMMUNITY
+                native = {
+                    "kind": kind.value,
+                    "group_id": group_id,
+                    "owner_id": -group_id,
+                    "peer_id": -group_id,
+                }
+            elif peer_type == "chat" and peer_id is not None and peer_id > 2_000_000_000:
+                settings = conversation.get("chat_settings")
+                title = (
+                    str(settings.get("title") or "").strip()
+                    if isinstance(settings, Mapping)
+                    else ""
+                ) or "VK group chat"
+                kind = SocialTargetKind.CHAT
+                native = {"kind": kind.value, "peer_id": peer_id}
+            else:
+                continue
+            results.append(
+                {
+                    "target_ref": self._mint("target", native),
+                    "kind": kind.value,
+                    "title": self._sanitize(title)[:256] or "VK dialog",
+                    "unread_count": unread_count,
+                    "trust": _TRUST,
+                }
+            )
+            if len(results) >= limit:
+                break
+        output: dict[str, Any] = {"results": results, "trust": _TRUST}
+        if len(provider_items) == limit:
+            output["next_cursor"] = self._cursor(request, offset + limit)
+        return output
+
     async def _editorial(self, request: SocialReadRequest) -> Mapping[str, Any]:
         if request.read_access is not SocialReadAccess.PUBLIC:
             raise VKWorkspaceError("access_target_mismatch")
@@ -1363,6 +1493,8 @@ class VKWorkspaceAdapter:
             return await self._notifications(request)
         if request.operation is SocialReadOperation.SEARCH_TARGETS:
             return await self._discover(request)
+        if request.operation is SocialReadOperation.LIST_DIALOGS:
+            return await self._dialogs(request)
         if request.operation is SocialReadOperation.EDITORIAL_SAMPLE:
             return await self._editorial(request)
         limit = min(request.limit, _MAX_RESULT_PAGE)
@@ -1373,7 +1505,12 @@ class VKWorkspaceAdapter:
                 native = self._resolve_ref("target", request.target_ref)
                 kind = self._target_kind(native)
                 if request.read_access is SocialReadAccess.DIALOGS:
-                    if kind not in {SocialTargetKind.USER, SocialTargetKind.CHAT, SocialTargetKind.SELF}:
+                    if kind not in {
+                        SocialTargetKind.USER,
+                        SocialTargetKind.CHAT,
+                        SocialTargetKind.COMMUNITY,
+                        SocialTargetKind.SELF,
+                    }:
                         raise VKWorkspaceError("access_target_mismatch")
                     if kind is SocialTargetKind.SELF:
                         response = await self._call("conversations", {"count": limit, "offset": offset, "filter": "all"})
@@ -1391,7 +1528,7 @@ class VKWorkspaceAdapter:
                         if len(_items(response)) == limit:
                             output["next_cursor"] = self._cursor(request, offset + limit)
                         return output
-                    peer_id = _int(native.get("peer_id"))
+                    peer_id = self._dialog_peer_id(native)
                     if peer_id is None:
                         raise VKWorkspaceError("opaque_reference_failed")
                     response = await self._call("dialog_history", {"peer_id": peer_id, "count": limit, "offset": offset, "rev": 0})
@@ -1698,9 +1835,9 @@ class VKWorkspaceAdapter:
 
         try:
             if intent.action is SocialAction.SEND_MESSAGE:
-                if target is None or self._target_kind(target) is not SocialTargetKind.USER or not self._valid_user_binding(target):
+                peer_id = self._dialog_peer_id(target or {})
+                if target is None or peer_id is None:
                     raise VKWorkspaceError("exact_user_required")
-                peer_id = target.get("peer_id")
                 attachments = self._legacy_attachments(bindings)
                 params = {"peer_id": peer_id, "message": text, "random_id": random_id, **({"attachment": attachments} if attachments else {})}
                 response = await action_call("send_message", params)
@@ -1790,10 +1927,11 @@ class VKWorkspaceAdapter:
                 if item is None or destination is None:
                     raise VKWorkspaceError("destination_required")
                 if item.get("kind") == "message":
-                    if not self._valid_message_binding(item) or self._target_kind(destination) is not SocialTargetKind.USER or not self._valid_user_binding(destination):
+                    destination_peer_id = self._dialog_peer_id(destination)
+                    if not self._valid_message_binding(item) or destination_peer_id is None:
                         raise VKWorkspaceError("exact_user_required")
                     forward = json.dumps({"peer_id": item.get("peer_id"), "message_ids": [item.get("message_id")]}, separators=(",", ":"))
-                    await action_call("message_forward", {"peer_id": destination.get("peer_id"), "message": "", "random_id": random_id, "forward": forward})
+                    await action_call("message_forward", {"peer_id": destination_peer_id, "message": "", "random_id": random_id, "forward": forward})
                 else:
                     if _int(item.get("owner_id")) is None or _int(item.get("post_id")) is None:
                         raise VKWorkspaceError("wall_post_required")

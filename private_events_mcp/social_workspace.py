@@ -38,6 +38,7 @@ class SocialReadOperation(_StringEnum):
     RESOLVE_TARGET = "resolve_target"
     RESOLVE_ITEM = "resolve_item"
     SEARCH_TARGETS = "search_targets"
+    LIST_DIALOGS = "list_dialogs"
     LIST_ITEMS = "list_items"
     SEARCH_ITEMS = "search_items"
     GET_ITEM = "get_item"
@@ -385,6 +386,7 @@ class SocialReadRequest:
     read_access: SocialReadAccess | None
     expected_target_kinds: tuple[SocialTargetKind, ...]
     authorization_basis: EditorialAuthorizationBasis | None = None
+    unread_only: bool = False
 
     @property
     def required_scopes(self) -> frozenset[str]:
@@ -820,6 +822,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             "item_kinds", "target_locator", "purpose", "sample_ref", "date_from", "date_to",
             "page_size", "total_limit", "read_access", "expected_target_kinds",
             "authorization_basis",
+            "unread_only",
         },
         "request",
     )
@@ -893,6 +896,9 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         raise SocialWorkspaceValidationError("page_size must be an integer from 1 to 25")
     if type(total_limit) is not int or not 1 <= total_limit <= 100:
         raise SocialWorkspaceValidationError("total_limit must be an integer from 1 to 100")
+    unread_only = data.get("unread_only", False)
+    if type(unread_only) is not bool:
+        raise SocialWorkspaceValidationError("unread_only must be a boolean")
 
     if operation is SocialReadOperation.RESOLVE_TARGET:
         if target_locator is None:
@@ -925,6 +931,34 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
     elif operation is SocialReadOperation.SEARCH_TARGETS:
         if not query:
             raise SocialWorkspaceValidationError("query is required for target discovery")
+    elif operation is SocialReadOperation.LIST_DIALOGS:
+        if platform is not SocialPlatform.VK:
+            raise SocialWorkspaceValidationError("dialog listing is supported only for VK")
+        if read_access is not SocialReadAccess.DIALOGS:
+            raise SocialWorkspaceValidationError("dialog listing requires dialogs access")
+        if raw_limit > 25:
+            raise SocialWorkspaceValidationError(
+                "dialog limit must be an integer from 1 to 25"
+            )
+        forbidden = {
+            "target_ref",
+            "item_ref",
+            "query",
+            "item_kinds",
+            "target_locator",
+            "purpose",
+            "sample_ref",
+            "date_from",
+            "date_to",
+            "page_size",
+            "total_limit",
+            "expected_target_kinds",
+            "authorization_basis",
+        } & set(data)
+        if forbidden:
+            raise SocialWorkspaceValidationError(
+                "dialog listing does not allow: " + ", ".join(sorted(forbidden))
+            )
     elif operation in {SocialReadOperation.LIST_ITEMS, SocialReadOperation.LIST_STORIES}:
         if target_ref is None:
             raise SocialWorkspaceValidationError("target_ref is required")
@@ -1021,6 +1055,10 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         SocialReadOperation.LIST_REACTIONS,
     } and read_access is None:
         raise SocialWorkspaceValidationError("read_access is required for this operation")
+    if operation is not SocialReadOperation.LIST_DIALOGS and "unread_only" in data:
+        raise SocialWorkspaceValidationError(
+            "unread_only is supported only for dialog listing"
+        )
 
     return SocialReadRequest(
         platform=platform,
@@ -1041,6 +1079,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         read_access=read_access,
         expected_target_kinds=expected_target_kinds,
         authorization_basis=authorization_basis,
+        unread_only=unread_only,
     )
 
 
@@ -1870,6 +1909,7 @@ SOCIAL_WORKSPACE_READ_SCHEMA: Mapping[str, Any] = {
             "type": "string",
             "enum": _enum_values(EditorialAuthorizationBasis),
         },
+        "unread_only": {"type": "boolean"},
         "sample_ref": {"type": "string", "pattern": r"^smp_[A-Za-z0-9_-]{24,160}$"},
         "date_from": {"type": "string", "format": "date"},
         "date_to": {"type": "string", "format": "date"},
@@ -2275,6 +2315,22 @@ def _external_page_schema(item_schema: Mapping[str, Any]) -> Mapping[str, Any]:
 
 SOCIAL_WORKSPACE_TARGET_SEARCH_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_TARGET)
 SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_TARGET)
+_EXTERNAL_DIALOG: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["target_ref", "kind", "title", "unread_count", "trust"],
+    "properties": {
+        "target_ref": {"$ref": "#/$defs/target_ref"},
+        "kind": {
+            "type": "string",
+            "enum": ["user", "chat", "community"],
+        },
+        "title": {"type": "string", "minLength": 1, "maxLength": 256},
+        "unread_count": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_DIALOG)
 SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_ITEM)
 _EXTERNAL_STORY_ITEM: Mapping[str, Any] = {
     **_EXTERNAL_ITEM,
@@ -2558,6 +2614,7 @@ __all__ = [
     "SOCIAL_WORKSPACE_CAPABILITIES_SCHEMA",
     "SOCIAL_WORKSPACE_COMMIT_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_COMMIT_SCHEMA",
+    "SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA",
