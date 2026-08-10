@@ -1262,3 +1262,19 @@ responses, Search POST и terminal bytes всегда выглядели отс�
 закрытый body count из `loadingFinished.metrics.responseBodyBytesReceived`.
 В этом run iOS снова сделал ноль Search POST, browser прошёл полностью;
 acceptance остаётся `1/2` до нового merged-main proof.
+
+Merged-main run
+[`31342584499`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31342584499)
+подтвердил, что общий `{method,event}` parser действительно видит iOS network
+traffic: callback, `getUser` и owner-RLS завершились, а закрытый meter получил
+1,128 bytes. Но Safari bucket всё равно не отдал пригодный main-document
+response для уже открытого Search route; поэтому cell снова остановилась до
+Search как `search_target_http_invalid`, тогда как browser прошёл полный
+one-POST journey. Main-document HTTP proof больше не зависит от этой
+нестабильной части XCUITest: тот же OTP-proven Safari session сначала использует
+sanitized document event, если он есть, а при его отсутствии выполняет внутри
+уже открытого документа один same-origin `HEAD` с `redirect: manual` для exact
+Search/event URL. В WebDriver receipt выходят только status class/redirect
+count/boolean equality; URL, callback credential и body не возвращаются.
+Redirect, другой final URL и non-2xx (для event — не `200`) остаются fail-closed.
+Acceptance всё ещё `1/2` до нового merged-main browser+iOS proof.

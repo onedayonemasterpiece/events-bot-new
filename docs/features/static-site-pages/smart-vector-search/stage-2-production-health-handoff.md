@@ -57,8 +57,10 @@ pagination или полный scheduled mobile/release matrix в production-hea
   scroll и exact candidate `/sobytiya/<slug>/` route 200;
 - Auth getUser + один owner RLS proof; iOS выполняет этот Search-only proof в
   общей OTP/Search Safari session через WebDriver async callback с explicit
-  bounded 15-second script timeout; callback landing одновременно даёт exact
-  target 2xx receipt и не требует повторного перехода на тот же clean URL;
+  bounded 15-second script timeout; callback landing не требует повторного
+  перехода на тот же clean URL. Если XCUITest не отдаёт usable main-document
+  event, та же session получает exact target/event HTTP receipt через
+  same-origin `redirect: manual` HEAD внутри уже открытого документа;
   общий OTP/Search network reducer нормализует Android/CDP `{method,params}` и
   официальный XCUITest `safariNetwork` `{method,event}`; 48/96 KiB meter и
   strict evidence;
@@ -151,6 +153,16 @@ response; response остаётся authoritative evidence, в том числе
 PR #436 не является зависимостью health activation. Его preclaim guard полезен
 для immutable release qualification, но должен проходить отдельный review и не
 возвращать `release_exact` в scheduled product health.
+
+Текущий live gate: `1/2`. Run
+[`31337041139`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337041139)
+принят как browser+Android proof. Последний merged-main browser+iOS run
+[`31342584499`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31342584499)
+завершил callback/Auth/owner-RLS и измерил iOS traffic, но XCUITest не выдал
+usable main-document record; iOS остановился до Search, browser прошёл. После
+этого exact route proof использует описанный выше same-document HEAD fallback.
+Нужен один fresh merged-main browser+iOS run с тем же immutable product
+identity; `SEARCH_PRODUCTION_HEALTH_ENABLED` до него остаётся отсутствующей.
 
 ## Completion evidence этапа 2
 
