@@ -12,6 +12,7 @@ sections:
     overview: docs/architecture/overview.md
     personalization_data_ownership: docs/architecture/personalization-data-ownership.md
   product:
+    my_data_hub_daily_statistics: docs/features/my-data-hub-daily-statistics/README.md
     mobile_discovery_shell: docs/features/static-site-pages/mobile-shell.md
     prelaunch_registration: docs/features/static-site-pages/prelaunch.md
     audience_admission_discovery: docs/features/unsigned-personalization/audience-admission-discovery.md
