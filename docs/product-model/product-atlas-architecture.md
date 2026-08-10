@@ -247,7 +247,7 @@ observed_with_sufficient_data
 
 Для action-map evidence это означает split без дублирования: reviewed maps и
 provenance находятся на page 50, а принятый finding/decision — на page 40. До
-review или при `insufficient_data` overlay остаётся evidence и не становится
+review или при `insufficient-data` overlay остаётся evidence и не становится
 problem/UI gap.
 
 На первом этапе это не auto-refresh dashboard.

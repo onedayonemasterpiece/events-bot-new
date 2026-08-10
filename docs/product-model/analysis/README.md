@@ -124,12 +124,12 @@ facts: []
 limitations: []
 competing_explanations: []
 finding:
-  status: accepted | rejected | insufficient_data
+  status: accepted | rejected | insufficient-data
   text: ...
 options: []
 decision:
   owner: ...
-  outcome: ship | change | instrument_better | stop | pending
+  outcome: ship | change | instrument-better | stop | pending
 follow_up:
   measurement_question: ...
   due_or_stop_rule: ...
@@ -156,7 +156,7 @@ provenance:
 ```
 
 `facts`, `limitations`, quality/coverage и immutable provenance обязательны
-даже при `insufficient_data`. Package content-addressed: после review его bytes,
+даже при `insufficient-data`. Package content-addressed: после review его bytes,
 artifacts и source receipts не переписываются. Исправление или новый cutoff
 создают новый `evidence_id`/hash и explicit `supersedes` link из нового analysis
 record; старый package остаётся воспроизводимым. Артефакты содержат только
