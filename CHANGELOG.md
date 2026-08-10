@@ -56,6 +56,14 @@
 
 ### Fixed
 
+- Completed Search production-health live acceptance. Merged-main runs
+  `31337041139` (browser+Android) and `31344632129` (browser+iOS) are
+  `HEALTHY/PASS` on one immutable target/backend/content/index identity; every
+  cell made exactly one physical vector Search POST, rendered five matching
+  cards, opened the exact event route with HTTP 200, emitted zero forbidden
+  activity, and passed cleanup/redaction. The twice-daily production-health
+  gate is now enabled; the old noisy release-exact canary remains disabled.
+
 - Fixed the iOS physical Search counter exposed by merged-main run
   `31343651286`. The reused OTP/XCUITest session completed Auth, one real
   vector Search, five matching cards and the exact backend/content/index

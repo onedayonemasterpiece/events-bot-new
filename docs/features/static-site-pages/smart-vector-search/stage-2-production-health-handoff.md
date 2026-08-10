@@ -154,20 +154,16 @@ PR #436 не является зависимостью health activation. Его
 для immutable release qualification, но должен проходить отдельный review и не
 возвращать `release_exact` в scheduled product health.
 
-Текущий live gate: `1/2`. Run
+Live gate: `2/2`. Run
 [`31337041139`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337041139)
-принят как browser+Android proof. Последний merged-main browser+iOS run
-[`31343651286`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31343651286)
-завершил callback/Auth/owner-RLS, один реальный Search, HTTP `200` и пять
-совпавших response/card IDs. XCUITest не выдал только fetch
-`requestWillBeSent`, поэтому старый внешний counter ложно записал `0` физических
-POST при наличии закрытого Search response. Общий OTP/Search transport не
-форкнут: runtime probe считает существующий `ResilientSupabaseTransport.rawFetch`
-и iOS объединяет этот closed receipt с общим Safari bucket. Отсутствующий
-physical receipt при уже полученном `200` теперь является
-`UNKNOWN_IOS_INFRA`, а не product failure.
-Нужен один fresh merged-main browser+iOS run с тем же immutable product
-identity; `SEARCH_PRODUCTION_HEALTH_ENABLED` до него остаётся отсутствующей.
+принят как browser+Android proof, а merged-main run
+[`31344632129`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31344632129)
+как browser+iOS proof. Все четыре cells — `HEALTHY/PASS`, по одному physical
+Search POST, пять matching IDs/cards, real scroll, event HTTP `200`, zero
+forbidden activity, cleanup/redaction PASS. Target fingerprint/immutable tuple,
+site SHA, backend revision и catalog/corpus generations совпадают между runs.
+`SEARCH_PRODUCTION_HEALTH_ENABLED=true` установлен 2026-08-10; автоматические
+запуски остаются ровно дважды в сутки.
 
 ## Completion evidence этапа 2
 
