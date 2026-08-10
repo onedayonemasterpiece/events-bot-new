@@ -1101,6 +1101,9 @@ test('post-preflight Appium log/session loss is platform infrastructure, never p
     ['browser', 'search_post_navigation_observation_missing', 'UNKNOWN_RUNNER_BROWSER'],
     ['ios', 'search_physical_observation_missing', 'UNKNOWN_IOS_INFRA'],
     ['ios', 'mobile_auth_async_script_timeout', 'UNKNOWN_IOS_INFRA'],
+    ['ios', 'mobile_target_head_probe_unavailable', 'UNKNOWN_IOS_INFRA'],
+    ['ios', 'mobile_target_head_probe_timeout_config_failed', 'UNKNOWN_IOS_INFRA'],
+    ['ios', 'mobile_target_head_probe_command_failed', 'UNKNOWN_IOS_INFRA'],
   ]) {
     const adapter = fakeJourneyAdapter({
       finalDiagnosticsFailure: true, finalDiagnosticsError: message, resetActivityOnOpen: true,

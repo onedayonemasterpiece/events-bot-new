@@ -49,6 +49,17 @@
 
 ### Fixed
 
+- Fixed the remaining iOS navigation-receipt boundary exposed by merged-main
+  run `31342584499`. The shared XCUITest envelope parser now measured the real
+  callback Auth traffic, but Mobile Safari still supplied no usable main-
+  document record for the already-open Search route, so a healthy page stopped
+  before Search as `search_target_http_invalid`. Search keeps the OTP-proven
+  native-first Safari session and, only when the sanitized document record is
+  absent, proves the exact current Search/event URL with a same-origin
+  `redirect: manual` HEAD executed inside that document. Redirects, changed
+  URLs and non-2xx/non-200 statuses remain fail-closed; no target URL, callback
+  credential or response body crosses the WebDriver boundary.
+
 - Fixed the actual XCUITest Safari network-envelope mismatch isolated by live
   run `31341835441`. Appium's Android performance log is `{method, params}` but
   its official `safariNetwork` serializer is `{method, event}`; the shared

@@ -315,6 +315,62 @@ test('iOS reuses the callback landing document receipt instead of navigating the
   assert.equal((await adapter.diagnostics()).target_navigation_receipt.http_status_class, '2xx');
 });
 
+test('iOS proves the current target with a same-document HEAD when Safari omits document network events', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const actionLink = `${target}?token_hash=bridge-secret&type=magiclink`;
+  let currentUrl = 'about:blank';
+  let networkReads = 0;
+  let headProbeCalls = 0;
+  const headRequests = [];
+  const driver = {
+    capabilities: {},
+    async getLogs(type) {
+      if (type !== 'safariNetwork') return [];
+      networkReads += 1;
+      if (networkReads !== 2) return [];
+      return [{ message: JSON.stringify({ method: 'Network.responseReceived', event: {
+        requestId: 'callback-auth', type: 'Fetch', response: {
+          url: 'https://project.supabase.co/auth/v1/verify', status: 200,
+          headers: { 'content-length': '1024' },
+        },
+      } }) }];
+    },
+    async url(value) { currentUrl = value === actionLink ? target : value; },
+    async refresh() {},
+    async getUrl() { return currentUrl; },
+    async waitUntil(predicate, options = {}) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (await predicate()) return;
+      }
+      throw new Error(options.timeoutMsg || 'wait_failed');
+    },
+    async execute() { return true; },
+    async setTimeout() {},
+    async executeAsync(fn, expectedUrl) {
+      headProbeCalls += 1;
+      const prior = { location: globalThis.location, fetch: globalThis.fetch };
+      globalThis.location = new URL(target);
+      globalThis.fetch = async (url, options) => {
+        headRequests.push({ url, options });
+        return { status: 200, url: target, redirected: false, type: 'basic' };
+      };
+      try { return await new Promise((resolve) => fn(expectedUrl, resolve)); }
+      finally { globalThis.location = prior.location; globalThis.fetch = prior.fetch; }
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'ios', driver,
+    supabaseOrigins: ['https://project.supabase.co'] });
+  await adapter.bootstrapSession(actionLink, target);
+  await adapter.open(target);
+  assert.equal(headProbeCalls, 1);
+  assert.deepEqual(headRequests.map(({ url, options }) => ({ url, method: options.method,
+    redirect: options.redirect, credentials: options.credentials })), [{
+    url: target, method: 'HEAD', redirect: 'manual', credentials: 'same-origin',
+  }]);
+  assert.equal((await adapter.diagnostics()).target_navigation_receipt.http_status_class, '2xx');
+  assert.doesNotMatch(JSON.stringify(await adapter.diagnostics()), /bridge-secret|token_hash/u);
+});
+
 test('Appium result snapshot counts actual skeleton cards and id-less placeholders', async () => {
   const eventCard = {
     getAttribute(name) { return name === 'data-event-id' ? '42' : ''; },
@@ -909,6 +965,139 @@ test('adapter opens the captured first result and binds the browser navigation t
   const physical = await adapter.physicalActivity();
   assert.equal(physical.search_posts, 2);
   assert.equal(physical.meter.total_bytes, 2816);
+});
+
+test('iOS reuses its Safari session and proves an opened event with a same-document HEAD fallback', async () => {
+  let currentUrl = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const eventUrl = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/sobytiya/42/';
+  let headProbeCalls = 0;
+  const driver = {
+    capabilities: {},
+    async execute(fn) {
+      if (fn?.name === 'snapshotSearchRuntimeProbe') return { requests: [], responses: [], meter: {} };
+      if (fn?.name === 'pageResultSnapshot') return { terminal: true, rendered_ids: ['42'] };
+      return { href: eventUrl, same_origin: true,
+        supabase_origins: ['https://project.supabase.co'] };
+    },
+    async getUrl() { return currentUrl; },
+    async getLogs(type) {
+      assert.ok(['safariNetwork', 'safariConsole'].includes(type));
+      return [];
+    },
+    async $(selector) {
+      assert.match(selector, /data-search-results/u);
+      return { click: async () => { currentUrl = eventUrl; } };
+    },
+    async waitUntil(fn, options = {}) {
+      if (!await fn()) throw new Error(options.timeoutMsg || 'wait_failed');
+    },
+    async setTimeout() {},
+    async executeAsync(fn, expectedUrl) {
+      headProbeCalls += 1;
+      const prior = { location: globalThis.location, fetch: globalThis.fetch };
+      globalThis.location = new URL(eventUrl);
+      globalThis.fetch = async () => ({ status: 200, url: eventUrl,
+        redirected: false, type: 'basic' });
+      try { return await new Promise((resolve) => fn(expectedUrl, resolve)); }
+      finally { globalThis.location = prior.location; globalThis.fetch = prior.fetch; }
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'ios', driver });
+  const receipt = await adapter.openFirstResult();
+  assert.equal(headProbeCalls, 1);
+  assert.deepEqual({ status: receipt.http_status, destination: receipt.destination_class,
+    source: receipt.network_source }, {
+    status: 200, destination: 'event_detail', source: 'same_document_head',
+  });
+  assert.doesNotMatch(JSON.stringify(receipt), /_review|sobytiya|42/u);
+});
+
+test('iOS same-document HEAD receipt fails closed on redirects and non-2xx status', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const actionLink = `${target}?token_hash=bridge-secret&type=magiclink`;
+  for (const response of [
+    { status: 0, url: '', redirected: false, type: 'opaqueredirect' },
+    { status: 404, url: target, redirected: false, type: 'basic' },
+  ]) {
+    let currentUrl = 'about:blank';
+    let reads = 0;
+    const driver = {
+      capabilities: {},
+      async getLogs() {
+        reads += 1;
+        if (reads !== 2) return [];
+        return [{ message: JSON.stringify({ method: 'Network.responseReceived', event: {
+          requestId: 'callback-auth', type: 'Fetch', response: {
+            url: 'https://project.supabase.co/auth/v1/verify', status: 200,
+            headers: { 'content-length': '64' },
+          },
+        } }) }];
+      },
+      async url(value) { currentUrl = value === actionLink ? target : value; },
+      async getUrl() { return currentUrl; },
+      async waitUntil(fn, options = {}) {
+        if (!await fn()) throw new Error(options.timeoutMsg || 'wait_failed');
+      },
+      async execute() { return true; },
+      async setTimeout() {},
+      async executeAsync(fn, expectedUrl) {
+        const prior = { location: globalThis.location, fetch: globalThis.fetch };
+        globalThis.location = new URL(target);
+        globalThis.fetch = async () => response;
+        try { return await new Promise((resolve) => fn(expectedUrl, resolve)); }
+        finally { globalThis.location = prior.location; globalThis.fetch = prior.fetch; }
+      },
+    };
+    const adapter = await createAppiumSearchAdapter({ platform: 'ios', driver,
+      supabaseOrigins: ['https://project.supabase.co'] });
+    await adapter.bootstrapSession(actionLink, target);
+    await assert.rejects(() => adapter.open(target), /search_target_http_invalid/u);
+  }
+});
+
+test('iOS never hides an observed non-2xx target document behind a successful HEAD fallback', async () => {
+  const target = 'https://kenigevents.ru/_review/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/poisk/';
+  const actionLink = `${target}?token_hash=bridge-secret&type=magiclink`;
+  let currentUrl = 'about:blank';
+  let reads = 0;
+  let headProbeCalls = 0;
+  const driver = {
+    capabilities: {},
+    async getLogs() {
+      reads += 1;
+      if (reads !== 2) return [];
+      return [
+        { message: JSON.stringify({ method: 'Network.responseReceived', event: {
+          requestId: 'target-document', type: 'Document', response: {
+            url: target, status: 404, headers: { 'content-length': '64' },
+          },
+        } }) },
+        { message: JSON.stringify({ method: 'Network.responseReceived', event: {
+          requestId: 'callback-auth', type: 'Fetch', response: {
+            url: 'https://project.supabase.co/auth/v1/verify', status: 200,
+            headers: { 'content-length': '64' },
+          },
+        } }) },
+      ];
+    },
+    async url(value) { currentUrl = value === actionLink ? target : value; },
+    async getUrl() { return currentUrl; },
+    async waitUntil(fn, options = {}) {
+      if (!await fn()) throw new Error(options.timeoutMsg || 'wait_failed');
+    },
+    async execute() { return true; },
+    async setTimeout() {},
+    async executeAsync() {
+      headProbeCalls += 1;
+      return { status: 'pass', http_status: 200, redirect_count: 0,
+        same_origin: true, final_url_matches: true };
+    },
+  };
+  const adapter = await createAppiumSearchAdapter({ platform: 'ios', driver,
+    supabaseOrigins: ['https://project.supabase.co'] });
+  await adapter.bootstrapSession(actionLink, target);
+  await assert.rejects(() => adapter.open(target), /search_target_http/u);
+  assert.equal(headProbeCalls, 0);
 });
 
 test('Appium failed evidence preserves the pre-navigation snapshot when final logs disappear', async () => {

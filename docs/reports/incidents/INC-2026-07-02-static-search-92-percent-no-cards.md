@@ -31,6 +31,24 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 ## Timeline
 
 - 2026-08-09 merged-main browser+iOS workflow
+  [`31342584499`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31342584499)
+  proved the XCUITest `{method,event}` correction was active: iOS completed the
+  shared OTP callback, `getUser` and owner-RLS, and retained 1,128 bytes of
+  closed Auth/REST traffic. It nevertheless received no usable main-document
+  record for the already-open Search page, so the old navigation receipt again
+  stopped before Search as `search_target_http_invalid`; browser completed
+  `HEALTHY/PASS` and iOS Search POST count stayed zero. The unstable component
+  is now isolated: XCUITest's Safari bucket remains useful for Auth/Search byte
+  and request evidence but is no longer the sole HTTP-status source for main
+  documents. Reusing the same OTP-proven Safari session, the adapter accepts an
+  observed sanitized document event when available and otherwise performs a
+  same-origin `redirect: manual` HEAD inside the exact current Search/event
+  document. Only closed status/redirect/equality fields leave the page;
+  redirect, URL drift and non-2xx/non-200 fail closed. Acceptance remains
+  `1/2`, schedules remain disabled, and a fresh merged-main browser+iOS proof
+  is required.
+
+- 2026-08-09 merged-main browser+iOS workflow
   [`31341835441`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31341835441)
   again stopped before Search with `search_target_http_invalid`, despite the
   callback-target receipt reuse; iOS completed callback and owner-RLS, and

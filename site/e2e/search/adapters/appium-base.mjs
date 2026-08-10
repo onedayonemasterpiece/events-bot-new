@@ -22,6 +22,82 @@ const IOS_SEARCH_KEYBOARD_DISMISS_LABELS = Object.freeze([
   'Найти событие по описанию',
 ]);
 
+/**
+ * Safari's XCUITest network bucket does not consistently include the main
+ * document response for a WebDriver navigation, even though it does include
+ * same-page Auth/fetch traffic. Prove the exact current route through a
+ * same-origin, redirect-manual HEAD from the already-open document. Only a
+ * closed receipt crosses the WebDriver boundary; URLs and response data stay
+ * in the page.
+ */
+async function probeExactCurrentDocumentHead(expectedHref, done) {
+  const finish = (value) => { try { done(value); } catch { /* session closed */ } };
+  try {
+    const expected = new URL(String(expectedHref));
+    const current = new URL(location.href);
+    if (current.href !== expected.href || current.origin !== expected.origin) {
+      finish({ status: 'failed', failure_code: 'current_document_mismatch' });
+      return;
+    }
+    const response = await fetch(expected.href, {
+      method: 'HEAD', redirect: 'manual', cache: 'no-store', credentials: 'same-origin',
+    });
+    const responseUrl = response.url ? new URL(response.url, current.href) : null;
+    const direct = response.redirected !== true && response.type !== 'opaqueredirect'
+      && responseUrl?.href === expected.href;
+    const status = Number(response.status);
+    finish({
+      status: direct && Number.isInteger(status) && status >= 200 && status < 300
+        ? 'pass' : 'failed',
+      failure_code: direct ? 'non_2xx' : 'redirected',
+      http_status: Number.isInteger(status) ? status : 0,
+      same_origin: responseUrl?.origin === expected.origin,
+      final_url_matches: responseUrl?.href === expected.href,
+      redirect_count: response.redirected === true || response.type === 'opaqueredirect' ? 1 : 0,
+    });
+  } catch {
+    finish({ status: 'failed', failure_code: 'head_request_failed' });
+  }
+}
+
+async function exactCurrentDocumentHeadReceipt(driver, expectedUrl, { exact200 = false } = {}) {
+  if (typeof driver?.executeAsync !== 'function' || typeof driver?.setTimeout !== 'function') {
+    throw new Error('mobile_target_head_probe_unavailable');
+  }
+  try { await driver.setTimeout({ script: 15_000 }); } catch {
+    throw new Error('mobile_target_head_probe_timeout_config_failed');
+  }
+  let outcome;
+  try { outcome = await driver.executeAsync(probeExactCurrentDocumentHead, expectedUrl); } catch {
+    throw new Error('mobile_target_head_probe_command_failed');
+  }
+  const acceptedStatus = exact200
+    ? Number(outcome?.http_status) === 200
+    : Number(outcome?.http_status) >= 200 && Number(outcome?.http_status) < 300;
+  if (outcome?.status !== 'pass' || outcome?.same_origin !== true
+    || outcome?.final_url_matches !== true || Number(outcome?.redirect_count) !== 0
+    || !acceptedStatus) {
+    throw new Error(exact200 ? 'mobile_card_http_200_missing' : 'search_target_http_invalid');
+  }
+  return Object.freeze({
+    schema_version: exact200 ? 'mobile-card-open-v1' : 'mobile-target-open-v1',
+    same_origin: true,
+    ...(exact200
+      ? { http_status: 200, destination_class: 'event_detail' }
+      : { redirect_count: 0, http_status_class: '2xx' }),
+    network_source: 'same_document_head', raw_url_retained: false,
+  });
+}
+
+function observedExactDocumentResponses(responses, expectedUrl) {
+  let expected;
+  try { expected = new URL(expectedUrl); } catch { return []; }
+  return (Array.isArray(responses) ? responses : []).filter((item) => (
+    (!item?.resource_type || item.resource_type === 'document')
+    && item?.origin === expected.origin && item?.pathname === expected.pathname
+  ));
+}
+
 function pageResultSnapshot() {
   const root = document.querySelector('[data-authorized-search]');
   const results = document.querySelector('[data-search-results]');
@@ -616,10 +692,22 @@ export async function createAppiumSearchAdapter(options = {}) {
           });
           return;
         } catch (error) {
-          // A missing callback document receipt is an instrumentation gap, so
-          // force one real reload below. Never hide an observed redirect or
-          // cross-origin document behind a later successful navigation.
+          // XCUITest can omit the main document from safariNetwork while still
+          // exposing the callback's Auth responses. Reuse the OTP-proven Safari
+          // session and obtain a closed same-document HEAD receipt instead of
+          // forcing a redundant navigation through the callback route.
+          // Never hide an observed redirect/cross-origin document behind the
+          // fallback: only the absence of an HTTP receipt reaches this path.
           if (String(error?.message) !== 'search_target_http_invalid') throw error;
+          if (observedExactDocumentResponses(callbackLandingResponses, targetUrl).length > 0) {
+            throw new Error('search_target_http_status_invalid');
+          }
+          if (platform === 'ios') {
+            lifecycle.target_navigation_receipt = await exactCurrentDocumentHeadReceipt(
+              driver, targetUrl,
+            );
+            return;
+          }
         }
       }
       if (currentUrl === targetUrl && typeof driver.refresh === 'function') await driver.refresh();
@@ -627,23 +715,36 @@ export async function createAppiumSearchAdapter(options = {}) {
       await driver.waitUntil(async () => (await driver.getUrl()) === targetUrl,
         { timeout: timeoutMs, interval: 250, timeoutMsg: 'search_target_redirected' });
       const responses = [];
-      await driver.waitUntil(async () => {
-        const logs = await driver.getLogs(networkType).catch(() => null);
-        if (!Array.isArray(logs)) return false;
-        observePostBoundarySearch(logs);
-        accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds,
-          driverDiagnosticRequests, wholeCellOrigins);
-        responses.push(...extractSanitizedNavigationResponses(logs));
-        try {
-          lifecycle.target_navigation_receipt = buildExactTargetNavigationReceipt({
-            expectedUrl: targetUrl, finalUrl: await driver.getUrl(), responses, networkSource: networkType,
-          });
-          return true;
-        } catch (error) {
-          if (String(error?.message) === 'search_target_redirected') throw error;
-          return false;
-        }
-      }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'search_target_http_invalid' });
+      try {
+        await driver.waitUntil(async () => {
+          const logs = await driver.getLogs(networkType).catch(() => null);
+          if (!Array.isArray(logs)) return false;
+          observePostBoundarySearch(logs);
+          accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds,
+            driverDiagnosticRequests, wholeCellOrigins);
+          responses.push(...extractSanitizedNavigationResponses(logs));
+          const exactDocuments = observedExactDocumentResponses(responses, targetUrl);
+          if (exactDocuments.length > 0
+            && !exactDocuments.some((item) => Number(item.status) >= 200
+              && Number(item.status) < 300)) {
+            throw new Error('search_target_http_status_invalid');
+          }
+          try {
+            lifecycle.target_navigation_receipt = buildExactTargetNavigationReceipt({
+              expectedUrl: targetUrl, finalUrl: await driver.getUrl(), responses, networkSource: networkType,
+            });
+            return true;
+          } catch (error) {
+            if (String(error?.message) === 'search_target_redirected') throw error;
+            return false;
+          }
+        }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'search_target_http_invalid' });
+      } catch (error) {
+        if (platform !== 'ios' || String(error?.message) !== 'search_target_http_invalid') throw error;
+        lifecycle.target_navigation_receipt = await exactCurrentDocumentHeadReceipt(
+          driver, targetUrl,
+        );
+      }
     },
     async inspectSurface() {
       await driver.waitUntil(async () => driver.execute(() => Boolean(document.querySelector('[data-authorized-search]'))),
@@ -908,21 +1009,39 @@ export async function createAppiumSearchAdapter(options = {}) {
         return current.origin === expectedUrl.origin && current.pathname === expectedUrl.pathname;
       }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'mobile_first_card_navigation_timeout' });
       const responses = [];
-      await driver.waitUntil(async () => {
+      if (platform === 'ios') {
         const logs = await driver.getLogs(logType).catch(() => null);
-        if (!Array.isArray(logs)) return false;
+        if (!Array.isArray(logs)) throw new Error('mobile_navigation_network_log_unavailable');
         accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds,
           driverDiagnosticRequests, wholeCellOrigins);
         observePostBoundarySearch(logs);
         responses.push(...extractSanitizedNavigationResponses(logs));
-        return responses.some((item) => item.origin === expectedUrl.origin
-          && item.pathname === expectedUrl.pathname && item.status === 200
-          && (!item.resource_type || item.resource_type === 'document'));
-      }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'mobile_first_card_http_200_timeout' });
-      const receipt = buildSameOriginNavigationReceipt({
-        beforeUrl, expectedUrl: expectedUrl.href, finalUrl: await driver.getUrl(),
-        responses, networkSource: logType,
-      });
+      } else {
+        await driver.waitUntil(async () => {
+          const logs = await driver.getLogs(logType).catch(() => null);
+          if (!Array.isArray(logs)) return false;
+          accumulateClosedDriverDiagnostics(logs, driverDiagnostics, driverDiagnosticIds,
+            driverDiagnosticRequests, wholeCellOrigins);
+          observePostBoundarySearch(logs);
+          responses.push(...extractSanitizedNavigationResponses(logs));
+          return responses.some((item) => item.origin === expectedUrl.origin
+            && item.pathname === expectedUrl.pathname && item.status === 200
+            && (!item.resource_type || item.resource_type === 'document'));
+        }, { timeout: timeoutMs, interval: 200, timeoutMsg: 'mobile_first_card_http_200_timeout' });
+      }
+      let receipt;
+      try {
+        receipt = buildSameOriginNavigationReceipt({
+          beforeUrl, expectedUrl: expectedUrl.href, finalUrl: await driver.getUrl(),
+          responses, networkSource: logType,
+        });
+      } catch (error) {
+        if (platform !== 'ios' || String(error?.message) !== 'mobile_card_http_200_missing') throw error;
+        if (observedExactDocumentResponses(responses, expectedUrl.href).length > 0) {
+          throw new Error('mobile_card_http_status_invalid');
+        }
+        receipt = await exactCurrentDocumentHeadReceipt(driver, expectedUrl.href, { exact200: true });
+      }
       lifecycle.first_card_opened = true;
       lifecycle.failure_stage = 'search_first_card_opened';
       return Object.freeze({

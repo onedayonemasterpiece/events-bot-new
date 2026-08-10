@@ -31,6 +31,12 @@
   `{method,event}` while the shared reducer accepted only Android/CDP
   `{method,params}`. Both Search and OTP adapters now use one normalizer for the
   two official envelopes and Safari terminal body-byte metrics.
+  Run `31342584499` then proved that normalizer measured callback/Auth traffic
+  but still received no usable Safari main-document entry for the exact Search
+  route. The unchanged OTP-proven Safari session now uses a same-origin,
+  redirect-manual HEAD only for that missing Search/event HTTP receipt; its
+  closed result contains no URL, callback credential or body. iOS made zero
+  Search POSTs in the failed run, browser passed, and acceptance remains `1/2`.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -52,9 +58,12 @@
 
 Required before live:
 
-- Search production-health aggregate suite: **153/153 PASS** after the shared
+- Search production-health aggregate suite: **157/157 PASS** after the shared
   OTP/Search Safari native-sheet, pre-side-effect retry, async owner-proof and
-  closed failure-evidence regressions;
+  closed failure-evidence/navigation-receipt regressions;
+- read-only HEAD against the exact current accepted private target returned
+  direct HTTP `200` with no redirect; the secret URL was kept in memory and
+  never printed or persisted;
 - legacy Search harness: **32/32 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
   security and static source/release regression **135/135 PASS**; Edge contract
