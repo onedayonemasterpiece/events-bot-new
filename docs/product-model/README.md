@@ -545,6 +545,18 @@ trace or idempotency identity
 
 Хранит evidence и внешнюю методологическую базу, но не является автоматически принятым требованием.
 
+### Action-map и Product Atlas evidence
+
+- [First-party карта действий](../features/static-site-pages/first-party-action-map.md)
+  владеет feature-specific capture, privacy, OFF и campaign contract.
+- [Product analysis records](analysis/README.md) владеют конкретным
+  `MeasurementQuestion → evidence → finding → decision → follow-up` и immutable
+  reviewed `ProductAnalyticsEvidencePackage`; hotspot не становится finding или
+  problem автоматически.
+- [Product Atlas architecture](product-atlas-architecture.md) владеет только
+  on-demand visual projection reviewed evidence/accepted decisions на pages
+  50/40 с Resource Graph deep links, но не raw analytics или live dashboard.
+
 ## 12. Рабочий процесс
 
 ### 12.1. Discovery review

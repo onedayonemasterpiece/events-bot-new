@@ -103,6 +103,38 @@ Analysis record хранит не сырые данные, а:
 
 Каноническое место: [`analysis/README.md`](analysis/README.md).
 
+#### 2.3.1 Action-map projection
+
+Канонический feature contract — [First-party карта действий](../features/static-site-pages/first-party-action-map.md).
+Она не создаёт отдельный analytics view или новую страницу Atlas. Plugin
+принимает только immutable reviewed
+`ProductAnalyticsEvidencePackage`, связанный с конкретным versioned analysis
+record из [`analysis/`](analysis/README.md). Package сохраняет hashes/receipts
+campaign manifest, schema, aggregate/export, release archive и artifacts;
+изменение evidence создаёт новую immutable revision, а не переписывает прежнюю.
+
+Используются существующие страницы:
+
+- **50 — UI and design evidence:** reviewed page/component maps, scope,
+  denominator/coverage, release/page/layout/model/component identities,
+  limitations и ссылка на package/analysis record;
+- **40 — Findings, incidents and decisions:** только accepted finding,
+  competing explanations, options, explicit owner decision и follow-up
+  measurement.
+
+Страница `45 — Product analytics evidence` **не создаётся**: она дублировала бы
+analysis record и pages 40/50. Product Atlas сохраняет deep links на
+соответствующие Resource Graph evidence IDs, но evidence само по себе не меняет
+Component Contract или design-system catalog.
+
+Ingest запускается только явной командой **`Обновить Product Atlas`**. Plugin не
+имеет live connection к production DB/YDB, не читает raw metrics или raw
+action-map stream, не делает background refresh и не интерпретирует hotspot.
+Hotspot/overlay не создаёт finding, `ProblemBubble`, UI gap, design change или
+profile signal автоматически: обязательна цепочка
+`MeasurementQuestion → evidence → finding → decision → follow-up` в concrete
+analysis record.
+
 ### 2.4 `common-analytics`
 
 `common-analytics` не является источником статистики, Job health или Product Atlas evidence.
@@ -213,6 +245,11 @@ observed_with_sufficient_data
 - owner decisions;
 - открытые вопросы.
 
+Для action-map evidence это означает split без дублирования: reviewed maps и
+provenance находятся на page 50, а принятый finding/decision — на page 40. До
+review или при `insufficient_data` overlay остаётся evidence и не становится
+problem/UI gap.
+
 На первом этапе это не auto-refresh dashboard.
 
 ## 5. Многоосевая готовность
@@ -300,6 +337,9 @@ Product Atlas размещается в отдельном Penpot-файле.
 89 — Decision archive
 99 — Technical diagnostics
 ```
+
+Allowlist намеренно не содержит page 45. Action-map evidence использует pages
+50 и 40 по контракту §2.3.1.
 
 Для него создаётся отдельный plugin и отдельный manifest.
 
@@ -419,6 +459,11 @@ product model / evidence / analysis record changes
 → acceptance and release evidence
 → next Product Atlas snapshot
 ```
+
+Каждый переход `analysis record changes → Product Atlas catalog generation`
+является on-demand операцией по явной команде **`Обновить Product Atlas`**.
+Отсутствуют live DB connection, raw-metric polling и background refresh; новый
+snapshot обязан сохранить package hash и Resource Graph deep links.
 
 ## 11. Пилот
 

@@ -11,9 +11,10 @@
 - **Static site pages / first-party action-map research**: added the supplied full and concise research on semantic component-level interaction signals, including the `ALWAYS` / `CAMPAIGN_ONLY` / `DO_NOT_COLLECT` evidence policy; this is research input only, with no runtime telemetry change.
 
 - **Static site pages / first-party action-map TO-BE contract**: preserved the
-  supplied canonical action-map design and synchronized analytics,
-  personalization/data ownership, release phases and routing around a
-  registered temporary diagnostic purpose, read-only presentation receipts,
+  supplied canonical action-map design and synchronized analytics, product
+  analysis/Product Atlas evidence, personalization/data ownership, release
+  phases and routing around a registered temporary diagnostic purpose,
+  read-only presentation receipts,
   zero-cost default-OFF proof, bounded YDB TTL and reviewed low-sample evidence.
   No runtime, schema or production capture was enabled.
 
