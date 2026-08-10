@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / OpenCode loopback callback:** allow the static public
+  OpenCode client to select any available unprivileged `127.0.0.1` port while
+  retaining the exact `/mcp/oauth/callback` path, S256 PKCE and authorization-code
+  redirect binding. Generated configs now expose `callbackPort`, so a VS Code
+  port conflict does not require closing VS Code or changing MCP identity.
+
 - **Private Events MCP / OpenCode OAuth discovery:** challenge every unauthenticated
   MCP JSON-RPC request, including `initialize` and `tools/list`, so OpenCode starts
   RFC 9728 OAuth instead of reporting a false successful anonymous connection.

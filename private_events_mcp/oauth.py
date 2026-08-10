@@ -258,9 +258,36 @@ class PrivateOAuthServer:
 
     @staticmethod
     def _validate_opencode_redirect_uri(value: str) -> str:
-        """Accept only OpenCode's configured fixed IPv4 loopback callback."""
+        """Accept OpenCode's exact IPv4 loopback path on a dynamic local port.
 
-        if value != "http://127.0.0.1:19876/mcp/oauth/callback":
+        RFC 8252 allows native public clients to select an available loopback
+        port.  The authorization code remains bound to the exact redirect URI
+        and mandatory S256 verifier, while DNS aliases, userinfo, queries,
+        fragments, implicit/privileged/zero-padded ports and alternate paths
+        remain rejected.
+        """
+
+        if not value.startswith("http://127.0.0.1:") or "?" in value or "#" in value:
+            raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed")
+        try:
+            parsed = urlsplit(value)
+            port = parsed.port
+        except ValueError as exc:
+            raise OAuthHTTPError(
+                "invalid_request", "Redirect URI is not allowed"
+            ) from exc
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname != "127.0.0.1"
+            or parsed.username is not None
+            or parsed.password is not None
+            or port is None
+            or not (1024 <= port <= 65535)
+            or parsed.netloc != f"127.0.0.1:{port}"
+            or parsed.path != "/mcp/oauth/callback"
+            or parsed.query
+            or parsed.fragment
+        ):
             raise OAuthHTTPError("invalid_request", "Redirect URI is not allowed")
         return value
 

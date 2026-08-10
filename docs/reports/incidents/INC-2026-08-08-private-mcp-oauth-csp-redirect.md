@@ -141,6 +141,10 @@ retry until the CSP hotfix and credential rotation are deployed.
   ports and callback queries, and never reflect raw authority text into CSP.
 - Add ChatGPT, Codex and OpenCode regression assertions for their distinct
   callback origins.
+- Permit OpenCode's native public client to select a free unprivileged IPv4
+  loopback port while retaining the exact callback path, S256 PKCE, CSP origin
+  and authorization-code redirect binding. A fixed port can be occupied by VS
+  Code and otherwise strands a granted code before token exchange.
 - Split credential handling into an explicit full-identity `--new-install`
   mode and `--rotate-bootstrap-only <full-credentials.json>`. The latter must
   emit only fresh `0700`/`0600` artifacts and a redacted receipt while keeping

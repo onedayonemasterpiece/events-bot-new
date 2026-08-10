@@ -699,11 +699,13 @@ async def test_opencode_public_client_real_oauth_and_full_resource_contract(
     "redirect_uri",
     [
         "http://localhost:19876/mcp/oauth/callback",
-        "http://127.0.0.1:19877/mcp/oauth/callback",
         "http://127.0.0.1:19876/callback",
         "http://127.0.0.1:19876/mcp/oauth/callback/extra",
         "http://user@127.0.0.1:19876/mcp/oauth/callback",
         "http://127.0.0.1:19876/mcp/oauth/callback?next=bad",
+        "http://127.0.0.1:80/mcp/oauth/callback",
+        "http://127.0.0.1:019876/mcp/oauth/callback",
+        "http://127.0.0.1:65536/mcp/oauth/callback",
         "http://127.0.0.1:19876/mcp/oauth/callback#fragment",
     ],
 )
@@ -731,6 +733,40 @@ async def test_opencode_redirect_contract_rejects_noncanonical_variants(
             )
         )
         assert response.status == 400
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("port", [19876, 19877, 49152, 65535])
+async def test_opencode_redirect_accepts_exact_loopback_path_on_free_port(
+    config, port
+) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.get(
+            config.oauth_authorize_path
+            + "?"
+            + urlencode(
+                {
+                    "response_type": "code",
+                    "client_id": config.opencode_oauth_client_id,
+                    "redirect_uri": f"http://127.0.0.1:{port}/mcp/oauth/callback",
+                    "state": "state",
+                    "resource": config.resource,
+                    "code_challenge": pkce_s256("o" * 64),
+                    "code_challenge_method": "S256",
+                }
+            )
+        )
+        assert response.status == 200
+        assert (
+            f"form-action 'self' http://127.0.0.1:{port}"
+            in response.headers["Content-Security-Policy"]
+        )
     finally:
         await client.close()
 
