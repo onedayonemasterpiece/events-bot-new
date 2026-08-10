@@ -48,15 +48,13 @@ def _canonical_hostname(value: str) -> str:
         # WHATWG clients interpret legacy decimal/octal/hex numeric host forms
         # as IPv4 even when Python's strict ipaddress parser rejects them.
         if labels and all(
-            re.fullmatch(r"(?:0[xX][0-9A-Fa-f]+|[0-9]+)", label)
-            for label in labels
+            re.fullmatch(r"(?:0[xX][0-9A-Fa-f]+|[0-9]+)", label) for label in labels
         ):
             raise ValueError("invalid hostname") from None
         if any(
             not label
             or len(label) > 63
-            or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
-            is None
+            or re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label) is None
             for label in labels
         ):
             raise ValueError("invalid hostname") from None
@@ -74,7 +72,9 @@ def validate_base_url(value: str) -> str:
         port = parsed.port
         hostname = _canonical_hostname(parsed.hostname or "")
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("base URL must be a canonical HTTPS origin") from exc
+        raise argparse.ArgumentTypeError(
+            "base URL must be a canonical HTTPS origin"
+        ) from exc
     authority = f"[{hostname}]" if ":" in hostname else hostname
     if (
         parsed.scheme != "https"
@@ -196,6 +196,7 @@ def _validate_full_credentials(value: Any) -> None:
         raise ValueError("existing credentials must contain chatgpt, codex and deploy")
     chatgpt = value["chatgpt"]
     codex = value["codex"]
+    opencode = value.get("opencode")
     deploy = value["deploy"]
     if not all(isinstance(section, dict) for section in (chatgpt, codex, deploy)):
         raise ValueError("existing credential sections must be objects")
@@ -206,8 +207,12 @@ def _validate_full_credentials(value: Any) -> None:
         _required_text(deploy, key, "deploy")
     for key, item in deploy.items():
         if not isinstance(key, str) or _ENV_NAME_RE.fullmatch(key) is None:
-            raise ValueError("existing credentials have an invalid deploy environment name")
-        if not isinstance(item, str) or any(marker in item for marker in ("\0", "\n", "\r")):
+            raise ValueError(
+                "existing credentials have an invalid deploy environment name"
+            )
+        if not isinstance(item, str) or any(
+            marker in item for marker in ("\0", "\n", "\r")
+        ):
             raise ValueError(f"existing credentials have invalid deploy.{key}")
     for key in (
         "mcp_url",
@@ -219,14 +224,28 @@ def _validate_full_credentials(value: Any) -> None:
         _required_text(chatgpt, key, "chatgpt")
     for key in ("mcp_url", "oauth_client_id", "bootstrap_operator_token"):
         _required_text(codex, key, "codex")
+    if (opencode is None) != (
+        "PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID" not in deploy
+    ):
+        raise ValueError("existing credentials have incomplete OpenCode registration")
+    if opencode is not None:
+        if not isinstance(opencode, dict):
+            raise ValueError("existing credential opencode section must be an object")
+        for key in (
+            "mcp_url",
+            "oauth_client_id",
+            "redirect_uri",
+            "bootstrap_operator_token",
+        ):
+            _required_text(opencode, key, "opencode")
 
-    base_url = _required_text(
-        deploy, "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", "deploy"
-    )
+    base_url = _required_text(deploy, "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL", "deploy")
     try:
         validated_base_url = validate_base_url(base_url)
     except argparse.ArgumentTypeError as exc:
-        raise ValueError("existing credentials contain an invalid public base URL") from exc
+        raise ValueError(
+            "existing credentials contain an invalid public base URL"
+        ) from exc
     path_secret = _required_text(deploy, "PRIVATE_EVENTS_MCP_PATH_SECRET", "deploy")
     expected_chatgpt_url = f"{validated_base_url}/_private/{path_secret}/mcp"
     expected_codex_url = f"{validated_base_url}/_private/{path_secret}/codex/mcp"
@@ -252,6 +271,22 @@ def _validate_full_credentials(value: Any) -> None:
             deploy["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"],
         ),
     )
+    if opencode is not None:
+        consistency_pairs += (
+            (opencode["mcp_url"], expected_chatgpt_url),
+            (
+                opencode["oauth_client_id"],
+                deploy["PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID"],
+            ),
+            (
+                opencode["redirect_uri"],
+                "http://127.0.0.1:19876/mcp/oauth/callback",
+            ),
+            (
+                opencode["bootstrap_operator_token"],
+                deploy["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"],
+            ),
+        )
     if any(actual != expected for actual, expected in consistency_pairs):
         raise ValueError("existing full credentials are internally inconsistent")
 
@@ -263,6 +298,53 @@ def _paths_overlap(source: Path, output: Path) -> bool:
     return common in {source_text, output_text}
 
 
+def _build_opencode_credentials(
+    endpoint: str, *, client_id: str, operator_token: str
+) -> dict[str, Any]:
+    scopes = [
+        "events:read",
+        "incidents:read",
+        "operations:read",
+        "offline_access",
+        "telegram:read",
+        "telegram:publish",
+        "vk:read",
+        "vk:publish",
+    ]
+    redirect_uri = "http://127.0.0.1:19876/mcp/oauth/callback"
+    return {
+        "name": "eventsBot_MCP",
+        "mcp_url": endpoint,
+        "oauth_client_id": client_id,
+        "token_endpoint_auth_method": "none",
+        "redirect_uri": redirect_uri,
+        "callback_port": 19876,
+        "bootstrap_operator_token": operator_token,
+        "oauth_scopes": scopes,
+        "opencode_config": {
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {
+                "eventsBot": {
+                    "type": "remote",
+                    "url": endpoint,
+                    "enabled": True,
+                    "timeout": 300000,
+                    "oauth": {
+                        "clientId": client_id,
+                        "scope": " ".join(scopes),
+                        "redirectUri": redirect_uri,
+                    },
+                }
+            },
+        },
+        "notes": [
+            "OpenCode is a static public OAuth client: never configure a client secret.",
+            "Run `opencode mcp auth eventsBot` and enter the bootstrap operator token only in the browser page.",
+            "The fixed callback requires port 19876 to be available on 127.0.0.1.",
+        ],
+    }
+
+
 def _build_new_credentials(
     base_url: str, *, enable_chatgpt_social: bool
 ) -> dict[str, Any]:
@@ -270,6 +352,7 @@ def _build_new_credentials(
     client_id = token("chatgpt-events-", 18)
     client_secret = token("client_", 48)
     codex_client_id = token("codex-events-", 18)
+    opencode_client_id = token("opencode-events-", 18)
     operator_token = token("operator_", 48)
     social_approval_token = token("approval_", 48)
     signing_key = token("signing_", 64)
@@ -368,6 +451,11 @@ def _build_new_credentials(
             "The bootstrap operator token is entered only on the authorization browser page.",
         ],
     }
+    opencode = _build_opencode_credentials(
+        endpoint,
+        client_id=opencode_client_id,
+        operator_token=operator_token,
+    )
     deploy = {
         "PRIVATE_EVENTS_MCP_ENABLED": "1",
         "PRIVATE_EVENTS_MCP_PUBLIC_BASE_URL": base_url,
@@ -375,6 +463,7 @@ def _build_new_credentials(
         "PRIVATE_EVENTS_MCP_OAUTH_CLIENT_ID": client_id,
         "PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET": client_secret,
         "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID": codex_client_id,
+        "PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID": opencode_client_id,
         "PRIVATE_EVENTS_MCP_OPERATOR_TOKEN": operator_token,
         "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN": social_approval_token,
         "PRIVATE_EVENTS_MCP_SIGNING_KEY": signing_key,
@@ -383,7 +472,12 @@ def _build_new_credentials(
         "PRIVATE_EVENTS_MCP_REPOSITORY_SLUG": "onedayonemasterpiece/events-bot-new",
         "PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE": "/app/.static-site-repo-sha",
     }
-    return {"chatgpt": chatgpt, "codex": codex, "deploy": deploy}
+    return {
+        "chatgpt": chatgpt,
+        "codex": codex,
+        "opencode": opencode,
+        "deploy": deploy,
+    }
 
 
 def _rotate_bootstrap_only(credentials: dict[str, Any]) -> dict[str, Any]:
@@ -391,12 +485,28 @@ def _rotate_bootstrap_only(credentials: dict[str, Any]) -> dict[str, Any]:
     credentials["deploy"]["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"] = operator_token
     credentials["chatgpt"]["bootstrap_operator_token"] = operator_token
     credentials["codex"]["bootstrap_operator_token"] = operator_token
+    if "opencode" in credentials:
+        credentials["opencode"]["bootstrap_operator_token"] = operator_token
+    return credentials
+
+
+def _add_opencode_client(credentials: dict[str, Any]) -> dict[str, Any]:
+    if "opencode" in credentials:
+        return credentials
+    client_id = token("opencode-events-", 18)
+    credentials["deploy"]["PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID"] = client_id
+    credentials["opencode"] = _build_opencode_credentials(
+        credentials["chatgpt"]["mcp_url"],
+        client_id=client_id,
+        operator_token=credentials["deploy"]["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"],
+    )
     return credentials
 
 
 def _write_credentials(output: Path, credentials: dict[str, Any]) -> None:
     chatgpt = credentials["chatgpt"]
     codex = credentials["codex"]
+    opencode = credentials.get("opencode")
     deploy = credentials["deploy"]
     write_private_text(
         output / "chatgpt-private-app-credentials.json",
@@ -414,11 +524,18 @@ def _write_credentials(output: Path, credentials: dict[str, Any]) -> None:
         output / "codex-private-mcp-config.json",
         json.dumps(codex, ensure_ascii=False, indent=2) + "\n",
     )
+    if opencode is not None:
+        write_private_text(
+            output / "opencode-private-mcp-config.json",
+            json.dumps(opencode, ensure_ascii=False, indent=2) + "\n",
+        )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate deploy, ChatGPT and Codex credentials for the private events MCP."
+        description=(
+            "Generate deploy, ChatGPT, Codex and OpenCode credentials for the private events MCP."
+        )
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
@@ -433,6 +550,15 @@ def main() -> int:
         help=(
             "Read an existing full credentials JSON and rotate only the shared "
             "bootstrap operator token."
+        ),
+    )
+    mode.add_argument(
+        "--add-opencode-client",
+        type=Path,
+        metavar="FULL_CREDENTIALS_JSON",
+        help=(
+            "Preserve an existing endpoint and all stable credentials while "
+            "adding one distinct static public OpenCode OAuth client."
         ),
     )
     # Validate after parsing so argparse never reflects a secret-bearing invalid
@@ -463,29 +589,38 @@ def main() -> int:
         receipt_mode = "new_install"
     else:
         if args.base_url is not None:
-            parser.error("--base-url cannot be used with --rotate-bootstrap-only")
+            parser.error("--base-url cannot be used with an existing-identity mode")
         if args.enable_chatgpt_social:
             parser.error(
-                "--enable-chatgpt-social cannot be used with --rotate-bootstrap-only"
+                "--enable-chatgpt-social cannot be used with an existing-identity mode"
             )
-        source = _absolute_path(args.rotate_bootstrap_only)
+        source_arg = args.rotate_bootstrap_only or args.add_opencode_client
+        source = _absolute_path(source_arg)
         if _paths_overlap(source, output):
             parser.error("credential source and output directory must not overlap")
         try:
-            credentials = _rotate_bootstrap_only(_read_full_credentials(source))
+            credentials = _read_full_credentials(source)
+            if args.rotate_bootstrap_only:
+                credentials = _rotate_bootstrap_only(credentials)
+                receipt_mode = "rotate_bootstrap_only"
+            else:
+                credentials = _add_opencode_client(credentials)
+                receipt_mode = "add_opencode_client"
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
-        receipt_mode = "rotate_bootstrap_only"
 
     try:
         create_private_output_dir(output)
     except (FileExistsError, NotADirectoryError, OSError, ValueError):
-        parser.error("--output-dir must be a fresh non-symlink path with an existing parent")
+        parser.error(
+            "--output-dir must be a fresh non-symlink path with an existing parent"
+        )
     _write_credentials(output, credentials)
 
     deploy = credentials["deploy"]
     endpoint = credentials["chatgpt"]["mcp_url"]
     codex_endpoint = credentials["codex"]["mcp_url"]
+    opencode_endpoint = credentials.get("opencode", {}).get("mcp_url")
     receipt = {
         "mode": receipt_mode,
         "credentials_file": str(output / "chatgpt-private-app-credentials.json"),
@@ -499,6 +634,13 @@ def main() -> int:
             codex_endpoint.encode()
         ).hexdigest()[:12],
     }
+    if opencode_endpoint:
+        receipt["opencode_config_file"] = str(
+            output / "opencode-private-mcp-config.json"
+        )
+        receipt["opencode_endpoint_fingerprint"] = hashlib.sha256(
+            opencode_endpoint.encode()
+        ).hexdigest()[:12]
     print(json.dumps(receipt, ensure_ascii=False))
     return 0
 

@@ -16,7 +16,9 @@ from scripts.generate_private_events_mcp_credentials import (
 from scripts.smoke_private_events_mcp import sanitized_endpoint_receipt
 
 
-def run_generator(*arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run_generator(
+    *arguments: str, check: bool = True
+) -> subprocess.CompletedProcess[str]:
     repo = Path(__file__).resolve().parents[1]
     return subprocess.run(
         [
@@ -54,6 +56,7 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     )
     private_url = generated["chatgpt"]["mcp_url"]
     codex_url = generated["codex"]["mcp_url"]
+    opencode_url = generated["opencode"]["mcp_url"]
     path_secret = generated["deploy"]["PRIVATE_EVENTS_MCP_PATH_SECRET"]
     approval_token = generated["deploy"]["PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN"]
     signing_key = generated["deploy"]["PRIVATE_EVENTS_MCP_SIGNING_KEY"]
@@ -61,6 +64,7 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     operator_token = generated["deploy"]["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"]
     assert private_url not in completed.stdout
     assert codex_url not in completed.stdout
+    assert opencode_url not in completed.stdout
     assert path_secret not in completed.stdout
     assert approval_token not in completed.stdout
     assert signing_key not in completed.stdout
@@ -71,6 +75,16 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     assert len(receipt["endpoint_fingerprint"]) == 12
     assert len(receipt["codex_endpoint_fingerprint"]) == 12
     assert codex_url.endswith("/codex/mcp")
+    assert opencode_url == private_url
+    assert generated["opencode"]["token_endpoint_auth_method"] == "none"
+    assert generated["opencode"]["redirect_uri"] == (
+        "http://127.0.0.1:19876/mcp/oauth/callback"
+    )
+    assert (
+        generated["opencode"]["oauth_client_id"]
+        == generated["deploy"]["PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID"]
+    )
+    assert (output / "opencode-private-mcp-config.json").stat().st_mode & 0o777 == 0o600
     assert "telegram:publish" not in generated["chatgpt"]["oauth_scopes"]
     assert "telegram:publish" not in generated["codex"]["oauth_scopes"]
     assert output.stat().st_mode & 0o777 == 0o700
@@ -210,6 +224,7 @@ def test_bootstrap_rotation_preserves_every_stable_identity_value(
     expected["deploy"]["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"] = new_operator
     expected["chatgpt"]["bootstrap_operator_token"] = new_operator
     expected["codex"]["bootstrap_operator_token"] = new_operator
+    expected["opencode"]["bootstrap_operator_token"] = new_operator
     assert after == expected
     assert (
         after["deploy"]["PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN"]
@@ -223,7 +238,10 @@ def test_bootstrap_rotation_preserves_every_stable_identity_value(
     original_public = json.loads(original_receipt.stdout)
     rotated_public = json.loads(completed.stdout)
     assert rotated_public["mode"] == "rotate_bootstrap_only"
-    assert rotated_public["endpoint_fingerprint"] == original_public["endpoint_fingerprint"]
+    assert (
+        rotated_public["endpoint_fingerprint"]
+        == original_public["endpoint_fingerprint"]
+    )
     assert (
         rotated_public["codex_endpoint_fingerprint"]
         == original_public["codex_endpoint_fingerprint"]
@@ -241,6 +259,62 @@ def test_bootstrap_rotation_preserves_every_stable_identity_value(
     assert all(value not in completed.stdout for value in sensitive_values)
     assert rotated_dir.stat().st_mode & 0o777 == 0o700
     assert all(path.stat().st_mode & 0o777 == 0o600 for path in rotated_dir.iterdir())
+
+
+def test_existing_bundle_can_add_opencode_without_rotating_stable_identity(
+    tmp_path: Path,
+) -> None:
+    original_dir = tmp_path / "original"
+    run_generator(
+        "--new-install",
+        "--base-url",
+        "https://events.example",
+        "--output-dir",
+        str(original_dir),
+        "--enable-chatgpt-social",
+    )
+    source = original_dir / "chatgpt-private-app-credentials.json"
+    before = json.loads(source.read_text(encoding="utf-8"))
+    del before["opencode"]
+    del before["deploy"]["PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID"]
+    legacy = tmp_path / "legacy-full-credentials.json"
+    legacy.write_text(json.dumps(before), encoding="utf-8")
+
+    output = tmp_path / "with-opencode"
+    completed = run_generator(
+        "--add-opencode-client",
+        str(legacy),
+        "--output-dir",
+        str(output),
+    )
+    after = json.loads(
+        (output / "chatgpt-private-app-credentials.json").read_text(encoding="utf-8")
+    )
+
+    assert completed.returncode == 0
+    assert json.loads(completed.stdout)["mode"] == "add_opencode_client"
+    assert after["chatgpt"] == before["chatgpt"]
+    assert after["codex"] == before["codex"]
+    for key, value in before["deploy"].items():
+        assert after["deploy"][key] == value
+    assert after["opencode"]["mcp_url"] == before["chatgpt"]["mcp_url"]
+    assert (
+        after["opencode"]["bootstrap_operator_token"]
+        == before["deploy"]["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"]
+    )
+    assert after["opencode"]["oauth_client_id"].startswith("opencode-events-")
+    assert (
+        after["deploy"]["PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID"]
+        == after["opencode"]["oauth_client_id"]
+    )
+    assert (output / "opencode-private-mcp-config.json").is_file()
+    sensitive = {
+        before["chatgpt"]["mcp_url"],
+        before["deploy"]["PRIVATE_EVENTS_MCP_OPERATOR_TOKEN"],
+        before["deploy"]["PRIVATE_EVENTS_MCP_SIGNING_KEY"],
+        before["deploy"]["PRIVATE_EVENTS_MCP_OAUTH_CLIENT_SECRET"],
+    }
+    assert all(value not in completed.stdout for value in sensitive)
 
 
 @pytest.mark.parametrize(
@@ -401,7 +475,9 @@ def test_private_artifact_is_created_exclusively_with_mode_0600(
         calls.append((flags, mode))
         return real_open(path, flags, mode)
 
-    monkeypatch.setattr("scripts.generate_private_events_mcp_credentials.os.open", tracked_open)
+    monkeypatch.setattr(
+        "scripts.generate_private_events_mcp_credentials.os.open", tracked_open
+    )
     target = tmp_path / "secret.json"
     write_private_text(target, '{"secret":"value"}\n')
     assert target.stat().st_mode & 0o777 == 0o600
@@ -430,7 +506,9 @@ def test_private_output_directory_is_fresh_and_mode_0700(tmp_path: Path) -> None
         create_private_output_dir(output)
 
 
-def test_overlay_inserts_enabled_only_provider_adapters_idempotently(tmp_path: Path) -> None:
+def test_overlay_inserts_enabled_only_provider_adapters_idempotently(
+    tmp_path: Path,
+) -> None:
     app_module = tmp_path / "main_part2.py"
     app_module.write_text(
         "from aiohttp import web\n\ndef create_app():\n    app = web.Application()\n    return app\n",

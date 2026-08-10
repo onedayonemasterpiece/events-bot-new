@@ -87,21 +87,23 @@ redirect chain after the form POST.
 ### Affected surfaces
 
 - `private_events_mcp/oauth.py::handle_authorize_get`;
-- ChatGPT HTTPS callback and Codex exact loopback callback;
+- ChatGPT HTTPS callback plus Codex/OpenCode exact client-specific loopback callbacks;
 - production OAuth browser smoke and credential rotation.
 
 ### Mandatory checks before closure or deploy
 
 - authorization-page CSP contains `'self'` plus only the origin derived from
   the already validated client redirect URI;
-- ChatGPT confidential and Codex public OAuth+PKCE round trips pass;
+- ChatGPT confidential plus Codex/OpenCode public OAuth+PKCE round trips pass;
 - invalid callback hosts/paths remain rejected;
 - full `tests/test_private_events_mcp_*.py`, compileall and `git diff --check`
   pass;
-- credential generation requires explicit `--new-install`; bootstrap rotation
-  from a complete bundle changes only the three consistent operator/bootstrap
-  fields, preserves all stable identity/signing/state/social-approval values,
-  and rejects incomplete bundles, overlap and symlinks before creating output;
+- credential generation requires explicit `--new-install`; adding OpenCode to
+  an existing complete bundle changes only its new public client registration,
+  while bootstrap rotation changes only the consistent operator/bootstrap
+  copies (including OpenCode when present). Both preserve all other stable
+  identity/signing/state/social-approval values and reject incomplete bundles,
+  overlap and symlinks before creating output;
 - credential generation and enabled runtime config reject origins containing
   invalid DNS labels, noncanonical numeric-IP forms, IPv6 zones, credentials,
   whitespace/control characters, a query, fragment or explicit port and reject
@@ -134,8 +136,8 @@ retry until the CSP hotfix and credential rotation are deployed.
   `base-uri 'none'` and `frame-ancestors 'none'`.
 - Canonicalize ChatGPT to `https://chatgpt.com`, reject userinfo, alternate
   ports and callback queries, and never reflect raw authority text into CSP.
-- Add ChatGPT and Codex regression assertions for their distinct callback
-  origins.
+- Add ChatGPT, Codex and OpenCode regression assertions for their distinct
+  callback origins.
 - Split credential handling into an explicit full-identity `--new-install`
   mode and `--rotate-bootstrap-only <full-credentials.json>`. The latter must
   emit only fresh `0700`/`0600` artifacts and a redacted receipt while keeping

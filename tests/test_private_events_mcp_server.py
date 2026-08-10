@@ -44,7 +44,9 @@ class _WorkspaceAdapter:
         return {}
 
 
-def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(config) -> None:
+def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(
+    config,
+) -> None:
     universal = replace(
         config,
         universal_social_enabled=True,
@@ -126,8 +128,7 @@ async def test_existing_chatgpt_legacy_scopes_see_typed_tools_without_codex_soci
     codex_list = await server.codex_protocol.dispatch(request, codex)
     assert len(codex_list["result"]["tools"]) == 7
     assert not any(
-        tool["name"].startswith("social_")
-        for tool in codex_list["result"]["tools"]
+        tool["name"].startswith("social_") for tool in codex_list["result"]["tools"]
     )
 
 
@@ -214,7 +215,9 @@ async def test_social_approval_page_hides_preview_until_operator_auth_and_commit
         page = await response.text()
         assert response.status == 200 and "Исправленный текст" not in page
         assert "form-action 'self'" in response.headers["Content-Security-Policy"]
-        state = re.search(r"name=['\"]state['\"] value=['\"]([^'\"]+)['\"]", page).group(1)
+        state = re.search(
+            r"name=['\"]state['\"] value=['\"]([^'\"]+)['\"]", page
+        ).group(1)
 
         invalid = await client.get(
             universal.social_approval_path,
@@ -286,7 +289,9 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
         assert metadata_payload["resource"] == config.resource
         assert metadata_payload["authorization_servers"] == [config.issuer]
 
-        authorization_metadata = await client.get(config.authorization_server_metadata_path)
+        authorization_metadata = await client.get(
+            config.authorization_server_metadata_path
+        )
         assert authorization_metadata.status == 200
         authorization_payload = await authorization_metadata.json()
         assert authorization_payload["issuer"] == config.issuer
@@ -330,7 +335,9 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
             "code_challenge": pkce_s256(verifier),
             "code_challenge_method": "S256",
         }
-        page = await client.get(config.oauth_authorize_path + "?" + urlencode(authorize_query))
+        page = await client.get(
+            config.oauth_authorize_path + "?" + urlencode(authorize_query)
+        )
         assert page.status == 200
         csp = page.headers["Content-Security-Policy"]
         assert "form-action 'self' https://chatgpt.com" in csp
@@ -430,7 +437,9 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chatgpt_redirect_authority_is_canonical_and_not_reflected_in_csp(config) -> None:
+async def test_chatgpt_redirect_authority_is_canonical_and_not_reflected_in_csp(
+    config,
+) -> None:
     app = web.Application()
     attach_private_events_mcp(app, config)
     client = TestClient(TestServer(app))
@@ -527,8 +536,13 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
         assert listed.status == 200
         names = {tool["name"] for tool in (await listed.json())["result"]["tools"]}
         assert names == {
-            "search", "fetch", "events_search", "event_get",
-            "incidents_search", "incident_get", "operations_snapshot",
+            "search",
+            "fetch",
+            "events_search",
+            "event_get",
+            "incidents_search",
+            "incident_get",
+            "operations_snapshot",
         }
 
         refreshed = await client.post(
@@ -542,6 +556,166 @@ async def test_codex_public_client_real_oauth_and_mcp_contract(config) -> None:
         )
         assert refreshed.status == 200
         assert (await refreshed.json())["refresh_token"] != tokens["refresh_token"]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_opencode_public_client_real_oauth_and_full_resource_contract(
+    config,
+) -> None:
+    universal = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_dm_enabled=True,
+    )
+    app = web.Application()
+    attach_private_events_mcp(
+        app,
+        universal,
+        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+    )
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    verifier = "o" * 64
+    callback = "http://127.0.0.1:19876/mcp/oauth/callback"
+    try:
+        query = {
+            "response_type": "code",
+            "client_id": universal.opencode_oauth_client_id,
+            "redirect_uri": callback,
+            "state": "opencode-state",
+            "resource": universal.resource,
+            "scope": (
+                "events:read incidents:read operations:read offline_access "
+                "telegram:read telegram:publish"
+            ),
+            "code_challenge": pkce_s256(verifier),
+            "code_challenge_method": "S256",
+        }
+        page = await client.get(universal.oauth_authorize_path + "?" + urlencode(query))
+        assert page.status == 200
+        body = await page.text()
+        assert "Events Bot к OpenCode" in body
+        assert (
+            "form-action 'self' http://127.0.0.1:19876"
+            in page.headers["Content-Security-Policy"]
+        )
+        sealed = re.search(r'name="authorization_request" value="([^"]+)"', body)
+        assert sealed
+        granted = await client.post(
+            universal.oauth_authorize_path,
+            data={
+                "authorization_request": sealed.group(1),
+                "operator_token": universal.operator_token,
+            },
+            allow_redirects=False,
+        )
+        assert granted.status == 302
+        redirect = urlsplit(granted.headers["Location"])
+        assert f"{redirect.scheme}://{redirect.netloc}{redirect.path}" == callback
+        code = parse_qs(redirect.query)["code"][0]
+
+        secret_downgrade = await client.post(
+            universal.oauth_token_path,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": universal.opencode_oauth_client_id,
+                "client_secret": universal.oauth_client_secret,
+                "code": code,
+                "redirect_uri": callback,
+                "resource": universal.resource,
+                "code_verifier": verifier,
+            },
+        )
+        assert secret_downgrade.status == 401
+        assert (await secret_downgrade.json())["error"] == "invalid_client"
+
+        token_response = await client.post(
+            universal.oauth_token_path,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": universal.opencode_oauth_client_id,
+                "code": code,
+                "redirect_uri": callback,
+                "resource": universal.resource,
+                "code_verifier": verifier,
+            },
+        )
+        assert token_response.status == 200
+        tokens = await token_response.json()
+        assert "refresh_token" in tokens
+
+        listed = await client.post(
+            universal.mcp_path,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert listed.status == 200
+        names = {tool["name"] for tool in (await listed.json())["result"]["tools"]}
+        assert "social_target_resolve" in names
+        assert "social_action_prepare" in names
+
+        crossed = await client.post(
+            universal.codex_mcp_path,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+        assert crossed.status == 401
+
+        refreshed = await client.post(
+            universal.oauth_token_path,
+            data={
+                "grant_type": "refresh_token",
+                "client_id": universal.opencode_oauth_client_id,
+                "refresh_token": tokens["refresh_token"],
+                "resource": universal.resource,
+            },
+        )
+        assert refreshed.status == 200
+        assert (await refreshed.json())["refresh_token"] != tokens["refresh_token"]
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "redirect_uri",
+    [
+        "http://localhost:19876/mcp/oauth/callback",
+        "http://127.0.0.1:19877/mcp/oauth/callback",
+        "http://127.0.0.1:19876/callback",
+        "http://127.0.0.1:19876/mcp/oauth/callback/extra",
+        "http://user@127.0.0.1:19876/mcp/oauth/callback",
+        "http://127.0.0.1:19876/mcp/oauth/callback?next=bad",
+        "http://127.0.0.1:19876/mcp/oauth/callback#fragment",
+    ],
+)
+async def test_opencode_redirect_contract_rejects_noncanonical_variants(
+    config, redirect_uri
+) -> None:
+    app = web.Application()
+    attach_private_events_mcp(app, config)
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    try:
+        response = await client.get(
+            config.oauth_authorize_path
+            + "?"
+            + urlencode(
+                {
+                    "response_type": "code",
+                    "client_id": config.opencode_oauth_client_id,
+                    "redirect_uri": redirect_uri,
+                    "state": "state",
+                    "resource": config.resource,
+                    "code_challenge": pkce_s256("o" * 64),
+                    "code_challenge_method": "S256",
+                }
+            )
+        )
+        assert response.status == 400
     finally:
         await client.close()
 
@@ -594,7 +768,9 @@ async def test_codex_redirect_contract_rejects_non_literal_variants(
 
 
 @pytest.mark.asyncio
-async def test_public_client_rejects_secret_downgrade_and_cross_client_code(config) -> None:
+async def test_public_client_rejects_secret_downgrade_and_cross_client_code(
+    config,
+) -> None:
     app = web.Application()
     server = attach_private_events_mcp(app, config)
     assert server is not None

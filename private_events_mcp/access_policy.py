@@ -83,7 +83,10 @@ def social_scopes_authorized(
     legacy_scope = legacy_social_scope_for(next(iter(required_scopes)))
     return legacy_scope is not None and legacy_scope in granted_scopes
 
+
 CHATGPT_DEFAULT_SCOPES = READ_SCOPES
 CODEX_DEFAULT_SCOPES = READ_SCOPES
+OPENCODE_DEFAULT_SCOPES = READ_SCOPES
 CHATGPT_MAX_SCOPES = READ_SCOPES | SOCIAL_SCOPES | {"offline_access"}
 CODEX_MAX_SCOPES = READ_SCOPES | {"offline_access"}
+OPENCODE_MAX_SCOPES = CHATGPT_MAX_SCOPES

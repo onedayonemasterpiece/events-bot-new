@@ -1,17 +1,18 @@
 import hashlib
 import os
-import sys
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 sys.path.append(os.path.dirname(__file__))
+from _helpers.no_network import no_network  # noqa: F401
+
 import main
 import poster_ocr
 from models import PosterOcrCache
-from _helpers.no_network import no_network  # noqa: F401
 from private_events_mcp.config import PrivateEventsMCPConfig
 
 
@@ -32,8 +33,10 @@ def _skip_default_vk_source_seed(monkeypatch):
 def _mock_telegraph(monkeypatch, request):
     if "get_telegraph_token" not in request.node.nodeid:
         monkeypatch.setattr(main, "get_telegraph_token", lambda: "t")
+
     async def fake_create_page(tg, *args, **kwargs):
         return {"path": "test", "url": "https://t.me/test"}
+
     # Skip for new test that needs real implementation to verify calls
     if "test_split_month_requires_many_pages" not in request.node.nodeid:
         monkeypatch.setattr(main, "telegraph_create_page", fake_create_page)
@@ -60,6 +63,7 @@ def _mock_telegraph(monkeypatch, request):
                     await session.commit()
             return url
         return None
+
     monkeypatch.setattr(main, "update_telegraph_event_page", fake_update)
     monkeypatch.setattr(main, "update_source_post_keyboard", lambda *a, **k: None)
 
@@ -301,6 +305,7 @@ def config(tmp_path: Path, repo_root: Path, event_db: Path) -> PrivateEventsMCPC
         oauth_client_id="chatgpt-events-test-client",
         oauth_client_secret="client_" + "s" * 48,
         codex_oauth_client_id="codex-events-test-client",
+        opencode_oauth_client_id="opencode-events-test-client",
         operator_token="operator_" + "o" * 48,
         signing_key="signing_" + "k" * 64,
         repository_root=str(repo_root),
