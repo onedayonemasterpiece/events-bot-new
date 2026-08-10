@@ -12,7 +12,7 @@ import re
 import textwrap
 import unicodedata
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields as dataclass_fields
 from enum import Enum
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
@@ -62,6 +62,14 @@ from smart_update_identity import (
     input_packet_fingerprint,
     merge_identity_gate_fail_safe_verdict,
     parse_identity_gate_mode,
+    stable_candidate_identity,
+)
+from smart_update_state import (
+    CandidateAttemptReceipt,
+    SmartUpdateTerminalOutcome,
+    begin_candidate_attempt,
+    claim_due_candidates,
+    finish_candidate_attempt,
 )
 
 logger = logging.getLogger(__name__)
@@ -560,6 +568,11 @@ class PosterCandidate:
     completion_tokens: int = 0
     total_tokens: int = 0
 
+
+class SmartUpdateIntent(str, Enum):
+    UPSERT_EVENT = "UPSERT_EVENT"
+    ATTACH_CONTEXT = "ATTACH_CONTEXT"
+
 def _poster_candidate_evidence_url(poster: PosterCandidate) -> str | None:
     """Return the real URL fields used for provenance-only grounding."""
 
@@ -571,6 +584,17 @@ class EventCandidate:
     source_type: str
     source_url: str | None
     source_text: str
+    # Product action is explicit. Context attachment never drives identity LLM.
+    intent: SmartUpdateIntent = SmartUpdateIntent.UPSERT_EVENT
+    target_event_id: int | None = None
+    producer_ordinal: int | None = None
+    occurrence_key: str | None = None
+    candidate_key: str | None = None
+    smart_update_candidate_id: int | None = None
+    # Internal retry-state instruction. It is set only after an existing
+    # identity decision classified the candidate as distinct or uncertainty
+    # exhausted its bounded attempts.
+    force_create_distinct: bool = False
     # Only identity-bearing sources may participate in event matching. Linked
     # roundups/program pages are provenance context and must use context_only.
     source_role: str = "identity_bearing"
@@ -1679,10 +1703,12 @@ def _should_skip_festival_post_candidate(candidate: EventCandidate) -> bool:
     return context == "festival_post" and not source_type.startswith("parser:")
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class SmartUpdateResult:
-    status: str
+    outcome: SmartUpdateTerminalOutcome
     event_id: int | None = None
+    diagnostic_event_id: int | None = None
+    attempt: int = 0
     created: bool = False
     merged: bool = False
     added_posters: int = 0
@@ -1691,6 +1717,124 @@ class SmartUpdateResult:
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
     queue_notes: list[str] = field(default_factory=list)
+
+    def __init__(
+        self,
+        outcome: SmartUpdateTerminalOutcome | str | None = None,
+        *,
+        status: str | None = None,
+        event_id: int | None = None,
+        diagnostic_event_id: int | None = None,
+        attempt: int = 0,
+        created: bool = False,
+        merged: bool = False,
+        added_posters: int = 0,
+        added_sources: bool = False,
+        added_facts: list[str] | None = None,
+        skipped_conflicts: list[str] | None = None,
+        reason: str | None = None,
+        queue_notes: list[str] | None = None,
+    ) -> None:
+        legacy = str(status or "").strip().lower()
+        if outcome is None:
+            outcome = _terminal_outcome_from_legacy_status(legacy, reason=reason)
+        elif not isinstance(outcome, SmartUpdateTerminalOutcome):
+            raw = str(outcome).strip()
+            try:
+                outcome = SmartUpdateTerminalOutcome(raw)
+            except ValueError:
+                outcome = _terminal_outcome_from_legacy_status(raw.lower(), reason=reason)
+        accepted = outcome in {
+            SmartUpdateTerminalOutcome.CREATED,
+            SmartUpdateTerminalOutcome.MERGED,
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY,
+        }
+        self.outcome = outcome
+        self.event_id = int(event_id) if accepted and event_id is not None else None
+        self.diagnostic_event_id = (
+            int(diagnostic_event_id)
+            if diagnostic_event_id is not None
+            else (int(event_id) if not accepted and event_id is not None else None)
+        )
+        self.attempt = max(0, int(attempt))
+        self.created = outcome is SmartUpdateTerminalOutcome.CREATED or bool(created and accepted)
+        self.merged = outcome is SmartUpdateTerminalOutcome.MERGED or bool(merged and accepted)
+        self.added_posters = int(added_posters)
+        self.added_sources = bool(added_sources)
+        self.added_facts = list(added_facts or [])
+        self.skipped_conflicts = list(skipped_conflicts or [])
+        self.reason = reason
+        self.queue_notes = list(queue_notes or [])
+
+    @property
+    def status(self) -> str:
+        """Deprecated read-only bridge; new callers must consume ``outcome``."""
+
+        return {
+            SmartUpdateTerminalOutcome.CREATED: "created",
+            SmartUpdateTerminalOutcome.MERGED: "merged",
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY: "noop_exact_source_replay",
+            SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY: "rejected_product_policy",
+            SmartUpdateTerminalOutcome.RETRY_SCHEDULED: "retry_scheduled",
+        }[self.outcome]
+
+    @property
+    def is_accepted(self) -> bool:
+        return self.outcome in {
+            SmartUpdateTerminalOutcome.CREATED,
+            SmartUpdateTerminalOutcome.MERGED,
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY,
+        }
+
+    @property
+    def is_retry(self) -> bool:
+        return self.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+
+    @property
+    def is_rejected(self) -> bool:
+        return self.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+
+    @property
+    def is_changed(self) -> bool:
+        return self.outcome in {
+            SmartUpdateTerminalOutcome.CREATED,
+            SmartUpdateTerminalOutcome.MERGED,
+        }
+
+
+_LEGACY_PRODUCT_REJECT_STATUSES = frozenset(
+    {
+        "invalid",
+        "rejected_incoherent_merge",
+        "rejected_out_of_region",
+        "rejected_schedule_digest",
+        "skipped_festival_post",
+        "skipped_giveaway",
+        "skipped_non_event",
+        "skipped_past_event",
+        "skipped_promo",
+    }
+)
+
+
+def _terminal_outcome_from_legacy_status(
+    status: str,
+    *,
+    reason: str | None = None,
+) -> SmartUpdateTerminalOutcome:
+    if status == "created":
+        return SmartUpdateTerminalOutcome.CREATED
+    if status == "merged":
+        return SmartUpdateTerminalOutcome.MERGED
+    if status in {"skipped_nochange", "skipped_same_source_url", "noop_exact_source_replay"}:
+        return SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+    technical_reason = str(reason or "").casefold()
+    if status in _LEGACY_PRODUCT_REJECT_STATUSES and not any(
+        token in technical_reason
+        for token in ("provider", "schema", "unavailable", "llm_error", "gate_error")
+    ):
+        return SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+    return SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
 
 class SmartUpdateOutcomeKind(str, Enum):
@@ -1721,10 +1865,9 @@ def classify_smart_update_status(status: str | None) -> SmartUpdateOutcomeKind:
 
 
 def smart_update_result_allows_caller_side_effects(result: Any) -> bool:
-    return (
-        classify_smart_update_status(getattr(result, "status", None))
-        is not SmartUpdateOutcomeKind.NOT_ACCEPTED
-    )
+    if isinstance(result, SmartUpdateResult):
+        return result.is_accepted
+    return classify_smart_update_status(getattr(result, "status", None)) is not SmartUpdateOutcomeKind.NOT_ACCEPTED
 
 
 class SourceBindingConflict(RuntimeError):
@@ -15947,19 +16090,78 @@ async def smart_event_update(
     schedule_tasks: bool = True,
     schedule_kwargs: dict[str, Any] | None = None,
 ) -> SmartUpdateResult:
+    try:
+        intent = (
+            candidate.intent
+            if isinstance(candidate.intent, SmartUpdateIntent)
+            else SmartUpdateIntent(str(candidate.intent or ""))
+        )
+    except ValueError:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="invalid_smart_update_intent",
+        )
+    candidate.intent = intent
+    if intent is SmartUpdateIntent.UPSERT_EVENT:
+        candidate.source_role = "identity_bearing"
+    else:
+        candidate.source_role = "context_only"
+    canonical_source_url = canonicalize_identity_url(candidate.source_url)
+    if canonical_source_url:
+        candidate.source_url = canonical_source_url
+    candidate_key, occurrence_key = stable_candidate_identity(candidate)
+    candidate.candidate_key = candidate_key
+    candidate.occurrence_key = occurrence_key
+    source_fingerprint = input_packet_fingerprint(candidate)
+    candidate.source_fingerprint = source_fingerprint
+    receipt: CandidateAttemptReceipt
+    try:
+        receipt = await begin_candidate_attempt(
+            db,
+            candidate_key=candidate_key,
+            occurrence_key=occurrence_key,
+            canonical_source_url=canonical_source_url,
+            source_type=str(candidate.source_type or "unknown"),
+            intent=intent.value,
+            source_fingerprint=source_fingerprint,
+            candidate_payload=asdict(candidate),
+            max_attempts=int(os.getenv("SMART_UPDATE_MAX_ATTEMPTS", "3") or 3),
+        )
+        candidate.smart_update_candidate_id = receipt.candidate_state_id
+        previous_reason = str(receipt.previous_reason or "")
+        identity_uncertainty = any(
+            token in previous_reason
+            for token in (
+                "identity_gate",
+                "merge_identity",
+                "specific_ticket_occurrence_conflict",
+            )
+        )
+        candidate.force_create_distinct = previous_reason.startswith("create_distinct:") or (
+            receipt.attempt >= receipt.max_attempts and identity_uncertainty
+        )
+    except Exception:
+        logger.exception("smart_update: durable candidate registration failed")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="candidate_state_unavailable",
+        )
     async with _SMART_UPDATE_LOCK:
         try:
-            result = await _smart_event_update_impl(
-                db,
-                candidate,
-                check_source_url=check_source_url,
-                schedule_tasks=schedule_tasks,
-                schedule_kwargs=schedule_kwargs,
-            )
+            if intent is SmartUpdateIntent.ATTACH_CONTEXT:
+                result = await _attach_context_source(db, candidate)
+            else:
+                result = await _smart_event_update_impl(
+                    db,
+                    candidate,
+                    check_source_url=check_source_url,
+                    schedule_tasks=schedule_tasks,
+                    schedule_kwargs=schedule_kwargs,
+                )
         except SourceBindingConflict as exc:
             result = SmartUpdateResult(
-                status="review_required",
-                event_id=exc.existing_event_id,
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=exc.existing_event_id,
                 reason="source_binding_conflict",
             )
         except IntegrityError as exc:
@@ -15975,18 +16177,137 @@ async def smart_event_update(
                 async with db.raw_conn() as conn:
                     cursor = await conn.execute(
                         "SELECT event_id FROM event_source WHERE canonical_source_url=? "
-                        "AND source_role='identity_bearing' ORDER BY id LIMIT 1",
-                        (canonical,),
+                        "AND source_role='identity_bearing' AND occurrence_key=? "
+                        "ORDER BY id LIMIT 1",
+                        (canonical, candidate.occurrence_key),
                     )
                     row = await cursor.fetchone()
                     await cursor.close()
                     owner_id = int(row[0]) if row and row[0] is not None else None
             result = SmartUpdateResult(
-                status="review_required",
-                event_id=owner_id,
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=owner_id,
                 reason="source_binding_conflict",
             )
+        except Exception:
+            logger.exception("smart_update: processing failed; scheduling durable retry")
+            result = SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                reason="smart_update_processing_error",
+            )
+    result.attempt = receipt.attempt
+    try:
+        await finish_candidate_attempt(
+            db,
+            receipt,
+            outcome=result.outcome,
+            event_id=result.event_id,
+            diagnostic_event_id=result.diagnostic_event_id,
+            reason=result.reason,
+        )
+    except Exception:
+        logger.exception("smart_update: durable terminal acknowledgement failed")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=result.event_id or result.diagnostic_event_id,
+            reason="candidate_state_ack_failed",
+            attempt=receipt.attempt,
+        )
     return result
+
+
+async def _attach_context_source(db: Database, candidate: EventCandidate) -> SmartUpdateResult:
+    """Attach provenance to an explicit target without identity matching/LLM."""
+
+    target_event_id = int(candidate.target_event_id or 0)
+    if target_event_id <= 0:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="attach_context_target_required",
+        )
+    candidate.source_role = "context_only"
+    canonical = canonicalize_identity_url(candidate.source_url)
+    if not canonical:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=target_event_id,
+            reason="attach_context_source_url_required",
+        )
+    candidate.source_url = canonical
+    async with db.get_session() as session:
+        target = await session.get(Event, target_event_id)
+        if target is None:
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=target_event_id,
+                reason="attach_context_target_missing",
+            )
+        added, same_source = await _ensure_event_source(session, target_event_id, candidate)
+        await session.commit()
+    return SmartUpdateResult(
+        outcome=(
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+            if same_source and not added
+            else SmartUpdateTerminalOutcome.MERGED
+        ),
+        event_id=target_event_id,
+        added_sources=added,
+        reason="context_provenance_attached" if added else "context_provenance_replay",
+    )
+
+
+async def retry_due_smart_update_candidates(
+    db: Database,
+    *,
+    limit: int = 25,
+    lease_seconds: int = 300,
+) -> dict[str, int]:
+    """Claim and automatically replay due durable candidates.
+
+    The periodic scheduler imports this function lazily. Rehydration does not
+    select a provider or add an LLM stage; it invokes the same Smart Update
+    facade with the original packet and existing configured calls.
+    """
+
+    owner = f"smart-update:{os.getpid()}:{id(asyncio.current_task())}"
+    claimed = await claim_due_candidates(
+        db,
+        lease_owner=owner,
+        limit=limit,
+        lease_seconds=lease_seconds,
+    )
+    result_counts = {item.value: 0 for item in SmartUpdateTerminalOutcome}
+    result_counts["claimed"] = len(claimed)
+    result_counts["rehydration_failed"] = 0
+    allowed_fields = {item.name for item in dataclass_fields(EventCandidate)}
+    for item in claimed:
+        try:
+            payload = {
+                key: value
+                for key, value in item.candidate_payload.items()
+                if key in allowed_fields
+            }
+            payload["candidate_key"] = item.candidate_key
+            intent_raw = str(payload.get("intent") or SmartUpdateIntent.UPSERT_EVENT.value)
+            if intent_raw.startswith("SmartUpdateIntent."):
+                intent_raw = intent_raw.rsplit(".", 1)[-1]
+            payload["intent"] = SmartUpdateIntent(intent_raw)
+            payload["posters"] = [
+                value if isinstance(value, PosterCandidate) else PosterCandidate(**value)
+                for value in (payload.get("posters") or [])
+                if isinstance(value, (PosterCandidate, dict))
+            ]
+            candidate = EventCandidate(**payload)
+        except Exception:
+            result_counts["rehydration_failed"] += 1
+            logger.exception(
+                "smart_update.retry rehydration_failed candidate_key=%s",
+                item.candidate_key,
+            )
+            continue
+        result = await smart_event_update(db, candidate)
+        result_counts[result.outcome.value] += 1
+    return result_counts
 
 
 def _candidate_source_role(candidate: EventCandidate) -> str:
@@ -16003,17 +16324,26 @@ async def _exact_input_noop_event_id(
     canonical_source_url: str | None,
     source_role: str,
     source_fingerprint: str,
+    occurrence_key: str | None = None,
+    candidate_key: str | None = None,
 ) -> tuple[int | None, bool]:
     if not canonical_source_url or not source_fingerprint:
         return None, False
     try:
         async with db.raw_conn() as conn:
-            cursor = await conn.execute(
-                "SELECT DISTINCT event_id FROM event_source "
-                "WHERE canonical_source_url=? AND source_role=? AND source_fingerprint=? "
-                "ORDER BY event_id LIMIT 2",
-                (canonical_source_url, source_role, source_fingerprint),
-            )
+            if candidate_key:
+                cursor = await conn.execute(
+                    "SELECT DISTINCT event_id FROM event_source "
+                    "WHERE candidate_key=? AND source_fingerprint=? ORDER BY event_id LIMIT 2",
+                    (candidate_key, source_fingerprint),
+                )
+            else:
+                cursor = await conn.execute(
+                    "SELECT DISTINCT event_id FROM event_source "
+                    "WHERE canonical_source_url=? AND source_role=? AND source_fingerprint=? "
+                    "AND COALESCE(occurrence_key,'')=COALESCE(?,'') ORDER BY event_id LIMIT 2",
+                    (canonical_source_url, source_role, source_fingerprint, occurrence_key),
+                )
             rows = await cursor.fetchall()
             await cursor.close()
         event_ids = [int(row[0]) for row in rows if row and row[0] is not None]
@@ -16247,6 +16577,10 @@ async def _smart_event_update_impl(
     # An exact accepted retry can then stop before every LLM and domain write.
     source_fingerprint = input_packet_fingerprint(candidate)
     source_role = _candidate_source_role(candidate)
+    # Intent owns behavior. A complete UPSERT candidate must not be silently
+    # discarded because an older caller mislabeled its source as context-only.
+    if candidate.intent is SmartUpdateIntent.UPSERT_EVENT:
+        source_role = "identity_bearing"
     canonical_source_url = canonicalize_identity_url(candidate.source_url)
     if canonical_source_url:
         candidate.source_url = canonical_source_url
@@ -16263,6 +16597,8 @@ async def _smart_event_update_impl(
         canonical_source_url=canonical_source_url,
         source_role=source_role,
         source_fingerprint=source_fingerprint,
+        occurrence_key=candidate.occurrence_key,
+        candidate_key=candidate.candidate_key,
     )
     if noop_binding_conflict:
         logger.warning(
@@ -16282,16 +16618,6 @@ async def _smart_event_update_impl(
             status="noop_exact_source_replay",
             event_id=noop_event_id,
             reason="exact_input_packet",
-        )
-    if source_role == "context_only":
-        logger.info(
-            "smart_update.skip reason=context_only_source source_type=%s source_url=%s",
-            candidate.source_type,
-            candidate.source_url,
-        )
-        return SmartUpdateResult(
-            status="skipped_context_only",
-            reason="context_only_cannot_drive_identity",
         )
     grounded_festival, dropped_kgd80 = ground_kgd80_festival(
         candidate.festival,
@@ -17356,6 +17682,12 @@ async def _smart_event_update_impl(
             )
 
     posters_map: dict[int, list[EventPoster]] = {}
+    if candidate.force_create_distinct and shortlist:
+        logger.info(
+            "smart_update.identity create_distinct candidate_key=%s previous_retry_exhausted=1",
+            candidate.candidate_key,
+        )
+        shortlist = []
     if shortlist:
         event_ids = [ev.id for ev in shortlist if ev.id]
         posters_map = await _fetch_event_posters_map(db, event_ids)
@@ -17961,7 +18293,10 @@ async def _smart_event_update_impl(
             )
             return SmartUpdateResult(status="invalid", reason="prose_location")
 
-        if SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
+        if (
+            SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF
+            and not candidate.force_create_distinct
+        ):
             try:
                 vector_evidence = await _smart_update_identity_vector_evidence(candidate)
                 suppressed_vector_error: dict[str, Any] | None = None
@@ -18783,6 +19118,7 @@ async def _smart_event_update_impl(
                     event_id=-1,
                     canonical_source_url=canonical_binding_url,
                     source_role=_candidate_source_role(candidate),
+                    occurrence_key=candidate.occurrence_key,
                 )
                 if conflicting_binding is not None:
                     return SmartUpdateResult(
@@ -18805,7 +19141,7 @@ async def _smart_event_update_impl(
                 final_stmt = _apply_soft_city_filter(final_stmt, candidate.city)
                 final_res = await session.execute(final_stmt)
                 final_duplicate = _pre_create_duplicate_probe(candidate, list(final_res.scalars().all()))
-                if final_duplicate is not None:
+                if final_duplicate is not None and not candidate.force_create_distinct:
                     await _record_identity_gate_decision(
                         db,
                         candidate,
@@ -19102,12 +19438,22 @@ async def _smart_event_update_impl(
             },
         )
         if merge_identity_verdict.should_skip_side_effects:
+            create_distinct = (
+                not merge_identity_verdict.fail_safe
+                and merge_identity_verdict.relation.value
+                in {"related_but_distinct", "festival_context_sibling", "unsafe_to_merge"}
+            )
             return SmartUpdateResult(
-                status="skipped_identity_gate",
-                event_id=existing.id,
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=existing.id,
                 created=False,
                 merged=False,
-                reason=merge_identity_verdict.reason_code,
+                reason=(
+                    f"create_distinct:{merge_identity_verdict.relation.value}:"
+                    f"{merge_identity_verdict.reason_code}"
+                    if create_distinct
+                    else merge_identity_verdict.reason_code
+                ),
                 queue_notes=list(queue_notes or []),
             )
 
@@ -19132,6 +19478,7 @@ async def _smart_event_update_impl(
                 event_id=int(event_db.id or 0),
                 canonical_source_url=canonical_binding_url,
                 source_role=_candidate_source_role(candidate),
+                occurrence_key=candidate.occurrence_key,
             )
             if conflicting_binding is not None:
                 return SmartUpdateResult(
@@ -20516,11 +20863,10 @@ async def _smart_event_update_impl(
                 exc_info=True,
             )
 
-    status = (
-        "merged"
-        if (updated_fields or added_posters or (added_sources and not same_source) or holiday_changed)
-        else "skipped_nochange"
-    )
+    # Once identity has been affirmatively classified as SAME_EVENT or
+    # SOURCE_UPDATE, the accepted terminal is MERGED. NOOP is reserved solely
+    # for the exact packet replay fast-path above.
+    status = "merged"
     logger.info(
         "smart_update.merge event_id=%s status=%s updated=%s added_posters=%d added_sources=%s updated_keys=%s added_facts=%d skipped_conflicts=%d reason=%s",
         existing.id,
@@ -21014,6 +21360,7 @@ async def _ensure_event_source(
         event_id=int(event_id),
         canonical_source_url=canonical_source_url,
         source_role=source_role,
+        occurrence_key=candidate.occurrence_key,
     )
     if conflicting_event_id is not None:
         raise SourceBindingConflict(conflicting_event_id)
@@ -21024,7 +21371,11 @@ async def _ensure_event_source(
             select(EventSource).where(
                 EventSource.event_id == event_id,
                 or_(
-                    EventSource.canonical_source_url == canonical_source_url,
+                    and_(
+                        EventSource.canonical_source_url == canonical_source_url,
+                        EventSource.occurrence_key == candidate.occurrence_key,
+                    ),
+                    EventSource.candidate_key == candidate.candidate_key,
                     and_(
                         EventSource.canonical_source_url.is_(None),
                         EventSource.source_url == candidate.source_url,
@@ -21057,6 +21408,15 @@ async def _ensure_event_source(
             existing.source_fingerprint = candidate.source_fingerprint
             existing.imported_at = datetime.now(timezone.utc)
             updated = True
+        if existing.candidate_key != candidate.candidate_key:
+            existing.candidate_key = candidate.candidate_key
+            updated = True
+        if existing.occurrence_key != candidate.occurrence_key:
+            existing.occurrence_key = candidate.occurrence_key
+            updated = True
+        if existing.smart_update_candidate_id != candidate.smart_update_candidate_id:
+            existing.smart_update_candidate_id = candidate.smart_update_candidate_id
+            updated = True
         if updated:
             session.add(existing)
         return False, True
@@ -21068,6 +21428,9 @@ async def _ensure_event_source(
             canonical_source_url=canonical_source_url,
             source_role=source_role,
             source_fingerprint=candidate.source_fingerprint,
+            candidate_key=candidate.candidate_key,
+            occurrence_key=candidate.occurrence_key,
+            smart_update_candidate_id=candidate.smart_update_candidate_id,
             source_chat_username=candidate.source_chat_username,
             source_chat_id=candidate.source_chat_id,
             source_message_id=candidate.source_message_id,
@@ -21097,6 +21460,7 @@ async def _source_identity_binding_conflict(
     event_id: int,
     canonical_source_url: str,
     source_role: str,
+    occurrence_key: str | None = None,
 ) -> int | None:
     if source_role != "identity_bearing":
         return None
@@ -21107,6 +21471,7 @@ async def _source_identity_binding_conflict(
             .where(
                 EventSource.canonical_source_url == canonical_source_url,
                 EventSource.source_role == "identity_bearing",
+                EventSource.occurrence_key == occurrence_key,
                 EventSource.event_id != int(event_id),
             )
             .limit(1)

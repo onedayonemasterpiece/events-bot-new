@@ -1072,6 +1072,8 @@ class EventSource(SQLModel, table=True):
         Index("ix_event_source_type_url", "source_type", "source_url"),
         Index("ix_event_source_canonical_role", "canonical_source_url", "source_role"),
         Index("ix_event_source_fingerprint", "source_fingerprint"),
+        Index("ix_event_source_candidate", "candidate_key"),
+        Index("ix_event_source_occurrence", "canonical_source_url", "occurrence_key"),
         UniqueConstraint("event_id", "source_url", name="ux_event_source_event_url"),
     )
 
@@ -1084,6 +1086,13 @@ class EventSource(SQLModel, table=True):
     canonical_source_url: Optional[str] = None
     source_role: Optional[str] = None
     source_fingerprint: Optional[str] = None
+    # Candidate identity is additive: legacy source rows remain NULL until they
+    # pass through an intake boundary that can supply an explicit occurrence.
+    candidate_key: Optional[str] = None
+    occurrence_key: Optional[str] = None
+    smart_update_candidate_id: Optional[int] = Field(
+        default=None, foreign_key="smart_update_candidate_state.id"
+    )
     source_chat_username: Optional[str] = None
     source_chat_id: Optional[int] = None
     source_message_id: Optional[int] = None
@@ -1092,6 +1101,79 @@ class EventSource(SQLModel, table=True):
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
     trust_level: Optional[str] = None
+
+
+class SmartUpdateCandidateState(SQLModel, table=True):
+    __tablename__ = "smart_update_candidate_state"
+    __table_args__ = (
+        UniqueConstraint("candidate_key", name="ux_smart_update_candidate_key"),
+        Index("ix_smart_update_candidate_due", "current_outcome", "next_retry_at"),
+        Index(
+            "ux_smart_update_candidate_source_occurrence",
+            "canonical_source_url",
+            "occurrence_key",
+            unique=True,
+            sqlite_where=text(
+                "canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+            ),
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    candidate_key: str
+    occurrence_key: str
+    canonical_source_url: Optional[str] = None
+    source_type: str
+    intent: str
+    source_fingerprint: str
+    candidate_payload: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    current_outcome: str = Field(default="RETRY_SCHEDULED")
+    accepted_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    diagnostic_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    reason: Optional[str] = None
+    attempts: int = Field(default=0)
+    max_attempts: int = Field(default=3)
+    retry_exhausted: bool = Field(default=False)
+    next_retry_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    claimed_by: Optional[str] = None
+    claim_expires_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+
+
+class SmartUpdateAttempt(SQLModel, table=True):
+    __tablename__ = "smart_update_attempt"
+    __table_args__ = (
+        UniqueConstraint(
+            "candidate_state_id", "attempt_no", name="ux_smart_update_attempt_no"
+        ),
+        Index("ix_smart_update_attempt_terminal", "terminal_outcome", "finished_at"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    candidate_state_id: int = Field(foreign_key="smart_update_candidate_state.id")
+    attempt_no: int
+    started_at: datetime = Field(
+        default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
+    )
+    finished_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    terminal_outcome: str = Field(default="RETRY_SCHEDULED")
+    accepted_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    diagnostic_event_id: Optional[int] = Field(default=None, foreign_key="event.id")
+    reason: Optional[str] = None
 
 
 class EventIdentityDecisionLog(SQLModel, table=True):

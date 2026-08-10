@@ -904,6 +904,69 @@ class Database:
             dbg("event_source")
             await conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS smart_update_candidate_state(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    candidate_key TEXT NOT NULL UNIQUE,
+                    occurrence_key TEXT NOT NULL,
+                    canonical_source_url TEXT,
+                    source_type TEXT NOT NULL,
+                    intent TEXT NOT NULL CHECK(intent IN ('UPSERT_EVENT','ATTACH_CONTEXT')),
+                    source_fingerprint TEXT NOT NULL,
+                    candidate_payload JSON NOT NULL DEFAULT '{}',
+                    current_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                        CHECK(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                    accepted_event_id INTEGER,
+                    diagnostic_event_id INTEGER,
+                    reason TEXT,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    retry_exhausted INTEGER NOT NULL DEFAULT 0,
+                    next_retry_at TIMESTAMP,
+                    claimed_by TEXT,
+                    claim_expires_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_smart_update_candidate_due "
+                "ON smart_update_candidate_state(current_outcome, next_retry_at, claim_expires_at)"
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_smart_update_candidate_source_occurrence "
+                "ON smart_update_candidate_state(canonical_source_url, occurrence_key) "
+                "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS smart_update_attempt(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    candidate_state_id INTEGER NOT NULL,
+                    attempt_no INTEGER NOT NULL,
+                    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    finished_at TIMESTAMP,
+                    terminal_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                        CHECK(terminal_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                    accepted_event_id INTEGER,
+                    diagnostic_event_id INTEGER,
+                    reason TEXT,
+                    UNIQUE(candidate_state_id, attempt_no),
+                    FOREIGN KEY(candidate_state_id) REFERENCES smart_update_candidate_state(id) ON DELETE CASCADE,
+                    FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_smart_update_attempt_terminal "
+                "ON smart_update_attempt(terminal_outcome, finished_at)"
+            )
+            await conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS event_source(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_id INTEGER NOT NULL,
@@ -912,6 +975,9 @@ class Database:
                     canonical_source_url TEXT,
                     source_role TEXT,
                     source_fingerprint TEXT,
+                    candidate_key TEXT,
+                    occurrence_key TEXT,
+                    smart_update_candidate_id INTEGER,
                     source_chat_username TEXT,
                     source_chat_id INTEGER,
                     source_message_id INTEGER,
@@ -919,6 +985,7 @@ class Database:
                     imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     trust_level TEXT,
                     FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(smart_update_candidate_id) REFERENCES smart_update_candidate_state(id) ON DELETE SET NULL,
                     UNIQUE(event_id, source_url)
                 )
                 """
@@ -930,6 +997,9 @@ class Database:
             await _add_column(conn, "event_source", "canonical_source_url TEXT")
             await _add_column(conn, "event_source", "source_role TEXT")
             await _add_column(conn, "event_source", "source_fingerprint TEXT")
+            await _add_column(conn, "event_source", "candidate_key TEXT")
+            await _add_column(conn, "event_source", "occurrence_key TEXT")
+            await _add_column(conn, "event_source", "smart_update_candidate_id INTEGER")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_event ON event_source(event_id)"
             )
@@ -949,6 +1019,14 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_fingerprint "
                 "ON event_source(source_fingerprint)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_source_candidate "
+                "ON event_source(candidate_key)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_source_occurrence "
+                "ON event_source(canonical_source_url, occurrence_key)"
             )
             # Classified source rows must be complete and role-valid. Legacy
             # rows may remain NULL until an evidence-backed intake/repair
@@ -971,47 +1049,33 @@ class Database:
                 "AND TRIM(COALESCE(NEW.canonical_source_url,''))='') "
                 "BEGIN SELECT RAISE(ABORT,'event_source_identity_contract'); END"
             )
-            event_conflict_cursor = await conn.execute(
-                "SELECT event_id, canonical_source_url FROM event_source "
-                "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
-                "GROUP BY event_id, canonical_source_url HAVING COUNT(*) > 1 LIMIT 1"
-            )
-            event_identity_conflict = await event_conflict_cursor.fetchone()
-            await event_conflict_cursor.close()
-            if event_identity_conflict is None:
-                await conn.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_event_canonical "
-                    "ON event_source(event_id, canonical_source_url) "
-                    "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>''"
-                )
-            else:
-                logging.warning(
-                    "event_source per-event canonical uniqueness not activated: event_id=%s source_alias=%s",
-                    event_identity_conflict[0],
-                    hashlib.sha256(str(event_identity_conflict[1]).encode("utf-8")).hexdigest()[:12],
-                )
-            # Activate global identity uniqueness only when current data proves
-            # it is safe. Never guess roles or rewrite conflicting legacy rows at
-            # startup: an explicit repair/audit must resolve those first.
-            conflict_cursor = await conn.execute(
-                "SELECT canonical_source_url FROM event_source "
+            # A carrier URL may contain several independent occurrences.  The
+            # previous global URL indexes encoded the false premise "one URL =
+            # one Event"; replace them without rewriting/classifying legacy rows.
+            await conn.execute("DROP INDEX IF EXISTS ux_event_source_event_canonical")
+            await conn.execute("DROP INDEX IF EXISTS ux_event_source_identity_canonical")
+            occurrence_conflict_cursor = await conn.execute(
+                "SELECT canonical_source_url, occurrence_key FROM event_source "
                 "WHERE source_role='identity_bearing' AND canonical_source_url IS NOT NULL "
-                "AND canonical_source_url<>'' "
-                "GROUP BY canonical_source_url HAVING COUNT(*) > 1 LIMIT 1"
+                "AND canonical_source_url<>'' AND occurrence_key IS NOT NULL AND occurrence_key<>'' "
+                "GROUP BY canonical_source_url, occurrence_key HAVING COUNT(*) > 1 LIMIT 1"
             )
-            identity_conflict = await conflict_cursor.fetchone()
-            await conflict_cursor.close()
-            if identity_conflict is None:
+            occurrence_conflict = await occurrence_conflict_cursor.fetchone()
+            await occurrence_conflict_cursor.close()
+            if occurrence_conflict is None:
                 await conn.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_identity_canonical "
-                    "ON event_source(canonical_source_url) "
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_identity_occurrence "
+                    "ON event_source(canonical_source_url, occurrence_key) "
                     "WHERE source_role='identity_bearing' "
-                    "AND canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+                    "AND canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
+                    "AND occurrence_key IS NOT NULL AND occurrence_key<>''"
                 )
             else:
-                logging.warning(
-                    "event_source identity uniqueness not activated: source_alias=%s",
-                    hashlib.sha256(str(identity_conflict[0]).encode("utf-8")).hexdigest()[:12],
+                raise RuntimeError(
+                    "event_source_identity_occurrence_conflict:"
+                    + hashlib.sha256(str(occurrence_conflict[0]).encode("utf-8")).hexdigest()[:12]
+                    + ":"
+                    + hashlib.sha256(str(occurrence_conflict[1]).encode("utf-8")).hexdigest()[:12]
                 )
 
             dbg("event_identity")

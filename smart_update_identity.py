@@ -1066,6 +1066,51 @@ def canonicalize_identity_url(
     return urlunsplit(("https", host, path, query, fragment))
 
 
+def stable_candidate_identity(value: Any) -> tuple[str, str]:
+    """Return ``(candidate_key, occurrence_key)`` without prose semantics.
+
+    Producers should pass an explicit occurrence key or stable ordinal for
+    multi-event carriers.  The structured fallback intentionally excludes title,
+    description, OCR and occurrence-scope prose so an edited packet remains the
+    same candidate and can be treated as an authoritative update.
+    """
+
+    explicit_candidate = str(getattr(value, "candidate_key", None) or "").strip()
+    explicit_occurrence = str(getattr(value, "occurrence_key", None) or "").strip()
+    canonical_source = canonicalize_identity_url(getattr(value, "source_url", None)) or ""
+    if explicit_occurrence:
+        occurrence_key = explicit_occurrence
+    elif getattr(value, "producer_ordinal", None) is not None:
+        occurrence_key = f"ordinal:{int(getattr(value, 'producer_ordinal'))}"
+    else:
+        ticket_identity = specific_ticket_occurrence_identity(
+            getattr(value, "ticket_link", None)
+        )
+        if ticket_identity is not None:
+            occurrence_key = "ticket:" + ":".join(ticket_identity)
+        else:
+            structured = {
+                "date": str(getattr(value, "date", None) or "").strip(),
+                "end_date": str(getattr(value, "end_date", None) or "").strip(),
+                "time": str(getattr(value, "time", None) or "").strip().replace(".", ":"),
+                "source_message_id": getattr(value, "source_message_id", None),
+            }
+            # A source with no occurrence anchors represents one source-local
+            # candidate. Multi-event producers must provide producer_ordinal.
+            occurrence_key = "structured:" + hashlib.sha256(
+                json.dumps(structured, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+    if explicit_candidate:
+        return explicit_candidate, occurrence_key
+    material = json.dumps(
+        {"canonical_source_url": canonical_source, "occurrence_key": occurrence_key},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest(), occurrence_key
+
+
 def _canonical_query(raw_query: str, *, ignored: set[str] | None = None) -> str:
     ignored_keys = {str(item).casefold() for item in (ignored or set())}
     pairs: list[tuple[str, str]] = []
