@@ -647,6 +647,11 @@ Thus the compact-card correction does not weaken large-surface protection.
 
 ## Связанные документы
 
+- Канонический TO-BE contract временной first-party карты действий,
+  read-only связи с персонализацией и zero-cost OFF:
+  `docs/features/static-site-pages/first-party-action-map.md`.
+- Общий analytics/consent/storage contract, включая зарегистрированный
+  `action_map_diagnostic` purpose: `docs/features/static-site-pages/analytics/README.md`.
 - Исходные требования владельца к подборкам: `docs/features/static-site-pages/podborki.md`.
 - Канонический анализ данных/extraction, общий Kaggle+BGE-план, venue SEO/GEO и
   Supabase-egress contract: `docs/features/static-site-pages/podborki-to-be.md`.

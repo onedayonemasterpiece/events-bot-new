@@ -125,6 +125,7 @@
 | Eligibility | Неперсональные правила попадания события на surface: дата, статус, город, тема, бесплатность, возраст и т. д. |
 | Candidate set | Допустимый набор событий до финального ранжирования. |
 | Served list | Фактически показанные пользователю карточки и их порядок. |
+| Presentation receipt | Opaque read-only ссылка на санитизированный контекст фактической выдачи; observability bridge для аналитики, но не профильный input. |
 | Explicit tombstone | Durable-состояние `Не интересует` для конкретного события/связанной сущности. |
 | Profile snapshot | Версионированная компактная проекция интересов и ограничений на момент расчёта. |
 | Profile projection | Подписанная/проверяемая компактная часть snapshot, пригодная для localStorage и zero-network scoring. |
@@ -201,9 +202,12 @@ schema snapshot сохранён локально в
 2. Просроченные, отменённые, несовместимые, дублированные и явно скрытые события
    не возвращаются ранжированием.
 3. Exact hide не спасается ни persona, ни popularity, ни exploration.
-4. До `personalization_started_at` нет server profile, impression/open telemetry
-   и удалённой interest-мутации; простое открытие, scroll, impression, dwell и
-   закрытие уведомления не активируют персонализацию.
+4. До `personalization_started_at` нет server profile,
+   **personalization-scoped** impression/open telemetry и удалённой
+   interest-мутации; простое открытие, scroll, impression, dwell и закрытие
+   уведомления не активируют персонализацию. Отдельная de-identified product
+   analytics telemetry допустима только по собственному `product_analytics`
+   consent, не выполняет subject/profile join и не проецируется в профиль.
 5. Открытие страницы не вызывает provider/LLM API.
 6. Первоначально видимый пользователю префикс карточек не переставляется.
 7. Карточка, с которой пользователь взаимодействует, не прыгает и не исчезает
@@ -977,6 +981,45 @@ sanitized test/debug-контракту и не раскрывает raw history
 - candidate starvation и surface fallback rate;
 - model quality/diversity/worst-group по snapshot.
 
+### 17.1. Read-only action-map bridge
+
+Канонический контракт временной диагностики:
+[First-party карта действий](../first-party-action-map.md). Для каждой выдачи
+персонализация может выпустить opaque `presentation_receipt_id`, который
+ссылается на санитизированную projection `served_list_id`, `surface_id`,
+presentation mode, catalog/model/profile revisions, experiment variant,
+итоговые event IDs, rank/slot и exploration/rescue markers. Action map читает
+только этот receipt и compact slot/rank bindings; raw profile, facets,
+embeddings, private history и score breakdown ей недоступны.
+
+Это строго односторонний observability bridge:
+
+```text
+personalization presentation context -> action-map analysis: allowed
+action-map capture -> current profile/ranking/profile facets: forbidden
+```
+
+До `personalization_started_at` receipt имеет только
+`personalization_mode=inactive|contextual`, `profile_revision=null` и не
+разрешает subject/profile join. При отдельном `product_analytics` consent может
+собираться de-identified product analytics/action-map telemetry, но она не
+является personalization-scoped impression/open, не активирует функцию и не
+создаёт server interest profile. После activation аналитическая projection
+может включать model/experiment context, однако raw profile остаётся закрыт.
+
+Dead tap, no-click, hover/dwell, repeat и coarse local bin не являются
+interest-сигналами. Если reviewed evidence предлагает новый signal, owner
+оформляет отдельную versioned signal-policy/model proposal; затем обязательны
+offline benchmark на immutable snapshot, зарегистрированный randomized/holdout
+experiment с новой `model_version`, guardrails и explicit promotion decision.
+До promotion signal не материализует facet и не меняет текущую сессию.
+
+Активная instrumentation сама является confounder: campaign сравнивает
+captured и non-captured control по INP/LCP/CLS, bundle/CPU/network delta,
+errors/dropped summaries и page-behavior parity. Нарушение performance parity
+останавливает кампанию и помечает выводы о retries/latency загрязнёнными; sampling
+не повышается как workaround.
+
 ## 18. Что именно должно доказывать тестирование
 
 Автотесты разделяют четыре разных утверждения:
@@ -1544,7 +1587,9 @@ artifacts/codex/personalization-e2e/<run_id>/
 
 - 0 exact-hide resurrection;
 - 0 eligibility/lifecycle/duplicate violations;
-- 0 server profile/impression/open mutations до activation;
+- 0 server profile, personalization-scoped impression/open и remote interest
+  mutations до activation; отдельная consented de-identified product analytics
+  не выполняет subject/profile join и не считается профильной телеметрией;
 - 0 activation от scroll/impression/open/dwell/share/закрытия уведомления;
 - 0 personalization network requests для обычного local rerank;
 - 0 per-action online profile recompute/download;
@@ -1560,6 +1605,9 @@ artifacts/codex/personalization-e2e/<run_id>/
 - activation evidence содержит утверждённые contract/privacy/rules versions;
 - постоянное уведомление и публичные Правила доступны без авторизации;
 - localization/legal gate подтверждён до включения remote profile.
+- action-map capture не создаёт profile facets, не меняет current ranks и не
+  проходит promotion без benchmark, registered randomized/holdout experiment,
+  новой `model_version` и explicit owner decision;
 
 ### 26.2. Quality gates
 
@@ -1574,6 +1622,9 @@ artifacts/codex/personalization-e2e/<run_id>/
 - profile projection укладывается в size budget, а refresh cadence не создаёт
   request storm;
 - calibration подтверждена до показа процентного индекса.
+- active action-map instrumentation проходит captured-vs-control
+  INP/LCP/CLS, bundle/CPU/network и behavior-parity guardrail; иначе evidence
+  имеет статус contaminated/insufficient и campaign останавливается.
 
 ### 26.3. Online gates
 
@@ -1708,6 +1759,8 @@ artifacts/codex/personalization-e2e/<run_id>/
 8. quality/diversity/worst-group gate пройден без подмены A/B browser-тестом;
 9. production rollout имеет experiment, observability, rollback и очистку
    test/campaign traffic.
+10. action-map evidence остаётся read-only diagnostic input: `0` map-driven
+    profile mutations до отдельного versioned promotion workflow.
 
 До выполнения этих условий любые хорошие примеры выдачи являются полезным
 prototype evidence, но не доказательством качества production-персонализации.
@@ -1722,6 +1775,7 @@ prototype evidence, но не доказательством качества pr
 - [Подборки](../podborki.md)
 - `docs/architecture/personalization-data-ownership.md` из `origin/main`
 - [Anonymous personalization](../../unsigned-personalization/README.md)
+- [First-party карта действий](../first-party-action-map.md)
 - [LLM-first request guide](../../../llm/request-guide.md)
 - [E2E testing](../../../operations/e2e-testing.md)
 - [E2E scenarios](../../../operations/e2e-scenarios.md)

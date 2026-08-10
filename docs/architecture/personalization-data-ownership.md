@@ -13,6 +13,13 @@ The project has one current user/profile and email control-plane system of recor
 - **An isolated YDB personal-data contour in `ru-central1`** owns the post-release VK proof-of-control link, VK-purpose consent and eligible friend edges. It is separated by database/namespace and IAM from YDB analytics; this is a narrow compliance vault, not a competing personalization profile.
 - **Object Storage/CDN** owns generated HTML/JSON/media artifacts. It does not own consent, profile, subscription, send state or token validity.
 
+The temporary first-party action map does not change these owners. Its opaque
+`presentation_receipt_id` is a read-only observability bridge to the existing
+personalization owner; neither the receipt nor map capture transfers ownership
+of the current profile, served-list state or strong action. Raw map summaries
+may exist only in an isolated YDB analytics namespace with TTL, while long-lived
+reviewed aggregate evidence packages belong in Object Storage.
+
 Email providers are transports and ingress surfaces, not additional systems of record:
 
 - **SpaceWeb** owns the durable human/inbound mailbox `info@kenigevents.ru` and manual webmail/IMAP/SMTP access.
@@ -49,7 +56,9 @@ This decision follows the implementation already present in `origin/main`: Supab
 | Normalized inbound trigger payload/attachments | Private Yandex Object Storage under an approved retention policy | Minimized signed metadata/reference receipt in the existing backend |
 | Product/operational analytics aggregates | YDB | Current control counters in Supabase only when needed |
 | Raw weak site telemetry | YDB with TTL, or do not collect | Never duplicate as a Supabase firehose |
+| Raw `ActionMapViewSummary` for an approved campaign | Isolated YDB analytics namespace, mandatory TTL `7 days` | Aggregated/sanitized `ProductAnalyticsEvidencePackage` in Object Storage; Supabase raw rows `0` |
 | Strong-action current state/profile inputs | Supabase | Analytics event in YDB |
+| Personalization presentation receipt / served-list summary | Existing personalization primary owner | Opaque read-only `presentation_receipt_id` plus bounded sanitized analytics projection; no raw-profile projection |
 | Raw TG/VK comments, embeddings and matches | YDB comment-feedback sidecar | Sanitized static manifest in Object Storage |
 | Canonical event data | Fly SQLite | Bounded card/vector projection in Supabase |
 
@@ -68,6 +77,23 @@ The post-release VK privacy vault is a scoped exception: it stores only VK subje
 3. Supabase transactionally updates bounded strong-action/current state and a profile revision.
 4. An asynchronous outbox projects de-identified analytics to YDB.
 5. YDB failure never blocks CTA/navigation or rolls back a user action.
+
+### Temporary action-map diagnostics
+
+1. An approved, unexpired `action_map_diagnostic` manifest and
+   `product_analytics` consent gate capture; default-OFF builds write nothing.
+2. The browser sends compact, idempotent `ActionMapViewSummary` packets only to
+   a same-origin/service ingest. Direct browser writes or credentials for YDB
+   remain forbidden.
+3. Ingest writes raw summaries only to an isolated YDB analytics namespace with
+   mandatory `7-day` TTL. Supabase raw action-map rows remain exactly `0`.
+4. The map may resolve an opaque `presentation_receipt_id` through a restricted
+   sanitized projection; it cannot read raw profile/history or mutate current
+   profile, strong-action state, model assignment or ranks.
+5. After aggregation/review, only a sanitized immutable
+   `ProductAnalyticsEvidencePackage` may be retained in Object Storage. It has
+   no raw actor/view identity; low-sample slices are suppressed or marked
+   insufficient. Product Atlas/design tooling never reads the raw YDB stream.
 
 ### Login and profile linking
 
@@ -120,6 +146,9 @@ The comment pipeline reads canonical event/source snapshots from Fly SQLite, kee
 - Cross-database transactions in the send-critical path.
 - YDB analytics used for send eligibility.
 - Browser direct writes to YDB or raw/private Supabase profile tables.
+- Raw action-map summaries, local bins or action-map event firehoses in
+  Supabase; browser-direct YDB action-map writes; action-map capture used as a
+  current-profile mutation or ranking input.
 - Plain email, bearer tokens or raw profile vectors in YDB analytics.
 - Raw VK IDs, VK message bodies, complete public friend lists or friendship edges in Supabase, YDB analytics, core Fly SQLite or static artifacts. The encrypted/HMAC VK identity and eligible pair edge may exist only in the isolated YDB personal-data contour.
 - Plain/unsalted SHA for email or bearer-token lookup.
@@ -205,6 +234,7 @@ rewrites Supabase Auth storage.
 
 ## Related documentation
 
+- [First-party action-map contract](../features/static-site-pages/first-party-action-map.md)
 - [Anonymous/static-site personalization](../features/unsigned-personalization/README.md)
 - [Personal email announcements](../features/personal-email-announcements/README.md)
 - [Site user identity](../features/site-user-identity/README.md)
