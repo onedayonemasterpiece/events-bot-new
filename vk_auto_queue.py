@@ -16,6 +16,7 @@ from ops_run import finish_ops_run, start_ops_run
 
 import vk_intake
 import vk_review
+from smart_event_update import SmartUpdateTerminalOutcome
 from smart_update_identity import canonicalize_identity_url
 
 logger = logging.getLogger(__name__)
@@ -260,8 +261,13 @@ async def _cancel_matching_event_from_notice(
     published_at: datetime | None,
 ) -> tuple[int | None, str | None]:
     """Try to find a matching event and mark it as cancelled/postponed (inactive)."""
-    from sqlalchemy import and_, or_, select
+    from sqlalchemy import select
     from models import Event, EventSource, EventSourceFact
+    from smart_event_update import (
+        EventCandidate,
+        SmartUpdateIntent,
+        smart_event_update,
+    )
     import main as main_mod
 
     year_hint = None
@@ -340,79 +346,70 @@ async def _cancel_matching_event_from_notice(
         canonical_source_url = canonicalize_identity_url(str(source_url))
         if not canonical_source_url:
             return None, "invalid_source_identity"
-        conflicting_owner = (
-            await session.execute(
-                select(EventSource.event_id).where(
-                    EventSource.canonical_source_url == canonical_source_url,
-                    EventSource.source_role == "identity_bearing",
-                    EventSource.event_id != int(best.id),
-                ).limit(1)
-            )
-        ).scalar_one_or_none()
-        if conflicting_owner is not None:
-            return None, "review_required:source_binding_conflict"
-
+        best_id = int(best.id)
         best.lifecycle_status = next_status
         session.add(best)
-        await session.flush()
+        await session.commit()
 
-        # Source URLs are unique per event (ux_event_source_event_url); cancellation notices can
-        # arrive as an edit of the original post. Reuse existing source row when present.
-        src = (
-            (
-                await session.execute(
-                    select(EventSource).where(
-                        EventSource.event_id == int(best.id),
-                        or_(
-                            EventSource.canonical_source_url == canonical_source_url,
-                            and_(
-                                EventSource.canonical_source_url.is_(None),
-                                EventSource.source_url == str(source_url),
-                            ),
-                        ),
-                    )
-                )
-            )
-            .scalars()
-            .first()
-        )
-        if src is None:
-            src = EventSource(
-                event_id=int(best.id),
+        context_result = await smart_event_update(
+            db,
+            EventCandidate(
+                intent=SmartUpdateIntent.ATTACH_CONTEXT,
+                target_event_id=best_id,
                 source_type="vk_cancel",
                 source_url=str(source_url),
-                canonical_source_url=canonical_source_url,
-                source_role="identity_bearing",
                 source_text=(notice_text or "")[:4000],
-            )
-            session.add(src)
-            await session.flush()
-        else:
-            src.source_type = "vk_cancel"
-            src.canonical_source_url = canonical_source_url
-            src.source_role = "identity_bearing"
-            src.source_text = (notice_text or "")[:4000]
-            session.add(src)
-            await session.flush()
+                occurrence_key=f"cancel:{best_id}:{canonical_source_url}",
+            ),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
         note = f"❌ {kind}: событие помечено как {next_status} по источнику VK"
         if source_name:
             note += f" ({source_name})"
-        session.add(
-            EventSourceFact(
-                event_id=int(best.id),
-                source_id=int(src.id),
-                fact=note,
-                status="note",
+        if context_result.is_accepted:
+            src = (
+                (
+                    await session.execute(
+                        select(EventSource).where(
+                            EventSource.event_id == best_id,
+                            EventSource.canonical_source_url == canonical_source_url,
+                        )
+                    )
+                )
+                .scalars()
+                .first()
             )
-        )
-        await session.commit()
+            if src is not None:
+                session.add(
+                    EventSourceFact(
+                        event_id=best_id,
+                        source_id=int(src.id),
+                        fact=note,
+                        status="note",
+                    )
+                )
+                await session.commit()
+        elif context_result.is_retry:
+            logger.warning(
+                "vk_auto.cancel context retry_scheduled event_id=%s reason=%s",
+                best_id,
+                context_result.reason,
+            )
 
         try:
-            await main_mod.schedule_event_update_tasks(db, best, skip_vk_sync=True)
+            async with db.get_session() as reload_session:
+                updated_event = await reload_session.get(Event, best_id)
+            if updated_event is not None:
+                await main_mod.schedule_event_update_tasks(
+                    db,
+                    updated_event,
+                    skip_vk_sync=True,
+                )
         except Exception:
             logger.warning("vk_auto: failed to schedule rebuild after cancel", exc_info=True)
 
-        return int(best.id), None
+        return best_id, None
 
 
 def request_vk_auto_import_cancel(*, chat_id: int, operator_id: int) -> None:
@@ -2454,6 +2451,7 @@ async def _process_vk_inbox_row(
     added_posters_total = 0
     added_posters_by_event_id: dict[int, int] = {}
     partial_error: str | None = None
+    smart_retry_reason: str | None = None
     semantic_rejections: list[str] = []
     inline_jobs_enabled = (os.getenv("VK_AUTO_IMPORT_INLINE_JOBS", "1") or "").strip().lower() in {
         "1",
@@ -2464,7 +2462,7 @@ async def _process_vk_inbox_row(
 
     ok = True
     persist_total_sec = 0.0
-    for draft in drafts:
+    for producer_ordinal, draft in enumerate(drafts):
         try:
             t0 = time.monotonic()
             res = await vk_intake.persist_event_and_pages(
@@ -2473,13 +2471,28 @@ async def _process_vk_inbox_row(
                 db,
                 source_post_url=source_url,
                 wait_for_telegraph_url=not inline_jobs_enabled,
+                producer_ordinal=producer_ordinal,
             )
             took_one = time.monotonic() - t0
             persist_total_sec += float(took_one)
 
+            smart_result = res.smart_result
+            if smart_result is None:
+                raise RuntimeError("persist boundary returned no typed Smart Update result")
+            if smart_result.is_rejected:
+                semantic_rejections.append(
+                    smart_result.reason or "unspecified_product_policy"
+                )
+                continue
+            if smart_result.is_retry:
+                smart_retry_reason = smart_result.reason or "smart_update_retry"
+                break
+            if not smart_result.is_accepted or res.event_id is None:
+                raise RuntimeError("invalid typed Smart Update result at VK boundary")
+
             imported_event_ids.append(int(res.event_id))
             imported_event_dates.append(res.event_date)
-            if getattr(res, "smart_created", False) or getattr(res, "smart_status", "") == "created":
+            if smart_result.outcome is SmartUpdateTerminalOutcome.CREATED:
                 created_ids.append(int(res.event_id))
             else:
                 updated_ids.append(int(res.event_id))
@@ -2489,23 +2502,6 @@ async def _process_vk_inbox_row(
         except Exception as exc:
             ok = False
             exc_txt = str(exc)
-            if "smart_update rejected:" in exc_txt:
-                report.errors.append(f"persist_rejected {source_url}: {exc_txt}")
-                # A roundup is one queue row but its drafts are independent
-                # semantic candidates. One invalid/past/ungrounded card must not
-                # discard valid siblings that follow it. Structured output only
-                # guarantees shape, not semantic correctness, so Smart Update's
-                # rejection is a terminal per-draft validation result; continue
-                # through the bounded draft list and decide the row afterwards.
-                semantic_rejections.append(exc_txt)
-                ok = True
-                continue
-            if "smart_update returned no event_id:" in exc_txt:
-                report.errors.append(f"persist_skipped {source_url}: {exc_txt}")
-                semantic_rejections.append(exc_txt)
-                ok = True
-                continue
-
             report.errors.append(f"persist_failed {source_url}: {exc_txt}")
             if not imported_event_ids:
                 report.inbox_failed += 1
@@ -2526,6 +2522,26 @@ async def _process_vk_inbox_row(
             break
     if drafts:
         _tmark("persist_total", persist_total_sec)
+
+    if smart_retry_reason and not imported_event_ids:
+        report.inbox_deferred += 1
+        report.errors.append(f"retry_scheduled {source_url}: {smart_retry_reason}")
+        await vk_review.mark_deferred(
+            db,
+            int(post.id),
+            batch_id=batch_id,
+            retry_after_sec=_partial_import_retry_sec(),
+        )
+        await _emit_progress(
+            "⏳",
+            [
+                "Результат: Smart Update запланировал автоматический повтор",
+                f"Причина: {_shorten_reason(smart_retry_reason) or 'transient'}",
+                f"took_sec: {(time.monotonic() - start_ts):.1f}",
+            ],
+        )
+        _log_row_timing(drafts_count=len(drafts or []), ok_value=True)
+        return
 
     if semantic_rejections and not imported_event_ids:
         report.inbox_rejected += 1
@@ -2556,20 +2572,22 @@ async def _process_vk_inbox_row(
         event_dates=imported_event_dates,
     )
     _tmark("mark_imported_events", time.monotonic() - t0)
-    partial_queue_state: str | None = None
-    partial_attempts = 0
-    if partial_error:
-        partial_queue_state, partial_attempts = await vk_review.mark_rate_limited(
+    if smart_retry_reason:
+        await vk_review.mark_deferred(
             db,
             int(post.id),
             batch_id=batch_id,
             retry_after_sec=_partial_import_retry_sec(),
-            max_attempts=_partial_import_max_attempts(),
         )
-        if partial_queue_state == "failed":
-            report.inbox_failed += 1
-        else:
-            report.inbox_deferred += 1
+        report.inbox_deferred += 1
+    elif partial_error:
+        await vk_review.mark_deferred(
+            db,
+            int(post.id),
+            batch_id=batch_id,
+            retry_after_sec=_partial_import_retry_sec(),
+        )
+        report.inbox_deferred += 1
     else:
         report.inbox_imported += 1
     report.created_event_ids.extend(created_ids)
@@ -2593,15 +2611,12 @@ async def _process_vk_inbox_row(
     ]
     if semantic_rejections:
         extra_lines.insert(0, f"⚠️ Отклонено независимых карточек: {len(semantic_rejections)}")
-    if partial_error:
-        retry_state = (
-            f"повтор {partial_attempts}/{_partial_import_max_attempts()}"
-            if partial_queue_state != "failed"
-            else f"failed после {partial_attempts} попыток"
-        )
+    effective_retry_reason = smart_retry_reason or partial_error
+    if effective_retry_reason:
         extra_lines.insert(
             0,
-            f"⚠️ Частично ({retry_state}): {_shorten_reason(partial_error) or 'persist error'}",
+            "⚠️ Частично (автоматический повтор запланирован): "
+            f"{_shorten_reason(effective_retry_reason) or 'transient'}",
         )
     await _emit_progress(icon, extra_lines)
 

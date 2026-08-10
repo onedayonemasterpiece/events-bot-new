@@ -17129,6 +17129,8 @@ async def _vkrev_import_flow(
     persist_results: list[
         tuple[vk_intake.EventDraft, vk_intake.PersistResult, Event | None]
     ] = []
+    product_rejection_reasons: list[str] = []
+    retry_scheduled_reasons: list[str] = []
     admin_chat = os.getenv("ADMIN_CHAT_ID")
 
     async def _send_persist_summary_messages() -> None:
@@ -17227,6 +17229,7 @@ async def _vkrev_import_flow(
             if record is not None:
                 tolerance_days = record.tolerance_days
         persist_kwargs: dict[str, Any] = {"source_post_url": source_post_url}
+        persist_kwargs["producer_ordinal"] = idx - 1
         if tolerance_days is not None:
             persist_kwargs["holiday_tolerance_days"] = tolerance_days
         start_time = _time.monotonic()
@@ -17270,11 +17273,43 @@ async def _vkrev_import_flow(
             if admin_chat:
                 await bot.send_message(int(admin_chat), failure_message)
             return
+        smart_result = res.smart_result
+        if smart_result is None:
+            retry_scheduled_reasons.append("missing_typed_smart_update_result")
+            continue
+        if not smart_result.is_accepted:
+            reason = smart_result.reason or "unspecified"
+            if smart_result.is_rejected:
+                product_rejection_reasons.append(reason)
+            else:
+                retry_scheduled_reasons.append(reason)
+            continue
         async with db.get_session() as session:
             event_obj = await session.get(Event, res.event_id)
         persist_results.append((draft, res, event_obj))
 
     if not persist_results:
+        if retry_scheduled_reasons:
+            await vk_review.mark_deferred(
+                db,
+                inbox_id,
+                batch_id=batch_id,
+                retry_after_sec=300,
+            )
+            await bot.send_message(
+                chat_id,
+                "⏳ Smart Update запланировал автоматический повтор: "
+                f"{retry_scheduled_reasons[0]}",
+            )
+            return
+        if product_rejection_reasons and not festival_obj:
+            await vk_review.mark_rejected(db, inbox_id)
+            await bot.send_message(
+                chat_id,
+                "⛔ События отклонены продуктовой политикой: "
+                f"{product_rejection_reasons[0]}",
+            )
+            return
         if festival_obj:
             fest_month_hint = fest_start_date or fest_end_date or ""
             await vk_review.mark_imported_events(
@@ -17320,6 +17355,13 @@ async def _vkrev_import_flow(
         event_ids=imported_event_ids,
         event_dates=imported_event_dates,
     )
+    if retry_scheduled_reasons:
+        await vk_review.mark_deferred(
+            db,
+            inbox_id,
+            batch_id=batch_id,
+            retry_after_sec=300,
+        )
     try:
         mark_vk_import_result(
             group_id=group_id,

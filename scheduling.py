@@ -3938,6 +3938,61 @@ def startup(
         )
         return job
 
+    if _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=True):
+        try:
+            smart_update_retry_interval = max(
+                15,
+                min(
+                    3600,
+                    int(os.getenv("SMART_UPDATE_RETRY_INTERVAL_SECONDS", "60") or "60"),
+                ),
+            )
+        except ValueError:
+            smart_update_retry_interval = 60
+        try:
+            smart_update_retry_batch = max(
+                1,
+                min(
+                    100,
+                    int(os.getenv("SMART_UPDATE_RETRY_BATCH_SIZE", "25") or "25"),
+                ),
+            )
+        except ValueError:
+            smart_update_retry_batch = 25
+
+        async def smart_update_retry_scheduler(
+            db_obj,
+            _bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            del run_id
+            from smart_event_update import retry_due_smart_update_candidates
+
+            counters = await retry_due_smart_update_candidates(
+                db_obj,
+                limit=smart_update_retry_batch,
+            )
+            logging.info("smart_update_retry_worker counters=%s", counters)
+
+        _register_job(
+            "smart_update_retry_worker",
+            _job_wrapper("smart_update_retry_worker", smart_update_retry_scheduler),
+            "interval",
+            id="smart_update_retry_worker",
+            seconds=smart_update_retry_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=smart_update_retry_interval,
+        )
+    else:
+        logging.info(
+            "SCHED skipping smart_update_retry_worker "
+            "(SMART_UPDATE_RETRY_WORKER_ENABLED!=1)"
+        )
+
     enable_core_schedulers = _env_enabled("ENABLE_CORE_SCHEDULERS", default=True)
     if enable_core_schedulers:
         _register_job(

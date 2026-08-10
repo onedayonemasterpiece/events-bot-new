@@ -906,7 +906,11 @@ async def _process_vk_item(
         }
 
     import main as main_mod
-    from smart_event_update import EventCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        SmartUpdateTerminalOutcome,
+        smart_event_update,
+    )
 
     async with db.get_session() as session:
         fests = (await session.execute(select(Festival))).scalars().all()
@@ -1012,7 +1016,9 @@ async def _process_vk_item(
 
     created_events = 0
     program_only: list[dict[str, Any]] = []
-    for ev in parsed_events:
+    product_rejected = 0
+    retry_scheduled = 0
+    for producer_ordinal, ev in enumerate(parsed_events):
         if not _looks_like_strong_program_event(ev):
             program_only.append(ev)
             continue
@@ -1046,12 +1052,15 @@ async def _process_vk_item(
             festival_full=decision.festival_full or item.festival_full,
             festival_source=True,
             festival_series=item.festival_series,
+            producer_ordinal=producer_ordinal,
         )
         result = await smart_event_update(db, candidate, check_source_url=False)
-        if result.event_id:
+        if result.is_accepted:
             created_events += 1
+        elif result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
+            product_rejected += 1
         else:
-            program_only.append(ev)
+            retry_scheduled += 1
 
     added_activities = await _append_festival_activities(
         db,
@@ -1062,6 +1071,8 @@ async def _process_vk_item(
         "festival_name": fest_obj.name,
         "events_created": created_events,
         "activities_added": added_activities,
+        "product_rejected": product_rejected,
+        "retry_scheduled": retry_scheduled,
     }
 
 

@@ -38,6 +38,7 @@ from kaggle_registry import list_jobs, remove_job
 from video_announce.kaggle_client import KaggleClient
 from models import Event, EventSource
 from smart_update_identity import canonicalize_identity_url
+from smart_event_update import SmartUpdateTerminalOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,7 @@ class SourceParsingStats:
     already_exists: int = 0
     failed: int = 0
     skipped: int = 0  # Explicitly skipped by Smart Update (e.g. no changes / promo filters)
+    retry_scheduled: int = 0
     added_event_ids: list[int] = field(default_factory=list)
     updated_event_ids: list[int] = field(default_factory=list)  # For displaying Telegraph links
 
@@ -630,38 +632,54 @@ async def find_exact_parser_ticket_slot(
 
 
 def unpack_add_event_result(
-    raw: tuple[int | None, bool] | tuple[int | None, bool, str | None],
-) -> tuple[int | None, bool, str]:
+    raw: tuple[int | None, bool]
+    | tuple[int | None, bool, SmartUpdateTerminalOutcome | None],
+) -> tuple[int | None, bool, SmartUpdateTerminalOutcome]:
     """Normalize add_new_event_via_queue result.
 
     Backward-compatible with older 2-field tuples used in tests/mocks.
     """
     if not isinstance(raw, tuple):
-        return None, False, "failed"
+        return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
     if len(raw) >= 3:
-        event_id, was_added, status = raw[0], bool(raw[1]), str(raw[2] or "")
-        return event_id, was_added, status or ("created" if was_added else "merged")
+        event_id, was_added, outcome = raw[0], bool(raw[1]), raw[2]
+        if isinstance(outcome, SmartUpdateTerminalOutcome):
+            return event_id, was_added, outcome
+        return event_id, was_added, (
+            SmartUpdateTerminalOutcome.CREATED
+            if was_added
+            else (
+                SmartUpdateTerminalOutcome.MERGED
+                if event_id is not None
+                else SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            )
+        )
     if len(raw) == 2:
         event_id, was_added = raw
-        return event_id, bool(was_added), "created" if was_added else "merged"
-    return None, False, "failed"
+        return event_id, bool(was_added), (
+            SmartUpdateTerminalOutcome.CREATED
+            if was_added
+            else SmartUpdateTerminalOutcome.MERGED
+        )
+    return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
 
 def classify_add_event_outcome(
     event_id: int | None,
     was_added: bool,
-    status: str | None,
+    terminal: SmartUpdateTerminalOutcome,
 ) -> str:
-    if was_added or status == "created":
+    del event_id, was_added
+    if terminal is SmartUpdateTerminalOutcome.CREATED:
         return "added"
-    st = (status or "").strip().lower()
-    if st.startswith("skipped"):
+    if terminal in {
+        SmartUpdateTerminalOutcome.MERGED,
+        SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY,
+    }:
+        return "updated"
+    if terminal is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
         return "skipped"
-    if event_id and st in {"merged", "updated"}:
-        return "updated"
-    if event_id and st:
-        return "updated"
-    return "failed"
+    return "retry_scheduled"
 
 
 def _format_parser_ticket_price(
@@ -1309,7 +1327,7 @@ async def add_new_event_via_queue(
     progress_current: int,
     progress_total: int,
     poster_media: Sequence[PosterMedia] | None = None,
-) -> tuple[int | None, bool, str]:
+) -> tuple[int | None, bool, SmartUpdateTerminalOutcome]:
     """Add a new event through the existing LLM queue system.
     
     Uses build_event_drafts_from_vk for consistent event creation.
@@ -1322,7 +1340,7 @@ async def add_new_event_via_queue(
         progress_total: Total events to process
     
     Returns:
-        Tuple: (event_id, was_added, smart_update_status)
+        Tuple: (accepted event_id, was_added, typed Smart Update terminal)
     """
     from vk_intake import build_event_drafts_from_vk
     import main as main_mod
@@ -1396,7 +1414,7 @@ async def add_new_event_via_queue(
                 PARSE_EVENT_TIMEOUT_SECONDS,
                 theatre_event.title[:50],
             )
-            return None, False, "llm_timeout"
+            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         if diag_enabled:
             logger.info(
                 "source_parsing: diag LLM done title=%s drafts=%d duration=%.2fs",
@@ -1410,7 +1428,7 @@ async def add_new_event_via_queue(
                 "source_parsing: no drafts returned title=%s",
                 theatre_event.title,
             )
-            return None, False, "llm_no_drafts"
+            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         
         draft = drafts[0]
         
@@ -1440,13 +1458,12 @@ async def add_new_event_via_queue(
                 EventCandidate,
                 PosterCandidate,
                 smart_event_update,
-                smart_update_result_allows_caller_side_effects,
             )
             
             main_mod = sys.modules.get("main") or sys.modules.get("__main__")
             if main_mod is None:
                 logger.error("source_parsing: main module not found")
-                return None, False, "main_module_missing"
+                return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
             
             # Build final description - should come from LLM (short_description)
             # If LLM didn't return it, use title as fallback and log warning
@@ -1524,6 +1541,11 @@ async def add_new_event_via_queue(
                 search_digest=draft.search_digest,
                 raw_excerpt=final_description,
                 posters=posters,
+                occurrence_key=(
+                    f"{theatre_event.source_type}:{theatre_event.url}"
+                    if theatre_event.url
+                    else None
+                ),
             )
 
             logger.info(
@@ -1543,27 +1565,26 @@ async def add_new_event_via_queue(
                 candidate,
                 smart_event_update,
             )
-            if not smart_update_result_allows_caller_side_effects(update_result):
-                status = str(getattr(update_result, "status", "") or "not_accepted")
+            if not update_result.is_accepted:
                 logger.warning(
-                    "source_parsing: smart_update not accepted title=%s status=%s reason=%s matched_event_id=%s",
+                    "source_parsing: smart_update not accepted title=%s outcome=%s reason=%s diagnostic_event_id=%s",
                     theatre_event.title[:80],
-                    status,
-                    getattr(update_result, "reason", None),
-                    getattr(update_result, "event_id", None),
+                    update_result.outcome.value,
+                    update_result.reason,
+                    update_result.diagnostic_event_id,
                 )
-                return None, False, status
+                return None, False, update_result.outcome
             event_id = update_result.event_id
-            was_added = bool(update_result.created)
+            was_added = update_result.outcome is SmartUpdateTerminalOutcome.CREATED
 
-            if not event_id:
+            if event_id is None:
                 logger.error(
-                    "source_parsing: smart_update failed title=%s status=%s reason=%s",
+                    "source_parsing: accepted smart_update result has no event_id title=%s outcome=%s reason=%s",
                     theatre_event.title[:80],
-                    update_result.status,
+                    update_result.outcome.value,
                     update_result.reason,
                 )
-                return None, False, update_result.status
+                return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
             async with db.get_session() as session:
                 saved = await session.get(Event, event_id)
@@ -1578,11 +1599,11 @@ async def add_new_event_via_queue(
                 )
             
             logger.info(
-                "source_parsing: smart_update result event_id=%d status=%s created=%s merged=%s",
+                "source_parsing: smart_update result event_id=%d outcome=%s created=%s merged=%s",
                 event_id,
-                update_result.status,
-                int(update_result.created),
-                int(update_result.merged),
+                update_result.outcome.value,
+                int(update_result.outcome is SmartUpdateTerminalOutcome.CREATED),
+                int(update_result.outcome is SmartUpdateTerminalOutcome.MERGED),
             )
             
             # Update ticket status
@@ -1614,7 +1635,7 @@ async def add_new_event_via_queue(
                     exc_info=True,
                 )
             
-            return event_id, was_added, update_result.status
+            return event_id, was_added, update_result.outcome
                 
         except Exception as persist_err:
             logger.error(
@@ -1623,7 +1644,7 @@ async def add_new_event_via_queue(
                 persist_err,
                 exc_info=True,
             )
-            return None, False, "persist_failed"
+            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         
     except Exception as e:
         logger.error(
@@ -1632,7 +1653,7 @@ async def add_new_event_via_queue(
             e,
             exc_info=True,
         )
-        return None, False, "add_failed"
+        return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
 
 def escape_md(text: str) -> str:
@@ -3197,6 +3218,9 @@ async def process_source_events(
                 elif outcome == "skipped":
                     stats.skipped += 1
                     result_tag = f"{mode_prefix}_skipped"
+                elif outcome == "retry_scheduled":
+                    stats.retry_scheduled += 1
+                    result_tag = f"{mode_prefix}_retry_scheduled"
                 else:
                     stats.failed += 1
                     result_tag = f"{mode_prefix}_failed"

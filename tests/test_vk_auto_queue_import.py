@@ -20,6 +20,7 @@ import vk_auto_queue
 import poster_ocr
 from poster_media import PosterMedia
 from source_parsing.handlers import AddedEventInfo
+from smart_event_update import SmartUpdateResult, SmartUpdateTerminalOutcome
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -522,9 +523,10 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
             event_time="18:30",
             event_type=None,
             is_free=False,
-            smart_status="created",
-            smart_created=True,
-            smart_merged=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=1000 + counter["n"],
+            ),
         )
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
@@ -597,9 +599,10 @@ async def test_vk_auto_import_keeps_valid_roundup_siblings_after_semantic_reject
             event_time="18:30",
             event_type=None,
             is_free=False,
-            smart_status="created",
-            smart_created=True,
-            smart_merged=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=1001,
+            ),
         )
 
     monkeypatch.setenv("VK_AUTO_IMPORT_INLINE_JOBS", "0")
@@ -669,9 +672,10 @@ async def test_vk_auto_import_continues_when_first_roundup_draft_is_rejected(
             event_time="",
             event_type=None,
             is_free=False,
-            smart_status="created",
-            smart_created=True,
-            smart_merged=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=2002,
+            ),
         )
 
     monkeypatch.setenv("VK_AUTO_IMPORT_INLINE_JOBS", "0")
@@ -932,9 +936,10 @@ async def test_vk_auto_import_include_skipped_requeues_and_imports(tmp_path, mon
             event_time="18:30",
             event_type=None,
             is_free=False,
-            smart_status="created",
-            smart_created=True,
-            smart_merged=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=1001,
+            ),
         )
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
@@ -1009,9 +1014,10 @@ async def test_vk_auto_import_prefetch_does_not_reprocess_current_locked_row(tmp
             event_time="18:30",
             event_type=None,
             is_free=False,
-            smart_status="created",
-            smart_created=True,
-            smart_merged=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=2000 + n,
+            ),
         )
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
@@ -1091,9 +1097,10 @@ async def test_vk_auto_import_skips_redundant_telegraph_wait_when_inline_jobs_en
             event_time="18:30",
             event_type=None,
             is_free=False,
-            smart_status="created",
-            smart_created=True,
-            smart_merged=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=1001,
+            ),
         )
 
     captured_allowed: list[set[main.JobTask]] = []
@@ -1170,9 +1177,10 @@ async def test_vk_auto_import_logs_stage_timings_for_slow_rows_without_pipeline_
             event_time="18:30",
             event_type=None,
             is_free=False,
-            smart_status="created",
-            smart_created=True,
-            smart_merged=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=1001,
+            ),
         )
 
     async def fake_report(*_args, **_kwargs):

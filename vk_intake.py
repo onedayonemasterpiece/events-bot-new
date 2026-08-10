@@ -1818,7 +1818,7 @@ class PosterDatetimeAnchor:
 
 @dataclass
 class PersistResult:
-    event_id: int
+    event_id: int | None
     telegraph_url: str
     ics_supabase_url: str
     ics_tg_url: str
@@ -1832,6 +1832,9 @@ class PersistResult:
     smart_created: bool = False
     smart_merged: bool = False
     smart_added_posters: int = 0
+    # Typed Smart Update boundary. Legacy booleans above remain constructor
+    # compatible for older fixtures, but production callers use this result.
+    smart_result: Any | None = None
 
 
 _EXTERNAL_SHORT_TICKET_HOSTS = {"clck.ru"}
@@ -4058,6 +4061,7 @@ async def persist_event_and_pages(
     *,
     holiday_tolerance_days: int | None = None,
     wait_for_telegraph_url: bool = True,
+    producer_ordinal: int | None = None,
 ) -> PersistResult:
     """Store a drafted event and produce all public artefacts.
 
@@ -4074,23 +4078,33 @@ async def persist_event_and_pages(
     main_mod = sys.modules.get("main") or sys.modules.get("__main__")
     if main_mod is None:  # pragma: no cover - defensive
         raise RuntimeError("main module not found")
-    schedule_event_update_tasks = main_mod.schedule_event_update_tasks
     rebuild_fest_nav_if_changed = main_mod.rebuild_fest_nav_if_changed
     normalize_event_type = getattr(main_mod, "normalize_event_type", None)
 
     from smart_event_update import (
         EventCandidate,
         PosterCandidate,
+        SmartUpdateResult,
+        SmartUpdateTerminalOutcome,
         smart_event_update,
-        smart_update_result_allows_caller_side_effects,
     )
 
     if (getattr(draft, "reject_reason", None) or "").strip():
-        # Keep the error string compatible with vk_auto_queue handler that treats
-        # "smart_update rejected:" as an expected rejection (not a technical failure).
-        raise RuntimeError(
-            "smart_update rejected: rejected_low_confidence "
-            f"reason={str(getattr(draft, 'reject_reason', '')).strip()}"
+        rejected = SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+            reason=str(getattr(draft, "reject_reason", "")).strip(),
+        )
+        return PersistResult(
+            event_id=None,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date=str(draft.date or ""),
+            event_end_date=draft.end_date or None,
+            event_time=str(draft.time or ""),
+            event_type=draft.event_type or None,
+            is_free=bool(draft.is_free),
+            smart_result=rejected,
         )
 
     posters = _build_smart_update_posters(
@@ -4144,6 +4158,7 @@ async def persist_event_and_pages(
         raw_excerpt=draft.description or "",
         posters=posters,
         organizer_names=_curated_vk_event_organizers(vk_source_chat_id),
+        producer_ordinal=producer_ordinal,
     )
 
     update_result = await smart_event_update(
@@ -4151,39 +4166,33 @@ async def persist_event_and_pages(
         candidate,
         check_source_url=False,
     )
-    if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
-        # Preserve the established expected-rejection contract consumed by the
-        # VK queue. Identity review/skip outcomes use the generic fail-closed
-        # branch below and must never be reported as successful imports.
-        raise RuntimeError(
-            f"smart_update rejected: {getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)}"
+    if not update_result.is_accepted:
+        return PersistResult(
+            event_id=None,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date=str(draft.date or ""),
+            event_end_date=draft.end_date or None,
+            event_time=str(draft.time or ""),
+            event_type=draft.event_type or None,
+            is_free=bool(draft.is_free),
+            smart_result=update_result,
         )
-    if not smart_update_result_allows_caller_side_effects(update_result):
+    if update_result.event_id is None:
         raise RuntimeError(
-            "smart_update not accepted: "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)} "
-            f"matched_event_id={getattr(update_result, 'event_id', None)}"
-        )
-    if not getattr(update_result, "event_id", None):
-        raise RuntimeError(
-            "smart_update returned no event_id: "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)}"
+            "accepted smart_update result returned no event_id: "
+            f"outcome={update_result.outcome.value} reason={update_result.reason}"
         )
     async with db.get_session() as session:
         saved = (
             await session.get(Event, update_result.event_id)
-            if update_result.event_id
-            else None
         )
     if saved is None:
         raise RuntimeError(
             "smart_update failed to persist event: "
             f"event_id={getattr(update_result, 'event_id', None)} "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)}"
+            f"outcome={update_result.outcome.value} reason={update_result.reason}"
         )
     text_length = len(saved.title or "") + len(saved.description or "") + len(saved.source_text or "")
     logging.info(
@@ -4198,7 +4207,10 @@ async def persist_event_and_pages(
     )
 
     nav_update_needed = False
-    if update_result.status != "noop_exact_source_replay" and saved.festival:
+    if (
+        update_result.outcome is not SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+        and saved.festival
+    ):
         parts = [p.strip() for p in (saved.date or "").split("..") if p.strip()]
         start_str = parts[0] if parts else None
         end_str = parts[-1] if len(parts) > 1 else None
@@ -4233,9 +4245,6 @@ async def persist_event_and_pages(
                         nav_update_needed = True
     if nav_update_needed:
         await rebuild_fest_nav_if_changed(db)
-    if update_result.status in ("skipped_nochange", "skipped_same_source_url"):
-        await schedule_event_update_tasks(db, saved)
-
     if wait_for_telegraph_url:
         # Wait for Telegraph URL to become available (async job). Callers that
         # already run inline Telegraph jobs can skip this extra wait.
@@ -4259,10 +4268,14 @@ async def persist_event_and_pages(
         event_time=saved.time,
         event_type=saved.event_type,
         is_free=bool(saved.is_free),
-        smart_status=getattr(update_result, "status", None),
-        smart_created=bool(getattr(update_result, "created", False)),
-        smart_merged=bool(getattr(update_result, "merged", False)),
+        smart_created=(
+            update_result.outcome is SmartUpdateTerminalOutcome.CREATED
+        ),
+        smart_merged=(
+            update_result.outcome is SmartUpdateTerminalOutcome.MERGED
+        ),
         smart_added_posters=int(getattr(update_result, "added_posters", 0) or 0),
+        smart_result=update_result,
     )
 
 

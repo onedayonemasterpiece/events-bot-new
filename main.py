@@ -17055,7 +17055,12 @@ async def add_events_from_text(
     logging.info(
         "add_events_from_text start: len=%d source=%s", len(text), source_link
     )
-    from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        PosterCandidate,
+        SmartUpdateTerminalOutcome,
+        smart_event_update,
+    )
     poster_items: list[PosterMedia] = []
     ocr_tokens_spent = 0
     ocr_tokens_remaining: int | None = None
@@ -17647,7 +17652,7 @@ async def add_events_from_text(
                     copy_e.topics = list(base_event.topics or [])
                     copy_e.topics_manual = base_event.topics_manual
                     events_to_add.append(copy_e)
-        for event in events_to_add:
+        for producer_ordinal, event in enumerate(events_to_add):
             rejected_links: list[str] = []
             if event.ticket_link and is_tg_folder_link(event.ticket_link):
                 rejected_links.append(event.ticket_link)
@@ -17708,6 +17713,7 @@ async def add_events_from_text(
                 source_message_id=source_message_id,
                 source_chat_username=source_channel,
                 creator_id=creator_id,
+                producer_ordinal=producer_ordinal,
             )
             update_result = await smart_event_update(
                 db,
@@ -17715,11 +17721,21 @@ async def add_events_from_text(
                 check_source_url=False,
             )
             saved: Event | None = None
-            if update_result.event_id:
+            if update_result.is_accepted:
                 async with db.get_session() as session:
                     saved = await session.get(Event, update_result.event_id)
             if saved is None:
-                results.append((None, False, ["smart_update_failed"], "error"))
+                result_lines = [
+                    f"smart_update: {update_result.outcome.value}",
+                    f"reason: {update_result.reason or 'unspecified'}",
+                ]
+                result_status = (
+                    "rejected_product_policy"
+                    if update_result.outcome
+                    is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+                    else "retry_scheduled"
+                )
+                results.append((None, False, result_lines, result_status))
                 continue
             if rejected_links:
                 for url in rejected_links:
@@ -17827,15 +17843,11 @@ async def add_events_from_text(
                 lines.append(f"price_max: {saved.ticket_price_max}")
             if saved.ticket_link:
                 lines.append(f"ticket_link: {saved.ticket_link}")
-            added_flag = bool(update_result.created)
+            added_flag = update_result.outcome is SmartUpdateTerminalOutcome.CREATED
             status = (
                 "added"
-                if update_result.created
-                else (
-                    "updated"
-                    if update_result.merged or update_result.status == "skipped_nochange"
-                    else "skipped"
-                )
+                if added_flag
+                else "updated"
             )
             results.append((saved, added_flag, lines, status))
             first = False
@@ -18163,7 +18175,11 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         html_text = html_text[len("/addevent_raw") :].lstrip()
     source_clean = html_text or parts[1]
 
-    from smart_event_update import EventCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        SmartUpdateTerminalOutcome,
+        smart_event_update,
+    )
 
     source_marker = f"bot:{message.chat.id}/{message.message_id}"
     candidate = EventCandidate(
@@ -18175,18 +18191,25 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         time=time,
         location_name=location,
         creator_id=creator_id,
+        producer_ordinal=0,
     )
     update_result = await smart_event_update(
         db,
         candidate,
         check_source_url=False,
     )
+    if not update_result.is_accepted:
+        if update_result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
+            message_text = f"Event rejected: {update_result.reason or 'product policy'}"
+        else:
+            message_text = (
+                "Event save retry scheduled: "
+                f"{update_result.reason or 'transient Smart Update failure'}"
+            )
+        await bot.send_message(message.chat.id, message_text)
+        return
     async with db.get_session() as session:
-        event = (
-            await session.get(Event, update_result.event_id)
-            if update_result.event_id
-            else None
-        )
+        event = await session.get(Event, update_result.event_id)
     if event is None:
         await bot.send_message(message.chat.id, "Failed to save event")
         return
@@ -18197,7 +18220,7 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         f"time: {event.time}",
         f"location_name: {event.location_name}",
     ]
-    added = bool(update_result.created)
+    added = update_result.outcome is SmartUpdateTerminalOutcome.CREATED
     status = "added" if added else "updated"
     logging.info("handle_add_event_raw %s event id=%s", status, event.id)
     buttons_first: list[types.InlineKeyboardButton] = []

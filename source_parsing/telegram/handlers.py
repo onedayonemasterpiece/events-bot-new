@@ -41,8 +41,15 @@ from models import (
     VideoAsset,
 )
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
-from smart_event_update import EventCandidate, PosterCandidate, SmartUpdateResult, smart_event_update
-from smart_update_identity import canonicalize_identity_url, input_packet_fingerprint
+from smart_event_update import (
+    EventCandidate,
+    PosterCandidate,
+    SmartUpdateIntent,
+    SmartUpdateResult,
+    SmartUpdateTerminalOutcome,
+    smart_event_update,
+)
+from smart_update_identity import canonicalize_identity_url
 from telegram_sources import canonicalize_tg_url, normalize_tg_username, parse_tg_post_url
 from source_parsing.post_metrics import (
     PopularityBaseline,
@@ -1426,71 +1433,39 @@ async def _attach_linked_sources(
     if not normalized:
         return 0
 
-    for attempt in range(1, 8):
-        try:
-            added = 0
-            async with db.get_session() as session:
-                for url in normalized:
-                    canonical = canonicalize_identity_url(url)
-                    if not canonical:
-                        continue
-                    existing = (
-                        await session.execute(
-                            select(EventSource).where(
-                                EventSource.event_id == int(event_id),
-                                (
-                                    (EventSource.canonical_source_url == canonical)
-                                    | (
-                                        EventSource.canonical_source_url.is_(None)
-                                        & (EventSource.source_url == url)
-                                    )
-                                ),
-                            )
-                        )
-                    ).scalar_one_or_none()
-                    fingerprint = input_packet_fingerprint(
-                        {"source_url": url, "source_text": source_text or "", "source_role": "context_only"}
-                    )
-                    if existing:
-                        changed = False
-                        if source_text and source_text != existing.source_text:
-                            existing.source_text = source_text
-                            changed = True
-                        if not existing.canonical_source_url:
-                            existing.canonical_source_url = canonical
-                            changed = True
-                        if not existing.source_role:
-                            existing.source_role = "context_only"
-                            changed = True
-                        if existing.source_role == "context_only" and existing.source_fingerprint != fingerprint:
-                            existing.source_fingerprint = fingerprint
-                            changed = True
-                        if changed:
-                            session.add(existing)
-                        continue
-                    username, message_id = _parse_tg_source_url(url)
-                    session.add(
-                        EventSource(
-                            event_id=int(event_id),
-                            source_type="telegram",
-                            source_url=url,
-                            canonical_source_url=canonical,
-                            source_role="context_only",
-                            source_fingerprint=fingerprint,
-                            source_chat_username=username,
-                            source_message_id=message_id,
-                            source_text=source_text,
-                            trust_level=trust_level,
-                        )
-                    )
-                    added += 1
-                if added or bool(session.dirty):
-                    await session.commit()
-            return added
-        except OperationalError as exc:
-            if "database is locked" not in str(exc).lower() or attempt >= 7:
-                raise
-            await asyncio.sleep(0.15 * attempt)
+    added = 0
+    for producer_ordinal, url in enumerate(normalized):
+        canonical = canonicalize_identity_url(url)
+        if not canonical:
+            continue
+        username, message_id = _parse_tg_source_url(url)
+        result = await smart_event_update(
+            db,
+            EventCandidate(
+                intent=SmartUpdateIntent.ATTACH_CONTEXT,
+                target_event_id=int(event_id),
+                source_type="telegram",
+                source_url=url,
+                source_text=source_text or "",
+                source_chat_username=username,
+                source_message_id=message_id,
+                trust_level=trust_level,
+                producer_ordinal=producer_ordinal,
+                occurrence_key=f"context:{int(event_id)}:{canonical}",
+            ),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+        if result.outcome is SmartUpdateTerminalOutcome.MERGED:
+            added += 1
+        elif result.is_retry:
+            logger.warning(
+                "tg_monitor.linked_source retry_scheduled event_id=%s url=%s reason=%s",
+                event_id,
+                url,
+                result.reason,
+            )
+    return added
 
 
 def _norm_space(text: str | None) -> str:
@@ -4054,7 +4029,13 @@ async def _should_reprocess_incomplete_scan(
     events: Any,
 ) -> bool:
     status = str(getattr(existing, "status", "") or "").strip().lower()
-    if status not in {"skipped", "partial", "error"}:
+    if status not in {
+        "skipped",
+        "partial",
+        "retry_scheduled",
+        "partial_retry_scheduled",
+        "error",
+    }:
         return False
     error_text = str(getattr(existing, "error", "") or "").strip()
     producer_zero_events = "producer_zero_events" in error_text
@@ -5670,7 +5651,9 @@ async def process_telegram_results(
         created_event_ids: list[int] = []
         merged_event_ids: list[int] = []
         event_ids_by_original_index: dict[int, set[int]] = defaultdict(set)
+        accepted_candidate_identity_by_event_id: dict[int, tuple[str | None, str | None]] = {}
         added_posters_total = 0
+        message_retry_scheduled = False
 
         def _sorted_breakdown(value: dict[str, int] | defaultdict[str, int] | None) -> dict[str, int]:
             if not value:
@@ -6046,6 +6029,10 @@ async def process_telegram_results(
                     source_chat_id=_to_int(message.get("source_chat_id")),
                     source_message_id=int(tgt_mid) if tgt_mid else None,
                     trust_level=source.trust_level,
+                    occurrence_key=str(bridge_target.get("occurrence_key") or "").strip()
+                    or None,
+                    candidate_key=str(bridge_target.get("candidate_key") or "").strip()
+                    or None,
                 )
                 result = await smart_event_update(
                     db,
@@ -6053,7 +6040,7 @@ async def process_telegram_results(
                     check_source_url=False,
                     schedule_kwargs={"skip_vk_sync": True},
                 )
-                if result.event_id and result.status in {"created", "merged", "skipped_nochange"}:
+                if result.is_accepted:
                     events_imported = 1
                     merged_event_ids.append(int(result.event_id))
                     report.events_merged += 1
@@ -6075,6 +6062,34 @@ async def process_telegram_results(
                     if info:
                         message_merged_events.append(info)
                         report.merged_events.append(info)
+                else:
+                    terminal_status = (
+                        "rejected_product_policy"
+                        if result.is_rejected
+                        else "retry_scheduled"
+                    )
+                    await _mark_message_scanned(
+                        db,
+                        source_id=source.id,
+                        message_id=message_id,
+                        message_date=message_dt,
+                        status=terminal_status,
+                        events_extracted=0,
+                        events_imported=0,
+                        error=result.reason,
+                    )
+                    await _update_source_scan_meta(db, source.id, message_id)
+                    await _notify_done(
+                        status=terminal_status,
+                        reason=result.reason,
+                        metrics_payload=None,
+                        popularity_payload=None,
+                        skip_breakdown_payload={terminal_status: 1},
+                        events_extracted_override=0,
+                        events_imported_override=0,
+                    )
+                    poster_bridge.pop(username, None)
+                    continue
                 skip_breakdown = {"poster_bridge": 1}
                 await _mark_message_scanned(
                     db,
@@ -6468,6 +6483,7 @@ async def process_telegram_results(
                     )
                     continue
                 candidate = _build_candidate(source, message, event_data)
+                candidate.producer_ordinal = transformed_event_index
                 if candidate.title:
                     event_titles.append(str(candidate.title).strip())
                 # Linked-source enrichment: when parser provides `linked_source_urls`,
@@ -6611,37 +6627,21 @@ async def process_telegram_results(
                 # including VK sync, so promo events can flow through VK and
                 # downstream promo surfaces. Auxiliary linked-source passes
                 # below still skip VK sync to avoid duplicate publication work.
-                result: SmartUpdateResult | None = None
-                nochange_tasks_rearmed = False
-                if result is None:
-                    result = await smart_event_update(
-                        db,
-                        candidate,
-                        check_source_url=False,
-                    )
-                if (
-                    result.status == "skipped_nochange"
-                    and getattr(result, "event_id", None)
-                    and not nochange_tasks_rearmed
-                ):
-                    try:
-                        await _schedule_primary_import_event_tasks(db, int(result.event_id))
-                    except Exception:
-                        logger.warning(
-                            "tg_monitor: failed to schedule nochange event tasks event_id=%s",
-                            result.event_id,
-                            exc_info=True,
-                        )
-                if (
-                    getattr(result, "event_id", None)
-                    and result.status in {"created", "merged", "skipped_nochange"}
-                ):
+                result: SmartUpdateResult = await smart_event_update(
+                    db,
+                    candidate,
+                    check_source_url=False,
+                )
+                linked_added = 0
+                if result.is_changed:
                     for original_event_index in original_event_indexes:
                         event_ids_by_original_index[int(original_event_index)].add(
                             int(result.event_id)
                         )
-                linked_added = 0
-                if result.event_id and result.status in {"created", "merged", "skipped_nochange"}:
+                    accepted_candidate_identity_by_event_id[int(result.event_id)] = (
+                        candidate.occurrence_key,
+                        candidate.candidate_key,
+                    )
                     linked_added = await _attach_linked_sources(
                         db,
                         event_id=result.event_id,
@@ -6686,17 +6686,16 @@ async def process_telegram_results(
                                 )
                             except Exception:
                                 logger.debug(
-                                    "tg_monitor.linked_text smart_update failed source=%s message_id=%s linked=%s",
+                                    "tg_monitor.linked_text smart_update exception source=%s message_id=%s linked=%s",
                                     username,
                                     message_id,
                                     linked_url,
                                     exc_info=True,
                                 )
-                if result.status == "created":
+                if result.outcome is SmartUpdateTerminalOutcome.CREATED:
                     report.events_created += 1
                     events_imported += 1
-                    if result.event_id:
-                        created_event_ids.append(int(result.event_id))
+                    created_event_ids.append(int(result.event_id))
                     try:
                         added_posters = int(getattr(result, "added_posters", 0) or 0)
                     except Exception:
@@ -6715,11 +6714,10 @@ async def process_telegram_results(
                     if info:
                         report.created_events.append(info)
                         message_created_events.append(info)
-                elif result.status == "merged":
+                elif result.outcome is SmartUpdateTerminalOutcome.MERGED:
                     report.events_merged += 1
                     events_imported += 1
-                    if result.event_id:
-                        merged_event_ids.append(int(result.event_id))
+                    merged_event_ids.append(int(result.event_id))
                     try:
                         added_posters = int(getattr(result, "added_posters", 0) or 0)
                     except Exception:
@@ -6738,44 +6736,25 @@ async def process_telegram_results(
                     if info:
                         report.merged_events.append(info)
                         message_merged_events.append(info)
-                elif result.status == "noop_exact_source_replay":
+                elif result.outcome is SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY:
                     report.events_nochange += 1
-                    report.events_skipped += 1
-                    skip_breakdown["noop_exact_source_replay"] += 1
-                elif result.status == "skipped_nochange":
-                    report.events_nochange += 1
-                    report.events_skipped += 1
-                    skip_breakdown["skipped_nochange"] += 1
-                elif result.status.startswith("skipped"):
-                    report.events_skipped += 1
-                    key = result.status
-                    if getattr(result, "reason", None):
-                        key = f"{key}:{getattr(result, 'reason')}"
-                    skip_breakdown[key] += 1
-                elif result.status == "invalid":
-                    report.events_invalid += 1
-                    report.events_skipped += 1
-                    key = "invalid"
-                    if getattr(result, "reason", None):
-                        key = f"{key}:{getattr(result, 'reason')}"
-                    skip_breakdown[key] += 1
-                elif result.status.startswith("rejected"):
+                    events_imported += 1
+                elif result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
                     report.events_rejected += 1
                     report.events_skipped += 1
-                    key = result.status
-                    if getattr(result, "reason", None):
-                        key = f"{key}:{getattr(result, 'reason')}"
+                    key = "rejected_product_policy"
+                    if result.reason:
+                        key = f"{key}:{result.reason}"
                     skip_breakdown[key] += 1
-                elif result.status == "error":
-                    report.events_errored += 1
-                    report.events_skipped += 1
-                    key = "error"
-                    if getattr(result, "reason", None):
-                        key = f"{key}:{getattr(result, 'reason')}"
+                else:
+                    message_retry_scheduled = True
+                    key = "retry_scheduled"
+                    if result.reason:
+                        key = f"{key}:{result.reason}"
                     skip_breakdown[key] += 1
                 logger.info(
-                    "tg_monitor.event result=%s event_id=%s source=%s message_id=%s title=%s linked_added=%s",
-                    result.status,
+                    "tg_monitor.event outcome=%s event_id=%s source=%s message_id=%s title=%s linked_added=%s",
+                    result.outcome.value,
                     result.event_id,
                     username,
                     message_id,
@@ -6788,7 +6767,7 @@ async def process_telegram_results(
                     and not bridge_notice_sent
                     and username == "klgdcity"
                     and filters.get("bridge_notice_daily")
-                    and result.event_id
+                    and result.is_changed
                     and _is_bridge_notice_message(source_text, candidate)
                 ):
                     notice_text = _format_bridge_notice(
@@ -6817,10 +6796,10 @@ async def process_telegram_results(
                             message_id,
                         )
             except Exception as exc:
-                report.errors.append(f"{username}/{message_id}: {exc}")
-                report.events_errored += 1
-                skip_breakdown["error:exception"] += 1
-                logger.exception("telegram_results: smart update failed")
+                report.errors.append(f"{username}/{message_id}: retry_scheduled:{exc}")
+                message_retry_scheduled = True
+                skip_breakdown["retry_scheduled:exception"] += 1
+                logger.exception("telegram_results: smart update retry scheduled")
         logger.info(
             "tg_monitor.message done run_id=%s source=%s message_id=%s imported=%d",
             report.run_id,
@@ -6830,7 +6809,12 @@ async def process_telegram_results(
         )
 
         if events_extracted and (events_imported < events_extracted or skip_breakdown):
-            status = "partial" if events_imported else "skipped"
+            if message_retry_scheduled:
+                status = (
+                    "partial_retry_scheduled" if events_imported else "retry_scheduled"
+                )
+            else:
+                status = "partial" if events_imported else "skipped"
             report.skipped_posts.append(
                 TelegramMonitorSkippedPostInfo(
                     source_username=username,
@@ -6921,7 +6905,11 @@ async def process_telegram_results(
                     post_video_status = "skipped:attach_error"
 
         final_status = "done"
-        if events_extracted and events_imported <= 0:
+        if message_retry_scheduled:
+            final_status = (
+                "partial_retry_scheduled" if events_imported else "retry_scheduled"
+            )
+        elif events_extracted and events_imported <= 0:
             final_status = "skipped"
         elif events_extracted and events_imported < events_extracted:
             final_status = "partial"
@@ -6986,11 +6974,17 @@ async def process_telegram_results(
                 and source_link
             ):
                 eid = (created_event_ids + merged_event_ids)[0]
+                occurrence_key, candidate_key = accepted_candidate_identity_by_event_id.get(
+                    int(eid),
+                    (None, None),
+                )
                 poster_bridge[username] = {
                     "event_id": int(eid),
                     "message_id": int(message_id),
                     "message_dt": message_dt,
                     "source_link": str(source_link).strip(),
+                    "occurrence_key": occurrence_key,
+                    "candidate_key": candidate_key,
                 }
             else:
                 # If the message had posters (or multiple events), do not keep a stale bridge target.
