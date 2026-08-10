@@ -41,6 +41,14 @@ logged `last_message` content.
 - 2026-08-10 21:25 UTC — production flags and dedicated VK role presence confirmed.
 - 2026-08-10 21:31 UTC — metadata-only provider probe succeeds for eight unread dialogs.
 - 2026-08-10 21:36 UTC — root cause localized to the MCP tool/response contract.
+- 2026-08-10 21:49 UTC — exact-main release 1964 deploys the typed dialog tool;
+  live MCP smoke still fails at the provider transport boundary.
+- 2026-08-10 21:55 UTC — bounded direct provider request succeeds while the
+  identical aiohttp transport intermittently returns truncated JSON; root cause
+  traced to treating one short `StreamReader.read(n)` result as EOF.
+- 2026-08-10 22:05 UTC — a production-equivalent OpenCode stable-scope
+  `tools/list` regression reproduces a second boundary failure: the catalog
+  exceeded the ordinary 128 KiB data-result cap.
 
 ## Root Cause
 
@@ -49,6 +57,10 @@ logged `last_message` content.
    self target and projected each conversation's `last_message` as content.
 3. There was no closed response schema that could prove message bodies and native
    peer identifiers were excluded.
+4. The fixed VK aiohttp transport performed a single bounded `read(n)`. Aiohttp
+   is allowed to return fewer than `n` bytes as soon as data is available, so a
+   fragmented or compressed provider response was parsed before EOF and collapsed
+   to the generic `provider_unavailable` workspace error.
 
 ## Contributing Factors
 
@@ -56,6 +68,11 @@ logged `last_message` content.
   implementation performed public/community discovery.
 - Provider availability errors were normalized to one generic workspace error,
   making a missing operation look like a credential/config failure.
+- Unit provider fakes returned already materialized Python mappings and therefore
+  did not exercise fragmented HTTP response delivery.
+- OAuth catalog coverage did not previously combine both providers, all
+  production capability flags and the stable coarse scopes used by the existing
+  OpenCode connection.
 
 ## Automation Contract
 
@@ -106,6 +123,10 @@ deliberately ignoring `last_message` and returning no native identifiers.
 - [ ] Bind unread/all mode into opaque cursors.
 - [ ] Allow explicit DM sends to bound VK user/chat/community dialog targets.
 - [ ] Deploy from exact merged main and run the metadata-only live smoke.
+- [ ] Read fixed VK HTTP responses to EOF under the decoded-byte cap and cover
+  fragmented/oversized streams with transport-level regressions.
+- [ ] Keep ordinary data responses at their configured cap while allowing the
+  authenticated full workspace catalog through a separate 512 KiB metadata cap.
 
 ## Follow-up Actions
 

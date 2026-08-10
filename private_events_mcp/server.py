@@ -41,6 +41,12 @@ from .social_workspace_tools import build_social_workspace_tools
 from .tool_catalog import build_tools
 
 logger = logging.getLogger(__name__)
+
+# Tool descriptors are protocol metadata rather than provider/user data. The
+# full ChatGPT/OpenCode workspace catalog is larger than the ordinary bounded
+# result cap, while still remaining under a fixed 512 KiB ceiling and the
+# shared hourly egress budget.
+_MAX_TOOLS_LIST_RESPONSE_BYTES = 512 * 1024
 _PREPARATION_RE = re.compile(r"^prep_[A-Za-z0-9_-]{24,160}$")
 _DIGEST_RE = re.compile(r"^[a-f0-9]{64}$")
 
@@ -624,7 +630,15 @@ class PrivateEventsMCPServer:
                     sort_keys=True,
                     separators=(",", ":"),
                 ).encode("utf-8")
-                if len(encoded) > self.config.max_response_bytes:
+                response_limit = (
+                    max(
+                        self.config.max_response_bytes,
+                        _MAX_TOOLS_LIST_RESPONSE_BYTES,
+                    )
+                    if request_message.get("method") == "tools/list"
+                    else self.config.max_response_bytes
+                )
+                if len(encoded) > response_limit:
                     request_id = request_message.get("id")
                     response_payload = {
                         "jsonrpc": "2.0",
