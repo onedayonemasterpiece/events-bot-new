@@ -17,6 +17,11 @@ from ops_run import finish_ops_run, start_ops_run
 import vk_intake
 import vk_review
 from smart_update_identity import canonicalize_identity_url
+from smart_event_update import (
+    SmartUpdateNotAcceptedError,
+    persist_smart_update_review,
+    smart_update_result_requires_review,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2486,6 +2491,42 @@ async def _process_vk_inbox_row(
             added = int(getattr(res, "smart_added_posters", 0) or 0)
             added_posters_total += added
             added_posters_by_event_id[int(res.event_id)] = added
+        except SmartUpdateNotAcceptedError as exc:
+            result = exc.result
+            if smart_update_result_requires_review(result):
+                await persist_smart_update_review(
+                    db,
+                    result=result,
+                    candidate=exc.candidate or None,
+                    pipeline="vk_auto_import",
+                    carrier_ref=f"vk_inbox:{int(post.id)}",
+                )
+                await vk_review.mark_review_required(
+                    db,
+                    int(post.id),
+                    reason_code=result.reason,
+                    diagnostic_event_id=result.event_id,
+                    identity_decision_log_id=result.identity_decision_id,
+                )
+                report.errors.append(
+                    f"persist_review_required source={source_url} reason={result.reason or 'identity_gate'}"
+                )
+                await _emit_progress(
+                    "⚠️",
+                    [
+                        "Результат: требуется identity review; импорт не подтверждён",
+                        f"Причина: {_shorten_reason(result.reason) or '—'}",
+                        f"took_sec: {(time.monotonic() - start_ts):.1f}",
+                    ],
+                )
+                _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
+                return
+            # Unknown/new NOT_ACCEPTED status is fail-closed and must not be
+            # coerced into a successful imported/rejected queue transition.
+            report.errors.append(f"persist_not_accepted {source_url}: {exc}")
+            await vk_review.mark_failed(db, int(post.id))
+            _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
+            return
         except Exception as exc:
             ok = False
             exc_txt = str(exc)

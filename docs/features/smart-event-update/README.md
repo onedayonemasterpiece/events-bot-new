@@ -915,3 +915,23 @@ Linked occurrences and festival identity remain owned by their existing
 features.  Full contract and separate production gate:
 [Interest clubs](../interest-clubs/README.md) and
 [release plan](../interest-clubs/release-plan.md).
+
+## Typed outcome boundary and durable identity review
+
+Every production Smart Update caller classifies `SmartUpdateResult.status` via
+the typed `SmartUpdateOutcomeKind`. Only `created`, `merged` and explicit
+accepted no-change outcomes may proceed; any unknown status is
+`NOT_ACCEPTED` and fail-closed. A diagnostic `event_id` on a rejected outcome
+is not an authority to load/recompute the event or enqueue Telegraph, ICS,
+static-site, social, media, fact or age work.
+
+Identity outcomes `review_required` and `skipped_identity_gate` retain a
+narrow durable `smart_update_review` projection with source identity, reason,
+diagnostic event id, immutable decision-log link, state and attempt count. No
+raw source text, prompts or provider payloads are copied. VK additionally
+keeps its original `vk_inbox` row as `review_required` with the same references
+rather than marking it imported or rejected; an operator can return it to the
+existing pending/retry workflow without losing evidence. Parser and Telegram
+carriers use the same projection. The production caller set is AST-inventoried
+by `tests/test_smart_update_caller_inventory.py`; adding a new direct caller
+requires an explicit inventory update and typed behavior test.

@@ -17055,7 +17055,12 @@ async def add_events_from_text(
     logging.info(
         "add_events_from_text start: len=%d source=%s", len(text), source_link
     )
-    from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        PosterCandidate,
+        smart_event_update,
+        smart_update_result_allows_caller_side_effects,
+    )
     poster_items: list[PosterMedia] = []
     ocr_tokens_spent = 0
     ocr_tokens_remaining: int | None = None
@@ -17714,6 +17719,18 @@ async def add_events_from_text(
                 candidate,
                 check_source_url=False,
             )
+            if not smart_update_result_allows_caller_side_effects(update_result):
+                # event_id on NOT_ACCEPTED is diagnostic only; do not load the
+                # event or render/schedule any dependent work.
+                results.append(
+                    (
+                        None,
+                        False,
+                        [f"smart_update_not_accepted:{update_result.status}"],
+                        "error",
+                    )
+                )
+                continue
             saved: Event | None = None
             if update_result.event_id:
                 async with db.get_session() as session:
@@ -18163,7 +18180,11 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         html_text = html_text[len("/addevent_raw") :].lstrip()
     source_clean = html_text or parts[1]
 
-    from smart_event_update import EventCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        smart_event_update,
+        smart_update_result_allows_caller_side_effects,
+    )
 
     source_marker = f"bot:{message.chat.id}/{message.message_id}"
     candidate = EventCandidate(
@@ -18181,6 +18202,9 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         candidate,
         check_source_url=False,
     )
+    if not smart_update_result_allows_caller_side_effects(update_result):
+        await bot.send_message(message.chat.id, "Event requires review; no changes were made")
+        return
     async with db.get_session() as session:
         event = (
             await session.get(Event, update_result.event_id)

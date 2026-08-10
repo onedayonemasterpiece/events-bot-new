@@ -1439,7 +1439,9 @@ async def add_new_event_via_queue(
             from smart_event_update import (
                 EventCandidate,
                 PosterCandidate,
+                persist_smart_update_review,
                 smart_event_update,
+                smart_update_result_requires_review,
                 smart_update_result_allows_caller_side_effects,
             )
             
@@ -1544,6 +1546,14 @@ async def add_new_event_via_queue(
                 smart_event_update,
             )
             if not smart_update_result_allows_caller_side_effects(update_result):
+                if smart_update_result_requires_review(update_result):
+                    await persist_smart_update_review(
+                        db,
+                        result=update_result,
+                        candidate=candidate,
+                        pipeline="parser",
+                        carrier_ref=f"parser:{theatre_event.source_type}:{source_url}",
+                    )
                 status = str(getattr(update_result, "status", "") or "not_accepted")
                 logger.warning(
                     "source_parsing: smart_update not accepted title=%s status=%s reason=%s matched_event_id=%s",
