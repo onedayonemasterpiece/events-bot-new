@@ -952,9 +952,11 @@ output/artifact, evidence хранит только его SHA-256.
 Production-health workflow принимает только две указанные cron-записи,
 закрытые manual profiles и `repository_dispatch: search-runtime-deployed` с
 явным `standard|full`. Smart Update, snapshot, Kaggle, corpus и index paths не
-эмитят этот event. До двух terminal live proofs автоматические schedule/dispatch
-fail-closed выключены repository variable `SEARCH_PRODUCTION_HEALTH_ENABLED`;
-manual profiles остаются доступными для этих двух acceptance runs.
+эмитят этот event. Два terminal live proofs получены в runs `31337041139` и
+`31344632129` на одной immutable product identity, после чего repository
+variable `SEARCH_PRODUCTION_HEALTH_ENABLED=true` включает только эти две
+schedule и явный runtime deploy marker. Manual profiles остаются доступны для
+evidence-driven диагностики; старый release-exact canary не включён.
 
 ### 16.6 Failure taxonomy
 
@@ -1293,5 +1295,15 @@ runtime probe теперь считает непосредственно сущ�
 `ResilientSupabaseTransport.rawFetch`: один raw direct/relay dispatch = один
 physical POST, а retry = отдельный POST. iOS использует максимум этого закрытого
 счётчика и общего OTP/XCUITest bucket; отсутствие обоих при уже полученном `200`
-классифицируется как `UNKNOWN_IOS_INFRA`. Acceptance остаётся `1/2` до fresh
-merged-main proof именно этого observation fix.
+классифицируется как `UNKNOWN_IOS_INFRA`.
+
+Fresh merged-main run
+[`31344632129`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31344632129)
+доказал correction и закрыл live gate. Browser и iOS получили `HEALTHY/PASS`;
+каждая cell сделала ровно один physical Search POST, получила HTTP `200`,
+сопоставила пять response IDs с пятью cards, выполнила real scroll и открыла
+exact event route HTTP `200`. LLM/pagination/receipt/storage и console/network
+errors равны нулю, cleanup/redaction прошли. Identity полностью совпала с
+browser+Android run `31337041139`: target SHA-256, immutable tuple, site SHA,
+backend revision, catalog и corpus revisions одинаковы. Acceptance = `2/2`;
+`SEARCH_PRODUCTION_HEALTH_ENABLED=true` установлен 2026-08-10.

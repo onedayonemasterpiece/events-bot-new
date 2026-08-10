@@ -7,7 +7,7 @@
   `dd5ffc2eb5327cb52eb62e232e1e927dbe4c9c66`.
 - Branch/PR: `integration/search-production-health-stage2-20260809` / #451.
 - PR #451 merged to `main` as `ad0a1f3bb12a63805aec65f52489151e3f382b83`.
-- Live acceptance workflows so far: `1 / 2` accepted. Run `31337041139`
+- Live acceptance workflows: `2 / 2` accepted. Run `31337041139`
   completed browser+Android `HEALTHY/PASS` on an unchanged immutable product.
   Browser+iOS runs `31337291226` and `31337643487` stopped side-effect-free in
   the fresh-simulator Safari first-run sheet before broker/Auth/Search.
@@ -46,6 +46,12 @@
   was introduced. Missing physical evidence after a complete response is typed
   infrastructure-unknown. Acceptance remains `1/2` until the merged fix is
   proven live.
+  Merged-main run `31344632129` then proved that final observation fix:
+  browser+iOS both completed `HEALTHY/PASS`, exactly one physical POST, five
+  matching response/card IDs, real scroll, exact event HTTP 200, zero forbidden
+  activity and cleanup/redaction PASS. Its immutable target/backend/content/index
+  identity exactly matches run `31337041139`. The repository variable
+  `SEARCH_PRODUCTION_HEALTH_ENABLED=true` was set after this comparison.
 - The post-merge activation migration and exact Edge/Fly deployments are
   complete; their verification is recorded below.
 - PR #436: untouched and not a dependency.
@@ -115,15 +121,15 @@ Required before live:
 8. Set `SEARCH_PRODUCTION_HEALTH_ENABLED=true`, then update the Search incident
    regression record and issue #431 with exact run IDs.
 
-Current disposition: `STAGE2_IMPLEMENTED_LIVE_ACCEPTANCE_PENDING / PRODUCT_HEALTH_UNCONFIRMED`.
+Current disposition: `STAGE2_LIVE_ACCEPTED / PRODUCT_HEALTH_HEALTHY`.
 
-Acceptance is now `1/2`: run `31337041139` is the accepted browser+Android
+Historical acceptance was `1/2`: run `31337041139` is the accepted browser+Android
 proof. Runs `31337291226` and `31337643487` repeated an iOS-only infrastructure
 failure with zero broker/Auth/Search operations. The shared OTP/Search Safari
-transport now handles the allowlisted first-run UI as either one exact WDA
-alert or one exact native sheet; a fresh merged-SHA browser+iOS workflow is the
-remaining live gate. `SEARCH_PRODUCTION_HEALTH_ENABLED` stays absent until that
-proof matches the first run's immutable product identity.
+transport handled the allowlisted first-run UI as either one exact WDA alert or
+one exact native sheet. At that point a fresh merged-SHA browser+iOS workflow
+was the remaining live gate and `SEARCH_PRODUCTION_HEALTH_ENABLED` remained
+absent.
 
 Follow-up run `31338416105` proved the native-sheet action but exhausted its
 five-second stable-dismissal window by re-reading the multi-second XCTest source
@@ -247,7 +253,7 @@ request starts, a pre-document allowlisted physical observer spans callback,
 Search and event documents, closes already-received response bytes inside each
 page and exports only document-delta totals/counters.
 Losing disposable capability-probe aborts are excluded from product errors but
-any received bytes remain metered. These are deterministic results;
-live acceptance remains `0 / 2`; activation changed only the explicitly listed
-migration, Edge and exact-main Fly release state, while scheduled health remains
-default-off.
+any received bytes remain metered. These deterministic results are now backed
+by live acceptance `2 / 2`: runs `31337041139` and `31344632129` prove one
+unchanged product identity across browser, Android and iOS, and scheduled
+health is enabled by `SEARCH_PRODUCTION_HEALTH_ENABLED=true`.

@@ -1,10 +1,10 @@
 # INC-2026-07-02 Static smart search stalls at 92% without cards
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Static site authorized smart search (`/poisk/`, personalization Supabase Edge Function `event-search`)
 Opened: 2026-07-02
-Closed: —
+Closed: 2026-08-10
 Owners: static site / personalization search
 Related incidents: —
 Related docs: `docs/features/static-site-pages/smart-vector-search/README.md`, `docs/features/unsigned-personalization/authorized-event-search.md`, `docs/features/unsigned-personalization/semantic-vector-retrieval.md`, `docs/operations/release-governance.md`
@@ -29,6 +29,22 @@ Server-side audit rows for the named queries were recorded as `ok`, so the initi
 - Observability gap: Edge audit rows record backend success and stage timings, but the frontend has no durable client-side event for `response received`, `cards rendered`, `render error`, or `stuck at progress`.
 
 ## Timeline
+
+- 2026-08-10 merged-main browser+iOS workflow
+  [`31344632129`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31344632129)
+  closed the terminal product gate. Browser and iOS are both `HEALTHY/PASS`;
+  each made exactly one physical vector Search POST, received HTTP `200`,
+  matched five response IDs to five rendered cards, performed real scroll and
+  opened the exact same-origin event route with HTTP `200`. Forbidden
+  LLM/pagination/receipt/storage counts and console/network errors are zero;
+  cleanup and redaction passed. Its target fingerprint, complete immutable
+  tuple, site SHA, backend source revision, catalog and corpus revisions exactly
+  match accepted browser+Android run
+  [`31337041139`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337041139).
+  This is the required unchanged-product `2/2` acceptance. Repository variable
+  `SEARCH_PRODUCTION_HEALTH_ENABLED=true` was set only afterward. Issues #474,
+  #476 and #480 are closed; issue #431 records the superseding contour. The old
+  noisy scheduled/release-exact canary remains disabled.
 
 - 2026-08-10 merged-main browser+iOS workflow
   [`31343651286`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31343651286)
@@ -759,6 +775,23 @@ Partial mitigation deployed to the working preview path and Supabase Edge Functi
 - [ ] Tune LLM verifier candidate window/timeouts/cache so first visible result target is consistently sub-2s when vector candidates exist.
 
 ## Release And Closure Evidence
+
+- Stage 2 accepted current production Search target:
+  [`31337041139`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31337041139)
+  (browser+Android) and
+  [`31344632129`](https://github.com/onedayonemasterpiece/events-bot-new/actions/runs/31344632129)
+  (browser+iOS), four `HEALTHY/PASS` cells on one immutable identity.
+- Each accepted cell proves no-mail Auth/getUser/owner-RLS, exactly one physical
+  vector POST, HTTP 200, five matching real cards, real wheel/native swipe,
+  exact candidate event route HTTP 200, zero forbidden activity, bounded
+  egress, cleanup and redaction.
+- `SEARCH_PRODUCTION_HEALTH_ENABLED=true` was verified after `2/2`; the current
+  workflow runs only at 06:17 UTC (browser+Android), 18:17 UTC (browser+iOS),
+  explicit manual profiles, or an explicit functional-release marker.
+- Public `/poisk/` is deliberately not a health fallback and still returns 404;
+  public CDN promotion remains the separate production-UX release gate already
+  tracked in `authorized-event-search.md`, not a reason to weaken or redirect
+  the accepted current-target health proof.
 
 - deployed SHA: commit `0c9fd9e6` on branch `recovery/static-site-smart-search-full-20260701`; Edge Function `event-search` deployed to personalization Supabase project `epyznmylqmchteykjsqj` from the same diff before commit.
 - deploy path: static preview `https://kenigevents.ru/preview-20260702t1536-merged-vector-medallions/poisk/` (`npm --prefix site run build:preview`, `check:preview`, `deploy:preview` passed; public preview verification ok).
