@@ -43,6 +43,15 @@
   existing-identity-preserving generator mode. Codex remains exactly seven
   read-only tools; OpenCode local-file media still requires the separately
   authenticated streaming bridge rather than accepting Windows paths.
+- **Smart Update automatic identity state machine (incident prevention, not
+  deployed):** replaced nonexistent human-review/veto terminals with a typed
+  five-outcome facade, stable carrier-child keys, occurrence-scoped source
+  bindings, durable balanced attempts and automatic retry; migrated parser,
+  Telegram, VK, ticket, festival and manual callers; and added idempotent
+  recovery/audit tooling. Existing match/create, dedup, identity-gate and
+  occurrence-scope LLM calls are reused without a new model, provider, or LLM
+  stage. Production was audited read-only; no recovery apply or deploy is part
+  of this change.
 
 - **my-data-hub daily statistics producer (default off)**: added a non-sensitive
   `events-bot.daily-statistics.v1` aggregate command with RFC 8785 canonical envelope
