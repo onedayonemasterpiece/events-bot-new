@@ -107,6 +107,7 @@ metadata commits were not required for runtime delivery.
   manifest SHA
   `cb75b598960968244353a8ff091436e21b5c624e8ccad128a54f5fd20e4adbf3`.
 - Post-rebase local relevant suite: `216 passed in 140.53s`; ignored log
+  `artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/d5-local-validation/relevant-pytest-rebased.log`,
   SHA-256
   `369baa7a28dbe428a6afb6f4f848e9e909313a21cc791af523127aac0cca9041`.
 - Production boundary compile: passed for core, schema, every caller, recovery,

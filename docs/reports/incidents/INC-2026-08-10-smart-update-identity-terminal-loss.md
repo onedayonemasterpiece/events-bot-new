@@ -280,6 +280,7 @@ The exact CLI source SHA-256 was
 - production recovery apply: not performed (explicitly out of scope)
 - post-rebase local regression checks: production-boundary compile PASS; full
   relevant suite `216 passed in 140.53s`; `git diff --check` PASS. Ignored log
+  `artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/d5-local-validation/relevant-pytest-rebased.log`,
   SHA-256
   `369baa7a28dbe428a6afb6f4f848e9e909313a21cc791af523127aac0cca9041`
 - post-deploy verification: pending
