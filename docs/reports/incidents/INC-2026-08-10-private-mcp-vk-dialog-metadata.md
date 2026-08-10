@@ -1,10 +1,10 @@
 # INC-2026-08-10 Private MCP VK dialog metadata unavailable
 
-Status: open
+Status: closed
 Severity: sev2
 Service: Private Events MCP / VK Social Workspace
 Opened: 2026-08-10
-Closed: —
+Closed: 2026-08-10
 Owners: events-bot MCP
 Related incidents: `INC-2026-08-08-private-mcp-oauth-csp-redirect`
 Related docs: `docs/operations/private-events-mcp.md`, `docs/operations/release-governance.md`
@@ -118,14 +118,14 @@ deliberately ignoring `last_message` and returning no native identifiers.
 
 ## Corrective Actions
 
-- [ ] Add a VK-only `social_dialogs_list` typed tool and `list_dialogs` operation.
-- [ ] Add a closed metadata-only dialog response schema and runtime projection.
-- [ ] Bind unread/all mode into opaque cursors.
-- [ ] Allow explicit DM sends to bound VK user/chat/community dialog targets.
-- [ ] Deploy from exact merged main and run the metadata-only live smoke.
-- [ ] Read fixed VK HTTP responses to EOF under the decoded-byte cap and cover
+- [x] Add a VK-only `social_dialogs_list` typed tool and `list_dialogs` operation.
+- [x] Add a closed metadata-only dialog response schema and runtime projection.
+- [x] Bind unread/all mode into opaque cursors.
+- [x] Allow explicit DM sends to bound VK user/chat/community dialog targets.
+- [x] Deploy from exact merged main and run the metadata-only live smoke.
+- [x] Read fixed VK HTTP responses to EOF under the decoded-byte cap and cover
   fragmented/oversized streams with transport-level regressions.
-- [ ] Keep ordinary data responses at their configured cap while allowing the
+- [x] Keep ordinary data responses at their configured cap while allowing the
   authenticated full workspace catalog through a separate 512 KiB metadata cap.
 
 ## Follow-up Actions
@@ -137,10 +137,28 @@ deliberately ignoring `last_message` and returning no native identifiers.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending exact-main Fly release
-- regression checks: pending
-- post-deploy verification: pending
+- merged implementation SHAs:
+  - PR `#491`, merge `c20c0cb4d005a826f7a6697ee10c094c1be19804`
+    (typed dialog surface and closed metadata schema);
+  - PR `#492`, merge `55d06e4a0d2622c770093acec379abd7f2fbbddf`
+    (fragment-safe VK transport and bounded full catalog).
+- deployed SHA: `55d06e4a0d2622c770093acec379abd7f2fbbddf`, Fly machine
+  version `1965`, via `scripts/deploy_fly_main.sh` from a clean detached exact
+  `origin/main` checkout.
+- regression checks: full Private Events MCP suite `395 passed` with three
+  pre-existing aiohttp `NotAppKeyWarning` warnings; focused adapter/runtime/server
+  suites `105 passed`; compileall, focused Ruff and `git diff --check` passed;
+  PR `#492` `python-ci` and `static-browser-release-gate` both passed.
+- post-deploy verification: `/healthz` returned `ok=true`, `ready=true`, DB
+  `quick_check=ok`, Fly health check passed, and the runtime file mirror was
+  enabled at `/data/runtime_logs/events-bot.log`. Since the final deploy the log
+  contained no traceback, error/critical, `provider_unavailable` or rejected
+  social-workspace marker.
+- sanitized live MCP receipt: OAuth refresh, `initialize`, production
+  `tools/list` and `social_dialogs_list(unread_only=true, limit=20)` all passed;
+  eight dialog metadata rows were returned with only opaque target ref, kind,
+  display title, unread count and trust marker. Message bodies and provider-native
+  identifiers were neither projected nor logged. No VK message was sent.
 
 ## Prevention
 
