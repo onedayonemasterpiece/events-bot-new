@@ -61,6 +61,9 @@ Required before live:
 - Search production-health aggregate suite: **157/157 PASS** after the shared
   OTP/Search Safari native-sheet, pre-side-effect retry, async owner-proof and
   closed failure-evidence/navigation-receipt regressions;
+- read-only HEAD against the exact current accepted private target returned
+  direct HTTP `200` with no redirect; the secret URL was kept in memory and
+  never printed or persisted;
 - legacy Search harness: **32/32 PASS**;
 - focused broker/HTTP/SQL/security suite **48/48 PASS**; combined broker,
   security and static source/release regression **135/135 PASS**; Edge contract
