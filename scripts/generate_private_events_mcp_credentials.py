@@ -332,6 +332,7 @@ def _build_opencode_credentials(
                     "oauth": {
                         "clientId": client_id,
                         "scope": " ".join(scopes),
+                        "callbackPort": 19876,
                         "redirectUri": redirect_uri,
                     },
                 }
@@ -340,7 +341,7 @@ def _build_opencode_credentials(
         "notes": [
             "OpenCode is a static public OAuth client: never configure a client secret.",
             "Run `opencode mcp auth eventsBot` and enter the bootstrap operator token only in the browser page.",
-            "The fixed callback requires port 19876 to be available on 127.0.0.1.",
+            "If port 19876 is occupied, set callbackPort and redirectUri to the same free unprivileged 127.0.0.1 port.",
         ],
     }
 

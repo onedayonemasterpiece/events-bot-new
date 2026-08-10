@@ -80,6 +80,9 @@ def test_generator_stdout_redacts_private_endpoint(tmp_path: Path) -> None:
     assert generated["opencode"]["redirect_uri"] == (
         "http://127.0.0.1:19876/mcp/oauth/callback"
     )
+    opencode_entry = generated["opencode"]["opencode_config"]["mcp"]["eventsBot"]
+    assert opencode_entry["oauth"]["callbackPort"] == 19876
+    assert opencode_entry["oauth"]["redirectUri"] == generated["opencode"]["redirect_uri"]
     assert (
         generated["opencode"]["oauth_client_id"]
         == generated["deploy"]["PRIVATE_EVENTS_MCP_OPENCODE_OAUTH_CLIENT_ID"]

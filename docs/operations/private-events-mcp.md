@@ -37,7 +37,9 @@ Data tools require OAuth authorization-code + PKCE S256. The server provides:
 - one predefined confidential ChatGPT client (`client_secret_basic`/post);
 - one distinct predefined public Codex client (`none`, mandatory S256);
 - one optional distinct public OpenCode client (`none`, mandatory S256) with
-  exact `http://127.0.0.1:19876/mcp/oauth/callback` redirect binding;
+  an exact `http://127.0.0.1:<unprivileged-port>/mcp/oauth/callback` loopback
+  path; the requested port may vary, while the code remains bound to the exact
+  redirect URI;
 - exact client/resource/audience binding;
 - exact ChatGPT callback validation and literal Codex loopback callbacks only;
 - 15-minute signed access tokens;
@@ -561,8 +563,12 @@ opencode mcp debug eventsBot
 ```
 
 The browser page accepts the bootstrap operator token once and redirects only
-to `http://127.0.0.1:19876/mcp/oauth/callback`; port 19876 must be free. The
-OpenCode config includes only the public client ID—there is no client secret.
+to the exact `http://127.0.0.1:<port>/mcp/oauth/callback` URI requested by
+OpenCode. The generated default is port `19876`. If it is occupied, choose a
+free unprivileged port and change both `oauth.callbackPort` and the port inside
+`oauth.redirectUri` to the same value; do not close unrelated applications just
+to retain the default. The OpenCode config includes only the public client ID—
+there is no client secret.
 These fields and commands follow the current official
 [OpenCode MCP OAuth contract](https://opencode.ai/docs/mcp-servers/) and
 [global configuration path](https://opencode.ai/docs/config/).
