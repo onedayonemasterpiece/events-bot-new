@@ -274,7 +274,8 @@ The exact CLI source SHA-256 was
 - integration branch: `integration/smart-update-identity-state-machine`
 - rebased core/caller/recovery commits: `c0488d9ba`, `fb84b2308`,
   `be65b0ca3`; reconciliation commit: `3899970f4`
-- PR / final implementation SHA: pending final checklist and draft PR
+- draft PR: `#494`; implementation/rebase evidence head before PR metadata:
+  `beda1283226d70059e7f9bf71d0f9a7b666d2461`
 - deployed SHA: not performed (explicitly out of scope)
 - production recovery apply: not performed (explicitly out of scope)
 - post-rebase local regression checks: production-boundary compile PASS; full

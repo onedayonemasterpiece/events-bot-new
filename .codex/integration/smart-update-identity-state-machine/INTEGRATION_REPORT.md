@@ -54,7 +54,7 @@ metadata commits were not required for runtime delivery.
 | IMPL-9 | structured balanced funnel | Done | current candidate + attempt metrics and schema-adaptive prod audit |
 | IMPL-10 | idempotent since/dry-run/batch-size recovery | Done | durable + Telegram/VK/parser/ticket/festival selectors; parser request worker; D4c dry-run |
 | TEST-1–14 | mandatory regression matrix | Done | hermetic fixtures include provider/schema/vector/DB retention, official parser same-page sessions, immediate distinct create, all-source recovery, and AST acceptance dominance; 216-test aggregate passes |
-| ART-1 | one focused PR from latest main | Pending | branch ready; draft PR created only after final reviewer |
+| ART-1 | one focused PR from latest main | Done | draft PR `#494`, base `main`, no merge/deploy |
 | ART-2 | incident document with AS-IS cause | Done | canonical incident record remains open pending release/recovery |
 | ART-3 | production reason baseline | Done | daily/reason tables in incident + D2 report |
 | ART-4 | TO-BE state machine | Done | canonical identity-state-machine doc |
@@ -112,7 +112,7 @@ metadata commits were not required for runtime delivery.
 - Production boundary compile: passed for core, schema, every caller, recovery,
   and audit script.
 - `git diff --check`: passed.
-- GitHub relevant CI: pending draft PR.
+- GitHub relevant CI: pending on draft PR `#494`.
 
 ## Residual release boundary
 
