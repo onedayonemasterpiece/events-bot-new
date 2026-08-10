@@ -29,8 +29,8 @@
 | CORE-IMPL | IMPL-1–6, IMPL-9, TEST-1–10, TEST-13 | worktree worker / high | `agent/smart-update-identity/core-impl`; `/home/dev/.codex/worktrees/events-bot-new/smart-update-core-impl` | merged | worker `8118b0085`; rebased integration `c0488d9ba` | typed state, schema, keys, leases, retries, exact replay |
 | CALLERS-IMPL | IMPL-7–8, TEST-11–12 | worktree worker / high | `agent/smart-update-identity/smart-update-callers-impl`; `/home/dev/.codex/worktrees/events-bot-new/smart-update-callers-impl` | merged | worker `13c588699`; rebased integration `fb84b2308` | all six production boundaries + AST contract |
 | RECOVERY-CLI | IMPL-10, TEST-14, ART-7 | worktree worker / high | `lane/recovery-smart-update-identity`; `/home/dev/.codex/worktrees/events-bot-new/recovery-smart-update-identity` | merged + reconciled | worker `c63cc37d3`; rebased integration `be65b0ca3` | durable + Telegram/VK/parser/ticket/festival recovery; final production read-only D4c dry-run |
-| Integrator | all integration, ART-1–9, constraints | serial integrator / maximum-risk | this branch/worktree | in review | final SHA pending | parser occurrence keys, immediate known-distinct create, all-source recovery, caller dominance proof, final validation/CI |
-| Checklist reviewer | all requirements | read-only reviewer / high | pending final diff | pending | pending | final closure table below will be reconciled to reviewer findings |
+| Integrator | all integration, ART-1–9, constraints | serial integrator / maximum-risk | this branch/worktree | complete | reviewed head `2f0a66270` | parser occurrence keys, immediate known-distinct create, all-source recovery, caller dominance proof, final validation/CI |
+| Checklist reviewer | all requirements | read-only reviewer / high | final integrated diff | complete | reviewed head `2f0a66270` | no material code, schema, caller, or recovery gaps; the sole then-pending CI gate subsequently passed |
 
 No worker change was rejected or abandoned. Worker worktrees are clean and their
 implementation commits are represented on the integration branch; lane-only
@@ -38,7 +38,7 @@ metadata commits were not required for runtime delivery.
 
 ## Requirement execution matrix
 
-| ID | Original requirement | Status before final review | Evidence |
+| ID | Original requirement | Final status | Evidence |
 | --- | --- | --- | --- |
 | PRE-1 | AST inventory on latest main | Done | caller inventory, exact base SHA |
 | PRE-2 | enumerate forbidden return/ID/failed paths | Done | caller inventory pre-fix terminal leaks |
@@ -59,7 +59,7 @@ metadata commits were not required for runtime delivery.
 | ART-3 | production reason baseline | Done | daily/reason tables in incident + D2 report |
 | ART-4 | TO-BE state machine | Done | canonical identity-state-machine doc |
 | ART-5 | migration and rollback | Done | state-machine and SQLite init docs |
-| ART-6 | hermetic and full relevant CI results | Partial | local aggregate 216 passed; GitHub CI pending draft PR |
+| ART-6 | hermetic and full relevant CI results | Done | local aggregate 216 passed; current-head GitHub CI run `31443999735` passed all jobs, including the dedicated Smart Update job `93634283480` |
 | ART-7 | dry-run recovery report | Done | final-source D4c all-source read-only aggregate and manifest |
 | ART-8 | caller inventory | Done | canonical caller inventory |
 | ART-9 | changed terminal outcomes | Done | state-machine old→new table |
@@ -113,7 +113,9 @@ metadata commits were not required for runtime delivery.
 - Production boundary compile: passed for core, schema, every caller, recovery,
   and audit script.
 - `git diff --check`: passed.
-- GitHub relevant CI: pending on draft PR `#494`.
+- GitHub current-head CI: run `31443999735` passed `python-ci`,
+  `smart-update-identity-state-machine` (job `93634283480`), and
+  `static-browser-release-gate` on draft PR `#494`.
 
 ## Residual release boundary
 
