@@ -6,7 +6,7 @@
 - Requirements: `R01`, `R02`, `R03`, `R04`, `R06`
 - Status: **complete**
 - Base SHA: `d7731ab4235b325e9ca52d13c45fba83eaf5de0b`
-- Validated implementation head SHA: `831336bf62e4fb3137d230db956ce785dd9d868d`
+- Validated implementation head SHA: `07753114a7174046a9d7019cdda14bc14690a8bc`
 - The RESULTS metadata is committed separately after the validated
   implementation head so this record can contain its exact SHA.
 
@@ -44,6 +44,11 @@
   Resource Graph deep links and forbids live/raw/background/hotspot automation.
 - `docs/routes.yml` now exposes the product-model, analysis and Product Atlas
   entrypoints plus static-site analytics and action-map research routes.
+- Final schema alignment uses canonical action-map package enums
+  `finding.status=insufficient-data` and
+  `decision.outcome=instrument-better`; the action-map Atlas projection uses
+  `insufficient-data`, while unrelated general `insufficient_data` analysis
+  states remain unchanged.
 
 ## Commands and checks run
 
@@ -70,6 +75,12 @@
     update command, no live/raw/background ingest and Resource Graph links.
 12. `git commit -m "docs: complete action-map evidence routing"` — PASS,
     corrected implementation head `831336bf62e4fb3137d230db956ce785dd9d868d`.
+13. Scoped enum assertions — PASS: canonical hyphenated values exist throughout
+    the action-map package section and Atlas evidence paragraph; the general
+    analysis rule and generic Atlas `analysis_state: insufficient_data` remain
+    unchanged.
+14. `git commit -m "docs: align action-map package enums"` — PASS, final
+    validated implementation head `07753114a7174046a9d7019cdda14bc14690a8bc`.
 
 ## Changed files
 
