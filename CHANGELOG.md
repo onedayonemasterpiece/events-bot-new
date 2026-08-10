@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / OpenCode OAuth discovery:** challenge every unauthenticated
+  MCP JSON-RPC request, including `initialize` and `tools/list`, so OpenCode starts
+  RFC 9728 OAuth instead of reporting a false successful anonymous connection.
+  Existing authenticated ChatGPT/Codex/OpenCode resources and identities are unchanged.
+
 - **Private Events MCP / OpenCode OAuth:** added a distinct static public
   OpenCode PKCE client on the full ChatGPT resource with an exact Windows
   loopback callback, client/resource/token isolation from ChatGPT and Codex,

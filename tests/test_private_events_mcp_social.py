@@ -243,10 +243,8 @@ async def test_endpoint_client_scope_and_catalog_isolation(config) -> None:
             configured.mcp_path,
             json={"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}},
         )
-        anonymous_names = {
-            item["name"] for item in (await anonymous.json())["result"]["tools"]
-        }
-        assert anonymous_names == read_names
+        assert anonymous.status == 401
+        assert "resource_metadata" in anonymous.headers["WWW-Authenticate"]
         assert all("max" not in name.casefold() for name in set(tools))
     finally:
         await client.close()

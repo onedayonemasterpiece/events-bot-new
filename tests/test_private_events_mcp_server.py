@@ -307,7 +307,10 @@ async def test_oauth_pkce_and_authenticated_mcp_round_trip(config) -> None:
                 "params": {"protocolVersion": "2025-06-18"},
             },
         )
-        assert initialize.status == 200
+        assert initialize.status == 401
+        initialize_challenge = initialize.headers["WWW-Authenticate"]
+        assert initialize_challenge.startswith("Bearer ")
+        assert "resource_metadata" in initialize_challenge
 
         unauthenticated = await client.post(
             config.mcp_path,
@@ -581,6 +584,18 @@ async def test_opencode_public_client_real_oauth_and_full_resource_contract(
     verifier = "o" * 64
     callback = "http://127.0.0.1:19876/mcp/oauth/callback"
     try:
+        discovery = await client.post(
+            universal.mcp_path,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": "2025-06-18"},
+            },
+        )
+        assert discovery.status == 401
+        assert "resource_metadata" in discovery.headers["WWW-Authenticate"]
+
         query = {
             "response_type": "code",
             "client_id": universal.opencode_oauth_client_id,
@@ -1044,8 +1059,8 @@ async def test_unsupported_protocol_header_is_rejected(config, monkeypatch) -> N
                 "params": {"protocolVersion": "2099-01-01"},
             },
         )
-        assert response.status == 400
-        assert (await response.json())["error"] == "unsupported_mcp_protocol_version"
+        assert response.status == 401
+        assert "resource_metadata" in response.headers["WWW-Authenticate"]
 
         response = await client.post(
             config.oauth_token_path,

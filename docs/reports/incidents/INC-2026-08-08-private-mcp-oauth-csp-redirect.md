@@ -113,9 +113,12 @@ redirect chain after the form POST.
   secret-redaction checks remain green;
 - preserve the operator-confirmed installed connector identity unless its OAuth
   client secret or signing key was exposed. The path segment alone is not an
-  authorization credential: the route must continue to return an OAuth 401
-  challenge and reject every unauthenticated tool call. A full-identity rotation
-  requires an explicit migration because it breaks the installed connector.
+  authorization credential: the route must return an OAuth 401 challenge for
+  every unauthenticated MCP JSON-RPC request, including `initialize` and
+  `tools/list`, and reject every unauthenticated tool call. Otherwise OpenCode
+  treats public initialization as a successful anonymous connection and never
+  persists OAuth tokens. A full-identity rotation requires an explicit migration
+  because it breaks the installed connector.
 
 ### Required evidence
 
