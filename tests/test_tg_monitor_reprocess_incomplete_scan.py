@@ -511,6 +511,13 @@ async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monke
                 "source_link": "https://t.me/ecodvor39/934",
                 "text": "История фриганской жизни. Подробности программы будут позже.",
                 "events": [],
+                "source_parse_decision": {
+                    "disposition": "CONFIRMED_NO_EVENT",
+                    "events": [],
+                    "lifecycle_actions": [],
+                    "evidence_complete": True,
+                    "parse_version": "source-parse-v1",
+                },
             },
             {
                 "source_username": "ecodvor39",
@@ -519,6 +526,13 @@ async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monke
                 "source_link": "https://t.me/ecodvor39/935",
                 "text": "Что можно принести в зону рукодельного свопа.",
                 "events": [],
+                "source_parse_decision": {
+                    "disposition": "CONFIRMED_NO_EVENT",
+                    "events": [],
+                    "lifecycle_actions": [],
+                    "evidence_complete": True,
+                    "parse_version": "source-parse-v1",
+                },
             },
         ],
     }
@@ -550,7 +564,9 @@ async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monke
         )[0]
     assert row[0] == 935
     assert row[1] is not None
-    assert scanned_count == 0
+    # Complete typed no-event carriers are durable terminals, not invisible
+    # cursor-only skips.
+    assert scanned_count == 2
     await db.close()
 
 
