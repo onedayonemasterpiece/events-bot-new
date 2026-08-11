@@ -149,6 +149,17 @@ def classify_carrier(evidence: Mapping[str, Any]) -> str:
         return "S"
 
     explicit = normalize_class(evidence.get("loss_class"))
+    if _truth(evidence, "confirmed_no_event", "valid_no_event"):
+        semantic_terminal_valid = (
+            _truth(evidence, "llm_completed")
+            and _truth(evidence, "structured_response_valid")
+            and _truth(evidence, "evidence_complete", "full_evidence")
+        )
+        if semantic_terminal_valid:
+            return "R"
+        # An unproven negative is an incomplete-evidence loss, never a valid
+        # product no-event outcome.
+        return "M"
     signals: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("A", ("discovery_no_keywords", "no_keywords")),
         ("B", ("discovery_no_date", "no_date")),
@@ -167,7 +178,6 @@ def classify_carrier(evidence: Mapping[str, Any]) -> str:
         ("O", ("post_llm_reject_partial", "low_confidence_partial", "partial_child_loss")),
         ("P", ("smart_update_identity_loss", "identity_loss")),
         ("Q", ("technical_terminal_failed", "persist_failure", "technical_failed")),
-        ("R", ("confirmed_no_event", "valid_no_event")),
     )
     active = {code for code, names in signals if _truth(evidence, *names)}
     if explicit:
@@ -231,8 +241,11 @@ def build_census(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         bucket["_sources"].add(str(row.get("source_type") or row.get("source") or "unknown"))
         bucket["llm_started_count"] += int(_truth(row, "llm_started"))
         bucket["llm_completed_count"] += int(_truth(row, "llm_completed"))
-        full = _truth(row, "full_evidence")
-        incomplete = _truth(row, "incomplete_evidence", "evidence_omitted", "partial_child_loss")
+        full = _truth(row, "full_evidence", "evidence_complete")
+        incomplete = (
+            _truth(row, "incomplete_evidence", "evidence_omitted", "partial_child_loss")
+            or row.get("evidence_complete") is False
+        )
         bucket["full_evidence_count"] += int(full)
         bucket["incomplete_evidence_count"] += int(incomplete)
         for name in COUNT_FIELDS[5:-1]:
@@ -259,6 +272,52 @@ def build_census(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         }
         for row in carriers
     ]
+    raw_packets = [row for row in carriers if _truth(row, "durable_source_packet")]
+    token_actual = sum(_int(row, "actual_tokens") for row in raw_packets)
+    token_reserved = sum(_int(row, "reserved_tokens") for row in raw_packets)
+    smart_outcomes: dict[str, int] = defaultdict(int)
+    for row in raw_packets:
+        for outcome, count in (row.get("smart_update_outcomes") or {}).items():
+            smart_outcomes[str(outcome)] += max(0, int(count or 0))
+    metrics = {
+        "vk_source_packets_total": len(raw_packets),
+        "vk_llm_carriers_total": sum(
+            int(_truth(row, "llm_started")) for row in raw_packets
+        ),
+        "vk_llm_parse_total": sum(_int(row, "llm_parse_attempts") for row in raw_packets),
+        "vk_llm_evidence_incomplete_total": sum(
+            int(row.get("evidence_complete") is False) for row in raw_packets
+        ),
+        "vk_llm_verification_total": sum(
+            _int(row, "verification_attempts") for row in raw_packets
+        ),
+        "vk_llm_tokens_total": {
+            "input": sum(_int(row, "input_tokens") for row in raw_packets),
+            "output": sum(_int(row, "output_tokens") for row in raw_packets),
+            "thought": sum(_int(row, "thought_tokens") for row in raw_packets),
+            "reserved": token_reserved,
+            "actual": token_actual,
+        },
+        "vk_llm_reservation_error_ratio": (
+            abs(token_reserved - token_actual) / token_actual if token_actual else None
+        ),
+        "vk_llm_rate_limit_total": sum(
+            _int(row, "rate_limit_attempts") for row in raw_packets
+        ),
+        "vk_ingestion_retry_total": sum(
+            _int(row, "retry_attempts") for row in raw_packets
+        ),
+        "vk_pre_llm_semantic_terminal_total": sum(
+            int(_truth(row, "pre_llm_semantic_terminal")) for row in raw_packets
+        ),
+        "vk_post_llm_deterministic_veto_total": sum(
+            int(classify_carrier(row) in {"N", "O"}) for row in raw_packets
+        ),
+        "vk_ingestion_balance_violation_total": sum(
+            int(_truth(row, "balance_violation")) for row in raw_packets
+        ),
+        "smart_update_resolution_total": dict(sorted(smart_outcomes.items())),
+    }
     return {
         "schema": REPORT_SCHEMA,
         "unit": "carrier_revision",
@@ -267,6 +326,7 @@ def build_census(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "inventory_hash": stable_hash(inventory),
         "inventory": inventory,
         "extrapolation": {"vk_misses_sample_multiplier": None, "permitted": False},
+        "metrics": metrics,
     }
 
 
@@ -361,9 +421,13 @@ def _raw_packet_rows(
     if not identity.issubset(columns) or not time_col:
         features["vk_source_packet"] = {"available": False, "rows": 0}
     else:
+        time_expr = (
+            f'CASE WHEN typeof("{time_col}") IN (\'integer\',\'real\') '
+            f'THEN datetime("{time_col}",\'unixepoch\') ELSE datetime("{time_col}") END'
+        )
         selected = con.execute(
-            f'SELECT * FROM vk_source_packet WHERE datetime("{time_col}")>=datetime(?) '
-            f'AND datetime("{time_col}")<datetime(?) ORDER BY id,source_revision_hash',
+            f'SELECT * FROM vk_source_packet WHERE {time_expr}>=datetime(?) '
+            f'AND {time_expr}<datetime(?) ORDER BY id,source_revision_hash',
             (utc(since), utc(until)),
         ).fetchall()
         attempts_by_packet: dict[Any, list[Mapping[str, Any]]] = defaultdict(list)
@@ -378,13 +442,19 @@ def _raw_packet_rows(
                 data.get("owner_id") or data.get("group_id") or data.get("source_url") or "unknown"
             )
             native_id = data.get("native_post_id") or data.get("post_id") or data["id"]
+            raw_packet_available = any(
+                str(data.get(name) or "").strip() not in {"", "[]", "{}"}
+                for name in ("raw_text", "raw_payload_json", "attachment_metadata_json")
+            )
             evidence: dict[str, Any] = {
                 "source_type": data.get("source_type") or "vk",
                 "carrier_id": f"{source_identity}:{native_id}",
                 "source_revision_hash": data.get("source_revision_hash") or data.get("payload_hash"),
-                "raw_payload_available": bool(str(data.get("raw_text") or "").strip()),
+                "raw_payload_available": raw_packet_available,
                 "observed_at": data.get(time_col),
-                "payload_unavailable": not bool(str(data.get("raw_text") or "").strip()),
+                "payload_unavailable": not raw_packet_available,
+                "durable_source_packet": True,
+                "evidence_complete": None,
             }
             for name in ("discovery_hints_json", "evidence_manifest_json", "parse_result_json"):
                 evidence.update(_json_mapping(data.get(name)))
@@ -392,7 +462,9 @@ def _raw_packet_rows(
             explicit = normalize_class(reason)
             if explicit:
                 evidence["loss_class"] = explicit
-            outcome = str(data.get("carrier_outcome") or "").strip()
+            outcome = str(
+                data.get("terminal_carrier_outcome") or data.get("carrier_outcome") or ""
+            ).strip()
             if outcome:
                 evidence["terminal_outcomes"] = [outcome]
             if outcome.upper() == "CONFIRMED_NO_EVENT":
@@ -423,9 +495,92 @@ def _raw_packet_rows(
             for attempt in attempts_by_packet.get(data["id"], []):
                 for name in ("evidence_json", "evidence_manifest_json", "result_json", "parse_result_json"):
                     evidence.update(_json_mapping(attempt.get(name)))
-                terminal = attempt.get("carrier_outcome") or attempt.get("terminal_outcome")
+                evidence["llm_started"] = bool(evidence.get("llm_started")) or bool(
+                    attempt.get("llm_started")
+                )
+                evidence["llm_completed"] = bool(evidence.get("llm_completed")) or bool(
+                    attempt.get("llm_completed")
+                )
+                evidence["structured_response_valid"] = bool(
+                    evidence.get("structured_response_valid")
+                ) or bool(attempt.get("structured_response_valid"))
+                evidence["extracted_event_occurrences"] = max(
+                    _int(evidence, "extracted_event_occurrences"),
+                    _int(attempt, "event_child_count"),
+                )
+                evidence["lifecycle_actions"] = max(
+                    _int(evidence, "lifecycle_actions"),
+                    _int(attempt, "lifecycle_action_count"),
+                )
+                evidence["llm_parse_attempts"] = _int(
+                    evidence, "llm_parse_attempts"
+                ) + int(bool(attempt.get("llm_started")))
+                evidence["verification_attempts"] = _int(
+                    evidence, "verification_attempts"
+                ) + int(bool(attempt.get("verification_triggered")))
+                for field in (
+                    "input_tokens", "output_tokens", "thought_tokens", "reserved_tokens"
+                ):
+                    evidence[field] = _int(evidence, field) + _int(attempt, field)
+                evidence["actual_tokens"] = _int(evidence, "actual_tokens") + sum(
+                    _int(attempt, field)
+                    for field in ("input_tokens", "output_tokens", "thought_tokens")
+                )
+                typed_error = str(attempt.get("typed_error_reason") or "").upper()
+                terminal_upper = str(
+                    attempt.get("terminal_carrier_outcome") or ""
+                ).upper()
+                if typed_error or terminal_upper == "RETRY_SCHEDULED":
+                    evidence["retry_attempts"] = _int(evidence, "retry_attempts") + 1
+                if any(
+                    marker in typed_error
+                    for marker in ("RATE_LIMIT", "RPD", "RPM", "TPM", "QUOTA")
+                ):
+                    evidence["rate_limit_attempts"] = _int(
+                        evidence, "rate_limit_attempts"
+                    ) + 1
+                if "PROVIDER" in typed_error or "SCHEMA" in typed_error or "RATE_LIMIT" in typed_error:
+                    evidence["llm_provider_failure"] = True
+                if "TRUNCAT" in typed_error:
+                    evidence["llm_output_truncated"] = True
+                if "OCR" in typed_error or "ATTACHMENT" in typed_error:
+                    evidence["ocr_failure"] = True
+                if "EVIDENCE" in typed_error:
+                    evidence["evidence_omitted"] = True
+                if "IDENTITY" in typed_error or "SMART_UPDATE" in typed_error:
+                    evidence["smart_update_identity_loss"] = True
+                terminal = (
+                    attempt.get("terminal_carrier_outcome")
+                    or attempt.get("carrier_outcome")
+                    or attempt.get("terminal_outcome")
+                )
                 if terminal:
                     evidence.setdefault("terminal_outcomes", []).append(str(terminal))
+                child_outcomes = attempt.get("smart_update_child_outcomes_json")
+                try:
+                    parsed_outcomes = (
+                        json.loads(child_outcomes)
+                        if isinstance(child_outcomes, str)
+                        else child_outcomes
+                    )
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    parsed_outcomes = []
+                if isinstance(parsed_outcomes, list):
+                    counts = evidence.setdefault("smart_update_outcomes", {})
+                    for child_outcome in parsed_outcomes:
+                        name = str(child_outcome or "UNKNOWN").upper()
+                        counts[name] = int(counts.get(name, 0)) + 1
+                    if terminal and _int(attempt, "event_child_count") != len(parsed_outcomes):
+                        evidence["balance_violation"] = True
+            terminal_set = {
+                str(value).upper() for value in (evidence.get("terminal_outcomes") or ())
+            }
+            semantic_terminals = {
+                "CONFIRMED_NO_EVENT", "CONFIRMED_PRODUCT_EXCLUSION"
+            }
+            evidence["pre_llm_semantic_terminal"] = bool(
+                terminal_set & semantic_terminals and not evidence.get("llm_started")
+            )
             parse_result = _json_mapping(data.get("parse_result_json"))
             children = parse_result.get("event_children") or parse_result.get("events")
             actions = parse_result.get("lifecycle_actions")
@@ -651,6 +806,65 @@ def run(
             supabase_count += len(loaded)
         features["supabase_offline_evidence"] = {"available": bool(supabase_evidence_paths), "rows": supabase_count, "network_used": False}
         report = build_census(rows)
+        packet_columns = _table_columns(con, "vk_source_packet")
+        backlog_count = 0
+        oldest_due_seconds: int | None = None
+        if {"status", "next_attempt_at"}.issubset(packet_columns):
+            due_statuses = ("pending", "retry_scheduled", "processing")
+            placeholders = ",".join("?" for _ in due_statuses)
+            backlog_count = int(
+                con.execute(
+                    f"SELECT COUNT(*) FROM vk_source_packet WHERE status IN ({placeholders})",
+                    due_statuses,
+                ).fetchone()[0]
+                or 0
+            )
+            oldest = con.execute(
+                f"SELECT MIN(next_attempt_at) FROM vk_source_packet "
+                f"WHERE status IN ({placeholders}) AND next_attempt_at IS NOT NULL",
+                due_statuses,
+            ).fetchone()[0]
+            if oldest:
+                seconds = con.execute(
+                    "SELECT MAX(0,CAST((julianday('now')-julianday(?))*86400 AS INTEGER))",
+                    (oldest,),
+                ).fetchone()[0]
+                oldest_due_seconds = int(seconds or 0)
+        report["metrics"].update(
+            vk_ingestion_backlog_count=backlog_count,
+            vk_ingestion_oldest_due_seconds=oldest_due_seconds,
+        )
+        raw_packet_total = int(report["metrics"]["vk_source_packets_total"] or 0)
+        raw_llm_carriers = int(report["metrics"]["vk_llm_carriers_total"] or 0)
+        no_event_incomplete = sum(
+            1
+            for row in _merge_evidence(rows)
+            if _truth(row, "confirmed_no_event")
+            and not (
+                _truth(row, "llm_completed")
+                and _truth(row, "structured_response_valid")
+                and _truth(row, "evidence_complete", "full_evidence")
+            )
+        )
+        report["metrics"]["vk_llm_coverage_ratio"] = (
+            raw_llm_carriers / raw_packet_total if raw_packet_total else None
+        )
+        report["metrics"]["vk_no_event_incomplete_evidence_total"] = no_event_incomplete
+        report["alerts"] = {
+            "llm_coverage_below_100_percent": bool(
+                raw_packet_total and raw_llm_carriers < raw_packet_total
+            ),
+            "pre_llm_semantic_terminal": bool(
+                report["metrics"]["vk_pre_llm_semantic_terminal_total"]
+            ),
+            "no_event_with_incomplete_evidence": bool(no_event_incomplete),
+            "post_llm_deterministic_veto": bool(
+                report["metrics"]["vk_post_llm_deterministic_veto_total"]
+            ),
+            "balance_violation": bool(
+                report["metrics"]["vk_ingestion_balance_violation_total"]
+            ),
+        }
         report.update(
             mode="read-only", since=utc(since_dt), until_exclusive=utc(until_dt),
             quick_check=quick, before_db_hash=before, after_db_hash=hashlib.sha256(path.read_bytes()).hexdigest(),

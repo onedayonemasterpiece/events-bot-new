@@ -21,11 +21,18 @@ import tempfile
 from typing import Any
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+
 REPORT_SCHEMA = "kenigevents.smart_update_migration_rehearsal.v1"
 
 
 class RehearsalError(RuntimeError):
-    pass
+    def __init__(self, reason: str, *, details: Mapping[str, Any] | None = None) -> None:
+        super().__init__(reason)
+        self.details = dict(details or {})
 
 
 def _hash(path: Path) -> str | None:
@@ -168,6 +175,40 @@ def _conflicts(con: sqlite3.Connection, schema: Mapping[str, Sequence[str]]) -> 
     return result
 
 
+def _foreign_key_violations(con: sqlite3.Connection) -> set[tuple[str, int, str, int]]:
+    return {
+        (str(row[0]), int(row[1]), str(row[2]), int(row[3]))
+        for row in con.execute("PRAGMA foreign_key_check").fetchall()
+    }
+
+
+def _foreign_key_repair_plan(
+    violations: set[tuple[str, int, str, int]],
+) -> dict[str, Any]:
+    by_relation: dict[tuple[str, str, int], int] = {}
+    for table, _rowid, parent, fkid in violations:
+        key = (table, parent, fkid)
+        by_relation[key] = by_relation.get(key, 0) + 1
+    normalized = sorted(violations)
+    return {
+        "required": bool(normalized),
+        "execution": "not_executed;production_writes_forbidden",
+        "strategy": (
+            "after a fresh backup, delete only child rowids still returned by "
+            "PRAGMA foreign_key_check, verify each parent absence in the same "
+            "transaction, rerun quick_check/foreign_key_check, and retain a "
+            "rowid+relation hash receipt"
+        ),
+        "violation_set_sha256": hashlib.sha256(
+            json.dumps(normalized, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+        "by_relation": [
+            {"table": key[0], "parent": key[1], "fkid": key[2], "count": count}
+            for key, count in sorted(by_relation.items())
+        ],
+    }
+
+
 def _rollback_compatibility_rehearsal(
     clone: Path, original_schema: Mapping[str, Sequence[str]]
 ) -> dict[str, Any]:
@@ -218,6 +259,7 @@ def run(
         try:
             original_quick = _quick_check(staging_con)
             original_schema, original_counts = _inventory(staging_con)
+            original_fk_violations = _foreign_key_violations(staging_con)
             query_only_rejected = _query_only_rejection(staging_con)
         finally:
             staging_con.close()
@@ -242,6 +284,7 @@ def run(
         migrated_schema, migrated_counts = _inventory(clone_con)
         index_constraints = _index_constraint_inventory(clone_con)
         conflicts = _conflicts(clone_con, migrated_schema)
+        migrated_fk_violations = _foreign_key_violations(clone_con)
     finally:
         clone_con.close()
     count_changes = {
@@ -256,9 +299,29 @@ def run(
         for table, columns in original_schema.items()
         if set(columns) - set(migrated_schema.get(table, ()))
     }
-    nonzero_conflicts = {name: value for name, value in conflicts.items() if value}
+    invariant_conflicts = {
+        name: value
+        for name, value in conflicts.items()
+        if name != "foreign_key_violations" and value
+    }
+    new_fk_violations = migrated_fk_violations - original_fk_violations
+    nonzero_conflicts = {
+        **invariant_conflicts,
+        **({"new_foreign_key_violations": len(new_fk_violations)} if new_fk_violations else {}),
+    }
     if disallowed_changes or removed_tables or removed_columns or nonzero_conflicts:
-        raise RehearsalError("migration_conflict_requires_repair_plan")
+        raise RehearsalError(
+            "migration_conflict_requires_repair_plan",
+            details={
+                "disallowed_count_changes": {
+                    table: count_changes[table] for table in disallowed_changes
+                },
+                "removed_tables": removed_tables,
+                "removed_columns": removed_columns,
+                "nonzero_conflicts": nonzero_conflicts,
+                "count_allowlist": sorted(count_allowlist),
+            },
+        )
 
     census = _load_sibling("smart_update_loss_census").run(
         clone, since=since, until=until
@@ -297,7 +360,14 @@ def run(
             "removed_tables": removed_tables, "removed_columns": removed_columns,
             "count_changes": count_changes, "count_allowlist": sorted(count_allowlist),
             "indexes_and_constraints": index_constraints,
-            "conflicts": conflicts,
+            "conflicts": {
+                **conflicts,
+                "preexisting_foreign_key_violations": len(original_fk_violations),
+                "new_foreign_key_violations": len(new_fk_violations),
+            },
+            "preexisting_foreign_key_repair_plan": _foreign_key_repair_plan(
+                original_fk_violations
+            ),
         },
         "census": {
             "inventory_hash": census["inventory_hash"], "carrier_count": census["totals"]["carrier_count"],
@@ -328,7 +398,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             count_allowlist=args.allow_count_change,
         )
     except (RehearsalError, sqlite3.DatabaseError, OSError) as exc:
-        sys.stderr.write(json.dumps({"schema": REPORT_SCHEMA, "status": "blocked", "reason": str(exc)}, sort_keys=True) + "\n")
+        error = {"schema": REPORT_SCHEMA, "status": "blocked", "reason": str(exc)}
+        if isinstance(exc, RehearsalError) and exc.details:
+            error["details"] = exc.details
+        sys.stderr.write(json.dumps(error, sort_keys=True) + "\n")
         return 2
     rendered = json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
     if args.output == "-":

@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from source_parse_contract import (
@@ -47,6 +49,29 @@ def test_t22_empty_provider_body_is_retry_not_no_event_contract():
     )
     assert result.disposition is SourceDisposition.RETRY_REQUIRED
     assert result.retry_reason is SourceParseRetryReason.EMPTY_PROVIDER_RESPONSE
+
+
+def test_provider_attempt_receipts_are_secret_free_and_round_trip():
+    result = SourceParseDecision.retry(
+        SourceParseRetryReason.TECHNICAL_ERROR,
+        evidence_manifest=_manifest(),
+        provider_attempts=[
+            {
+                "attempt_kind": "primary",
+                "model": "gemma-4-31b-it",
+                "quota_scope": "google:project-a",
+                "request_id": "request-1",
+                "input_tokens": 600,
+                "output_tokens": 20,
+                "thought_tokens": 10,
+                "reserved_tokens": 900,
+                "provider_retry_after_ms": 3000,
+            }
+        ],
+    )
+    payload = result.to_payload()
+    assert payload["provider_attempts"] == list(result.provider_attempts)
+    assert "api_key" not in json.dumps(payload)
 
 
 def test_t22_legacy_empty_array_cannot_claim_confirmed_no_event():

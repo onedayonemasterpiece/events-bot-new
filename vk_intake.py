@@ -1412,6 +1412,7 @@ class DraftParseResult(list[EventDraft]):
             retry_reason=decision_payload.get("retry_reason"),
             festival=decision_payload.get("festival"),
             enrichment_required=bool(decision_payload.get("enrichment_required", False)),
+            provider_attempts=decision_payload.get("provider_attempts") or (),
         )
         drafts: list[EventDraft] = []
         allowed = set(EventDraft.__dataclass_fields__)

@@ -21,6 +21,17 @@ import vk_intake
 import vk_review
 
 
+class _Bot:
+    async def send_message(self, *_args, **_kwargs):
+        return None
+
+    async def get_me(self):
+        class _Me:
+            username = "eventsbotTestBot"
+
+        return _Me()
+
+
 async def _db(tmp_path: Path) -> Database:
     db = Database(str(tmp_path / "vk.sqlite"))
     await db.init()
@@ -259,6 +270,107 @@ async def test_rate_limit_and_restart_never_terminal(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_typed_provider_receipt_releases_lease_and_persists_quota_metadata(
+    tmp_path, monkeypatch
+):
+    db = await _db(tmp_path)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','source')"
+        )
+        await conn.commit()
+    now = int(time.time())
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post={"date": now, "post_id": 9, "text": "source", "photos": []},
+        source_url="https://vk.com/wall-1_9",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    post = await vk_review.pick_next(db, 7, "batch", resume_locked=False)
+    assert post is not None and post.source_packet_id == packet_id
+
+    async def fake_fetch(*_args, **_kwargs):
+        return (
+            "source",
+            [],
+            datetime.fromtimestamp(now, timezone.utc),
+            {},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    decision = SourceParseDecision.retry(
+        SourceParseRetryReason.TECHNICAL_ERROR,
+        evidence_manifest=EvidenceManifest.complete_source("source"),
+        provider_attempts=[
+            {
+                "attempt_kind": "primary",
+                "model": "gemma-4-31b-it",
+                "quota_scope": "google:shared-project",
+                "quota_reason": "RPD_EXHAUSTED",
+                "request_id": "request-1",
+                "finish_reason": "RATE_LIMITED",
+                "input_tokens": 700,
+                "reserved_tokens": 1400,
+                "provider_retry_after_ms": 3_600_000,
+                "error_type": "rate_limit",
+            }
+        ],
+    )
+
+    async def fake_build(*_args, **_kwargs):
+        return vk_intake.DraftParseResult([], decision=decision), None
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_auto_queue.vk_intake, "build_event_drafts", fake_build)
+    report = vk_auto_queue.VkAutoImportReport(batch_id="batch")
+    await vk_auto_queue._process_vk_inbox_row(
+        db,
+        _Bot(),
+        chat_id=1,
+        operator_id=7,
+        batch_id="batch",
+        post=post,
+        source_url="https://vk.com/wall-1_9",
+        report=report,
+        festival_names=None,
+        festival_alias_pairs=None,
+        progress_message_id=None,
+        progress_current_no=1,
+        progress_total_txt="1",
+    )
+
+    async with db.raw_conn() as conn:
+        inbox = await (await conn.execute(
+            "SELECT status,quota_scope,provider_retry_after,last_typed_reason "
+            "FROM vk_inbox WHERE source_packet_id=?",
+            (packet_id,),
+        )).fetchone()
+        attempt = await (await conn.execute(
+            "SELECT attempt_kind,llm_started,llm_completed,structured_response_valid,"
+            "quota_scope,request_id,finish_reason,input_tokens,reserved_tokens,"
+            "provider_retry_after,typed_error_reason "
+            "FROM vk_source_packet_attempt WHERE source_packet_id=?",
+            (packet_id,),
+        )).fetchone()
+    assert report.inbox_deferred == 1
+    assert inbox == (
+        "deferred",
+        "google:shared-project",
+        3600,
+        SourceParseRetryReason.TECHNICAL_ERROR.value,
+    )
+    assert attempt == (
+        "primary", 1, 0, 0, "google:shared-project", "request-1",
+        "RATE_LIMITED", 700, 1400, 3600,
+        SourceParseRetryReason.TECHNICAL_ERROR.value,
+    )
+
+
+@pytest.mark.asyncio
 async def test_unknown_and_bad_hints_are_due_with_age_fairness(tmp_path):
     db = await _db(tmp_path)
     async with db.raw_conn() as conn:
@@ -278,6 +390,77 @@ async def test_unknown_and_bad_hints_are_due_with_age_fairness(tmp_path):
         picked.append(post.post_id)
         await vk_review.mark_rejected(db, post.id)
     assert picked == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_recorded_1_5x_p99_burst_is_lossless_and_backlog_drains(tmp_path):
+    """T48/T51: audited p99 is six event-parse requests/minute; replay nine."""
+
+    db = await _db(tmp_path)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','source')"
+        )
+        await conn.commit()
+    now = int(time.time())
+    for post_id in range(1, 10):
+        await vk_intake._persist_vk_source_packet(
+            db,
+            group_id=1,
+            owner_type="group",
+            post={
+                "date": now + post_id,
+                "post_id": post_id,
+                "text": f"carrier {post_id}",
+                "photos": [],
+            },
+            source_url=f"https://vk.com/wall-1_{post_id}",
+            keyword_hints=[],
+            date_hints=[],
+            event_ts_hint=None,
+        )
+
+    # Recorded quota-exhaustion response: every lease is released into durable
+    # retry; no attempt ceiling can terminalize one member of the burst.
+    for _ in range(9):
+        post = await vk_review.pick_next(db, 1, "limited", resume_locked=False)
+        assert post is not None
+        state, _ = await vk_review.mark_rate_limited(
+            db, post.id, batch_id="limited", retry_after_sec=1, max_attempts=3
+        )
+        assert state == "deferred"
+    async with db.raw_conn() as conn:
+        assert (await (await conn.execute(
+            "SELECT COUNT(*) FROM vk_inbox WHERE status='deferred'"
+        )).fetchone())[0] == 9
+        await conn.execute(
+            "UPDATE vk_inbox SET next_attempt_at=datetime('now','-1 second')"
+        )
+        await conn.execute(
+            "UPDATE vk_source_packet SET next_attempt_at=datetime('now','-1 second')"
+        )
+        await conn.commit()
+    assert await vk_review.release_due_deferred(db) == 9
+
+    # Quota recovers: the same durable carriers are selected and resolved;
+    # backlog monotonically drains to zero without re-fetch identity loss.
+    remaining = []
+    for _ in range(9):
+        post = await vk_review.pick_next(db, 1, "recovered", resume_locked=False)
+        assert post is not None
+        await vk_review.mark_carrier_outcome(
+            db, inbox_id=post.id, outcome="EVENTS_RESOLVED"
+        )
+        async with db.raw_conn() as conn:
+            remaining.append((await (await conn.execute(
+                "SELECT COUNT(*) FROM vk_inbox WHERE status='pending'"
+            )).fetchone())[0])
+    assert remaining == sorted(remaining, reverse=True)
+    async with db.raw_conn() as conn:
+        statuses = await (await conn.execute(
+            "SELECT status,COUNT(*) FROM vk_source_packet GROUP BY status"
+        )).fetchall()
+    assert statuses == [("imported", 9)]
 
 
 def test_static_vk_ingestion_bans_semantic_shortcuts():

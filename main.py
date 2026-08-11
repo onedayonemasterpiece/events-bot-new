@@ -178,6 +178,7 @@ from source_parse_contract import (
     build_verification_request,
     conditionally_verify_source_decision,
     decision_from_provider_payload,
+    provider_attempt_metadata,
     provider_response_is_truncated,
 )
 from telegram_business import (
@@ -9993,6 +9994,10 @@ def _event_parse_normalize_parsed_events(
         evidence_manifest=evidence_manifest,
         provider_metadata=provider_metadata,
     )
+    if provider_metadata is not None:
+        decision.with_provider_attempts(
+            [provider_attempt_metadata(provider_metadata, attempt_kind="primary")]
+        )
     for obj in decision:
         if isinstance(obj, dict):
             _normalise_event_location_from_reference(obj)
@@ -10170,11 +10175,15 @@ async def _parse_event_via_gemma(
     max_tokens = max(400, min(max_tokens, 8000))
 
     evidence_manifest = _event_parse_evidence_manifest(text, poster_texts, extra)
+    initial_attempt_kind = "verification" if isinstance(verification_request, Mapping) else "primary"
     raw, usage = await _generate_once(
         full_prompt,
         label="parse",
         max_tokens=max_tokens,
     )
+    provider_attempts = [
+        provider_attempt_metadata(usage, attempt_kind=initial_attempt_kind)
+    ]
     try:
         await log_token_usage(
             BOT_CODE,
@@ -10207,11 +10216,13 @@ async def _parse_event_via_gemma(
         return SourceParseDecision.retry(
             SourceParseRetryReason.OUTPUT_TRUNCATED,
             evidence_manifest=evidence_manifest.with_provider_truncation(),
+            provider_attempts=provider_attempts,
         )
     if not str(raw or "").strip():
         return SourceParseDecision.retry(
             SourceParseRetryReason.EMPTY_PROVIDER_RESPONSE,
             evidence_manifest=evidence_manifest,
+            provider_attempts=provider_attempts,
         )
     data = _event_parse_extract_json(raw or "")
     if data is None:
@@ -10232,10 +10243,16 @@ async def _parse_event_via_gemma(
             label="repair",
             max_tokens=max_tokens,
         )
+        provider_attempts.append(
+            provider_attempt_metadata(
+                usage2, attempt_kind=f"{initial_attempt_kind}_repair"
+            )
+        )
         if provider_response_is_truncated(usage2):
             return SourceParseDecision.retry(
                 SourceParseRetryReason.OUTPUT_TRUNCATED,
                 evidence_manifest=evidence_manifest.with_provider_truncation(),
+                provider_attempts=provider_attempts,
             )
         data = _event_parse_extract_json(raw2 or "")
     if data is None:
@@ -10280,12 +10297,14 @@ async def _parse_event_via_gemma(
         return SourceParseDecision.retry(
             SourceParseRetryReason.MALFORMED_JSON,
             evidence_manifest=evidence_manifest,
+            provider_attempts=provider_attempts,
         )
-    return _event_parse_normalize_parsed_events(
+    decision = _event_parse_normalize_parsed_events(
         data,
         evidence_manifest=evidence_manifest,
-        provider_metadata=usage,
+        provider_metadata=(usage2 if len(provider_attempts) > 1 else usage),
     )
+    return decision.with_provider_attempts(provider_attempts)
 
 
 async def _parse_event_via_4o(
@@ -10555,8 +10574,13 @@ async def parse_event_via_llm(
         return SourceParseDecision.retry(
             SourceParseRetryReason.TECHNICAL_ERROR,
             evidence_manifest=_event_parse_evidence_manifest(text, poster_texts, extra),
+            provider_attempts=[
+                provider_attempt_metadata(
+                    {"error_type": "wall_clock_timeout"}, attempt_kind="primary"
+                )
+            ],
         )
-    except Exception:
+    except Exception as exc:
         logging.exception(
             "event_parse: primary provider/schema technical failure source_channel=%s; retry required",
             source_channel,
@@ -10564,6 +10588,7 @@ async def parse_event_via_llm(
         return SourceParseDecision.retry(
             SourceParseRetryReason.TECHNICAL_ERROR,
             evidence_manifest=_event_parse_evidence_manifest(text, poster_texts, extra),
+            provider_attempts=[provider_attempt_metadata(exc, attempt_kind="primary")],
         )
 
     # The verifier is not an always-on stage.  Deterministic checks can only
@@ -10627,13 +10652,25 @@ async def parse_event_via_llm(
             [fact.reason.value for fact in facts],
             "configured-4o" if use_4o else verify_extra.get("gemma_model"),
         )
-        return await _invoke_primary(verify_extra)
+        try:
+            return await _invoke_primary(verify_extra)
+        except Exception as exc:
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR,
+                evidence_manifest=evidence_manifest,
+                events=list(result),
+                lifecycle_actions=result.lifecycle_actions,
+                provider_attempts=[
+                    provider_attempt_metadata(exc, attempt_kind="verification")
+                ],
+            )
 
-    return await conditionally_verify_source_decision(
+    resolved = await conditionally_verify_source_decision(
         result,
         contradiction_facts=supplied_facts,
         invoke=_invoke_verifier,
     )
+    return resolved
 
 
 async def parse_event_via_4o(

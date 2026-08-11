@@ -613,6 +613,13 @@ async def record_source_parse_attempt(
     thought_tokens: int | None = None,
     reserved_tokens: int | None = None,
     provider_retry_after: int | None = None,
+    attempt_kind: str = "primary",
+    llm_started: bool = True,
+    llm_completed: bool | None = None,
+    structured_response_valid: bool | None = None,
+    verification_triggered: bool = False,
+    verification_reason: str | None = None,
+    verification_disposition: str | None = None,
 ) -> str | None:
     """Append a funnel attempt and store a replayable successful receipt."""
 
@@ -649,8 +656,12 @@ async def record_source_parse_attempt(
         )
         attempt_row = await cur.fetchone()
         attempt_no = int((attempt_row[0] if attempt_row else 1) or 1)
-        valid = parse_result is not None and not retry_reason
-        completed = parse_result is not None
+        completed = bool(parse_result is not None) if llm_completed is None else bool(llm_completed)
+        valid = (
+            bool(parse_result is not None and not retry_reason)
+            if structured_response_valid is None
+            else bool(structured_response_valid)
+        )
         hints_json = json.dumps(
             {"keywords": json.loads(keyword_json or "[]"), "dates": json.loads(date_json or "[]")},
             ensure_ascii=False,
@@ -664,19 +675,52 @@ async def record_source_parse_attempt(
                 evidence_manifest_json,llm_started,llm_completed,
                 structured_response_valid,model,quota_scope,request_id,response_id,
                 finish_reason,provider_retry_after,input_tokens,output_tokens,
-                thought_tokens,reserved_tokens,primary_disposition,event_child_count,
-                lifecycle_action_count,typed_error_reason,completed_at
-            ) VALUES(?,?,'primary',?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,CURRENT_TIMESTAMP)
+                thought_tokens,reserved_tokens,primary_disposition,
+                verification_triggered,verification_reason,verification_disposition,
+                event_child_count,lifecycle_action_count,typed_error_reason,completed_at
+            ) VALUES(
+                :source_packet_id,:attempt_no,:attempt_kind,:parse_key,:payload_hash,
+                'vk',:source_url,:source_revision_hash,:discovery_hints_json,
+                :evidence_manifest_json,:llm_started,:llm_completed,
+                :structured_response_valid,:model,:quota_scope,:request_id,:response_id,
+                :finish_reason,:provider_retry_after,:input_tokens,:output_tokens,
+                :thought_tokens,:reserved_tokens,:primary_disposition,
+                :verification_triggered,:verification_reason,:verification_disposition,
+                :event_child_count,:lifecycle_action_count,:typed_error_reason,
+                CURRENT_TIMESTAMP
+            )
             """,
-            (
-                int(source_packet_id), attempt_no, parse_key, str(payload_hash), "vk",
-                str(source_url), str(revision_hash), hints_json, manifest_json,
-                1 if completed else 0, 1 if valid else 0, str(model), quota_scope,
-                request_id, response_id, finish_reason, provider_retry_after,
-                input_tokens, output_tokens, thought_tokens, reserved_tokens,
-                str(disposition), int(event_child_count), int(lifecycle_action_count),
-                retry_reason,
-            ),
+            {
+                "source_packet_id": int(source_packet_id),
+                "attempt_no": attempt_no,
+                "attempt_kind": str(attempt_kind or "primary"),
+                "parse_key": parse_key,
+                "payload_hash": str(payload_hash),
+                "source_url": str(source_url),
+                "source_revision_hash": str(revision_hash),
+                "discovery_hints_json": hints_json,
+                "evidence_manifest_json": manifest_json,
+                "llm_started": 1 if llm_started else 0,
+                "llm_completed": 1 if completed else 0,
+                "structured_response_valid": 1 if valid else 0,
+                "model": str(model),
+                "quota_scope": quota_scope,
+                "request_id": request_id,
+                "response_id": response_id,
+                "finish_reason": finish_reason,
+                "provider_retry_after": provider_retry_after,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "thought_tokens": thought_tokens,
+                "reserved_tokens": reserved_tokens,
+                "primary_disposition": str(disposition),
+                "verification_triggered": 1 if verification_triggered else 0,
+                "verification_reason": verification_reason,
+                "verification_disposition": verification_disposition,
+                "event_child_count": int(event_child_count),
+                "lifecycle_action_count": int(lifecycle_action_count),
+                "typed_error_reason": retry_reason,
+            },
         )
         if valid:
             await conn.execute(

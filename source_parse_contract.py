@@ -207,6 +207,7 @@ class SourceParseDecision(list[dict[str, Any]]):
         verification_reasons: Sequence[VerificationReason] | None = None,
         verification: Mapping[str, Any] | None = None,
         enrichment_required: bool | None = None,
+        provider_attempts: Sequence[Mapping[str, Any]] | None = None,
     ) -> None:
         event_items = list(events or ())
         super().__init__(event_items)
@@ -229,6 +230,13 @@ class SourceParseDecision(list[dict[str, Any]]):
             bool(enrichment_required)
             if enrichment_required is not None
             else bool(event_items and not self.evidence_complete)
+        )
+        # Sanitized transport/accounting metadata only.  It intentionally
+        # excludes API-key identifiers and request payloads, but survives the
+        # typed adapter so the owning durable queue can append one ledger row
+        # per physical provider attempt.
+        self.provider_attempts = tuple(
+            dict(item) for item in (provider_attempts or ()) if isinstance(item, Mapping)
         )
 
     @property
@@ -255,6 +263,8 @@ class SourceParseDecision(list[dict[str, Any]]):
             payload["evidence_manifest"] = self.evidence_manifest.to_payload()
         if self.verification is not None:
             payload["verification"] = dict(self.verification)
+        if self.provider_attempts:
+            payload["provider_attempts"] = [dict(item) for item in self.provider_attempts]
         return payload
 
     @classmethod
@@ -267,6 +277,7 @@ class SourceParseDecision(list[dict[str, Any]]):
         lifecycle_actions: Sequence[LifecycleAction] | None = None,
         verification_reasons: Sequence[VerificationReason] | None = None,
         festival: dict[str, Any] | None = None,
+        provider_attempts: Sequence[Mapping[str, Any]] | None = None,
     ) -> "SourceParseDecision":
         return cls(
             events,
@@ -278,7 +289,18 @@ class SourceParseDecision(list[dict[str, Any]]):
             retry_reason=reason,
             verification_reasons=verification_reasons,
             enrichment_required=bool(events),
+            provider_attempts=provider_attempts,
         )
+
+    def with_provider_attempts(
+        self, attempts: Sequence[Mapping[str, Any]] | None
+    ) -> "SourceParseDecision":
+        """Attach redacted provider receipts while preserving list compatibility."""
+
+        self.provider_attempts = tuple(
+            dict(item) for item in (attempts or ()) if isinstance(item, Mapping)
+        )
+        return self
 
 
 # Backward-compatible public spelling used throughout the application.
@@ -316,6 +338,71 @@ def provider_response_is_truncated(metadata: Any) -> bool:
         )
     truncated = {"length", "max_tokens", "max_output_tokens", "token_limit", "truncated"}
     return any(str(value or "").strip().casefold() in truncated for value in values)
+
+
+def provider_attempt_metadata(metadata: Any, *, attempt_kind: str) -> dict[str, Any]:
+    """Return a secret-free durable receipt for one physical provider call."""
+
+    def read(*names: str) -> Any:
+        if isinstance(metadata, Mapping):
+            for name in names:
+                if metadata.get(name) is not None:
+                    return metadata.get(name)
+            return None
+        for name in names:
+            value = getattr(metadata, name, None)
+            if value is not None:
+                return value
+        return None
+
+    usage = read("usage")
+    usage_source = usage if usage is not None else metadata
+
+    def usage_read(*names: str) -> Any:
+        if isinstance(usage_source, Mapping):
+            for name in names:
+                if usage_source.get(name) is not None:
+                    return usage_source.get(name)
+            return None
+        for name in names:
+            value = getattr(usage_source, name, None)
+            if value is not None:
+                return value
+        return None
+
+    payload: dict[str, Any] = {"attempt_kind": str(attempt_kind or "primary")}
+    text_fields = {
+        "model": read("model", "provider_model_version"),
+        "quota_scope": read("quota_scope"),
+        "quota_reason": read("quota_reason", "blocked_reason"),
+        "request_id": read("provider_request_id", "request_id"),
+        "response_id": read("provider_response_id", "response_id"),
+        "finish_reason": read("finish_reason") or usage_read("finish_reason"),
+        "provider_model_version": read("provider_model_version")
+        or usage_read("provider_model_version"),
+        "input_count_source": usage_read("input_count_source"),
+        "error_type": read("error_type"),
+    }
+    for key, value in text_fields.items():
+        if value not in (None, ""):
+            payload[key] = str(value)
+    int_fields = {
+        "input_tokens": usage_read("input_tokens"),
+        "output_tokens": usage_read("output_tokens"),
+        "thought_tokens": usage_read("thought_tokens"),
+        "reserved_tokens": usage_read("reserved_tokens"),
+        "actual_total_tokens": usage_read("actual_total_tokens", "total_tokens"),
+        "provider_retry_after_ms": read("retry_after_ms"),
+        "status_code": read("status_code"),
+    }
+    for key, value in int_fields.items():
+        if value is None:
+            continue
+        try:
+            payload[key] = max(0, int(value))
+        except (TypeError, ValueError):
+            continue
+    return payload
 
 
 def decision_from_provider_payload(
@@ -574,16 +661,35 @@ async def conditionally_verify_source_decision(
             lifecycle_actions=primary_decision.lifecycle_actions,
             verification_reasons=[fact.reason for fact in facts],
             festival=primary_decision.festival,
+            provider_attempts=primary_decision.provider_attempts,
         )
     if not isinstance(corrected, SourceParseDecision) or corrected.is_retry:
+        corrected_attempts = (
+            corrected.provider_attempts
+            if isinstance(corrected, SourceParseDecision)
+            else ()
+        )
+        retry_reason = (
+            SourceParseRetryReason.VERIFICATION_UNCERTAIN
+            if isinstance(corrected, SourceParseDecision)
+            and corrected.retry_reason is SourceParseRetryReason.VERIFICATION_UNCERTAIN
+            else SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR
+        )
         return SourceParseDecision.retry(
-            SourceParseRetryReason.VERIFICATION_UNCERTAIN,
+            retry_reason,
             evidence_manifest=primary_decision.evidence_manifest,
             events=list(primary_decision),
             lifecycle_actions=primary_decision.lifecycle_actions,
             verification_reasons=[fact.reason for fact in facts],
             festival=primary_decision.festival,
+            provider_attempts=[
+                *primary_decision.provider_attempts,
+                *corrected_attempts,
+            ],
         )
+    corrected.with_provider_attempts(
+        [*primary_decision.provider_attempts, *corrected.provider_attempts]
+    )
     corrected.verification_reasons = tuple(fact.reason for fact in facts)
     corrected.verification = {
         "performed": True,

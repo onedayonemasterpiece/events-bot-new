@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import time
 import re
@@ -2198,21 +2199,108 @@ async def _process_vk_inbox_row(
             )
             _tmark("build_drafts_total", time.monotonic() - t0)
             decision = getattr(drafts, "decision", None)
+            if decision is None:
+                # Positive legacy adapters remain temporarily accepted, but a
+                # legacy empty list never acquires no-event authority.
+                from source_parse_contract import EvidenceManifest, SourceParseDecision
+                decision = SourceParseDecision(
+                    list(drafts or ()),
+                    disposition=(
+                        SourceDisposition.EVENTS_FOUND
+                        if drafts
+                        else SourceDisposition.RETRY_REQUIRED
+                    ),
+                    evidence_manifest=EvidenceManifest.complete_source(text or ""),
+                    retry_reason=(
+                        None if drafts else SourceParseRetryReason.SCHEMA_MISMATCH
+                    ),
+                )
             manifest = getattr(decision, "evidence_manifest", None)
-            await vk_review.record_source_parse_attempt(
-                db,
-                source_packet_id=getattr(post, "source_packet_id", None),
-                prompt_version=PARSE_VERSION,
-                model=model_name,
-                evidence_manifest=(manifest.to_payload() if manifest is not None else {}),
-                parse_result=(drafts.to_receipt_payload() if hasattr(drafts, "to_receipt_payload") else None),
-                disposition=str(getattr(getattr(decision, "disposition", None), "value", "RETRY_REQUIRED")),
-                retry_reason=(
-                    str(getattr(getattr(decision, "retry_reason", None), "value", "")) or None
-                ),
-                event_child_count=len(drafts or ()),
-                lifecycle_action_count=len(getattr(decision, "lifecycle_actions", ()) or ()),
+            provider_attempts = list(getattr(decision, "provider_attempts", ()) or ())
+            if not provider_attempts:
+                provider_attempts = [{}]
+            decision_reason = (
+                str(getattr(getattr(decision, "retry_reason", None), "value", ""))
+                or None
             )
+            final_parse_result = (
+                drafts.to_receipt_payload()
+                if hasattr(drafts, "to_receipt_payload") and not decision_reason
+                else None
+            )
+            verification_reasons = [
+                str(getattr(item, "value", item))
+                for item in (getattr(decision, "verification_reasons", ()) or ())
+            ]
+            for attempt_index, provider_attempt in enumerate(provider_attempts):
+                is_final_attempt = attempt_index == len(provider_attempts) - 1
+                retry_after_ms = int(
+                    provider_attempt.get("provider_retry_after_ms", 0) or 0
+                )
+                attempt_error = provider_attempt.get("error_type")
+                finish_reason = provider_attempt.get("finish_reason")
+                provider_completed = bool(
+                    finish_reason
+                    or provider_attempt.get("actual_total_tokens")
+                    or provider_attempt.get("output_tokens")
+                ) and not attempt_error
+                await vk_review.record_source_parse_attempt(
+                    db,
+                    source_packet_id=getattr(post, "source_packet_id", None),
+                    prompt_version=PARSE_VERSION,
+                    model=str(provider_attempt.get("model") or model_name),
+                    evidence_manifest=(
+                        manifest.to_payload() if manifest is not None else {}
+                    ),
+                    parse_result=(final_parse_result if is_final_attempt else None),
+                    disposition=(
+                        str(getattr(decision.disposition, "value", decision.disposition))
+                        if is_final_attempt
+                        else SourceDisposition.RETRY_REQUIRED.value
+                    ),
+                    retry_reason=(
+                        decision_reason
+                        if is_final_attempt
+                        else SourceParseRetryReason.MALFORMED_JSON.value
+                    ),
+                    event_child_count=(len(drafts or ()) if is_final_attempt else 0),
+                    lifecycle_action_count=(
+                        len(getattr(decision, "lifecycle_actions", ()) or ())
+                        if is_final_attempt
+                        else 0
+                    ),
+                    quota_scope=provider_attempt.get("quota_scope"),
+                    request_id=provider_attempt.get("request_id"),
+                    response_id=provider_attempt.get("response_id"),
+                    finish_reason=finish_reason,
+                    input_tokens=provider_attempt.get("input_tokens"),
+                    output_tokens=provider_attempt.get("output_tokens"),
+                    thought_tokens=provider_attempt.get("thought_tokens"),
+                    reserved_tokens=provider_attempt.get("reserved_tokens"),
+                    provider_retry_after=(
+                        int(math.ceil(retry_after_ms / 1000))
+                        if retry_after_ms
+                        else None
+                    ),
+                    attempt_kind=str(provider_attempt.get("attempt_kind") or "primary"),
+                    llm_started=True,
+                    llm_completed=(
+                        provider_completed
+                        or bool(final_parse_result and is_final_attempt)
+                    ),
+                    structured_response_valid=bool(
+                        final_parse_result and is_final_attempt
+                    ),
+                    verification_triggered=bool(verification_reasons),
+                    verification_reason=(
+                        ",".join(verification_reasons) or None
+                    ),
+                    verification_disposition=(
+                        str(getattr(decision.disposition, "value", decision.disposition))
+                        if verification_reasons and is_final_attempt
+                        else None
+                    ),
+                )
         except Exception as exc:
             retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
             status_code = int(getattr(exc, "status_code", 0) or 0)
@@ -2253,24 +2341,41 @@ async def _process_vk_inbox_row(
             return
 
     decision = getattr(drafts, "decision", None)
-    if decision is None:
-        # Test/legacy adapters may still return a plain list. An empty legacy
-        # value is never granted semantic no-event authority.
+    if decision is None:  # defensive compatibility for non-receipt legacy mocks
         from source_parse_contract import EvidenceManifest, SourceParseDecision
         decision = SourceParseDecision(
             list(drafts or ()),
-            disposition=(SourceDisposition.EVENTS_FOUND if drafts else SourceDisposition.RETRY_REQUIRED),
+            disposition=(
+                SourceDisposition.EVENTS_FOUND
+                if drafts
+                else SourceDisposition.RETRY_REQUIRED
+            ),
             evidence_manifest=EvidenceManifest.complete_source(text or ""),
-            retry_reason=(None if drafts else SourceParseRetryReason.SCHEMA_MISMATCH),
+            retry_reason=(
+                None if drafts else SourceParseRetryReason.SCHEMA_MISMATCH
+            ),
         )
 
     if decision.disposition is SourceDisposition.RETRY_REQUIRED:
         reason = str(getattr(getattr(decision, "retry_reason", None), "value", "RETRY_REQUIRED"))
+        latest_provider_attempt = (
+            dict((getattr(decision, "provider_attempts", ()) or ())[-1])
+            if getattr(decision, "provider_attempts", ())
+            else {}
+        )
+        retry_after_ms = int(
+            latest_provider_attempt.get("provider_retry_after_ms", 0) or 0
+        )
         await vk_review.schedule_retry(
             db,
             int(post.id),
             typed_reason=reason,
             batch_id=batch_id,
+            retry_after_sec=(retry_after_ms / 1000 if retry_after_ms else None),
+            quota_scope=latest_provider_attempt.get("quota_scope"),
+            provider_retry_after=(
+                int(math.ceil(retry_after_ms / 1000)) if retry_after_ms else None
+            ),
         )
         report.inbox_deferred += 1
         report.errors.append(f"source_retry {source_url}: {reason}")

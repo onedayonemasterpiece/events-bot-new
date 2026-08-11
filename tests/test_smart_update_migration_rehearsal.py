@@ -96,3 +96,40 @@ def test_rehearsal_fails_closed_on_identity_conflicts(tmp_path: Path) -> None:
         )
 
     assert original.read_bytes() == before
+
+
+def test_rehearsal_reports_unchanged_legacy_fk_orphans_without_calling_them_new(
+    tmp_path: Path,
+) -> None:
+    original, clone = tmp_path / "prod.sqlite", tmp_path / "clone.sqlite"
+    con = sqlite3.connect(original)
+    con.executescript(
+        """
+        CREATE TABLE parent(id INTEGER PRIMARY KEY);
+        CREATE TABLE child(
+          id INTEGER PRIMARY KEY,
+          parent_id INTEGER REFERENCES parent(id)
+        );
+        INSERT INTO child VALUES(1,999);
+        """
+    )
+    con.commit()
+    con.close()
+
+    report = rehearsal.run(
+        original,
+        clone,
+        since="2026-08-01",
+        until="2026-08-11",
+        initializer=lambda _path: None,
+    )
+
+    conflicts = report["migration"]["conflicts"]
+    assert conflicts["preexisting_foreign_key_violations"] == 1
+    assert conflicts["new_foreign_key_violations"] == 0
+    plan = report["migration"]["preexisting_foreign_key_repair_plan"]
+    assert plan["required"] is True
+    assert plan["execution"] == "not_executed;production_writes_forbidden"
+    assert plan["by_relation"] == [
+        {"table": "child", "parent": "parent", "fkid": 0, "count": 1}
+    ]

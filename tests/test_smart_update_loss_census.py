@@ -121,21 +121,25 @@ def test_planned_raw_packet_schema_is_feature_detected(tmp_path: Path) -> None:
         """
         CREATE TABLE vk_source_packet(
           id INTEGER PRIMARY KEY, source_type TEXT, owner_id INTEGER,
-          native_post_id INTEGER, published_at TEXT, raw_text TEXT,
-          payload_hash TEXT, source_revision_hash TEXT, discovery_hints_json TEXT,
+          post_id INTEGER, published_at INTEGER, raw_text TEXT, raw_payload_json TEXT,
+          attachment_metadata_json TEXT, payload_hash TEXT, source_revision_hash TEXT,
+          discovery_hints_json TEXT,
           evidence_manifest_json TEXT, parse_result_json TEXT, ocr_status TEXT,
-          llm_status TEXT, last_typed_reason TEXT, carrier_outcome TEXT
+          llm_status TEXT, last_typed_reason TEXT, terminal_carrier_outcome TEXT
         );
         CREATE TABLE vk_source_packet_attempt(
-          id INTEGER PRIMARY KEY, source_packet_id INTEGER, evidence_json TEXT,
-          terminal_outcome TEXT
+          id INTEGER PRIMARY KEY, source_packet_id INTEGER,
+          evidence_manifest_json TEXT, llm_started INTEGER, llm_completed INTEGER,
+          structured_response_valid INTEGER, event_child_count INTEGER,
+          lifecycle_action_count INTEGER, typed_error_reason TEXT,
+          terminal_carrier_outcome TEXT
         );
         CREATE TABLE vk_crawl_continuation(id INTEGER PRIMARY KEY, owner_id INTEGER);
         INSERT INTO vk_source_packet VALUES
-          (1,'vk',10,20,'2026-08-05','raw','p','r','{}','{}','{}','ok',
+          (1,'vk',10,20,1785888000,'','{"post":20}','[{"type":"photo"}]','p','r','{}','{}','{}','ok',
            'completed','POST_LLM_REJECT_REASON_PARTIAL',NULL);
         INSERT INTO vk_source_packet_attempt VALUES
-          (1,1,'{"partial_child_loss":true,"extracted_event_occurrences":2}',NULL);
+          (1,1,'{"partial_child_loss":true}',1,1,1,2,1,NULL,NULL);
         """
     )
     con.commit()
@@ -146,6 +150,46 @@ def test_planned_raw_packet_schema_is_feature_detected(tmp_path: Path) -> None:
     assert report["features"]["vk_crawl_continuation"]["available"] is True
     assert report["inventory"][0]["loss_class"] == "O"
     assert report["totals"]["extracted_event_occurrences"] == 2
+    assert report["totals"]["lifecycle_actions"] == 1
+    assert report["totals"]["llm_completed_count"] == 1
+    assert report["inventory"][0]["payload_available"] is True
+    assert report["metrics"]["vk_source_packets_total"] == 1
+    assert report["metrics"]["vk_llm_parse_total"] == 1
+
+
+def test_no_event_requires_completed_valid_complete_evidence() -> None:
+    invalid = census.build_census(
+        [
+            {
+                "source_type": "vk",
+                "carrier_id": "1:1",
+                "source_revision_hash": "r1",
+                "raw_payload_available": True,
+                "confirmed_no_event": True,
+                "llm_started": True,
+                "llm_completed": True,
+                "structured_response_valid": True,
+                "evidence_complete": False,
+            }
+        ]
+    )
+    valid = census.build_census(
+        [
+            {
+                "source_type": "vk",
+                "carrier_id": "1:2",
+                "source_revision_hash": "r2",
+                "raw_payload_available": True,
+                "confirmed_no_event": True,
+                "llm_started": True,
+                "llm_completed": True,
+                "structured_response_valid": True,
+                "evidence_complete": True,
+            }
+        ]
+    )
+    assert invalid["inventory"][0]["loss_class"] == "M"
+    assert valid["inventory"][0]["loss_class"] == "R"
 
 
 def test_generic_ledger_fallback_respects_half_open_window(tmp_path: Path) -> None:

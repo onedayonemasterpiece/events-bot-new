@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import main
+from google_ai.exceptions import RateLimitError
 from source_parse_contract import (
     EvidenceManifest,
     SourceDisposition,
@@ -222,3 +223,30 @@ async def test_mocked_finish_length_signal_is_retry_without_accepting_partial_js
     result = await main._parse_event_via_gemma("source", poster_texts=["ocr"])
     assert result.disposition is SourceDisposition.RETRY_REQUIRED
     assert result.retry_reason is SourceParseRetryReason.OUTPUT_TRUNCATED
+
+
+@pytest.mark.asyncio
+async def test_provider_rate_limit_metadata_survives_typed_parse_boundary(monkeypatch):
+    class FakeClient:
+        async def generate_content_async(self, **_kwargs):
+            raise RateLimitError(
+                blocked_reason="rpd",
+                retry_after_ms=3_600_000,
+                model="gemma-4-31b-it",
+                quota_scope="google:shared-project",
+                quota_reason="RPD_EXHAUSTED",
+            )
+
+    monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    result = await main.parse_event_via_llm("source", poster_texts=["ocr"])
+
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.TECHNICAL_ERROR
+    assert result.provider_attempts[-1] == {
+        "attempt_kind": "primary",
+        "model": "gemma-4-31b-it",
+        "quota_scope": "google:shared-project",
+        "quota_reason": "RPD_EXHAUSTED",
+        "provider_retry_after_ms": 3_600_000,
+    }
