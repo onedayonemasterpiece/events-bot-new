@@ -16,7 +16,8 @@ import time as _time
 
 from db import Database
 from runtime import require_main_attr
-from vk_intake import OCR_PENDING_SENTINEL, extract_event_ts_hint
+from source_parse_contract import SourceDisposition
+from vk_intake import DraftParseResult, OCR_PENDING_SENTINEL, extract_event_ts_hint
 
 
 LOCK_TIMEOUT_SECONDS = 10 * 60
@@ -587,9 +588,41 @@ async def load_successful_parse_receipt(
         return None
     try:
         payload = json.loads(str(row[0]))
-    except Exception:
+    except Exception as exc:
+        logging.warning(
+            "vk_review invalid successful parse receipt: malformed_json "
+            "source_packet_id=%s error=%s",
+            source_packet_id,
+            exc,
+        )
         return None
-    return payload if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        logging.warning(
+            "vk_review invalid successful parse receipt: schema_mismatch "
+            "source_packet_id=%s payload_type=%s",
+            source_packet_id,
+            type(payload).__name__,
+        )
+        return None
+    try:
+        replay = DraftParseResult.from_receipt_payload(payload)
+    except (TypeError, ValueError) as exc:
+        logging.warning(
+            "vk_review invalid successful parse receipt: invalidate_and_reparse "
+            "source_packet_id=%s error=%s",
+            source_packet_id,
+            exc,
+        )
+        return None
+    if replay.disposition is SourceDisposition.RETRY_REQUIRED:
+        logging.warning(
+            "vk_review invalid successful parse receipt: retry verdict is not replay-terminal "
+            "source_packet_id=%s retry_reason=%s",
+            source_packet_id,
+            getattr(replay.retry_reason, "value", replay.retry_reason),
+        )
+        return None
+    return payload
 
 
 async def record_source_parse_attempt(

@@ -532,7 +532,14 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
     async def fake_build_event_drafts(*_args, **_kwargs):
         d1 = vk_intake.EventDraft(title="E1", date="2026-12-31", time="18:30", venue="Научная библиотека")
         d2 = vk_intake.EventDraft(title="E2", date="2026-12-31", time="18:30", venue="Научная библиотека")
-        return [d1, d2], None
+        decision = SourceParseDecision(
+            [{"title": "E1"}, {"title": "E2"}],
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source(
+                "text", ["poster OCR"], attachment_count=1
+            ),
+        )
+        return vk_intake.DraftParseResult([d1, d2], decision=decision), None
 
     # Persist stub: we only need deterministic ids to verify mapping table; the events
     # themselves are not required for this unit test.
@@ -905,7 +912,12 @@ async def test_vk_auto_import_skips_festival_helper_for_regular_sources(tmp_path
         seen["festival_names"] = kwargs.get("festival_names")
         seen["festival_alias_pairs"] = kwargs.get("festival_alias_pairs")
         seen["festival_hint"] = kwargs.get("festival_hint")
-        return [], None
+        decision = SourceParseDecision(
+            [],
+            disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            evidence_manifest=EvidenceManifest.complete_source("text"),
+        )
+        return vk_intake.DraftParseResult([], decision=decision), None
 
     async def fake_load_festival_hints(_db):
         return ["Fest"], [("fest", 0)]
@@ -953,7 +965,12 @@ async def test_vk_auto_import_keeps_festival_helper_for_festival_sources(tmp_pat
         seen["festival_names"] = kwargs.get("festival_names")
         seen["festival_alias_pairs"] = kwargs.get("festival_alias_pairs")
         seen["festival_hint"] = kwargs.get("festival_hint")
-        return [], None
+        decision = SourceParseDecision(
+            [],
+            disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            evidence_manifest=EvidenceManifest.complete_source("text"),
+        )
+        return vk_intake.DraftParseResult([], decision=decision), None
 
     async def fake_load_festival_hints(_db):
         return ["Fest"], [("fest", 0)]

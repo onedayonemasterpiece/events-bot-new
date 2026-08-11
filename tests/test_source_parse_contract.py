@@ -8,6 +8,7 @@ from source_parse_contract import (
     LifecycleActionType,
     ParsedEvents,
     SourceDisposition,
+    SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
     VerificationReason,
@@ -40,6 +41,35 @@ def test_t21_valid_confirmed_no_event_is_typed_product_outcome():
     assert result.disposition is SourceDisposition.CONFIRMED_NO_EVENT
     assert result.evidence_complete is True
     assert list(result) == []
+
+
+def test_confirmed_giveaway_only_reason_is_closed_and_preserved():
+    result = decision_from_provider_payload(
+        {
+            **_typed("CONFIRMED_NO_EVENT"),
+            "no_event_reason": "GIVEAWAY_ONLY",
+        },
+        evidence_manifest=_manifest(),
+    )
+    assert result.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+    assert result.no_event_reason is SourceNoEventReason.GIVEAWAY_ONLY
+    assert result.to_payload()["no_event_reason"] == "GIVEAWAY_ONLY"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {**_typed("CONFIRMED_NO_EVENT"), "no_event_reason": "UNKNOWN"},
+        {
+            **_typed(events=[{"title": "Event"}]),
+            "no_event_reason": "GIVEAWAY_ONLY",
+        },
+    ],
+)
+def test_unknown_or_misplaced_no_event_reason_is_schema_retry(payload):
+    result = decision_from_provider_payload(payload, evidence_manifest=_manifest())
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
 
 
 def test_t22_empty_provider_body_is_retry_not_no_event_contract():

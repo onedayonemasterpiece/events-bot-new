@@ -1726,6 +1726,15 @@ SOURCE_PARSE_RETRY_REASONS = {
     'VERIFICATION_TECHNICAL_ERROR',
     'VERIFICATION_UNCERTAIN',
 }
+SOURCE_PARSE_NO_EVENT_REASONS = {
+    'NO_ATTENDABLE_EVENT',
+    'GIVEAWAY_ONLY',
+    'VAGUE_TEASER',
+    'REFERRAL_ONLY',
+    'SERVICE_OR_RENTAL',
+    'RECAP_ONLY',
+    'OUT_OF_SCOPE',
+}
 SOURCE_PARSE_LIFECYCLE_ACTIONS = {
     'CANCEL',
     'POSTPONE',
@@ -1777,6 +1786,10 @@ SOURCE_PARSE_DECISION_SCHEMA = {
         'evidence_complete': {'type': 'boolean'},
         'parse_version': _string_schema(),
         'retry_reason': {'type': 'string', 'enum': sorted(SOURCE_PARSE_RETRY_REASONS)},
+        'no_event_reason': {
+            'type': 'string',
+            'enum': sorted(SOURCE_PARSE_NO_EVENT_REASONS),
+        },
     },
     'required': [
         'disposition',
@@ -2234,6 +2247,12 @@ def _parse_source_decision_response(
         return _source_parse_retry('SCHEMA_MISMATCH', evidence_manifest)
 
     disposition = str(parsed.get('disposition') or '').strip().upper()
+    supplied_no_event_reason = parsed.get('no_event_reason')
+    no_event_reason = (
+        str(supplied_no_event_reason).strip().upper()
+        if supplied_no_event_reason is not None
+        else None
+    )
     events = parsed.get('events')
     lifecycle_actions = parsed.get('lifecycle_actions')
     declared_complete = parsed.get('evidence_complete')
@@ -2249,6 +2268,13 @@ def _parse_source_decision_response(
         or not isinstance(lifecycle_actions, list)
         or not all(isinstance(item, dict) for item in lifecycle_actions)
         or not isinstance(declared_complete, bool)
+        or (
+            no_event_reason is not None
+            and (
+                no_event_reason not in SOURCE_PARSE_NO_EVENT_REASONS
+                or disposition != 'CONFIRMED_NO_EVENT'
+            )
+        )
     ):
         return _source_parse_retry('SCHEMA_MISMATCH', evidence_manifest)
 
@@ -2285,7 +2311,7 @@ def _parse_source_decision_response(
     if disposition == 'CONFIRMED_NO_EVENT' and not effective_complete:
         return _source_parse_retry('EVIDENCE_INCOMPLETE', evidence_manifest)
 
-    return {
+    result = {
         'disposition': disposition,
         'events': list(events),
         'lifecycle_actions': list(lifecycle_actions),
@@ -2294,6 +2320,9 @@ def _parse_source_decision_response(
         'parse_version': str(parsed.get('parse_version') or SOURCE_PARSE_VERSION),
         'enrichment_required': bool(events and not effective_complete),
     }
+    if no_event_reason is not None:
+        result['no_event_reason'] = no_event_reason
+    return result
 
 
 def _source_parse_contradictions(
@@ -2386,6 +2415,7 @@ def _source_parse_prompt(
             'Extract every event and every distinct occurrence/session; never cap or silently discard children.',
             'Cancellation, postponement, reschedule, and detail changes are typed lifecycle_actions; use MIXED when new events and lifecycle actions coexist.',
             'CONFIRMED_NO_EVENT is allowed only after considering the complete raw text and every OCR block.',
+            'Giveaway-only content requires CONFIRMED_NO_EVENT with no_event_reason=GIVEAWAY_ONLY; a giveaway plus a real event preserves the event.',
             'A recap, giveaway, historical/admin wrapper, or past date may coexist with a future event; preserve the future event.',
             'Weak title, missing regex-visible date, suspicious venue, or low confidence never authorizes deletion of a positive child.',
             'Technical uncertainty, malformed/incomplete reasoning, or inability to fit all children requires RETRY_REQUIRED with a typed retry_reason.',
@@ -2394,6 +2424,7 @@ def _source_parse_prompt(
         'allowed_dispositions': sorted(SOURCE_PARSE_DISPOSITIONS),
         'allowed_lifecycle_actions': sorted(SOURCE_PARSE_LIFECYCLE_ACTIONS),
         'allowed_retry_reasons': sorted(SOURCE_PARSE_RETRY_REASONS),
+        'allowed_no_event_reasons': sorted(SOURCE_PARSE_NO_EVENT_REASONS),
         'message_date': message_date,
         'source_context': {
             'username': source_username,

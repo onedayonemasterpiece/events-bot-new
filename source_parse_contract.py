@@ -44,6 +44,16 @@ class SourceParseRetryReason(str, Enum):
     VERIFICATION_UNCERTAIN = "VERIFICATION_UNCERTAIN"
 
 
+class SourceNoEventReason(str, Enum):
+    NO_ATTENDABLE_EVENT = "NO_ATTENDABLE_EVENT"
+    GIVEAWAY_ONLY = "GIVEAWAY_ONLY"
+    VAGUE_TEASER = "VAGUE_TEASER"
+    REFERRAL_ONLY = "REFERRAL_ONLY"
+    SERVICE_OR_RENTAL = "SERVICE_OR_RENTAL"
+    RECAP_ONLY = "RECAP_ONLY"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+
+
 class VerificationReason(str, Enum):
     """The seven and only seven semantic contradiction classes."""
 
@@ -304,6 +314,7 @@ class SourceParseDecision(list[dict[str, Any]]):
         parse_version: str = PARSE_VERSION,
         festival: dict[str, Any] | None = None,
         retry_reason: SourceParseRetryReason | str | None = None,
+        no_event_reason: SourceNoEventReason | str | None = None,
         verification_reasons: Sequence[VerificationReason] | None = None,
         verification: Mapping[str, Any] | None = None,
         enrichment_required: bool | None = None,
@@ -328,6 +339,9 @@ class SourceParseDecision(list[dict[str, Any]]):
         self.festival = festival
         self.retry_reason = (
             SourceParseRetryReason(retry_reason) if retry_reason is not None else None
+        )
+        self.no_event_reason = (
+            SourceNoEventReason(no_event_reason) if no_event_reason is not None else None
         )
         if inferred_empty_retry and self.retry_reason is None:
             self.retry_reason = SourceParseRetryReason.SCHEMA_MISMATCH
@@ -354,10 +368,16 @@ class SourceParseDecision(list[dict[str, Any]]):
             for item in event_items
         )
         if self.disposition is not SourceDisposition.RETRY_REQUIRED and (
-            invalid_events or self.disposition is not expected_disposition
+            invalid_events
+            or self.disposition is not expected_disposition
+            or (
+                self.no_event_reason is not None
+                and self.disposition is not SourceDisposition.CONFIRMED_NO_EVENT
+            )
         ):
             self.disposition = SourceDisposition.RETRY_REQUIRED
             self.retry_reason = SourceParseRetryReason.SCHEMA_MISMATCH
+            self.no_event_reason = None
             self.evidence_complete = False
             self.enrichment_required = bool(event_items)
 
@@ -368,6 +388,7 @@ class SourceParseDecision(list[dict[str, Any]]):
                 if evidence_manifest is not None
                 else SourceParseRetryReason.SCHEMA_MISMATCH
             )
+            self.no_event_reason = None
             self.enrichment_required = False
 
     @property
@@ -391,6 +412,8 @@ class SourceParseDecision(list[dict[str, Any]]):
             payload["festival"] = self.festival
         if self.retry_reason is not None:
             payload["retry_reason"] = self.retry_reason.value
+        if self.no_event_reason is not None:
+            payload["no_event_reason"] = self.no_event_reason.value
         if self.evidence_manifest is not None:
             payload["evidence_manifest"] = self.evidence_manifest.to_payload()
         if self.verification is not None:
@@ -615,6 +638,23 @@ def decision_from_provider_payload(
             evidence_manifest=evidence_manifest,
             festival=festival,
         )
+    raw_no_event_reason = payload.get("no_event_reason")
+    no_event_reason: SourceNoEventReason | None = None
+    if raw_no_event_reason is not None:
+        try:
+            no_event_reason = SourceNoEventReason(str(raw_no_event_reason))
+        except (TypeError, ValueError):
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.SCHEMA_MISMATCH,
+                evidence_manifest=evidence_manifest,
+                festival=festival,
+            )
+        if disposition is not SourceDisposition.CONFIRMED_NO_EVENT:
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.SCHEMA_MISMATCH,
+                evidence_manifest=evidence_manifest,
+                festival=festival,
+            )
     events = payload.get("events")
     actions_raw = payload.get("lifecycle_actions")
     if not isinstance(events, list) or not all(_event_mapping_is_valid(item) for item in events):
@@ -686,6 +726,7 @@ def decision_from_provider_payload(
         evidence_complete=effective_complete,
         parse_version=str(payload.get("parse_version") or PARSE_VERSION),
         festival=festival,
+        no_event_reason=no_event_reason,
         enrichment_required=bool(events and not effective_complete),
     )
 

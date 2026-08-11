@@ -22,6 +22,7 @@ jobs:
           smart_event_update.py
           db.py
           models.py
+          source_parse_contract.py
           source_parsing/handlers.py
           source_parsing/telegram/handlers.py
           vk_intake.py
@@ -33,9 +34,15 @@ jobs:
           scheduling.py
           scripts/ops/recover_smart_update_identity_losses.py
           scripts/ops/smart_update_prod_audit.py
+          scripts/inspect/audit_source_parse_prompt_contract.py
+      - name: Enforce live source-parse prompt contract
+        run: python scripts/inspect/audit_source_parse_prompt_contract.py --root .
       - name: Run Smart Update identity/state/recovery regressions
         run: >-
           python -m pytest -q
+          tests/test_source_parse_contract.py
+          tests/test_source_parse_prompt_contract.py
+          tests/test_vk_raw_first_llm_contract.py
           tests/test_event_identity.py
           tests/test_smart_update_identity_gate.py
           tests/test_smart_update_identity_incident_replay.py

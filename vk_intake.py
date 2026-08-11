@@ -30,10 +30,12 @@ from poster_media import (
 import poster_ocr
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
 from source_parse_contract import (
+    decision_from_provider_payload,
     EvidenceManifest,
     LifecycleAction,
     PARSE_VERSION,
     SourceDisposition,
+    SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
 )
@@ -1347,7 +1349,7 @@ class EventDraft:
     ocr_tokens_spent: int = 0
     ocr_tokens_remaining: int | None = None
     ocr_limit_notice: str | None = None
-    ocr_failed = False
+    ocr_failed: bool = False
     search_digest: str | None = None
     verification_warnings: list[str] = field(default_factory=list)
 
@@ -1362,10 +1364,8 @@ class DraftParseResult(list[EventDraft]):
         decision: SourceParseDecision | None = None,
     ) -> None:
         super().__init__(drafts or ())
-        self.decision = decision if decision is not None else SourceParseDecision(
-            [],
-            disposition=SourceDisposition.CONFIRMED_NO_EVENT,
-            evidence_manifest=EvidenceManifest.complete_source(""),
+        self.decision = decision if decision is not None else SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
         )
         self.disposition = self.decision.disposition
         self.lifecycle_actions = self.decision.lifecycle_actions
@@ -1394,33 +1394,96 @@ class DraftParseResult(list[EventDraft]):
         if not isinstance(decision_payload, dict):
             raise ValueError("missing typed decision receipt")
         manifest_payload = decision_payload.get("evidence_manifest")
-        manifest = (
-            EvidenceManifest.from_mapping(manifest_payload)
-            if isinstance(manifest_payload, dict)
-            else EvidenceManifest.complete_source("")
-        )
+        if not isinstance(manifest_payload, dict):
+            raise ValueError("missing evidence_manifest in typed decision receipt")
+        required_decision_fields = {
+            "disposition",
+            "events",
+            "lifecycle_actions",
+            "evidence_complete",
+            "parse_version",
+        }
+        missing_fields = sorted(required_decision_fields - decision_payload.keys())
+        if missing_fields:
+            if missing_fields == ["disposition"]:
+                raise ValueError("missing disposition in typed decision receipt")
+            raise ValueError(
+                "missing typed decision receipt fields: " + ",".join(missing_fields)
+            )
+        disposition = decision_payload.get("disposition")
+        try:
+            typed_disposition = SourceDisposition(str(disposition))
+        except ValueError as exc:
+            raise ValueError(f"unknown disposition in typed decision receipt: {disposition!r}") from exc
+        retry_reason = decision_payload.get("retry_reason")
+        if typed_disposition is SourceDisposition.RETRY_REQUIRED and retry_reason is None:
+            raise ValueError("missing retry_reason in retry receipt")
+        if retry_reason is not None:
+            try:
+                SourceParseRetryReason(str(retry_reason))
+            except ValueError as exc:
+                raise ValueError(
+                    f"unknown retry_reason in typed decision receipt: {retry_reason!r}"
+                ) from exc
+        no_event_reason = decision_payload.get("no_event_reason")
+        if no_event_reason is not None:
+            try:
+                SourceNoEventReason(str(no_event_reason))
+            except ValueError as exc:
+                raise ValueError(
+                    f"unknown no_event_reason in typed decision receipt: {no_event_reason!r}"
+                ) from exc
+            if typed_disposition is not SourceDisposition.CONFIRMED_NO_EVENT:
+                raise ValueError("no_event_reason is only valid for CONFIRMED_NO_EVENT")
+        manifest = EvidenceManifest.from_mapping(manifest_payload)
+        events_payload = decision_payload.get("events")
+        actions_payload = decision_payload.get("lifecycle_actions")
+        if not isinstance(events_payload, list):
+            raise ValueError("events is not a list in typed decision receipt")
+        if not isinstance(actions_payload, list) or not all(
+            isinstance(item, dict) for item in actions_payload
+        ):
+            raise ValueError("lifecycle_actions is invalid in typed decision receipt")
         actions = tuple(
             LifecycleAction.from_mapping(item)
-            for item in (decision_payload.get("lifecycle_actions") or ())
-            if isinstance(item, dict)
+            for item in actions_payload
         )
         decision = SourceParseDecision(
-            decision_payload.get("events") or (),
-            disposition=decision_payload.get("disposition"),
+            events_payload,
+            disposition=typed_disposition,
             lifecycle_actions=actions,
             evidence_manifest=manifest,
             evidence_complete=bool(decision_payload.get("evidence_complete", False)),
             parse_version=str(decision_payload.get("parse_version") or PARSE_VERSION),
-            retry_reason=decision_payload.get("retry_reason"),
+            retry_reason=retry_reason,
+            no_event_reason=no_event_reason,
             festival=decision_payload.get("festival"),
             enrichment_required=bool(decision_payload.get("enrichment_required", False)),
             provider_attempts=decision_payload.get("provider_attempts") or (),
         )
         drafts: list[EventDraft] = []
         allowed = set(EventDraft.__dataclass_fields__)
-        for item in payload.get("drafts") or ():
-            if isinstance(item, dict):
-                drafts.append(EventDraft(**{k: v for k, v in item.items() if k in allowed}))
+        drafts_payload = payload.get("drafts")
+        if not isinstance(drafts_payload, list) or not all(
+            isinstance(item, dict) for item in drafts_payload
+        ):
+            raise ValueError("drafts is invalid in typed decision receipt")
+        for item in drafts_payload:
+            drafts.append(EventDraft(**{k: v for k, v in item.items() if k in allowed}))
+        decision_events = list(decision.events)
+        if len(decision_events) != len(drafts):
+            raise ValueError("decision/draft child count mismatch in typed receipt")
+
+        def title_key(value: Any) -> str:
+            text = unicodedata.normalize("NFKC", str(value or "")).casefold().strip()
+            return re.sub(r"^[^0-9a-zа-я]+", "", text)
+
+        if any(
+            not title_key(event.get("title"))
+            or title_key(event.get("title")) != title_key(draft.title)
+            for event, draft in zip(decision_events, drafts)
+        ):
+            raise ValueError("decision/draft title mismatch in typed receipt")
         return cls(drafts, decision=decision)
 
 
@@ -2201,6 +2264,19 @@ async def build_event_drafts_from_vk(
     # nudge the parser to make the format visible in the title (without hardcoding
     # deterministic renames after parsing).
     llm_text += (
+        "\nОбязательный source-level verdict: верни один типизированный объект "
+        "SourceParseDecision с disposition, events, lifecycle_actions, evidence_complete и parse_version. "
+        "Допустимы только EVENTS_FOUND, CONFIRMED_NO_EVENT, LIFECYCLE_ONLY, MIXED и RETRY_REQUIRED. "
+        "CONFIRMED_NO_EVENT допустим только для доказанного полного non-event при полном тексте и всех OCR-карточках. "
+        "Если карточки/вложения доступны не полностью, используй RETRY_REQUIRED с retry_reason=EVIDENCE_INCOMPLETE. "
+        "Если при неполных доказательствах найдены положительные события, сохрани их с EVENTS_FOUND либо MIXED "
+        "и evidence_complete=false: они требуют дальнейшего enrichment, но не должны исчезнуть. "
+        "Для сообщения только об отмене, переносе или изменении уже известного события используй LIFECYCLE_ONLY. "
+        "Розыгрыш без самостоятельного описания посещаемого события — доказанный non-event и получает "
+        "CONFIRMED_NO_EVENT с no_event_reason=GIVEAWAY_ONLY только при полном evidence; "
+        "розыгрыш вместе с реальным событием сохраняет событие. "
+        "Расплывчатый тизер без конкретного посещаемого слота получает CONFIRMED_NO_EVENT при полном evidence, "
+        "а при неполных карточках — RETRY_REQUIRED/EVIDENCE_INCOMPLETE. "
         "\nПравила извлечения локации: если пост содержит несколько дат/блоков/репостов, "
         "для каждого события бери площадку, адрес и город из ближайшего к нему блока даты/названия. "
         "Хинт источника или дефолт группы используй только когда в самом блоке нет своей площадки. "
@@ -2219,10 +2295,12 @@ async def build_event_drafts_from_vk(
         "разные соревнования/события, даты, города или площадки, верни отдельный event для каждой "
         "достаточно подтверждённой карточки; диапазон с обложки — только envelope, не date/end_date "
         "одного события. Не создавай aggregate event. Если видна лишь часть карточек и нельзя "
-        "надёжно восстановить конкретный пункт, fail closed (`[]`) вместо свёртки подборки. "
+        "надёжно восстановить конкретный пункт, используй RETRY_REQUIRED с "
+        "retry_reason=EVIDENCE_INCOMPLETE вместо свёртки подборки. "
         "Если пост про выставку/ярмарку только тизерит будущий анонс без точного дня, периода или даты окончания "
         "(например «готовим выставку», «анонс через пару дней», «точную дату анонсируем позже», «в мае откроем»), "
-        "верни `[]`: не ставь дату публикации и не подставляй первое число месяца. "
+        "используй CONFIRMED_NO_EVENT при полном evidence или RETRY_REQUIRED/EVIDENCE_INCOMPLETE "
+        "при неполных карточках: не ставь дату публикации и не подставляй первое число месяца. "
         "Если текст поста даёт относительный или разговорный якорь даты вроде «в этот четверг», "
         "а OCR афиши даёт точные `DD месяц HH:MM` и площадку/адрес, считай OCR афиши более точным "
         "источником для date/time/location и обязательно перенеси эти значения в событие. "
@@ -2271,9 +2349,11 @@ async def build_event_drafts_from_vk(
     if _vk_parse_should_add_giveaway_prize_hint(text, poster_texts=poster_texts):
         llm_text += (
             "\nЕсли это розыгрыш/конкурс и мероприятие упомянуто только как приз "
-            "(например билеты на матч/концерт), не создавай событие и верни `[]`. "
+            "(например билеты на матч/концерт), не создавай событие: при полном evidence используй "
+            "CONFIRMED_NO_EVENT с no_event_reason=GIVEAWAY_ONLY, при неполном — "
+            "RETRY_REQUIRED/EVIDENCE_INCOMPLETE. "
             "Извлекай событие только если пост отдельно описывает само посещаемое "
-            "мероприятие, а не только механику розыгрыша."
+            "мероприятие, а не только механику розыгрыша; тогда используй EVENTS_FOUND или MIXED."
         )
     if location_hint:
         hint_clean = str(location_hint).strip()
@@ -2282,14 +2362,16 @@ async def build_event_drafts_from_vk(
                 f"{llm_text}\n"
                 "Хинт по локации (используй ТОЛЬКО если пост действительно описывает посещаемое событие, "
                 f"но место не указано явно): {hint_clean}. "
-                "Не создавай событие только из-за этого хинта. Если пост не про событие — верни `[]`."
+                "Не создавай событие только из-за этого хинта. Доказанный полный non-event обозначай "
+                "только disposition=CONFIRMED_NO_EVENT."
             )
     if fallback_ticket_link:
         llm_text = (
             f"{llm_text}\n"
             "Хинт по ссылке: если и только если это событие и в посте нет ссылки на билеты/регистрацию, "
             f"используй {fallback_ticket_link} как ссылку по умолчанию. "
-            "Не заменяй ссылки, которые уже указаны. Если пост не про событие — верни `[]`."
+            "Не заменяй ссылки, которые уже указаны. Доказанный полный non-event обозначай "
+            "только disposition=CONFIRMED_NO_EVENT."
         )
     if festival_hint:
         llm_text = (
@@ -2299,7 +2381,7 @@ async def build_event_drafts_from_vk(
         )
 
     t0 = time.monotonic()
-    parsed = await vk_intake_parse_llm(
+    raw_parsed = await vk_intake_parse_llm(
         llm_text,
         source_text=text,
         source_name=source_name,
@@ -2320,13 +2402,23 @@ async def build_event_drafts_from_vk(
             )
         except Exception:
             pass
-    if not isinstance(parsed, SourceParseDecision):
-        parsed = SourceParseDecision(
-            list(parsed or ()),
+    if isinstance(raw_parsed, SourceParseDecision):
+        parsed = raw_parsed
+    else:
+        parsed = decision_from_provider_payload(
+            raw_parsed,
             evidence_manifest=evidence_manifest,
-            evidence_complete=evidence_manifest.evidence_complete,
-            festival=getattr(parsed, "festival", None),
         )
+        legacy_festival = getattr(raw_parsed, "festival", None)
+        if parsed.festival is None and isinstance(legacy_festival, dict):
+            parsed.festival = dict(legacy_festival)
+        if parsed.disposition is SourceDisposition.RETRY_REQUIRED:
+            logger.warning(
+                "vk_intake: untyped/invalid source parse payload rejected "
+                "payload_type=%s retry_reason=%s",
+                type(raw_parsed).__name__,
+                getattr(parsed.retry_reason, "value", parsed.retry_reason),
+            )
     festival_payload = getattr(parsed, "festival", None)
     parsed_events = list(parsed or [])
     if not parsed_events and not festival_payload:
@@ -3130,6 +3222,10 @@ async def build_event_drafts(
     photo_bytes = await _download_photo_media(photos or [])
     _tmark("download_photos", time.monotonic() - t0)
     poster_items: list[PosterMedia] = []
+    # This flag participates in the source-level evidence verdict even when a
+    # post has no downloadable photos.  Keep it explicitly initialised rather
+    # than relying on one of the OCR branches to assign it.
+    ocr_failed = False
     ocr_tokens_spent = 0
     ocr_tokens_remaining: int | None = None
     ocr_limit_notice: str | None = None

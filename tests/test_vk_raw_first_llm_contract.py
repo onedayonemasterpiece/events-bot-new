@@ -12,13 +12,17 @@ import main
 from db import Database
 from source_parse_contract import (
     EvidenceManifest,
+    LifecycleAction,
+    LifecycleActionType,
     SourceDisposition,
+    SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
 )
 import vk_auto_queue
 import vk_intake
 import vk_review
+from poster_media import PosterMedia
 
 
 class _Bot:
@@ -480,3 +484,348 @@ def test_static_vk_ingestion_bans_semantic_shortcuts():
     ast.parse(intake)
     ast.parse(queue)
     ast.parse(review)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    (
+        "case_id",
+        "source_text",
+        "incomplete",
+        "events",
+        "actions",
+        "expected",
+        "overlay_kwargs",
+    ),
+    [
+        ("A", "Информационная справка без события", False, [], [], SourceDisposition.CONFIRMED_NO_EVENT, {}),
+        ("B", "Расписание находится на недоступной карточке", True, [], [], SourceDisposition.RETRY_REQUIRED, {}),
+        ("C", "Лекция 1 декабря, часть карточек недоступна", True, [{"title": "Лекция", "date": "2026-12-01"}], [], SourceDisposition.EVENTS_FOUND, {}),
+        ("D", "Розыгрыш билетов: подпишись и сделай репост", False, [], [], SourceDisposition.CONFIRMED_NO_EVENT, {}),
+        ("E", "Розыгрыш и концерт 1 декабря", False, [{"title": "Концерт", "date": "2026-12-01"}], [], SourceDisposition.EVENTS_FOUND, {}),
+        ("F", "Скоро выставка, точную дату объявим позже", False, [], [], SourceDisposition.CONFIRMED_NO_EVENT, {}),
+        (
+            "G",
+            "Лекция 1 декабря отменена",
+            False,
+            [],
+            [LifecycleAction(LifecycleActionType.CANCEL, target_title="Лекция", evidence="отменена")],
+            SourceDisposition.LIFECYCLE_ONLY,
+            {},
+        ),
+        (
+            "H",
+            "Информационная справка без события",
+            False,
+            [],
+            [],
+            SourceDisposition.CONFIRMED_NO_EVENT,
+            {"location_hint": "Научная библиотека"},
+        ),
+        (
+            "I",
+            "Информационная справка без события",
+            False,
+            [],
+            [],
+            SourceDisposition.CONFIRMED_NO_EVENT,
+            {"default_ticket_link": "https://tickets.example/event"},
+        ),
+    ],
+)
+async def test_vk_live_prompt_a_i_typed_provider_contract(
+    monkeypatch,
+    case_id,
+    source_text,
+    incomplete,
+    events,
+    actions,
+    expected,
+    overlay_kwargs,
+):
+    manifest = EvidenceManifest.complete_source(
+        source_text,
+        [] if incomplete else None,
+        attachment_count=1 if incomplete else 0,
+    )
+    calls: list[str] = []
+    emitted_payloads: list[dict] = []
+
+    async def typed_provider(prompt, **_kwargs):
+        calls.append(prompt)
+        disposition = (
+            SourceDisposition.MIXED
+            if events and actions
+            else SourceDisposition.EVENTS_FOUND
+            if events
+            else SourceDisposition.LIFECYCLE_ONLY
+            if actions
+            else SourceDisposition.CONFIRMED_NO_EVENT
+        )
+        if case_id == "D":
+            payload = {
+                "disposition": disposition.value,
+                "events": list(events),
+                "lifecycle_actions": [],
+                "evidence_complete": manifest.evidence_complete,
+                "parse_version": "source-parse-v1",
+                "no_event_reason": "GIVEAWAY_ONLY",
+            }
+            emitted_payloads.append(payload)
+            return payload
+        return SourceParseDecision(
+            events,
+            disposition=disposition,
+            lifecycle_actions=actions,
+            evidence_manifest=manifest,
+            evidence_complete=manifest.evidence_complete,
+        )
+
+    monkeypatch.setattr(main, "parse_event_via_llm", typed_provider)
+    drafts, _festival = await vk_intake.build_event_drafts_from_vk(
+        source_text,
+        evidence_manifest=manifest,
+        **overlay_kwargs,
+    )
+
+    assert len(calls) == 1, f"prompt case {case_id} must not enter a schema retry loop"
+    assert drafts.disposition is expected
+    assert drafts.retry_reason is not SourceParseRetryReason.SCHEMA_MISMATCH
+    prompt = calls[0]
+    for token in (
+        "EVENTS_FOUND",
+        "CONFIRMED_NO_EVENT",
+        "LIFECYCLE_ONLY",
+        "MIXED",
+        "RETRY_REQUIRED",
+        "EVIDENCE_INCOMPLETE",
+    ):
+        assert token in prompt
+    assert "розыгрыш вместе с реальным событием" in prompt
+    assert "Расплывчатый тизер" in prompt
+    if case_id == "H":
+        assert "Не создавай событие только из-за этого хинта" in prompt
+    if case_id == "I":
+        assert "если и только если это событие" in prompt
+    if case_id == "D":
+        assert emitted_payloads[0]["no_event_reason"] == "GIVEAWAY_ONLY"
+        assert drafts.decision.no_event_reason is SourceNoEventReason.GIVEAWAY_ONLY
+        assert (
+            drafts.to_receipt_payload()["decision"]["no_event_reason"]
+            == "GIVEAWAY_ONLY"
+        )
+    if incomplete and events:
+        assert drafts.enrichment_required is True
+        assert len(drafts) == len(events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw_payload", [[], None, {"unexpected": "shape"}])
+async def test_vk_untyped_empty_none_and_malformed_payloads_use_central_retry_adapter(
+    monkeypatch, raw_payload, caplog
+):
+    calls = 0
+
+    async def provider(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return raw_payload
+
+    monkeypatch.setattr(main, "parse_event_via_llm", provider)
+    with caplog.at_level("WARNING"):
+        drafts, _ = await vk_intake.build_event_drafts_from_vk("source")
+    assert calls == 1
+    assert drafts.disposition is SourceDisposition.RETRY_REQUIRED
+    assert drafts.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+    assert "untyped/invalid source parse payload rejected" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_vk_legacy_positive_list_uses_central_validated_adapter(monkeypatch):
+    async def provider(*_args, **_kwargs):
+        return [{"title": "Лекция", "date": "2026-12-01"}]
+
+    monkeypatch.setattr(main, "parse_event_via_llm", provider)
+    drafts, _ = await vk_intake.build_event_drafts_from_vk("Лекция 1 декабря")
+    assert len(drafts) == 1
+    assert drafts.disposition is SourceDisposition.EVENTS_FOUND
+    assert drafts.parse_version == "legacy-array-adapter-v1"
+
+
+def test_draft_result_without_decision_is_schema_retry_not_no_event():
+    result = vk_intake.DraftParseResult([])
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+    assert result.evidence_manifest is None
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        (lambda payload: payload.pop("decision"), "missing typed decision"),
+        (lambda payload: payload["decision"].pop("evidence_manifest"), "missing evidence_manifest"),
+        (lambda payload: payload["decision"].pop("disposition"), "missing disposition"),
+        (lambda payload: payload["decision"].update(disposition="UNKNOWN"), "unknown disposition"),
+        (
+            lambda payload: payload["decision"].update(
+                disposition="RETRY_REQUIRED", retry_reason="UNKNOWN"
+            ),
+            "unknown retry_reason",
+        ),
+        (
+            lambda payload: payload["decision"].update(
+                disposition="RETRY_REQUIRED", retry_reason=None
+            ),
+            "missing retry_reason",
+        ),
+        (
+            lambda payload: payload["decision"].update(no_event_reason="UNKNOWN"),
+            "unknown no_event_reason",
+        ),
+        (
+            lambda payload: payload["decision"].update(
+                no_event_reason="GIVEAWAY_ONLY"
+            ),
+            "only valid for CONFIRMED_NO_EVENT",
+        ),
+    ],
+)
+def test_receipt_a_f_invalid_typed_fields_force_invalidation_and_reparse(mutation, error):
+    result = vk_intake.DraftParseResult(
+        [vk_intake.EventDraft(title="Event")],
+        decision=SourceParseDecision(
+            [{"title": "Event"}],
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source("Event"),
+        ),
+    )
+    payload = result.to_receipt_payload()
+    mutation(payload)
+    with pytest.raises(ValueError, match=error):
+        vk_intake.DraftParseResult.from_receipt_payload(payload)
+
+
+@pytest.mark.parametrize(
+    ("decision_events", "drafts", "error"),
+    [
+        ([{"title": "Other"}], [{"title": "Event"}], "title mismatch"),
+        ([{"title": "Event"}, {"title": "Second"}], [{"title": "Event"}], "child count mismatch"),
+    ],
+)
+def test_receipt_decision_and_draft_envelopes_must_correspond(
+    decision_events, drafts, error
+):
+    payload = {
+        "decision": SourceParseDecision(
+            decision_events,
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source("source"),
+        ).to_payload(),
+        "drafts": drafts,
+    }
+    with pytest.raises(ValueError, match=error):
+        vk_intake.DraftParseResult.from_receipt_payload(payload)
+
+
+@pytest.mark.asyncio
+async def test_direct_poster_media_manifest_counts_missing_ocr_as_incomplete(monkeypatch):
+    captured = {}
+
+    async def provider(*_args, **kwargs):
+        captured.update(kwargs["evidence_manifest"])
+        return {
+            "disposition": "RETRY_REQUIRED",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_complete": False,
+            "parse_version": "source-parse-v1",
+            "retry_reason": "EVIDENCE_INCOMPLETE",
+        }
+
+    monkeypatch.setattr(main, "parse_event_via_llm", provider)
+    drafts, _ = await vk_intake.build_event_drafts_from_vk(
+        "caption",
+        poster_media=[PosterMedia(data=b"image", name="poster.jpg")],
+    )
+    assert captured["attachment_count"] == 1
+    assert captured["ocr_blocks_available"] == 0
+    assert captured["unavailable_attachment_count"] == 1
+    assert captured["evidence_complete"] is False
+    assert drafts.retry_reason is SourceParseRetryReason.EVIDENCE_INCOMPLETE
+
+
+@pytest.mark.asyncio
+async def test_vk_build_without_photos_has_explicit_ocr_state(tmp_path, monkeypatch):
+    db = await _db(tmp_path)
+
+    async def recognize(_db, photo_bytes, **_kwargs):
+        assert photo_bytes == []
+        return [], 0, None
+
+    async def provider(*_args, **_kwargs):
+        return {
+            "disposition": "CONFIRMED_NO_EVENT",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_complete": True,
+            "parse_version": "source-parse-v1",
+        }
+
+    monkeypatch.setattr(vk_intake.poster_ocr, "recognize_posters", recognize)
+    monkeypatch.setattr(main, "parse_event_via_llm", provider)
+    drafts, _ = await vk_intake.build_event_drafts("plain text", photos=[], db=db)
+    assert drafts.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+    await db.close()
+
+
+@pytest.mark.parametrize("legacy", [[], None, "malformed"])
+def test_vk_queue_legacy_empty_none_and_malformed_results_are_retryable(legacy):
+    result = vk_auto_queue._adapt_vk_draft_result(legacy, source_text="source")
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
+def test_vk_queue_legacy_positive_receipt_strips_poster_objects_and_serializes():
+    draft = vk_intake.EventDraft(title="Event", date="2026-12-01")
+    draft.poster_media = [PosterMedia(data=b"image", name="poster.jpg")]
+    result = vk_auto_queue._adapt_vk_draft_result([draft], source_text="source")
+    assert result.disposition is SourceDisposition.EVENTS_FOUND
+    encoded = json.dumps(result.to_receipt_payload(), ensure_ascii=False)
+    assert "poster_media" not in encoded
+    assert "Event" in encoded
+
+
+@pytest.mark.asyncio
+async def test_load_successful_receipt_invalidates_old_untyped_terminal(tmp_path, caplog):
+    db = await _db(tmp_path)
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post={"date": 1, "post_id": 77, "text": "source", "photos": []},
+        source_url="https://vk.com/wall-1_77",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    # This is shaped like the historical terminal receipt which omitted the
+    # source decision. It may be reparsed, but can never be an exact replay.
+    await vk_review.record_source_parse_attempt(
+        db,
+        source_packet_id=packet_id,
+        prompt_version="p",
+        model="m",
+        evidence_manifest=EvidenceManifest.complete_source("source").to_payload(),
+        parse_result={"drafts": []},
+        disposition="CONFIRMED_NO_EVENT",
+        retry_reason=None,
+        event_child_count=0,
+        lifecycle_action_count=0,
+    )
+    with caplog.at_level("WARNING"):
+        loaded = await vk_review.load_successful_parse_receipt(
+            db, source_packet_id=packet_id, prompt_version="p", model="m"
+        )
+    assert loaded is None
+    assert "invalidate_and_reparse" in caplog.text
+    await db.close()

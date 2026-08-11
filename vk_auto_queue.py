@@ -19,11 +19,69 @@ import vk_intake
 import vk_review
 from smart_event_update import SmartUpdateTerminalOutcome
 from smart_update_identity import canonicalize_identity_url
-from source_parse_contract import PARSE_VERSION, SourceDisposition, SourceParseRetryReason
+from source_parse_contract import (
+    decision_from_provider_payload,
+    EvidenceManifest,
+    PARSE_VERSION,
+    SourceDisposition,
+    SourceParseDecision,
+    SourceParseRetryReason,
+)
 
 logger = logging.getLogger(__name__)
 
 _vk_auto_import_cancel_requests: set[tuple[int, int]] = set()
+
+
+def _adapt_vk_draft_result(
+    value: Any,
+    *,
+    source_text: str,
+    attachment_count: int = 0,
+) -> vk_intake.DraftParseResult:
+    """Put legacy/mock VK draft results through the one validated adapter.
+
+    The production builder already returns ``DraftParseResult``.  This boundary
+    exists for rolling compatibility and tests; in particular a bare empty
+    list, ``None`` or malformed object is uncertainty, never no-event proof.
+    """
+
+    if isinstance(value, vk_intake.DraftParseResult) and isinstance(
+        getattr(value, "decision", None), SourceParseDecision
+    ):
+        return value
+
+    manifest = EvidenceManifest.complete_source(
+        source_text or "", attachment_count=max(0, int(attachment_count or 0))
+    )
+    legacy_drafts = list(value) if isinstance(value, (list, tuple)) else []
+    provider_payload: Any
+    if isinstance(value, (list, tuple)):
+        provider_payload = [
+            {
+                key: field_value
+                for key, field_value in vars(item).items()
+                if key != "poster_media"
+            }
+            if isinstance(item, vk_intake.EventDraft)
+            else item
+            for item in value
+        ]
+    else:
+        provider_payload = value
+    decision = decision_from_provider_payload(
+        provider_payload,
+        evidence_manifest=manifest,
+    )
+    if decision.disposition is SourceDisposition.RETRY_REQUIRED:
+        logger.warning(
+            "vk_auto: untyped/invalid draft result requires reparse/retry "
+            "payload_type=%s retry_reason=%s",
+            type(value).__name__,
+            getattr(decision.retry_reason, "value", decision.retry_reason),
+        )
+        legacy_drafts = []
+    return vk_intake.DraftParseResult(legacy_drafts, decision=decision)
 
 
 def _vk_auto_parse_gemma_model() -> str:
@@ -2197,24 +2255,26 @@ async def _process_vk_inbox_row(
                 ),
                 db=db,
             )
+            drafts = _adapt_vk_draft_result(
+                drafts,
+                source_text=text or "",
+                attachment_count=int(
+                    getattr(vk_fetch, "attachment_count", 0) or len(photos)
+                ),
+            )
             _tmark("build_drafts_total", time.monotonic() - t0)
             decision = getattr(drafts, "decision", None)
             if decision is None:
-                # Positive legacy adapters remain temporarily accepted, but a
-                # legacy empty list never acquires no-event authority.
-                from source_parse_contract import EvidenceManifest, SourceParseDecision
-                decision = SourceParseDecision(
-                    list(drafts or ()),
-                    disposition=(
-                        SourceDisposition.EVENTS_FOUND
-                        if drafts
-                        else SourceDisposition.RETRY_REQUIRED
-                    ),
-                    evidence_manifest=EvidenceManifest.complete_source(text or ""),
-                    retry_reason=(
-                        None if drafts else SourceParseRetryReason.SCHEMA_MISMATCH
+                # The adapter above owns every legacy shape.  Reaching this
+                # branch means the builder violated the boundary contract.
+                drafts = _adapt_vk_draft_result(
+                    None,
+                    source_text=text or "",
+                    attachment_count=int(
+                        getattr(vk_fetch, "attachment_count", 0) or len(photos)
                     ),
                 )
+                decision = drafts.decision
             manifest = getattr(decision, "evidence_manifest", None)
             provider_attempts = list(getattr(decision, "provider_attempts", ()) or ())
             if not provider_attempts:
@@ -2341,20 +2401,15 @@ async def _process_vk_inbox_row(
             return
 
     decision = getattr(drafts, "decision", None)
-    if decision is None:  # defensive compatibility for non-receipt legacy mocks
-        from source_parse_contract import EvidenceManifest, SourceParseDecision
-        decision = SourceParseDecision(
-            list(drafts or ()),
-            disposition=(
-                SourceDisposition.EVENTS_FOUND
-                if drafts
-                else SourceDisposition.RETRY_REQUIRED
-            ),
-            evidence_manifest=EvidenceManifest.complete_source(text or ""),
-            retry_reason=(
-                None if drafts else SourceParseRetryReason.SCHEMA_MISMATCH
+    if decision is None:  # defensive compatibility for corrupted in-memory state
+        drafts = _adapt_vk_draft_result(
+            drafts,
+            source_text=text or "",
+            attachment_count=int(
+                getattr(vk_fetch, "attachment_count", 0) or len(photos)
             ),
         )
+        decision = drafts.decision
 
     if decision.disposition is SourceDisposition.RETRY_REQUIRED:
         reason = str(getattr(getattr(decision, "retry_reason", None), "value", "RETRY_REQUIRED"))
