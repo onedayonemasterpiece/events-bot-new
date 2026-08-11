@@ -56,7 +56,7 @@ lanes:
       - .codex/lanes/document-policy-store/RESULTS.md
     forbidden_files: [private_events_mcp_telegram_adapter.py, private_events_mcp/social_workspace_runtime.py, private_events_mcp/config.py, docs, CHANGELOG.md]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: telegram_document_provider
     role: worker
     requirement_ids: [R07, R08]
