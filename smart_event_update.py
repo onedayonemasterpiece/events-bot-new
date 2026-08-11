@@ -14910,10 +14910,11 @@ def _event_blocked_by_explicit_occurrence(
     event: Event | None,
 ) -> bool:
     event_id = int(getattr(event, "id", 0) or 0)
+    conflict_ids = getattr(candidate, "explicit_occurrence_conflict_event_ids", ()) or ()
     return bool(
         event_id
         and event_id
-        in {int(value) for value in candidate.explicit_occurrence_conflict_event_ids}
+        in {int(value) for value in conflict_ids}
     )
 
 

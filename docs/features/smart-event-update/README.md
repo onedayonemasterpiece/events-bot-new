@@ -36,7 +36,10 @@ Durable authority — `smart_update_candidate_state` плюс append-only
 `smart_update_attempt`; Event/EventSource/facts/terminal attempt коммитятся в
 одной write transaction, а LLM не выполняется под SQLite transaction.
 `EventSource` связывается с `candidate_key`/`occurrence_key`; canonical source URL
-может быть carrier нескольких независимых children. Полный контракт:
+может быть carrier нескольких независимых children. Legacy/structural
+candidate без optional in-memory conflict set означает «нет доказанных
+explicit conflicts», а не technical failure в duplicate probe. Полный
+контракт:
 [`identity-state-machine.md`](identity-state-machine.md).
 
 Автоматический мердж события из разных источников без ручной модерации, с сохранением списка источников и защитой якорных полей.
