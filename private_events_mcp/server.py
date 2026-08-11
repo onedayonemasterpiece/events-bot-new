@@ -87,27 +87,46 @@ class PrivateEventsMCPServer:
             }
             if set(adapters) != expected:
                 raise ValueError("universal social adapter set does not match enabled providers")
-            if config.universal_social_media_story_enabled:
+            if config.asset_ingress_enabled:
                 if asset_ingestor is None:
                     raise ValueError(
-                        "universal social media/story requires an asset ingestor"
+                        "universal social asset ingress requires an asset ingestor"
                     )
+                largest_asset = max(
+                    config.max_asset_bytes
+                    if config.universal_social_media_story_enabled
+                    else 0,
+                    config.max_document_bytes
+                    if config.universal_social_file_send_enabled
+                    else 0,
+                )
                 if (
                     not config.media_root
                     or not Path(config.media_root).is_absolute()
                     or not config.media_allowed_hosts
-                    or config.max_store_bytes < config.max_asset_bytes
+                    or config.max_store_bytes < largest_asset
                 ):
                     raise ValueError(
-                        "universal social media/story requires storage and host policy"
+                        "universal social asset ingress requires storage and host policy"
                     )
-                if any(
+            if config.universal_social_media_story_enabled and any(
                     not callable(getattr(adapters[name], method, None))
                     for name in expected
                     for method in ("stage_asset", "read_asset")
                 ):
+                raise ValueError(
+                    "universal social media/story requires provider asset staging and preview"
+                )
+            if config.universal_social_file_send_enabled:
+                telegram = adapters.get("telegram")
+                if (
+                    telegram is None
+                    or not callable(getattr(telegram, "stage_asset", None))
+                    or getattr(telegram, "document_send_supported", False) is not True
+                    or not callable(getattr(asset_ingestor, "reverify", None))
+                ):
                     raise ValueError(
-                        "universal social media/story requires provider asset staging and preview"
+                        "universal social file send requires Telegram document staging and reverification"
                     )
             self.social_workspace = SocialWorkspaceRuntime(
                 store=self.oauth.store,
@@ -119,11 +138,14 @@ class PrivateEventsMCPServer:
                 approval_url_base=config.social_approval_url,
                 asset_ingestor=asset_ingestor,
                 asset_max_bytes=config.max_asset_bytes,
+                document_max_bytes=config.max_document_bytes,
                 asset_ttl_seconds=config.asset_ttl_seconds,
                 asset_ingest_timeout_seconds=config.download_timeout_seconds,
                 asset_max_width=config.max_width,
                 asset_max_height=config.max_height,
                 asset_max_pixels=config.max_pixels,
+                media_story_enabled=config.universal_social_media_story_enabled,
+                file_send_enabled=config.universal_social_file_send_enabled,
                 budget_limits=SocialBudgetLimits(
                     attempts=config.social_publish_attempts_per_day
                 ),
@@ -144,8 +166,10 @@ class PrivateEventsMCPServer:
                     "post": config.universal_social_post_enabled,
                     "edit_delete": config.universal_social_edit_delete_enabled,
                     "media_story": config.universal_social_media_story_enabled,
-                    "social_asset_stage": config.universal_social_media_story_enabled,
-                    "social_asset_status": config.universal_social_media_story_enabled,
+                    "file_send": config.universal_social_file_send_enabled,
+                    "asset_ingress": config.asset_ingress_enabled,
+                    "social_asset_stage": config.asset_ingress_enabled,
+                    "social_asset_status": config.asset_ingress_enabled,
                     "social_asset_preview": config.universal_social_media_story_enabled,
                     "social_content_stories": config.universal_social_media_story_enabled,
                 },

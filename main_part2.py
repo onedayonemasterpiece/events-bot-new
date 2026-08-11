@@ -22345,13 +22345,14 @@ def create_app() -> web.Application:
                 build_private_events_mcp_workspace_adapters,
             )
 
-            if private_mcp_config.universal_social_media_story_enabled:
+            if private_mcp_config.asset_ingress_enabled:
                 from private_events_mcp_media import SecureMediaAssetStore
 
                 private_mcp_asset_store = SecureMediaAssetStore(
                     private_mcp_config.media_root,
                     allowed_hosts=private_mcp_config.media_allowed_hosts,
                     max_asset_bytes=private_mcp_config.max_asset_bytes,
+                    max_document_bytes=private_mcp_config.max_document_bytes,
                     max_store_bytes=private_mcp_config.max_store_bytes,
                     ttl_seconds=private_mcp_config.asset_ttl_seconds,
                     timeout_seconds=private_mcp_config.download_timeout_seconds,

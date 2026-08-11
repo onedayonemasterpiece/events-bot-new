@@ -11,6 +11,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import inspect
 import io
 import json
 import re
@@ -41,6 +42,7 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
     AssetStageRequest,
     MediaRole,
+    SocialAction,
     SocialActionIntent,
     SocialActionStatus,
     SocialPlatform,
@@ -50,6 +52,7 @@ from .social_workspace import (
     compute_action_digest,
     validate_action_status_response,
     validate_capabilities,
+    validate_document_attachment_policy,
     validate_editorial_sample_response,
     validate_resolved_target_preview,
 )
@@ -126,7 +129,7 @@ _REF_RE = re.compile(r"^(tgt|itm|ast)_[A-Za-z0-9_-]{16,160}$")
 _INGESTED_REF_RE = re.compile(r"^ing_[A-Za-z0-9_-]{24,160}$")
 _CONTENT_DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _MIME_TYPE_RE = re.compile(
-    r"^(?:image|video|audio|application)/[A-Za-z0-9.+-]{1,64}$"
+    r"^(?:image|video|audio|application|text)/[A-Za-z0-9.+-]{1,64}$"
 )
 _SECRET_KEY = re.compile(
     r"(?:^id$|(?:provider|peer|owner|chat|user)_id$|provider|native|identifier|access_hash|token|secret|password|authorization|cookie|session|raw|method|path|url)",
@@ -166,11 +169,14 @@ class SocialWorkspaceRuntime:
         approval_url_base: str | None = None,
         asset_ingestor: AssetIngestor | None = None,
         asset_max_bytes: int = 30 * 1024 * 1024,
+        document_max_bytes: int = 48 * 1024 * 1024,
         asset_ttl_seconds: int = 3600,
         asset_ingest_timeout_seconds: float = 20.0,
         asset_max_width: int = 8192,
         asset_max_height: int = 8192,
         asset_max_pixels: int = 40_000_000,
+        media_story_enabled: bool = True,
+        file_send_enabled: bool = False,
         clock: Any = time.time,
     ) -> None:
         if not isinstance(store, OAuthStateStore):
@@ -218,13 +224,18 @@ class SocialWorkspaceRuntime:
         self.approval_url_base = approval_url_base
         self.asset_ingestor = asset_ingestor
         self.asset_max_bytes = int(asset_max_bytes)
+        self.document_max_bytes = int(document_max_bytes)
         self.asset_ttl_seconds = int(asset_ttl_seconds)
         self.asset_ingest_timeout_seconds = float(asset_ingest_timeout_seconds)
         self.asset_max_width = int(asset_max_width)
         self.asset_max_height = int(asset_max_height)
         self.asset_max_pixels = int(asset_max_pixels)
+        self.media_story_enabled = bool(media_story_enabled)
+        self.file_send_enabled = bool(file_send_enabled)
         if self.asset_max_bytes < 1 or self.asset_max_bytes > 64 * 1024 * 1024:
             raise ValueError("asset_max_bytes is outside the media budget")
+        if self.document_max_bytes < 1 or self.document_max_bytes > 64 * 1024 * 1024:
+            raise ValueError("document_max_bytes is outside the document budget")
         if self.asset_ttl_seconds < 60 or self.asset_ttl_seconds > 86400:
             raise ValueError("asset_ttl_seconds is outside the supported TTL")
         if not 1 <= self.asset_ingest_timeout_seconds <= 120:
@@ -427,6 +438,16 @@ class SocialWorkspaceRuntime:
             raise SocialWorkspaceRuntimeError("verified asset digest is invalid")
         if not _MIME_TYPE_RE.fullmatch(asset.mime_type):
             raise SocialWorkspaceRuntimeError("verified asset MIME type is invalid")
+        asset_role = getattr(asset, "role", None)
+        normalized_role = (
+            asset_role.value if isinstance(asset_role, MediaRole) else asset_role
+        )
+        if normalized_role is None and role is MediaRole.IMAGE:
+            # Compatibility for image manifests created before roles were
+            # explicit. Documents never receive this downgrade.
+            normalized_role = MediaRole.IMAGE.value
+        if normalized_role != role.value:
+            raise SocialWorkspaceRuntimeError("verified asset role binding mismatch")
         expected_family = {
             MediaRole.IMAGE: "image/",
             MediaRole.VIDEO: "video/",
@@ -434,7 +455,12 @@ class SocialWorkspaceRuntime:
         }.get(role)
         if expected_family is not None and not asset.mime_type.startswith(expected_family):
             raise SocialWorkspaceRuntimeError("verified asset MIME type does not match role")
-        if type(asset.byte_length) is not int or not 1 <= asset.byte_length <= self.asset_max_bytes:
+        byte_limit = (
+            self.document_max_bytes
+            if role is MediaRole.DOCUMENT
+            else self.asset_max_bytes
+        )
+        if type(asset.byte_length) is not int or not 1 <= asset.byte_length <= byte_limit:
             raise SocialWorkspaceRuntimeError("verified asset size is outside the media budget")
         now = self._now()
         if (
@@ -457,6 +483,23 @@ class SocialWorkspaceRuntime:
             raise SocialWorkspaceRuntimeError("verified asset dimensions exceed the media budget")
         if role in {MediaRole.IMAGE, MediaRole.VIDEO, MediaRole.ANIMATION} and asset.width is None:
             raise SocialWorkspaceRuntimeError("verified visual asset dimensions are required")
+        if role is MediaRole.DOCUMENT:
+            if asset.width is not None or asset.height is not None:
+                raise SocialWorkspaceRuntimeError(
+                    "verified document dimensions must be absent"
+                )
+            display_name = getattr(asset, "display_name", None)
+            classification = getattr(asset, "classification", None)
+            if (
+                not isinstance(display_name, str)
+                or not 1 <= len(display_name) <= 255
+                or any(character in display_name for character in ("/", "\\", "\x00"))
+                or not isinstance(classification, str)
+                or not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{0,63}", classification)
+            ):
+                raise SocialWorkspaceRuntimeError(
+                    "verified document metadata is invalid"
+                )
         return asset
 
     def _mint_verified_asset_ref(
@@ -471,6 +514,12 @@ class SocialWorkspaceRuntime:
         public_ref = f"ast_{secrets.token_urlsafe(24)}"
         value: dict[str, Any] = {
             "asset_ref": public_ref,
+            "storage_ref": asset.storage_ref,
+            "role": (
+                asset.role.value
+                if isinstance(getattr(asset, "role", None), MediaRole)
+                else getattr(asset, "role", MediaRole.IMAGE.value)
+            ),
             "content_digest": asset.content_digest,
             "mime_type": asset.mime_type,
             "byte_length": asset.byte_length,
@@ -479,6 +528,10 @@ class SocialWorkspaceRuntime:
         if asset.width is not None:
             value["width"] = asset.width
             value["height"] = asset.height
+        if getattr(asset, "display_name", None) is not None:
+            value["display_name"] = asset.display_name
+        if getattr(asset, "classification", None) is not None:
+            value["classification"] = asset.classification
         now = self._now()
         client, subject, resource = self._binding(principal)
         with self.store._lock, self.store._connect() as conn:
@@ -553,23 +606,39 @@ class SocialWorkspaceRuntime:
             raise SocialWorkspaceRuntimeError("verified asset metadata is invalid") from None
         allowed = {
             "asset_ref",
+            "storage_ref",
+            "role",
             "content_digest",
             "mime_type",
             "byte_length",
             "expires_at",
             "width",
             "height",
+            "display_name",
+            "classification",
         }
         if not isinstance(metadata, dict) or set(metadata) - allowed:
             raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
         if (
             metadata.get("asset_ref") != asset_ref
+            or (
+                metadata.get("storage_ref") is not None
+                and (
+                    not isinstance(metadata["storage_ref"], str)
+                    or not _INGESTED_REF_RE.fullmatch(metadata["storage_ref"])
+                )
+            )
+            or metadata.get("role", "image") not in {"image", "document"}
             or not isinstance(metadata.get("content_digest"), str)
             or not _CONTENT_DIGEST_RE.fullmatch(metadata["content_digest"])
             or not isinstance(metadata.get("mime_type"), str)
             or not _MIME_TYPE_RE.fullmatch(metadata["mime_type"])
             or type(metadata.get("byte_length")) is not int
-            or not 1 <= metadata["byte_length"] <= self.asset_max_bytes
+            or not 1 <= metadata["byte_length"] <= (
+                self.document_max_bytes
+                if metadata.get("role", "image") == "document"
+                else self.asset_max_bytes
+            )
             or type(metadata.get("expires_at")) is not int
             or metadata["expires_at"] != int(row["expires_at"])
         ):
@@ -588,6 +657,22 @@ class SocialWorkspaceRuntime:
             raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
         if metadata["mime_type"].startswith(("image/", "video/")) and width is None:
             raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
+        metadata.setdefault("role", "image")
+        if metadata["role"] == "document" and (
+                width is not None
+                or not isinstance(metadata.get("storage_ref"), str)
+                or not isinstance(metadata.get("display_name"), str)
+                or not 1 <= len(metadata["display_name"]) <= 255
+                or any(
+                    character in metadata["display_name"]
+                    for character in ("/", "\\", "\x00")
+                )
+                or not isinstance(metadata.get("classification"), str)
+                or not re.fullmatch(
+                    r"[a-z0-9][a-z0-9_.-]{0,63}", metadata["classification"]
+                )
+            ):
+                raise SocialWorkspaceRuntimeError("verified asset metadata is invalid")
         return metadata, expired
 
     def _asset_metadata_for_intent(
@@ -602,7 +687,7 @@ class SocialWorkspaceRuntime:
             return []
         if conn is None:
             with self.store._lock, self.store._connect() as owned_conn:
-                return [
+                metadata = [
                     self._asset_metadata_on_conn(
                         owned_conn,
                         ref,
@@ -611,15 +696,49 @@ class SocialWorkspaceRuntime:
                     )[0]
                     for ref in refs
                 ]
-        return [
-            self._asset_metadata_on_conn(
-                conn,
-                ref,
-                intent.platform.value,
-                self._binding(principal),
-            )[0]
-            for ref in refs
-        ]
+        else:
+            metadata = [
+                self._asset_metadata_on_conn(
+                    conn,
+                    ref,
+                    intent.platform.value,
+                    self._binding(principal),
+                )[0]
+                for ref in refs
+            ]
+        by_ref = {str(item["asset_ref"]): item for item in metadata}
+        if intent.content is not None:
+            for attachment in intent.content.media:
+                if by_ref[attachment.asset_ref]["role"] != attachment.role.value:
+                    raise SocialWorkspaceRuntimeError(
+                        "verified asset role binding mismatch"
+                    )
+        return metadata
+
+    @staticmethod
+    def _digest_asset_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
+        """Return only externally safe immutable fields bound into a digest."""
+
+        allowed = (
+            "asset_ref",
+            "content_digest",
+            "mime_type",
+            "byte_length",
+            "expires_at",
+            "width",
+            "height",
+            "display_name",
+            "classification",
+        )
+        result = {key: metadata[key] for key in allowed if key in metadata}
+        if metadata.get("role") == MediaRole.DOCUMENT.value:
+            result["role"] = MediaRole.DOCUMENT.value
+        return result
+
+    def _digest_assets(
+        self, metadata: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        return [self._digest_asset_metadata(item) for item in metadata]
 
     def _store_target_previews_from_output(self, value: Any) -> None:
         """Persist every closed-schema target preview minted by a read.
@@ -1142,7 +1261,18 @@ class SocialWorkspaceRuntime:
             features = safe.get("content_features")
             if isinstance(features, list):
                 media_features = {"image", "video", "document", "audio", "animation"}
-                allowed_media = {"image"} if self.asset_ingestor is not None else set()
+                allowed_media: set[str] = set()
+                actions = safe.get("actions")
+                if self.asset_ingestor is not None and self.media_story_enabled:
+                    allowed_media.add("image")
+                if (
+                    self.asset_ingestor is not None
+                    and self.file_send_enabled
+                    and platform == SocialPlatform.TELEGRAM.value
+                    and isinstance(actions, list)
+                    and SocialAction.SEND_MESSAGE.value in actions
+                ):
+                    allowed_media.add("document")
                 safe["content_features"] = [
                     value
                     for value in features
@@ -1356,6 +1486,116 @@ class SocialWorkspaceRuntime:
             return sum(SocialWorkspaceRuntime._count_media(child) for child in value)
         return 0
 
+    @staticmethod
+    def _has_document(intent: SocialActionIntent) -> bool:
+        return bool(
+            intent.content
+            and any(
+                attachment.role is MediaRole.DOCUMENT
+                for attachment in intent.content.media
+            )
+        )
+
+    def _enforce_document_runtime_policy(self, intent: SocialActionIntent) -> None:
+        validate_document_attachment_policy(intent)
+        if not self._has_document(intent):
+            return
+        if not self.file_send_enabled or self.asset_ingestor is None:
+            raise SocialWorkspaceRuntimeError("social document sending is disabled")
+        if not callable(getattr(self.asset_ingestor, "reverify", None)):
+            raise SocialWorkspaceRuntimeError(
+                "document asset reverification is unavailable"
+            )
+
+    async def _authorize_document_target(
+        self, intent: SocialActionIntent, principal: RuntimePrincipal
+    ) -> None:
+        if not self._has_document(intent):
+            return
+        native_target = self._resolve_ref(
+            intent.target_ref,
+            "target",
+            SocialPlatform.TELEGRAM.value,
+            principal,
+        )
+        try:
+            raw = await asyncio.wait_for(
+                self._adapter(SocialPlatform.TELEGRAM.value).capabilities(
+                    native_target
+                ),
+                self.provider_timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            raise SocialWorkspaceRuntimeError(
+                "social provider capability check timed out"
+            ) from None
+        except Exception:  # noqa: BLE001 - provider exception text is untrusted
+            raise self._safe_provider_error() from None
+        if not isinstance(raw, Mapping):
+            raise SocialWorkspaceRuntimeError("provider capabilities are invalid")
+        actions = raw.get("actions")
+        features = raw.get("content_features")
+        if (
+            not isinstance(actions, list)
+            or SocialAction.SEND_MESSAGE.value not in actions
+            or not isinstance(features, list)
+            or MediaRole.DOCUMENT.value not in features
+        ):
+            raise SocialWorkspaceRuntimeError(
+                "target does not permit Telegram document send_message"
+            )
+
+    def _reverify_document_assets(
+        self,
+        intent: SocialActionIntent,
+        principal: RuntimePrincipal,
+        metadata: list[dict[str, Any]],
+    ) -> None:
+        if not self._has_document(intent):
+            return
+        self._enforce_document_runtime_policy(intent)
+        assert self.asset_ingestor is not None
+        reverify = self.asset_ingestor.reverify
+        owner_binding = self._principal_hash(principal)
+        for stored in metadata:
+            if stored["role"] != MediaRole.DOCUMENT.value:
+                continue
+            refreshed = reverify(
+                stored["storage_ref"],
+                owner_binding=owner_binding,
+                max_bytes=self.document_max_bytes,
+                role=MediaRole.DOCUMENT.value,
+            )
+            if inspect.isawaitable(refreshed):
+                raise SocialWorkspaceRuntimeError(
+                    "document asset reverification must be synchronous"
+                )
+            verified = self._validate_verified_asset(
+                refreshed,
+                owner_binding=owner_binding,
+                requested_expires_at=int(stored["expires_at"]),
+                role=MediaRole.DOCUMENT,
+            )
+            fresh = {
+                "storage_ref": verified.storage_ref,
+                "role": (
+                    verified.role.value
+                    if isinstance(verified.role, MediaRole)
+                    else verified.role
+                ),
+                "content_digest": verified.content_digest,
+                "mime_type": verified.mime_type,
+                "byte_length": verified.byte_length,
+                "expires_at": verified.expires_at,
+                "display_name": verified.display_name,
+                "classification": verified.classification,
+            }
+            expected = {key: stored[key] for key in fresh}
+            if fresh != expected:
+                raise SocialWorkspaceRuntimeError(
+                    "verified document bytes or metadata changed"
+                )
+
     async def prepare(self, intent: SocialActionIntent, context: ToolCallContext) -> dict[str, Any]:
         principal = RuntimePrincipal.from_context(context)
         if not social_scopes_authorized(intent.required_scopes, principal.scopes):
@@ -1368,6 +1608,10 @@ class SocialWorkspaceRuntime:
         # fails before an approval can ever be issued.
         try:
             self._native_intent(intent, principal)
+            self._enforce_document_runtime_policy(intent)
+            await self._authorize_document_target(intent, principal)
+            preflight_assets = self._asset_metadata_for_intent(intent, principal)
+            self._reverify_document_assets(intent, principal, preflight_assets)
         except Exception as exc:
             self._audit(principal, platform=platform, operation="prepare",
                         outcome="denied", reason=type(exc).__name__,
@@ -1383,7 +1627,7 @@ class SocialWorkspaceRuntime:
                     intent, principal, conn=conn
                 )
                 digest = compute_action_digest(
-                    intent, verified_assets=verified_assets or None
+                    intent, verified_assets=self._digest_assets(verified_assets) or None
                 )
                 existing = conn.execute(
                     """SELECT * FROM social_workspace_preparation WHERE client_hash=? AND
@@ -1500,7 +1744,7 @@ class SocialWorkspaceRuntime:
                 for ref in self._asset_refs(intent)
             ]
             if compute_action_digest(
-                intent, verified_assets=verified_assets or None
+                intent, verified_assets=self._digest_assets(verified_assets) or None
             ) != action_digest:
                 raise SocialWorkspaceRuntimeError("verified asset action digest mismatch")
 
@@ -1554,6 +1798,12 @@ class SocialWorkspaceRuntime:
                         "byte_length": asset_by_ref[item.asset_ref]["byte_length"],
                         "width": asset_by_ref[item.asset_ref].get("width"),
                         "height": asset_by_ref[item.asset_ref].get("height"),
+                        "display_name": asset_by_ref[item.asset_ref].get(
+                            "display_name"
+                        ),
+                        "classification": asset_by_ref[item.asset_ref].get(
+                            "classification"
+                        ),
                         "expires_at": _now_rfc3339(
                             int(asset_by_ref[item.asset_ref]["expires_at"])
                         ),
@@ -1564,7 +1814,7 @@ class SocialWorkspaceRuntime:
                 ],
                 "verified_assets": [
                     {
-                        **asset,
+                        **self._digest_asset_metadata(asset),
                         "asset_fingerprint": self._hash(str(asset["asset_ref"]))[:12],
                         "expires_at": _now_rfc3339(int(asset["expires_at"])),
                     }
@@ -1622,7 +1872,7 @@ class SocialWorkspaceRuntime:
                     for ref in self._asset_refs(intent)
                 ]
                 if compute_action_digest(
-                    intent, verified_assets=verified_assets or None
+                    intent, verified_assets=self._digest_assets(verified_assets) or None
                 ) != str(prep["action_digest"]):
                     raise SocialWorkspaceRuntimeError(
                         "verified asset action digest mismatch"
@@ -1676,6 +1926,37 @@ class SocialWorkspaceRuntime:
         digest = str(payload["action_digest"])
         now = self._now()
         client, subject, resource = self._binding(principal)
+        # Re-authorize the current kill switch, OAuth scope, target rights and
+        # immutable bytes before consuming the one-shot preparation.
+        with self.store._lock, self.store._connect() as conn:
+            preflight = conn.execute(
+                "SELECT * FROM social_workspace_preparation WHERE preparation_hash=?",
+                (self._hash(prep_ref),),
+            ).fetchone()
+        if preflight is None:
+            raise SocialWorkspaceRuntimeError("approval or preparation is invalid")
+        if (
+            preflight["client_hash"],
+            preflight["subject_hash"],
+            preflight["resource_hash"],
+            preflight["action_digest"],
+        ) != (client, subject, resource, digest):
+            raise SocialWorkspaceRuntimeError("preparation binding mismatch")
+        if int(preflight["expires_at"]) <= now:
+            raise SocialWorkspaceRuntimeError("approval or preparation expired")
+        preflight_intent = self._intent_from_row(preflight)
+        self._enforce_document_runtime_policy(preflight_intent)
+        if not social_scopes_authorized(
+            preflight_intent.required_scopes, principal.scopes
+        ):
+            raise SocialWorkspaceRuntimeError("required social action scope is missing")
+        await self._authorize_document_target(preflight_intent, principal)
+        preflight_assets = self._asset_metadata_for_intent(
+            preflight_intent, principal
+        )
+        self._reverify_document_assets(
+            preflight_intent, principal, preflight_assets
+        )
         with self.store._lock, self.store._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
@@ -1717,6 +1998,7 @@ class SocialWorkspaceRuntime:
                 if int(prep["expires_at"]) <= now:
                     raise SocialWorkspaceRuntimeError("approval or preparation expired")
                 intent = self._intent_from_row(prep)
+                self._enforce_document_runtime_policy(intent)
                 direct_user_authorized = (
                     browser_approved
                     and prep["status"] == SocialActionStatus.APPROVED.value
@@ -1757,7 +2039,7 @@ class SocialWorkspaceRuntime:
                     intent, principal, conn=conn
                 )
                 if compute_action_digest(
-                    intent, verified_assets=verified_assets or None
+                    intent, verified_assets=self._digest_assets(verified_assets) or None
                 ) != digest:
                     raise SocialWorkspaceRuntimeError(
                         "verified asset action digest mismatch"
@@ -1968,10 +2250,17 @@ class SocialWorkspaceRuntime:
             return unknown
 
     @staticmethod
-    def _asset_scope_authorized(platform: str, scopes: frozenset[str]) -> bool:
+    def _asset_scope_authorized(
+        platform: str, role: MediaRole, scopes: frozenset[str]
+    ) -> bool:
+        suffixes = (
+            ("dm:send",)
+            if role is MediaRole.DOCUMENT
+            else ("post:publish", "story:write")
+        )
         return any(
             social_scopes_authorized(frozenset({f"{platform}:{suffix}"}), scopes)
-            for suffix in ("post:publish", "story:write")
+            for suffix in suffixes
         )
 
     async def stage_asset(
@@ -1986,10 +2275,20 @@ class SocialWorkspaceRuntime:
         principal = RuntimePrincipal.from_context(context)
         platform = request.platform.value
         try:
-            if not self._asset_scope_authorized(platform, principal.scopes):
+            if not self._asset_scope_authorized(
+                platform, request.role, principal.scopes
+            ):
                 raise SocialWorkspaceRuntimeError("required social asset scope is missing")
-            if request.role is not MediaRole.IMAGE:
-                raise SocialWorkspaceRuntimeError("only image asset staging is enabled")
+            if request.role is MediaRole.IMAGE and not self.media_story_enabled:
+                raise SocialWorkspaceRuntimeError("image asset staging is disabled")
+            if request.role is MediaRole.DOCUMENT and (
+                not self.file_send_enabled or platform != SocialPlatform.TELEGRAM.value
+            ):
+                raise SocialWorkspaceRuntimeError("document asset staging is disabled")
+            if request.role not in {MediaRole.IMAGE, MediaRole.DOCUMENT}:
+                raise SocialWorkspaceRuntimeError(
+                    "only image or document asset staging is enabled"
+                )
             if self.asset_ingestor is None:
                 raise SocialWorkspaceRuntimeError("social asset ingestor is unavailable")
             adapter = self._adapter(platform)
@@ -2002,13 +2301,34 @@ class SocialWorkspaceRuntime:
             requested_expires_at = self._now() + min(
                 self.asset_ttl_seconds, self.reference_ttl_seconds
             )
+            byte_limit = (
+                self.document_max_bytes
+                if request.role is MediaRole.DOCUMENT
+                else self.asset_max_bytes
+            )
             try:
+                ingest_parameters = inspect.signature(
+                    self.asset_ingestor.ingest
+                ).parameters
+                ingest_kwargs: dict[str, Any] = {
+                    "owner_binding": owner_binding,
+                    "max_bytes": byte_limit,
+                    "expires_at": requested_expires_at,
+                }
+                if "role" in ingest_parameters:
+                    ingest_kwargs["role"] = (
+                        request.role.value
+                        if request.role is MediaRole.DOCUMENT
+                        else "story_media"
+                    )
+                elif request.role is MediaRole.DOCUMENT:
+                    raise SocialWorkspaceRuntimeError(
+                        "document-aware asset ingestor is unavailable"
+                    )
                 ingested = await asyncio.wait_for(
                     self.asset_ingestor.ingest(
                         request.file,
-                        owner_binding=owner_binding,
-                        max_bytes=self.asset_max_bytes,
-                        expires_at=requested_expires_at,
+                        **ingest_kwargs,
                     ),
                     timeout=self.asset_ingest_timeout_seconds,
                 )
@@ -2066,8 +2386,6 @@ class SocialWorkspaceRuntime:
             if row is None:
                 raise SocialWorkspaceRuntimeError("asset reference is unknown or not bound")
             platform = str(row["platform"])
-        if not self._asset_scope_authorized(platform, principal.scopes):
-            raise SocialWorkspaceRuntimeError("required social asset scope is missing")
         with self.store._lock, self.store._connect() as conn:
             metadata, expired = self._asset_metadata_on_conn(
                 conn,
@@ -2076,6 +2394,9 @@ class SocialWorkspaceRuntime:
                 self._binding(principal),
                 allow_expired=True,
             )
+        role = MediaRole(str(metadata["role"]))
+        if not self._asset_scope_authorized(platform, role, principal.scopes):
+            raise SocialWorkspaceRuntimeError("required social asset scope is missing")
         result = {
             "asset_ref": asset_ref,
             "status": "expired" if expired else "ready",
@@ -2088,6 +2409,9 @@ class SocialWorkspaceRuntime:
         if metadata.get("width") is not None:
             result["width"] = metadata["width"]
             result["height"] = metadata["height"]
+        if metadata.get("display_name") is not None:
+            result["display_name"] = metadata["display_name"]
+            result["classification"] = metadata["classification"]
         self._audit(principal, platform=platform, operation="asset_status",
                     outcome="succeeded", reason=str(result["status"]))
         return result

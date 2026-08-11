@@ -4,7 +4,7 @@ import asyncio
 import json
 import sqlite3
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -12,14 +12,17 @@ from typing import Any
 import pytest
 from PIL import Image
 
+import private_events_mcp.social_workspace_runtime as runtime_module
 from private_events_mcp.auth_store import OAuthStateStore, OAuthStoreError
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
 from private_events_mcp.protocol import MCPProtocol
 from private_events_mcp.repository import InvalidArgumentsError
 from private_events_mcp.social_workspace import (
+    MediaRole,
     SocialAction,
     SocialReadOperation,
     compute_action_digest,
+    validate_asset_stage_request,
     validate_prepare_request,
     validate_read_request,
 )
@@ -165,6 +168,61 @@ class FakeAdapter:
         assert len(self.asset_bytes) <= max_bytes
         return self.asset_bytes
 
+
+@dataclass(frozen=True)
+class FakeDocumentAsset:
+    storage_ref: str
+    owner_binding: str
+    role: str
+    content_digest: str
+    mime_type: str
+    byte_length: int
+    expires_at: int
+    width: int | None = None
+    height: int | None = None
+    display_name: str | None = None
+    classification: str | None = None
+
+
+class FakeDocumentIngestor:
+    def __init__(self, now: int) -> None:
+        self.now = now
+        self.asset: FakeDocumentAsset | None = None
+        self.reverify_calls = 0
+
+    async def ingest(
+        self, file, *, owner_binding, max_bytes, expires_at, role
+    ):
+        assert role == "document"
+        assert max_bytes == 48 * 1024 * 1024
+        self.asset = FakeDocumentAsset(
+            storage_ref="ing_" + "d" * 24,
+            owner_binding=owner_binding,
+            role="document",
+            content_digest="sha256:" + "e" * 64,
+            mime_type="application/pdf",
+            byte_length=128,
+            expires_at=expires_at,
+            display_name="safe.pdf",
+            classification="pdf",
+        )
+        return self.asset
+
+    def reverify(self, storage_ref, *, owner_binding, max_bytes, role):
+        self.reverify_calls += 1
+        assert self.asset is not None
+        return self.asset
+
+
+class FakeDocumentAdapter(FakeAdapter):
+    async def capabilities(self, target_ref):
+        value = dict(await super().capabilities(target_ref))
+        value["content_features"] = ["rich_text", "image", "document"]
+        return value
+
+    async def stage_asset(self, asset, *, role):
+        assert role is MediaRole.DOCUMENT
+        return "provider-document-binding"
 
 @pytest.fixture
 def runtime(tmp_path: Path):
@@ -698,6 +756,130 @@ def test_catalog_omits_disabled_action_and_media_surfaces(runtime) -> None:
     }
     assert "telegram:dm:send" in advertised and "vk:dm:send" in advertised
     assert not any(scope.endswith(":post:publish") for scope in advertised)
+
+
+@pytest.mark.asyncio
+async def test_document_runtime_reverifies_digest_and_kill_switch(
+    tmp_path: Path, monkeypatch
+) -> None:
+    now = 1_800_000_000
+    ingestor = FakeDocumentIngestor(now)
+    adapter = FakeDocumentAdapter()
+    monkeypatch.setattr(runtime_module, "VerifiedAsset", FakeDocumentAsset)
+    service = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "document.sqlite")),
+        adapters={"telegram": adapter, "vk": adapter},
+        encryption_key="document-runtime-test-key-long-enough",
+        asset_ingestor=ingestor,
+        media_story_enabled=False,
+        file_send_enabled=True,
+        clock=lambda: now,
+    )
+    tools = build_social_workspace_tools(
+        service,
+        feature_policy={
+            "dm": True,
+            "media_story": False,
+            "file_send": True,
+            "asset_ingress": True,
+        },
+        capability_policy={"telegram": True, "vk": True},
+    )
+    stage_tool = next(item for item in tools if item.name == "social_asset_stage")
+    assert stage_tool.input_schema["properties"]["role"]["enum"] == ["document"]
+    staged = await service.stage_asset(
+        validate_asset_stage_request(
+            {
+                "platform": "telegram",
+                "file": {
+                    "download_url": "https://files.example.test/document",
+                    "file_id": "file-document",
+                    "mime_type": "application/pdf",
+                    "file_name": "unsafe.pdf",
+                },
+                "role": "document",
+            }
+        ),
+        scoped_context("telegram:dm:send"),
+    )
+    principal = RuntimePrincipal.from_context(scoped_context("telegram:dm:send"))
+    target = service._mint_ref("target", "native-self", "telegram", principal)
+    service._store_target_preview(
+        target,
+        {
+            "platform": "telegram",
+            "target_ref": target,
+            "kind": "self",
+            "display_name": "Saved Messages",
+        },
+    )
+    telegram_caps = await service.capabilities(
+        target, scoped_context("telegram:dm:send"), platform="telegram"
+    )
+    assert "document" in telegram_caps["content_features"]
+    vk_caps = await service.capabilities(None, context(), platform="vk")
+    assert "document" not in vk_caps["content_features"]
+    intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "send_message",
+            "idempotency_key": "document-runtime-123",
+            "target_ref": target,
+            "content": {
+                "text": "caption",
+                "entities": [],
+                "media": [{"asset_ref": staged["asset_ref"], "role": "document"}],
+            },
+        }
+    )
+    prepared = await service.prepare(intent, scoped_context("telegram:dm:send"))
+    assert ingestor.reverify_calls == 1
+    status = await service.asset_status(
+        staged["asset_ref"], scoped_context("telegram:dm:send")
+    )
+    assert status["display_name"] == "safe.pdf"
+    assert status["classification"] == "pdf"
+    preview = service.approval_preview(
+        preparation_ref=prepared["preparation_ref"],
+        action_digest=prepared["action_digest"],
+    )
+    encoded_preview = json.dumps(preview)
+    assert "safe.pdf" in encoded_preview
+    assert "application/pdf" in encoded_preview
+    assert "ing_" not in encoded_preview
+    assert "provider-document-binding" not in encoded_preview
+    assert ingestor.asset is not None
+    ingestor.asset = replace(
+        ingestor.asset, content_digest="sha256:" + "f" * 64
+    )
+    with pytest.raises(SocialWorkspaceRuntimeError, match="changed"):
+        await service.commit(
+            {
+                "preparation_ref": prepared["preparation_ref"],
+                "action_digest": prepared["action_digest"],
+            },
+            scoped_context("telegram:dm:send"),
+        )
+    assert adapter.executions == 0
+
+    ingestor.asset = replace(
+        ingestor.asset, content_digest="sha256:" + "e" * 64
+    )
+    service.file_send_enabled = False
+    with pytest.raises(SocialWorkspaceRuntimeError, match="disabled"):
+        await service.commit(
+            {
+                "preparation_ref": prepared["preparation_ref"],
+                "action_digest": prepared["action_digest"],
+            },
+            scoped_context("telegram:dm:send"),
+        )
+    assert adapter.executions == 0
+
+    telegram_caps = await service.capabilities(
+        target, scoped_context("telegram:dm:send"), platform="telegram"
+    )
+    assert "document" not in telegram_caps["content_features"]
 
 
 @pytest.mark.asyncio

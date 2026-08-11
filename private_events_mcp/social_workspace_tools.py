@@ -141,6 +141,18 @@ def build_social_workspace_tools(
     def enabled(name: str) -> bool:
         return policy_allows(feature_policy, name) and policy_allows(capability_policy, name)
 
+    media_story_enabled = enabled("media_story")
+    if isinstance(feature_policy, Mapping):
+        file_send_enabled = bool(feature_policy.get("file_send", False))
+        asset_ingress_enabled = bool(
+            feature_policy.get(
+                "asset_ingress", media_story_enabled or file_send_enabled
+            )
+        )
+    else:
+        file_send_enabled = enabled("file_send")
+        asset_ingress_enabled = enabled("asset_ingress")
+
     action_features = {
         SocialAction.SEND_MESSAGE: "dm",
         SocialAction.PUBLISH: "post",
@@ -256,8 +268,21 @@ def build_social_workspace_tools(
         feature = action_features[request.action]
         if not enabled(feature):
             raise InvalidArgumentsError("social action class is disabled")
-        if request.content is not None and request.content.media and not enabled("media_story"):
-            raise InvalidArgumentsError("social media actions are disabled")
+        if request.content is not None and request.content.media:
+            roles = {item.role.value for item in request.content.media}
+            if "document" in roles:
+                if (
+                    not file_send_enabled
+                    or request.platform.value != "telegram"
+                    or request.action is not SocialAction.SEND_MESSAGE
+                    or roles != {"document"}
+                    or len(request.content.media) != 1
+                ):
+                    raise InvalidArgumentsError(
+                        "social document sending is disabled"
+                    )
+            elif not enabled("media_story"):
+                raise InvalidArgumentsError("social media actions are disabled")
 
     def require_stored_action_feature(action_value: Any) -> SocialAction:
         try:
@@ -280,6 +305,19 @@ def build_social_workspace_tools(
         platform = arguments.get("platform")
         platform = require_platform(platform)
         return frozenset({f"{platform}:discover"})
+
+    def asset_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
+        try:
+            platform = require_platform(arguments.get("platform"))
+            role = arguments.get("role")
+            suffix = (
+                "dm:send"
+                if role == "document"
+                else "post:publish"
+            )
+            return frozenset({f"{platform}:{suffix}"})
+        except Exception as exc:  # noqa: BLE001 - normalize untrusted request errors
+            raise rejected(exc) from None
 
     def status_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         try:
@@ -313,6 +351,14 @@ def build_social_workspace_tools(
             raise InvalidArgumentsError("preparation reference is unknown")
         require_platform(row["platform"])
         require_stored_action_feature(row["action"])
+        with runtime.store._lock, runtime.store._connect() as conn:
+            stored = conn.execute(
+                "SELECT * FROM social_workspace_preparation WHERE preparation_hash=?",
+                (runtime._hash(ref),),
+            ).fetchone()
+        if stored is None:
+            raise InvalidArgumentsError("preparation reference is unknown")
+        require_action_feature(runtime._intent_from_row(stored))
         return required_scope_for_action(row["platform"], row["action"])
 
     async def denial(arguments: Mapping[str, Any], context: ToolCallContext, reason: str) -> None:
@@ -377,10 +423,15 @@ def build_social_workspace_tools(
 
     async def asset_stage(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
-            if not enabled("media_story"):
-                raise InvalidArgumentsError("social media actions are disabled")
+            if not asset_ingress_enabled:
+                raise InvalidArgumentsError("social asset ingress is disabled")
             request = validate_asset_stage_request(arguments)
             require_platform(request.platform.value)
+            if request.role.value == "document":
+                if not file_send_enabled or request.platform.value != "telegram":
+                    raise InvalidArgumentsError("social document sending is disabled")
+            elif not enabled("media_story"):
+                raise InvalidArgumentsError("social media actions are disabled")
             return await runtime.stage_asset(request, context)
         except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise asset_rejected(exc) from None
@@ -445,6 +496,16 @@ def build_social_workspace_tools(
     prepare_output_schema["properties"]["action"] = {
         "type": "string",
         "enum": [action.value for action in enabled_actions],
+    }
+    asset_stage_schema = copy.deepcopy(dict(SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA))
+    enabled_asset_roles: list[str] = []
+    if media_story_enabled:
+        enabled_asset_roles.append("image")
+    if file_send_enabled and "telegram" in enabled_platforms:
+        enabled_asset_roles.append("document")
+    asset_stage_schema["properties"]["role"] = {
+        "type": "string",
+        "enum": enabled_asset_roles,
     }
 
     capability_schema = {
@@ -540,9 +601,9 @@ def build_social_workspace_tools(
                  handler=read, scope_selector=read_scope, **common),
         ToolSpec("social_asset_stage", "Stage social asset",
                  "Ingest one authenticated ChatGPT file into a verified opaque social asset.",
-                 SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA,
+                 asset_stage_schema,
                  SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA, handler=asset_stage,
-                 scope_selector=lambda _a: frozenset(), file_params=("file",),
+                 scope_selector=asset_scope, file_params=("file",),
                  read_only=False, idempotent=False,
                  **{
                      **common,
@@ -595,8 +656,8 @@ def build_social_workspace_tools(
     feature_tools = {
         "social_dialogs_list": "private_read",
         "social_content_stories": "media_story",
-        "social_asset_stage": "media_story",
-        "social_asset_status": "media_story",
+        "social_asset_stage": "asset_ingress",
+        "social_asset_status": "asset_ingress",
         "social_asset_preview": "media_story",
     }
     provider_tools = {
@@ -640,7 +701,7 @@ def build_social_workspace_tools(
     )
     mutation_options = options_for(mutation_suffixes, legacy_family="publish")
     asset_options = options_for(
-        ("post:publish", "story:write"), legacy_family="publish"
+        ("dm:send", "post:publish", "story:write"), legacy_family="publish"
     )
     scoped_options = {
         "social_capabilities": discovery_options,
@@ -677,7 +738,11 @@ def build_social_workspace_tools(
         for spec in specs
         if enabled(spec.name)
         and (enabled_actions or spec.name not in action_tool_names)
-        and enabled(feature_tools.get(spec.name, spec.name))
+        and (
+            asset_ingress_enabled
+            if feature_tools.get(spec.name) == "asset_ingress"
+            else enabled(feature_tools.get(spec.name, spec.name))
+        )
         and (
             spec.name not in provider_tools
             or provider_tools[spec.name] in enabled_platforms

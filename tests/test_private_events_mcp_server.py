@@ -19,6 +19,8 @@ from private_events_mcp.tool_catalog import ToolCallContext
 
 
 class _WorkspaceAdapter:
+    document_send_supported = True
+
     async def capabilities(self, target_ref):
         return {}
 
@@ -49,6 +51,14 @@ class _WorkspaceAdapter:
 
     async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
         return b"image"
+
+
+class _DocumentIngestor:
+    async def ingest(self, file, **kwargs):
+        raise AssertionError("catalogue construction must not ingest")
+
+    def reverify(self, storage_ref, **kwargs):
+        raise AssertionError("catalogue construction must not reverify")
 
 
 def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(
@@ -82,6 +92,33 @@ def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(
 
     with pytest.raises(ValueError, match="adapter set"):
         attach_private_events_mcp(web.Application(), universal)
+
+
+def test_file_only_server_advertises_document_ingress_to_chatgpt_not_codex(
+    config,
+) -> None:
+    enabled = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_dm_enabled=True,
+        universal_social_file_send_enabled=True,
+        media_allowed_hosts=("files.example",),
+    )
+    server = attach_private_events_mcp(
+        web.Application(),
+        enabled,
+        social_workspace_adapters={"telegram": _WorkspaceAdapter()},
+        asset_ingestor=_DocumentIngestor(),
+    )
+    assert server is not None
+    stage = next(
+        tool for tool in server.protocol.tools if tool.name == "social_asset_stage"
+    )
+    assert stage.input_schema["properties"]["role"]["enum"] == ["document"]
+    assert not any(
+        tool.name.startswith("social_") for tool in server.codex_protocol.tools
+    )
 
 
 @pytest.mark.asyncio

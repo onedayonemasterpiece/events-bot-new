@@ -33,6 +33,20 @@ def _media_enabled_env(monkeypatch) -> None:
         monkeypatch.setenv(key, value)
 
 
+def _file_enabled_env(monkeypatch) -> None:
+    _enabled_env(monkeypatch)
+    for key, value in {
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID": "codex-public-client",
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED": "1",
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED": "1",
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED": "1",
+        "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED": "1",
+        "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN": "approval_" + "a" * 48,
+        "PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS": "files.example",
+    }.items():
+        monkeypatch.setenv(key, value)
+
+
 def test_enabled_config_requires_distinct_static_codex_client(monkeypatch) -> None:
     _enabled_env(monkeypatch)
     with pytest.raises(ValueError, match="CODEX_OAUTH_CLIENT_ID"):
@@ -102,6 +116,45 @@ def test_disabled_media_story_does_not_parse_stale_media_limits(monkeypatch) -> 
     assert config.universal_social_media_story_enabled is False
     assert config.max_asset_bytes == 30 * 1024 * 1024
     assert config.max_store_bytes == 128 * 1024 * 1024
+
+
+def test_file_send_defaults_off_and_stale_document_limit_is_inert(monkeypatch) -> None:
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client"
+    )
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_DOCUMENT_MAX_ASSET_BYTES", "invalid")
+    config = PrivateEventsMCPConfig.from_env()
+    assert config.universal_social_file_send_enabled is False
+    assert config.asset_ingress_enabled is False
+    assert config.max_document_bytes == 48 * 1024 * 1024
+
+
+def test_file_send_enables_asset_ingress_and_enforces_document_hard_cap(
+    monkeypatch,
+) -> None:
+    _file_enabled_env(monkeypatch)
+    config = PrivateEventsMCPConfig.from_env()
+    assert config.asset_ingress_enabled is True
+    assert config.max_document_bytes == 48 * 1024 * 1024
+
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_DOCUMENT_MAX_ASSET_BYTES", str(64 * 1024 * 1024 + 1)
+    )
+    with pytest.raises(ValueError, match="DOCUMENT_MAX_ASSET_BYTES"):
+        PrivateEventsMCPConfig.from_env()
+
+
+def test_file_send_requires_telegram_dm_and_store_capacity(monkeypatch) -> None:
+    _file_enabled_env(monkeypatch)
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED", "0")
+    with pytest.raises(ValueError, match="Telegram provider and DM"):
+        PrivateEventsMCPConfig.from_env()
+
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED", "1")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES", "1048576")
+    with pytest.raises(ValueError, match="largest enabled asset class"):
+        PrivateEventsMCPConfig.from_env()
 
 
 def test_media_limits_use_the_canonical_documented_environment_names(

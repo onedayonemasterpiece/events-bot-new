@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 import private_events_mcp_provider_adapters as legacy_adapters
+import private_events_mcp_workspace_providers as workspace_providers
 from private_events_mcp.social_workspace import (
     SocialTargetKind,
     validate_prepare_request,
@@ -266,6 +267,36 @@ def test_workspace_builder_is_lazy_and_matches_enabled_providers(config) -> None
     adapters = build_private_events_mcp_workspace_adapters(vk_only)
     assert set(adapters) == {"vk"}
     assert not asyncio.iscoroutine(adapters["vk"])
+
+
+def test_file_only_store_is_injected_into_telegram_never_vk(
+    config, monkeypatch
+) -> None:
+    seen = {}
+
+    def telegram(_config, *, asset_store=None):
+        seen["telegram"] = asset_store
+        return object()
+
+    def vk(_config, *, asset_store=None):
+        seen["vk"] = asset_store
+        return object()
+
+    monkeypatch.setattr(workspace_providers, "build_telegram_workspace_adapter", telegram)
+    monkeypatch.setattr(workspace_providers, "build_vk_workspace_adapter", vk)
+    file_only = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_vk_enabled=True,
+        universal_social_dm_enabled=True,
+        universal_social_file_send_enabled=True,
+    )
+    store = object()
+    assert set(
+        build_private_events_mcp_workspace_adapters(file_only, asset_store=store)
+    ) == {"telegram", "vk"}
+    assert seen == {"telegram": store, "vk": None}
 
 
 def test_telegram_operation_claim_is_atomic_across_store_instances(config) -> None:
