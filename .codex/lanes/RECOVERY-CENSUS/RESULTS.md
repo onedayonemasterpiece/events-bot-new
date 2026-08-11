@@ -30,7 +30,8 @@ committed
 
 ## Head SHA
 
-Implementation commit: `55c5e7496`.
+Implementation commits: `55c5e7496` and half-open generic-ledger follow-up
+`d33cd7b03e402d30b81a5e3034c7aa27a930312e`.
 
 The branch handoff tip also contains this RESULTS-only metadata commit; use
 `git rev-parse agent/smart-update-llm-first/recovery-census` as the final lane
@@ -98,7 +99,7 @@ git diff --check
 
 ## Tests / verification
 
-- Focused suite: `32 passed in 1.23s`.
+- Final focused suite: `33 passed in 0.71s`.
 - Real `Database.init()`-twice smoke on an isolated snapshot: `status=passed`,
   `database_init_runs=2`, original unchanged, final `quick_check=["ok"]`,
   count changes empty, all conflict counters zero.
@@ -129,8 +130,8 @@ git diff --check
 
 ## Merge notes
 
-- Cherry-pick implementation commit `55c5e7496`, then this RESULTS metadata
-  commit.
+- Cherry-pick implementation commits `55c5e7496` and `d33cd7b03`, plus the
+  RESULTS metadata commits on this branch.
 - After the RAW/schema lane is merged, rerun the four focused test files and a
   real snapshot rehearsal. Do not convert unavailable pre-migration evidence
   into estimated carrier/event counts.
