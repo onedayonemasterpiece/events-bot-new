@@ -640,6 +640,7 @@ class TelegramWorkspaceAdapter:
     """Fixed high-level Telegram implementation for Social Workspace."""
 
     platform = "telegram"
+    document_send_supported = True
 
     def __init__(
         self,

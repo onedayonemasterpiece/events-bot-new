@@ -1707,6 +1707,7 @@ async def test_concurrent_same_operation_is_atomically_claimed_once():
 
 
 def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch():
+    assert TelegramWorkspaceAdapter.document_send_supported is True
     public = {
         name
         for name, value in inspect.getmembers(TelegramWorkspaceAdapter, inspect.isfunction)
