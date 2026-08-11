@@ -33,21 +33,21 @@ async def test_pick_next_and_skip(tmp_path):
         )
         await conn.commit()
     post = await vk_review.pick_next(db, 10, "batch1")
-    assert post and post.post_id == 2  # newest by date
+    assert post and post.post_id == 1  # publication age fairness: oldest first
 
     # Skip the first post and ensure the other pending one is returned
     await vk_review.mark_skipped(db, post.id)
-    post2 = await vk_review.pick_next(db, 10, "batch1")
-    assert post2 and post2.post_id == 1
+    post2 = await vk_review.pick_next(db, 10, "batch1", requeue_skipped=False)
+    assert post2 and post2.post_id == 2
 
     # After resolving remaining pending posts the skipped one should reappear
     await vk_review.mark_rejected(db, post2.id)
     post3 = await vk_review.pick_next(db, 10, "batch1")
-    assert post3 and post3.post_id == 2
+    assert post3 and post3.post_id == 1
 
 
 @pytest.mark.asyncio
-async def test_pick_next_rejects_outdated(tmp_path):
+async def test_pick_next_never_rejects_from_timestamp_hints(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     async with db.raw_conn() as conn:
@@ -67,21 +67,24 @@ async def test_pick_next_rejects_outdated(tmp_path):
         await conn.commit()
 
     post = await vk_review.pick_next(db, 10, "batch1")
-    assert post and post.post_id == 2
+    assert post and post.post_id == 1
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=1")
-        assert (await cur.fetchone())[0] == "rejected"
+        assert (await cur.fetchone())[0] == "locked"
 
     await vk_review.mark_rejected(db, post.id)
     post2 = await vk_review.pick_next(db, 10, "batch1")
-    assert post2 is None
+    assert post2 is not None and post2.post_id == 2
+    await vk_review.mark_rejected(db, post2.id)
+    post3 = await vk_review.pick_next(db, 10, "batch1")
+    assert post3 is not None and post3.post_id == 3
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=3")
-        assert (await cur.fetchone())[0] == "rejected"
+        assert (await cur.fetchone())[0] == "locked"
 
 
 @pytest.mark.asyncio
-async def test_pick_next_updates_hint_in_dataclass_for_new_selection(
+async def test_pick_next_does_not_promote_recomputed_hint_to_eligibility(
     tmp_path, monkeypatch
 ):
     future_hint = int(_time.time()) + 500_000
@@ -108,15 +111,15 @@ async def test_pick_next_updates_hint_in_dataclass_for_new_selection(
 
     post = await vk_review.pick_next(db, 10, "batch-new-hint")
     assert post is not None
-    assert post.event_ts_hint == future_hint
+    assert post.event_ts_hint is None
 
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT event_ts_hint FROM vk_inbox WHERE id=?", (post.id,))
-        assert (await cur.fetchone())[0] == future_hint
+        assert (await cur.fetchone())[0] is None
 
 
 @pytest.mark.asyncio
-async def test_pick_next_updates_hint_for_resumed_lock(tmp_path, monkeypatch):
+async def test_pick_next_resumes_lock_without_semantic_hint_gate(tmp_path, monkeypatch):
     future_hint = int(_time.time()) + 600_000
     expected_publish_ts = 100
 
@@ -144,7 +147,7 @@ async def test_pick_next_updates_hint_for_resumed_lock(tmp_path, monkeypatch):
 
     post = await vk_review.pick_next(db, operator_id, "batch-resume")
     assert post is not None
-    assert post.event_ts_hint == future_hint
+    assert post.event_ts_hint is None
     assert post.review_batch == "batch-resume"
 
     async with db.raw_conn() as conn:
@@ -153,7 +156,7 @@ async def test_pick_next_updates_hint_for_resumed_lock(tmp_path, monkeypatch):
             (post.id,),
         )
         hint, batch = await cur.fetchone()
-        assert hint == future_hint
+        assert hint is None
         assert batch == "batch-resume"
 
 
@@ -186,7 +189,7 @@ async def test_pick_next_keeps_ocr_pending(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_pick_next_recomputes_hint_and_rejects_recent_past(tmp_path, monkeypatch):
+async def test_pick_next_keeps_recent_past_hint_as_priority_only(tmp_path, monkeypatch):
     class FixedDatetime(real_datetime):
         @classmethod
         def now(cls, tz=None):
@@ -232,13 +235,13 @@ async def test_pick_next_recomputes_hint_and_rejects_recent_past(tmp_path, monke
         await conn.commit()
 
     post = await vk_review.pick_next(db, 10, "batch1")
-    assert post and post.post_id == 2
+    assert post and post.post_id == 1
 
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=1")
-        assert (await cur.fetchone())[0] == "rejected"
-        cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=2")
         assert (await cur.fetchone())[0] == "locked"
+        cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=2")
+        assert (await cur.fetchone())[0] == "pending"
 
 
 @pytest.mark.asyncio
@@ -249,7 +252,7 @@ async def test_release_due_deferred_only_for_new_batch(tmp_path):
     async with db.raw_conn() as conn:
         await conn.executemany(
             """
-            INSERT INTO vk_inbox(group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status, locked_at, review_batch)
+            INSERT INTO vk_inbox(group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status, next_attempt_at, review_batch)
             VALUES(?,?,?,?,?,?,?,?,?,?)
             """,
             [
@@ -265,7 +268,7 @@ async def test_release_due_deferred_only_for_new_batch(tmp_path):
 
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT post_id, status, review_batch, locked_at FROM vk_inbox ORDER BY post_id"
+            "SELECT post_id, status, review_batch, next_attempt_at FROM vk_inbox ORDER BY post_id"
         )
         rows = await cur.fetchall()
 
@@ -277,7 +280,7 @@ async def test_release_due_deferred_only_for_new_batch(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_release_all_locks_caps_auto_recovery_attempts(tmp_path, monkeypatch):
+async def test_release_all_locks_never_terminalizes_orphaned_leases(tmp_path, monkeypatch):
     monkeypatch.setenv("VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS", "3")
 
     db = Database(str(tmp_path / "db.sqlite"))
@@ -302,8 +305,7 @@ async def test_release_all_locks_caps_auto_recovery_attempts(tmp_path, monkeypat
 
     recovery = await vk_review.release_all_locks(db)
 
-    assert recovery.unlocked == 2
-    assert recovery.failed == 1
+    assert recovery.unlocked == 3
 
     async with db.raw_conn() as conn:
         cur = await conn.execute(
@@ -317,13 +319,13 @@ async def test_release_all_locks_caps_auto_recovery_attempts(tmp_path, monkeypat
 
     assert rows == [
         (1, "pending", None, None, None, 2),
-        (2, "failed", None, None, None, 3),
+        (2, "pending", None, None, None, 3),
         (3, "pending", None, None, None, 4),
     ]
 
 
 @pytest.mark.asyncio
-async def test_pick_next_rejects_explicit_year_past(tmp_path, monkeypatch):
+async def test_pick_next_does_not_reject_explicit_year_past(tmp_path, monkeypatch):
     fixed_now = int(real_datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp())
     monkeypatch.setattr(vk_review._time, "time", lambda: fixed_now)
     monkeypatch.setattr(vk_review.random, "random", lambda: 0.0)
@@ -365,13 +367,13 @@ async def test_pick_next_rejects_explicit_year_past(tmp_path, monkeypatch):
         await conn.commit()
 
     post = await vk_review.pick_next(db, 10, "batch-explicit")
-    assert post and post.post_id == 2
+    assert post and post.post_id == 1
 
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=1")
-        assert (await cur.fetchone())[0] == "rejected"
-        cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=2")
         assert (await cur.fetchone())[0] == "locked"
+        cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=2")
+        assert (await cur.fetchone())[0] == "pending"
 
 
 @pytest.mark.asyncio
@@ -423,23 +425,17 @@ async def test_far_gap_override_triggers_after_k_non_far(tmp_path, monkeypatch):
     operator_id = 77
     batch_id = "batch"
 
-    for expected_history_length in (1, 2, 3):
+    for _ in range(4):
         post = await vk_review.pick_next(db, operator_id, batch_id)
         assert post is not None
         assert post.post_id != 100
         await vk_review.mark_rejected(db, post.id)
-        history = vk_review._FAR_BUCKET_HISTORY.get(operator_id)
-        assert history is not None
-        assert len(history) == expected_history_length
-        assert all(bucket == "SOON" for bucket in history)
 
     post = await vk_review.pick_next(db, operator_id, batch_id)
     assert post is not None
     assert post.post_id == 100
     await vk_review.mark_rejected(db, post.id)
-    history = vk_review._FAR_BUCKET_HISTORY.get(operator_id)
-    assert history is not None
-    assert list(history) == ["SOON", "SOON", "FAR"]
+    assert vk_review._FAR_BUCKET_HISTORY.get(operator_id) is None
 
 
 @pytest.mark.asyncio
@@ -480,18 +476,14 @@ async def test_bucket_boundaries_use_weighted_selection(tmp_path, monkeypatch):
     post = await vk_review.pick_next(db, operator_id, batch_id)
     assert post is not None
     assert post.post_id == 101
-    history = vk_review._FAR_BUCKET_HISTORY.get(operator_id)
-    assert history is not None
-    assert list(history) == ["SOON"]
+    assert vk_review._FAR_BUCKET_HISTORY.get(operator_id) is None
 
     await vk_review.mark_rejected(db, post.id)
 
     post2 = await vk_review.pick_next(db, operator_id, batch_id)
     assert post2 is not None
     assert post2.post_id == 202
-    history = vk_review._FAR_BUCKET_HISTORY.get(operator_id)
-    assert history is not None
-    assert list(history) == ["SOON", "LONG"]
+    assert vk_review._FAR_BUCKET_HISTORY.get(operator_id) is None
 
 
 @pytest.mark.asyncio
@@ -653,9 +645,8 @@ async def test_pick_next_weighted_bucket_without_sqlite_math(tmp_path, monkeypat
 
     post = await vk_review.pick_next(db, 99, "weighted")
     assert post is not None
-    history = vk_review._FAR_BUCKET_HISTORY.get(99)
-    assert history is not None
-    assert list(history) == ["FAR"]
+    assert post.post_id == 201
+    assert vk_review._FAR_BUCKET_HISTORY.get(99) is None
 
 
 @pytest.mark.asyncio
@@ -688,9 +679,8 @@ async def test_history_tracks_fallback_bucket(tmp_path, monkeypatch):
     operator_id = 88
     post = await vk_review.pick_next(db, operator_id, "batch-fallback")
     assert post is not None
-    history = vk_review._FAR_BUCKET_HISTORY.get(operator_id)
-    assert history is not None
-    assert list(history) == ["FALLBACK"]
+    assert post.post_id == 500
+    assert vk_review._FAR_BUCKET_HISTORY.get(operator_id) is None
 
 
 @pytest.mark.asyncio

@@ -38,10 +38,10 @@ def test_long_vk_post_keeps_poster_ocr_logistics_lines(monkeypatch) -> None:
     assert "05'ИЮЛЯ" in compact
     assert "19'ИЮЛЯ" in compact
     assert "ВХОД СВОБОДНЫЙ" in compact
-    assert "УЛИЧНЫЕ МЕЛОДИИ" not in compact
+    assert "УЛИЧНЫЕ МЕЛОДИИ" in compact
 
 
-def test_long_vk_post_without_logistics_still_skips_poster_ocr(monkeypatch) -> None:
+def test_long_vk_post_without_logistics_keeps_all_poster_ocr(monkeypatch) -> None:
     monkeypatch.setenv("VK_PARSE_POSTER_TEXT_SKIP_MAIN_TEXT_CHARS", "1600")
     long_post = "Подробный отчёт о городской жизни. " * 120
     poster_ocr = """
@@ -50,7 +50,9 @@ def test_long_vk_post_without_logistics_still_skips_poster_ocr(monkeypatch) -> N
     ЛЕТНИЙ НАСТРОЙ
     """
 
-    assert _budget_vk_parse_poster_texts(long_post, [poster_ocr]) == []
+    assert _budget_vk_parse_poster_texts(long_post, [poster_ocr]) == [
+        "УЛИЧНЫЕ МЕЛОДИИ\nОРКЕСТР\nЛЕТНИЙ НАСТРОЙ"
+    ]
 
 
 def test_explicit_schedule_cards_keep_complete_bounded_ocr_gallery(monkeypatch) -> None:
@@ -82,13 +84,13 @@ def test_explicit_schedule_cards_keep_complete_bounded_ocr_gallery(monkeypatch) 
     assert "КУБОК ПАМЯТИ" in selected[-1]
 
 
-def test_explicit_schedule_cards_respect_dedicated_block_cap(monkeypatch) -> None:
+def test_explicit_schedule_cards_ignore_semantic_block_cap(monkeypatch) -> None:
     monkeypatch.setenv("VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCKS", "3")
     source = "Расписание и места проведения — в карточках."
 
     selected = _budget_vk_parse_poster_texts(source, [f"КАРТОЧКА {idx}" for idx in range(8)])
 
-    assert selected == ["КАРТОЧКА 0", "КАРТОЧКА 1", "КАРТОЧКА 2"]
+    assert selected == [f"КАРТОЧКА {idx}" for idx in range(8)]
 
 
 @pytest.mark.asyncio

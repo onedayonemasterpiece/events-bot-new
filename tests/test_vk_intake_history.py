@@ -116,6 +116,9 @@ async def test_crawl_includes_history_with_other_matches(tmp_path, monkeypatch):
     assert row[0] == posts[0]["text"]
     assert row[2:] == (1, future_ts, "pending")
 
-    matched_values = row[1].split(",")
-    assert vk_intake.HISTORY_MATCHED_KEYWORD in matched_values
-    assert len(matched_values) >= 2
+    assert row[1] == vk_intake.HISTORY_MATCHED_KEYWORD
+    async with db.raw_conn() as conn:
+        packet = await (await conn.execute(
+            "SELECT discovery_keyword_hints_json FROM vk_source_packet WHERE post_id=11"
+        )).fetchone()
+    assert vk_intake.HISTORY_MATCHED_KEYWORD in packet[0]

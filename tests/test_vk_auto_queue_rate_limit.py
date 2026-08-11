@@ -84,19 +84,19 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
 
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT status, locked_by, review_batch, locked_at, attempts FROM vk_inbox WHERE id=?",
+            "SELECT status, locked_by, review_batch, next_attempt_at, attempts FROM vk_inbox WHERE id=?",
             (1,),
         )
-        status, locked_by, review_batch, locked_at, attempts = await cur.fetchone()
+        status, locked_by, review_batch, next_attempt_at, attempts = await cur.fetchone()
     assert status == "deferred"
     assert locked_by is None
     assert review_batch == "batch-x"
-    assert locked_at is not None
+    assert next_attempt_at is not None
     assert attempts == 1
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_queue_rate_limit_marks_row_failed_after_max_defers(tmp_path, monkeypatch):
+async def test_vk_auto_queue_rate_limit_never_becomes_terminal_after_many_defers(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -151,19 +151,15 @@ async def test_vk_auto_queue_rate_limit_marks_row_failed_after_max_defers(tmp_pa
         progress_total_txt="1",
     )
 
-    assert report.inbox_deferred == 0
-    assert report.inbox_failed == 1
-    assert any("drafts_rate_limited_terminal" in err for err in report.errors)
+    assert report.inbox_deferred == 1
+    assert report.inbox_failed == 0
 
     async with db.raw_conn() as conn:
-        cur = await conn.execute(
-            "SELECT status, locked_by, locked_at, review_batch, attempts FROM vk_inbox WHERE id=?",
-            (1,),
-        )
-        status, locked_by, locked_at, review_batch, attempts = await cur.fetchone()
-
-    assert status == "failed"
-    assert locked_by is None
-    assert locked_at is None
-    assert review_batch is None
-    assert attempts == 3
+        row = await (await conn.execute(
+            "SELECT status, attempts, last_typed_reason, next_attempt_at FROM vk_inbox WHERE id=1"
+        )).fetchone()
+    assert row[0] == "deferred"
+    assert row[1] == 3
+    assert row[2] == "RATE_LIMITED"
+    assert row[3] is not None
+    assert any("retry_scheduled" in err for err in report.errors)

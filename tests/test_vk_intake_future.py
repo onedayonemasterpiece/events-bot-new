@@ -14,7 +14,7 @@ from db import Database
 
 
 @pytest.mark.asyncio
-async def test_crawl_skips_past_events(tmp_path, monkeypatch):
+async def test_crawl_keeps_past_hint_for_llm(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     async with db.raw_conn() as conn:
@@ -43,11 +43,15 @@ async def test_crawl_skips_past_events(tmp_path, monkeypatch):
     monkeypatch.setattr(vk_intake.asyncio, "sleep", no_sleep)
 
     stats = await vk_intake.crawl_once(db)
-    assert stats["added"] == 1
+    assert stats["added"] == 2
     async with db.raw_conn() as conn:
-        cur = await conn.execute("SELECT post_id FROM vk_inbox")
+        cur = await conn.execute("SELECT post_id FROM vk_inbox ORDER BY post_id")
         rows = await cur.fetchall()
-    assert rows == [(2,)]
+        hints = await (await conn.execute(
+            "SELECT discovery_keyword_hints_json FROM vk_source_packet WHERE post_id=1"
+        )).fetchone()
+    assert rows == [(1,), (2,)]
+    assert "hint:past_event" in hints[0]
 
 
 @pytest.mark.asyncio

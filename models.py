@@ -2347,9 +2347,130 @@ class VKInbox(SQLModel, table=True):
     imported_event_id: Optional[int] = None
     review_batch: Optional[str] = None
     attempts: int = 0
+    source_packet_id: Optional[int] = Field(default=None, foreign_key="vk_source_packet.id")
+    next_attempt_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    last_typed_reason: Optional[str] = None
+    quota_scope: Optional[str] = None
+    provider_retry_after: Optional[int] = None
+    provider_retry_after: Optional[int] = None
     created_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
+
+
+class VKSourcePacket(SQLModel, table=True):
+    __tablename__ = "vk_source_packet"
+    __table_args__ = (
+        UniqueConstraint("source_type", "owner_id", "post_id", "revision"),
+        UniqueConstraint("source_type", "owner_id", "post_id", "source_revision_hash"),
+        Index("ix_vk_source_packet_due", "status", "next_attempt_at", "published_at"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_type: str = "vk"
+    owner_id: int
+    owner_type: str = "group"
+    post_id: int
+    revision: int
+    source_url: str
+    published_at: int
+    fetched_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    raw_text: str
+    raw_payload_json: str
+    attachment_metadata_json: str = "[]"
+    payload_hash: str
+    source_revision_hash: str
+    discovery_keyword_hints_json: str = "[]"
+    discovered_date_hints_json: str = "[]"
+    event_ts_hint: Optional[int] = None
+    ocr_status: str = "pending"
+    llm_status: str = "pending"
+    evidence_manifest_json: Optional[str] = None
+    parse_result_json: Optional[str] = None
+    successful_parse_key: Optional[str] = None
+    prompt_version: Optional[str] = None
+    model: Optional[str] = None
+    quota_scope: Optional[str] = None
+    status: str = "pending"
+    next_attempt_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    attempts: int = 0
+    lease_owner: Optional[str] = None
+    lease_expires_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    last_typed_reason: Optional[str] = None
+    terminal_carrier_outcome: Optional[str] = None
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+
+
+class VKSourcePacketAttempt(SQLModel, table=True):
+    __tablename__ = "vk_source_packet_attempt"
+    __table_args__ = (
+        Index("ix_vk_packet_attempt_packet", "source_packet_id", "attempt_no"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_packet_id: int = Field(foreign_key="vk_source_packet.id")
+    attempt_no: int
+    attempt_kind: str = "primary"
+    parse_key: Optional[str] = None
+    payload_hash: str
+    source_type: str = "vk"
+    source_url: str
+    source_revision_hash: str
+    discovery_hints_json: str = "{}"
+    evidence_manifest_json: Optional[str] = None
+    llm_started: bool = False
+    llm_completed: bool = False
+    structured_response_valid: bool = False
+    model: Optional[str] = None
+    quota_scope: Optional[str] = None
+    request_id: Optional[str] = None
+    response_id: Optional[str] = None
+    finish_reason: Optional[str] = None
+    provider_retry_after: Optional[int] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    thought_tokens: Optional[int] = None
+    reserved_tokens: Optional[int] = None
+    primary_disposition: Optional[str] = None
+    verification_triggered: bool = False
+    verification_reason: Optional[str] = None
+    verification_disposition: Optional[str] = None
+    event_child_count: int = 0
+    lifecycle_action_count: int = 0
+    smart_update_child_outcomes_json: str = "[]"
+    terminal_carrier_outcome: Optional[str] = None
+    next_attempt_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    typed_error_reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+
+
+class VKCrawlContinuation(SQLModel, table=True):
+    __tablename__ = "vk_crawl_continuation"
+    __table_args__ = (
+        UniqueConstraint("source_type", "owner_id", "since_ts", "offset", "horizon_ts"),
+        Index("ix_vk_crawl_continuation_due", "status", "next_attempt_at"),
+        {"extend_existing": True},
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    source_type: str = "vk"
+    owner_id: int
+    owner_type: str = "group"
+    since_ts: int
+    offset: int
+    horizon_ts: int
+    reason: str
+    status: str = "pending"
+    attempts: int = 0
+    next_attempt_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    lease_owner: Optional[str] = None
+    lease_expires_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    last_typed_reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
 
 @dataclass
 class VkMissRecord:

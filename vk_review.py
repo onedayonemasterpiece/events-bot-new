@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections import deque
 from dataclasses import dataclass
 from typing import Optional, Any, Awaitable, Callable
@@ -105,6 +107,16 @@ async def _unlock_stale(conn) -> int:
         """,
         (f"-{LOCK_TIMEOUT_SECONDS} seconds",),
     )
+    await conn.execute(
+        """
+        UPDATE vk_source_packet
+        SET status='pending', lease_owner=NULL, lease_expires_at=NULL,
+            next_attempt_at=CURRENT_TIMESTAMP,
+            last_typed_reason='ORPHANED_LEASE', updated_at=CURRENT_TIMESTAMP
+        WHERE status='processing'
+          AND (lease_expires_at IS NULL OR lease_expires_at<CURRENT_TIMESTAMP)
+        """
+    )
     return cursor.rowcount
 
 
@@ -137,9 +149,10 @@ async def release_due_deferred(db: Database, *, batch_id: str | None = None) -> 
                 cursor = await conn.execute(
                     """
                     UPDATE vk_inbox
-                    SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                    SET status='pending', locked_by=NULL, locked_at=NULL,
+                        review_batch=NULL, next_attempt_at=NULL
                     WHERE status='deferred'
-                      AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
+                      AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
                       AND (review_batch IS NULL OR review_batch <> ?)
                     """,
                     (batch_id,),
@@ -148,9 +161,10 @@ async def release_due_deferred(db: Database, *, batch_id: str | None = None) -> 
                 cursor = await conn.execute(
                     """
                     UPDATE vk_inbox
-                    SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                    SET status='pending', locked_by=NULL, locked_at=NULL,
+                        review_batch=NULL, next_attempt_at=NULL
                     WHERE status='deferred'
-                      AND (locked_at IS NULL OR locked_at <= CURRENT_TIMESTAMP)
+                      AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
                     """
                 )
             return int(cursor.rowcount or 0)
@@ -168,20 +182,6 @@ async def release_due_deferred(db: Database, *, batch_id: str | None = None) -> 
 @dataclass(frozen=True)
 class LockRecoveryCounts:
     unlocked: int = 0
-    failed: int = 0
-
-
-def _auto_import_recovery_max_attempts() -> int:
-    raw = (
-        os.getenv("VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS")
-        or os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS")
-        or "3"
-    ).strip()
-    try:
-        value = int(raw)
-    except Exception:
-        value = 3
-    return max(0, min(value, 1000))
 
 
 async def release_all_locks(db: Database) -> LockRecoveryCounts:
@@ -192,28 +192,8 @@ async def release_all_locks(db: Database) -> LockRecoveryCounts:
     orphaned.
     """
 
-    max_attempts = _auto_import_recovery_max_attempts()
-
     async with db.raw_conn() as conn:
         async def _unlock_all() -> LockRecoveryCounts:
-            failed = 0
-            if max_attempts > 0:
-                cursor = await conn.execute(
-                    """
-                    UPDATE vk_inbox
-                    SET status='failed',
-                        locked_by=NULL,
-                        locked_at=NULL,
-                        review_batch=NULL,
-                        attempts=COALESCE(attempts, 0) + 1
-                    WHERE status='locked'
-                      AND review_batch LIKE 'auto:%'
-                      AND COALESCE(attempts, 0) + 1 >= ?
-                    """,
-                    (max_attempts,),
-                )
-                failed = int(cursor.rowcount or 0)
-
             cursor = await conn.execute(
                 """
                 UPDATE vk_inbox
@@ -237,23 +217,24 @@ async def release_all_locks(db: Database) -> LockRecoveryCounts:
                 """
             )
             unlocked_other = int(cursor.rowcount or 0)
-            return LockRecoveryCounts(
-                unlocked=unlocked_auto + unlocked_other,
-                failed=failed,
+            await conn.execute(
+                """
+                UPDATE vk_source_packet
+                SET status='pending', lease_owner=NULL, lease_expires_at=NULL,
+                    next_attempt_at=CURRENT_TIMESTAMP,
+                    last_typed_reason='ORPHANED_LEASE', updated_at=CURRENT_TIMESTAMP
+                WHERE status='processing'
+                """
             )
+            return LockRecoveryCounts(unlocked=unlocked_auto + unlocked_other)
 
         counts = await _run_locked_write(
             conn,
             _unlock_all,
             description="release_all_locks",
         )
-    if counts.unlocked or counts.failed:
-        logging.info(
-            "vk_review release_all_locks unlocked=%s failed=%s max_attempts=%s",
-            counts.unlocked,
-            counts.failed,
-            max_attempts,
-        )
+    if counts.unlocked:
+        logging.info("vk_review release_all_locks unlocked=%s", counts.unlocked)
     return counts
 
 
@@ -331,6 +312,7 @@ class InboxPost:
     # (owner_id = -group_id) from personal-page posts (owner_id = +user_id).
     # Default 'group' preserves the legacy contract for pre-migration rows.
     owner_type: str = "group"
+    source_packet_id: Optional[int] = None
 
 
 def _hours_from_env(name: str, default: float) -> float:
@@ -387,395 +369,107 @@ async def pick_next(
     strict_chronological: bool = False,
     resume_locked: bool = True,
 ) -> Optional[InboxPost]:
-    """Select the next inbox item and lock it for the operator.
+    """Atomically claim the oldest due carrier without semantic eligibility gates.
 
-    Rows in ``pending`` state are preferred. When none are available and
-    ``requeue_skipped`` is enabled, all rows in ``skipped`` state are moved
-    back to ``pending`` and the selection is repeated. Items are ordered by
-    ``event_ts_hint`` ascending and, within the same hint, by ``date`` and
-    ``id`` descending by default. For auto-import flows that must process
-    VK posts chronologically (oldest -> newest), pass ``prefer_oldest=True``.
-    The selected row is
-    atomically updated to ``locked`` state with ``locked_by`` and ``locked_at``
-    set and ``review_batch`` recorded so later imports can accumulate months
-    for this batch.
-
-    When ``strict_chronological=True``, bucket weighting/prioritization is
-    bypassed and the next row is always picked globally by oldest timestamp
-    first (``event_ts_hint ASC``, then ``date``/``id`` according to
-    ``prefer_oldest``).
-
-    ``None`` is returned when the queue is empty.
+    ``event_ts_hint`` is a priority hint only. Publication age is the primary
+    order so unknown-date and far-hint carriers cannot starve. Legacy selection
+    switches remain accepted for caller compatibility but never exclude a row.
     """
 
+    del strict_chronological
+    date_order = "ASC" if prefer_oldest else "ASC"
+    columns = (
+        "id, group_id, post_id, date, text, matched_kw, has_date, status, "
+        "review_batch, imported_event_id, event_ts_hint, "
+        "COALESCE(owner_type, 'group'), source_packet_id"
+    )
     async with db.raw_conn() as conn:
         await _unlock_stale(conn)
-
-        reject_window_hours = _hours_from_env("VK_REVIEW_REJECT_H", 2)
-        urgent_window_hours = _hours_from_env("VK_REVIEW_URGENT_MAX_H", 48)
-        urgent_window_hours = max(urgent_window_hours, reject_window_hours)
-
-        now_ts = int(_time.time())
-        reject_cutoff = now_ts + int(reject_window_hours * 3600)
-
         if resume_locked:
-            while True:
-                # Continue reviewing rows that remain locked for this operator.
-                cur = await conn.execute(
-                    """
-                    SELECT id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
-                    FROM vk_inbox
-                    WHERE status='locked' AND locked_by=?
-                    ORDER BY locked_at ASC, id ASC
-                    LIMIT 1
-                    """,
-                    (operator_id,),
-                )
-                row = await cur.fetchone()
-                if not row:
-                    break
-
-                inbox_id = row[0]
-                text = row[4]
-                matched_kw = row[5]
-                has_date = row[6]
-                skip_hint_recalc = matched_kw == OCR_PENDING_SENTINEL and has_date == 0
-                publish_ts = row[3]
-                ts_hint = (
-                    None
-                    if skip_hint_recalc
-                    else extract_event_ts_hint(text, publish_ts=publish_ts)
-                )
-                if not skip_hint_recalc and (ts_hint is None or ts_hint < reject_cutoff):
-                    await conn.execute(
-                        "UPDATE vk_inbox SET status='rejected', locked_by=NULL, locked_at=NULL, review_batch=NULL WHERE id=?",
-                        (inbox_id,),
-                    )
-                    await conn.commit()
-                    logging.info(
-                        "vk_review reject_locked_due_to_hint id=%s operator=%s hint=%s cutoff=%s",
-                        inbox_id,
-                        operator_id,
-                        ts_hint,
-                        reject_cutoff,
-                    )
-                    now_ts = int(_time.time())
-                    reject_cutoff = now_ts + int(reject_window_hours * 3600)
-                    continue
-
-                if not skip_hint_recalc and ts_hint is not None:
-                    await conn.execute(
-                        "UPDATE vk_inbox SET event_ts_hint=?, review_batch=?, locked_at=CURRENT_TIMESTAMP WHERE id=?",
-                        (ts_hint, batch_id, inbox_id),
-                    )
-                else:
-                    await conn.execute(
-                        "UPDATE vk_inbox SET review_batch=?, locked_at=CURRENT_TIMESTAMP WHERE id=?",
-                        (batch_id, inbox_id),
-                    )
-                await conn.commit()
-                row = list(row)
-                row[8] = batch_id
-                row[10] = ts_hint
-                post = InboxPost(*row)
-                logging.info(
-                    "vk_review resume_locked id=%s operator=%s batch=%s",
-                    post.id,
-                    operator_id,
-                    batch_id,
-                )
-                return post
-
-        selected_row = None
-        final_bucket_name: Optional[str] = None
-        final_weight_config: dict[str, float] = {}
-        far_gap_k = max(_int_from_env("VK_REVIEW_FAR_GAP_K", 5), 0)
-        history = _get_far_history(operator_id, far_gap_k)
-        date_order = "ASC" if prefer_oldest else "DESC"
-        id_order = "ASC" if prefer_oldest else "DESC"
-        while True:
-            bucket_name_for_history: Optional[str] = None
-            weight_config_for_log: dict[str, float] = {}
-            now_ts = int(_time.time())
-            reject_cutoff = now_ts + int(reject_window_hours * 3600)
-            urgent_cutoff = now_ts + int(urgent_window_hours * 3600)
-            await conn.execute(
-                "UPDATE vk_inbox SET status='rejected', locked_by=NULL, locked_at=NULL WHERE status IN ('pending','skipped') AND event_ts_hint IS NOT NULL AND event_ts_hint < ?",
-                (reject_cutoff,),
-            )
             cur = await conn.execute(
-                "SELECT 1 FROM vk_inbox WHERE status='pending' AND (event_ts_hint IS NULL OR event_ts_hint >= ?) LIMIT 1",
-                (reject_cutoff,),
+                f"""
+                SELECT {columns}
+                FROM vk_inbox
+                WHERE status='locked' AND locked_by=?
+                ORDER BY locked_at ASC, id ASC
+                LIMIT 1
+                """,
+                (operator_id,),
             )
-            has_pending = await cur.fetchone() is not None
-            if not has_pending:
-                if requeue_skipped:
+            row = await cur.fetchone()
+            if row:
+                await conn.execute(
+                    "UPDATE vk_inbox SET review_batch=?, locked_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (batch_id, int(row[0])),
+                )
+                packet_id = row[12]
+                if packet_id is not None:
                     await conn.execute(
-                        "UPDATE vk_inbox SET status='pending' WHERE status='skipped' AND (event_ts_hint IS NULL OR event_ts_hint >= ?)",
-                        (reject_cutoff,),
-                    )
-                    # Re-check now that we've moved skipped back to pending.
-                    cur = await conn.execute(
-                        "SELECT 1 FROM vk_inbox WHERE status='pending' AND (event_ts_hint IS NULL OR event_ts_hint >= ?) LIMIT 1",
-                        (reject_cutoff,),
-                    )
-                    has_pending = await cur.fetchone() is not None
-                    if has_pending:
-                        continue
-                    await conn.commit()
-                    return None
-                else:
-                    return None
-
-            row = None
-            if strict_chronological:
-                cursor = await conn.execute(
-                    f"""
-                    WITH next AS (
-                        SELECT id FROM vk_inbox
-                        WHERE status='pending'
-                          AND (event_ts_hint IS NULL OR event_ts_hint >= ?)
-                        ORDER BY CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
-                                 event_ts_hint ASC,
-                                 date {date_order},
-                                 id {id_order}
-                        LIMIT 1
-                    )
-                    UPDATE vk_inbox
-                    SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
-                    WHERE id = (SELECT id FROM next)
-                    RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
-                    """,
-                    (reject_cutoff, operator_id, batch_id),
-                )
-                row = await cursor.fetchone()
-                if row:
-                    bucket_name_for_history = "STRICT"
-            else:
-                cursor = await conn.execute(
-                    f"""
-                    WITH next AS (
-                        SELECT id FROM vk_inbox
-                        WHERE status='pending'
-                          AND event_ts_hint IS NOT NULL
-                          AND event_ts_hint >= ?
-                          AND event_ts_hint < ?
-                        ORDER BY event_ts_hint ASC, date {date_order}, id {id_order}
-                        LIMIT 1
-                    )
-                    UPDATE vk_inbox
-                    SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
-                    WHERE id = (SELECT id FROM next)
-                    RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
-                    """,
-                    (reject_cutoff, urgent_cutoff, operator_id, batch_id),
-                )
-                row = await cursor.fetchone()
-                if row:
-                    bucket_name_for_history = "URGENT"
-            if not row and strict_chronological:
-                await conn.commit()
-                return None
-
-            if not row and not strict_chronological:
-                soon_max_days = max(_float_from_env("VK_REVIEW_SOON_MAX_D", 14), 0.0)
-                long_max_days = max(
-                    _float_from_env("VK_REVIEW_LONG_MAX_D", 30),
-                    soon_max_days,
-                )
-                soon_cutoff = max(urgent_cutoff, now_ts + int(soon_max_days * 86400))
-                long_cutoff = max(soon_cutoff, now_ts + int(long_max_days * 86400))
-
-                bucket_specs = [
-                    (
-                        "SOON",
-                        "status='pending' AND event_ts_hint IS NOT NULL AND event_ts_hint >= ? AND event_ts_hint < ?",
-                        (urgent_cutoff, soon_cutoff),
-                        max(_float_from_env("VK_REVIEW_W_SOON", 3.0), 0.0),
-                    ),
-                    (
-                        "LONG",
-                        "status='pending' AND event_ts_hint IS NOT NULL AND event_ts_hint >= ? AND event_ts_hint < ?",
-                        (soon_cutoff, long_cutoff),
-                        max(_float_from_env("VK_REVIEW_W_LONG", 2.0), 0.0),
-                    ),
-                    (
-                        "FAR",
-                        "status='pending' AND (event_ts_hint IS NULL OR event_ts_hint >= ?)",
-                        (long_cutoff,),
-                        max(_float_from_env("VK_REVIEW_W_FAR", 6.0), 0.0),
-                    ),
-                ]
-
-                bucket_counts: dict[str, int] = {}
-                bucket_specs_by_name: dict[str, tuple[str, tuple[Any, ...]]] = {}
-                weighted_total = 0.0
-                weight_config_for_log = {
-                    name: weight for name, _, _, weight in bucket_specs
-                }
-                for name, where_clause, params, weight in bucket_specs:
-                    count_cursor = await conn.execute(
-                        f"SELECT COUNT(1) FROM vk_inbox WHERE {where_clause}",
-                        params,
-                    )
-                    count_row = await count_cursor.fetchone()
-                    count = int(count_row[0]) if count_row else 0
-                    bucket_counts[name] = count
-                    bucket_specs_by_name[name] = (where_clause, params)
-                    weighted_total += weight * count
-
-                chosen_bucket = None
-                if (
-                    history is not None
-                    and history.maxlen
-                    and len(history) == history.maxlen
-                    and all(bucket != "FAR" for bucket in history)
-                    and bucket_counts.get("FAR", 0) > 0
-                    and "FAR" in bucket_specs_by_name
-                ):
-                    where_clause, params = bucket_specs_by_name["FAR"]
-                    chosen_bucket = ("FAR", where_clause, params)
-                    logging.info(
-                        "vk_review far_gap_override operator=%s history=%s counts=%s",
-                        operator_id,
-                        list(history),
-                        bucket_counts,
-                    )
-                elif weighted_total > 0:
-                    ticket = random.random() * weighted_total
-                    for name, where_clause, params, weight in bucket_specs:
-                        count = bucket_counts.get(name, 0)
-                        bucket_weight = weight * count
-                        if bucket_weight <= 0:
-                            continue
-                        if ticket < bucket_weight:
-                            chosen_bucket = (name, where_clause, params)
-                            break
-                        ticket -= bucket_weight
-
-                if chosen_bucket:
-                    name, where_clause, params = chosen_bucket
-                    logging.info(
-                        "vk_review bucket_pick name=%s counts=%s", name, bucket_counts
-                    )
-                    penalty_cursor = await conn.execute(
-                        f"SELECT group_id, COUNT(*) FROM vk_inbox WHERE {where_clause} GROUP BY group_id",
-                        params,
-                    )
-                    penalty_rows = await penalty_cursor.fetchall()
-                    await penalty_cursor.close()
-                    penalty_params: list[float | int] = []
-                    penalty_cte = ", group_penalties(group_id, penalty) AS (SELECT NULL, 1.0 LIMIT 0)"
-                    if penalty_rows:
-                        values_clause = ", ".join(["(?, ?)"] * len(penalty_rows))
-                        penalty_cte = (
-                            f", group_penalties(group_id, penalty) AS (VALUES {values_clause})"
-                        )
-                        for group_id, cnt in penalty_rows:
-                            penalty_params.extend([group_id, math.sqrt(cnt)])
-
-                    bucket_query = f"""
-                        WITH candidates AS (
-                            SELECT id, group_id, event_ts_hint, date
-                            FROM vk_inbox
-                            WHERE {where_clause}
-                        ){penalty_cte},
-                        ranked AS (
-                            SELECT c.id
-                            FROM candidates c
-                            LEFT JOIN group_penalties gp ON c.group_id = gp.group_id
-	                            ORDER BY c.event_ts_hint ASC,
-	                                     c.date {date_order},
-	                                     c.id {id_order},
-	                                     (ABS(RANDOM()) / 9223372036854775808.0) * 0.001 *
-	                                         COALESCE(gp.penalty, 1.0) ASC
-	                            LIMIT 1
-	                        )
-                        UPDATE vk_inbox
-                        SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
-                        WHERE id = (SELECT id FROM ranked)
-                        RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
-                    """
-                    bucket_cursor = await conn.execute(
-                        bucket_query,
-                        (*params, *penalty_params, operator_id, batch_id),
-                    )
-                    row = await bucket_cursor.fetchone()
-                    if row:
-                        bucket_name_for_history = name
-
-                if not row:
-                    cursor = await conn.execute(
-                        f"""
-                        WITH next AS (
-                            SELECT id FROM vk_inbox
-                            WHERE status='pending' AND (event_ts_hint IS NULL OR event_ts_hint >= ?)
-                            ORDER BY CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
-                                     event_ts_hint ASC, date {date_order}, id {id_order}
-                            LIMIT 1
-                        )
-                        UPDATE vk_inbox
-                        SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
-                        WHERE id = (SELECT id FROM next)
-                        RETURNING id, group_id, post_id, date, text, matched_kw, has_date, status, review_batch, imported_event_id, event_ts_hint, COALESCE(owner_type, 'group')
+                        """
+                        UPDATE vk_source_packet
+                        SET status='processing', lease_owner=?,
+                            lease_expires_at=datetime('now','+15 minutes'),
+                            updated_at=CURRENT_TIMESTAMP
+                        WHERE id=?
                         """,
-                        (reject_cutoff, operator_id, batch_id),
+                        (str(operator_id), int(packet_id)),
                     )
-                    row = await cursor.fetchone()
-                    if not row:
-                        await conn.commit()
-                        return None
-                    bucket_name_for_history = "FALLBACK"
-
-            inbox_id = row[0]
-            text = row[4]
-            matched_kw = row[5]
-            has_date = row[6]
-            skip_hint_recalc = matched_kw == OCR_PENDING_SENTINEL and has_date == 0
-            publish_ts = row[3]
-            ts_hint = (
-                None
-                if skip_hint_recalc
-                else extract_event_ts_hint(text, publish_ts=publish_ts)
-            )
-            if not skip_hint_recalc and (ts_hint is None or ts_hint < reject_cutoff):
-                await conn.execute(
-                    "UPDATE vk_inbox SET status='rejected', locked_by=NULL, locked_at=NULL, review_batch=NULL WHERE id=?",
-                    (inbox_id,),
-                )
                 await conn.commit()
-                logging.info(
-                    "vk_review reject_due_to_hint id=%s operator=%s batch=%s", inbox_id, operator_id, batch_id
-                )
-                continue
+                values = list(row)
+                values[8] = batch_id
+                return InboxPost(*values)
 
-            if not skip_hint_recalc and ts_hint is not None:
-                await conn.execute(
-                    "UPDATE vk_inbox SET event_ts_hint=? WHERE id=?",
-                    (ts_hint, inbox_id),
-                )
+        if requeue_skipped:
+            await conn.execute(
+                """
+                UPDATE vk_inbox
+                SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL
+                WHERE status='skipped'
+                """
+            )
+
+        cursor = await conn.execute(
+            f"""
+            WITH next AS (
+                SELECT id FROM vk_inbox
+                WHERE status='pending'
+                  AND (next_attempt_at IS NULL OR next_attempt_at<=CURRENT_TIMESTAMP)
+                ORDER BY date {date_order},
+                         CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
+                         event_ts_hint ASC,
+                         id ASC
+                LIMIT 1
+            )
+            UPDATE vk_inbox
+            SET status='locked', locked_by=?, locked_at=CURRENT_TIMESTAMP, review_batch=?
+            WHERE id=(SELECT id FROM next)
+            RETURNING {columns}
+            """,
+            (operator_id, batch_id),
+        )
+        row = await cursor.fetchone()
+        if not row:
             await conn.commit()
-            selected_row = list(row)
-            if not skip_hint_recalc:
-                selected_row[10] = ts_hint
-            final_bucket_name = bucket_name_for_history
-            final_weight_config = weight_config_for_log
-            if final_bucket_name and history is not None:
-                history.append(final_bucket_name)
-            break
-    post = InboxPost(*selected_row)
+            return None
+        packet_id = row[12]
+        if packet_id is not None:
+            await conn.execute(
+                """
+                UPDATE vk_source_packet
+                SET status='processing', lease_owner=?,
+                    lease_expires_at=datetime('now','+15 minutes'),
+                    attempts=attempts+1, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (str(operator_id), int(packet_id)),
+            )
+        await conn.commit()
+    post = InboxPost(*row)
     logging.info(
-        "vk_review pick_next id=%s group=%s post=%s kw=%s has_date=%s bucket=%s weights=%s",
-        post.id,
-        post.group_id,
-        post.post_id,
-        post.matched_kw,
-        post.has_date,
-        final_bucket_name,
-        final_weight_config,
+        "vk_review pick_next id=%s packet=%s group=%s post=%s hint=%s",
+        post.id, post.source_packet_id, post.group_id, post.post_id, post.event_ts_hint,
     )
     return post
-
 
 async def mark_skipped(db: Database, inbox_id: int) -> None:
     async with db.raw_conn() as conn:
@@ -792,50 +486,358 @@ async def mark_skipped(db: Database, inbox_id: int) -> None:
         )
 
 
-async def mark_failed(db: Database, inbox_id: int) -> None:
+async def schedule_retry(
+    db: Database,
+    inbox_id: int,
+    *,
+    typed_reason: str,
+    batch_id: str | None = None,
+    retry_after_sec: float | int | None = None,
+    quota_scope: str | None = None,
+    provider_retry_after: int | None = None,
+) -> tuple[str, int]:
+    """Release the lease and persist capped backoff forever.
+
+    Technical/provider/OCR/schema/persist/restart failures never become a
+    terminal ``failed``/``rejected`` state. After quick retries the same row
+    simply moves to a wider capped backoff and remains automatically due.
+    """
+
+    try:
+        requested = max(0, int(math.ceil(float(retry_after_sec or 0))))
+    except Exception:
+        requested = 0
+    reason = str(typed_reason or "TECHNICAL_ERROR").strip().upper() or "TECHNICAL_ERROR"
     async with db.raw_conn() as conn:
-        async def _update() -> None:
-            await conn.execute(
-                "UPDATE vk_inbox SET status='failed', locked_by=NULL, locked_at=NULL WHERE id=?",
+        async def _update() -> tuple[str, int]:
+            cur = await conn.execute(
+                "SELECT COALESCE(attempts,0), source_packet_id FROM vk_inbox WHERE id=?",
                 (inbox_id,),
             )
-
-        await _run_locked_write(
-            conn,
-            _update,
-            description=f"mark_failed inbox_id={inbox_id}",
+            row = await cur.fetchone()
+            attempts = int((row[0] if row else 0) or 0) + 1
+            packet_id = row[1] if row else None
+            # Fast retries widen into a bounded one-day interval; there is no
+            # terminal attempt ceiling.
+            backoff = min(86400, max(requested, min(3600, 15 * (2 ** min(attempts, 8)))))
+            modifier = f"+{backoff} seconds"
+            await conn.execute(
+                """
+                UPDATE vk_inbox
+                SET status='deferred', locked_by=NULL, locked_at=NULL,
+                    review_batch=?, attempts=?, next_attempt_at=datetime('now',?),
+                    last_typed_reason=?, quota_scope=COALESCE(?,quota_scope),
+                    provider_retry_after=?
+                WHERE id=?
+                """,
+                (
+                    batch_id, attempts, modifier, reason, quota_scope,
+                    provider_retry_after, inbox_id,
+                ),
+            )
+            if packet_id is not None:
+                await conn.execute(
+                    """
+                    UPDATE vk_source_packet
+                    SET status='retry_scheduled', llm_status=CASE
+                            WHEN ? LIKE 'OCR_%' THEN llm_status ELSE 'retry_scheduled' END,
+                        next_attempt_at=datetime('now',?), attempts=?,
+                        lease_owner=NULL, lease_expires_at=NULL,
+                        last_typed_reason=?, quota_scope=COALESCE(?,quota_scope),
+                        provider_retry_after=?, terminal_carrier_outcome=NULL,
+                        updated_at=CURRENT_TIMESTAMP
+                    WHERE id=?
+                    """,
+                    (
+                        reason, modifier, attempts, reason, quota_scope,
+                        provider_retry_after, int(packet_id),
+                    ),
+                )
+            return "deferred", attempts
+        return await _run_locked_write(
+            conn, _update, description=f"schedule_retry inbox_id={inbox_id} reason={reason}"
         )
+
+
+async def load_successful_parse_receipt(
+    db: Database,
+    *,
+    source_packet_id: int | None,
+    prompt_version: str,
+    model: str,
+) -> dict[str, Any] | None:
+    """Return an immutable successful parse for exact packet replay."""
+
+    if source_packet_id is None:
+        return None
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT parse_result_json
+            FROM vk_source_packet
+            WHERE id=? AND llm_status='completed'
+              AND prompt_version=? AND model=?
+              AND successful_parse_key IS NOT NULL
+              AND parse_result_json IS NOT NULL
+            """,
+            (int(source_packet_id), str(prompt_version), str(model)),
+        )
+        row = await cur.fetchone()
+    if not row or not row[0]:
+        return None
+    try:
+        payload = json.loads(str(row[0]))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+async def record_source_parse_attempt(
+    db: Database,
+    *,
+    source_packet_id: int | None,
+    prompt_version: str,
+    model: str,
+    evidence_manifest: dict[str, Any],
+    parse_result: dict[str, Any] | None,
+    disposition: str,
+    retry_reason: str | None,
+    event_child_count: int,
+    lifecycle_action_count: int,
+    quota_scope: str | None = None,
+    request_id: str | None = None,
+    response_id: str | None = None,
+    finish_reason: str | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    thought_tokens: int | None = None,
+    reserved_tokens: int | None = None,
+    provider_retry_after: int | None = None,
+) -> str | None:
+    """Append a funnel attempt and store a replayable successful receipt."""
+
+    if source_packet_id is None:
+        return None
+    manifest_json = json.dumps(
+        evidence_manifest or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    result_json = (
+        json.dumps(parse_result, ensure_ascii=False, sort_keys=True, default=str)
+        if parse_result is not None else None
+    )
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT source_url,source_revision_hash,payload_hash,
+                   discovery_keyword_hints_json,discovered_date_hints_json
+            FROM vk_source_packet WHERE id=?
+            """,
+            (int(source_packet_id),),
+        )
+        packet = await cur.fetchone()
+        if not packet:
+            return None
+        source_url, revision_hash, payload_hash, keyword_json, date_json = packet
+        parse_key = hashlib.sha256(
+            "\x1f".join(
+                (str(payload_hash), str(revision_hash), manifest_json, str(prompt_version), str(model))
+            ).encode("utf-8")
+        ).hexdigest()
+        cur = await conn.execute(
+            "SELECT COALESCE(MAX(attempt_no),0)+1 FROM vk_source_packet_attempt WHERE source_packet_id=?",
+            (int(source_packet_id),),
+        )
+        attempt_row = await cur.fetchone()
+        attempt_no = int((attempt_row[0] if attempt_row else 1) or 1)
+        valid = parse_result is not None and not retry_reason
+        completed = parse_result is not None
+        hints_json = json.dumps(
+            {"keywords": json.loads(keyword_json or "[]"), "dates": json.loads(date_json or "[]")},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        await conn.execute(
+            """
+            INSERT INTO vk_source_packet_attempt(
+                source_packet_id,attempt_no,attempt_kind,parse_key,payload_hash,
+                source_type,source_url,source_revision_hash,discovery_hints_json,
+                evidence_manifest_json,llm_started,llm_completed,
+                structured_response_valid,model,quota_scope,request_id,response_id,
+                finish_reason,provider_retry_after,input_tokens,output_tokens,
+                thought_tokens,reserved_tokens,primary_disposition,event_child_count,
+                lifecycle_action_count,typed_error_reason,completed_at
+            ) VALUES(?,?,'primary',?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?,CURRENT_TIMESTAMP)
+            """,
+            (
+                int(source_packet_id), attempt_no, parse_key, str(payload_hash), "vk",
+                str(source_url), str(revision_hash), hints_json, manifest_json,
+                1 if completed else 0, 1 if valid else 0, str(model), quota_scope,
+                request_id, response_id, finish_reason, provider_retry_after,
+                input_tokens, output_tokens, thought_tokens, reserved_tokens,
+                str(disposition), int(event_child_count), int(lifecycle_action_count),
+                retry_reason,
+            ),
+        )
+        if valid:
+            await conn.execute(
+                """
+                UPDATE vk_source_packet
+                SET llm_status='completed', ocr_status=CASE
+                        WHEN json_extract(?,'$.evidence_complete') THEN 'completed'
+                        ELSE 'incomplete' END,
+                    evidence_manifest_json=?, parse_result_json=?,
+                    successful_parse_key=?, prompt_version=?, model=?,
+                    quota_scope=?, last_typed_reason=?, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    manifest_json, manifest_json, result_json, parse_key,
+                    str(prompt_version), str(model), quota_scope, str(disposition),
+                    int(source_packet_id),
+                ),
+            )
+        else:
+            await conn.execute(
+                """
+                UPDATE vk_source_packet
+                SET llm_status='retry_scheduled', evidence_manifest_json=?,
+                    prompt_version=?, model=?, quota_scope=?,
+                    last_typed_reason=?, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    manifest_json, str(prompt_version), str(model), quota_scope,
+                    retry_reason or str(disposition), int(source_packet_id),
+                ),
+            )
+        await conn.commit()
+    return parse_key
+
+
+async def record_exact_parse_replay(
+    db: Database,
+    *,
+    source_packet_id: int | None,
+    prompt_version: str,
+    model: str,
+) -> None:
+    if source_packet_id is None:
+        return
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT source_url,source_revision_hash,payload_hash,
+                   discovery_keyword_hints_json,discovered_date_hints_json,
+                   evidence_manifest_json,successful_parse_key
+            FROM vk_source_packet WHERE id=?
+            """,
+            (int(source_packet_id),),
+        )
+        row = await cur.fetchone()
+        if not row:
+            return
+        cur = await conn.execute(
+            "SELECT COALESCE(MAX(attempt_no),0)+1 FROM vk_source_packet_attempt WHERE source_packet_id=?",
+            (int(source_packet_id),),
+        )
+        attempt_row = await cur.fetchone()
+        hints = json.dumps(
+            {"keywords": json.loads(row[3] or "[]"), "dates": json.loads(row[4] or "[]")},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        await conn.execute(
+            """
+            INSERT INTO vk_source_packet_attempt(
+                source_packet_id,attempt_no,attempt_kind,parse_key,payload_hash,
+                source_type,source_url,source_revision_hash,discovery_hints_json,
+                evidence_manifest_json,llm_started,llm_completed,
+                structured_response_valid,model,primary_disposition,
+                terminal_carrier_outcome,completed_at
+            ) VALUES(?,?,'exact_replay',?,?,?,?,?,?,?,0,0,1,?,'EXACT_REPLAY','EXACT_REPLAY',CURRENT_TIMESTAMP)
+            """,
+            (
+                int(source_packet_id), int((attempt_row[0] if attempt_row else 1) or 1),
+                row[6], row[2], "vk", row[0], row[1], hints, row[5], str(model),
+            ),
+        )
+        await conn.commit()
+
+
+async def record_carrier_resolution(
+    db: Database,
+    *,
+    source_packet_id: int | None,
+    child_outcomes: list[str],
+    terminal_carrier_outcome: str | None,
+    next_attempt_at: str | None = None,
+    typed_error_reason: str | None = None,
+) -> None:
+    if source_packet_id is None:
+        return
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            UPDATE vk_source_packet_attempt
+            SET smart_update_child_outcomes_json=?,terminal_carrier_outcome=?,
+                next_attempt_at=?,typed_error_reason=COALESCE(?,typed_error_reason)
+            WHERE id=(
+                SELECT id FROM vk_source_packet_attempt
+                WHERE source_packet_id=? ORDER BY attempt_no DESC,id DESC LIMIT 1
+            )
+            """,
+            (
+                json.dumps(child_outcomes, ensure_ascii=False), terminal_carrier_outcome,
+                next_attempt_at, typed_error_reason, int(source_packet_id),
+            ),
+        )
+        await conn.commit()
 
 
 async def mark_rejected(db: Database, inbox_id: int) -> None:
+    """Record a validated, complete-evidence LLM no-event outcome only."""
+
     async with db.raw_conn() as conn:
         async def _update() -> None:
+            cur = await conn.execute("SELECT source_packet_id FROM vk_inbox WHERE id=?", (inbox_id,))
+            row = await cur.fetchone()
             await conn.execute(
-                "UPDATE vk_inbox SET status='rejected', locked_by=NULL, locked_at=NULL WHERE id=?",
+                """
+                UPDATE vk_inbox SET status='confirmed_no_event', locked_by=NULL,
+                    locked_at=NULL, next_attempt_at=NULL,
+                    last_typed_reason='CONFIRMED_NO_EVENT'
+                WHERE id=?
+                """,
                 (inbox_id,),
             )
-
-        await _run_locked_write(
-            conn,
-            _update,
-            description=f"mark_rejected inbox_id={inbox_id}",
-        )
+            if row and row[0] is not None:
+                await conn.execute(
+                    """
+                    UPDATE vk_source_packet
+                    SET status='confirmed_no_event', llm_status='completed',
+                        terminal_carrier_outcome='CONFIRMED_NO_EVENT',
+                        lease_owner=NULL, lease_expires_at=NULL,
+                        last_typed_reason='CONFIRMED_NO_EVENT', updated_at=CURRENT_TIMESTAMP
+                    WHERE id=?
+                    """,
+                    (int(row[0]),),
+                )
+        await _run_locked_write(conn, _update, description=f"mark_confirmed_no_event inbox_id={inbox_id}")
 
 
 async def mark_pending(db: Database, inbox_id: int) -> None:
-    """Return an inbox row back to the queue (clear lock and batch)."""
+    """Return an inbox row back to the due queue."""
     async with db.raw_conn() as conn:
         async def _update() -> None:
             await conn.execute(
-                "UPDATE vk_inbox SET status='pending', locked_by=NULL, locked_at=NULL, review_batch=NULL WHERE id=?",
+                """
+                UPDATE vk_inbox SET status='pending', locked_by=NULL, locked_at=NULL,
+                    review_batch=NULL, next_attempt_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
                 (inbox_id,),
             )
-
-        await _run_locked_write(
-            conn,
-            _update,
-            description=f"mark_pending inbox_id={inbox_id}",
-        )
+        await _run_locked_write(conn, _update, description=f"mark_pending inbox_id={inbox_id}")
 
 
 async def mark_deferred(
@@ -844,47 +846,15 @@ async def mark_deferred(
     *,
     batch_id: str | None,
     retry_after_sec: float | int | None = None,
+    typed_reason: str = "RETRY_REQUIRED",
 ) -> None:
-    """Persist a rate-limited inbox row without turning it into a stale lock."""
-
-    try:
-        delay_seconds = max(0, int(math.ceil(float(retry_after_sec or 0.0))))
-    except Exception:
-        delay_seconds = 0
-    modifier = f"+{delay_seconds} seconds" if delay_seconds > 0 else None
-
-    async with db.raw_conn() as conn:
-        async def _update() -> None:
-            if modifier:
-                await conn.execute(
-                    """
-                    UPDATE vk_inbox
-                    SET status='deferred',
-                        locked_by=NULL,
-                        locked_at=datetime('now', ?),
-                        review_batch=?
-                    WHERE id=?
-                    """,
-                    (modifier, batch_id, inbox_id),
-                )
-            else:
-                await conn.execute(
-                    """
-                    UPDATE vk_inbox
-                    SET status='deferred',
-                        locked_by=NULL,
-                        locked_at=CURRENT_TIMESTAMP,
-                        review_batch=?
-                    WHERE id=?
-                    """,
-                    (batch_id, inbox_id),
-                )
-
-        await _run_locked_write(
-            conn,
-            _update,
-            description=f"mark_deferred inbox_id={inbox_id}",
-        )
+    await schedule_retry(
+        db,
+        inbox_id,
+        typed_reason=typed_reason,
+        batch_id=batch_id,
+        retry_after_sec=retry_after_sec,
+    )
 
 
 async def mark_rate_limited(
@@ -895,72 +865,16 @@ async def mark_rate_limited(
     retry_after_sec: float | int | None = None,
     max_attempts: int,
 ) -> tuple[str, int]:
-    """Persist a rate-limit defer and return the new queue state with attempts."""
-
-    try:
-        delay_seconds = max(0, int(math.ceil(float(retry_after_sec or 0.0))))
-    except Exception:
-        delay_seconds = 0
-    modifier = f"+{delay_seconds} seconds" if delay_seconds > 0 else None
-    normalized_max_attempts = max(0, int(max_attempts))
-
-    async with db.raw_conn() as conn:
-        async def _update() -> tuple[str, int]:
-            cur = await conn.execute(
-                "SELECT COALESCE(attempts, 0) FROM vk_inbox WHERE id=?",
-                (inbox_id,),
-            )
-            row = await cur.fetchone()
-            next_attempts = int((row[0] if row else 0) or 0) + 1
-            terminal = normalized_max_attempts > 0 and next_attempts >= normalized_max_attempts
-            if terminal:
-                await conn.execute(
-                    """
-                    UPDATE vk_inbox
-                    SET status='failed',
-                        locked_by=NULL,
-                        locked_at=NULL,
-                        review_batch=NULL,
-                        attempts=?
-                    WHERE id=?
-                    """,
-                    (next_attempts, inbox_id),
-                )
-                return "failed", next_attempts
-            if modifier:
-                await conn.execute(
-                    """
-                    UPDATE vk_inbox
-                    SET status='deferred',
-                        locked_by=NULL,
-                        locked_at=datetime('now', ?),
-                        review_batch=?,
-                        attempts=?
-                    WHERE id=?
-                    """,
-                    (modifier, batch_id, next_attempts, inbox_id),
-                )
-            else:
-                await conn.execute(
-                    """
-                    UPDATE vk_inbox
-                    SET status='deferred',
-                        locked_by=NULL,
-                        locked_at=CURRENT_TIMESTAMP,
-                        review_batch=?,
-                        attempts=?
-                    WHERE id=?
-                    """,
-                    (batch_id, next_attempts, inbox_id),
-                )
-            return "deferred", next_attempts
-
-        return await _run_locked_write(
-            conn,
-            _update,
-            description=f"mark_rate_limited inbox_id={inbox_id}",
-        )
-
+    # ``max_attempts`` controls alerting cadence only; it is never terminal.
+    del max_attempts
+    return await schedule_retry(
+        db,
+        inbox_id,
+        typed_reason="RATE_LIMITED",
+        batch_id=batch_id,
+        retry_after_sec=retry_after_sec,
+        provider_retry_after=(int(retry_after_sec) if retry_after_sec else None),
+    )
 
 async def mark_imported(
     db: Database,
@@ -981,6 +895,49 @@ async def mark_imported(
         event_ids=event_ids,
         event_dates=event_dates,
     )
+
+
+async def mark_carrier_outcome(
+    db: Database,
+    *,
+    inbox_id: int,
+    outcome: str,
+    keep_due: bool = False,
+    typed_reason: str | None = None,
+) -> None:
+    normalized = str(outcome or "").strip().upper()
+    status_map = {
+        "EVENTS_RESOLVED": "imported",
+        "LIFECYCLE_RESOLVED": "imported",
+        "MIXED_RESOLVED": "imported",
+        "CONFIRMED_PRODUCT_EXCLUSION": "confirmed_product_exclusion",
+        "EXACT_REPLAY": "imported",
+    }
+    status = "deferred" if keep_due else status_map.get(normalized, "pending")
+    async with db.raw_conn() as conn:
+        cur = await conn.execute("SELECT source_packet_id FROM vk_inbox WHERE id=?", (inbox_id,))
+        row = await cur.fetchone()
+        await conn.execute(
+            """
+            UPDATE vk_inbox
+            SET status=?,locked_by=NULL,locked_at=NULL,
+                next_attempt_at=CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END,
+                last_typed_reason=?
+            WHERE id=?
+            """,
+            (status, 1 if keep_due else 0, typed_reason or normalized, inbox_id),
+        )
+        if row and row[0] is not None:
+            await conn.execute(
+                """
+                UPDATE vk_source_packet
+                SET status=?,terminal_carrier_outcome=?,lease_owner=NULL,
+                    lease_expires_at=NULL,last_typed_reason=?,updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (status, normalized, typed_reason or normalized, int(row[0])),
+            )
+        await conn.commit()
 
 
 async def mark_imported_events(
@@ -1032,6 +989,22 @@ async def mark_imported_events(
                 """,
                 (primary_event_id, batch_id, inbox_id),
             )
+            cur_packet = await conn.execute(
+                "SELECT source_packet_id FROM vk_inbox WHERE id=?", (inbox_id,)
+            )
+            packet_row = await cur_packet.fetchone()
+            if packet_row and packet_row[0] is not None:
+                await conn.execute(
+                    """
+                    UPDATE vk_source_packet
+                    SET status='events_resolved',
+                        terminal_carrier_outcome='EVENTS_RESOLVED',
+                        lease_owner=NULL,lease_expires_at=NULL,
+                        last_typed_reason='EVENTS_RESOLVED',updated_at=CURRENT_TIMESTAMP
+                    WHERE id=?
+                    """,
+                    (int(packet_row[0]),),
+                )
 
             if ids:
                 for eid in ids:

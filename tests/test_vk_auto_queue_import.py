@@ -21,6 +21,13 @@ import poster_ocr
 from poster_media import PosterMedia
 from source_parsing.handlers import AddedEventInfo
 from smart_event_update import SmartUpdateResult, SmartUpdateTerminalOutcome
+from source_parse_contract import (
+    EvidenceManifest,
+    LifecycleAction,
+    LifecycleActionType,
+    SourceDisposition,
+    SourceParseDecision,
+)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -60,13 +67,13 @@ def test_schedule_cards_use_expanded_bounded_photo_cap(monkeypatch):
         "С 1 по 9 августа пройдут соревнования. "
         "Расписание и места проведения – в карточках."
     )
-    assert vk_auto_queue._vk_auto_import_photo_limit_for_text(text) == 10
+    assert vk_auto_queue._vk_auto_import_photo_limit_for_text(text) == 100
 
 
-def test_ordinary_vk_gallery_keeps_default_photo_cap(monkeypatch):
+def test_ordinary_vk_gallery_keeps_all_evidence(monkeypatch):
     monkeypatch.setenv("VK_AUTO_IMPORT_MAX_PHOTOS", "4")
     monkeypatch.setenv("VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS", "10")
-    assert vk_auto_queue._vk_auto_import_photo_limit_for_text("Фото с открытия выставки") == 4
+    assert vk_auto_queue._vk_auto_import_photo_limit_for_text("Фото с открытия выставки") == 100
 
 
 @pytest.mark.asyncio
@@ -240,7 +247,7 @@ async def test_manual_vk_auto_import_does_not_wait_for_heavy_gate_by_default(tmp
     monkeypatch.setattr(vk_auto_queue, "heavy_operation", forbidden_heavy_operation)
 
     bot = DummyBot()
-    await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
+    report = await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
     assert bot.messages
     assert all("ждёт завершения другой тяжёлой операции" not in text for _, text in bot.messages)
@@ -277,7 +284,7 @@ async def test_vk_auto_import_wait_mode_reports_heavy_gate_wait(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_marks_row_failed_on_timeout(tmp_path, monkeypatch):
+async def test_vk_auto_import_schedules_durable_retry_on_timeout(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -313,10 +320,12 @@ async def test_vk_auto_import_marks_row_failed_on_timeout(tmp_path, monkeypatch)
         ops_row = await ops_cur.fetchone()
         assert ops_row is not None
         assert ops_row[0] == "failed"
-        cur = await conn.execute("SELECT status FROM vk_inbox WHERE id=1")
+        cur = await conn.execute("SELECT status, last_typed_reason, next_attempt_at FROM vk_inbox WHERE id=1")
         row = await cur.fetchone()
         assert row is not None
-        assert row[0] == "failed"
+        assert row[0] == "deferred"
+        assert row[1] == "ROW_TIMEOUT"
+        assert row[2] is not None
 
 
 @pytest.mark.asyncio
@@ -341,7 +350,7 @@ async def test_vk_auto_import_requests_strict_chronological_pick_next(tmp_path, 
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_cancellation_notice_marks_existing_event_inactive(tmp_path, monkeypatch):
+async def test_vk_auto_import_cancellation_requires_typed_llm_action(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -393,28 +402,45 @@ async def test_vk_auto_import_cancellation_notice_marks_existing_event_inactive(
             vk_auto_queue.VkFetchStatus(True, "ok"),
         )
 
-    async def should_not_be_called(*_args, **_kwargs):
-        raise AssertionError("build_event_drafts must not be called for cancellation notices")
+    called = 0
+
+    async def fake_build(*_args, **_kwargs):
+        nonlocal called
+        called += 1
+        decision = SourceParseDecision(
+            [],
+            disposition=SourceDisposition.LIFECYCLE_ONLY,
+            lifecycle_actions=(LifecycleAction(
+                action=LifecycleActionType.CANCEL,
+                target_title="Manhattan Short Online",
+                target_date="2026-02-15",
+                evidence="показ 15 февраля не состоится",
+            ),),
+            evidence_manifest=EvidenceManifest.complete_source(cancel_text),
+        )
+        return vk_intake.DraftParseResult([], decision=decision), None
+
+    seen_actions = []
+
+    async def fake_apply(*_args, lifecycle_action=None, **_kwargs):
+        seen_actions.append(lifecycle_action)
+        return event_id, None
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
-    monkeypatch.setattr(vk_intake, "build_event_drafts", should_not_be_called)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
+    monkeypatch.setattr(vk_auto_queue, "_cancel_matching_event_from_notice", fake_apply)
 
     bot = DummyBot()
     await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
     async with db.raw_conn() as conn:
-        cur = await conn.execute(
-            "SELECT silent, lifecycle_status FROM event WHERE id=?",
-            (int(event_id),),
-        )
-        silent, lifecycle_status = await cur.fetchone()
-        assert int(silent or 0) == 0
-        assert str(lifecycle_status or "") in {"cancelled", "postponed"}
-
         cur = await conn.execute("SELECT status, imported_event_id FROM vk_inbox WHERE id=1")
         status, imported_event_id = await cur.fetchone()
         assert status == "imported"
         assert int(imported_event_id) == int(event_id)
+    assert called == 1
+    assert len(seen_actions) == 1
+    assert seen_actions[0].action is LifecycleActionType.CANCEL
 
 
 def test_vk_auto_import_time_reschedule_notice_stays_on_normal_import_path():
@@ -425,7 +451,7 @@ def test_vk_auto_import_time_reschedule_notice_stays_on_normal_import_path():
 
     assert vk_auto_queue._parse_ru_date_from_text(text, year_hint=2026) == "2026-05-08"
     assert vk_auto_queue._looks_like_time_reschedule_notice(text) is True
-    assert vk_auto_queue._looks_like_cancellation_notice(text) is False
+    assert not hasattr(vk_auto_queue, "_looks_like_cancellation_notice")
 
 
 def test_vk_auto_import_previous_meeting_reschedule_stays_on_normal_import_path():
@@ -438,7 +464,7 @@ def test_vk_auto_import_previous_meeting_reschedule_stays_on_normal_import_path(
 
     assert vk_auto_queue._parse_ru_date_from_text(text, year_hint=2026) == "2026-05-22"
     assert vk_auto_queue._looks_like_retrospective_reschedule_context(text) is True
-    assert vk_auto_queue._looks_like_cancellation_notice(text) is False
+    assert not hasattr(vk_auto_queue, "_looks_like_cancellation_notice")
 
 
 @pytest.mark.asyncio
@@ -725,7 +751,7 @@ async def test_vk_auto_import_continues_when_first_roundup_draft_is_rejected(
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_rejects_low_confidence_drafts(tmp_path, monkeypatch):
+async def test_vk_auto_import_keeps_llm_child_despite_warning(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -755,28 +781,43 @@ async def test_vk_auto_import_rejects_low_confidence_drafts(tmp_path, monkeypatc
             date="2026-03-19",
             time=None,
             venue="Филармония",
-            reject_reason="Низкая уверенность: заголовок взят из прошедшего концерта.",
+            verification_warnings=["Низкая уверенность: требуется условная проверка."],
         )
         return [d1], None
 
-    async def should_not_be_called(*_args, **_kwargs):
-        raise AssertionError("persist_event_and_pages must not be called for low-confidence drafts")
+    async def fake_persist(*_args, **_kwargs):
+        return vk_intake.PersistResult(
+            event_id=77,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date="2026-03-19",
+            event_end_date=None,
+            event_time="",
+            event_type=None,
+            is_free=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=77,
+            ),
+        )
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
     monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build_event_drafts)
-    monkeypatch.setattr(vk_intake, "persist_event_and_pages", should_not_be_called)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+    monkeypatch.setenv("VK_AUTO_IMPORT_INLINE_JOBS", "0")
 
     bot = DummyBot()
-    await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
+    report = await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE id=1")
         (status,) = await cur.fetchone()
-    assert status == "rejected"
+    assert status == "imported", report.errors
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_enables_obvious_non_event_prefilter(tmp_path, monkeypatch):
+async def test_vk_auto_import_uses_llm_decision_without_prefilter_argument(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -803,13 +844,15 @@ async def test_vk_auto_import_enables_obvious_non_event_prefilter(tmp_path, monk
         )
 
     async def fake_build_event_drafts(*_args, **kwargs):
-        captured["prefilter_obvious_non_events"] = kwargs.get("prefilter_obvious_non_events")
-        return [
-            vk_intake.EventDraft(
-                title="",
-                reject_reason="Длинный исторический/справочный пост без признаков будущего посещаемого события",
-            )
-        ], None
+        captured.update(kwargs)
+        decision = SourceParseDecision(
+            [],
+            disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            evidence_manifest=EvidenceManifest.complete_source(
+                "Исторический очерк о послевоенном театре кукол."
+            ),
+        )
+        return vk_intake.DraftParseResult([], decision=decision), None
 
     async def should_not_be_called(*_args, **_kwargs):
         raise AssertionError("persist_event_and_pages must not be called for reject-only drafts")
@@ -821,11 +864,11 @@ async def test_vk_auto_import_enables_obvious_non_event_prefilter(tmp_path, monk
     bot = DummyBot()
     await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
-    assert captured["prefilter_obvious_non_events"] is True
+    assert "prefilter_obvious_non_events" not in captured
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE id=1")
         (status,) = await cur.fetchone()
-    assert status == "rejected"
+    assert status == "confirmed_no_event"
 
 
 @pytest.mark.asyncio
@@ -1346,7 +1389,7 @@ async def test_fetch_vk_post_text_and_photos_includes_repost_text(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_queue_rejects_deleted_post_when_vk_fetch_not_found(tmp_path, monkeypatch):
+async def test_vk_auto_queue_retries_deleted_post_as_missing_evidence(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     db = Database(str(tmp_path / "db.sqlite"))
@@ -1406,13 +1449,16 @@ async def test_vk_auto_queue_rejects_deleted_post_when_vk_fetch_not_found(tmp_pa
         progress_total_txt="1",
     )
 
-    assert report.inbox_rejected == 1
+    assert report.inbox_rejected == 0
+    assert report.inbox_deferred == 1
     assert report.inbox_failed == 0
 
     async with db.raw_conn() as conn:
-        cur = await conn.execute("SELECT status FROM vk_inbox WHERE id=?", (1,))
+        cur = await conn.execute("SELECT status, last_typed_reason, next_attempt_at FROM vk_inbox WHERE id=?", (1,))
         row = await cur.fetchone()
-    assert row[0] == "rejected"
+    assert row[0] == "deferred"
+    assert row[1] == "EVIDENCE_UNAVAILABLE"
+    assert row[2] is not None
 
 
 @pytest.mark.asyncio
@@ -1492,14 +1538,14 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
 
     async with db.raw_conn() as conn:
         cur = await conn.execute(
-            "SELECT status, locked_by, review_batch, locked_at FROM vk_inbox WHERE id=?",
+            "SELECT status, locked_by, review_batch, next_attempt_at FROM vk_inbox WHERE id=?",
             (1,),
         )
-        status, locked_by, review_batch, locked_at = await cur.fetchone()
+        status, locked_by, review_batch, next_attempt_at = await cur.fetchone()
     assert status == "deferred"
     assert locked_by is None
     assert review_batch == "batch-x"
-    assert locked_at is not None
+    assert next_attempt_at is not None
 
 
 def test_build_smart_update_posters_falls_back_to_vk_photo_url_when_catbox_missing():

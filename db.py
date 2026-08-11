@@ -2703,6 +2703,151 @@ class Database:
             await _add_column(
                 conn, "vk_inbox", "owner_type TEXT NOT NULL DEFAULT 'group'"
             )
+            await _add_column(conn, "vk_inbox", "source_packet_id INTEGER")
+            await _add_column(conn, "vk_inbox", "next_attempt_at TIMESTAMP")
+            await _add_column(conn, "vk_inbox", "last_typed_reason TEXT")
+            await _add_column(conn, "vk_inbox", "quota_scope TEXT")
+            await _add_column(conn, "vk_inbox", "provider_retry_after INTEGER")
+
+            # Raw-first VK ingestion ledger.  A row is an immutable fetched
+            # revision; semantic state lives beside it but the source payload is
+            # never overwritten.  The inbox points at the newest revision.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_source_packet (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_type TEXT NOT NULL DEFAULT 'vk',
+                    owner_id INTEGER NOT NULL,
+                    owner_type TEXT NOT NULL DEFAULT 'group',
+                    post_id INTEGER NOT NULL,
+                    revision INTEGER NOT NULL,
+                    source_url TEXT NOT NULL,
+                    published_at INTEGER NOT NULL,
+                    fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    raw_text TEXT NOT NULL,
+                    raw_payload_json TEXT NOT NULL,
+                    attachment_metadata_json TEXT NOT NULL DEFAULT '[]',
+                    payload_hash TEXT NOT NULL,
+                    source_revision_hash TEXT NOT NULL,
+                    discovery_keyword_hints_json TEXT NOT NULL DEFAULT '[]',
+                    discovered_date_hints_json TEXT NOT NULL DEFAULT '[]',
+                    event_ts_hint INTEGER,
+                    ocr_status TEXT NOT NULL DEFAULT 'pending',
+                    llm_status TEXT NOT NULL DEFAULT 'pending',
+                    evidence_manifest_json TEXT,
+                    parse_result_json TEXT,
+                    successful_parse_key TEXT,
+                    prompt_version TEXT,
+                    model TEXT,
+                    quota_scope TEXT,
+                    provider_retry_after INTEGER,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    lease_owner TEXT,
+                    lease_expires_at TIMESTAMP,
+                    last_typed_reason TEXT,
+                    terminal_carrier_outcome TEXT,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_type, owner_id, post_id, revision),
+                    UNIQUE(source_type, owner_id, post_id, source_revision_hash)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_source_packet_due ON vk_source_packet(status,next_attempt_at,published_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_source_packet_post ON vk_source_packet(source_type,owner_id,post_id,revision)"
+            )
+            await _add_column(conn, "vk_source_packet", "provider_retry_after INTEGER")
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_source_packet_attempt (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_packet_id INTEGER NOT NULL,
+                    attempt_no INTEGER NOT NULL,
+                    attempt_kind TEXT NOT NULL DEFAULT 'primary',
+                    parse_key TEXT,
+                    payload_hash TEXT NOT NULL,
+                    source_type TEXT NOT NULL DEFAULT 'vk',
+                    source_url TEXT NOT NULL,
+                    source_revision_hash TEXT NOT NULL,
+                    discovery_hints_json TEXT NOT NULL DEFAULT '{}',
+                    evidence_manifest_json TEXT,
+                    llm_started INTEGER NOT NULL DEFAULT 0,
+                    llm_completed INTEGER NOT NULL DEFAULT 0,
+                    structured_response_valid INTEGER NOT NULL DEFAULT 0,
+                    model TEXT,
+                    quota_scope TEXT,
+                    request_id TEXT,
+                    response_id TEXT,
+                    finish_reason TEXT,
+                    provider_retry_after INTEGER,
+                    input_tokens INTEGER,
+                    output_tokens INTEGER,
+                    thought_tokens INTEGER,
+                    reserved_tokens INTEGER,
+                    primary_disposition TEXT,
+                    verification_triggered INTEGER NOT NULL DEFAULT 0,
+                    verification_reason TEXT,
+                    verification_disposition TEXT,
+                    event_child_count INTEGER NOT NULL DEFAULT 0,
+                    lifecycle_action_count INTEGER NOT NULL DEFAULT 0,
+                    smart_update_child_outcomes_json TEXT NOT NULL DEFAULT '[]',
+                    terminal_carrier_outcome TEXT,
+                    next_attempt_at TIMESTAMP,
+                    typed_error_reason TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    FOREIGN KEY(source_packet_id) REFERENCES vk_source_packet(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_packet_attempt_packet ON vk_source_packet_attempt(source_packet_id,attempt_no)"
+            )
+            await _add_column(conn, "vk_source_packet_attempt", "payload_hash TEXT")
+            await _add_column(conn, "vk_source_packet_attempt", "response_id TEXT")
+            await _add_column(conn, "vk_source_packet_attempt", "finish_reason TEXT")
+            await _add_column(conn, "vk_source_packet_attempt", "provider_retry_after INTEGER")
+            await conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_vk_packet_success_parse
+                ON vk_source_packet_attempt(parse_key)
+                WHERE parse_key IS NOT NULL
+                  AND llm_completed=1
+                  AND structured_response_valid=1
+                """
+            )
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_crawl_continuation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_type TEXT NOT NULL DEFAULT 'vk',
+                    owner_id INTEGER NOT NULL,
+                    owner_type TEXT NOT NULL DEFAULT 'group',
+                    since_ts INTEGER NOT NULL,
+                    offset INTEGER NOT NULL,
+                    horizon_ts INTEGER NOT NULL,
+                    reason TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    lease_owner TEXT,
+                    lease_expires_at TIMESTAMP,
+                    last_typed_reason TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_type, owner_id, since_ts, offset, horizon_ts)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_crawl_continuation_due ON vk_crawl_continuation(status,next_attempt_at)"
+            )
 
             await conn.execute(
                 """
