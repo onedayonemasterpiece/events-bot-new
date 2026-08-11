@@ -181,4 +181,3 @@ fetch configured in-horizon post
 
 Regex/date/history signals remain evidence, priority hints, or conditional
 verification triggers. They are never product verdicts.
-
