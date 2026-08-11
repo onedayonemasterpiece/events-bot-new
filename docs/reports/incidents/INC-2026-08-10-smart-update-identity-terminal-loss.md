@@ -283,7 +283,7 @@ The exact CLI source SHA-256 was
   `artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/d5-local-validation/relevant-pytest-rebased.log`,
   SHA-256
   `369baa7a28dbe428a6afb6f4f848e9e909313a21cc791af523127aac0cca9041`
-- GitHub current-head CI: run `31443999735` PASS for `python-ci`, dedicated
+- GitHub reviewed implementation/evidence-head CI: run `31443999735` PASS for `python-ci`, dedicated
   `smart-update-identity-state-machine` job `93634283480`, and
   `static-browser-release-gate`; PR `#494` remains draft and unmerged
 - post-deploy verification: pending

@@ -59,7 +59,7 @@ metadata commits were not required for runtime delivery.
 | ART-3 | production reason baseline | Done | daily/reason tables in incident + D2 report |
 | ART-4 | TO-BE state machine | Done | canonical identity-state-machine doc |
 | ART-5 | migration and rollback | Done | state-machine and SQLite init docs |
-| ART-6 | hermetic and full relevant CI results | Done | local aggregate 216 passed; current-head GitHub CI run `31443999735` passed all jobs, including the dedicated Smart Update job `93634283480` |
+| ART-6 | hermetic and full relevant CI results | Done | local aggregate 216 passed; reviewed implementation/evidence head `2f0a66270` passed GitHub CI run `31443999735`, including dedicated Smart Update job `93634283480` |
 | ART-7 | dry-run recovery report | Done | final-source D4c all-source read-only aggregate and manifest |
 | ART-8 | caller inventory | Done | canonical caller inventory |
 | ART-9 | changed terminal outcomes | Done | state-machine old→new table |
@@ -113,7 +113,7 @@ metadata commits were not required for runtime delivery.
 - Production boundary compile: passed for core, schema, every caller, recovery,
   and audit script.
 - `git diff --check`: passed.
-- GitHub current-head CI: run `31443999735` passed `python-ci`,
+- GitHub reviewed implementation/evidence-head CI: run `31443999735` passed `python-ci`,
   `smart-update-identity-state-machine` (job `93634283480`), and
   `static-browser-release-gate` on draft PR `#494`.
 
