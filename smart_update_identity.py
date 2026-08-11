@@ -18,6 +18,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from telegram_sources import canonicalize_tg_url
+from smart_update_state import IdentityDistinctReason
 
 
 class IdentityGateMode(str, Enum):
@@ -152,6 +153,8 @@ class MergeIdentityGateVerdict:
     allowed_fields: tuple[str, ...] = ()
     deterministic: bool = False
     llm: Mapping[str, Any] | None = None
+    llm_contract_valid: bool = False
+    identity_distinct_reason: IdentityDistinctReason | None = None
     fail_safe: bool = False
 
     @property
@@ -605,6 +608,7 @@ def build_merge_identity_gate_verdict(
     existing_ticket_identity = specific_ticket_occurrence_identity(
         existing_subject.ticket_link
     )
+    specific_ticket_conflict = False
     if (
         candidate_ticket_identity is not None
         and existing_ticket_identity is not None
@@ -625,6 +629,7 @@ def build_merge_identity_gate_verdict(
         action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         relation = MergeIdentityRelation.UNSAFE_TO_MERGE
         reason_code = "specific_ticket_occurrence_conflict"
+        specific_ticket_conflict = True
         deterministic = True
         conflicts = tuple(dict.fromkeys((*conflicts, conflict)))
         reasons = tuple(
@@ -634,6 +639,16 @@ def build_merge_identity_gate_verdict(
                     "different explicit ticket occurrence identities require automatic resolution",
                 )
             )
+        )
+
+    identity_distinct_reason = {
+        MergeIdentityRelation.RELATED_BUT_DISTINCT: IdentityDistinctReason.RELATED_BUT_DISTINCT,
+        MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING: IdentityDistinctReason.FESTIVAL_CONTEXT_SIBLING,
+        MergeIdentityRelation.UNSAFE_TO_MERGE: IdentityDistinctReason.UNSAFE_TO_MERGE,
+    }.get(relation)
+    if specific_ticket_conflict:
+        identity_distinct_reason = (
+            IdentityDistinctReason.SPECIFIC_TICKET_OCCURRENCE_CONFLICT
         )
 
     return MergeIdentityGateVerdict(
@@ -649,6 +664,8 @@ def build_merge_identity_gate_verdict(
         allowed_fields=allowed_fields,
         deterministic=deterministic,
         llm=llm or None,
+        llm_contract_valid=llm_contract_valid,
+        identity_distinct_reason=identity_distinct_reason,
     )
 
 
@@ -1081,19 +1098,29 @@ def canonicalize_identity_url(
 def stable_candidate_identity(value: Any) -> tuple[str, str]:
     """Return ``(candidate_key, occurrence_key)`` without prose semantics.
 
-    Producers should pass an explicit occurrence key or stable ordinal for
-    multi-event carriers.  The structured fallback intentionally excludes title,
+    Occurrence identity follows a strict precedence: source-native occurrence
+    ID, vendor occurrence ID/ticket identity, structured schedule anchor, then
+    producer ordinal only as a same-anchor collision tie-breaker.  The
+    structured fallback intentionally excludes title,
     description, OCR and occurrence-scope prose so an edited packet remains the
     same candidate and can be treated as an authoritative update.
     """
 
     explicit_candidate = str(getattr(value, "candidate_key", None) or "").strip()
     explicit_occurrence = str(getattr(value, "occurrence_key", None) or "").strip()
+    source_native_occurrence = str(
+        getattr(value, "source_native_occurrence_id", None)
+        or getattr(value, "source_occurrence_id", None)
+        or ""
+    ).strip()
+    vendor_occurrence = str(getattr(value, "vendor_occurrence_id", None) or "").strip()
     canonical_source = canonicalize_identity_url(getattr(value, "source_url", None)) or ""
     if explicit_occurrence:
         occurrence_key = explicit_occurrence
-    elif getattr(value, "producer_ordinal", None) is not None:
-        occurrence_key = f"ordinal:{int(getattr(value, 'producer_ordinal'))}"
+    elif source_native_occurrence:
+        occurrence_key = "source-native:" + _stable_occurrence_component(source_native_occurrence)
+    elif vendor_occurrence:
+        occurrence_key = "vendor:" + _stable_occurrence_component(vendor_occurrence)
     else:
         ticket_identity = specific_ticket_occurrence_identity(
             getattr(value, "ticket_link", None)
@@ -1105,13 +1132,16 @@ def stable_candidate_identity(value: Any) -> tuple[str, str]:
                 "date": str(getattr(value, "date", None) or "").strip(),
                 "end_date": str(getattr(value, "end_date", None) or "").strip(),
                 "time": str(getattr(value, "time", None) or "").strip().replace(".", ":"),
-                "source_message_id": getattr(value, "source_message_id", None),
             }
-            # A source with no occurrence anchors represents one source-local
-            # candidate. Multi-event producers must provide producer_ordinal.
-            occurrence_key = "structured:" + hashlib.sha256(
+            structured_key = "structured:" + hashlib.sha256(
                 json.dumps(structured, ensure_ascii=False, sort_keys=True).encode("utf-8")
             ).hexdigest()
+            ordinal = getattr(value, "producer_ordinal", None)
+            occurrence_key = (
+                f"{structured_key}:ordinal:{int(ordinal)}"
+                if ordinal is not None
+                else structured_key
+            )
     if explicit_candidate:
         return explicit_candidate, occurrence_key
     material = json.dumps(
@@ -1121,6 +1151,21 @@ def stable_candidate_identity(value: Any) -> tuple[str, str]:
         separators=(",", ":"),
     )
     return hashlib.sha256(material.encode("utf-8")).hexdigest(), occurrence_key
+
+
+def _stable_occurrence_component(value: object) -> str:
+    """Keep readable native IDs while preventing delimiter ambiguity."""
+
+    raw = unicodedata.normalize("NFKC", str(value or "")).strip()
+    compact = re.sub(r"[^\w.~-]+", "-", raw, flags=re.UNICODE).strip("-")
+    return compact or hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def is_explicit_occurrence_key(value: object) -> bool:
+    """Whether a key carries source/vendor identity rather than fallback order."""
+
+    key = str(value or "").strip()
+    return bool(key and not key.startswith("structured:") and not key.startswith("ordinal:"))
 
 
 def _canonical_query(raw_query: str, *, ignored: set[str] | None = None) -> str:

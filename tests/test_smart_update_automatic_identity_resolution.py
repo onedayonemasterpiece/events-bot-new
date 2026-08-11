@@ -11,7 +11,11 @@ from db import Database
 from models import Event, EventSource
 from smart_event_update import EventCandidate, SmartUpdateTerminalOutcome
 from smart_update_identity import IdentityGateMode
-from smart_update_state import smart_update_funnel_counts
+from smart_update_state import (
+    IdentityDistinctReason,
+    RetryReason,
+    smart_update_funnel_counts,
+)
 
 
 REPLAY_FIXTURE = (
@@ -309,7 +313,68 @@ async def test_specific_ticket_occurrence_conflict_creates_distinct(tmp_path, mo
 
 
 @pytest.mark.asyncio
-async def test_identity_llm_unavailable_retries_then_forces_distinct(tmp_path, monkeypatch) -> None:
+async def test_late_incoherent_merge_rolls_back_and_creates_distinct(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "late-incoherent.sqlite"))
+    await db.init()
+    try:
+        existing_id = await _seed_event(db)
+        merge_calls = 0
+
+        async def _anchor(db_arg, _candidate_value):
+            async with db_arg.get_session() as session:
+                return await session.get(Event, existing_id)
+
+        async def _incoherent_merge(*_args, **_kwargs):
+            nonlocal merge_calls
+            merge_calls += 1
+            return {
+                "title": "Совершенно чужой фестиваль",
+                "description": "Чужое описание",
+                "added_facts": [],
+                "duplicate_facts": [],
+                "conflict_facts": [],
+                "skipped_conflicts": [],
+            }
+
+        candidate = _candidate()
+        candidate.source_url = "https://t.me/automatic_identity/incoherent"
+        candidate.title = "Независимая новая лекция"
+        candidate.source_text += " Дополнительные сведения."
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.OFF
+        )
+        monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", _anchor)
+        monkeypatch.setattr(su, "_single_candidate_auto_match_ok", lambda *_a, **_k: True)
+        monkeypatch.setattr(su, "_llm_merge_event", _incoherent_merge)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", _eventness)
+
+        result = await su.smart_event_update(
+            db, candidate, check_source_url=False, schedule_tasks=False
+        )
+
+        assert result.outcome is SmartUpdateTerminalOutcome.CREATED
+        assert result.event_id not in {None, existing_id}
+        assert result.diagnostic_event_id == existing_id
+        assert result.identity_distinct_reason is IdentityDistinctReason.INCOHERENT_MERGE
+        assert merge_calls == 1
+        async with db.get_session() as session:
+            original = await session.get(Event, existing_id)
+            assert original is not None
+            assert original.title == "Каноническое событие"
+            assert int(await session.scalar(select(func.count()).select_from(Event))) == 2
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_identity_llm_unavailable_remains_technical_retry_past_semantic_budget(
+    tmp_path, monkeypatch
+) -> None:
     db = Database(str(tmp_path / "llm-unavailable.sqlite"))
     await db.init()
     try:
@@ -343,10 +408,71 @@ async def test_identity_llm_unavailable_retries_then_forces_distinct(tmp_path, m
         )
         assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         assert first.reason == "merge_identity_llm_unavailable"
+        assert first.retry_reason is RetryReason.IDENTITY_TECHNICAL_FAILURE
+        for _ in range(4):
+            assert (await _make_due(db))["RETRY_SCHEDULED"] == 1
+        async with db.get_session() as session:
+            assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_typed_semantic_unknown_creates_distinct_after_bounded_adjudication(
+    tmp_path, monkeypatch
+) -> None:
+    db = Database(str(tmp_path / "semantic-unknown.sqlite"))
+    await db.init()
+    try:
+        existing_id = await _seed_event(db)
+        calls = 0
+
+        async def _anchor(db_arg, _candidate_value):
+            async with db_arg.get_session() as session:
+                return await session.get(Event, existing_id)
+
+        async def _unknown(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            return {
+                "action": "automatic_resolution_required",
+                "relation": "unknown",
+                "confidence": 0.4,
+                "reason_code": "semantic_abstention",
+                "reason": "identity cannot be proven",
+                "blocking_conflicts": [],
+                "allowed_fields": [],
+            }
+
+        monkeypatch.setenv("SMART_UPDATE_MAX_ATTEMPTS", "3")
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.ENFORCE
+        )
+        monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", _anchor)
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", _unknown)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", _eventness)
+
+        first = await su.smart_event_update(
+            db, _candidate(), check_source_url=False, schedule_tasks=False
+        )
+        assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert first.retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
         assert (await _make_due(db))["RETRY_SCHEDULED"] == 1
-        assert (await _make_due(db))["CREATED"] == 1
+        final = await _make_due(db)
+        assert final["CREATED"] == 1
+        assert calls == 2
         async with db.get_session() as session:
             assert int(await session.scalar(select(func.count()).select_from(Event))) == 2
+        async with db.raw_conn() as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT reason FROM smart_update_candidate_state ORDER BY id DESC LIMIT 1"
+                )
+            ).fetchone()
+        assert row == (IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION.value,)
     finally:
         await db.close()
 
@@ -513,7 +639,8 @@ async def test_legacy_unclassified_source_is_upgraded_after_accepted_match(
         assert len(sources) == 1
         assert sources[0].source_role == "identity_bearing"
         assert sources[0].candidate_key
-        assert sources[0].occurrence_key == "ordinal:0"
+        assert sources[0].occurrence_key.startswith("structured:")
+        assert sources[0].occurrence_key.endswith(":ordinal:0")
         assert sources[0].smart_update_candidate_id is not None
     finally:
         await db.close()

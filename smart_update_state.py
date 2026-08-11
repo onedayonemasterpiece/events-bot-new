@@ -24,6 +24,83 @@ class SmartUpdateTerminalOutcome(str, Enum):
 TERMINAL_OUTCOMES = tuple(item.value for item in SmartUpdateTerminalOutcome)
 
 
+class ProductExclusionReason(str, Enum):
+    """Closed product-policy reasons allowed to terminate without an Event."""
+
+    MISSING_DATE = "missing_date"
+    MISSING_TITLE = "missing_title"
+    MISSING_LOCATION = "missing_location"
+    EMPTY_TITLE_AFTER_CLEAN = "empty_title_after_clean"
+    INVALID_DATE = "invalid_date"
+    PAST_EVENT = "past_event"
+    FESTIVAL_POST = "festival_post"
+    SCHEDULE_DIGEST = "schedule_digest"
+    PROMO_OR_CONGRATS = "promo_or_congrats"
+    PROMO_ONLY = "promo_only"
+    GIVEAWAY_NO_EVENT = "giveaway_no_event"
+    NON_EVENT = "non_event"
+    OPEN_CALL = "open_call"
+    WORK_SCHEDULE = "work_schedule"
+    NON_EVENT_NOTICE = "non_event_notice"
+    VENUE_STATUS_UPDATE = "venue_status_update"
+    CONGRATS_NOTICE = "congrats_notice"
+    UNSUPPORTED_EXHIBITION_TEASER_DATE = "unsupported_exhibition_teaser_date"
+    COURSE_PROMO = "course_promo"
+    SERVICE_PROMO = "service_promo"
+    RENTAL_BOOKING = "rental_booking"
+    TOO_SOON = "too_soon"
+    EVENT_LOGISTICS_NOTICE = "event_logistics_notice"
+    ONLINE_EVENT = "online_event"
+    BOOK_REVIEW = "book_review"
+    PHOTO_DAY = "photo_day"
+    RETROSPECTIVE_FUTURE_TEASER = "retrospective_future_teaser"
+    COMPLETED_EVENT_REPORT = "completed_event_report"
+    OUT_OF_REGION = "out_of_region"
+    PROSE_LOCATION = "prose_location"
+
+
+class RetryReason(str, Enum):
+    """Closed retry classes. Technical classes are never identity fallbacks."""
+
+    UNKNOWN = "unknown_typed_reason"
+    INVALID_INTENT = "invalid_smart_update_intent"
+    CANDIDATE_ATTEMPT_IN_PROGRESS = "candidate_attempt_in_progress"
+    CANDIDATE_STATE_UNAVAILABLE = "candidate_state_unavailable"
+    CANDIDATE_STATE_ACK_FAILED = "candidate_state_ack_failed"
+    SOURCE_BINDING_CONFLICT = "source_binding_conflict"
+    SMART_UPDATE_INTEGRITY_ERROR = "smart_update_integrity_error"
+    SMART_UPDATE_PROCESSING_ERROR = "smart_update_processing_error"
+    ATTACH_CONTEXT_TARGET_REQUIRED = "attach_context_target_required"
+    ATTACH_CONTEXT_SOURCE_URL_REQUIRED = "attach_context_source_url_required"
+    ATTACH_CONTEXT_TARGET_MISSING = "attach_context_target_missing"
+    FINAL_PROBE_EVENT_MISSING = "final_probe_event_missing"
+    EVENT_MISSING = "event_missing"
+    IDENTITY_MATCH_DISAPPEARED = "identity_gate_match_disappeared"
+    IDENTITY_TECHNICAL_FAILURE = "identity_technical_failure"
+    IDENTITY_SEMANTIC_UNKNOWN = "identity_semantic_unknown"
+    DEDUP_ADJUDICATOR_TECHNICAL_FAILURE = "dedup_adjudicator_technical_failure"
+    PRODUCT_REASON_UNTYPED = "product_reason_untyped"
+
+
+class IdentityDistinctReason(str, Enum):
+    """Closed positive evidence authorising a separate Event."""
+
+    RELATED_BUT_DISTINCT = "related_but_distinct"
+    FESTIVAL_CONTEXT_SIBLING = "festival_context_sibling"
+    UNSAFE_TO_MERGE = "unsafe_to_merge"
+    SPECIFIC_TICKET_OCCURRENCE_CONFLICT = "specific_ticket_occurrence_conflict"
+    EXPLICIT_OCCURRENCE_ID_CONFLICT = "explicit_occurrence_id_conflict"
+    UNKNOWN_AFTER_BOUNDED_ADJUDICATION = "unknown_after_bounded_adjudication"
+    INCOHERENT_MERGE = "incoherent_merge"
+
+
+class LifecycleReason(str, Enum):
+    """Closed lifecycle/provenance resolutions produced by Smart Update."""
+
+    CONTEXT_PROVENANCE_ATTACHED = "context_provenance_attached"
+    CONTEXT_PROVENANCE_REPLAY = "context_provenance_replay"
+
+
 class CandidateAttemptInProgress(RuntimeError):
     """The same candidate identity is already leased by another execution."""
 
@@ -39,6 +116,7 @@ class CandidateAttemptReceipt:
     max_attempts: int
     previous_reason: str | None = None
     previous_diagnostic_event_id: int | None = None
+    previous_retry_reason: RetryReason | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +127,18 @@ class ClaimedCandidate:
     attempts: int
     max_attempts: int
     previous_reason: str | None
+    previous_retry_reason: RetryReason | None = None
+
+
+def parse_retry_reason(value: object) -> RetryReason | None:
+    """Parse only exact closed values; prose and substrings have no authority."""
+
+    if isinstance(value, RetryReason):
+        return value
+    try:
+        return RetryReason(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _json_payload(value: Mapping[str, Any] | None) -> str:
@@ -189,13 +279,14 @@ async def begin_candidate_attempt(
             await conn.rollback()
             raise
     return CandidateAttemptReceipt(
-        state_id,
-        candidate_key,
-        attempt,
-        attempt_no,
-        stored_max,
-        previous_reason,
-        previous_diagnostic_event_id,
+        candidate_state_id=state_id,
+        candidate_key=candidate_key,
+        attempt=attempt,
+        attempt_no=attempt_no,
+        max_attempts=stored_max,
+        previous_reason=previous_reason,
+        previous_diagnostic_event_id=previous_diagnostic_event_id,
+        previous_retry_reason=parse_retry_reason(previous_reason),
     )
 
 
@@ -207,12 +298,32 @@ async def finish_candidate_attempt(
     event_id: int | None = None,
     diagnostic_event_id: int | None = None,
     reason: str | None = None,
+    retry_reason: RetryReason | None = None,
+    product_exclusion_reason: ProductExclusionReason | None = None,
+    identity_distinct_reason: IdentityDistinctReason | None = None,
+    lifecycle_reason: LifecycleReason | None = None,
     retry_delay_seconds: int = 300,
 ) -> None:
     """Atomically close an attempt and project its terminal onto candidate state."""
 
     if not isinstance(outcome, SmartUpdateTerminalOutcome):
         outcome = SmartUpdateTerminalOutcome(str(outcome))
+    if outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
+        if not isinstance(product_exclusion_reason, ProductExclusionReason):
+            outcome = SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            retry_reason = RetryReason.PRODUCT_REASON_UNTYPED
+            reason = retry_reason.value
+        else:
+            reason = product_exclusion_reason.value
+    elif outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED and isinstance(
+        retry_reason, RetryReason
+    ):
+        reason = retry_reason.value
+    elif isinstance(identity_distinct_reason, IdentityDistinctReason):
+        reason = identity_distinct_reason.value
+    elif isinstance(lifecycle_reason, LifecycleReason):
+        reason = lifecycle_reason.value
+
     accepted = outcome in {
         SmartUpdateTerminalOutcome.CREATED,
         SmartUpdateTerminalOutcome.MERGED,
@@ -392,6 +503,7 @@ async def claim_due_candidates(
                         attempts=int(row[3]),
                         max_attempts=int(row[4]),
                         previous_reason=str(row[5]) if row[5] is not None else None,
+                        previous_retry_reason=parse_retry_reason(row[5]),
                     )
                 )
             await conn.commit()
