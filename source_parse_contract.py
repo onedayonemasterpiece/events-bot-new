@@ -1,0 +1,596 @@
+"""Typed, dependency-light contract for one source-level semantic parse.
+
+The contract deliberately contains no provider, ORM, queue, or bot imports.  A
+source adapter may therefore use it before importing the large application
+module, and every provider path can express technical uncertainty without
+overloading an empty event list.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+import hashlib
+from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
+
+
+PARSE_VERSION = "source-parse-v1"
+
+
+class SourceDisposition(str, Enum):
+    EVENTS_FOUND = "EVENTS_FOUND"
+    CONFIRMED_NO_EVENT = "CONFIRMED_NO_EVENT"
+    LIFECYCLE_ONLY = "LIFECYCLE_ONLY"
+    MIXED = "MIXED"
+    RETRY_REQUIRED = "RETRY_REQUIRED"
+
+
+class LifecycleActionType(str, Enum):
+    CANCEL = "CANCEL"
+    POSTPONE = "POSTPONE"
+    RESCHEDULE_DATE = "RESCHEDULE_DATE"
+    RESCHEDULE_TIME = "RESCHEDULE_TIME"
+    UPDATE_DETAILS = "UPDATE_DETAILS"
+
+
+class SourceParseRetryReason(str, Enum):
+    EMPTY_PROVIDER_RESPONSE = "EMPTY_PROVIDER_RESPONSE"
+    MALFORMED_JSON = "MALFORMED_JSON"
+    SCHEMA_MISMATCH = "SCHEMA_MISMATCH"
+    OUTPUT_TRUNCATED = "OUTPUT_TRUNCATED"
+    TECHNICAL_ERROR = "TECHNICAL_ERROR"
+    EVIDENCE_INCOMPLETE = "EVIDENCE_INCOMPLETE"
+    VERIFICATION_TECHNICAL_ERROR = "VERIFICATION_TECHNICAL_ERROR"
+    VERIFICATION_UNCERTAIN = "VERIFICATION_UNCERTAIN"
+
+
+class VerificationReason(str, Enum):
+    """The seven and only seven semantic contradiction classes."""
+
+    NO_EVENT_WITH_STRONG_SIGNALS = "NO_EVENT_WITH_STRONG_SIGNALS"
+    EVENT_DATE_CONFLICT = "EVENT_DATE_CONFLICT"
+    MULTIPLE_OCCURRENCES_COLLAPSED = "MULTIPLE_OCCURRENCES_COLLAPSED"
+    GENERIC_UNGROUNDED_TITLE = "GENERIC_UNGROUNDED_TITLE"
+    LIFECYCLE_MIXED_CONTENT_CONFLICT = "LIFECYCLE_MIXED_CONTENT_CONFLICT"
+    IMPOSSIBLE_SCHEMA_VALUE = "IMPOSSIBLE_SCHEMA_VALUE"
+    INCOMPLETE_EVIDENCE = "INCOMPLETE_EVIDENCE"
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceManifest:
+    raw_text_chars: int
+    raw_text_hash: str
+    attachment_count: int = 0
+    ocr_blocks_available: int = 0
+    ocr_blocks_included: int = 0
+    included_chars: int = 0
+    omitted_blocks: tuple[str, ...] = ()
+    unavailable_attachment_count: int = 0
+    ocr_complete: bool = True
+    source_text_truncated: bool = False
+    provider_output_truncated: bool = False
+
+    @property
+    def evidence_complete(self) -> bool:
+        return (
+            not self.source_text_truncated
+            and not self.provider_output_truncated
+            and self.ocr_complete
+            and self.unavailable_attachment_count == 0
+            and self.ocr_blocks_included == self.ocr_blocks_available
+            and not self.omitted_blocks
+        )
+
+    @classmethod
+    def complete_source(
+        cls,
+        source_text: str,
+        ocr_blocks: Sequence[str] | None = None,
+        *,
+        attachment_count: int | None = None,
+    ) -> "EvidenceManifest":
+        text = source_text or ""
+        blocks = tuple(str(block or "") for block in (ocr_blocks or ()))
+        return cls(
+            raw_text_chars=len(text),
+            raw_text_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            attachment_count=max(
+                len(blocks), int(attachment_count if attachment_count is not None else len(blocks))
+            ),
+            ocr_blocks_available=len(blocks),
+            ocr_blocks_included=len(blocks),
+            included_chars=len(text) + sum(len(block) for block in blocks),
+        )
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "EvidenceManifest":
+        return cls(
+            raw_text_chars=max(0, int(value.get("raw_text_chars", 0) or 0)),
+            raw_text_hash=str(value.get("raw_text_hash") or ""),
+            attachment_count=max(0, int(value.get("attachment_count", 0) or 0)),
+            ocr_blocks_available=max(0, int(value.get("ocr_blocks_available", 0) or 0)),
+            ocr_blocks_included=max(0, int(value.get("ocr_blocks_included", 0) or 0)),
+            included_chars=max(0, int(value.get("included_chars", 0) or 0)),
+            omitted_blocks=tuple(str(v) for v in (value.get("omitted_blocks") or ())),
+            unavailable_attachment_count=max(
+                0, int(value.get("unavailable_attachment_count", 0) or 0)
+            ),
+            ocr_complete=bool(value.get("ocr_complete", True)),
+            source_text_truncated=bool(value.get("source_text_truncated", False)),
+            provider_output_truncated=bool(value.get("provider_output_truncated", False)),
+        )
+
+    def with_provider_truncation(self) -> "EvidenceManifest":
+        payload = asdict(self)
+        payload["provider_output_truncated"] = True
+        return EvidenceManifest(**payload)
+
+    def to_payload(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["omitted_blocks"] = list(self.omitted_blocks)
+        payload["evidence_complete"] = self.evidence_complete
+        return payload
+
+
+@dataclass(frozen=True, slots=True)
+class LifecycleAction:
+    action: LifecycleActionType
+    target_title: str | None = None
+    target_date: str | None = None
+    target_time: str | None = None
+    target_location: str | None = None
+    new_date: str | None = None
+    new_time: str | None = None
+    evidence: str = ""
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "LifecycleAction":
+        try:
+            action = LifecycleActionType(str(value.get("action") or "").strip().upper())
+        except ValueError as exc:
+            raise ValueError("unknown lifecycle action") from exc
+        return cls(
+            action=action,
+            target_title=_optional_text(value.get("target_title")),
+            target_date=_optional_text(value.get("target_date")),
+            target_time=_optional_text(value.get("target_time")),
+            target_location=_optional_text(value.get("target_location")),
+            new_date=_optional_text(value.get("new_date")),
+            new_time=_optional_text(value.get("new_time")),
+            evidence=str(value.get("evidence") or "").strip(),
+        )
+
+    def to_payload(self) -> dict[str, Any]:
+        payload = asdict(self)
+        payload["action"] = self.action.value
+        return payload
+
+
+def _optional_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+@dataclass(frozen=True, slots=True)
+class ContradictionFact:
+    reason: VerificationReason
+    details: str
+    evidence: tuple[str, ...] = ()
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "reason": self.reason.value,
+            "details": self.details,
+            "evidence": list(self.evidence),
+        }
+
+
+class SourceParseDecision(list[dict[str, Any]]):
+    """Typed source verdict that remains a drop-in list for legacy callers.
+
+    Iteration, indexing, length checks and ``festival`` access intentionally
+    match the old ``ParsedEvents`` container.  New callers must inspect
+    ``disposition`` rather than interpreting an empty list.
+    """
+
+    def __init__(
+        self,
+        events: Sequence[dict[str, Any]] | None = None,
+        *,
+        disposition: SourceDisposition | str | None = None,
+        lifecycle_actions: Sequence[LifecycleAction] | None = None,
+        evidence_manifest: EvidenceManifest | None = None,
+        evidence_complete: bool | None = None,
+        parse_version: str = PARSE_VERSION,
+        festival: dict[str, Any] | None = None,
+        retry_reason: SourceParseRetryReason | str | None = None,
+        verification_reasons: Sequence[VerificationReason] | None = None,
+        verification: Mapping[str, Any] | None = None,
+        enrichment_required: bool | None = None,
+    ) -> None:
+        event_items = list(events or ())
+        super().__init__(event_items)
+        actions = tuple(lifecycle_actions or ())
+        if disposition is None:
+            disposition = _infer_disposition(event_items, actions)
+        self.disposition = SourceDisposition(disposition)
+        self.lifecycle_actions = actions
+        self.evidence_manifest = evidence_manifest
+        manifest_complete = evidence_manifest.evidence_complete if evidence_manifest else True
+        self.evidence_complete = manifest_complete if evidence_complete is None else bool(evidence_complete and manifest_complete)
+        self.parse_version = str(parse_version or PARSE_VERSION)
+        self.festival = festival
+        self.retry_reason = (
+            SourceParseRetryReason(retry_reason) if retry_reason is not None else None
+        )
+        self.verification_reasons = tuple(verification_reasons or ())
+        self.verification = dict(verification) if verification is not None else None
+        self.enrichment_required = (
+            bool(enrichment_required)
+            if enrichment_required is not None
+            else bool(event_items and not self.evidence_complete)
+        )
+
+    @property
+    def events(self) -> list[dict[str, Any]]:
+        return list(self)
+
+    @property
+    def is_retry(self) -> bool:
+        return self.disposition is SourceDisposition.RETRY_REQUIRED
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "disposition": self.disposition.value,
+            "events": list(self),
+            "lifecycle_actions": [action.to_payload() for action in self.lifecycle_actions],
+            "evidence_complete": self.evidence_complete,
+            "parse_version": self.parse_version,
+        }
+        if self.festival is not None:
+            payload["festival"] = self.festival
+        if self.retry_reason is not None:
+            payload["retry_reason"] = self.retry_reason.value
+        if self.evidence_manifest is not None:
+            payload["evidence_manifest"] = self.evidence_manifest.to_payload()
+        if self.verification is not None:
+            payload["verification"] = dict(self.verification)
+        return payload
+
+    @classmethod
+    def retry(
+        cls,
+        reason: SourceParseRetryReason,
+        *,
+        evidence_manifest: EvidenceManifest | None = None,
+        events: Sequence[dict[str, Any]] | None = None,
+        lifecycle_actions: Sequence[LifecycleAction] | None = None,
+        verification_reasons: Sequence[VerificationReason] | None = None,
+        festival: dict[str, Any] | None = None,
+    ) -> "SourceParseDecision":
+        return cls(
+            events,
+            disposition=SourceDisposition.RETRY_REQUIRED,
+            lifecycle_actions=lifecycle_actions,
+            evidence_manifest=evidence_manifest,
+            evidence_complete=False,
+            festival=festival,
+            retry_reason=reason,
+            verification_reasons=verification_reasons,
+            enrichment_required=bool(events),
+        )
+
+
+# Backward-compatible public spelling used throughout the application.
+ParsedEvents = SourceParseDecision
+
+
+def _infer_disposition(
+    events: Sequence[Mapping[str, Any]], actions: Sequence[LifecycleAction]
+) -> SourceDisposition:
+    if events and actions:
+        return SourceDisposition.MIXED
+    if events:
+        return SourceDisposition.EVENTS_FOUND
+    if actions:
+        return SourceDisposition.LIFECYCLE_ONLY
+    return SourceDisposition.CONFIRMED_NO_EVENT
+
+
+def provider_response_is_truncated(metadata: Any) -> bool:
+    """Recognise common provider finish signals without importing an SDK."""
+
+    if metadata is None:
+        return False
+    if isinstance(metadata, Mapping):
+        values: Iterable[Any] = (
+            metadata.get("finish_reason"),
+            metadata.get("finishReason"),
+            metadata.get("stop_reason"),
+        )
+    else:
+        values = (
+            getattr(metadata, "finish_reason", None),
+            getattr(metadata, "finishReason", None),
+            getattr(metadata, "stop_reason", None),
+        )
+    truncated = {"length", "max_tokens", "max_output_tokens", "token_limit", "truncated"}
+    return any(str(value or "").strip().casefold() in truncated for value in values)
+
+
+def decision_from_provider_payload(
+    payload: Any,
+    *,
+    evidence_manifest: EvidenceManifest,
+    provider_metadata: Any = None,
+) -> SourceParseDecision:
+    """Validate provider JSON and convert it to the closed source verdict.
+
+    Legacy arrays and single-event objects are accepted only as a temporary
+    adapter.  An actually empty HTTP response must be handled before JSON
+    decoding and can never reach this function as a legacy empty array.
+    """
+
+    if provider_response_is_truncated(provider_metadata):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.OUTPUT_TRUNCATED,
+            evidence_manifest=evidence_manifest.with_provider_truncation(),
+        )
+
+    festival = _festival_payload(payload)
+    if isinstance(payload, list):
+        if not all(isinstance(item, dict) for item in payload):
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.SCHEMA_MISMATCH,
+                evidence_manifest=evidence_manifest,
+            )
+        disposition = (
+            SourceDisposition.EVENTS_FOUND
+            if payload
+            else SourceDisposition.CONFIRMED_NO_EVENT
+        )
+        if not payload and not evidence_manifest.evidence_complete:
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.EVIDENCE_INCOMPLETE,
+                evidence_manifest=evidence_manifest,
+            )
+        return SourceParseDecision(
+            payload,
+            disposition=disposition,
+            evidence_manifest=evidence_manifest,
+            evidence_complete=evidence_manifest.evidence_complete,
+            festival=festival,
+            parse_version="legacy-array-adapter-v1",
+        )
+
+    if not isinstance(payload, dict):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+        )
+
+    typed_shape = any(
+        key in payload for key in ("disposition", "events", "lifecycle_actions")
+    )
+    if not typed_shape:
+        # Temporary compatibility for the legacy single-event object.
+        if not payload or not isinstance(payload.get("title"), str):
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.SCHEMA_MISMATCH,
+                evidence_manifest=evidence_manifest,
+                festival=festival,
+            )
+        return SourceParseDecision(
+            [payload],
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=evidence_manifest,
+            evidence_complete=evidence_manifest.evidence_complete,
+            festival=festival,
+            parse_version="legacy-object-adapter-v1",
+        )
+
+    try:
+        disposition = SourceDisposition(str(payload.get("disposition") or ""))
+    except ValueError:
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+            festival=festival,
+        )
+    events = payload.get("events")
+    actions_raw = payload.get("lifecycle_actions")
+    if not isinstance(events, list) or not all(isinstance(item, dict) for item in events):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+            festival=festival,
+        )
+    if not isinstance(actions_raw, list) or not all(isinstance(item, dict) for item in actions_raw):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+            festival=festival,
+        )
+    try:
+        actions = tuple(LifecycleAction.from_mapping(item) for item in actions_raw)
+    except ValueError:
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+            festival=festival,
+        )
+
+    if disposition is SourceDisposition.RETRY_REQUIRED:
+        raw_reason = payload.get("retry_reason") or SourceParseRetryReason.VERIFICATION_UNCERTAIN.value
+        try:
+            reason = SourceParseRetryReason(str(raw_reason))
+        except ValueError:
+            reason = SourceParseRetryReason.SCHEMA_MISMATCH
+        return SourceParseDecision.retry(
+            reason,
+            evidence_manifest=evidence_manifest,
+            events=events,
+            lifecycle_actions=actions,
+            festival=festival,
+        )
+
+    expected = _infer_disposition(events, actions)
+    if disposition is not expected:
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+            events=events,
+            lifecycle_actions=actions,
+            festival=festival,
+        )
+
+    declared_complete = payload.get("evidence_complete")
+    if not isinstance(declared_complete, bool):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+            events=events,
+            lifecycle_actions=actions,
+            festival=festival,
+        )
+    effective_complete = bool(declared_complete and evidence_manifest.evidence_complete)
+    if disposition is SourceDisposition.CONFIRMED_NO_EVENT and not effective_complete:
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.EVIDENCE_INCOMPLETE,
+            evidence_manifest=evidence_manifest,
+            festival=festival,
+        )
+    return SourceParseDecision(
+        events,
+        disposition=disposition,
+        lifecycle_actions=actions,
+        evidence_manifest=evidence_manifest,
+        evidence_complete=effective_complete,
+        parse_version=str(payload.get("parse_version") or PARSE_VERSION),
+        festival=festival,
+        enrichment_required=bool(events and not effective_complete),
+    )
+
+
+def _festival_payload(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, Mapping):
+        return None
+    value = payload.get("festival")
+    if isinstance(value, str):
+        return {"name": value}
+    if isinstance(value, Mapping):
+        return dict(value)
+    return None
+
+
+def normalise_contradiction_facts(
+    values: Sequence[ContradictionFact | VerificationReason | str | Mapping[str, Any]] | None,
+) -> tuple[ContradictionFact, ...]:
+    facts: list[ContradictionFact] = []
+    for value in values or ():
+        if isinstance(value, ContradictionFact):
+            facts.append(value)
+            continue
+        if isinstance(value, Mapping):
+            raw_reason = value.get("reason")
+            details = str(value.get("details") or "").strip()
+            evidence = tuple(str(item) for item in (value.get("evidence") or ()))
+        else:
+            raw_reason = value
+            details = ""
+            evidence = ()
+        try:
+            reason = raw_reason if isinstance(raw_reason, VerificationReason) else VerificationReason(str(raw_reason))
+        except ValueError:
+            # Unknown/free-form facts are diagnostics only; they cannot trigger
+            # a semantic veto or an unbounded verifier stage.
+            continue
+        facts.append(ContradictionFact(reason, details or reason.value, evidence))
+    return tuple(facts)
+
+
+def collect_verification_facts(
+    decision: SourceParseDecision,
+    supplied: Sequence[ContradictionFact | VerificationReason | str | Mapping[str, Any]] | None = None,
+) -> tuple[ContradictionFact, ...]:
+    facts = list(normalise_contradiction_facts(supplied))
+    manifest = decision.evidence_manifest
+    if manifest is not None and not manifest.evidence_complete:
+        facts.append(
+            ContradictionFact(
+                VerificationReason.INCOMPLETE_EVIDENCE,
+                "Evidence manifest is incomplete or carries a truncation signal.",
+            )
+        )
+    unique: dict[VerificationReason, ContradictionFact] = {}
+    for fact in facts:
+        unique.setdefault(fact.reason, fact)
+    return tuple(unique.values())
+
+
+def build_verification_request(
+    *,
+    source_text: str,
+    ocr_blocks: Sequence[str] | None,
+    evidence_manifest: EvidenceManifest,
+    primary_decision: SourceParseDecision,
+    contradiction_facts: Sequence[ContradictionFact],
+    today: str,
+    published_at: str | None,
+    source_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "task": "conditionally_verify_source_parse",
+        "rules": [
+            "Use all source text and every OCR block; deterministic hints are evidence, never a verdict.",
+            "Confirm or correct events and lifecycle actions, split missing siblings/sessions, or return RETRY_REQUIRED.",
+            "Return the same typed SourceParseDecision JSON schema and no prose.",
+        ],
+        "today": today,
+        "published_at": published_at,
+        "source_context": dict(source_context or {}),
+        "source_text": source_text or "",
+        "ocr_blocks": list(ocr_blocks or ()),
+        "evidence_manifest": evidence_manifest.to_payload(),
+        "primary_result": primary_decision.to_payload(),
+        "contradiction_facts": [fact.to_payload() for fact in contradiction_facts],
+    }
+
+
+async def conditionally_verify_source_decision(
+    primary_decision: SourceParseDecision,
+    *,
+    contradiction_facts: Sequence[ContradictionFact | VerificationReason | str | Mapping[str, Any]] | None,
+    invoke: Callable[[tuple[ContradictionFact, ...]], Awaitable[SourceParseDecision]],
+) -> SourceParseDecision:
+    """Run exactly zero or one verifier call for the closed contradiction set."""
+
+    facts = collect_verification_facts(primary_decision, contradiction_facts)
+    if not facts:
+        return primary_decision
+    try:
+        corrected = await invoke(facts)
+    except Exception:
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR,
+            evidence_manifest=primary_decision.evidence_manifest,
+            events=list(primary_decision),
+            lifecycle_actions=primary_decision.lifecycle_actions,
+            verification_reasons=[fact.reason for fact in facts],
+            festival=primary_decision.festival,
+        )
+    if not isinstance(corrected, SourceParseDecision) or corrected.is_retry:
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.VERIFICATION_UNCERTAIN,
+            evidence_manifest=primary_decision.evidence_manifest,
+            events=list(primary_decision),
+            lifecycle_actions=primary_decision.lifecycle_actions,
+            verification_reasons=[fact.reason for fact in facts],
+            festival=primary_decision.festival,
+        )
+    corrected.verification_reasons = tuple(fact.reason for fact in facts)
+    corrected.verification = {
+        "performed": True,
+        "reasons": [fact.reason.value for fact in facts],
+    }
+    return corrected

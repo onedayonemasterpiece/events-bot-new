@@ -13,8 +13,21 @@ The other sections in this file document separate prompts/workflows and must not
 ```
 MASTER-PROMPT for Codex ― Telegram Event Bot
 You receive long multi-line text describing one **or several** events.
-Extract structured information and respond **only** with JSON.
-If multiple events are found, return an array of objects. Each object uses these keys:
+Extract structured information and respond **only** with one typed JSON object:
+`{"disposition":"EVENTS_FOUND|CONFIRMED_NO_EVENT|LIFECYCLE_ONLY|MIXED|RETRY_REQUIRED","events":[],"lifecycle_actions":[],"evidence_complete":true,"parse_version":"source-parse-v1"}`.
+Never use an empty HTTP/body response, malformed/partial JSON, a schema mismatch, a provider error, or a finish/truncation signal to express no-event; those cases require `RETRY_REQUIRED`.
+`CONFIRMED_NO_EVENT` is valid only after examining the complete source text and every supplied OCR block and finding neither an attendable event nor a lifecycle action.
+
+**Maximum-recall source rules (highest priority):**
+- Examine all supplied source text and all poster/card OCR. Never silently omit the end of a long text, an OCR block, or a card. Regex/keyword/date hints are neutral evidence only and can never order a no-event verdict or delete an LLM draft.
+- Find every future or currently continuing attendable event. Do not stop after the first apparent date: evaluate every explicit date/time/card as an occurrence candidate unless the source proves that it is only one range.
+- Separate every independently attendable sibling and every distinct session into its own event child. Do not merge festival siblings merely because they share a venue, programme, festival, or carrier.
+- A past recap/history section plus a concrete future announcement must preserve the future event. A historical/background date is not automatically an event date.
+- Giveaway mechanics do not erase the real event being promoted: when the carrier contains both, return the event and exclude only the giveaway mechanics from event facts.
+- Mixed content may contain cancellations/postponements/updates **and** new events. Return both sides with `MIXED`; an unresolved lifecycle target must not destroy new event children.
+- Distinguish an update to an existing occurrence from a distinct new event. Return lifecycle actions separately from `events`.
+
+Each object in `events` uses these keys:
 title             - name of the event
 short_description - **REQUIRED** one-sentence summary of the event (see **short_description** rules below)
 festival          - festival name or empty string
@@ -101,6 +114,13 @@ What to include:
 - Conditions/restrictions (16+, "for entrepreneurs", "Pushkin card"...).
 Length guide: 25–55 words (20-80 allowed if necessary for search uniqueness).
 If an array of events is returned, `search_digest` must be present in every object.
+
+Each object in `lifecycle_actions` uses these keys:
+- `action`: exactly one of `CANCEL`, `POSTPONE`, `RESCHEDULE_DATE`, `RESCHEDULE_TIME`, `UPDATE_DETAILS`;
+- `target_title`, `target_date`, `target_time`, `target_location`;
+- `new_date`, `new_time` where relevant;
+- `evidence`: the source/OCR evidence supporting the action.
+One carrier may contain multiple independent lifecycle actions.
 
 **multi-event digest rule:**
 - If the post is a roundup/digest where each event is ONE short line with only `<date>. <city>. <"NAME">. Билеты: <link or name>` and there is NO per-event description, time, venue/address, programme, or independent OCR poster — return `[]`.
