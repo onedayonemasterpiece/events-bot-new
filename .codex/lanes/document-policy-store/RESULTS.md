@@ -79,3 +79,29 @@
   correctness or content safety.
 - Transport/action authorization and Telegram delivery are owned by other
   lanes; this lane supplies the closed byte/store contract only.
+
+## Follow-up: non-blocking bounded validation
+
+- Validated follow-up implementation head: `566b691ecc37f1f7b54716b22b2465e3b4e45fd3`.
+- Root cause: the download alone was under `asyncio.wait_for`; the subsequent
+  synchronous document validator ran directly on the aiohttp event-loop thread
+  and had a fresh, unbounded validation interval.
+- Fix: document validation now runs through `asyncio.to_thread` under the time
+  remaining from the same download-plus-validation deadline. A validation
+  timeout maps fail-closed to `FILE_FETCH_FAILED`; the existing `finally`
+  removes the uncommitted temporary object while the image validator path is
+  unchanged.
+- Regression proof before the fix: the new timeout test did not raise and the
+  heartbeat test exposed the synchronous boundary (initial pre-fix run failed
+  both new tests; one also first exposed a missing test-only `asyncio` import,
+  corrected before implementation verification).
+- Focused concurrency/timeout tests:
+  `PYTHONPATH=. /home/dev/.codex/venvs/events-bot-new/bin/pytest -q tests/test_private_events_mcp_social_asset_ingress.py -k 'document_validation_does_not_block or document_validation_uses_remaining'`
+  — PASS, `2 passed, 26 deselected in 0.44s`.
+- Document/media/ingress tests — PASS, `112 passed in 1.65s`.
+- Full private MCP suite — PASS, `427 passed, 3 pre-existing aiohttp warnings in 14.35s`.
+- Touched-file ruff, compileall, and `git diff --check` — PASS.
+- Residual behavior: timing out `asyncio.to_thread` cannot forcibly stop its
+  Python worker, but the bounded validator has a hard 64 MiB input ceiling and
+  the temp pathname is immediately unlinked; no manifest/final asset is
+  published after timeout.
