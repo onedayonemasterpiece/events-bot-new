@@ -40,6 +40,9 @@ class VerifiedAsset:
     expires_at: int
     width: int | None = None
     height: int | None = None
+    role: str = "image"
+    display_name: str | None = None
+    classification: str | None = None
 
 
 class AssetIngestor(Protocol):
@@ -52,6 +55,16 @@ class AssetIngestor(Protocol):
         owner_binding: str,
         max_bytes: int,
         expires_at: int,
+        role: str = "story_media",
+    ) -> VerifiedAsset: ...
+
+    def reverify(
+        self,
+        storage_ref: str,
+        *,
+        owner_binding: str,
+        max_bytes: int,
+        role: str,
     ) -> VerifiedAsset: ...
 
 
