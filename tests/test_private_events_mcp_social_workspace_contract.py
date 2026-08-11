@@ -913,6 +913,22 @@ def test_document_stage_is_telegram_only_and_accepts_text_mime_hint() -> None:
     assert validate_asset_stage_request(request).role is MediaRole.DOCUMENT
     with pytest.raises(SocialWorkspaceValidationError, match="only for Telegram"):
         validate_asset_stage_request({**request, "platform": "vk"})
+    hostile_name = "../unsafe\u202e.apk"
+    document = validate_asset_stage_request(
+        {
+            **request,
+            "file": {**request["file"], "file_name": hostile_name},
+        }
+    )
+    assert document.file.file_name == hostile_name
+    with pytest.raises(SocialWorkspaceValidationError, match="file_name"):
+        validate_asset_stage_request(
+            {
+                **request,
+                "role": "image",
+                "file": {**request["file"], "file_name": hostile_name},
+            }
+        )
 
     intent = validate_prepare_request(
         {

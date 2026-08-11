@@ -189,22 +189,24 @@ class FakeDocumentIngestor:
         self.now = now
         self.asset: FakeDocumentAsset | None = None
         self.reverify_calls = 0
+        self.file_names: list[str | None] = []
 
     async def ingest(
         self, file, *, owner_binding, max_bytes, expires_at, role
     ):
         assert role == "document"
         assert max_bytes == 48 * 1024 * 1024
+        self.file_names.append(file.file_name)
         self.asset = FakeDocumentAsset(
             storage_ref="ing_" + "d" * 24,
             owner_binding=owner_binding,
             role="document",
             content_digest="sha256:" + "e" * 64,
-            mime_type="application/pdf",
+            mime_type="application/vnd.android.package-archive",
             byte_length=128,
             expires_at=expires_at,
-            display_name="safe.pdf",
-            classification="pdf",
+            display_name="safe.apk",
+            classification="apk",
         )
         return self.asset
 
@@ -794,8 +796,8 @@ async def test_document_runtime_reverifies_digest_and_kill_switch(
                 "file": {
                     "download_url": "https://files.example.test/document",
                     "file_id": "file-document",
-                    "mime_type": "application/pdf",
-                    "file_name": "unsafe.pdf",
+                    "mime_type": "application/vnd.android.package-archive",
+                    "file_name": "../unsafe\u202e.apk",
                 },
                 "role": "document",
             }
@@ -834,20 +836,25 @@ async def test_document_runtime_reverifies_digest_and_kill_switch(
     )
     prepared = await service.prepare(intent, scoped_context("telegram:dm:send"))
     assert ingestor.reverify_calls == 1
+    assert ingestor.file_names == ["../unsafe\u202e.apk"]
     status = await service.asset_status(
         staged["asset_ref"], scoped_context("telegram:dm:send")
     )
-    assert status["display_name"] == "safe.pdf"
-    assert status["classification"] == "pdf"
+    assert status["display_name"] == "safe.apk"
+    assert status["classification"] == "apk"
     preview = service.approval_preview(
         preparation_ref=prepared["preparation_ref"],
         action_digest=prepared["action_digest"],
     )
     encoded_preview = json.dumps(preview)
-    assert "safe.pdf" in encoded_preview
-    assert "application/pdf" in encoded_preview
+    assert "safe.apk" in encoded_preview
+    assert "application/vnd.android.package-archive" in encoded_preview
+    assert "../unsafe\u202e.apk" not in encoded_preview
     assert "ing_" not in encoded_preview
     assert "provider-document-binding" not in encoded_preview
+    assert "../unsafe\u202e.apk".encode("utf-8") not in Path(
+        service.store.path
+    ).read_bytes()
     assert ingestor.asset is not None
     ingestor.asset = replace(
         ingestor.asset, content_digest="sha256:" + "f" * 64

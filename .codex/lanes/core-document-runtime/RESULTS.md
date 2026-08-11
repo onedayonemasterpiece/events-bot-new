@@ -105,3 +105,22 @@ Tests cover default-off/inert config, hard limits and parent gates, Telegram-onl
 
 - Final integration must run the combined policy + Telegram adapter suites because this isolated lane intentionally did not edit those dependency-owned files.
 - The full `main_part2.py` Ruff surface has substantial unrelated baseline debt; no attempt was made to broaden scope and rewrite it.
+
+## B-09 follow-up
+
+The request parser now preserves bounded, untrusted document filename hints—including path separators and bidi/control characters—until the document-policy sanitizer. Image filename validation remains unchanged and continues to reject separators/NUL. An actual document stage test passes `../unsafe\u202e.apk` into the fake policy boundary, receives only `safe.apk`, and verifies the raw sentinel is absent from asset status, approval preview, and durable runtime database bytes.
+
+Focused verification:
+
+```bash
+/home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
+  tests/test_private_events_mcp_social_workspace_contract.py::test_document_stage_is_telegram_only_and_accepts_text_mime_hint \
+  tests/test_private_events_mcp_social_workspace_runtime.py::test_document_runtime_reverifies_digest_and_kill_switch \
+  tests/test_private_events_mcp_social_asset_ingress.py::test_official_file_param_descriptor_and_schema_are_exact
+# 3 passed in 0.57s
+
+uvx ruff check private_events_mcp/social_workspace.py \
+  tests/test_private_events_mcp_social_workspace_contract.py \
+  tests/test_private_events_mcp_social_workspace_runtime.py
+# All checks passed!
+```

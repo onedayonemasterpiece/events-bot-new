@@ -1572,16 +1572,29 @@ def validate_asset_stage_request(payload: Mapping[str, Any]) -> AssetStageReques
         or any(ord(character) < 0x20 or ord(character) == 0x7F for character in file_id)
     ):
         raise SocialWorkspaceValidationError("file file_id is invalid")
+    role = _enum(data.get("role"), MediaRole, "role")
+    platform = _enum(data.get("platform"), SocialPlatform, "platform")
     mime_type = _optional_text(file_data.get("mime_type"), "mime_type", maximum=100)
     if mime_type is not None and not re.fullmatch(
         r"(?:image|video|audio|application|text)/[A-Za-z0-9.+-]{1,64}", mime_type
     ):
         raise SocialWorkspaceValidationError("file mime_type is invalid")
-    file_name = _optional_text(file_data.get("file_name"), "file_name", maximum=255)
-    if file_name is not None and any(character in file_name for character in ("/", "\\", "\x00")):
-        raise SocialWorkspaceValidationError("file file_name is invalid")
-    role = _enum(data.get("role"), MediaRole, "role")
-    platform = _enum(data.get("platform"), SocialPlatform, "platform")
+    raw_file_name = file_data.get("file_name")
+    if role is MediaRole.DOCUMENT:
+        # The document-policy boundary, not this transport parser, owns NFKC,
+        # basename, control/bidi stripping and extension enforcement. Preserve
+        # the bounded untrusted hint so that sanitizer is actually exercised.
+        if raw_file_name is not None and (
+            not isinstance(raw_file_name, str) or len(raw_file_name) > 255
+        ):
+            raise SocialWorkspaceValidationError("file file_name is invalid")
+        file_name = raw_file_name
+    else:
+        file_name = _optional_text(raw_file_name, "file_name", maximum=255)
+        if file_name is not None and any(
+            character in file_name for character in ("/", "\\", "\x00")
+        ):
+            raise SocialWorkspaceValidationError("file file_name is invalid")
     if role not in {MediaRole.IMAGE, MediaRole.DOCUMENT}:
         raise SocialWorkspaceValidationError(
             "only image or document asset staging is enabled"
