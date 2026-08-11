@@ -2,21 +2,31 @@
 
 ## P0 typed LLM-first producer/consumer contract
 
-Kaggle producer сохраняет для каждого message/album один
+Канонический producer сохраняет для каждого message/album один
 `source_parse_decision` (`source-parse-v1`) с closed disposition, всеми event
-children, всеми lifecycle actions и `evidence_manifest`. No-keyword/no-date/
-historical hints не завершают message до LLM. `CONFIRMED_NO_EVENT` допустим
-только при complete evidence и валидном structured response; video/media/OCR
-неполнота, empty/malformed/truncated/provider error дают `RETRY_REQUIRED`.
+children, lifecycle actions и `evidence_manifest`. No-keyword/no-date/historical
+hints не завершают carrier до LLM. `CONFIRMED_NO_EVENT` допустим только при
+complete evidence и валидном structured response; неполные video/media/OCR,
+empty/malformed/truncated response и technical/provider error дают
+`RETRY_REQUIRED`.
+
+```text
+configured Telegram source -> durable message/album source revision
+  -> discovery hints only -> attachment/OCR EvidenceManifest
+  -> automatic typed SourceParseDecision
+  -> optional conditional verification -> Smart Update
+  -> typed automatic outcome or durable retry
+```
 
 Album aggregation объединяет typed decisions, сохраняя siblings и actions;
-ordinal не используется как единственная identity. Consumer
-`source_parsing/telegram/handlers.py` не продвигает cursor/force-message как
-успешный для legacy `events=[]`, technical failure или incomplete evidence.
-Только complete typed no-event может закрыть zero-event carrier. Positive child
-может быть принят при incomplete evidence, но message остаётся due для
-enrichment. Smart Update `diagnostic_event_id` не увеличивает imported counters
-и не запускает publication.
+ordinal не используется как единственная identity. Consumer не продвигает
+cursor/force-message как успешный для untyped compatibility payload,
+technical failure или incomplete evidence. Только complete typed no-event может
+закрыть zero-event carrier. Positive child можно принять при incomplete evidence,
+но message остаётся due для enrichment. Smart Update `diagnostic_event_id` не
+увеличивает imported counters и не запускает publication. Legacy payload reader
+существует только для fail-closed диагностики/replay старых артефактов; он не
+является producer contract или нормальным terminal workflow.
 
 
 Ежедневный мониторинг публичных Telegram‑каналов/групп с автоматическим импортом событий в БД бота через Smart Event Update.
@@ -30,9 +40,9 @@ enrichment. Smart Update `diagnostic_event_id` не увеличивает impor
   - Catbox используется только в `fallback/off` режимах.
   - Инвариант: extractor **не должен придумывать дату события** из даты публикации поста.
     - Дата/период должны быть явно в тексте/афише (или в виде относительных слов типа «сегодня/завтра», которые разрешено резолвить от даты поста).
-    - Для выставок/ярмарок extractor не подставляет `message_date` или первое число месяца вместо недостающей даты. Teaser/pre-announcement без точного дня разрешается только типизированным complete-evidence LLM verdict; пустой/нетипизированный `[]` не считается no-event и повторяется.
-    - `open call` / «конкурсный отбор» / «приём заявок» и post-event recap — не deterministic filters. Эти признаки передаются как evidence: тольк complete typed LLM decision может подтвердить no-event/product exclusion, а любой future child или lifecycle action сохраняется.
-    - Официальные уведомления администрации Калининграда о **разводе/разводке мостов** считаются событиями городской повестки: `@klgdcity` входит в мониторинг, Gemma 4 извлекает их как `Развод мостов`; если общий extractor вернул пустой или непригодный bridge-ответ, запускается узкий Gemma rescue-pass, и только затем структурный fallback сохраняет карточки по явно grounded дате/тексту. Для источника также включён `bridge_notice_daily`: после успешного `event_id` сервер отправляет notice в `/daily` каналы.
+    - Для выставок/ярмарок typed parser не подставляет `message_date` или первое число месяца вместо недостающей даты. Teaser/pre-announcement без точного дня разрешается только типизированным complete-evidence LLM verdict; untyped compatibility result не подтверждает no-event и остаётся due.
+    - `open call` / «конкурсный отбор» / «приём заявок» и post-event recap — не deterministic filters. Эти признаки передаются как evidence: только complete typed LLM decision может подтвердить no-event/product exclusion, а любой future child или lifecycle action сохраняется.
+    - Официальные уведомления администрации Калининграда о **разводе/разводке мостов** считаются событиями городской повестки: `@klgdcity` входит в мониторинг, а bridge-specific rescue работает как conditional verification typed decision, не как разрешение принять пустой legacy verdict. Для источника также включён `bridge_notice_daily`: после успешного `event_id` сервер отправляет notice в `/daily` каналы.
 - Для афиш (постеров) по умолчанию использует **managed storage** для стабильных URL:
   - `TG_MONITORING_POSTERS_SUPABASE_MODE=always` (default): upload в managed storage всегда включён; Catbox используется только если storage недоступен;
   - `fallback`: приоритет Catbox, managed storage — только если Catbox‑загрузка не удалась;
@@ -47,9 +57,9 @@ enrichment. Smart Update `diagnostic_event_id` не увеличивает impor
       не определяет публичный immutable URL; старые `<prefix>/dh16/**` доступны
       только для чтения;
   - качество WebP: `TG_MONITORING_POSTERS_WEBP_QUALITY` (default `82`).
-- Empty-caption poster-only posts remain part of the normal LLM-first extraction path:
+- Empty-caption poster-only posts remain part of the normal typed LLM-first path:
   when Telegram text/caption is empty but OCR contains event facts (title/date/time/venue/price/registration),
-  TelegramMonitor passes the OCR text as primary source evidence instead of returning `events=[]` at the caption guard.
+  TelegramMonitor passes the OCR text as primary source evidence; an empty caption is not a terminal shortcut.
   The server import also preserves that OCR as event/source text and may derive a narrow `tel:+...` booking contact
   from explicit `Запись/регистрация по телефону` evidence before any group post-author fallback is considered.
   Regression contract: `INC-2026-06-30-kraftmarket317-poster-only-zero-events`.
@@ -143,7 +153,7 @@ enrichment. Smart Update `diagnostic_event_id` не увеличивает impor
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
 - Historical-date contract explicitly treats interviews, memoirs, museum chronicles and anniversary articles as non-events: an old opening/acquisition/employment day-month cannot be rolled into the current year without a separate future attendee-facing announcement.
-- `Gemma 4` extract prompt различает явные work-hours notices и события в музеях/библиотеках: `график/режим/часы работы`, `санитарный день`, `не работает/закрыто` возвращают `[]`, но лекции, шоу, мастер-классы, экскурсии и фестивальные слоты с датой/временем должны извлекаться даже при venue/address словах вроде `Библиотека ...` или `Музейная аллея`.
+- Typed source prompt различает явные work-hours notices и события в музеях/библиотеках: `график/режим/часы работы`, `санитарный день`, `не работает/закрыто` могут дать только complete-evidence `CONFIRMED_NO_EVENT`, но лекции, шоу, мастер-классы, экскурсии и фестивальные слоты с датой/временем должны стать positive children даже при venue/address словах вроде `Библиотека ...` или `Музейная аллея`.
 - После `INC-2026-07-31-false-kgd80-festival-link` принадлежность к кампании
   «80 историй о главном» требует literal anchor в текущем source text/OCR/link:
   точного названия (separator-style hashtag тоже допустим), домена `kgd80.ru`
@@ -152,13 +162,13 @@ enrichment. Smart Update `diagnostic_event_id` не увеличивает impor
   являются. Prompt остаётся semantic owner, а Telegram import и центральный
   Smart Update применяют узкий fail-closed grounding guard до merge и
   festival queue.
-- После `INC-2026-07-10-zoo-ticket-validity-non-event` schedule-like сообщения сначала проходят отдельный LLM screen `event_timetable | institution_hours_or_ticket_terms | other` с `date_role` и короткими evidence spans. Сообщения только о нормальном режиме площадки, часах посетителей/касс, покупке или сроке действия входного билета возвращают `[]`: `билет действителен до 31 декабря` — это `ticket_valid_until`, не event date, а часы площадки/кассы — не event time. Deterministic `schedule_like` остаётся только роутером; если настоящих date-header blocks нет, whole-message schedule rescue не запускается.
+- После `INC-2026-07-10-zoo-ticket-validity-non-event` schedule-like сообщения сначала проходят отдельный LLM screen `event_timetable | institution_hours_or_ticket_terms | other` с `date_role` и короткими evidence spans. Сообщения только о нормальном режиме площадки, часах посетителей/касс, покупке или сроке действия входного билета могут закрыться typed `CONFIRMED_NO_EVENT`: `билет действителен до 31 декабря` — это `ticket_valid_until`, не event date, а часы площадки/кассы — не event time. Deterministic `schedule_like` остаётся только роутером; если настоящих date-header blocks нет, whole-message schedule rescue не запускается.
 - `Gemma 4` producer-level contract for `location_name`: поле должно быть реальным venue/place name, а не соседней прозой, биографией спикера, schedule commentary, non-location emoji/list bullet, discussion-topic строкой (`о концертах` / `об итогах ...`), film metadata, ticket instruction, описанием события или temporal/date fragment. Запрещены и decorated формы вроде `🤗Завтра` / bullet-prefixed `Сегодня`: producer schema и venue-review prompt обязаны отправлять такие значения в LLM review / empty+fallback path до server import safety-net. Одна prose/list sentence не должна раскладываться между `location_name` и `location_address`. Для расписаний schedule-rescue передаёт в каждый day-block prompt общий контекст поста, чтобы хвостовые venue-линии вроде `📍Остров Канта` были видны LLM для всех строк расписания.
 - После `INC-2026-05-17-future-event-quality-regressions` этот contract дополнен профилактикой для реальных May 17 форм:
   - очевидные имена персон в `location_name` (например `ТАТЬЯНА БОРИСОВА`) являются только триггером LLM venue-review; смысловую площадку выбирает review-pass по source text/OCR/source default, а серверный импорт держит такой же fail-closed safety-net;
   - compact theatre lines вида `17.05 | GROZA` трактуются как date marker + title, не как `time=17:05`;
   - service/digest headings вроде `неделя в театре`, `афиша`, `репертуар`, `анонс` не считаются attendee-facing title, если рядом есть реальное название события;
-  - если producer всё равно вернул `events=[]` для structurally clear single-event post с датой, временем и ticket/venue evidence, запускается узкий LLM single-event rescue. Сервер дополнительно сохраняет диагностический `telegram_scanned_message.error=producer_zero_events:clear_event_signals`, чтобы DB-аудит видел “producer false negative”, а не “пост не сканировался”; такая строка допускает переобработку, когда новый producer output уже содержит events.
+  - если primary typed decision не содержит positive child для structurally clear single-event post с датой, временем и ticket/venue evidence, запускается узкий conditional LLM verifier. Сервер сохраняет typed retry/diagnostic evidence, чтобы DB-аудит видел “possible producer false negative”, а не “пост не сканировался”; carrier остаётся доступен для автоматической переобработки.
 - После `INC-2026-07-14-ecodvor-unknown-start-time-cursor` parent/programme window не становится временем вложенной активности: если у мастер-класса/лекции прямо сказано, что время начала уточняется, producer и Smart Update возвращают неизвестное время, даже когда тот же пост даёт часы всего фестиваля. Подтверждённый LLM anchor-review также может очистить уже сохранённое неверное время при source-anchor merge. Это один дополнительный anchor-role LLM review только для exact TBD-кандидата, а не новый вызов на каждое событие; узкий server/merge guard лишь fail-closed применяет подтверждённое решение и не извлекает смысл.
 - После `INC-2026-05-02-pre-daily-event-quality` prompt contract дополнительно закрепляет **event-local venue grounding**: в multi-event/digest/repost постах площадка, адрес и город берутся из ближайшего блока конкретного события, а source/default location используется только когда event-local блок не называет свою площадку. Литералы имён полей (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) считаются синтаксическими placeholders и должны стать пустыми строками, не публичными значениями.
 - После `INC-2026-06-24-future-event-date-default-venue-regressions` contract дополнительно закрепляет real-source date/default-location guard: русские числовые даты в мониторинге всегда трактуются как `DD.MM` (`10.05` = 10 мая, не 10 сентября), даты словами/хэштегом (`26 июля`, `#13_июня`, `#21_июня`) являются authoritative event date и не переносятся в месяц публикации, а `гейт 2.6`, этажи, адреса, координаты, цены, телефоны и номера домов не могут становиться датой/временем. Для single-event output producer может узко исправить LLM-date drift только если в тексте/OCR есть ровно одна явная дата; это safety-net, не классификатор eventness. Если пост явно даёт offsite `Место:`/`📍`/адрес, эта event-local площадка/адрес выигрывает у `source.default_location` даже когда extractor изначально оставил venue пустым.
@@ -198,8 +208,8 @@ event. Каждый child получает стабильный occurrence/candi
 extracted/imported обязана иметь typed retry/product/exact receipt. Legacy
 `skipped|partial|error`, `events_extracted > events_imported` и technical/identity
 losses остаются в automatic recovery selection. Complete typed
-`CONFIRMED_NO_EVENT` может продвинуть cursor без Event; untyped `events=[]` не
-может. Старые сообщения, прочитанные только для метрик после уже успешного exact
+`CONFIRMED_NO_EVENT` может продвинуть cursor без Event; untyped compatibility
+payload без children не может. Старые сообщения, прочитанные только для метрик после уже успешного exact
 revision, не вызывают LLM повторно.
 
 Forum/multithread-группа остаётся одним source с общим message-id cursor; topic
@@ -558,8 +568,8 @@ Live E2E multi-source (VK+TG): `tests/e2e/features/multi_source_vk_tg.feature` (
 
 Сервер принимает `telegram_results.json`:
 
-- `schema_version=1` (legacy): только `messages[]` (без `sources_meta`);
-- `schema_version=2`: `messages[]` + top-level `sources_meta[]`; каждый новый message содержит `source_parse_decision` и `evidence_manifest`. Legacy payload без typed decision поддерживается только fail-closed: positive children можно адаптировать, zero-event не подтверждается.
+- `schema_version=2`: `messages[]` + top-level `sources_meta[]`; каждый новый message содержит `source_parse_decision` и `evidence_manifest`. Это единственный канонический producer contract.
+- `schema_version=1` (legacy): только fail-closed reader для диагностики/replay ранее сохранённых `messages[]` без `sources_meta`; positive children можно адаптировать, zero-event/technical result не подтверждается и cursor не продвигается.
 
 - Producer (Kaggle): `kaggle/TelegramMonitor/telegram_monitor.py` -> sync в `telegram_monitor.ipynb`
 - Consumer (server): `source_parsing/telegram/handlers.py`

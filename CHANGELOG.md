@@ -47,6 +47,22 @@
   Preserved compatibility for legacy/structural Smart Update candidates without
   an optional explicit-occurrence conflict set, so the duplicate probe treats
   it as empty instead of failing before identity resolution.
+- **Fixed — VK continuation consumer:** crawl caps now have a documented durable
+  automatic lifecycle from due claim through leased page raw-persist and
+  advance/done, with typed retry and stale-lease recovery instead of an orphaned
+  continuation row.
+- **Fixed — fail-closed legacy source verdict:** untyped/legacy empty extraction
+  is compatibility diagnostics only; it cannot confirm no-event, advance a
+  carrier as successful, or substitute for `SourceParseDecision`.
+- **Fixed — truthful attachment evidence:** the typed evidence manifest records
+  total, included, unavailable, omitted, and truncated attachment/OCR evidence,
+  so incomplete media cannot produce a confirmed negative verdict.
+- **Changed — typed prompts/static gate:** source parsing prompts and repository
+  static acceptance are bound to the closed typed disposition/retry contract and
+  reject reintroduction of deterministic semantic shortcuts.
+- **Release gate — not deploy-ready:** real provider quota/tier proof, an atomic
+  fresh-production-snapshot rehearsal, explicit FK-orphan disposition, and
+  model-derived recovery replay through typed Smart Update remain required.
 
 
 - **my-data-hub daily statistics producer (default off)**: added a non-sensitive

@@ -33,6 +33,22 @@ payload/revision hash использует exact successful receipt без provi
 изменившийся пост получает новый immutable revision и снова становится due.
 Blank/photo-only packets также сохраняются и идут через OCR и LLM.
 
+Continuation consumer запускается автоматически и следует ожидаемой durable
+state machine без зависимости от ручного UI:
+
+```text
+pending/retry due -> leased/running
+  -> fetch one bounded page -> persist every raw packet/revision from that page
+  -> advance continuation offset/cursor or mark done
+```
+
+Typed transport/provider/backpressure failure освобождает continuation в
+`retry due` с причиной и следующим временем попытки. После restart stale lease
+возвращается в due retry. Cursor/offset нельзя продвинуть при частично
+сохранённой странице; exact replay должен быть idempotent. Имена внутренних
+helper-функций не являются частью контракта — обязательны durable transitions и
+read-back state.
+
 ## Durable schema
 
 - `vk_source_packet` — immutable raw carrier revision: owner/post/revision,
@@ -122,7 +138,9 @@ model)` receipt повторно используется.
 Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
 Основные ENV:
 
-- `ENABLE_VK_AUTO_IMPORT=1`;
+- `ENABLE_VK_AUTO_IMPORT=1`; production scheduler **default-on** в `fly.toml`
+  (локальная/тестовая среда должна включать его явно, чтобы не получить
+  неожиданные внешние вызовы);
 - `VK_AUTO_IMPORT_TIMES_LOCAL` (default
   `06:15,10:15,12:00,15:30,18:30`);
 - `VK_AUTO_IMPORT_TZ` (default `Europe/Kaliningrad`);
@@ -138,6 +156,11 @@ Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
 удалены из production path. Старые photo/OCR semantic caps не являются
 допустимым способом экономии TPM: если transport не дал полный материал,
 negative outcome запрещён и планируется enrichment retry.
+
+`/vk`, `/vk_queue`, `/vk_misses`, manual accept/reject/skip и editor actions
+остаются legacy diagnostic/admin surfaces. Они могут помочь исследовать receipt
+или выполнить отдельное редакционное действие, но автоматический carrier не
+ждёт operator verdict и не обязан пройти manual terminal transition.
 
 ## Recovery и observability
 
@@ -164,6 +187,15 @@ violation. Канонический incident и release gates:
 - `docs/operations/smart-update-prod-audit.md`;
 - `docs/operations/release-smoke-smart-update.md`.
 
+Эта реализация сама по себе **не означает deploy-ready**. Внешними release
+blockers остаются все четыре независимых доказательства:
+
+1. реальная provider quota/tier проверка на production route;
+2. атомарная репетиция на свежем production snapshot;
+3. явная disposition для FK orphan rows до apply;
+4. replay model-derived recovery candidates через тот же typed Smart Update
+   путь с проверяемыми receipts.
+
 ## Важные файлы и тесты
 
 - `vk_intake.py` — raw-first crawl, evidence/OCR и source adapter;
@@ -171,9 +203,15 @@ violation. Канонический incident и release gates:
 - `vk_review.py` — durable state/attempt/retry receipts;
 - `source_parse_contract.py` — typed source/lifecycle/evidence contract;
 - `smart_event_update.py`, `smart_update_state.py` — child resolution;
-- `tests/test_vk_llm_first_discovery.py`;
+- `tests/test_source_parse_contract.py`;
 - `tests/test_vk_raw_first_llm_contract.py`;
-- `tests/test_vk_source_packet_state.py`;
-- `tests/test_vk_ingestion_static_contract.py`;
 - `tests/test_vk_auto_queue_import.py`;
-- `tests/test_vk_auto_queue_rate_limit.py`.
+- `tests/test_vk_auto_queue_rate_limit.py`;
+- `tests/test_vk_intake_future.py`;
+- `tests/test_vk_intake_history.py`;
+- `tests/test_vk_intake_keywords_dates.py`.
+
+Список содержит только существующие test modules. Continuation acceptance должна
+дополнительно проверять описанную выше state machine: due claim, running lease,
+raw-persist-before-advance, done, typed retry и stale-lease recovery — без
+привязки документации к временному имени helper-функции.

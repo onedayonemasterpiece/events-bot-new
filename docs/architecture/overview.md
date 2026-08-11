@@ -28,6 +28,61 @@ The bot is built with **aiogram 3** and runs on Fly.io using a webhook.
 - **Deployment** – Docker container on Fly.io with volume `data` attached to
   `/data`.
 
+## Raw-first, typed source ingestion
+
+Configured Telegram/VK/source-parser inputs share a provider-neutral semantic
+boundary. Transport-specific collectors may enforce source configuration,
+pagination, crawl horizon, byte limits, and quota admission, but must persist the
+raw carrier revision before any semantic decision. Keyword, date, historical,
+cancellation, and `event_ts_hint` detections are neutral hints only; they cannot
+drop a fetched carrier, confirm no-event, or veto a positive child.
+
+```text
+configured source
+  -> durable immutable raw source packet/revision
+  -> attachment/OCR EvidenceManifest
+  -> automatic SourceParseDecision
+  -> optional conditional contradiction verification
+  -> Smart Update for each event child + typed lifecycle actions
+  -> closed automatic outcome or durable due retry
+```
+
+The evidence manifest binds the raw-text hash/length and the complete attachment
+inventory to available, included, omitted, unavailable, and truncated OCR/media
+evidence. A negative semantic conclusion is forbidden while evidence is
+incomplete. Empty, malformed, truncated, timed-out, quota-limited, or otherwise
+technical responses are retryable rather than semantic no-event. Legacy payloads
+without a typed decision are accepted only through a fail-closed compatibility
+adapter: grounded positive children may continue, but an empty legacy array is
+never terminal evidence.
+
+`SourceParseDecision` has a closed set of dispositions:
+
+- `EVENTS_FOUND`;
+- `LIFECYCLE_ONLY`;
+- `MIXED`;
+- `CONFIRMED_NO_EVENT`;
+- `RETRY_REQUIRED`.
+
+Only a complete, structurally valid decision can confirm no-event. Conditional
+verification is reserved for explicit contradictions or incomplete coverage; it
+is not an unconditional second semantic pass. Smart Update returns closed typed
+child outcomes and separates accepted event identity from any diagnostic ID.
+Downstream publication/page jobs run only for accepted outcomes. Provider,
+schema, persistence, quota, timeout, or unresolved-action failures retain typed
+retry metadata and remain due; there is no terminal technical-failure state.
+
+Durable crawl continuations are consumed automatically. Their lifecycle is
+`pending/retry due -> leased/running -> persist every raw packet in the page ->
+advance or done`. A crash, expired lease, or typed provider/backpressure failure
+returns the continuation to a bounded due retry. Source cursors advance only
+after every fetched in-horizon packet is durable. Manual review and legacy inbox
+screens are diagnostic/admin surfaces, not required transitions in this state
+machine. The detailed VK contract is
+[`../features/vk-auto-queue/README.md`](../features/vk-auto-queue/README.md); the
+Telegram producer/consumer contract is
+[`../features/telegram-monitoring/README.md`](../features/telegram-monitoring/README.md).
+
 The MVP includes moderator registration, timezone setting and simple event
 creation (`/addevent` and `/addevent_raw`). For each event the bot creates a
 Telegraph page containing the original announcement text. When the event comes
@@ -46,14 +101,17 @@ Events also keep `event_type` (one of eight categories: спектакль, вы
 When present the link is inserted into the Telegraph source page below the title image so readers can quickly add the event to their phone calendar.
 If a text describes several events at once the LLM returns an array of event objects and the bot creates separate entries and Telegraph pages for each of them.
 Channels where the bot is admin are tracked in the `channel` table. Use `/setchannel` to choose an admin channel and mark it as an announcement source. The `/channels` command lists all admin channels and shows which ones are registered.
-- `../reference/locations.md` – list of standard venues used when parsing events. are appended to the 4o prompt so events use consistent `location_name` values.
+- `../reference/locations.md` – list of standard venues used when parsing events;
+  the reference context is appended to the configured structured model request
+  so events use consistent `location_name` values.
 
 ## Poster OCR pipeline
 
 - Poster media is uploaded to Catbox once per unique image; the resulting bytes feed both the Telegraph page and the OCR stage.
 - `poster_ocr.recognize_posters` caches results in `PosterOcrCache` by hash, detail level and model so retries reuse the stored text and token counts.
 - Daily usage is tracked in the `OcrUsage` table and compared against the 10 000 000-token budget. Cached entries keep working, while new, uncached OCR requests are blocked until the quota resets.
-- Recognized text is saved in `EventPoster` rows and injected into the downstream LLM pipeline so 4o sees both the operator draft and poster contents.
+- Recognized text is saved in `EventPoster` rows and injected into the downstream
+  typed LLM pipeline together with the operator draft.
 
 ## Video Announce pipeline
 
