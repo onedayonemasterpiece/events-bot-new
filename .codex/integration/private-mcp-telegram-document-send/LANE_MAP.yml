@@ -70,7 +70,7 @@ lanes:
       - .codex/lanes/telegram-document-provider/RESULTS.md
     forbidden_files: [private_events_mcp/social_workspace_runtime.py, private_events_mcp/config.py, docs, CHANGELOG.md]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: core_document_runtime
     role: worker
     requirement_ids: [R02, R05, R06, R10, R11]
