@@ -6,6 +6,8 @@
 
 ## TODO (проработано, но не реализовано)
 
+- Telegram document sending through private Events MCP: архитектура, policy-прототип, acceptance matrix и one-pass execution prompt до production rollout:
+  `docs/backlog/features/private-events-mcp-telegram-document-send/README.md`
 - Movie showtimes (кино/сеансы): `docs/backlog/features/movie-showtimes/README.md`
 - Event scoring & filtering (скоринг/фильтрация): `docs/backlog/features/event-scoring/README.md`
 - Event static pages (собственный домен, SEO/GEO, Yandex S3): `docs/backlog/features/static-event-pages/README.md`
