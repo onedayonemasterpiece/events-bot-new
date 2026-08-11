@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, datetime, timezone
+import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -28,7 +30,7 @@ import sys
 from typing import Any, Iterable, Mapping, Sequence
 
 
-REPORT_SCHEMA = "kenigevents.smart_update_identity_recovery.v1"
+REPORT_SCHEMA = "kenigevents.smart_update_identity_recovery.v2"
 DEFAULT_SINCE = "2026-08-04"
 MAX_BATCH_SIZE = 10_000
 
@@ -86,11 +88,67 @@ def _count(con: sqlite3.Connection, table: str, where: str, params: Iterable[Any
     return int((row or (0,))[0] or 0)
 
 
-def _since_predicate(column: str, *, unix_epoch: bool = False) -> str:
+def _window_predicate(column: str, *, unix_epoch: bool = False) -> str:
     quoted = _quoted(column)
     if unix_epoch:
-        return f"datetime({quoted}, 'unixepoch') >= datetime(?)"
-    return f"datetime({quoted}) >= datetime(?)"
+        rendered = f"datetime({quoted}, 'unixepoch')"
+    else:
+        rendered = f"datetime({quoted})"
+    return f"{rendered} >= datetime(?) AND {rendered} < datetime(?)"
+
+
+def _normalized_filters(values: Sequence[str] | None, *, field: str) -> tuple[str, ...]:
+    result: list[str] = []
+    for value in values or ():
+        for item in str(value).split(","):
+            clean = item.strip().upper() if field == "loss_class" else item.strip().lower()
+            if clean and clean not in result:
+                result.append(clean)
+    if field == "loss_class":
+        known = set("ABCDEFGHIJKLMNOPQRST") | {
+            "DISCOVERY_NO_KEYWORDS", "DISCOVERY_NO_DATE", "DISCOVERY_PAST_HINT",
+            "DISCOVERY_TOO_FAR_HINT", "DISCOVERY_CURSOR_OR_PAGE_GAP",
+            "INBOX_HINT_AUTO_REJECT", "PRE_LLM_HISTORY_PREFILTER",
+            "PRE_LLM_ADMIN_PREFILTER", "PRE_LLM_CANCELLATION_SHORT_CIRCUIT",
+            "PRE_LLM_PAYLOAD_OR_OCR_FAILURE", "LLM_PROVIDER_OR_SCHEMA_FAILURE",
+            "LLM_OUTPUT_TRUNCATION", "EVIDENCE_OMITTED_FROM_PROMPT",
+            "POST_LLM_REJECT_REASON_FULL", "POST_LLM_REJECT_REASON_PARTIAL",
+            "SMART_UPDATE_IDENTITY_LOSS", "TECHNICAL_TERMINAL_FAILED",
+            "VALID_CONFIRMED_NO_EVENT", "EXACT_REPLAY_OR_ALREADY_IMPORTED",
+            "UNKNOWN_EVIDENCE_UNAVAILABLE",
+        }
+        if any(item not in known for item in result):
+            raise RecoveryError("invalid_loss_class")
+    return tuple(sorted(result))
+
+
+def _source_enabled(filters: Sequence[str], source: str) -> bool:
+    return not filters or source.lower() in filters
+
+
+def _class_enabled(filters: Sequence[str], *classes: str) -> bool:
+    if not filters:
+        return True
+    codes = "ABCDEFGHIJKLMNOPQRST"
+    names = (
+        "DISCOVERY_NO_KEYWORDS", "DISCOVERY_NO_DATE", "DISCOVERY_PAST_HINT",
+        "DISCOVERY_TOO_FAR_HINT", "DISCOVERY_CURSOR_OR_PAGE_GAP",
+        "INBOX_HINT_AUTO_REJECT", "PRE_LLM_HISTORY_PREFILTER",
+        "PRE_LLM_ADMIN_PREFILTER", "PRE_LLM_CANCELLATION_SHORT_CIRCUIT",
+        "PRE_LLM_PAYLOAD_OR_OCR_FAILURE", "LLM_PROVIDER_OR_SCHEMA_FAILURE",
+        "LLM_OUTPUT_TRUNCATION", "EVIDENCE_OMITTED_FROM_PROMPT",
+        "POST_LLM_REJECT_REASON_FULL", "POST_LLM_REJECT_REASON_PARTIAL",
+        "SMART_UPDATE_IDENTITY_LOSS", "TECHNICAL_TERMINAL_FAILED",
+        "VALID_CONFIRMED_NO_EVENT", "EXACT_REPLAY_OR_ALREADY_IMPORTED",
+        "UNKNOWN_EVIDENCE_UNAVAILABLE",
+    )
+    expanded = {value for value in classes}
+    for value in tuple(expanded):
+        if value in names:
+            expanded.add(codes[names.index(value)])
+        elif value in codes:
+            expanded.add(names[codes.index(value)])
+    return bool(set(filters) & expanded)
 
 
 def _product_policy_predicate(columns: set[str]) -> str:
@@ -130,6 +188,16 @@ def _marker_predicate(columns: set[str], markers: Sequence[str]) -> str:
     return "(" + " OR ".join(clauses) + ")"
 
 
+def _load_census_module():
+    path = Path(__file__).with_name("smart_update_loss_census.py")
+    spec = importlib.util.spec_from_file_location("smart_update_loss_census_for_recovery", path)
+    if not spec or not spec.loader:
+        raise RecoveryError("census_module_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _is_nonempty(value: Any) -> bool:
     return value is not None and str(value).strip() != ""
 
@@ -161,6 +229,7 @@ def _recover_durable(
     con: sqlite3.Connection,
     *,
     since: datetime,
+    until: datetime,
     now: datetime,
     dry_run: bool,
     limit: int,
@@ -189,9 +258,9 @@ def _recover_durable(
         return _empty_durable(supported=False)
 
     terminal_q = _quoted(terminal_column)
-    since_sql = _since_predicate(since_column)
+    since_sql = _window_predicate(since_column)
     where_parts = [f"upper(COALESCE({terminal_q}, ''))='RETRY_SCHEDULED'", since_sql]
-    params: list[Any] = [_render_utc(since)]
+    params: list[Any] = [_render_utc(since), _render_utc(until)]
     if retry_column:
         retry_q = _quoted(retry_column)
         where_parts.append(
@@ -309,6 +378,7 @@ def _recover_legacy_telegram(
     con: sqlite3.Connection,
     *,
     since: datetime,
+    until: datetime,
     now: datetime,
     dry_run: bool,
     limit: int,
@@ -338,12 +408,12 @@ def _recover_legacy_telegram(
     technical = _marker_predicate(columns, technical_markers)
     policy = _product_policy_predicate(columns)
     base = (
-        "datetime(processed_at)>=datetime(?) AND ("
+        "datetime(processed_at)>=datetime(?) AND datetime(processed_at)<datetime(?) AND ("
         "lower(COALESCE(status,'')) IN ('retry_scheduled','partial_retry_scheduled','error') "
         "OR (lower(COALESCE(status,'')) IN ('skipped','partial') AND "
         f"{technical}))"
     )
-    params = (_render_utc(since),)
+    params = (_render_utc(since), _render_utc(until))
     eligible_where = f"({base}) AND NOT ({policy})"
     eligible = _count(con, scan_table, eligible_where, params)
     excluded = _count(con, scan_table, f"({base}) AND ({policy})", params)
@@ -418,6 +488,7 @@ def _recover_legacy_queue(
     table: str,
     ready_status: str,
     since: datetime,
+    until: datetime,
     now: datetime,
     dry_run: bool,
     limit: int,
@@ -426,9 +497,9 @@ def _recover_legacy_queue(
     if not {"id", "status", "updated_at"}.issubset(columns):
         return _empty_queue(supported=False)
     policy = _product_policy_predicate(columns)
-    since_sql = _since_predicate("updated_at")
+    since_sql = _window_predicate("updated_at")
     base = f"lower(COALESCE(status,''))='error' AND {since_sql}"
-    params = (_render_utc(since),)
+    params = (_render_utc(since), _render_utc(until))
     eligible_where = f"({base}) AND NOT ({policy})"
     eligible = _count(con, table, eligible_where, params)
     excluded = _count(con, table, f"({base}) AND ({policy})", params)
@@ -436,7 +507,7 @@ def _recover_legacy_queue(
         con,
         table,
         f"lower(COALESCE(status,''))=? AND {since_sql}",
-        (ready_status.lower(), _render_utc(since)),
+        (ready_status.lower(), _render_utc(since), _render_utc(until)),
     )
     if limit <= 0 or eligible == 0:
         result = _empty_queue(supported=True)
@@ -486,6 +557,7 @@ def _recover_source_parser_refresh(
     con: sqlite3.Connection,
     *,
     since: datetime,
+    until: datetime,
     now: datetime,
     dry_run: bool,
     limit: int,
@@ -509,8 +581,8 @@ def _recover_source_parser_refresh(
         }
     rows = con.execute(
         "SELECT details_json FROM ops_run WHERE kind='parse' "
-        "AND datetime(started_at)>=datetime(?)",
-        (_render_utc(since),),
+        "AND datetime(started_at)>=datetime(?) AND datetime(started_at)<datetime(?)",
+        (_render_utc(since), _render_utc(until)),
     ).fetchall()
     failed = 0
     retries = 0
@@ -607,6 +679,7 @@ def _recover_legacy_vk(
     con: sqlite3.Connection,
     *,
     since: datetime,
+    until: datetime,
     now: datetime,
     dry_run: bool,
     limit: int,
@@ -620,14 +693,14 @@ def _recover_legacy_vk(
         # Without a durable time boundary the incident window cannot be honored.
         return _empty_vk(supported=False)
     unix_epoch = since_column == "date"
-    since_sql = _since_predicate(since_column, unix_epoch=unix_epoch)
+    since_sql = _window_predicate(since_column, unix_epoch=unix_epoch)
     due_deferred = "lower(status)='deferred'"
     due_params: list[Any] = []
     if "locked_at" in columns:
         due_deferred += " AND (locked_at IS NULL OR datetime(locked_at) <= datetime(?))"
         due_params.append(_render_utc(now))
     base = f"(lower(status)='failed' OR ({due_deferred})) AND {since_sql}"
-    base_params = [*due_params, _render_utc(since)]
+    base_params = [*due_params, _render_utc(since), _render_utc(until)]
     policy = _product_policy_predicate(columns)
     eligible_where = f"({base}) AND NOT ({policy})"
     eligible = _count(con, table, eligible_where, base_params)
@@ -640,7 +713,7 @@ def _recover_legacy_vk(
             table,
             "lower(status)='deferred' AND locked_at IS NOT NULL "
             "AND datetime(locked_at) > datetime(?) AND " + since_sql,
-            (_render_utc(now), _render_utc(since)),
+            (_render_utc(now), _render_utc(since), _render_utc(until)),
         )
     if limit <= 0 or eligible == 0:
         result = _empty_vk(supported=True)
@@ -707,9 +780,16 @@ def run(
     db_path: str | Path,
     *,
     since: str = DEFAULT_SINCE,
+    until: str | None = None,
     dry_run: bool = True,
+    read_only: bool = False,
     batch_size: int = 100,
     now: str | datetime | None = None,
+    sources: Sequence[str] | None = None,
+    loss_classes: Sequence[str] | None = None,
+    include_discovery_misses: bool = False,
+    evidence_paths: Sequence[str | Path] = (),
+    supabase_evidence_paths: Sequence[str | Path] = (),
 ) -> dict[str, Any]:
     """Plan or apply a bounded, idempotent recovery transaction."""
 
@@ -719,6 +799,8 @@ def run(
         raise RecoveryError("invalid_batch_size") from exc
     if normalized_batch <= 0 or normalized_batch > MAX_BATCH_SIZE:
         raise RecoveryError("invalid_batch_size")
+    if read_only and not dry_run:
+        raise RecoveryError("read_only_apply_conflict")
     since_dt = _parse_utc(since, field="since")
     if isinstance(now, datetime):
         now_dt = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
@@ -727,6 +809,11 @@ def run(
         now_dt = datetime.now(timezone.utc)
     else:
         now_dt = _parse_utc(now, field="now")
+    until_dt = _parse_utc(until, field="until") if until else now_dt
+    if until_dt <= since_dt:
+        raise RecoveryError("invalid_window")
+    source_filters = _normalized_filters(sources, field="source")
+    class_filters = _normalized_filters(loss_classes, field="loss_class")
 
     path = Path(db_path).expanduser().resolve()
     if not path.is_file():
@@ -741,56 +828,74 @@ def run(
     else:
         con.execute("BEGIN IMMEDIATE")
     try:
+        durable_enabled = _source_enabled(source_filters, "smart_update") and _class_enabled(
+            class_filters, "P", "Q", "SMART_UPDATE_IDENTITY_LOSS", "TECHNICAL_TERMINAL_FAILED"
+        )
         durable = _recover_durable(
             con,
             since=since_dt,
+            until=until_dt,
             now=now_dt,
             dry_run=dry_run,
-            limit=normalized_batch,
+            limit=normalized_batch if durable_enabled else 0,
         )
         remaining = max(0, normalized_batch - int(durable["selected"]))
+        telegram_enabled = _source_enabled(source_filters, "telegram") and _class_enabled(
+            class_filters, "N", "O", "P", "Q"
+        )
         legacy_telegram = _recover_legacy_telegram(
             con,
             since=since_dt,
+            until=until_dt,
             now=now_dt,
             dry_run=dry_run,
-            limit=remaining,
+            limit=remaining if telegram_enabled else 0,
         )
         remaining = max(0, remaining - int(legacy_telegram["selected"]))
+        parser_enabled = _source_enabled(source_filters, "parser") and _class_enabled(class_filters, "Q")
         source_parser = _recover_source_parser_refresh(
             con,
             since=since_dt,
+            until=until_dt,
             now=now_dt,
             dry_run=dry_run,
-            limit=remaining,
+            limit=remaining if parser_enabled else 0,
         )
         remaining = max(0, remaining - int(source_parser["selected"]))
+        vk_enabled = _source_enabled(source_filters, "vk") and _class_enabled(
+            class_filters, "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q"
+        )
         legacy_vk = _recover_legacy_vk(
             con,
             since=since_dt,
+            until=until_dt,
             now=now_dt,
             dry_run=dry_run,
-            limit=remaining,
+            limit=remaining if vk_enabled else 0,
         )
         remaining = max(0, remaining - int(legacy_vk["selected"]))
+        ticket_enabled = _source_enabled(source_filters, "ticket") and _class_enabled(class_filters, "Q")
         legacy_ticket_queue = _recover_legacy_queue(
             con,
             table="ticket_site_queue",
             ready_status="active",
             since=since_dt,
+            until=until_dt,
             now=now_dt,
             dry_run=dry_run,
-            limit=remaining,
+            limit=remaining if ticket_enabled else 0,
         )
         remaining = max(0, remaining - int(legacy_ticket_queue["selected"]))
+        festival_enabled = _source_enabled(source_filters, "festival") and _class_enabled(class_filters, "Q")
         legacy_festival_queue = _recover_legacy_queue(
             con,
             table="festival_queue",
             ready_status="pending",
             since=since_dt,
+            until=until_dt,
             now=now_dt,
             dry_run=dry_run,
-            limit=remaining,
+            limit=remaining if festival_enabled else 0,
         )
         mutable_results = (
             durable,
@@ -805,13 +910,56 @@ def run(
         selected_total = sum(int(item["selected"]) for item in mutable_results)
         if not dry_run:
             con.commit()
+        census = None
+        replay_inventory: list[dict[str, Any]] = []
+        if dry_run:
+            census_module = _load_census_module()
+            census = census_module.run(
+                path,
+                since=_render_utc(since_dt),
+                until=_render_utc(until_dt),
+                evidence_paths=evidence_paths,
+                supabase_evidence_paths=supabase_evidence_paths,
+            )
+            normalized_class_codes = {
+                census_module.normalize_class(item) for item in class_filters
+            } - {None}
+            for item in census["inventory"]:
+                if source_filters and str(item["source_type"]).lower() not in source_filters:
+                    continue
+                if normalized_class_codes and item["loss_class"] not in normalized_class_codes:
+                    continue
+                if not include_discovery_misses and item["loss_class"] in {"A", "B", "C", "D", "E"}:
+                    continue
+                replay_inventory.append(item)
+            replay_inventory = replay_inventory[:normalized_batch]
+        pipeline = (
+            "RESTORE_RAW_PAYLOAD", "RESTORE_ATTACHMENTS_AND_OCR",
+            "TYPED_LLM_SOURCE_DECISION", "SMART_UPDATE_PLAN",
+        )
+        stable_plan = {
+            "sources": list(source_filters), "loss_classes": list(class_filters),
+            "include_discovery_misses": bool(include_discovery_misses),
+            "pipeline": pipeline,
+            "carrier_revision_keys": [item["carrier_revision_key"] for item in replay_inventory],
+            "direct_event_insert": False,
+        }
+        plan_hash = hashlib.sha256(
+            json.dumps(stable_plan, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
         result = {
             "schema": REPORT_SCHEMA,
             "mode": "dry-run" if dry_run else "apply",
             "status": "ready" if dry_run and would_change else "applied" if changed else "noop",
             "changed": bool(changed),
             "since": _render_utc(since_dt),
+            "until_exclusive": _render_utc(until_dt),
             "batch_size": normalized_batch,
+            "filters": {
+                "sources": list(source_filters),
+                "loss_classes": list(class_filters),
+                "include_discovery_misses": bool(include_discovery_misses),
+            },
             "features": {
                 "smart_update_candidate_state": bool(
                     durable["schema_supported"]
@@ -833,6 +981,25 @@ def run(
             "legacy_ticket_queue": legacy_ticket_queue,
             "legacy_festival_queue": legacy_festival_queue,
             "source_parser": source_parser,
+            "loss_census": census,
+            "replay_plan": {
+                "carrier_count": len(replay_inventory),
+                "event_occurrence_count": sum(
+                    int(item.get("extracted_event_occurrences") or 0) for item in replay_inventory
+                ),
+                "lifecycle_action_count": sum(
+                    int(item.get("lifecycle_actions") or 0) for item in replay_inventory
+                ),
+                "unavailable_evidence_count": sum(
+                    not bool(item.get("payload_available")) for item in replay_inventory
+                ),
+                "stages": list(pipeline),
+                "execution": "plan_only_requires_deployed_llm_first_pipeline",
+                "direct_event_insert": False,
+                "production_writes": False if dry_run else bool(changed),
+                "inventory_hash": census.get("inventory_hash") if census else None,
+                "plan_hash": plan_hash,
+            },
             "aggregate": {
                 "selected": selected_total,
                 "would_change": would_change,
@@ -875,9 +1042,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true", help="read-only plan (default)")
+    mode.add_argument(
+        "--read-only", action="store_true",
+        help="explicit strict read-only plan; mutually exclusive with --apply",
+    )
     mode.add_argument("--apply", action="store_true", help="commit bounded requeue transitions")
     parser.add_argument("--since", default=DEFAULT_SINCE, help="UTC ISO date/time boundary")
+    parser.add_argument("--until", help="exclusive UTC ISO date/time boundary")
     parser.add_argument("--batch-size", type=int, default=100)
+    parser.add_argument("--source", action="append", default=[])
+    parser.add_argument("--loss-class", action="append", default=[])
+    parser.add_argument("--include-discovery-misses", action="store_true")
+    parser.add_argument("--evidence-json", action="append", default=[])
+    parser.add_argument("--supabase-evidence-json", action="append", default=[])
     parser.add_argument("--db", default=os.getenv("DB_PATH", "/data/db.sqlite"))
     parser.add_argument("--output", default="-")
     args = parser.parse_args(argv)
@@ -886,8 +1063,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run(
             args.db,
             since=args.since,
+            until=args.until,
             dry_run=dry_run,
+            read_only=bool(args.read_only),
             batch_size=args.batch_size,
+            sources=args.source,
+            loss_classes=args.loss_class,
+            include_discovery_misses=bool(args.include_discovery_misses),
+            evidence_paths=args.evidence_json,
+            supabase_evidence_paths=args.supabase_evidence_json,
         )
         _write_result(result, args.output)
         return 0

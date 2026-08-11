@@ -374,3 +374,77 @@ def test_main_defaults_to_dry_run_and_emits_only_aggregate_json(
     assert payload["aggregate"]["selected"] == 1
     assert "rows" not in payload
     assert _status_map(db)[1][0] == "failed"
+
+
+def test_expanded_read_only_plan_includes_prefilters_discovery_and_partial_children(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "events.sqlite"
+    _make_legacy_db(db)
+    evidence = tmp_path / "losses.json"
+    evidence.write_text(
+        json.dumps(
+            [
+                {
+                    "source_type": "vk", "carrier_id": "g:1", "source_revision_hash": "r1",
+                    "no_keywords": True, "raw_payload_available": True,
+                },
+                {
+                    "source_type": "vk", "carrier_id": "g:2", "source_revision_hash": "r2",
+                    "history_prefilter": True, "raw_payload_available": True,
+                },
+                {
+                    "source_type": "telegram", "carrier_id": "c:3", "source_revision_hash": "r3",
+                    "partial_child_loss": True, "raw_payload_available": True,
+                    "extracted_event_occurrences": 3, "would_retry": 1,
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    before = db.read_bytes()
+    first = recovery.run(
+        db, since="2026-08-04", until="2026-08-11", dry_run=True,
+        read_only=True, batch_size=100, now=NOW,
+        include_discovery_misses=True, evidence_paths=[evidence],
+    )
+    second = recovery.run(
+        db, since="2026-08-04", until="2026-08-11", dry_run=True,
+        read_only=True, batch_size=100, now=NOW,
+        include_discovery_misses=True, evidence_paths=[evidence],
+    )
+    assert db.read_bytes() == before
+    inventory_classes = {item["loss_class"] for item in first["loss_census"]["inventory"]}
+    assert {"A", "G", "O"}.issubset(inventory_classes)
+    assert first["replay_plan"]["event_occurrence_count"] >= 3
+    assert first["replay_plan"]["stages"] == [
+        "RESTORE_RAW_PAYLOAD", "RESTORE_ATTACHMENTS_AND_OCR",
+        "TYPED_LLM_SOURCE_DECISION", "SMART_UPDATE_PLAN",
+    ]
+    assert first["replay_plan"]["direct_event_insert"] is False
+    assert first["replay_plan"]["production_writes"] is False
+    assert first["replay_plan"]["inventory_hash"] == second["replay_plan"]["inventory_hash"]
+    assert first["replay_plan"]["plan_hash"] == second["replay_plan"]["plan_hash"]
+
+
+def test_until_is_half_open_and_source_loss_filters_are_applied(tmp_path: Path) -> None:
+    db = tmp_path / "events.sqlite"
+    _make_legacy_db(db)
+    result = recovery.run(
+        db, since="2026-08-06T00:00:00Z", until="2026-08-06T01:00:00Z",
+        dry_run=True, read_only=True, now=NOW, sources=["vk"], loss_classes=["Q"],
+    )
+    # Rows exactly at/after the exclusive 01:00 boundary are excluded.
+    assert result["legacy_vk"]["eligible"] == 0
+    assert result["until_exclusive"] == "2026-08-06T01:00:00+00:00"
+    assert result["filters"] == {
+        "sources": ["vk"], "loss_classes": ["Q"],
+        "include_discovery_misses": False,
+    }
+
+
+def test_read_only_and_apply_are_mutually_exclusive_at_cli(tmp_path: Path) -> None:
+    db = tmp_path / "events.sqlite"
+    _make_legacy_db(db)
+    with pytest.raises(SystemExit, match="2"):
+        recovery.main(["--db", str(db), "--read-only", "--apply"])

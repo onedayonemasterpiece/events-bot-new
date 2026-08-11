@@ -274,6 +274,47 @@ def collect_database(
         manifest_db.update({"quick_check": quick, "schema_hash": schema_hash, "table_inventory": inventory})
         start_s, end_s = utc_iso(start), utc_iso(end)
 
+        # Loss-census surface availability is reported independently of event
+        # occurrence counts.  Sampled misses live in Supabase and must arrive as
+        # an explicit offline export; they are never extrapolated here.
+        raw_columns = columns.get("vk_source_packet", set())
+        attempt_columns = columns.get("vk_source_packet_attempt", set())
+        raw_time = "published_at" if "published_at" in raw_columns else "fetched_at" if "fetched_at" in raw_columns else None
+        raw_metrics: dict[str, Any] = {
+            "vk_source_packet_present": bool(raw_columns),
+            "vk_source_packet_attempt_present": bool(attempt_columns),
+            "vk_crawl_continuation_present": "vk_crawl_continuation" in columns,
+            "vk_inbox_source_packet_link_present": "source_packet_id" in columns.get("vk_inbox", set()),
+            "carrier_revisions_in_window": None,
+            "raw_payload_available": None,
+            "raw_payload_unavailable": None,
+            "supabase_miss_evidence": "offline_export_required",
+            "vk_misses_sample_multiplier": None,
+            "extrapolation_permitted": False,
+        }
+        if raw_time and {"id", "raw_text", "source_revision_hash"}.issubset(raw_columns):
+            row = qr.execute(
+                connection,
+                "loss_census.vk_source_packet_window",
+                f"SELECT COUNT(*) AS carriers,"
+                f"SUM(CASE WHEN trim(COALESCE(raw_text,''))<>'' THEN 1 ELSE 0 END) AS available "
+                f"FROM vk_source_packet WHERE julianday({raw_time})>=julianday(?) "
+                f"AND julianday({raw_time})<julianday(?)",
+                (start_s, end_s),
+            ).fetchone()
+            carriers = int(row["carriers"] or 0)
+            available_payload = int(row["available"] or 0)
+            raw_metrics.update(
+                carrier_revisions_in_window=carriers,
+                raw_payload_available=available_payload,
+                raw_payload_unavailable=carriers - available_payload,
+            )
+        elif raw_columns:
+            add_gap(gaps, "loss_census", "vk_source_packet_columns_missing")
+        else:
+            add_gap(gaps, "loss_census", "vk_source_packet_schema_missing")
+        metrics["loss_census_surfaces"] = raw_metrics
+
         if "event_source" not in columns or not {"id", "event_id", "source_type", "source_url", "imported_at"}.issubset(columns["event_source"]):
             add_gap(gaps, "database", "event_source_schema_missing")
             import_rows: list[sqlite3.Row] = []
