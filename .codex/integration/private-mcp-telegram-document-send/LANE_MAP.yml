@@ -97,7 +97,7 @@ lanes:
       - .codex/lanes/core-document-runtime/RESULTS.md
     forbidden_files: [private_events_mcp_telegram_adapter.py, private_events_mcp_workspace_providers.py, docs, CHANGELOG.md]
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: docs_smoke
     role: worker
     requirement_ids: [R12]
