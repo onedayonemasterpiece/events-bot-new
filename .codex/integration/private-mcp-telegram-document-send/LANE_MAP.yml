@@ -1,0 +1,131 @@
+mode: worktree_worker_then_serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_sha: dcd51b7a1dc50eacdaffe5401a808d2c4285eec0
+base_branch: main
+integration_branch: feature/private-mcp-telegram-document-send
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/private-mcp-document-send
+global_constraints:
+  - preserve existing eventsBot endpoint, OAuth identity/resource/signing state and connector name
+  - fileParams-only ingress; no path, arbitrary URL, base64, direct Telethon acceptance, or new connector
+  - Telegram send_message only; exactly one document; no mixed media
+  - source default off; exact-main deploy; live ChatGPT upload acceptance required
+  - never expose signed URL, file_id, original name/path, access hash/native ids, tokens, or provider kwargs
+verification_owner: /root
+stop_conditions:
+  - missing external approval/permission that cannot be recovered locally
+  - unsafe inability to prove real ChatGPT fileParams live acceptance
+lanes:
+  - id: doc_core_map
+    role: planner
+    requirement_ids: [R02, R03, R04, R05, R06, R09, R10, R11]
+    execution_mode: read_only_parallel
+    verification_scope: inspection_only
+    status: completed
+  - id: doc_tg_map
+    role: planner
+    requirement_ids: [R07, R08]
+    execution_mode: read_only_parallel
+    verification_scope: inspection_only
+    status: completed
+  - id: doc_live_map
+    role: planner
+    requirement_ids: [R01, R15, R16, R17, R18]
+    execution_mode: read_only_parallel
+    verification_scope: inspection_only
+    status: completed
+  - id: doc_security_map
+    role: planner
+    requirement_ids: [R12, R13, R14]
+    execution_mode: read_only_parallel
+    verification_scope: inspection_only
+    status: completed
+  - id: document_policy_store
+    role: worker
+    requirement_ids: [R03, R04, R09]
+    depends_on: [doc_core_map, doc_security_map]
+    execution_mode: serial_after_dependency
+    branch: agent/private-mcp-document-send/document-policy-store
+    worktree: /home/dev/.codex/worktrees/events-bot-new/document-policy-store
+    writable_files:
+      - private_events_mcp/document_policy.py
+      - private_events_mcp/media_contract.py
+      - private_events_mcp_media.py
+      - tests/test_private_events_mcp_document_policy.py
+      - tests/test_private_events_mcp_social_asset_ingress.py
+      - .codex/lanes/document-policy-store/RESULTS.md
+    forbidden_files: [private_events_mcp_telegram_adapter.py, private_events_mcp/social_workspace_runtime.py, private_events_mcp/config.py, docs, CHANGELOG.md]
+    verification_scope: targeted
+    status: spawned
+  - id: telegram_document_provider
+    role: worker
+    requirement_ids: [R07, R08]
+    depends_on: [document_policy_store, doc_tg_map]
+    execution_mode: serial_after_dependency
+    branch: agent/private-mcp-document-send/telegram-provider
+    worktree: /home/dev/.codex/worktrees/events-bot-new/document-telegram-provider
+    writable_files:
+      - private_events_mcp_telegram_adapter.py
+      - private_events_mcp_workspace_providers.py
+      - tests/test_private_events_mcp_telegram_workspace.py
+      - tests/test_private_events_mcp_workspace_providers.py
+      - .codex/lanes/telegram-document-provider/RESULTS.md
+    forbidden_files: [private_events_mcp/social_workspace_runtime.py, private_events_mcp/config.py, docs, CHANGELOG.md]
+    verification_scope: targeted
+    status: planned
+  - id: core_document_runtime
+    role: worker
+    requirement_ids: [R02, R05, R06, R10, R11]
+    depends_on: [document_policy_store, telegram_document_provider]
+    execution_mode: serial_after_dependency
+    branch: agent/private-mcp-document-send/core-runtime
+    worktree: /home/dev/.codex/worktrees/events-bot-new/document-core-runtime
+    writable_files:
+      - private_events_mcp/config.py
+      - private_events_mcp/social_workspace.py
+      - private_events_mcp/social_workspace_runtime.py
+      - private_events_mcp/social_workspace_tools.py
+      - private_events_mcp/server.py
+      - private_events_mcp/integration.py
+      - tests/test_private_events_mcp_social_workspace_contract.py
+      - tests/test_private_events_mcp_social_workspace_runtime.py
+      - tests/test_private_events_mcp_server.py
+      - .codex/lanes/core-document-runtime/RESULTS.md
+    forbidden_files: [private_events_mcp_telegram_adapter.py, private_events_mcp_workspace_providers.py, docs, CHANGELOG.md]
+    verification_scope: targeted
+    status: planned
+  - id: docs_smoke
+    role: worker
+    requirement_ids: [R12]
+    depends_on: [core_document_runtime]
+    execution_mode: serial_after_dependency
+    branch: agent/private-mcp-document-send/docs-smoke
+    worktree: /home/dev/.codex/worktrees/events-bot-new/document-docs-smoke
+    writable_files:
+      - .env.example
+      - CHANGELOG.md
+      - docs/operations/private-events-mcp.md
+      - docs/operations/e2e-scenarios.md
+      - docs/backlog/features/private-events-mcp-telegram-document-send
+      - scripts/smoke_private_events_mcp_media.py
+      - .codex/lanes/document-docs-smoke/RESULTS.md
+    forbidden_files: [private_events_mcp, private_events_mcp_telegram_adapter.py, private_events_mcp_workspace_providers.py]
+    verification_scope: targeted
+    status: planned
+  - id: exact_head_review
+    role: reviewer
+    requirement_ids: [R13, R14]
+    depends_on: [docs_smoke]
+    execution_mode: serial_after_dependency
+    verification_scope: full_local
+    status: planned
+  - id: release_live_acceptance
+    role: merge_reviewer
+    requirement_ids: [R01, R15, R16, R17, R18]
+    depends_on: [exact_head_review]
+    execution_mode: serial_after_dependency
+    branch: feature/private-mcp-telegram-document-send
+    worktree: /home/dev/.codex/worktrees/events-bot-new/private-mcp-document-send
+    writable_files: [integration-only conflict fixes, PR evidence, production configuration, incident evidence]
+    verification_scope: full_local_and_ci_and_live
+    status: planned
