@@ -104,6 +104,10 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         )
         assert isinstance(scheduler, DummyScheduler)
         assert "main" not in sys.modules
+        assert "vk_crawl_continuation_worker" in scheduler.jobs
+        assert scheduler.jobs["vk_crawl_continuation_worker"].trigger == "interval"
+        assert scheduler.jobs["vk_crawl_continuation_worker"].kwargs["seconds"] == 60
+        assert scheduler.jobs["vk_crawl_continuation_worker"].kwargs["max_instances"] == 1
         assert {"region_talk_0", "region_talk_1", "region_talk_2", "region_talk_3", "region_talk_4"} <= set(scheduler.jobs)
         assert "region_talk_watchdog" in scheduler.jobs
         assert scheduler.jobs["region_talk_0"].kwargs["hour"] == "4"

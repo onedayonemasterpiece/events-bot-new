@@ -2352,7 +2352,6 @@ class VKInbox(SQLModel, table=True):
     last_typed_reason: Optional[str] = None
     quota_scope: Optional[str] = None
     provider_retry_after: Optional[int] = None
-    provider_retry_after: Optional[int] = None
     created_at: datetime = Field(
         default_factory=utc_now, sa_column=Column(DateTime(timezone=True))
     )
@@ -2451,6 +2450,7 @@ class VKCrawlContinuation(SQLModel, table=True):
     __tablename__ = "vk_crawl_continuation"
     __table_args__ = (
         UniqueConstraint("source_type", "owner_id", "since_ts", "offset", "horizon_ts"),
+        UniqueConstraint("continuation_key"),
         Index("ix_vk_crawl_continuation_due", "status", "next_attempt_at"),
         {"extend_existing": True},
     )
@@ -2459,16 +2459,26 @@ class VKCrawlContinuation(SQLModel, table=True):
     source_type: str = "vk"
     owner_id: int
     owner_type: str = "group"
+    continuation_key: Optional[str] = None
+    scan_mode: str = "incremental"
+    page_size: int = 30
     since_ts: int
     offset: int
     horizon_ts: int
+    original_cursor_ts: int = 0
+    original_cursor_post_id: int = 0
     reason: str
     status: str = "pending"
     attempts: int = 0
     next_attempt_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
     lease_owner: Optional[str] = None
+    locked_by: Optional[str] = None
     lease_expires_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    locked_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
+    run_id: Optional[str] = None
+    last_page_fingerprint: Optional[str] = None
     last_typed_reason: Optional[str] = None
+    completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
     updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
 

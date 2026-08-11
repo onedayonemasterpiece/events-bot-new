@@ -14,8 +14,10 @@ from dataclasses import dataclass, field
 from typing import Any, List, Sequence
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 import aiohttp
+import aiosqlite
 from db import Database
 from poster_media import (
     PosterMedia,
@@ -4402,18 +4404,498 @@ async def _schedule_vk_crawl_continuation(
     since_ts: int,
     offset: int,
     horizon_ts: int,
+    scan_mode: str,
+    page_size: int,
+    original_cursor_ts: int,
+    original_cursor_post_id: int,
     reason: str,
+    last_page_fingerprint: str | None = None,
 ) -> None:
+    continuation_key = hashlib.sha256(
+        _vk_packet_json(
+            {
+                "source_type": "vk",
+                "owner_id": int(group_id),
+                "owner_type": owner_type,
+                "scan_mode": scan_mode,
+                "since_ts": int(since_ts),
+                "horizon_ts": int(horizon_ts),
+                "original_cursor_ts": int(original_cursor_ts),
+                "original_cursor_post_id": int(original_cursor_post_id),
+            }
+        ).encode("utf-8")
+    ).hexdigest()
     async with db.raw_conn() as conn:
+        # Adopt an older pre-key row instead of creating parallel work for the
+        # same immutable crawl boundary after its mutable offset has advanced.
+        existing = await conn.execute(
+            """
+            SELECT id FROM vk_crawl_continuation
+            WHERE source_type='vk' AND owner_id=? AND COALESCE(owner_type,'group')=?
+              AND COALESCE(scan_mode,'incremental')=? AND since_ts=? AND horizon_ts=?
+              AND COALESCE(original_cursor_ts,0)=?
+              AND COALESCE(original_cursor_post_id,0)=?
+            ORDER BY id LIMIT 1
+            """,
+            (
+                int(group_id), owner_type, scan_mode, int(since_ts), int(horizon_ts),
+                int(original_cursor_ts), int(original_cursor_post_id),
+            ),
+        )
+        existing_row = await existing.fetchone()
+        if existing_row is not None:
+            await conn.execute(
+                "UPDATE vk_crawl_continuation SET continuation_key=COALESCE(continuation_key,?) "
+                "WHERE id=?",
+                (continuation_key, int(existing_row[0])),
+            )
+            await conn.commit()
+            return
         await conn.execute(
             """
             INSERT OR IGNORE INTO vk_crawl_continuation(
-                source_type,owner_id,owner_type,since_ts,offset,horizon_ts,reason,status
-            ) VALUES('vk',?,?,?,?,?,?,'pending')
+                source_type,owner_id,owner_type,continuation_key,scan_mode,page_size,since_ts,offset,
+                horizon_ts,original_cursor_ts,original_cursor_post_id,reason,status,
+                last_page_fingerprint
+            ) VALUES('vk',?,?,?,?,?,?,?,?,?,?,?,'pending',?)
             """,
-            (int(group_id), owner_type, int(since_ts), int(offset), int(horizon_ts), reason),
+            (
+                int(group_id), owner_type, continuation_key, scan_mode, max(1, int(page_size)),
+                int(since_ts), int(offset), int(horizon_ts),
+                int(original_cursor_ts), int(original_cursor_post_id), reason,
+                last_page_fingerprint,
+            ),
         )
         await conn.commit()
+
+
+@dataclass(frozen=True)
+class VKCrawlContinuationClaim:
+    id: int
+    owner_id: int
+    owner_type: str
+    scan_mode: str
+    page_size: int
+    since_ts: int
+    offset: int
+    horizon_ts: int
+    original_cursor_ts: int
+    original_cursor_post_id: int
+    attempts: int
+    lease_owner: str
+    run_id: str
+    last_page_fingerprint: str | None
+    stale_recovered: bool = False
+
+
+class VKCrawlContinuationLeaseLost(RuntimeError):
+    """The continuation no longer belongs to this worker/run."""
+
+
+async def _open_vk_continuation_conn(db: Database) -> aiosqlite.Connection:
+    """Open a dedicated connection so BEGIN IMMEDIATE cannot interleave.
+
+    ``Database.raw_conn`` intentionally reuses one connection. A queue claim is
+    a cross-process synchronization primitive, so it must own its transaction
+    and connection from BEGIN through COMMIT.
+    """
+
+    conn = await aiosqlite.connect(db.path, timeout=db._sqlite_timeout_sec())
+    await conn.execute(f"PRAGMA busy_timeout={db._sqlite_busy_timeout_ms()}")
+    await conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+async def _claim_vk_crawl_continuation(
+    db: Database,
+    *,
+    lease_owner: str,
+    run_id: str,
+    lease_seconds: int,
+    excluded_ids: Sequence[int] = (),
+) -> VKCrawlContinuationClaim | None:
+    """Atomically claim one due row, including an expired running lease."""
+
+    owner = str(lease_owner or "").strip()
+    run = str(run_id or "").strip()
+    if not owner or not run:
+        raise ValueError("vk_crawl_continuation_owner_and_run_required")
+    lease_seconds = max(30, min(int(lease_seconds), 3600))
+    excluded = tuple(int(value) for value in excluded_ids)
+    exclusion_sql = ""
+    params: list[Any] = []
+    if excluded:
+        exclusion_sql = f" AND id NOT IN ({','.join('?' for _ in excluded)})"
+        params.extend(excluded)
+    conn = await _open_vk_continuation_conn(db)
+    try:
+        await conn.execute("BEGIN IMMEDIATE")
+        cursor = await conn.execute(
+            f"""
+            SELECT id,owner_id,COALESCE(owner_type,'group'),
+                   COALESCE(scan_mode,'incremental'),COALESCE(page_size,30),
+                   since_ts,offset,horizon_ts,COALESCE(original_cursor_ts,0),
+                   COALESCE(original_cursor_post_id,0),attempts,
+                   last_page_fingerprint,status
+            FROM vk_crawl_continuation
+            WHERE (
+                    (status IN ('pending','retry')
+                     AND (next_attempt_at IS NULL OR next_attempt_at<=CURRENT_TIMESTAMP))
+                 OR (status='running'
+                     AND (lease_expires_at IS NULL OR lease_expires_at<=CURRENT_TIMESTAMP))
+                  )
+              {exclusion_sql}
+            ORDER BY COALESCE(next_attempt_at,created_at),id
+            LIMIT 1
+            """,
+            tuple(params),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        if row is None:
+            await conn.commit()
+            return None
+        stale_recovered = str(row[12]) == "running"
+        update = await conn.execute(
+            f"""
+            UPDATE vk_crawl_continuation
+            SET status='running', attempts=attempts+1, lease_owner=?, locked_by=?, run_id=?,
+                locked_at=CURRENT_TIMESTAMP,
+                lease_expires_at=datetime(CURRENT_TIMESTAMP,'+{lease_seconds} seconds'),
+                last_typed_reason=CASE WHEN status='running'
+                    THEN 'STALE_LEASE_RECOVERED' ELSE last_typed_reason END,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=? AND (
+                    (status IN ('pending','retry')
+                     AND (next_attempt_at IS NULL OR next_attempt_at<=CURRENT_TIMESTAMP))
+                 OR (status='running'
+                     AND (lease_expires_at IS NULL OR lease_expires_at<=CURRENT_TIMESTAMP))
+                  )
+            """,
+            (owner, owner, run, int(row[0])),
+        )
+        if update.rowcount != 1:
+            await conn.rollback()
+            return None
+        await conn.commit()
+        return VKCrawlContinuationClaim(
+            id=int(row[0]), owner_id=int(row[1]), owner_type=str(row[2]),
+            scan_mode=str(row[3]), page_size=max(1, int(row[4])),
+            since_ts=int(row[5]), offset=int(row[6]), horizon_ts=int(row[7]),
+            original_cursor_ts=int(row[8]), original_cursor_post_id=int(row[9]),
+            attempts=int(row[10]) + 1, lease_owner=owner, run_id=run,
+            last_page_fingerprint=(str(row[11]) if row[11] else None),
+            stale_recovered=stale_recovered,
+        )
+    except Exception:
+        await conn.rollback()
+        raise
+    finally:
+        await conn.close()
+
+
+async def _continuation_cas_update(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    sql_set: str,
+    params: Sequence[Any],
+) -> None:
+    conn = await _open_vk_continuation_conn(db)
+    try:
+        cursor = await conn.execute(
+            f"""
+            UPDATE vk_crawl_continuation SET {sql_set},updated_at=CURRENT_TIMESTAMP
+            WHERE id=? AND status='running' AND lease_owner=? AND run_id=?
+            """,
+            (*params, claim.id, claim.lease_owner, claim.run_id),
+        )
+        await conn.commit()
+        if cursor.rowcount != 1:
+            raise VKCrawlContinuationLeaseLost(f"continuation_lease_lost:{claim.id}")
+    finally:
+        await conn.close()
+
+
+async def _renew_vk_crawl_continuation_lease(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    *,
+    lease_seconds: int,
+) -> None:
+    lease_seconds = max(30, min(int(lease_seconds), 3600))
+    await _continuation_cas_update(
+        db,
+        claim,
+        f"lease_expires_at=datetime(CURRENT_TIMESTAMP,'+{lease_seconds} seconds')",
+        (),
+    )
+
+
+def _vk_continuation_page_fingerprint(page: Sequence[dict[str, Any]]) -> str:
+    canonical = _vk_packet_json(list(page))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _vk_continuation_retry_reason(exc: BaseException, *, stage: str) -> str:
+    status = getattr(exc, "status", None)
+    if status == 429:
+        return "VK_CRAWL_RATE_LIMITED"
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return "VK_CRAWL_FETCH_TIMEOUT" if stage == "fetch" else "VK_CRAWL_PERSIST_TIMEOUT"
+    if isinstance(exc, (aiohttp.ClientError, OSError)):
+        return "VK_CRAWL_TRANSPORT" if stage == "fetch" else "VK_CRAWL_PERSIST_FAILED"
+    return "VK_CRAWL_FETCH_FAILED" if stage == "fetch" else "VK_CRAWL_PERSIST_FAILED"
+
+
+def _vk_continuation_retry_after_seconds(exc: BaseException) -> int | None:
+    for name, divisor in (("retry_after_ms", 1000), ("retry_after", 1)):
+        raw = getattr(exc, name, None)
+        try:
+            if raw is not None:
+                return max(1, int(float(raw) / divisor))
+        except (TypeError, ValueError):
+            pass
+    headers = getattr(exc, "headers", None)
+    if headers:
+        try:
+            return max(1, int(float(headers.get("Retry-After"))))
+        except (AttributeError, TypeError, ValueError):
+            pass
+    return None
+
+
+async def _retry_vk_crawl_continuation(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    exc: BaseException,
+    *,
+    stage: str,
+) -> int:
+    base = max(1, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_BASE_SECONDS", 30))
+    cap = max(base, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_MAX_SECONDS", 3600))
+    exponential = base * (2 ** min(max(0, claim.attempts - 1), 16))
+    provider_delay = _vk_continuation_retry_after_seconds(exc) or 0
+    delay = min(cap, max(exponential, provider_delay))
+    reason = _vk_continuation_retry_reason(exc, stage=stage)
+    await _continuation_cas_update(
+        db,
+        claim,
+        "status='retry',next_attempt_at=datetime(CURRENT_TIMESTAMP,?),"
+        "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+        "last_typed_reason=?",
+        (f"+{delay} seconds", reason),
+    )
+    return delay
+
+
+async def _persist_vk_continuation_page(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    page: Sequence[dict[str, Any]],
+    *,
+    lease_seconds: int,
+) -> tuple[int, int]:
+    """Persist the whole fetched page before any durable offset movement."""
+
+    added = duplicates = 0
+    from vk_owner import vk_wall_url
+
+    for post in page:
+        await _renew_vk_crawl_continuation_lease(
+            db, claim, lease_seconds=lease_seconds
+        )
+        post_id = int(post["post_id"])
+        source_url = str(post.get("url") or vk_wall_url(
+            claim.owner_id, post_id, claim.owner_type
+        ))
+        _packet_id, is_new = await _persist_vk_source_packet(
+            db,
+            group_id=claim.owner_id,
+            owner_type=claim.owner_type,
+            post=post,
+            source_url=source_url,
+            keyword_hints=(),
+            date_hints=(),
+            event_ts_hint=None,
+        )
+        if is_new:
+            added += 1
+        else:
+            duplicates += 1
+    return added, duplicates
+
+
+async def process_vk_crawl_continuations(
+    db: Database,
+    *,
+    max_jobs: int = 2,
+    max_pages_per_job: int = 3,
+    lease_seconds: int = 300,
+    worker_id: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, int]:
+    """Consume due durable VK crawl pages with bounded, idempotent work.
+
+    The canonical ``vk_crawl_cursor`` is deliberately untouched. The stored
+    offset advances only after every post in the fetched page has reached the
+    immutable raw packet ledger.
+    """
+
+    max_jobs = max(1, min(int(max_jobs), 25))
+    max_pages_per_job = max(1, min(int(max_pages_per_job), 25))
+    lease_seconds = max(30, min(int(lease_seconds), 3600))
+    worker = str(worker_id or f"vk-continuation:{os.getpid()}:{uuid4().hex[:8]}")
+    invocation_run = str(run_id or uuid4().hex)
+    result = {
+        "claimed": 0, "pages": 0, "posts": 0, "added": 0,
+        "duplicates": 0, "completed": 0, "retried": 0,
+        "stale_recovered": 0, "lease_lost": 0,
+    }
+    processed_ids: list[int] = []
+    vk_wall_since = require_main_attr("vk_wall_since")
+
+    for job_index in range(max_jobs):
+        claim = await _claim_vk_crawl_continuation(
+            db,
+            lease_owner=worker,
+            run_id=f"{invocation_run}:{job_index}",
+            lease_seconds=lease_seconds,
+            excluded_ids=processed_ids,
+        )
+        if claim is None:
+            break
+        processed_ids.append(claim.id)
+        result["claimed"] += 1
+        if claim.stale_recovered:
+            result["stale_recovered"] += 1
+        current_offset = claim.offset
+        previous_fingerprint = claim.last_page_fingerprint
+
+        for page_index in range(max_pages_per_job):
+            try:
+                await _renew_vk_crawl_continuation_lease(
+                    db, claim, lease_seconds=lease_seconds
+                )
+                page = await vk_wall_since(
+                    claim.owner_id,
+                    claim.since_ts,
+                    count=claim.page_size,
+                    offset=current_offset,
+                    owner_type=claim.owner_type,
+                )
+            except VKCrawlContinuationLeaseLost:
+                result["lease_lost"] += 1
+                break
+            except Exception as exc:
+                await _retry_vk_crawl_continuation(db, claim, exc, stage="fetch")
+                result["retried"] += 1
+                logging.warning(
+                    "vk.crawl.continuation retry id=%s stage=fetch offset=%s",
+                    claim.id, current_offset, exc_info=True,
+                )
+                break
+
+            page = list(page or ())
+            fingerprint = _vk_continuation_page_fingerprint(page)
+            try:
+                added, duplicates = await _persist_vk_continuation_page(
+                    db, claim, page, lease_seconds=lease_seconds
+                )
+            except VKCrawlContinuationLeaseLost:
+                result["lease_lost"] += 1
+                break
+            except Exception as exc:
+                await _retry_vk_crawl_continuation(db, claim, exc, stage="persist")
+                result["retried"] += 1
+                logging.warning(
+                    "vk.crawl.continuation retry id=%s stage=persist offset=%s",
+                    claim.id, current_offset, exc_info=True,
+                )
+                break
+
+            result["pages"] += 1
+            result["posts"] += len(page)
+            result["added"] += added
+            result["duplicates"] += duplicates
+
+            dates = [int(post["date"]) for post in page]
+            cursor_overlap = claim.scan_mode == "incremental" and any(
+                int(post["date"]) < claim.original_cursor_ts
+                or (
+                    int(post["date"]) == claim.original_cursor_ts
+                    and int(post["post_id"]) <= claim.original_cursor_post_id
+                )
+                for post in page
+            )
+            horizon_reached = (
+                claim.scan_mode == "backfill"
+                and bool(dates)
+                and min(dates) < claim.horizon_ts
+            )
+            terminal_reason: str | None = None
+            if not page:
+                terminal_reason = "EMPTY_PAGE"
+            elif previous_fingerprint and fingerprint == previous_fingerprint:
+                terminal_reason = "EXACT_PAGE_REPLAY"
+            elif len(page) < claim.page_size:
+                terminal_reason = "SHORT_PAGE"
+            elif horizon_reached:
+                terminal_reason = "HORIZON_REACHED"
+            elif cursor_overlap:
+                terminal_reason = "ORIGINAL_CURSOR_OVERLAP"
+
+            if terminal_reason:
+                await _continuation_cas_update(
+                    db,
+                    claim,
+                    "status='done',lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,"
+                    "locked_at=NULL,run_id=NULL,completed_at=CURRENT_TIMESTAMP,"
+                    "last_page_fingerprint=?,last_typed_reason=?",
+                    (fingerprint, terminal_reason),
+                )
+                result["completed"] += 1
+                break
+
+            current_offset += claim.page_size
+            previous_fingerprint = fingerprint
+            if page_index + 1 >= max_pages_per_job:
+                await _continuation_cas_update(
+                    db,
+                    claim,
+                    "status='pending',offset=?,next_attempt_at=CURRENT_TIMESTAMP,"
+                    "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+                    "last_page_fingerprint=?,last_typed_reason='BOUNDED_YIELD'",
+                    (current_offset, fingerprint),
+                )
+                break
+            await _continuation_cas_update(
+                db,
+                claim,
+                f"offset=?,last_page_fingerprint=?,"
+                f"lease_expires_at=datetime(CURRENT_TIMESTAMP,'+{lease_seconds} seconds'),"
+                "last_typed_reason='PAGE_ADVANCED'",
+                (current_offset, fingerprint),
+            )
+
+    return result
+
+
+async def vk_crawl_continuation_scheduler(
+    db: Database,
+    _bot: Any | None = None,
+    *,
+    run_id: str | None = None,
+    max_jobs: int = 2,
+    max_pages_per_job: int = 3,
+    lease_seconds: int = 300,
+) -> dict[str, int]:
+    return await process_vk_crawl_continuations(
+        db,
+        max_jobs=max_jobs,
+        max_pages_per_job=max_pages_per_job,
+        lease_seconds=lease_seconds,
+        run_id=run_id,
+    )
 
 
 async def crawl_once(
@@ -4552,6 +5034,8 @@ async def crawl_once(
         safety_cap_triggered = False
         hard_cap_triggered = False
         reached_cursor_overlap = False
+        scan_terminal_reached = False
+        last_fetched_page: list[dict[str, Any]] = []
         deep_backfill_scheduled = False
         mode = "inc"
         try:
@@ -4615,11 +5099,16 @@ async def crawl_once(
                         offset=offset,
                         owner_type=owner_type,
                     )
+                    last_fetched_page = list(page)
                     pages_loaded += 1
-                    posts.extend(p for p in page if p["date"] >= horizon)
+                    # Raw-first means even the boundary-crossing page is
+                    # persisted in full; the horizon only terminates paging.
+                    posts.extend(page)
                     if len(page) < VK_CRAWL_PAGE_SIZE_BACKFILL:
+                        scan_terminal_reached = True
                         break
                     if page and min(p["date"] for p in page) < horizon:
+                        scan_terminal_reached = True
                         break
                     offset += VK_CRAWL_PAGE_SIZE_BACKFILL
             else:
@@ -4635,6 +5124,7 @@ async def crawl_once(
                         offset=offset,
                         owner_type=owner_type,
                     )
+                    last_fetched_page = list(page)
                     pages_loaded += 1
                     posts.extend(page)
 
@@ -4649,9 +5139,11 @@ async def crawl_once(
                             reached_cursor_overlap = True
 
                     if not page or len(page) < VK_CRAWL_PAGE_SIZE:
+                        scan_terminal_reached = True
                         break
 
                     if reached_cursor_overlap:
+                        scan_terminal_reached = True
                         break
 
                     if pages_loaded >= safety_cap_threshold:
@@ -4821,11 +5313,11 @@ async def crawl_once(
             next_cursor_pid = max_pid
             continuation_needed = bool(
                 hard_cap_triggered
-                or safety_cap_triggered
                 or (
                     backfill
                     and pages_loaded >= VK_CRAWL_MAX_PAGES_BACKFILL
-                    and bool(posts)
+                    and not scan_terminal_reached
+                    and len(last_fetched_page) >= VK_CRAWL_PAGE_SIZE_BACKFILL
                 )
             )
             if continuation_needed:
@@ -4839,7 +5331,16 @@ async def crawl_once(
                     since_ts=(0 if backfill else max(0, last_seen_ts - VK_CRAWL_OVERLAP_SEC)),
                     offset=max(0, pages_loaded * page_size),
                     horizon_ts=(horizon if backfill else max(0, last_seen_ts - VK_CRAWL_OVERLAP_SEC)),
+                    scan_mode=("backfill" if backfill else "incremental"),
+                    page_size=page_size,
+                    original_cursor_ts=int(last_seen_ts),
+                    original_cursor_post_id=int(last_post_id),
                     reason=("hard_cap" if hard_cap_triggered else "page_safety_cap"),
+                    last_page_fingerprint=(
+                        _vk_continuation_page_fingerprint(last_fetched_page)
+                        if last_fetched_page
+                        else None
+                    ),
                 )
             if hard_cap_triggered and max_ts > 0 and not reached_cursor_overlap:
                 deep_backfill_scheduled = True
@@ -4847,7 +5348,7 @@ async def crawl_once(
                 next_cursor_pid = last_post_id
                 idle_threshold = VK_CRAWL_BACKFILL_AFTER_IDLE_H * 3600
                 cursor_updated_at_override = max(0, now_ts - idle_threshold - 60)
-            elif safety_cap_triggered and max_ts > 0:
+            elif safety_cap_triggered and not scan_terminal_reached and max_ts > 0:
                 adjusted_ts = max(last_seen_ts, max_ts - VK_CRAWL_OVERLAP_SEC)
                 if adjusted_ts < next_cursor_ts:
                     next_cursor_ts = adjusted_ts

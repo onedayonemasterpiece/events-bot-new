@@ -2829,16 +2829,26 @@ class Database:
                     source_type TEXT NOT NULL DEFAULT 'vk',
                     owner_id INTEGER NOT NULL,
                     owner_type TEXT NOT NULL DEFAULT 'group',
+                    continuation_key TEXT,
+                    scan_mode TEXT NOT NULL DEFAULT 'incremental',
+                    page_size INTEGER NOT NULL DEFAULT 30,
                     since_ts INTEGER NOT NULL,
                     offset INTEGER NOT NULL,
                     horizon_ts INTEGER NOT NULL,
+                    original_cursor_ts INTEGER NOT NULL DEFAULT 0,
+                    original_cursor_post_id INTEGER NOT NULL DEFAULT 0,
                     reason TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
                     attempts INTEGER NOT NULL DEFAULT 0,
                     next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     lease_owner TEXT,
+                    locked_by TEXT,
                     lease_expires_at TIMESTAMP,
+                    locked_at TIMESTAMP,
+                    run_id TEXT,
+                    last_page_fingerprint TEXT,
                     last_typed_reason TEXT,
+                    completed_at TIMESTAMP,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(source_type, owner_id, since_ts, offset, horizon_ts)
@@ -2847,6 +2857,67 @@ class Database:
             )
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_vk_crawl_continuation_due ON vk_crawl_continuation(status,next_attempt_at)"
+            )
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "scan_mode TEXT NOT NULL DEFAULT 'incremental'",
+            )
+            await _add_column(conn, "vk_crawl_continuation", "continuation_key TEXT")
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "page_size INTEGER NOT NULL DEFAULT 30",
+            )
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "original_cursor_ts INTEGER NOT NULL DEFAULT 0",
+            )
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "original_cursor_post_id INTEGER NOT NULL DEFAULT 0",
+            )
+            await _add_column(conn, "vk_crawl_continuation", "locked_at TIMESTAMP")
+            await _add_column(conn, "vk_crawl_continuation", "locked_by TEXT")
+            await _add_column(conn, "vk_crawl_continuation", "run_id TEXT")
+            await _add_column(
+                conn, "vk_crawl_continuation", "last_page_fingerprint TEXT"
+            )
+            await _add_column(conn, "vk_crawl_continuation", "completed_at TIMESTAMP")
+            # Rows may have been queued by an older producer before the
+            # continuation consumer existed. Recover the immutable boundary
+            # from the canonical cursor where possible, without advancing it.
+            await conn.execute(
+                """
+                UPDATE vk_crawl_continuation
+                SET scan_mode='backfill', page_size=50
+                WHERE since_ts=0 AND horizon_ts>0 AND scan_mode='incremental'
+                """
+            )
+            await conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_vk_crawl_continuation_key
+                ON vk_crawl_continuation(continuation_key)
+                WHERE continuation_key IS NOT NULL
+                """
+            )
+            await conn.execute(
+                """
+                UPDATE vk_crawl_continuation
+                SET original_cursor_ts=COALESCE(
+                        (SELECT last_seen_ts FROM vk_crawl_cursor
+                         WHERE group_id=vk_crawl_continuation.owner_id),
+                        since_ts
+                    ),
+                    original_cursor_post_id=COALESCE(
+                        (SELECT last_post_id FROM vk_crawl_cursor
+                         WHERE group_id=vk_crawl_continuation.owner_id),
+                        0
+                    )
+                WHERE original_cursor_ts=0 AND scan_mode='incremental'
+                """
             )
 
             await conn.execute(

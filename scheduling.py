@@ -3999,6 +3999,65 @@ def startup(
             "(SMART_UPDATE_RETRY_WORKER_ENABLED!=1)"
         )
 
+    if _env_enabled("VK_CRAWL_CONTINUATION_WORKER_ENABLED", default=True):
+        def _bounded_int(name: str, default: int, low: int, high: int) -> int:
+            try:
+                return max(low, min(high, int(os.getenv(name, str(default)) or default)))
+            except ValueError:
+                return default
+
+        continuation_interval = _bounded_int(
+            "VK_CRAWL_CONTINUATION_INTERVAL_SECONDS", 60, 15, 3600
+        )
+        continuation_batch = _bounded_int(
+            "VK_CRAWL_CONTINUATION_BATCH_SIZE", 2, 1, 25
+        )
+        continuation_pages = _bounded_int(
+            "VK_CRAWL_CONTINUATION_PAGES_PER_JOB", 3, 1, 25
+        )
+        continuation_lease = _bounded_int(
+            "VK_CRAWL_CONTINUATION_LEASE_SECONDS", 300, 30, 3600
+        )
+
+        async def durable_vk_crawl_continuation_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            from vk_intake import vk_crawl_continuation_scheduler
+
+            counters = await vk_crawl_continuation_scheduler(
+                db_obj,
+                bot_obj,
+                run_id=run_id,
+                max_jobs=continuation_batch,
+                max_pages_per_job=continuation_pages,
+                lease_seconds=continuation_lease,
+            )
+            logging.info("vk_crawl_continuation_worker counters=%s", counters)
+
+        _register_job(
+            "vk_crawl_continuation_worker",
+            _job_wrapper(
+                "vk_crawl_continuation_worker",
+                durable_vk_crawl_continuation_scheduler,
+            ),
+            "interval",
+            id="vk_crawl_continuation_worker",
+            seconds=continuation_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=continuation_interval,
+        )
+    else:
+        logging.info(
+            "SCHED skipping vk_crawl_continuation_worker "
+            "(VK_CRAWL_CONTINUATION_WORKER_ENABLED!=1)"
+        )
+
     enable_core_schedulers = _env_enabled("ENABLE_CORE_SCHEDULERS", default=True)
     if enable_core_schedulers:
         _register_job(
