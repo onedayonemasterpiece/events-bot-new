@@ -28,7 +28,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: authoritative implementation map
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: MAP-TYPED
     role: planner
     effort: medium
@@ -42,7 +42,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: exact fail-open inventory
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: MAP-EVIDENCE
     role: planner
     effort: medium
@@ -56,7 +56,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: evidence truth-path inventory
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: MAP-PROMPTS-DOCS
     role: planner
     effort: medium
@@ -70,8 +70,10 @@ lanes:
     forbidden_files: ['*']
     expected_output: marker and documentation inventory
     verification_scope: inspection_only
-    status: spawned
+    status: completed
   - id: CONTINUATION
+    implementation_commit: fe625286c
+    results_commit: bec1997d4
     role: worker
     effort: high
     requirement_ids: [R1.1-R1.12, R5.model, R7.3-R7.4]
@@ -95,8 +97,10 @@ lanes:
       - CHANGELOG.md
     expected_output: committed consumer, scheduler registration, mandatory A-G tests
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: TYPED-EVIDENCE
+    implementation_commit: 2fd3bda4b
+    results_commit: e460704bf
     role: worker
     effort: high
     requirement_ids: [R2.1-R2.6, R3.1-R3.6, R7.1-R7.2]
@@ -124,8 +128,10 @@ lanes:
       - CHANGELOG.md
     expected_output: committed typed adapter/receipt/evidence fixes and tests
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: PROMPT-GATES
+    implementation_commit: f2f08f6f1
+    results_commit: f521f13ff
     role: worker
     effort: high
     requirement_ids: [R4.1-R4.7, R4.static, R7.5-R7.7]
@@ -150,8 +156,10 @@ lanes:
       - CHANGELOG.md
     expected_output: committed prompt migration and static gate
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: DOCS-RELEASE
+    docs_commit: 0b5b04317
+    docs_results_commit: 09a0d6d0f
     role: worker
     effort: high
     requirement_ids: [R5.docs, R7.8, R8.1-R8.12]
@@ -168,7 +176,7 @@ lanes:
     forbidden_files: []
     expected_output: exact-SHA integration report, incident and release evidence
     verification_scope: full_local
-    status: planned
+    status: completed
   - id: FINAL-REVIEW
     role: merge_reviewer
     effort: high
@@ -182,4 +190,4 @@ lanes:
     forbidden_files: ['*']
     expected_output: final Done/Partial/Missing/Blocked table
     verification_scope: full_local
-    status: planned
+    status: completed

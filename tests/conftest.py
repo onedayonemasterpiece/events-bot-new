@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import os
 import sqlite3
@@ -12,8 +13,16 @@ from _helpers.no_network import no_network  # noqa: F401
 
 import main
 import poster_ocr
+from db import close_known_databases
 from models import PosterOcrCache
 from private_events_mcp.config import PrivateEventsMCPConfig
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Dispose pooled SQLite workers before Python joins non-daemon threads."""
+
+    del session, exitstatus
+    asyncio.run(close_known_databases())
 
 
 @pytest.fixture(autouse=True)

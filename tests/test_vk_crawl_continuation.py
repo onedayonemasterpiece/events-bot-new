@@ -6,10 +6,28 @@ import time
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
 import main
 from db import Database
 import vk_intake
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_test_databases(monkeypatch):
+    """Close every Database created by this module before interpreter shutdown."""
+
+    instances: list[Database] = []
+    original_init = Database.__init__
+
+    def tracked_init(instance, *args, **kwargs):
+        original_init(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(Database, "__init__", tracked_init)
+    yield
+    for instance in instances:
+        await instance.close()
 
 
 async def _db(path: Path) -> Database:

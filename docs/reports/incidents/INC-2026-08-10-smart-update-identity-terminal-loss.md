@@ -277,3 +277,95 @@ after multi-occurrence data exists. Destructive SQLite rollback requires a table
 rebuild and is not the default. Release/catch-up commands and stop conditions
 are canonical in `docs/operations/release-smoke-smart-update.md`; production
 audit rules are in `docs/operations/smart-update-prod-audit.md`.
+
+## 2026-08-11 — final review remediation on reviewed HEAD `f72dce816`
+
+Draft PR #494 was re-opened against exact remote/local head
+`f72dce8164c5b77a22865032dbbedbc4fd0817d9`; there was no intake delta. Four
+remaining recall blockers were remediated without changing the completed Smart
+Update architecture:
+
+1. `vk_crawl_continuation` now has an atomic leased production consumer,
+   stored scan/cursor boundary, raw-before-progress page processing, typed
+   capped retry, stale-lease recovery, concurrency exclusion, idempotence and a
+   default-on scheduler. Incremental and backfill pagination have separate
+   tested terminal rails.
+2. Source compatibility is fail-closed: only an explicit valid typed
+   `CONFIRMED_NO_EVENT` with complete structured evidence can terminate. Bare
+   `[]`, `None`, malformed/missing/unknown decisions and legacy receipts without
+   a manifest retry/reparse. A nonempty legacy positive list is accepted only
+   through the validated rolling adapter.
+3. Evidence cardinality is truthful for main/direct, VK and Telegram paths.
+   Missing/unavailable/omitted OCR makes the manifest incomplete; a negative
+   verdict retries, while positive children survive and leave their carrier due
+   for enrichment. Durable receipts preserve that flag and validate child
+   correspondence.
+4. The three live source-parse prompt surfaces use closed typed dispositions,
+   retry reasons and no-event reasons instead of legacy carrier-empty arrays.
+   `GIVEAWAY_ONLY` is closed and receipt-preserved; giveaway+event, incomplete
+   cards, vague teaser, lifecycle-only, location-hint and ticket-hint cases are
+   covered. CI statically inventories the master/VK/TG surfaces and proves the
+   historical Telegram extractor remains unreachable.
+
+No new model/provider, unconditional second semantic call, operator gate,
+semantic regex classifier or TPM evidence filter was introduced. The normal
+carrier remains one primary call plus the existing closed conditional verifier.
+The official parser/festival/ticket/Smart Update identity work was not rewritten.
+
+### Current-source production read-only repeat
+
+The final local recovery and census sources were injected in-memory into the
+Fly machine and executed against `/data/db.sqlite`; no remote script or data was
+written. Window: `[2026-08-04T00:00:00+00:00,
+2026-08-12T00:00:00+00:00)`.
+
+- mode/status: `dry-run / ready`;
+- selected/would-change/changed queue carriers: `125 / 125 / 0`;
+- carrier selection: Telegram `6`, VK `119`, ticket `0`, festival `0`;
+- four parser sources have failed observations, but production lacks the
+  pre-migration durable parser recovery-request table, so unique parser carrier
+  selection remains unavailable rather than inferred;
+- A–T unit `carrier_revision`: `676` observed carriers; `256` extracted event
+  occurrences are reported separately and are not called carriers or recovered
+  events;
+- SQLite `mode=ro`, `query_only=1`, `quick_check=ok`, a write probe was rejected,
+  both probe connections had `total_changes=0`, file stat was unchanged, and DB
+  SHA-256 before/after was
+  `57b6116edd97455baed4f83fc7b148a9211c81dd8a99f054ba7718ebfb427aea`;
+- recovery source SHA-256
+  `d18d7565f87484e284b95a2482f0e470c5e5db8e579cdecb31c0457f518a5c54`;
+  census source SHA-256
+  `dc5de3015fdbeaeedd8893156b9eba9e552bb133a5320c5f1a3312861af6d49a`.
+
+This remains a queue/replay plan. It made no refetch/model call and does not
+provide model-derived recovered event/action/true-no-event counts. Detailed
+ignored evidence is under
+`artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/p0-final-remediation/`;
+the committed four-blocker matrix and receipts are in
+`.codex/integration/smart-update-llm-first-final-remediation/INTEGRATION_REPORT.md`.
+
+### Review and release status
+
+Local final review is repeated after the four fixes. The Antigravity Opus
+endpoint required interactive Google OAuth re-authentication and timed out; the
+permitted Claude Code `Opus` fallback produced no response for more than eleven
+minutes and was terminated. No lower-class model was substituted; this is an
+external-consultant availability blocker, not a green review claim.
+
+Final local receipts after the stale-test assertions were aligned to the
+raw-first/cursor contract and SQLite test engines were closed deterministically:
+
+- exact updated GitHub focused command: `321 passed, 9 warnings`; log SHA-256
+  `ef1487af5821a6d38006ed91ca4cb63fcf0b6598f250e004f3e2538c8c3c603f`;
+- full relevant aggregate: `620 passed, 17 warnings`; log SHA-256
+  `684ccab28897e3a919666fd195ee70bcb4e28174654c60c435ebf90a2931decc`;
+- live source-prompt audit and production `py_compile`/diff checks: PASS;
+- Google AI path audit: 1,139 files, zero unapproved/unreadable; log SHA-256
+  `a51585a63d3eb060dcc4b94e0109d63d5c9efa8c35151d48bc26dd0573606c15`.
+
+The incident remains **open**. Draft PR #494 must remain Draft. Merge, deploy,
+production writes and recovery apply were not performed. Regardless of local/CI
+results, release remains blocked until all four separately requested proofs
+exist: real provider quota/tier, an atomic production DB snapshot rehearsal,
+approved disposition of the 195 known FK-orphan references, and model-derived
+recovery replay through the deployed typed pipeline.

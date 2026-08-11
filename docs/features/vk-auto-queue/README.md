@@ -39,8 +39,13 @@ state machine без зависимости от ручного UI:
 ```text
 pending/retry due -> leased/running
   -> fetch one bounded page -> persist every raw packet/revision from that page
-  -> advance continuation offset/cursor or mark done
+  -> advance the persisted continuation offset or mark that continuation done
 ```
+
+Continuation workers deliberately do not rewrite the canonical
+`vk_crawl_cursor`; only the primary crawl owns that cursor. A continuation is
+bound to the original cursor boundary stored in its durable row and advances
+only its own offset after the complete page reaches `vk_source_packet`.
 
 Typed transport/provider/backpressure failure освобождает continuation в
 `retry due` с причиной и следующим временем попытки. После restart stale lease

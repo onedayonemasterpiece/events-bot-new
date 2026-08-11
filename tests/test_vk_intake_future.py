@@ -5,12 +5,30 @@ import time
 from datetime import datetime
 
 import pytest
+import pytest_asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import main
 import vk_intake
 from db import Database
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_test_databases(monkeypatch):
+    """Dispose per-test SQLite workers after the crawl contract assertions."""
+
+    instances: list[Database] = []
+    original_init = Database.__init__
+
+    def tracked_init(instance, *args, **kwargs):
+        original_init(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(Database, "__init__", tracked_init)
+    yield
+    for instance in instances:
+        await instance.close()
 
 
 @pytest.mark.asyncio
@@ -166,7 +184,10 @@ async def test_forced_backfill_respects_clamped_horizon(
         )
         rows = await cur.fetchall()
 
-    assert rows == [(101,)]
+    # Raw-first persists the complete boundary-crossing page before the horizon
+    # terminates pagination. The stale row is evidence, not a semantic import
+    # decision, and therefore must remain replayable in the packet/inbox queue.
+    assert rows == [(99,), (101,)]
 
 
 @pytest.mark.asyncio
@@ -244,12 +265,11 @@ async def test_incremental_pagination_processes_full_backlog(
     assert [pid for (pid,) in inbox_rows] == [100 + i for i in range(total_posts)]
 
     newest_ts = max(p["date"] for p in posts)
-    expected_cursor_ts = max(last_seen_ts, newest_ts - vk_intake.VK_CRAWL_OVERLAP_SEC)
-    if expected_cursor_ts < newest_ts:
-        expected_cursor = (expected_cursor_ts, 0)
-    else:
-        newest_pid = max(p["post_id"] for p in posts if p["date"] == newest_ts)
-        expected_cursor = (expected_cursor_ts, newest_pid)
+    newest_pid = max(p["post_id"] for p in posts if p["date"] == newest_ts)
+    # Although the diagnostic safety threshold was crossed, the following
+    # short page proved that the backlog was completely scanned. Cursor overlap
+    # is only retained for an actually incomplete/capped scan.
+    expected_cursor = (newest_ts, newest_pid)
     assert cursor_row == expected_cursor
 
 
