@@ -72,6 +72,11 @@ that failed scenario; no message was sent.
   v1957. Post-deploy inspection confirmed that the stopped preparation still
   has status `awaiting_human_approval` and has zero operation rows; it was not
   upgraded, committed or sent.
+- 2026-08-11 — a source-default-off Telegram document-send candidate extended
+  the same authenticated `fileParams -> ast_*` boundary for one structurally
+  verified document. This is offline implementation evidence, not production
+  closure: exact-main deploy, real ChatGPT APK selection, Saved Messages
+  read-back, negative and narrow off/on rollback probes remain pending.
 
 ## Root Cause
 
@@ -107,7 +112,7 @@ duplicated consent without strengthening the target/payload binding.
 
 - changing `openai/fileParams` metadata or file input schema;
 - changing ChatGPT file download/validation/storage, asset ownership, social
-  asset staging or image publication to Telegram.
+  asset staging, or image/document publication to Telegram.
 
 ### Affected surfaces
 
@@ -115,7 +120,9 @@ duplicated consent without strengthening the target/payload binding.
   `social_action_prepare`;
 - ChatGPT tool descriptor metadata and connector runtime payload;
 - private media ingest/store and principal/resource binding;
-- Telegram Saved Messages image publication acceptance.
+- Telegram Saved Messages image publication acceptance;
+- the default-off Telegram `send_message` document role, immutable document
+  manifest/digest and one-attempt/read-after-write provider path.
 
 ### Mandatory checks before closure or deploy
 
@@ -124,6 +131,18 @@ duplicated consent without strengthening the target/payload binding.
 - real-shape ChatGPT file object stages to `ast_*`, status is ready, and a fresh
   explicit outbound request prepares as `approved` without `approval_url`; the
   same principal can commit the exact image to Saved Messages once;
+- when document send changes or is enabled, the actual ChatGPT upload UI supplies
+  the closed file object for a deterministic tiny APK. Stage returns a ready
+  principal/provider-bound `ast_*` with detected APK MIME, exact size/SHA-256,
+  sanitized `.apk` name and expiry;
+- document prepare is Telegram `send_message` with exactly one document and no
+  mixed media; it is `approved` without `approval_url`, performs zero provider
+  calls, and freezes role/name/MIME/size/SHA/expiry into its digest/preview.
+  Commit reopens/rehashes, makes exactly one forced-document attempt and proves
+  the matching downloadable Saved Messages document by read-back;
+- VK, non-`send_message`, two-document, mixed-media, renamed ordinary ZIP,
+  expired/tampered/foreign-principal, string/path/file-ID-only and disabled-flag
+  controls fail before Telegram transport;
 - old `awaiting_human_approval` preparations are never auto-upgraded or
   executed; edit/delete still require the independent operator approval;
 - foreign-principal, unbound, string/path/file-id-only, expired and tampered
@@ -135,6 +154,10 @@ duplicated consent without strengthening the target/payload binding.
   lists exactly seven evidence tools with no file/social surface;
 - exact-main deploy preserves `/healthz`, webhook/scheduler health, SQLite
   `quick_check`, event DB read immutability and log redaction.
+- disabling only `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED`
+  removes document discovery/capability without breaking text/image/story;
+  re-enabling restores the new-chat catalogue. Refresh the existing `eventsBot`
+  connection in place; never replace or rename it.
 
 ### Required evidence
 
@@ -143,6 +166,9 @@ duplicated consent without strengthening the target/payload binding.
 - reviewed PR head, merged/deployed main SHA, Fly release and in-container SHA;
 - Telegram Saved Messages message ID/read-back receipt for a fresh explicit
   post-fix request (never the stopped preparation);
+- for document changes, sanitized actual-ChatGPT APK descriptor/stage, immutable
+  prepare, one-attempt commit/read-back, negative and flag-off/on rollback
+  receipts. A fake/local/filesystem smoke is supporting evidence only;
 - confirmation that no unrelated channel/user received the test message.
 
 ## Immediate Mitigation
@@ -179,6 +205,10 @@ request after the hotfix is deployed.
   negative controls.
 - [ ] After deploy and only after a fresh operator request, complete the Saved
   Messages image read-back. Do not reuse the stopped preparation.
+- [ ] After the document candidate reaches exact `origin/main`, stage scoped
+  config with the source-default-off flag, preflight, enable, then complete the
+  actual ChatGPT APK -> Saved Messages live/negative/off-on rollback acceptance.
+  Offline smoke/tests do not close this incident or the document rollout.
 
 ## Release And Closure Evidence
 
@@ -198,6 +228,9 @@ request after the hotfix is deployed.
 - remaining closure gate: one fresh operator-requested ChatGPT PNG -> `ast_*`
   -> direct approved preparation -> commit -> Saved Messages read-back; the
   stopped preparation must never be reused
+- document extension: no merged-main/Fly SHA or real ChatGPT APK/Saved
+  Messages/rollback evidence has been recorded yet; this remains explicitly
+  pending and does not change `Status: open`
 
 ## Prevention
 

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import sqlite3
+import threading
+import time
+import zipfile
 from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 
+import private_events_mcp_media as media_store_module
 from private_events_mcp.auth_store import OAuthStateStore
 from private_events_mcp.config import PrivateEventsMCPConfig, _hosts
 from private_events_mcp.crypto import AccessIdentity
@@ -27,7 +34,11 @@ from private_events_mcp.social_workspace_runtime import (
 )
 from private_events_mcp.social_workspace_tools import build_social_workspace_tools
 from private_events_mcp.tool_catalog import ToolCallContext, ToolExecutionError
-from private_events_mcp_media import MediaIngressRejected, SecureMediaAssetStore
+from private_events_mcp_media import (
+    MediaIngressRejected,
+    MediaIntegrityError,
+    SecureMediaAssetStore,
+)
 
 FILE_VALUE = {
     "download_url": "https://files.example.test/signed/private-image?signature=secret",
@@ -35,6 +46,47 @@ FILE_VALUE = {
     "mime_type": "image/png",
     "file_name": "poster.png",
 }
+
+
+class _DocumentResponse:
+    status = 200
+
+    def __init__(self, payload: bytes) -> None:
+        self.payload = payload
+        self.headers = {"Content-Type": "application/octet-stream"}
+
+    async def aiter_bytes(self, _size: int):
+        yield self.payload[:7]
+        yield self.payload[7:]
+
+
+def _apk_bytes() -> bytes:
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("AndroidManifest.xml", b"binary manifest")
+        archive.writestr("classes.dex", b"dex\n035\x00")
+    return output.getvalue()
+
+
+def _document_store(
+    tmp_path: Path, payload: bytes, *, clock=lambda: 1000, **store_kwargs
+):
+    async def resolver(_host: str, _port: int):
+        return ["93.184.216.34"]
+
+    response = _DocumentResponse(payload)
+
+    def fetch(_url: str, **_kwargs):
+        return response
+
+    return SecureMediaAssetStore(
+        tmp_path / "assets",
+        allowed_hosts=["files.example.test"],
+        resolver=resolver,
+        http_fetch=fetch,
+        clock=clock,
+        **store_kwargs,
+    )
 
 
 def test_media_allowed_hosts_supports_only_safe_leading_wildcards(monkeypatch) -> None:
@@ -693,3 +745,222 @@ def test_server_media_attach_requires_ingestor_and_keeps_codex_evidence_only(
     )
     assert len(server.codex_protocol.tools) == 7
     assert not any(tool.name.startswith("social_") for tool in server.codex_protocol.tools)
+
+
+@pytest.mark.asyncio
+async def test_document_ingress_persists_only_safe_role_aware_manifest(
+    tmp_path: Path,
+) -> None:
+    payload = _apk_bytes()
+    store = _document_store(tmp_path, payload)
+    owner = hashlib.sha256(b"document-owner").hexdigest()
+    original_name = "../TOP_SECRET_DIRECTORY/report\u202egpj.exe"
+    asset = await store.ingest(
+        ChatGPTFile(
+            download_url="https://files.example.test/signed?secret=URL_SENTINEL",
+            file_id="FILE_ID_SENTINEL",
+            mime_type="application/octet-stream",
+            file_name=original_name,
+        ),
+        owner_binding=owner,
+        max_bytes=1024 * 1024,
+        expires_at=1500,
+        role="document",
+    )
+    assert asset.role == "document"
+    assert asset.mime_type == "application/vnd.android.package-archive"
+    assert asset.display_name == "reportgpj.apk"
+    assert asset.classification == "android_apk"
+    assert asset.width is None and asset.height is None
+    assert asset.content_digest == "sha256:" + hashlib.sha256(payload).hexdigest()
+    assert "ing_" not in repr(asset)
+
+    verified = store.reverify(
+        asset.storage_ref,
+        owner_binding=owner,
+        max_bytes=len(payload),
+        role="document",
+    )
+    assert verified == asset
+    assert not hasattr(verified, "_path")
+    with sqlite3.connect(tmp_path / "assets" / ".manifest.sqlite3") as db:
+        row = db.execute(
+            "SELECT role, display_name, classification FROM media_assets"
+        ).fetchone()
+    assert row == ("document", "reportgpj.apk", "android_apk")
+    persisted = b"".join(
+        path.read_bytes() for path in (tmp_path / "assets").iterdir() if path.is_file()
+    )
+    for forbidden in (
+        b"URL_SENTINEL",
+        b"FILE_ID_SENTINEL",
+        b"TOP_SECRET_DIRECTORY",
+        "\u202e".encode(),
+        str(tmp_path).encode(),
+    ):
+        assert forbidden not in persisted
+
+
+@pytest.mark.asyncio
+async def test_document_reverify_rejects_role_size_and_byte_mutation(
+    tmp_path: Path,
+) -> None:
+    payload = _apk_bytes()
+    store = _document_store(tmp_path, payload)
+    owner = hashlib.sha256(b"document-owner").hexdigest()
+    asset = await store.ingest(
+        ChatGPTFile(
+            download_url="https://files.example.test/document",
+            file_id="document-id",
+            mime_type="application/vnd.android.package-archive",
+            file_name="fixture.apk",
+        ),
+        owner_binding=owner,
+        max_bytes=1024 * 1024,
+        expires_at=1500,
+        role="document",
+    )
+    with pytest.raises(MediaIntegrityError, match="role mismatch"):
+        store.reverify(
+            asset.storage_ref,
+            owner_binding=owner,
+            max_bytes=len(payload),
+            role="image",
+        )
+    with pytest.raises(MediaIntegrityError, match="requested limit"):
+        store.reverify(
+            asset.storage_ref,
+            owner_binding=owner,
+            max_bytes=len(payload) - 1,
+            role="document",
+        )
+    stored = next((tmp_path / "assets").glob("*.asset"))
+    stored.chmod(0o600)
+    mutated = bytearray(stored.read_bytes())
+    mutated[0] ^= 0xFF
+    stored.write_bytes(mutated)
+    with pytest.raises(MediaIntegrityError, match="digest"):
+        store.reverify(
+            asset.storage_ref,
+            owner_binding=owner,
+            max_bytes=len(payload),
+            role="document",
+        )
+
+
+@pytest.mark.asyncio
+async def test_document_policy_error_is_stable_and_partial_is_not_retained(
+    tmp_path: Path,
+) -> None:
+    ordinary_zip = BytesIO()
+    with zipfile.ZipFile(ordinary_zip, "w") as archive:
+        archive.writestr("readme.txt", b"not Android")
+    store = _document_store(tmp_path, ordinary_zip.getvalue())
+    owner = hashlib.sha256(b"document-owner").hexdigest()
+    with pytest.raises(MediaIngressRejected) as caught:
+        await store.ingest(
+            ChatGPTFile(
+                download_url="https://files.example.test/document",
+                file_id="document-id",
+                mime_type="application/vnd.android.package-archive",
+                file_name="fake.apk",
+            ),
+            owner_binding=owner,
+            max_bytes=1024 * 1024,
+            expires_at=1500,
+            role="document",
+        )
+    assert caught.value.error_code == "FILE_TYPE_MISMATCH"
+    assert not list((tmp_path / "assets").glob("*.asset"))
+    with sqlite3.connect(tmp_path / "assets" / ".manifest.sqlite3") as db:
+        assert db.execute("SELECT COUNT(*) FROM media_assets").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_document_validation_does_not_block_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = _apk_bytes()
+    store = _document_store(tmp_path, payload, timeout_seconds=1.0)
+    owner = hashlib.sha256(b"document-owner").hexdigest()
+    original_validator = media_store_module.validate_document_file
+    release = threading.Event()
+    entered = threading.Event()
+
+    def slow_validator(*args, **kwargs):
+        entered.set()
+        assert release.wait(timeout=0.5)
+        return original_validator(*args, **kwargs)
+
+    monkeypatch.setattr(media_store_module, "validate_document_file", slow_validator)
+    heartbeat_ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal heartbeat_ticks
+        while not release.is_set():
+            heartbeat_ticks += 1
+            await asyncio.sleep(0.005)
+
+    release_timer = threading.Timer(0.1, release.set)
+    release_timer.start()
+    try:
+        heartbeat_task = asyncio.create_task(heartbeat())
+        asset_task = asyncio.create_task(
+            store.ingest(
+                ChatGPTFile(
+                    download_url="https://files.example.test/document",
+                    file_id="document-id",
+                    mime_type="application/vnd.android.package-archive",
+                    file_name="fixture.apk",
+                ),
+                owner_binding=owner,
+                max_bytes=1024 * 1024,
+                expires_at=1500,
+                role="document",
+            )
+        )
+        asset, _ = await asyncio.gather(asset_task, heartbeat_task)
+    finally:
+        release.set()
+        release_timer.cancel()
+    assert entered.is_set()
+    assert heartbeat_ticks >= 5
+    assert asset.role == "document"
+
+
+@pytest.mark.asyncio
+async def test_document_validation_uses_remaining_timeout_and_cleans_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = _apk_bytes()
+    store = _document_store(tmp_path, payload, timeout_seconds=0.02)
+    owner = hashlib.sha256(b"document-owner").hexdigest()
+    original_validator = media_store_module.validate_document_file
+
+    def slow_validator(*args, **kwargs):
+        time.sleep(0.1)
+        return original_validator(*args, **kwargs)
+
+    monkeypatch.setattr(media_store_module, "validate_document_file", slow_validator)
+    started = time.monotonic()
+    with pytest.raises(MediaIngressRejected) as caught:
+        await store.ingest(
+            ChatGPTFile(
+                download_url="https://files.example.test/document",
+                file_id="document-id",
+                mime_type="application/vnd.android.package-archive",
+                file_name="fixture.apk",
+            ),
+            owner_binding=owner,
+            max_bytes=1024 * 1024,
+            expires_at=1500,
+            role="document",
+        )
+    assert time.monotonic() - started < 0.08
+    assert caught.value.error_code == "FILE_FETCH_FAILED"
+    assert not list((tmp_path / "assets").glob(".ingress-*"))
+    assert not list((tmp_path / "assets").glob("*.asset"))
+    with sqlite3.connect(tmp_path / "assets" / ".manifest.sqlite3") as db:
+        assert db.execute("SELECT COUNT(*) FROM media_assets").fetchone()[0] == 0
+    # Let the canceled executor call finish before pytest removes tmp_path.
+    await asyncio.sleep(0.12)

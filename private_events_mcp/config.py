@@ -203,6 +203,7 @@ class PrivateEventsMCPConfig:
     universal_social_post_enabled: bool = False
     universal_social_edit_delete_enabled: bool = False
     universal_social_media_story_enabled: bool = False
+    universal_social_file_send_enabled: bool = False
     social_approval_token: str = ""
     social_targets_json: str = ""
     social_ticket_ttl_seconds: int = 300
@@ -211,6 +212,7 @@ class PrivateEventsMCPConfig:
     media_root: str = "/data/private-events-mcp-media"
     media_allowed_hosts: tuple[str, ...] = ()
     max_asset_bytes: int = 30 * 1024 * 1024
+    max_document_bytes: int = 48 * 1024 * 1024
     max_store_bytes: int = 128 * 1024 * 1024
     asset_ttl_seconds: int = 3600
     download_timeout_seconds: int = 20
@@ -242,6 +244,11 @@ class PrivateEventsMCPConfig:
             "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED",
             mcp_enabled=enabled,
         )
+        file_send_enabled = _strict_feature_bool(
+            "PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED",
+            mcp_enabled=enabled,
+        )
+        asset_ingress_enabled = media_story_enabled or file_send_enabled
         config = cls(
             enabled=enabled,
             # Disabled means inert even when stale deployment variables remain.
@@ -313,6 +320,7 @@ class PrivateEventsMCPConfig:
                 mcp_enabled=enabled,
             ),
             universal_social_media_story_enabled=media_story_enabled,
+            universal_social_file_send_enabled=file_send_enabled,
             social_approval_token=(
                 os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN") or ""
             ).strip(),
@@ -343,7 +351,7 @@ class PrivateEventsMCPConfig:
             ).strip(),
             media_allowed_hosts=(
                 _hosts("PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS")
-                if media_story_enabled
+                if asset_ingress_enabled
                 else ()
             ),
             max_asset_bytes=_strict_feature_int(
@@ -353,26 +361,33 @@ class PrivateEventsMCPConfig:
                 high=64 * 1024 * 1024,
                 enabled=media_story_enabled,
             ),
+            max_document_bytes=_strict_feature_int(
+                "PRIVATE_EVENTS_MCP_DOCUMENT_MAX_ASSET_BYTES",
+                48 * 1024 * 1024,
+                low=1,
+                high=64 * 1024 * 1024,
+                enabled=file_send_enabled,
+            ),
             max_store_bytes=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES",
                 128 * 1024 * 1024,
                 low=1,
                 high=1024 * 1024 * 1024,
-                enabled=media_story_enabled,
+                enabled=asset_ingress_enabled,
             ),
             asset_ttl_seconds=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS",
                 3600,
                 low=60,
                 high=86400,
-                enabled=media_story_enabled,
+                enabled=asset_ingress_enabled,
             ),
             download_timeout_seconds=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS",
                 20,
                 low=1,
                 high=120,
-                enabled=media_story_enabled,
+                enabled=asset_ingress_enabled,
             ),
             max_width=_strict_feature_int(
                 "PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH",
@@ -517,6 +532,7 @@ class PrivateEventsMCPConfig:
             self.universal_social_post_enabled,
             self.universal_social_edit_delete_enabled,
             self.universal_social_media_story_enabled,
+            self.universal_social_file_send_enabled,
         )
         if not self.universal_social_enabled and any(
             (*provider_flags, *capability_flags)
@@ -532,11 +548,22 @@ class PrivateEventsMCPConfig:
             raise ValueError(
                 "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN must contain at least 32 characters"
             )
-        if self.universal_social_media_story_enabled:
-            if self.max_store_bytes < self.max_asset_bytes:
+        if self.universal_social_file_send_enabled and (
+            not self.universal_social_telegram_enabled
+            or not self.universal_social_dm_enabled
+        ):
+            raise ValueError(
+                "Telegram provider and DM action flags are required for universal social file send"
+            )
+        if self.asset_ingress_enabled:
+            largest_asset = max(
+                self.max_asset_bytes if self.universal_social_media_story_enabled else 0,
+                self.max_document_bytes if self.universal_social_file_send_enabled else 0,
+            )
+            if self.max_store_bytes < largest_asset:
                 raise ValueError(
                     "PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES must cover "
-                    "PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES"
+                    "the largest enabled asset class"
                 )
             if not self.media_root or not Path(self.media_root).is_absolute():
                 raise ValueError(
@@ -545,8 +572,15 @@ class PrivateEventsMCPConfig:
             if not self.media_allowed_hosts:
                 raise ValueError(
                     "authenticated upload storage requires "
-                    "PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS for media/story"
+                    "PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS for asset ingress"
                 )
+
+    @property
+    def asset_ingress_enabled(self) -> bool:
+        return (
+            self.universal_social_media_story_enabled
+            or self.universal_social_file_send_enabled
+        )
 
     @property
     def private_prefix(self) -> str:

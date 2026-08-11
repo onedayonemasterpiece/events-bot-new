@@ -1291,7 +1291,7 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
         raise SocialWorkspaceValidationError(
             f"field(s) not valid for {action.value}: {', '.join(sorted(unsupported))}"
         )
-    return SocialActionIntent(
+    intent = SocialActionIntent(
         platform=platform,
         action=action,
         idempotency_key=idempotency_key,
@@ -1303,6 +1303,25 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
         schedule_at=schedule_at,
         expected_revision=expected_revision,
     )
+    validate_document_attachment_policy(intent)
+    return intent
+
+
+def validate_document_attachment_policy(intent: SocialActionIntent) -> None:
+    """Keep Telegram document v1 narrow at every contract boundary."""
+
+    media = intent.content.media if intent.content is not None else ()
+    if not any(item.role is MediaRole.DOCUMENT for item in media):
+        return
+    if (
+        intent.platform is not SocialPlatform.TELEGRAM
+        or intent.action is not SocialAction.SEND_MESSAGE
+        or len(media) != 1
+        or media[0].role is not MediaRole.DOCUMENT
+    ):
+        raise SocialWorkspaceValidationError(
+            "document content requires one Telegram send_message attachment"
+        )
 
 
 def validate_capabilities(payload: Mapping[str, Any]) -> SocialCapabilities:
@@ -1553,19 +1572,39 @@ def validate_asset_stage_request(payload: Mapping[str, Any]) -> AssetStageReques
         or any(ord(character) < 0x20 or ord(character) == 0x7F for character in file_id)
     ):
         raise SocialWorkspaceValidationError("file file_id is invalid")
+    role = _enum(data.get("role"), MediaRole, "role")
+    platform = _enum(data.get("platform"), SocialPlatform, "platform")
     mime_type = _optional_text(file_data.get("mime_type"), "mime_type", maximum=100)
     if mime_type is not None and not re.fullmatch(
-        r"(?:image|video|audio|application)/[A-Za-z0-9.+-]{1,64}", mime_type
+        r"(?:image|video|audio|application|text)/[A-Za-z0-9.+-]{1,64}", mime_type
     ):
         raise SocialWorkspaceValidationError("file mime_type is invalid")
-    file_name = _optional_text(file_data.get("file_name"), "file_name", maximum=255)
-    if file_name is not None and any(character in file_name for character in ("/", "\\", "\x00")):
-        raise SocialWorkspaceValidationError("file file_name is invalid")
-    role = _enum(data.get("role"), MediaRole, "role")
-    if role is not MediaRole.IMAGE:
-        raise SocialWorkspaceValidationError("only image asset staging is enabled")
+    raw_file_name = file_data.get("file_name")
+    if role is MediaRole.DOCUMENT:
+        # The document-policy boundary, not this transport parser, owns NFKC,
+        # basename, control/bidi stripping and extension enforcement. Preserve
+        # the bounded untrusted hint so that sanitizer is actually exercised.
+        if raw_file_name is not None and (
+            not isinstance(raw_file_name, str) or len(raw_file_name) > 255
+        ):
+            raise SocialWorkspaceValidationError("file file_name is invalid")
+        file_name = raw_file_name
+    else:
+        file_name = _optional_text(raw_file_name, "file_name", maximum=255)
+        if file_name is not None and any(
+            character in file_name for character in ("/", "\\", "\x00")
+        ):
+            raise SocialWorkspaceValidationError("file file_name is invalid")
+    if role not in {MediaRole.IMAGE, MediaRole.DOCUMENT}:
+        raise SocialWorkspaceValidationError(
+            "only image or document asset staging is enabled"
+        )
+    if role is MediaRole.DOCUMENT and platform is not SocialPlatform.TELEGRAM:
+        raise SocialWorkspaceValidationError(
+            "document asset staging is supported only for Telegram"
+        )
     return AssetStageRequest(
-        platform=_enum(data.get("platform"), SocialPlatform, "platform"),
+        platform=platform,
         file=ChatGPTFile(
             download_url=download_url,
             file_id=file_id,
@@ -2023,6 +2062,44 @@ SOCIAL_WORKSPACE_PREPARE_SCHEMA: Mapping[str, Any] = {
         "schedule_at": {"type": "string", "format": "date-time"},
         "expected_revision": {"type": "string", "minLength": 1, "maxLength": 160},
     },
+    "allOf": [
+        {
+            "if": {
+                "properties": {
+                    "content": {
+                        "properties": {
+                            "media": {
+                                "contains": {
+                                    "properties": {"role": {"const": "document"}},
+                                    "required": ["role"],
+                                }
+                            }
+                        },
+                        "required": ["media"],
+                    }
+                },
+                "required": ["content"],
+            },
+            "then": {
+                "properties": {
+                    "platform": {"const": "telegram"},
+                    "action": {"const": "send_message"},
+                    "content": {
+                        "properties": {
+                            "media": {
+                                "minItems": 1,
+                                "maxItems": 1,
+                                "items": {
+                                    "properties": {"role": {"const": "document"}},
+                                    "required": ["role"],
+                                },
+                            }
+                        }
+                    },
+                }
+            },
+        }
+    ],
 }
 
 SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA: Mapping[str, Any] = {
@@ -2517,8 +2594,20 @@ SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA: Mapping[str, Any] = {
     "properties": {
         "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
         "file": {"$ref": "#/$defs/OpenAIFile"},
-        "role": {"type": "string", "enum": [MediaRole.IMAGE.value]},
+        "role": {
+            "type": "string",
+            "enum": [MediaRole.IMAGE.value, MediaRole.DOCUMENT.value],
+        },
     },
+    "allOf": [
+        {
+            "if": {
+                "properties": {"role": {"const": "document"}},
+                "required": ["role"],
+            },
+            "then": {"properties": {"platform": {"const": "telegram"}}},
+        }
+    ],
 }
 
 SOCIAL_WORKSPACE_ASSET_STAGE_OUTPUT_SCHEMA: Mapping[str, Any] = {
@@ -2564,6 +2653,8 @@ SOCIAL_WORKSPACE_ASSET_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
         "content_digest": {"type": "string", "pattern": r"^sha256:[a-f0-9]{64}$"},
         "width": {"type": "integer", "minimum": 1, "maximum": 8192},
         "height": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "display_name": {"type": "string", "minLength": 1, "maxLength": 255},
+        "classification": {"type": "string", "minLength": 1, "maxLength": 64},
         "expires_at": {"type": "string", "format": "date-time"},
         "error_code": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,63}$"},
         "trust": {"const": "untrusted_external_data"},
@@ -2688,6 +2779,7 @@ __all__ = [
     "validate_asset_status_request",
     "validate_capabilities",
     "validate_commit_request",
+    "validate_document_attachment_policy",
     "validate_editorial_sample_response",
     "validate_opaque_ref",
     "validate_prepare_request",

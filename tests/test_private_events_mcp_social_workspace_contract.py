@@ -47,6 +47,7 @@ from private_events_mcp.social_workspace import (
     EditorialSampleState,
     ExecutionSafetyHooks,
     GateDecision,
+    MediaRole,
     RecursiveRedactionResult,
     SafetyAuditEvent,
     SocialAction,
@@ -895,6 +896,83 @@ def test_asset_lifecycle_uses_fileparams_and_opaque_refs_not_paths_or_legacy_han
     ):
         with pytest.raises((SocialWorkspaceValidationError, ValidationError)):
             validate_asset_stage_request({**request, **escape})
+
+
+def test_document_stage_is_telegram_only_and_accepts_text_mime_hint() -> None:
+    request = {
+        "platform": "telegram",
+        "file": {
+            "download_url": "https://files.example.test/download?signed=1",
+            "file_id": "file_chatgpt_document",
+            "mime_type": "text/markdown",
+            "file_name": "notes.md",
+        },
+        "role": "document",
+    }
+    validate(request, SOCIAL_WORKSPACE_ASSET_STAGE_SCHEMA)
+    assert validate_asset_stage_request(request).role is MediaRole.DOCUMENT
+    with pytest.raises(SocialWorkspaceValidationError, match="only for Telegram"):
+        validate_asset_stage_request({**request, "platform": "vk"})
+    hostile_name = "../unsafe\u202e.apk"
+    document = validate_asset_stage_request(
+        {
+            **request,
+            "file": {**request["file"], "file_name": hostile_name},
+        }
+    )
+    assert document.file.file_name == hostile_name
+    with pytest.raises(SocialWorkspaceValidationError, match="file_name"):
+        validate_asset_stage_request(
+            {
+                **request,
+                "role": "image",
+                "file": {**request["file"], "file_name": hostile_name},
+            }
+        )
+
+    intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "send_message",
+            "idempotency_key": "document-valid-123",
+            "target_ref": TARGET_REF,
+            "content": {
+                "text": "caption",
+                "entities": [],
+                "media": [{"asset_ref": ASSET_REF, "role": "document"}],
+            },
+        }
+    )
+    assert intent.content is not None
+    assert intent.content.media[0].role is MediaRole.DOCUMENT
+
+
+@pytest.mark.parametrize("platform,action,roles", [
+    ("vk", "send_message", ["document"]),
+    ("telegram", "publish", ["document"]),
+    ("telegram", "send_message", ["document", "document"]),
+    ("telegram", "send_message", ["document", "image"]),
+])
+def test_document_prepare_rejects_wrong_provider_action_or_cardinality(
+    platform, action, roles
+) -> None:
+    payload = {
+        "platform": platform,
+        "action": action,
+        "idempotency_key": "document-policy-123",
+        "target_ref": TARGET_REF,
+        "content": {
+            "text": "caption",
+            "entities": [],
+            "media": [
+                {"asset_ref": ASSET_REF, "role": role} for role in roles
+            ],
+        },
+    }
+    with pytest.raises(SocialWorkspaceValidationError, match="one Telegram"):
+        validate_prepare_request(payload)
+    with pytest.raises(ValidationError):
+        validate(payload, SOCIAL_WORKSPACE_PREPARE_SCHEMA)
 
 
 def _safety_hooks(

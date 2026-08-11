@@ -1,9 +1,8 @@
-"""Hardened, owner-bound media ingress for the private-events MCP service.
+"""Hardened, owner-bound asset ingress for the private-events MCP service.
 
-The store deliberately accepts only images which Pillow can fully verify.  In
-particular, merely having an image-ish extension or Content-Type is never
-enough.  Video is rejected until the application has a real bounded container
-and codec validator.
+Images continue through the independent Pillow validator.  Documents use a
+closed structural policy and bounded ZIP inventory; neither path executes or
+extracts attacker-controlled content.
 
 The module has no dependency on the MCP implementation except for a lazy
 import of ``private_events_mcp.media_contract.VerifiedAsset``.  This keeps it
@@ -38,6 +37,14 @@ from typing import (
     Protocol,
 )
 from urllib.parse import parse_qsl, urlsplit
+
+from private_events_mcp.document_policy import (
+    DEFAULT_MAX_DOCUMENT_BYTES,
+    HARD_MAX_DOCUMENT_BYTES,
+    DocumentPolicyError,
+    validate_document_file,
+    validate_document_stream,
+)
 
 
 class MediaStoreError(RuntimeError):
@@ -82,6 +89,8 @@ class MediaIngressRejected(MediaStoreError):
         "image dimensions exceed limits": "FILE_TOO_LARGE",
         "image validation failed": "MIME_NOT_ALLOWED",
         "media store capacity exceeded": "WORKSPACE_NOT_BOUND",
+        "document validation failed": "FILE_TYPE_INVALID",
+        "document validation timed out": "FILE_FETCH_FAILED",
     }
 
     def __init__(
@@ -166,6 +175,9 @@ class StoredMediaAsset:
     duration: float | None
     created_at: int
     expires_at: int
+    role: str = "image"
+    display_name: str | None = None
+    classification: str | None = None
 
     @property
     def content_digest(self) -> str:
@@ -192,6 +204,9 @@ class _FallbackVerifiedAsset:
     expires_at: int
     width: int | None = None
     height: int | None = None
+    role: str = "image"
+    display_name: str | None = None
+    classification: str | None = None
 
 
 class _Resolver(Protocol):
@@ -223,6 +238,8 @@ _ROLE_MATRIX = {
     "event_image": _IMAGE_MIMES,
     "story_media": _IMAGE_MIMES,
 }
+_DOCUMENT_ROLE = "document"
+_CANONICAL_ROLES = frozenset({"image", _DOCUMENT_ROLE})
 
 
 def _normalise_host(host: str) -> str:
@@ -274,7 +291,7 @@ class _PinnedAiohttpResolver:
 
 
 class SecureMediaAssetStore:
-    """Secure image-only implementation of the AssetIngestor contract."""
+    """Secure image/document implementation of the AssetIngestor contract."""
 
     def __init__(
         self,
@@ -285,6 +302,7 @@ class SecureMediaAssetStore:
         resolver: _Resolver | None = None,
         http_fetch: _Fetcher | None = None,
         max_asset_bytes: int = 30 * 1024 * 1024,
+        max_document_bytes: int = DEFAULT_MAX_DOCUMENT_BYTES,
         max_store_bytes: int = 128 * 1024 * 1024,
         ttl_seconds: int = 60 * 60,
         timeout_seconds: float = 20.0,
@@ -317,6 +335,12 @@ class SecureMediaAssetStore:
             or max_asset_bytes > max_store_bytes
         ):
             raise ValueError("invalid media byte limits")
+        if (
+            not isinstance(max_document_bytes, int)
+            or isinstance(max_document_bytes, bool)
+            or not 1 <= max_document_bytes <= HARD_MAX_DOCUMENT_BYTES
+        ):
+            raise ValueError("invalid document byte limit")
         if timeout_seconds <= 0:
             raise ValueError("byte and time limits must be positive")
         if ttl_seconds <= 0 or ttl_seconds > 86_400:
@@ -332,6 +356,7 @@ class SecureMediaAssetStore:
         self._resolver = resolver or self._default_resolver
         self._http_fetch = http_fetch or self._default_http_fetch
         self._max_asset_bytes = int(max_asset_bytes)
+        self._max_document_bytes = int(max_document_bytes)
         self._max_store_bytes = int(max_store_bytes)
         self._download_timeout = float(timeout_seconds)
         self._max_ttl = int(ttl_seconds)
@@ -372,10 +397,26 @@ class SecureMediaAssetStore:
                     height INTEGER,
                     duration REAL,
                     created_at INTEGER NOT NULL,
-                    expires_at INTEGER NOT NULL
+                    expires_at INTEGER NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'image',
+                    display_name TEXT,
+                    classification TEXT
                 )
                 """
             )
+            columns = {
+                str(row[1]) for row in db.execute("PRAGMA table_info(media_assets)")
+            }
+            # Forward-compatible nullable/defaulted additions preserve stores
+            # created by the original image-only implementation.
+            if "role" not in columns:
+                db.execute(
+                    "ALTER TABLE media_assets ADD COLUMN role TEXT NOT NULL DEFAULT 'image'"
+                )
+            if "display_name" not in columns:
+                db.execute("ALTER TABLE media_assets ADD COLUMN display_name TEXT")
+            if "classification" not in columns:
+                db.execute("ALTER TABLE media_assets ADD COLUMN classification TEXT")
             db.execute(
                 "CREATE INDEX IF NOT EXISTS media_assets_expiry ON media_assets(expires_at)"
             )
@@ -696,9 +737,17 @@ class SecureMediaAssetStore:
             download_url = file.download_url
             file_id = file.file_id
             declared_mime = file.mime_type
+            original_file_name = file.file_name
         except AttributeError as exc:
             raise TypeError("file must implement the ChatGPTFile contract") from exc
-        if role not in _ROLE_MATRIX:
+        role_value = getattr(role, "value", role)
+        if not isinstance(role_value, str):
+            raise MediaIngressRejected("unsupported media role")
+        role_value = role_value.casefold()
+        canonical_role = (
+            "image" if role_value in _ROLE_MATRIX else role_value
+        )
+        if role_value not in _ROLE_MATRIX and role_value != _DOCUMENT_ROLE:
             raise MediaIngressRejected("unsupported media role")
         if (
             not isinstance(max_bytes, int)
@@ -706,7 +755,12 @@ class SecureMediaAssetStore:
             or max_bytes <= 0
         ):
             raise MediaIngressRejected("invalid byte limit")
-        byte_limit = min(max_bytes, self._max_asset_bytes)
+        configured_limit = (
+            self._max_document_bytes
+            if canonical_role == _DOCUMENT_ROLE
+            else self._max_asset_bytes
+        )
+        byte_limit = min(max_bytes, configured_limit)
         now = int(self._clock())
         if not isinstance(expires_at, int) or isinstance(expires_at, bool):
             raise MediaIngressRejected("invalid expiry")
@@ -720,19 +774,77 @@ class SecureMediaAssetStore:
         temp_path: Path | None = None
         final_path: Path | None = None
         try:
+            ingress_deadline = (
+                asyncio.get_running_loop().time() + self._download_timeout
+            )
             temp_path, digest, length, http_mime = await asyncio.wait_for(
-                self._download_to_exclusive_temp(download_url, allowed_ips, byte_limit),
+                self._download_to_exclusive_temp(
+                    download_url,
+                    allowed_ips,
+                    byte_limit,
+                    role=canonical_role,
+                ),
                 timeout=self._download_timeout,
             )
-            detected_mime, width, height = self._verify_image(temp_path)
-            if detected_mime not in _ROLE_MATRIX[role]:
-                raise MediaIngressRejected("media type is not permitted for this role")
-            for claimed in (declared_mime, http_mime):
-                normalised = _mime_without_parameters(claimed)
-                if normalised not in _GENERIC_MIMES and normalised != detected_mime:
+            display_name: str | None = None
+            if canonical_role == _DOCUMENT_ROLE:
+                try:
+                    remaining = (
+                        ingress_deadline - asyncio.get_running_loop().time()
+                    )
+                    if remaining <= 0:
+                        raise asyncio.TimeoutError
+                    document = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            validate_document_file,
+                            temp_path,
+                            file_name=original_file_name,
+                            declared_mime=declared_mime,
+                            max_bytes=byte_limit,
+                        ),
+                        timeout=remaining,
+                    )
+                except asyncio.TimeoutError as exc:
+                    raise MediaIngressRejected(
+                        "document validation timed out"
+                    ) from exc
+                except DocumentPolicyError as exc:
+                    raise MediaIngressRejected(
+                        "document validation failed", error_code=exc.code
+                    ) from exc
+                detected_mime = document.mime_type
+                width = height = None
+                display_name = document.safe_file_name
+                classification = document.classification
+                if (
+                    document.byte_length != length
+                    or document.content_digest != "sha256:" + digest
+                ):
+                    raise MediaIntegrityError("downloaded document changed during validation")
+                normalised_http_mime = _mime_without_parameters(http_mime)
+                if (
+                    normalised_http_mime not in _GENERIC_MIMES
+                    and normalised_http_mime != detected_mime
+                ):
                     raise MediaIngressRejected(
                         "claimed media type does not match content"
                     )
+            else:
+                detected_mime, width, height = self._verify_image(temp_path)
+                classification = "image_" + detected_mime.removeprefix("image/")
+                if detected_mime not in _ROLE_MATRIX[role_value]:
+                    raise MediaIngressRejected(
+                        "media type is not permitted for this role"
+                    )
+                for claimed in (declared_mime, http_mime):
+                    normalised = _mime_without_parameters(claimed)
+                    if (
+                        normalised not in _GENERIC_MIMES
+                        and normalised != detected_mime
+                    ):
+                        raise MediaIngressRejected(
+                            "claimed media type does not match content"
+                        )
 
             storage_ref = "ing_" + secrets.token_urlsafe(32)
             filename = secrets.token_hex(32) + ".asset"
@@ -752,8 +864,8 @@ class SecureMediaAssetStore:
                     """INSERT INTO media_assets
                        (storage_ref, filename, owner_mac, file_id_mac, sha256,
                         detected_mime, byte_length, width, height, duration,
-                        created_at, expires_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)""",
+                        created_at, expires_at, role, display_name, classification)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)""",
                     (
                         storage_ref,
                         filename,
@@ -766,6 +878,9 @@ class SecureMediaAssetStore:
                         height,
                         now,
                         expires_at,
+                        canonical_role,
+                        display_name,
+                        classification,
                     ),
                 )
             asset = StoredMediaAsset(
@@ -779,6 +894,9 @@ class SecureMediaAssetStore:
                 duration=None,
                 created_at=now,
                 expires_at=expires_at,
+                role=canonical_role,
+                display_name=display_name,
+                classification=classification,
             )
             return self._contract_asset(asset, owner_binding)
         except asyncio.TimeoutError as exc:
@@ -800,7 +918,12 @@ class SecureMediaAssetStore:
                         final_path.unlink()
 
     async def _download_to_exclusive_temp(
-        self, url: str, allowed_ips: Sequence[str], byte_limit: int
+        self,
+        url: str,
+        allowed_ips: Sequence[str],
+        byte_limit: int,
+        *,
+        role: str,
     ) -> tuple[Path, str, int, str | None]:
         temp_path = self._root / (".ingress-" + secrets.token_hex(32))
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
@@ -811,7 +934,11 @@ class SecureMediaAssetStore:
         total = 0
         started = self._monotonic()
         headers = {
-            "Accept": "image/jpeg,image/png,image/webp",
+            "Accept": (
+                "application/*,text/plain,text/csv,text/markdown"
+                if role == _DOCUMENT_ROLE
+                else "image/jpeg,image/png,image/webp"
+            ),
             "User-Agent": "events-bot-private-media-ingress/1",
         }
         try:
@@ -993,6 +1120,9 @@ class SecureMediaAssetStore:
             expires_at=asset.expires_at,
             width=asset.width,
             height=asset.height,
+            role=asset.role,
+            display_name=asset.display_name,
+            classification=asset.classification,
         )
 
     def _row_for(self, storage_ref: str) -> sqlite3.Row:
@@ -1017,6 +1147,30 @@ class SecureMediaAssetStore:
         filename = str(row["filename"])
         if not _FILE_RE.fullmatch(filename):
             raise MediaIntegrityError("invalid media manifest")
+        role = str(row["role"])
+        if role not in _CANONICAL_ROLES:
+            raise MediaIntegrityError("invalid media manifest")
+        display_name = row["display_name"]
+        classification = row["classification"]
+        if display_name is not None and (
+            not isinstance(display_name, str)
+            or not display_name
+            or len(display_name.encode("utf-8")) > 180
+            or "/" in display_name
+            or "\\" in display_name
+        ):
+            raise MediaIntegrityError("invalid media manifest")
+        if classification is not None and (
+            not isinstance(classification, str)
+            or not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", classification)
+        ):
+            raise MediaIntegrityError("invalid media manifest")
+        if role == _DOCUMENT_ROLE and (
+            display_name is None or classification is None
+        ):
+            raise MediaIntegrityError("invalid document manifest")
+        if role == "image" and display_name is not None:
+            raise MediaIntegrityError("invalid image manifest")
         return StoredMediaAsset(
             storage_ref=str(row["storage_ref"]),
             _path=self._root / filename,
@@ -1028,6 +1182,9 @@ class SecureMediaAssetStore:
             duration=float(row["duration"]) if row["duration"] is not None else None,
             created_at=int(row["created_at"]),
             expires_at=int(row["expires_at"]),
+            role=role,
+            display_name=display_name,
+            classification=classification,
         )
 
     def _open_and_rehash(self, asset: StoredMediaAsset) -> BinaryIO:
@@ -1047,7 +1204,12 @@ class SecureMediaAssetStore:
             total = 0
             for chunk in iter(lambda: stream.read(64 * 1024), b""):
                 total += len(chunk)
-                if total > self._max_asset_bytes:
+                configured_limit = (
+                    self._max_document_bytes
+                    if asset.role == _DOCUMENT_ROLE
+                    else self._max_asset_bytes
+                )
+                if total > configured_limit:
                     raise MediaIntegrityError("stored media object exceeds limits")
                 digest.update(chunk)
             if total != asset.bytes or not hmac.compare_digest(
@@ -1056,6 +1218,28 @@ class SecureMediaAssetStore:
                 raise MediaIntegrityError(
                     "stored media object failed digest verification"
                 )
+            if asset.role == _DOCUMENT_ROLE:
+                try:
+                    document = validate_document_stream(
+                        stream,
+                        file_name=asset.display_name,
+                        declared_mime=asset.detected_mime,
+                        max_bytes=min(configured_limit, asset.bytes),
+                    )
+                except DocumentPolicyError as exc:
+                    raise MediaIntegrityError(
+                        "stored document failed structural verification"
+                    ) from exc
+                if (
+                    document.content_digest != "sha256:" + asset.sha256
+                    or document.byte_length != asset.bytes
+                    or document.mime_type != asset.detected_mime
+                    or document.safe_file_name != asset.display_name
+                    or document.classification != asset.classification
+                ):
+                    raise MediaIntegrityError(
+                        "stored document metadata failed verification"
+                    )
             stream.seek(0)
             return stream
         except BaseException:
@@ -1065,7 +1249,44 @@ class SecureMediaAssetStore:
     def verify(self, storage_ref: str, owner_binding: str) -> Any:
         """Re-hash an asset and return contract metadata, never its path."""
 
+        row = self._row_for(storage_ref)
+        role = str(row["role"])
+        maximum = (
+            self._max_document_bytes
+            if role == _DOCUMENT_ROLE
+            else self._max_asset_bytes
+        )
+        return self.reverify(
+            storage_ref,
+            owner_binding=owner_binding,
+            max_bytes=maximum,
+            role=role,
+        )
+
+    def reverify(
+        self,
+        storage_ref: str,
+        *,
+        owner_binding: str,
+        max_bytes: int,
+        role: str,
+    ) -> Any:
+        """Reopen and recheck an exact role-bound asset without leaking a path."""
+
+        role_value = getattr(role, "value", role)
+        if role_value not in _CANONICAL_ROLES:
+            raise MediaIntegrityError("requested asset role is invalid")
+        if (
+            not isinstance(max_bytes, int)
+            or isinstance(max_bytes, bool)
+            or max_bytes <= 0
+        ):
+            raise MediaIntegrityError("requested asset byte limit is invalid")
         asset = self._asset_from_row(self._row_for(storage_ref), owner_binding)
+        if asset.role != role_value:
+            raise MediaIntegrityError("stored asset role mismatch")
+        if asset.bytes > max_bytes:
+            raise MediaIntegrityError("stored media object exceeds requested limit")
         stream = self._open_and_rehash(asset)
         stream.close()
         return self._contract_asset(asset, owner_binding)

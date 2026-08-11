@@ -742,7 +742,14 @@ def build_private_events_mcp_workspace_adapters(
             config, asset_store=asset_store
         )
     if config.universal_social_vk_enabled:
-        adapters["vk"] = build_vk_workspace_adapter(config, asset_store=asset_store)
+        adapters["vk"] = build_vk_workspace_adapter(
+            config,
+            asset_store=(
+                asset_store
+                if config.universal_social_media_story_enabled
+                else None
+            ),
+        )
     return adapters
 
 

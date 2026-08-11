@@ -1,10 +1,11 @@
 # Private Events MCP for ChatGPT, OpenCode and Codex
 
-Status: integrated release candidate; disabled by default. The initial
-media/story gate is image-only. Production social activation requires exact-main
-deployment, capability probes, independent review, and the live acceptance gate
-below; video remains unsupported until a separately verified validator and both
-provider implementations are merged and accepted.
+Status: integrated release candidate; disabled by default. The media/story gate
+remains image-only; the independent file-send gate permits one structurally
+verified document only for Telegram `send_message`. Production activation
+requires exact-main deployment, capability probes, independent review, and the
+live acceptance gate below. Video remains unsupported until a separately
+verified validator and both provider implementations are merged and accepted.
 
 ## Purpose and client boundary
 
@@ -139,8 +140,8 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_content_stories` | bounded Telegram/VK story page with opaque media refs and no mark-read/viewer identities |
 | `social_content_editorial_sample` | purpose-bound editorial sample, at most 25 items/page and 100 cumulatively |
 | `social_content_analytics` | bounded aggregate post/story statistics or audience counts where the credential is entitled |
-| `social_asset_stage` | ingest one ChatGPT `fileParams` image into immutable short-lived server storage |
-| `social_asset_status` | return only verified MIME/size/digest/dimensions/expiry and lifecycle state for an opaque asset ref |
+| `social_asset_stage` | ingest one ChatGPT `fileParams` image or eligible Telegram document into immutable short-lived server storage |
+| `social_asset_status` | return only verified MIME/size/digest/dimensions or sanitized document name/classification, expiry and lifecycle state for an opaque asset ref |
 | `social_asset_preview` | render one principal-bound story image as a bounded metadata-free MCP JPEG thumbnail |
 | `social_action_prepare` | freeze exact typed action/content/target/media digest; explicitly requested outbound actions return `approved` with no provider call, while edit/delete wait for external approval |
 | `social_action_commit` | atomically consume the exact preparation authorization, then make the sole provider attempt |
@@ -186,30 +187,74 @@ filesystem path, raw provider method, Telegram/VK native file identifier or
 caller-declared digest/size. The server accepts only HTTPS `download_url` values
 inside `fileParams`, requires a configured exact-host/explicit-wildcard
 allowlist, resolves only public addresses, rejects redirects and streams into a
-bounded temporary file. The initial gate detects and verifies JPEG, PNG or WebP
-image bytes independently of the hint; audio, document, animation and **video**
-roles/MIME types are rejected even if the provider could otherwise accept them.
+bounded temporary file. The media/story gate detects and verifies JPEG, PNG or
+WebP image bytes independently of the hint. The separate default-off file-send
+gate accepts only structurally verified APK, PDF, ZIP, UTF-8 TXT/MD/CSV/JSON,
+DOCX, XLSX or PPTX bytes for Telegram `role=document`. Audio, animation and
+**video** remain rejected even if a provider could otherwise accept them.
+
+Document validation is structural, not a malware, signature, provenance or
+publisher assertion. It hashes immutable regular bytes, derives a path-free
+bounded display filename, checks declared/detected MIME consistency, and
+inventories ZIP/APK/Office containers without extracting or executing them.
+Encrypted archives, unsafe/colliding paths, unsupported compression, excessive
+entry count/declared expansion, an ordinary ZIP renamed `.apk`, and generic
+opaque binaries fail closed. APK classification requires Android structure,
+including `AndroidManifest.xml` and Android payload. An incoming
+`application/octet-stream` is only a hint; accepted bytes must still classify
+to the closed allowlist.
 
 A successful stage returns only an owner- and provider-bound opaque `asset_ref`.
 The server atomically stores an immutable read-only file and a manifest binding
-its actual SHA-256 digest, detected MIME, byte length, dimensions and expiry.
-`file_id`, `file_name`, download URL and internal path are never returned or
-persisted as usable source values. `social_asset_status` can disclose only the
-opaque ref, lifecycle state, trust marker, verified metadata and a sanitized
-error code. The default TTL is one hour and configuration cannot exceed 24
-hours; aggregate retained bytes and dimensions/pixels are also bounded. Every
-provider upload reopens the stored file, checks ownership and TTL, requires a
-regular file and recomputes the digest before reading bytes. Expired assets are
-unusable and removed by bounded cleanup.
+its actual SHA-256 digest, detected MIME, byte length, role and expiry, plus
+dimensions for images or a sanitized display filename/classification for a
+document. `file_id`, original/unsanitized `file_name`, download URL and internal
+path are never returned or persisted as usable source values.
+`social_asset_status` can disclose only the opaque ref, lifecycle state, trust
+marker, verified metadata and a sanitized error code. The default TTL is one
+hour and configuration cannot exceed 24 hours; aggregate retained bytes and
+image dimensions/pixels are also bounded. Every provider upload reopens the
+stored file, checks principal/provider/role binding and TTL, requires a regular
+file and recomputes the digest before reading bytes. Expired assets are unusable
+and removed by bounded cleanup.
 
 Asset-stage failures return only a bounded `structuredContent.error_code` and
 `retry_safe=false`: `FILE_REF_UNRESOLVED`, `FILE_HOST_NOT_ALLOWED`,
 `FILE_PRINCIPAL_MISMATCH`, `WORKSPACE_NOT_BOUND`, `MIME_NOT_ALLOWED`,
-`FILE_TOO_LARGE`, `FILE_EXPIRED`, `FILE_INTEGRITY_FAILED`, or
-`FILE_FETCH_FAILED`. The text never contains the signed download URL, file ID,
-filename, provider ID or native path. The audit ledger records the same safe
+`FILE_TOO_LARGE`, `FILE_EXPIRED`, `FILE_INTEGRITY_FAILED`,
+`FILE_TYPE_NOT_ALLOWED`, `FILE_TYPE_MISMATCH`, `FILE_TYPE_INVALID`,
+`FILE_NAME_INVALID`, or `FILE_FETCH_FAILED`. The text never contains the signed
+download URL, original file ID/name, provider/native ID or internal path. The audit ledger records the same safe
 reason; a host-policy denial may append only a one-way hostname fingerprint so
 operators can correct an exact allowlist without logging the temporary URL.
+
+### Telegram document message v1
+
+The document surface is deliberately narrower than generic media:
+
+- platform is Telegram and the action is exactly `send_message`;
+- content contains exactly one `role=document` attachment, never a second file
+  or mixed image/document media; an optional caption and existing rich entities
+  are allowed;
+- `document` is advertised only when the file-send flag, asset ingress,
+  Telegram adapter and the resolved target's current `send_message` right all
+  agree. VK, stories, publish/schedule/edit/comment/forward/delete and
+  read-only/publish-only targets never advertise or accept it;
+- prepare reauthorizes the target and reopens/rehashes the principal/provider-
+  bound asset, then freezes the role, SHA-256, size, detected MIME, sanitized
+  filename, classification and expiry into the action digest and preview;
+- prepare performs no Telegram upload. Commit repeats feature/rights/TTL and
+  immutable-byte verification, atomically consumes the exact authorization,
+  and makes exactly one Telethon `send_file` attempt with forced-document
+  semantics and a sanitized `DocumentAttributeFilename`;
+- read-after-write requires the intended target/message and a Telegram document,
+  checking filename and size when the provider supplies them. A timeout remains
+  `outcome_unknown`, `retry_safe=false`; never blindly resend.
+
+The only valid ChatGPT end-to-end ingress is the actual `file` object supplied
+by the connector through `_meta["openai/fileParams"]`. A locally fabricated
+object, filesystem-only call, raw URL/path or `file_*` string is useful only as
+a negative/unit probe and is not live ChatGPT acceptance.
 
 ### Story reads, publication and statistics
 
@@ -263,12 +308,15 @@ Every external mutation follows:
 
 1. `social_action_prepare` validates scope, feature flag, provider rights,
    budgets, target/item bindings, content/entities/assets and idempotency;
-2. it persists only the exact canonical digest and returns an operator approval
-   URL; it does not call the provider;
-3. the operator opens that URL, enters the separate approval token, inspects the
-   exact human-readable target, destination, source target, source item, action
-   and text, then confirms in the browser; an opaque-only target/item preview
-   or an item without a human-readable source target fails closed;
+2. it persists only the exact canonical digest and does not call the provider.
+   A fresh typed outbound action explicitly requested through the authenticated
+   ChatGPT/OpenCode resource is returned as `approved` without an
+   `approval_url`; edit/delete remain `awaiting_human_approval`;
+3. for edit/delete only, the operator opens the returned URL, enters the
+   separate approval token, inspects the exact human-readable target, source
+   item, action and text, then confirms in the browser. An opaque-only
+   target/item preview or an item without a human-readable source target fails
+   closed;
 4. `social_action_commit` accepts only the preparation ref and digest. It
    rechecks the current action-class kill switch, then atomically consumes the
    server-side approval before one provider attempt;
@@ -290,12 +338,15 @@ PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_DM_ENABLED
 PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_POST_ENABLED
 PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_EDIT_DELETE_ENABLED
 PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED
+PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED
 ```
 
 Child switches cannot enable a disabled master/provider. Media/story activation
-requires a configured media root, a nonempty ChatGPT download-host allowlist and
-the matching injected provider roles. Missing/invalid storage or provider
-capability fails startup/advertisement instead of exposing placeholder tools.
+or document-send activation derives the common asset-ingress gate and requires
+a configured media root, a nonempty ChatGPT download-host allowlist and the
+matching injected provider roles. Document send additionally requires Telegram
+and DM switches. Missing/invalid storage, document budget or provider capability
+fails startup/advertisement instead of exposing placeholder tools.
 The credential generator retains the original provider-level read/publish
 families rather than minting a new connector identity. Text in a social message
 is never treated as a media URL to fetch.
@@ -331,6 +382,13 @@ pass. It receives only an already verified server-owned asset handle, never a
 ChatGPT URL or client-supplied path. Story reads and aggregate statistics omit
 viewer collections and do not mark a story read. There is no fallback to a bot,
 E2E, S22 or general-purpose human session for story work.
+
+With the independent file-send gate enabled, the same dedicated MCP role may
+advertise `document` only for a target whose live capabilities include
+`send_message`. It receives a closed binding to verified immutable bytes and,
+at commit, performs the single forced-document upload described above. Native
+Telegram document/file IDs, access hashes and raw Telethon keyword arguments
+remain internal and never enter MCP responses, audit records or smoke receipts.
 
 ### VK
 
@@ -432,8 +490,9 @@ PRIVATE_EVENTS_MCP_REPOSITORY_SLUG=onedayonemasterpiece/events-bot-new
 PRIVATE_EVENTS_MCP_REPOSITORY_SHA_FILE=/app/.static-site-repo-sha
 ```
 
-Image ingress/storage uses nonsecret bounded settings. The allowlist is
-mandatory when media/story is enabled and has no implicit host default because
+Image/document ingress and storage use nonsecret bounded settings. The allowlist
+is mandatory when media/story or document send is enabled and has no implicit
+host default because
 ChatGPT file-download hostnames are an operationally observed dependency, not a
 stable name promised by the connector contract. Current ChatGPT uploads can use
 a rotating Azure storage-account label, so the production policy may explicitly
@@ -443,6 +502,7 @@ allow both the exact OpenAI host and the Azure Blob suffix:
 PRIVATE_EVENTS_MCP_MEDIA_ROOT=/data/private-events-mcp-media
 PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS=files.oaiusercontent.com,*.blob.core.windows.net
 PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES=31457280
+PRIVATE_EVENTS_MCP_DOCUMENT_MAX_ASSET_BYTES=50331648
 PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES=134217728
 PRIVATE_EVENTS_MCP_MEDIA_ASSET_TTL_SECONDS=3600
 PRIVATE_EVENTS_MCP_MEDIA_DOWNLOAD_TIMEOUT_SECONDS=20
@@ -450,6 +510,17 @@ PRIVATE_EVENTS_MCP_MEDIA_MAX_WIDTH=8192
 PRIVATE_EVENTS_MCP_MEDIA_MAX_HEIGHT=8192
 PRIVATE_EVENTS_MCP_MEDIA_MAX_PIXELS=40000000
 ```
+
+The document limit defaults to `50331648` bytes (48 MiB) and has a hard
+configuration maximum of `67108864` bytes (64 MiB). The source-default
+`PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=0` keeps the document
+surface absent. When enabled it derives common asset ingress from
+`media_story_enabled or file_send_enabled`; it does not weaken or implicitly
+enable the image/story gate. An enabled invalid document limit, missing
+allowlist/root, store quota smaller than the largest enabled asset class, or
+missing Telegram/DM/provider support fails closed. When the file-send feature is
+off, a stale malformed document-limit value remains inert during disabled
+startup.
 
 `*.blob.core.windows.net` is handled more narrowly than an ordinary wildcard.
 The URL must have exactly one canonical Azure storage-account label, a blob
@@ -460,8 +531,8 @@ public-IP resolution/pinning, no redirects, no caller credentials and the
 measured image/byte/dimension limits below. The signed URL, file ID and filename
 are never persisted or logged.
 
-TTL configuration is capped at `86400`. The initial fileParams stage accepts at
-most one image per call. Telegram continues to use only
+TTL configuration is capped at `86400`. Each fileParams stage accepts exactly
+one selected file. Telegram continues to use only
 `TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP`; VK story work uses only the
 blank-by-default `PRIVATE_EVENTS_MCP_VK_STORY_READER_TOKEN` and
 `PRIVATE_EVENTS_MCP_VK_STORY_EDITOR_TOKEN` roles (and the dedicated analytics
@@ -650,11 +721,23 @@ python scripts/smoke_private_events_mcp_media.py \
 python scripts/smoke_private_events_mcp_media.py \
   --credentials /secure/chatgpt-private-app-credentials.json \
   --platform telegram --preview-asset-ref '<opaque-story-image-ref>'
+
+# nonmutating document descriptor check; add --target-ref to check live rights
+python scripts/smoke_private_events_mcp_media.py \
+  --credentials /secure/chatgpt-private-app-credentials.json \
+  --platform telegram --check-document-contract \
+  --target-ref '<opaque-saved-target-ref>'
 ```
 
 Preparing an image story additionally requires `--allow-write`, explicit
 target/asset refs, an idempotency key and a fresh owner-only receipt path.
 Committing requires `--allow-write` and that owner-only preparation receipt.
+The analogous `--prepare-document` mode requires an `ast_*` that was already
+staged by the real ChatGPT conversation, a Telegram target, explicit caption,
+idempotency key and fresh receipt; `--commit-document` consumes that owner-only
+receipt. Both print only safe metadata and one-way ref/digest fingerprints.
+They neither accept a local file/URL/file ID nor produce genuine `fileParams`,
+so real ChatGPT UI staging and Telegram UI/download read-back remain mandatory.
 The script expects an explicitly requested outbound preparation to be directly
 `approved`; it never opens or prints a browser approval URL. Edit/delete are
 outside this smoke and retain the separate approval page. It never prints access/refresh
@@ -666,6 +749,63 @@ URL.
 Deploy only an exact merged `origin/main` SHA via `scripts/deploy_fly_main.sh`.
 Keep all new social switches off until credentials are staged and the
 provider-specific canary is authorized.
+
+### Telegram document rollout and rollback
+
+Use one clean worktree checked out at the exact current `origin/main`; do not
+deploy this feature from an integration/feature branch:
+
+1. `git fetch origin --prune`; record `git rev-parse origin/main`; require a
+   clean status and `HEAD == origin/main`, then run
+   `scripts/deploy_fly_main.sh`. Record merged, Fly release and in-container
+   immutable SHAs and require equality.
+2. Keep `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=0`. Through the
+   existing owner terminal and Fly secret store, set only the scoped document
+   names needed for this rollout (the flag and, if overriding the default,
+   `PRIVATE_EVENTS_MCP_DOCUMENT_MAX_ASSET_BYTES`). Reuse the already approved
+   owner-only media root and observed ChatGPT host policy; never paste secret
+   values, the private endpoint or signed file URLs into chat, logs or artifacts.
+3. With the flag still off, preflight public/internal `/healthz`, Fly machine
+   state, exact SHA, both SQLite `quick_check=ok`, auth DB/root permissions,
+   retained-byte quota and disk headroom, webhook/scheduler health, runtime-log
+   mirror, OAuth metadata, Codex exact-seven catalogue, text send, and existing
+   image/story behavior. Confirm staging/prepare causes zero provider calls.
+4. Enable only `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=1` through
+   the same scoped secret mechanism. Recheck readiness/logs and refresh the
+   existing `eventsBot` ChatGPT connection **in place**, then start a new chat.
+   Do not use `--new-install`, rename, delete/re-add or mint another connector
+   identity.
+5. In that new ChatGPT chat, select a deterministic tiny APK-shaped fixture in
+   the actual upload UI. The connector—not a local script—must supply the actual
+   closed `fileParams` object. Stage with
+   `platform=telegram, role=document`; require ready `ast_*`, detected APK MIME,
+   exact size/SHA-256, sanitized `.apk` filename and expiry, with no URL, file
+   ID, original name, native ID or path in response/logs/artifacts.
+6. Resolve Saved Messages with `social_target_resolve`; require target
+   capabilities to include both `send_message` and `document`. Prepare exactly
+   one document plus a clear canary caption, require `approved` and no
+   `approval_url`, and inspect the frozen preview/digest for target, filename,
+   size, MIME, digest prefix and expiry. Provider attempt count must remain zero.
+7. Commit once. Require exactly one Telethon attempt, a durable `succeeded`
+   receipt, read-after-write confirmation, and a downloadable Telegram document
+   whose filename, size and caption match the frozen preview. Record only opaque
+   ref fingerprints/counters and safe metadata. Delete the canary only through
+   the existing typed delete flow if policy permits; otherwise leave exactly one
+   clearly labelled canary and report that state.
+8. Run a live negative probe that stops before Telegram transport (for example,
+   an ordinary ZIP renamed `.apk` or an expired asset). Also confirm VK,
+   multiple documents, mixed image/document and non-`send_message` actions fail
+   before provider I/O.
+9. Rollback-probe the narrow switch: set only file-send to `0`; require the
+   document role/capability to disappear while evidence tools, text sends and
+   image/story remain healthy. Then restore it to `1`, recheck the new-chat
+   catalogue and harmless readiness so the intended final production state is
+   enabled. For a real incident, leave it `0` until remediation is merged and
+   accepted; staged document assets simply expire under bounded cleanup.
+
+The sanitized smoke below can verify catalogues, capabilities and an already
+staged opaque asset's prepare/commit boundary, but it cannot create the actual
+ChatGPT upload or replace steps 5–7 in the ChatGPT UI.
 
 Record all of the following without secrets:
 
@@ -708,8 +848,9 @@ Record all of the following without secrets:
 15. webhook latency/errors, scheduler/jobs, runtime-log mirror, disk free space
     and auth DB permissions show no regression; the auth/provider state file is
     `0600` from creation and daily attempt budget rows use the current UTC date.
-16. the existing ChatGPT connection was refreshed in place and a new chat sees
-    the image/story tools; endpoint, client/resource/audience, signing identity
+16. the existing `eventsBot` ChatGPT connection was refreshed in place and a
+    new chat sees the enabled image/story/document tools; endpoint,
+    client/resource/audience, signing identity
     and connector name are unchanged, while Codex still lists exactly seven
     evidence tools and no social/file tool;
 17. one ChatGPT-selected image stages through `fileParams`; status reports the
@@ -720,8 +861,9 @@ Record all of the following without secrets:
     the generic `social workspace request rejected`;
 18. wrong host/private DNS, redirect, oversize, quota exhaustion, MIME spoof,
     decompression/pixel bomb, changed digest, expired ref, second file and video
-    all fail before provider upload; the initial release accepts only verified
-    JPEG/PNG/WebP images;
+    all fail before provider upload; the image role accepts only verified
+    JPEG/PNG/WebP bytes, while the independent document role follows its closed
+    structural allowlist;
 19. for Telegram and VK separately, one explicitly requested safe-target image
     story follows `stage -> prepare(approved) -> commit -> provider read-back`;
     the preparation binds the exact provider/target/action and immutable asset
@@ -736,10 +878,18 @@ Record all of the following without secrets:
     bounded, retained bytes stay within quota, and disabling only the media/story
     switch removes asset/story tools without changing the connector identity or
     the seven evidence tools.
+22. when document send is enabled, one actual ChatGPT-selected tiny APK follows
+    `fileParams -> stage(document) -> Saved resolve -> prepare(approved) -> one
+    commit -> read-back`; the immutable filename/MIME/size/SHA/expiry binding,
+    actual downloadable Telegram document, one-attempt count, negative probe
+    and file-send off/on rollback probe all pass without secret/path/native-ID
+    disclosure.
 
 Rollback order: first turn
-`PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED=0` to remove all
-asset/story tools and redeploy the exact approved main SHA. If the issue is
+`PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=0` for a document-only
+incident; this removes document staging/capability while leaving text and the
+independent image/story flag unchanged. For an image/story incident, turn
+`PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_MEDIA_STORY_ENABLED=0`. If the issue is
 broader, turn the universal social master off; turn
 `PRIVATE_EVENTS_MCP_ENABLED=0` only for a complete MCP rollback. Preserve the
 existing endpoint/client/resource/signing identity throughout a routine

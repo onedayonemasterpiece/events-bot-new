@@ -19,6 +19,7 @@ import inspect
 import io
 import re
 import secrets
+import unicodedata
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -51,10 +52,41 @@ _MAX_GLOBAL_SCAN = 100
 _MIN_TELETHON_VERSION = (1, 44)
 _MAX_TELETHON_MAJOR = 1
 _MAX_UPLOAD_BYTES = 30 * 1024 * 1024
+_MAX_DOCUMENT_UPLOAD_BYTES = 64 * 1024 * 1024
+_MAX_DOCUMENT_FILENAME_BYTES = 180
 _UPLOAD_MIME_TYPES = {
     MediaRole.IMAGE: frozenset({"image/jpeg", "image/png", "image/webp"}),
     MediaRole.VIDEO: frozenset({"video/mp4", "video/quicktime", "video/webm"}),
 }
+_DOCUMENT_MIME_TYPES = frozenset(
+    {
+        "application/vnd.android.package-archive",
+        "application/pdf",
+        "application/zip",
+        "application/json",
+        "text/plain",
+        "text/csv",
+        "text/markdown",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+)
+_DOCUMENT_MIME_EXTENSIONS = {
+    "application/vnd.android.package-archive": ".apk",
+    "application/pdf": ".pdf",
+    "application/zip": ".zip",
+    "application/json": ".json",
+    "text/plain": ".txt",
+    "text/csv": ".csv",
+    "text/markdown": ".md",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+}
+_BIDI_CONTROLS = frozenset(
+    "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+)
 
 
 class TelegramWorkspaceError(RuntimeError):
@@ -127,10 +159,12 @@ class TelegramVerifiedUpload:
     content_digest: str
     mime_type: str
     byte_length: int
-    width: int
-    height: int
+    width: int | None
+    height: int | None
     duration: float | None
     expires_at: datetime
+    display_name: str | None
+    classification: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,6 +369,23 @@ def _extract_flood_wait(exc: BaseException) -> int | None:
     return None
 
 
+def _is_definite_provider_rejection(exc: BaseException) -> bool:
+    """Identify closed request/RPC rejection without importing Telethon eagerly."""
+
+    if isinstance(exc, ValueError):
+        return True
+    names = {base.__name__ for base in type(exc).__mro__}
+    if "RPCError" not in names:
+        return False
+    ambiguous = {
+        "FloodError",
+        "ServerError",
+        "TimedOutError",
+        "TimeoutError",
+    }
+    return not names & ambiguous and not any("FloodWait" in name for name in names)
+
+
 class _DefaultTelethonTypes:
     """Lazy, closed factory for the exact TL types used by this adapter."""
 
@@ -367,6 +418,7 @@ class _DefaultTelethonTypes:
                 (functions.stories, "SendStoryRequest"),
                 (types, "InputMediaUploadedPhoto"),
                 (types, "InputMediaUploadedDocument"),
+                (types, "DocumentAttributeFilename"),
                 (types, "DocumentAttributeVideo"),
                 (types, "InputPrivacyValueAllowAll"),
                 (types, "UpdateStoryID"),
@@ -385,7 +437,14 @@ class _DefaultTelethonTypes:
                     "formatting_entities", "schedule", "comment_to"
                 },
                 TelegramClient.send_file: {
-                    "formatting_entities", "schedule", "comment_to"
+                    "formatting_entities",
+                    "schedule",
+                    "comment_to",
+                    "force_document",
+                    "mime_type",
+                    "file_size",
+                    "attributes",
+                    "parse_mode",
                 },
                 TelegramClient.edit_message: {"formatting_entities"},
             }
@@ -450,6 +509,14 @@ class _DefaultTelethonTypes:
         cloned = copy.copy(value)
         cloned.spoiler = True
         return cloned
+
+    def document_filename(self, file_name: str) -> Any:
+        _, types = self._load()
+        return types.DocumentAttributeFilename(file_name=file_name)
+
+    def peer_id(self, entity: Any) -> int:
+        self._load()
+        return self._utils.get_peer_id(entity)
 
     def request(self, name: str, **values: Any) -> Any:
         functions, types = self._load()
@@ -590,6 +657,7 @@ class TelegramWorkspaceAdapter:
     """Fixed high-level Telegram implementation for Social Workspace."""
 
     platform = "telegram"
+    document_send_supported = True
 
     def __init__(
         self,
@@ -803,8 +871,10 @@ class TelegramWorkspaceAdapter:
 
     @staticmethod
     def _verified_upload(asset: Any, role: MediaRole) -> TelegramVerifiedUpload:
-        if role not in _UPLOAD_MIME_TYPES:
-            raise SocialWorkspaceValidationError("Telegram upload role must be image or video")
+        if role not in {*_UPLOAD_MIME_TYPES, MediaRole.DOCUMENT}:
+            raise SocialWorkspaceValidationError(
+                "Telegram upload role must be image, video, or document"
+            )
 
         def field_value(primary: str, fallback: str | None = None) -> Any:
             value = getattr(asset, primary, None)
@@ -820,6 +890,8 @@ class TelegramWorkspaceAdapter:
         duration = field_value("duration")
         expires_at = field_value("expires_at")
         declared_role = field_value("role")
+        display_name = field_value("display_name", "safe_file_name")
+        classification = field_value("classification")
 
         # The initial provider contract mentioned storage_path, but callers must
         # never pass a filesystem path. Only an opaque storage_ref is accepted.
@@ -840,11 +912,53 @@ class TelegramWorkspaceAdapter:
         if not isinstance(mime_type, str):
             raise SocialWorkspaceValidationError("verified asset MIME is invalid")
         mime_type = mime_type.strip().casefold()
-        if mime_type not in _UPLOAD_MIME_TYPES[role]:
+        allowed_mime_types = (
+            _DOCUMENT_MIME_TYPES
+            if role is MediaRole.DOCUMENT
+            else _UPLOAD_MIME_TYPES[role]
+        )
+        if mime_type not in allowed_mime_types:
             raise SocialWorkspaceValidationError("verified asset MIME does not match role")
-        if type(byte_length) is not int or not 0 < byte_length <= _MAX_UPLOAD_BYTES:
+        size_limit = (
+            _MAX_DOCUMENT_UPLOAD_BYTES
+            if role is MediaRole.DOCUMENT
+            else _MAX_UPLOAD_BYTES
+        )
+        if type(byte_length) is not int or not 0 < byte_length <= size_limit:
             raise SocialWorkspaceValidationError("verified asset exceeds Telegram size limit")
-        if type(width) is not int or type(height) is not int or not (
+        if role is MediaRole.DOCUMENT:
+            if width is not None or height is not None or duration is not None:
+                raise SocialWorkspaceValidationError(
+                    "verified document dimensions and duration must be absent"
+                )
+            if (
+                not isinstance(display_name, str)
+                or not display_name
+                or display_name != unicodedata.normalize("NFKC", display_name)
+                or display_name.strip(" .") != display_name
+                or "/" in display_name
+                or "\\" in display_name
+                or display_name in {".", ".."}
+                or len(display_name.encode("utf-8")) > _MAX_DOCUMENT_FILENAME_BYTES
+                or any(
+                    character in _BIDI_CONTROLS
+                    or unicodedata.category(character) in {"Cc", "Cs"}
+                    for character in display_name
+                )
+                or not display_name.casefold().endswith(
+                    _DOCUMENT_MIME_EXTENSIONS[mime_type]
+                )
+            ):
+                raise SocialWorkspaceValidationError(
+                    "verified document display name is invalid"
+                )
+            if not isinstance(classification, str) or not re.fullmatch(
+                r"[a-z][a-z0-9_]{1,63}", classification
+            ):
+                raise SocialWorkspaceValidationError(
+                    "verified document classification is invalid"
+                )
+        elif type(width) is not int or type(height) is not int or not (
             0 < width <= 20_000 and 0 < height <= 20_000
         ):
             raise SocialWorkspaceValidationError("verified asset dimensions are invalid")
@@ -852,7 +966,7 @@ class TelegramWorkspaceAdapter:
             if type(duration) not in {int, float} or not 0 < float(duration) <= 3600:
                 raise SocialWorkspaceValidationError("verified video duration is invalid")
             duration = float(duration)
-        elif duration is not None:
+        elif role is not MediaRole.DOCUMENT and duration is not None:
             raise SocialWorkspaceValidationError("verified image duration must be absent")
         if declared_role is not None:
             try:
@@ -895,6 +1009,8 @@ class TelegramWorkspaceAdapter:
             height=height,
             duration=duration,
             expires_at=expiry,
+            display_name=display_name,
+            classification=classification,
         )
 
     async def stage_asset(self, asset: Any, *, role: MediaRole) -> str:
@@ -941,7 +1057,7 @@ class TelegramWorkspaceAdapter:
         if isinstance(binding.provider_media, TelegramVerifiedUpload):
             if binding.provider_media.owner_binding != owner_binding:
                 raise SocialWorkspaceValidationError("asset owner binding mismatch")
-            data = await self._read_upload_bytes(binding.provider_media)
+            data = await self._read_upload_bytes(binding.provider_media, role=binding.role)
             if len(data) > max_bytes:
                 raise SocialWorkspaceValidationError("asset exceeds requested read bound")
             return data
@@ -1002,7 +1118,9 @@ class TelegramWorkspaceAdapter:
         validate_opaque_ref(media_ref, "asset")
         return media_ref
 
-    async def _read_upload_bytes(self, upload: TelegramVerifiedUpload) -> bytes:
+    async def _read_upload_bytes(
+        self, upload: TelegramVerifiedUpload, *, role: MediaRole
+    ) -> bytes:
         if upload.expires_at <= datetime.now(timezone.utc):
             raise SocialWorkspaceValidationError("verified asset has expired")
         reader = self._asset_reader
@@ -1019,7 +1137,12 @@ class TelegramWorkspaceAdapter:
                 raise TelegramWorkspaceError("asset_reader_invalid", retry_safe=False)
             close = getattr(opened, "close", None)
             try:
-                data = await _await(opened.read(_MAX_UPLOAD_BYTES + 1))
+                limit = (
+                    _MAX_DOCUMENT_UPLOAD_BYTES
+                    if role is MediaRole.DOCUMENT
+                    else _MAX_UPLOAD_BYTES
+                )
+                data = await _await(opened.read(limit + 1))
             finally:
                 if callable(close):
                     await _await(close())
@@ -1028,7 +1151,12 @@ class TelegramWorkspaceAdapter:
             data = bytes(data)
         if (
             len(data) != upload.byte_length
-            or len(data) > _MAX_UPLOAD_BYTES
+            or len(data)
+            > (
+                _MAX_DOCUMENT_UPLOAD_BYTES
+                if role is MediaRole.DOCUMENT
+                else _MAX_UPLOAD_BYTES
+            )
             or hashlib.sha256(data).hexdigest()
             != upload.content_digest.removeprefix("sha256:")
         ):
@@ -1053,7 +1181,7 @@ class TelegramWorkspaceAdapter:
                 if callable(compile_media)
                 else upload
             )
-        data = await self._read_upload_bytes(upload)
+        data = await self._read_upload_bytes(upload, role=binding.role)
         compile_upload = getattr(self._types, "upload_media", None)
         if not callable(compile_upload) or not callable(getattr(client, "upload_file", None)):
             raise TelegramWorkspaceError("provider_dependency_unavailable")
@@ -1417,6 +1545,7 @@ class TelegramWorkspaceAdapter:
         if binding.kind is SocialTargetKind.GROUP and content_allowed:
             actions.update(
                 {
+                    SocialAction.SEND_MESSAGE,
                     SocialAction.PUBLISH,
                     SocialAction.COMMENT,
                     SocialAction.SCHEDULE,
@@ -1491,6 +1620,8 @@ class TelegramWorkspaceAdapter:
         content_features = (
             set(policy.content_features) if policy else set(ContentFeature)
         )
+        if binding is not None and SocialAction.SEND_MESSAGE not in actions:
+            content_features.discard(ContentFeature.DOCUMENT)
         return {
             "platform": "telegram",
             **({"target_ref": binding.target_ref} if binding else {}),
@@ -1559,6 +1690,48 @@ class TelegramWorkspaceAdapter:
             if supplied.role is not staged.role:
                 raise SocialWorkspaceValidationError("media role does not match staged asset")
         return assets
+
+    @staticmethod
+    def _document_metadata(message: Any) -> tuple[Any | None, str | None, int | None]:
+        media = getattr(message, "media", None)
+        document = getattr(media, "document", None)
+        if document is None:
+            document = getattr(message, "document", None)
+        if document is None:
+            return None, None, None
+        file = getattr(message, "file", None)
+        file_name = getattr(file, "name", None)
+        file_size = getattr(file, "size", None)
+        if file_name is None:
+            for attribute in list(getattr(document, "attributes", None) or [])[:100]:
+                candidate = getattr(attribute, "file_name", None)
+                if isinstance(candidate, str):
+                    file_name = candidate
+                    break
+        if file_size is None:
+            file_size = getattr(document, "size", None)
+        return (
+            document,
+            file_name if isinstance(file_name, str) else None,
+            file_size if type(file_size) is int else None,
+        )
+
+    def _message_matches_target(
+        self, message: Any, target: TelegramTargetBinding
+    ) -> bool:
+        marker = getattr(message, "_workspace_entity", None)
+        if marker is not None:
+            return getattr(marker, "id", None) == getattr(target.entity, "id", None)
+        observed_chat_id = getattr(message, "chat_id", None)
+        peer_id = getattr(self._types, "peer_id", None)
+        if type(observed_chat_id) is int and callable(peer_id):
+            try:
+                return observed_chat_id == peer_id(target.entity)
+            except Exception:  # noqa: BLE001 - normalize provider metadata drift
+                return False
+        # ``get_messages(entity, ids=...)`` is already scoped to the snapshotted
+        # target. Some Telethon test doubles/provider layers omit peer metadata.
+        return True
 
     def _item_payload(
         self,
@@ -2271,8 +2444,11 @@ class TelegramWorkspaceAdapter:
         if intent.action is SocialAction.SEND_MESSAGE and target.kind not in {
             SocialTargetKind.SELF,
             SocialTargetKind.USER,
+            SocialTargetKind.GROUP,
         }:
-            raise SocialWorkspaceValidationError("send_message requires Saved or user DM")
+            raise SocialWorkspaceValidationError(
+                "send_message requires Saved Messages, user DM, or writable group"
+            )
         if intent.action is SocialAction.PUBLISH and target.kind not in {
             SocialTargetKind.CHANNEL,
             SocialTargetKind.GROUP,
@@ -2287,6 +2463,24 @@ class TelegramWorkspaceAdapter:
                 raise SocialWorkspaceValidationError("story requires exactly one media asset")
             if intent.content.media[0].role is not MediaRole.IMAGE:
                 raise SocialWorkspaceValidationError("story media must be a verified image")
+        document_media = (
+            tuple(
+                attachment
+                for attachment in intent.content.media
+                if attachment.role is MediaRole.DOCUMENT
+            )
+            if intent.content is not None
+            else ()
+        )
+        if document_media and (
+            intent.action is not SocialAction.SEND_MESSAGE
+            or intent.content is None
+            or len(intent.content.media) != 1
+            or len(document_media) != 1
+        ):
+            raise SocialWorkspaceValidationError(
+                "Telegram documents require send_message with exactly one document"
+            )
         if intent.content and (
             len(intent.content.text) > 4096 or len(intent.content.media) > 10
         ):
@@ -2306,6 +2500,42 @@ class TelegramWorkspaceAdapter:
     ) -> Any:
         entities = self._compile_entities(content)
         assets = self._compile_media(content)
+        if len(assets) == 1 and assets[0].role is MediaRole.DOCUMENT:
+            upload = assets[0].provider_media
+            if not isinstance(upload, TelegramVerifiedUpload):
+                raise SocialWorkspaceValidationError(
+                    "document asset is not a verified immutable upload"
+                )
+            data = await self._read_upload_bytes(upload, role=MediaRole.DOCUMENT)
+            compile_filename = getattr(self._types, "document_filename", None)
+            if not callable(compile_filename) or upload.display_name is None:
+                raise TelegramWorkspaceError("provider_dependency_unavailable")
+            stream = io.BytesIO(data)
+            stream.name = upload.display_name
+            attributes = [compile_filename(upload.display_name)]
+            attempt.provider_mutation_attempted = True
+            try:
+                return await _await(
+                    client.send_file(
+                        target.entity,
+                        stream,
+                        caption=content.text,
+                        formatting_entities=entities,
+                        parse_mode=None,
+                        force_document=True,
+                        mime_type=upload.mime_type,
+                        file_size=upload.byte_length,
+                        attributes=attributes,
+                    )
+                )
+            except (asyncio.TimeoutError, TimeoutError, ConnectionError, OSError):
+                raise
+            except Exception as exc:
+                if _is_definite_provider_rejection(exc):
+                    raise TelegramWorkspaceError(
+                        "provider_rejected", retry_safe=False
+                    ) from None
+                raise
         if assets:
             media_values = []
             for attachment, asset in zip(content.media, assets):
@@ -2448,6 +2678,40 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("operation error_code is invalid")
         validate_action_status_response(result)
         return result
+
+    def _operation_ledger_unknown(
+        self, operation_ref: str, action: SocialAction
+    ) -> Mapping[str, Any]:
+        return dict(
+            self._recordless_operation_validation(
+                operation_ref,
+                {
+                    "platform": "telegram",
+                    "operation_ref": operation_ref,
+                    "action": action.value,
+                    "status": "outcome_unknown",
+                    "retry_safe": False,
+                    "error_code": "operation_ledger_failed",
+                },
+            )
+        )
+
+    def _provider_rejected_result(
+        self, operation_ref: str, action: SocialAction
+    ) -> Mapping[str, Any]:
+        return dict(
+            self._recordless_operation_validation(
+                operation_ref,
+                {
+                    "platform": "telegram",
+                    "operation_ref": operation_ref,
+                    "action": action.value,
+                    "status": "failed",
+                    "retry_safe": False,
+                    "error_code": "provider_rejected",
+                },
+            )
+        )
 
     async def execute(
         self,
@@ -2605,6 +2869,16 @@ class TelegramWorkspaceAdapter:
                 return receipt
             message = result[0] if isinstance(result, Sequence) and result else result
             message_id = getattr(message, "id", None)
+            document_send = (
+                intent.action is SocialAction.SEND_MESSAGE
+                and intent.content is not None
+                and any(
+                    attachment.role is MediaRole.DOCUMENT
+                    for attachment in intent.content.media
+                )
+            )
+            if document_send and (type(message_id) is not int or message_id <= 0):
+                raise TimeoutError("document message id was not confirmed")
             if type(message_id) is int and message_id > 0:
                 minted = self._mint_item_binding(
                     target_ref=target.target_ref,
@@ -2624,8 +2898,24 @@ class TelegramWorkspaceAdapter:
                 if intent.action is SocialAction.SEND_MESSAGE:
                     await self._fenced(lease)
                     observed = await _await(client.get_messages(target.entity, ids=message_id))
-                    if _provider_message_id(observed) != message_id:
+                    if (
+                        type(getattr(observed, "id", None)) is not int
+                        or getattr(observed, "id", None) != message_id
+                        or not self._message_matches_target(observed, target)
+                    ):
                         raise TimeoutError("read-back mismatch")
+                    if document_send:
+                        assets = self._compile_media(intent.content)
+                        upload = assets[0].provider_media if len(assets) == 1 else None
+                        if not isinstance(upload, TelegramVerifiedUpload):
+                            raise TimeoutError("document read-back binding mismatch")
+                        document, file_name, file_size = self._document_metadata(observed)
+                        if (
+                            document is None
+                            or (file_name is not None and file_name != upload.display_name)
+                            or (file_size is not None and file_size != upload.byte_length)
+                        ):
+                            raise TimeoutError("document read-back mismatch")
                     receipt["read_after_write"] = {
                         "verified": True,
                         "observed_item_ref": minted.item_ref,
@@ -2644,12 +2934,24 @@ class TelegramWorkspaceAdapter:
             )
         except SocialWorkspaceValidationError:
             if provider_completed:
-                raise TelegramWorkspaceError(
-                    "operation_ledger_failed", retry_safe=False
-                ) from None
+                return self._operation_ledger_unknown(operation_ref, intent.action)
             await self._release_operation(operation_ref, action_digest)
             raise
         except TelegramWorkspaceError as exc:
+            if provider_completed and exc.code == "operation_ledger_failed":
+                return self._operation_ledger_unknown(operation_ref, intent.action)
+            if exc.code == "provider_rejected":
+                rejected = self._provider_rejected_result(
+                    operation_ref, intent.action
+                )
+                try:
+                    return await self._complete_operation(
+                        operation_ref, action_digest, rejected
+                    )
+                except (SocialWorkspaceValidationError, TelegramWorkspaceError):
+                    return self._operation_ledger_unknown(
+                        operation_ref, intent.action
+                    )
             if exc.retry_safe:
                 await self._release_operation(operation_ref, action_digest)
                 raise
