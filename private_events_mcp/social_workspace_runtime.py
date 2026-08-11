@@ -1545,7 +1545,7 @@ class SocialWorkspaceRuntime:
                 "target does not permit Telegram document send_message"
             )
 
-    def _reverify_document_assets(
+    async def _reverify_document_assets(
         self,
         intent: SocialActionIntent,
         principal: RuntimePrincipal,
@@ -1557,15 +1557,27 @@ class SocialWorkspaceRuntime:
         assert self.asset_ingestor is not None
         reverify = self.asset_ingestor.reverify
         owner_binding = self._principal_hash(principal)
+        timeout = max(
+            self.provider_timeout_seconds, self.asset_ingest_timeout_seconds
+        )
         for stored in metadata:
             if stored["role"] != MediaRole.DOCUMENT.value:
                 continue
-            refreshed = reverify(
-                stored["storage_ref"],
-                owner_binding=owner_binding,
-                max_bytes=self.document_max_bytes,
-                role=MediaRole.DOCUMENT.value,
-            )
+            try:
+                refreshed = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        reverify,
+                        stored["storage_ref"],
+                        owner_binding=owner_binding,
+                        max_bytes=self.document_max_bytes,
+                        role=MediaRole.DOCUMENT.value,
+                    ),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                raise SocialWorkspaceRuntimeError(
+                    "document asset reverification timed out"
+                ) from None
             if inspect.isawaitable(refreshed):
                 raise SocialWorkspaceRuntimeError(
                     "document asset reverification must be synchronous"
@@ -1611,7 +1623,9 @@ class SocialWorkspaceRuntime:
             self._enforce_document_runtime_policy(intent)
             await self._authorize_document_target(intent, principal)
             preflight_assets = self._asset_metadata_for_intent(intent, principal)
-            self._reverify_document_assets(intent, principal, preflight_assets)
+            await self._reverify_document_assets(
+                intent, principal, preflight_assets
+            )
         except Exception as exc:
             self._audit(principal, platform=platform, operation="prepare",
                         outcome="denied", reason=type(exc).__name__,
@@ -1954,7 +1968,7 @@ class SocialWorkspaceRuntime:
         preflight_assets = self._asset_metadata_for_intent(
             preflight_intent, principal
         )
-        self._reverify_document_assets(
+        await self._reverify_document_assets(
             preflight_intent, principal, preflight_assets
         )
         with self.store._lock, self.store._connect() as conn:

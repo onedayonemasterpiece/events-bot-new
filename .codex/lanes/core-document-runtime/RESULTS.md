@@ -124,3 +124,24 @@ uvx ruff check private_events_mcp/social_workspace.py \
   tests/test_private_events_mcp_social_workspace_runtime.py
 # All checks passed!
 ```
+
+## Async reverify follow-up
+
+Document prepare/commit reverification now runs the synchronous immutable-store `reverify` operation in `asyncio.to_thread`, bounded by `max(provider_timeout_seconds, asset_ingest_timeout_seconds)`. Timeout fails closed before preparation/operation consumption and before provider transport. The slow fake regression proves the loop remains responsive while a 48 MiB-class local verification is in progress, verifies timeout denial, and retains independent prepare-time and commit-time checks.
+
+Focused verification:
+
+```bash
+/home/dev/.codex/venvs/events-bot-new/bin/python -m pytest -q \
+  tests/test_private_events_mcp_social_workspace_runtime.py::test_document_runtime_reverifies_digest_and_kill_switch
+# 1 passed in 0.54s
+
+uvx ruff check private_events_mcp/social_workspace_runtime.py \
+  tests/test_private_events_mcp_social_workspace_runtime.py
+# All checks passed!
+
+python3 -m compileall -q private_events_mcp/social_workspace_runtime.py \
+  tests/test_private_events_mcp_social_workspace_runtime.py
+git diff --check
+# PASS
+```

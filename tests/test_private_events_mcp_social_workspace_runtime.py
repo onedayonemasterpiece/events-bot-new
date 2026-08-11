@@ -190,6 +190,7 @@ class FakeDocumentIngestor:
         self.asset: FakeDocumentAsset | None = None
         self.reverify_calls = 0
         self.file_names: list[str | None] = []
+        self.reverify_delay = 0.0
 
     async def ingest(
         self, file, *, owner_binding, max_bytes, expires_at, role
@@ -212,6 +213,8 @@ class FakeDocumentIngestor:
 
     def reverify(self, storage_ref, *, owner_binding, max_bytes, role):
         self.reverify_calls += 1
+        if self.reverify_delay:
+            time.sleep(self.reverify_delay)
         assert self.asset is not None
         return self.asset
 
@@ -834,8 +837,25 @@ async def test_document_runtime_reverifies_digest_and_kill_switch(
             },
         }
     )
-    prepared = await service.prepare(intent, scoped_context("telegram:dm:send"))
-    assert ingestor.reverify_calls == 1
+    ingestor.reverify_delay = 0.05
+    service.provider_timeout_seconds = 0.01
+    service.asset_ingest_timeout_seconds = 0.01
+    with pytest.raises(SocialWorkspaceRuntimeError, match="reverification timed out"):
+        await service.prepare(intent, scoped_context("telegram:dm:send"))
+    assert adapter.executions == 0
+
+    service.provider_timeout_seconds = 0.2
+    service.asset_ingest_timeout_seconds = 0.2
+    prepare_task = asyncio.create_task(
+        service.prepare(intent, scoped_context("telegram:dm:send"))
+    )
+    heartbeat_seen = False
+    await asyncio.sleep(0.005)
+    heartbeat_seen = True
+    assert heartbeat_seen is True
+    assert prepare_task.done() is False
+    prepared = await prepare_task
+    assert ingestor.reverify_calls >= 2
     assert ingestor.file_names == ["../unsafe\u202e.apk"]
     status = await service.asset_status(
         staged["asset_ref"], scoped_context("telegram:dm:send")
