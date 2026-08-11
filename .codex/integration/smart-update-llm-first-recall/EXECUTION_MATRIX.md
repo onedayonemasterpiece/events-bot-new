@@ -95,3 +95,38 @@ the attached request; no test is intentionally omitted.
 
 `{all implementation + audits} -> R22/R24/R25/R26 -> R27`
 
+
+## Integrated closure status (2026-08-11, before final push)
+
+`Done` means the requested code/test/read-only evidence exists on the integration
+branch. `Partial`/`Blocked` is not hidden by green tests.
+
+| ID | Status | Integrated evidence / remaining gap |
+| --- | --- | --- |
+| R01 | Done | Incident record escalated to P0/SEV-1; carriers, occurrences and actions are never conflated. |
+| R02 | Done | Recall-first priority is canonical in source/VK/Smart Update/LLM docs and tests. |
+| R03 | Done | Regex/deterministic semantic terminals removed from automatic VK/TG and positive Smart Update path. |
+| R04 | Done | Fetched configured-source VK revisions resolve via exact replay, typed LLM, or durable retry. |
+| R05 | Done | Git/Fly/deployed-file/env/quota chronology with explicit historical-image limitation. |
+| R06 | Done | AS-IS discovery/auto-import and TO-BE control flow are recorded with durability/retry/side-effect annotations. |
+| R07 | Partial | A–T census covers all retained/available evidence, but no complete fetched universe or acute VK refetch ledger exists; exact global counts remain unavailable. |
+| R08 | Done | Raw packet before semantic selection, changed revisions, cursor boundary and continuation are implemented. |
+| R09 | Done | Production prefilter API/call edge and cancellation semantic bypass are absent; static gates enforce this. |
+| R10 | Done | Full available source/OCR manifest; incomplete evidence forbids no-event and keeps enrichment due. |
+| R11 | Done | Closed source disposition/lifecycle schema with legacy positive adapter and strict zero-event boundary. |
+| R12 | Done | Lifecycle originates in typed LLM output; no-match retries independently of new event children. |
+| R13 | Done | Free-form child veto removed; deterministic semantic detectors and far-future OCR mismatch are hints/verification only. |
+| R14 | Done | One normal call; one conditional existing-model verifier for seven closed contradiction classes. |
+| R15 | Partial | Gateway calibration, durable queue and deterministic 1.5× p99 drain test are done; provider billing tier/entitlements and live production-like semantic replay are unavailable. |
+| R16 | Done | Maximum-recall typed prompt covers all text/OCR, siblings/sessions, recap+future, giveaway+event and mixed lifecycle. |
+| R17 | Done | Closed reasons, technical retry, incoherent distinct create, stable occurrence rails and caller ID isolation. |
+| R18 | Done | Typed source/carrier/child outcomes; technical/identity uncertainty remains retryable. |
+| R19 | Partial / Blocked | Read-only all-source selector/plan is idempotent; historical raw evidence and a model-derived raw→LLM→Smart Update dry-run are unavailable, and production apply is forbidden. |
+| R20 | Partial / Blocked | Deterministic stratified sampler exists; retained evidence starts 2026-06-12, so February–May rate/denominators are unavailable. |
+| R21 | Partial | Durable packet/attempt funnel and derived invariant metrics exist; pre-deploy production lacks the schema and several requested per-label live series cannot be observed yet. |
+| R22 | Partial | T01–T67/T69–T76 have deterministic receipts; T68 is planner-only without recoverable historical raw/model replay. Final local relevant suite is 489 passed and the provider path audit is green; GitHub CI on the final pushed head remains pending. |
+| R23 | Done | Current production bundle clone: init×2, census/recovery/rollback, quick-check passed; zero new conflicts and a non-executed plan for 195 pre-existing FK orphans. |
+| R24 | Done | Emergency/semantic/gateway/Smart/caller/recovery blocks are coherent commits; no artificial microcommit fanout. |
+| R25 | Partial | Timeline, graphs, census, capacity, quotas-known-vs-unknown, caller/reason/static/test/migration/runbook receipts exist; model-routing quality benchmark and model-derived recovery receipt are unavailable; final PR summary is posted only after the exact pushed head exists. |
+| R26 | Done | No new provider/model/operator queue; no merge/deploy/production write/recovery apply/new PR/issue. |
+| R27 | Blocked | Criteria needing exact never-LLM/incomplete/model-derived recovery counts, full historical evidence, provider entitlement, live deployment/catch-up and all-green final CI cannot be satisfied inside the explicit no-write/no-deploy boundary. PR remains draft. |

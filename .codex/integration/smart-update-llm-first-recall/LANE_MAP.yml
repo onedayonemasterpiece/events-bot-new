@@ -31,7 +31,7 @@ lanes:
     expected_output: bounded report with exact commits, paths, branches, and gap list
     verification_scope: inspection_only
     effort: medium
-    status: planned
+    status: completed
   - id: MAP-SEMANTIC
     role: planner
     supporting_requirement_ids: [R03, R10, R11, R12, R13, R14, R16, R18]
@@ -45,7 +45,7 @@ lanes:
     expected_output: exact production paths, ownership-safe file split and test gaps
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: MAP-TPM
     role: planner
     supporting_requirement_ids: [R15, R21]
@@ -59,7 +59,7 @@ lanes:
     expected_output: capacity code map, current failure modes and disjoint implementation scope
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: MAP-CENSUS-RECOVERY
     role: planner
     supporting_requirement_ids: [R07, R19, R20, R23]
@@ -73,7 +73,7 @@ lanes:
     expected_output: data-source map, read-only plan, schema ownership and evidence gaps
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: MAP-SMART-GATES
     role: planner
     supporting_requirement_ids: [R17, R22, T56-T76]
@@ -87,7 +87,7 @@ lanes:
     expected_output: exact violations and smallest conflict-free implementation/test scope
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
   - id: PROD-FORENSICS
     role: planner
     supporting_requirement_ids: [R05, R07, R15, R20]
@@ -105,7 +105,7 @@ lanes:
     expected_output: redacted immutable evidence with query_only/hash/no-write receipts and explicit unavailable sources
     verification_scope: inspection_only
     effort: high
-    status: in_progress
+    status: completed
   - id: SEMANTIC-CONTRACT
     role: worker
     requirement_ids: [R03, R10, R11, R12, R13, R14, R16, R18]
@@ -134,7 +134,7 @@ lanes:
     expected_output: committed typed parse boundary with one-call normal path and deterministic mocked tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: RAW-VK
     role: worker
     requirement_ids: [R04, R08, R09, R10.vk, R12.vk, R13.vk, R15.queue, R18.vk, R21]
@@ -170,7 +170,7 @@ lanes:
     expected_output: committed raw carrier/attempt/continuation schema and production VK flow with zero semantic/technical terminal shortcuts
     verification_scope: targeted
     effort: high
-    status: waiting_on_dependency
+    status: completed
   - id: TPM-GATEWAY
     role: worker
     requirement_ids: [R15.gateway]
@@ -198,7 +198,7 @@ lanes:
     expected_output: committed backward-compatible gateway metadata/calibration primitives and tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: SMART-CLOSURE
     role: worker
     requirement_ids: [R17]
@@ -226,7 +226,7 @@ lanes:
     expected_output: committed residual Smart Update closure with focused DB/facade tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: CALLER-RETRY
     role: worker
     requirement_ids: [R17.callers, R18.callers]
@@ -256,7 +256,7 @@ lanes:
     expected_output: committed due/reclaimable technical outcomes and strengthened caller AST/behavior tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
   - id: RECOVERY-CENSUS
     role: worker
     requirement_ids: [R07, R19, R20, R23]
@@ -286,7 +286,30 @@ lanes:
     expected_output: committed pure selectors/reports/rehearsal tools with byte/query-only/idempotence tests
     verification_scope: targeted
     effort: high
-    status: planned
+    status: completed
+  - id: TG-PRODUCER
+    role: worker
+    requirement_ids: [R03, R10, R11, R12, R13, R14, R16, R18]
+    test_ids: [T01-T44]
+    target: self-contained Telegram Monitoring typed source verdict, complete album OCR and conditional verifier
+    depends_on: [SEMANTIC-CONTRACT, MAP-SEMANTIC]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-llm-first/tg-producer
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-tg-producer
+    writable_files:
+      - kaggle/TelegramMonitor/telegram_monitor.py
+      - tests/test_telegram_monitor_llm_first_producer_contract.py
+      - .codex/lanes/TG-PRODUCER/RESULTS.md
+    forbidden_files:
+      - source_parsing/**
+      - db.py
+      - models.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: typed every-message/album decision with complete OCR manifest and no semantic short circuit
+    verification_scope: targeted
+    effort: high
+    status: completed
   - id: ORCH
     role: merge_reviewer
     requirement_ids: [R01, R02, R22, R24, R25, R26]
@@ -300,7 +323,7 @@ lanes:
     expected_output: clean pushed PR head, integration report and full verification receipts
     verification_scope: full_local
     effort: max
-    status: in_progress
+    status: completed
   - id: CLOSURE-REVIEW
     role: reviewer
     requirement_ids: [R27]
@@ -314,4 +337,5 @@ lanes:
     expected_output: Done/Partial/Missing/Blocked table with no hidden gaps
     verification_scope: inspection_only
     effort: high
-    status: planned
+    status: completed
+    closure_outcome: blocked_by_explicit_no_deploy_no_write_and_unavailable_historical_provider_evidence
