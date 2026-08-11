@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import sqlite3
+import threading
+import time
 import zipfile
 from dataclasses import replace
 from io import BytesIO
@@ -10,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import private_events_mcp_media as media_store_module
 from private_events_mcp.auth_store import OAuthStateStore
 from private_events_mcp.config import PrivateEventsMCPConfig, _hosts
 from private_events_mcp.crypto import AccessIdentity
@@ -64,7 +68,9 @@ def _apk_bytes() -> bytes:
     return output.getvalue()
 
 
-def _document_store(tmp_path: Path, payload: bytes, *, clock=lambda: 1000):
+def _document_store(
+    tmp_path: Path, payload: bytes, *, clock=lambda: 1000, **store_kwargs
+):
     async def resolver(_host: str, _port: int):
         return ["93.184.216.34"]
 
@@ -79,6 +85,7 @@ def _document_store(tmp_path: Path, payload: bytes, *, clock=lambda: 1000):
         resolver=resolver,
         http_fetch=fetch,
         clock=clock,
+        **store_kwargs,
     )
 
 
@@ -867,3 +874,93 @@ async def test_document_policy_error_is_stable_and_partial_is_not_retained(
     assert not list((tmp_path / "assets").glob("*.asset"))
     with sqlite3.connect(tmp_path / "assets" / ".manifest.sqlite3") as db:
         assert db.execute("SELECT COUNT(*) FROM media_assets").fetchone()[0] == 0
+
+
+@pytest.mark.asyncio
+async def test_document_validation_does_not_block_event_loop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = _apk_bytes()
+    store = _document_store(tmp_path, payload, timeout_seconds=1.0)
+    owner = hashlib.sha256(b"document-owner").hexdigest()
+    original_validator = media_store_module.validate_document_file
+    release = threading.Event()
+    entered = threading.Event()
+
+    def slow_validator(*args, **kwargs):
+        entered.set()
+        assert release.wait(timeout=0.5)
+        return original_validator(*args, **kwargs)
+
+    monkeypatch.setattr(media_store_module, "validate_document_file", slow_validator)
+    heartbeat_ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal heartbeat_ticks
+        while not release.is_set():
+            heartbeat_ticks += 1
+            await asyncio.sleep(0.005)
+
+    release_timer = threading.Timer(0.1, release.set)
+    release_timer.start()
+    try:
+        heartbeat_task = asyncio.create_task(heartbeat())
+        asset_task = asyncio.create_task(
+            store.ingest(
+                ChatGPTFile(
+                    download_url="https://files.example.test/document",
+                    file_id="document-id",
+                    mime_type="application/vnd.android.package-archive",
+                    file_name="fixture.apk",
+                ),
+                owner_binding=owner,
+                max_bytes=1024 * 1024,
+                expires_at=1500,
+                role="document",
+            )
+        )
+        asset, _ = await asyncio.gather(asset_task, heartbeat_task)
+    finally:
+        release.set()
+        release_timer.cancel()
+    assert entered.is_set()
+    assert heartbeat_ticks >= 5
+    assert asset.role == "document"
+
+
+@pytest.mark.asyncio
+async def test_document_validation_uses_remaining_timeout_and_cleans_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = _apk_bytes()
+    store = _document_store(tmp_path, payload, timeout_seconds=0.02)
+    owner = hashlib.sha256(b"document-owner").hexdigest()
+    original_validator = media_store_module.validate_document_file
+
+    def slow_validator(*args, **kwargs):
+        time.sleep(0.1)
+        return original_validator(*args, **kwargs)
+
+    monkeypatch.setattr(media_store_module, "validate_document_file", slow_validator)
+    started = time.monotonic()
+    with pytest.raises(MediaIngressRejected) as caught:
+        await store.ingest(
+            ChatGPTFile(
+                download_url="https://files.example.test/document",
+                file_id="document-id",
+                mime_type="application/vnd.android.package-archive",
+                file_name="fixture.apk",
+            ),
+            owner_binding=owner,
+            max_bytes=1024 * 1024,
+            expires_at=1500,
+            role="document",
+        )
+    assert time.monotonic() - started < 0.08
+    assert caught.value.error_code == "FILE_FETCH_FAILED"
+    assert not list((tmp_path / "assets").glob(".ingress-*"))
+    assert not list((tmp_path / "assets").glob("*.asset"))
+    with sqlite3.connect(tmp_path / "assets" / ".manifest.sqlite3") as db:
+        assert db.execute("SELECT COUNT(*) FROM media_assets").fetchone()[0] == 0
+    # Let the canceled executor call finish before pytest removes tmp_path.
+    await asyncio.sleep(0.12)

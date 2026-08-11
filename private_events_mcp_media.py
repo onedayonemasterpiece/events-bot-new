@@ -90,6 +90,7 @@ class MediaIngressRejected(MediaStoreError):
         "image validation failed": "MIME_NOT_ALLOWED",
         "media store capacity exceeded": "WORKSPACE_NOT_BOUND",
         "document validation failed": "FILE_TYPE_INVALID",
+        "document validation timed out": "FILE_FETCH_FAILED",
     }
 
     def __init__(
@@ -773,6 +774,9 @@ class SecureMediaAssetStore:
         temp_path: Path | None = None
         final_path: Path | None = None
         try:
+            ingress_deadline = (
+                asyncio.get_running_loop().time() + self._download_timeout
+            )
             temp_path, digest, length, http_mime = await asyncio.wait_for(
                 self._download_to_exclusive_temp(
                     download_url,
@@ -785,12 +789,25 @@ class SecureMediaAssetStore:
             display_name: str | None = None
             if canonical_role == _DOCUMENT_ROLE:
                 try:
-                    document = validate_document_file(
-                        temp_path,
-                        file_name=original_file_name,
-                        declared_mime=declared_mime,
-                        max_bytes=byte_limit,
+                    remaining = (
+                        ingress_deadline - asyncio.get_running_loop().time()
                     )
+                    if remaining <= 0:
+                        raise asyncio.TimeoutError
+                    document = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            validate_document_file,
+                            temp_path,
+                            file_name=original_file_name,
+                            declared_mime=declared_mime,
+                            max_bytes=byte_limit,
+                        ),
+                        timeout=remaining,
+                    )
+                except asyncio.TimeoutError as exc:
+                    raise MediaIngressRejected(
+                        "document validation timed out"
+                    ) from exc
                 except DocumentPolicyError as exc:
                     raise MediaIngressRejected(
                         "document validation failed", error_code=exc.code
