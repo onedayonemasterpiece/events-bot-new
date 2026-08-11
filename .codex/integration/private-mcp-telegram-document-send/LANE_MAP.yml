@@ -18,25 +18,25 @@ stop_conditions:
 lanes:
   - id: doc_core_map
     role: planner
-    requirement_ids: [R02, R03, R04, R05, R06, R09, R10, R11]
+    requirement_ids: []
     execution_mode: read_only_parallel
     verification_scope: inspection_only
     status: completed
   - id: doc_tg_map
     role: planner
-    requirement_ids: [R07, R08]
+    requirement_ids: []
     execution_mode: read_only_parallel
     verification_scope: inspection_only
     status: completed
   - id: doc_live_map
     role: planner
-    requirement_ids: [R01, R15, R16, R17, R18]
+    requirement_ids: []
     execution_mode: read_only_parallel
     verification_scope: inspection_only
     status: completed
   - id: doc_security_map
     role: planner
-    requirement_ids: [R12, R13, R14]
+    requirement_ids: []
     execution_mode: read_only_parallel
     verification_scope: inspection_only
     status: completed
