@@ -115,7 +115,7 @@ lanes:
       - .codex/lanes/document-docs-smoke/RESULTS.md
     forbidden_files: [private_events_mcp, private_events_mcp_telegram_adapter.py, private_events_mcp_workspace_providers.py]
     verification_scope: targeted
-    status: planned
+    status: spawned
   - id: exact_head_review
     role: reviewer
     requirement_ids: [R13, R14]
