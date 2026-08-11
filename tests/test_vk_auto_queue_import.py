@@ -21,6 +21,7 @@ import poster_ocr
 from poster_media import PosterMedia
 from source_parsing.handlers import AddedEventInfo
 from smart_event_update import SmartUpdateResult, SmartUpdateTerminalOutcome
+from smart_update_state import ProductExclusionReason
 from source_parse_contract import (
     EvidenceManifest,
     LifecycleAction,
@@ -627,6 +628,7 @@ async def test_vk_auto_import_keeps_valid_roundup_siblings_after_semantic_reject
                 smart_result=SmartUpdateResult(
                     outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
                     reason="past_event",
+                    product_exclusion_reason=ProductExclusionReason.PAST_EVENT,
                 ),
             )
         return vk_intake.PersistResult(
@@ -714,6 +716,7 @@ async def test_vk_auto_import_continues_when_first_roundup_draft_is_rejected(
                 smart_result=SmartUpdateResult(
                     outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
                     reason="past_event",
+                    product_exclusion_reason=ProductExclusionReason.PAST_EVENT,
                 ),
             )
         return vk_intake.PersistResult(
