@@ -369,6 +369,23 @@ def _extract_flood_wait(exc: BaseException) -> int | None:
     return None
 
 
+def _is_definite_provider_rejection(exc: BaseException) -> bool:
+    """Identify closed request/RPC rejection without importing Telethon eagerly."""
+
+    if isinstance(exc, ValueError):
+        return True
+    names = {base.__name__ for base in type(exc).__mro__}
+    if "RPCError" not in names:
+        return False
+    ambiguous = {
+        "FloodError",
+        "ServerError",
+        "TimedOutError",
+        "TimeoutError",
+    }
+    return not names & ambiguous and not any("FloodWait" in name for name in names)
+
+
 class _DefaultTelethonTypes:
     """Lazy, closed factory for the exact TL types used by this adapter."""
 
@@ -1528,6 +1545,7 @@ class TelegramWorkspaceAdapter:
         if binding.kind is SocialTargetKind.GROUP and content_allowed:
             actions.update(
                 {
+                    SocialAction.SEND_MESSAGE,
                     SocialAction.PUBLISH,
                     SocialAction.COMMENT,
                     SocialAction.SCHEDULE,
@@ -2426,8 +2444,11 @@ class TelegramWorkspaceAdapter:
         if intent.action is SocialAction.SEND_MESSAGE and target.kind not in {
             SocialTargetKind.SELF,
             SocialTargetKind.USER,
+            SocialTargetKind.GROUP,
         }:
-            raise SocialWorkspaceValidationError("send_message requires Saved or user DM")
+            raise SocialWorkspaceValidationError(
+                "send_message requires Saved Messages, user DM, or writable group"
+            )
         if intent.action is SocialAction.PUBLISH and target.kind not in {
             SocialTargetKind.CHANNEL,
             SocialTargetKind.GROUP,
@@ -2493,19 +2514,28 @@ class TelegramWorkspaceAdapter:
             stream.name = upload.display_name
             attributes = [compile_filename(upload.display_name)]
             attempt.provider_mutation_attempted = True
-            return await _await(
-                client.send_file(
-                    target.entity,
-                    stream,
-                    caption=content.text,
-                    formatting_entities=entities,
-                    parse_mode=None,
-                    force_document=True,
-                    mime_type=upload.mime_type,
-                    file_size=upload.byte_length,
-                    attributes=attributes,
+            try:
+                return await _await(
+                    client.send_file(
+                        target.entity,
+                        stream,
+                        caption=content.text,
+                        formatting_entities=entities,
+                        parse_mode=None,
+                        force_document=True,
+                        mime_type=upload.mime_type,
+                        file_size=upload.byte_length,
+                        attributes=attributes,
+                    )
                 )
-            )
+            except (asyncio.TimeoutError, TimeoutError, ConnectionError, OSError):
+                raise
+            except Exception as exc:
+                if _is_definite_provider_rejection(exc):
+                    raise TelegramWorkspaceError(
+                        "provider_rejected", retry_safe=False
+                    ) from None
+                raise
         if assets:
             media_values = []
             for attachment, asset in zip(content.media, assets):
@@ -2648,6 +2678,40 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("operation error_code is invalid")
         validate_action_status_response(result)
         return result
+
+    def _operation_ledger_unknown(
+        self, operation_ref: str, action: SocialAction
+    ) -> Mapping[str, Any]:
+        return dict(
+            self._recordless_operation_validation(
+                operation_ref,
+                {
+                    "platform": "telegram",
+                    "operation_ref": operation_ref,
+                    "action": action.value,
+                    "status": "outcome_unknown",
+                    "retry_safe": False,
+                    "error_code": "operation_ledger_failed",
+                },
+            )
+        )
+
+    def _provider_rejected_result(
+        self, operation_ref: str, action: SocialAction
+    ) -> Mapping[str, Any]:
+        return dict(
+            self._recordless_operation_validation(
+                operation_ref,
+                {
+                    "platform": "telegram",
+                    "operation_ref": operation_ref,
+                    "action": action.value,
+                    "status": "failed",
+                    "retry_safe": False,
+                    "error_code": "provider_rejected",
+                },
+            )
+        )
 
     async def execute(
         self,
@@ -2870,12 +2934,24 @@ class TelegramWorkspaceAdapter:
             )
         except SocialWorkspaceValidationError:
             if provider_completed:
-                raise TelegramWorkspaceError(
-                    "operation_ledger_failed", retry_safe=False
-                ) from None
+                return self._operation_ledger_unknown(operation_ref, intent.action)
             await self._release_operation(operation_ref, action_digest)
             raise
         except TelegramWorkspaceError as exc:
+            if provider_completed and exc.code == "operation_ledger_failed":
+                return self._operation_ledger_unknown(operation_ref, intent.action)
+            if exc.code == "provider_rejected":
+                rejected = self._provider_rejected_result(
+                    operation_ref, intent.action
+                )
+                try:
+                    return await self._complete_operation(
+                        operation_ref, action_digest, rejected
+                    )
+                except (SocialWorkspaceValidationError, TelegramWorkspaceError):
+                    return self._operation_ledger_unknown(
+                        operation_ref, intent.action
+                    )
             if exc.retry_safe:
                 await self._release_operation(operation_ref, action_digest)
                 raise

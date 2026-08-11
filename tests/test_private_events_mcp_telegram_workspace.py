@@ -268,6 +268,8 @@ class FakeRefs:
         self.next_item = 1
         self.next_cursor = 1
         self.operations = {}
+        self.complete_attempts = 0
+        self.fail_complete_operation = False
         self.asset_reader = FakeAssetReader()
 
     def resolve_target(self, target_ref):
@@ -347,6 +349,9 @@ class FakeRefs:
         return True
 
     def complete_operation(self, *, operation_ref, action_digest, result):
+        self.complete_attempts += 1
+        if self.fail_complete_operation:
+            raise RuntimeError("durable operation ledger unavailable")
         existing = self.operations[operation_ref]
         if existing.action_digest != action_digest:
             return existing
@@ -490,6 +495,8 @@ class FakeClient:
         self.calls.append(("send_file", {"entity": entity, "files": files, **kwargs}))
         if self.raise_on == "send_file":
             raise TimeoutError("native document timeout")
+        if self.raise_on == "send_file_rejected":
+            raise ValueError("native access_hash=123 secret rejection")
         if self.delay:
             await asyncio.sleep(self.delay)
         message = Message(
@@ -798,16 +805,9 @@ async def test_document_commit_reopens_and_rehashes_before_provider_attempt(harn
                 )
             ),
         ),
-        intent(
-            SocialAction.SEND_MESSAGE,
-            target_ref=GROUP_REF,
-            content=content(
-                media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
-            ),
-        ),
     ],
 )
-async def test_document_denies_other_action_multiple_mixed_and_group_before_send(
+async def test_document_denies_other_action_multiple_and_mixed_before_send(
     harness, denied_intent
 ):
     adapter, client, _, _ = harness
@@ -819,17 +819,56 @@ async def test_document_denies_other_action_multiple_mixed_and_group_before_send
 
 @pytest.mark.asyncio
 async def test_document_capability_is_target_bound_to_existing_send_message_rights(harness):
-    adapter, _, _, _ = harness
+    adapter, client, refs, _ = harness
     saved = await adapter.capabilities(SELF_REF)
     group = await adapter.capabilities(GROUP_REF)
     readonly = await adapter.capabilities(NO_RIGHT_REF)
 
     assert "send_message" in saved["actions"]
     assert "document" in saved["content_features"]
-    assert "send_message" not in group["actions"]
-    assert "document" not in group["content_features"]
+    assert "send_message" in group["actions"]
+    assert "document" in group["content_features"]
     assert "send_message" not in readonly["actions"]
     assert "document" not in readonly["content_features"]
+
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    receipt = await adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=GROUP_REF,
+            content=content(
+                "group document",
+                media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),),
+            ),
+        ),
+        operation_ref=op_ref(46),
+    )
+    assert receipt["status"] == "succeeded"
+    assert [name for name, _ in client.calls].count("send_file") == 1
+
+    refs.targets[GROUP_REF].entity.creator = False
+    refs.targets[GROUP_REF].entity.admin_rights = SimpleNamespace(
+        post_messages=False,
+        edit_messages=False,
+        delete_messages=False,
+        post_stories=False,
+    )
+    refs.targets[GROUP_REF].entity.default_banned_rights.send_messages = True
+    denied = await adapter.capabilities(GROUP_REF)
+    assert "send_message" not in denied["actions"]
+    assert "document" not in denied["content_features"]
+    with pytest.raises(SocialWorkspaceValidationError, match="capability denied"):
+        await adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=GROUP_REF,
+                content=content(
+                    media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+                ),
+            ),
+            operation_ref=op_ref(47),
+        )
+    assert [name for name, _ in client.calls].count("send_file") == 1
 
 
 @pytest.mark.asyncio
@@ -853,6 +892,33 @@ async def test_document_timeout_is_one_attempt_unknown_and_replay_never_resends(
     assert first["status"] == "outcome_unknown"
     assert first["retry_safe"] is False
     assert [name for name, _ in client.calls].count("send_file") == 1
+
+
+@pytest.mark.asyncio
+async def test_document_definite_rejection_is_sanitized_failed_and_never_retried(harness):
+    adapter, client, _, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    request = intent(
+        SocialAction.SEND_MESSAGE,
+        target_ref=SELF_REF,
+        content=content(
+            media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+        ),
+    )
+    operation_ref = op_ref(49)
+    client.raise_on = "send_file_rejected"
+
+    first = await adapter.execute(request, operation_ref=operation_ref)
+    second = await adapter.execute(request, operation_ref=operation_ref)
+
+    assert first == second
+    assert first["status"] == "failed"
+    assert first["retry_safe"] is False
+    assert first["error_code"] == "provider_rejected"
+    assert validate_action_status_response(first).value == "failed"
+    assert [name for name, _ in client.calls].count("send_file") == 1
+    assert "access_hash" not in repr(first)
+    assert "secret" not in repr(first)
 
 
 @pytest.mark.asyncio
@@ -883,6 +949,39 @@ async def test_document_readback_mismatch_is_unknown_and_never_resends(harness):
     assert first == second
     assert first["status"] == "outcome_unknown"
     assert first["retry_safe"] is False
+    assert [name for name, _ in client.calls].count("send_file") == 1
+
+
+@pytest.mark.asyncio
+async def test_document_completion_ledger_failure_is_unknown_and_claim_blocks_resend(
+    harness,
+):
+    adapter, client, refs, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    refs.fail_complete_operation = True
+    request = intent(
+        SocialAction.SEND_MESSAGE,
+        target_ref=SELF_REF,
+        content=content(
+            media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+        ),
+    )
+    operation_ref = op_ref(48)
+
+    result = await adapter.execute(request, operation_ref=operation_ref)
+
+    assert result["status"] == "outcome_unknown"
+    assert result["retry_safe"] is False
+    assert result["error_code"] == "operation_ledger_failed"
+    assert validate_action_status_response(result).value == "outcome_unknown"
+    assert refs.complete_attempts == 1
+    assert refs.operations[operation_ref].result is None
+    assert [name for name, _ in client.calls].count("send_file") == 1
+
+    with pytest.raises(TelegramWorkspaceError) as replay:
+        await adapter.execute(request, operation_ref=operation_ref)
+    assert replay.value.code == "operation_in_progress"
+    assert refs.complete_attempts == 1
     assert [name for name, _ in client.calls].count("send_file") == 1
 
 
@@ -1372,6 +1471,7 @@ async def test_realistic_telethon_group_permissions_are_fail_closed(harness):
     )
     capabilities = await adapter.capabilities(GROUP_REF)
     assert {
+        "send_message",
         "publish",
         "comment",
         "forward",
@@ -1382,7 +1482,7 @@ async def test_realistic_telethon_group_permissions_are_fail_closed(harness):
     ordinary.entity.default_banned_rights.send_messages = True
     denied = await adapter.capabilities(GROUP_REF)
     assert set(denied["actions"]).isdisjoint(
-        {"publish", "comment", "forward", "reaction", "schedule"}
+        {"send_message", "publish", "comment", "forward", "reaction", "schedule"}
     )
     assert all(name != "send_message" for name, _ in client.calls)
 
