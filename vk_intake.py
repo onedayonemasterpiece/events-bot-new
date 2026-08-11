@@ -4427,9 +4427,10 @@ async def crawl_once(
     """Crawl configured VK groups once and enqueue matching posts.
 
     The function scans groups listed in ``vk_source`` and uses cursors from
-    ``vk_crawl_cursor`` to fetch only new posts. Posts containing event
-    keywords and a date mention are inserted into ``vk_inbox`` with status
-    ``pending``. Basic statistics are returned for reporting purposes.
+    ``vk_crawl_cursor`` to fetch in-horizon posts. Every fetched post is first
+    persisted as an immutable ``vk_source_packet`` revision and projected into
+    the due inbox; keyword/date/history checks are hints only. Basic statistics
+    are returned for reporting purposes.
 
     If ``broadcast`` is True and ``bot`` is supplied, a crawl summary is sent
     to the admin chat specified by ``ADMIN_CHAT_ID`` environment variable.

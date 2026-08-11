@@ -67,3 +67,14 @@ def test_closed_identity_and_lifecycle_fields_are_structural() -> None:
 
     assert created.identity_distinct_reason is IdentityDistinctReason.RELATED_BUT_DISTINCT
     assert attached.lifecycle_reason is LifecycleReason.CONTEXT_PROVENANCE_ATTACHED
+
+
+def test_far_future_ocr_conflict_cannot_silence_positive_child() -> None:
+    import inspect
+    import smart_event_update as module
+
+    source = inspect.getsource(module._smart_event_update_impl)
+    assert "force_silent_due_to_date_risk" not in source
+    assert "silent=False" in source
+    note_source = inspect.getsource(module._far_future_poster_date_mismatch_note)
+    assert "event.silent=1" not in note_source

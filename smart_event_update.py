@@ -10967,7 +10967,8 @@ def _far_future_poster_date_mismatch_note(
     pairs_label = _format_day_month_pairs(pairs)
     extracted_label = f"{start.day:02d}/{start.month:02d}"
     return (
-        f"⚠️ Дата: конфликт с афишей (OCR={pairs_label}, extracted={extracted_label}) → event.silent=1"
+        f"⚠️ Дата: конфликт с афишей (OCR={pairs_label}, extracted={extracted_label}); "
+        "semantic resolution belongs to source verification"
     )
 
 
@@ -17638,7 +17639,6 @@ async def _smart_event_update_impl(
     # Posters policy:
     # Keep all posters (dedupe/order happens later). OCR is used for prioritization only.
     # This avoids events ending up without images due to overly strict filtering.
-    force_silent_due_to_date_risk = False
     poster_filter_facts: list[str] = []
     if candidate.posters:
         # Best-effort: backfill missing OCR from local cache (cheap, no network).
@@ -17675,7 +17675,9 @@ async def _smart_event_update_impl(
             months_threshold=SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS,
         )
         if note:
-            force_silent_due_to_date_risk = True
+            # The source-level contradiction verifier already owns semantic
+            # date resolution.  Smart Update records the mismatch as evidence;
+            # it must not silently suppress an accepted positive child.
             poster_filter_facts.append(note)
 
     # Raw-URL existence is deliberately not an idempotency verdict. Exact
@@ -19345,7 +19347,7 @@ async def _smart_event_update_impl(
             end_date_confidence=_date_provenance_confidence(_candidate_end_date_provenance_level(candidate, is_canonical_site=is_canonical_site)),
             is_free=is_free_value,
             pushkin_card=bool(candidate.pushkin_card),
-            silent=bool(force_silent_due_to_date_risk),
+            silent=False,
             source_text=clean_source_text or "",
             source_texts=[clean_source_text] if clean_source_text else [],
             organizer_names=_bounded_organizer_names(candidate.organizer_names),

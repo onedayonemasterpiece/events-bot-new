@@ -43,22 +43,8 @@
   existing-identity-preserving generator mode. Codex remains exactly seven
   read-only tools; OpenCode local-file media still requires the separately
   authenticated streaming bridge rather than accepting Windows paths.
-- **Smart Update automatic identity state machine (incident prevention, not
-  deployed):** replaced nonexistent human-review/veto terminals with a typed
-  five-outcome facade, stable carrier-child keys, occurrence-scoped source
-  bindings, durable balanced attempts and automatic retry; migrated parser,
-  Telegram, VK, ticket, festival and manual callers; and added idempotent
-  recovery/audit tooling. The final duplicate race now reloads and merges the
-  authoritative Event in the same facade operation, while an accepted domain
-  commit cannot regress to caller-level retry solely because its attempt
-  acknowledgement was interrupted. Known distinct merge relations create a
-  separate Event immediately; official parsers key same-page sessions by stable
-  structured slot/ordinal and receive an idempotent source-level recovery queue.
-  Legacy recovery now covers Telegram Monitoring, VK, official parsers, ticket
-  and festival queues rather than VK alone. Existing match/create, dedup,
-  identity-gate and occurrence-scope LLM calls are reused without a new model,
-  provider, or LLM stage. Production was audited read-only; no recovery apply
-  or deploy is part of this change.
+- **P0 / SEV-1 LLM-first ingestion recall remediation (Draft PR #494, not deployed):** added raw-first immutable VK revisions before semantic selection, cursor-safe continuation, complete source/OCR manifests, one typed source verdict with mixed lifecycle/events, conditional contradiction verification, durable provider/backpressure receipts, fair automatic retry and exact successful parse replay. Removed production VK pre-LLM semantic filters, cancellation bypass, post-LLM child veto and technical terminal failure. The Google gateway now exposes countTokens-backed calibrated admission plus input/output/thought/reserved/finish metadata without reducing semantic output/evidence. Completed Smart Update with closed reasons, accepted/diagnostic ID isolation, occurrence-scoped bindings, stable source-native/vendor/structured keys, incoherent-merge distinct create and durable technical retry across Telegram, parser, ticket/festival and manual callers. Added A–T all-source census/recovery planning, February–July availability-aware sampling, funnel/static gates and clone-only production-snapshot migration rehearsal. Production audits/rehearsal were read-only; historical/model-derived recovery totals, provider-tier verification, merge, deploy and recovery apply remain explicitly pending.
+
 
 - **my-data-hub daily statistics producer (default off)**: added a non-sensitive
   `events-bot.daily-statistics.v1` aggregate command with RFC 8785 canonical envelope

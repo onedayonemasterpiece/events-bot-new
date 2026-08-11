@@ -1,5 +1,67 @@
 # Smoke (prod/test) — релиз Smart Update + VK/TG + Festivals
 
+## P0 release/deploy/recovery runbook
+
+This section has precedence for
+`INC-2026-08-10-smart-update-identity-terminal-loss`. The current implementation
+task explicitly forbids merge, deploy, production writes and recovery apply;
+therefore only phase A may run now.
+
+### A. Review-ready, no production mutation
+
+1. `git fetch origin --prune`; require a clean worktree, the exact Draft PR #494
+   branch and no lost newer commits. Record final HEAD and `origin/main`.
+2. Run T01–T76 targeted/static receipts, the full relevant suite,
+   `python3 scripts/inspect/audit_google_ai_provider_paths.py`, compile and
+   `git diff --check`. No unapproved provider path is allowed.
+3. Run `Database.init()` twice and rollback rehearsal on a clone of the latest
+   read-only production bundle. Require quick-check before/after, zero new FK/
+   identity/occurrence conflict, allowlisted count changes only, original bundle
+   byte unchanged and an explicit plan for any pre-existing conflict.
+4. Run the acute A–T census and recovery command twice with `--read-only
+   --dry-run --include-discovery-misses`, a half-open window and bounded batch.
+   Require identical semantic hashes and zero changes. Exact model-derived
+   recovery counts may remain unavailable when raw evidence is missing; do not
+   substitute carrier/source counts.
+5. Keep PR draft/unmerged and incident open. Update the PR summary with exact
+   receipts and every Partial/Blocked gate. Green CI alone is not readiness.
+
+### B. Future merge/deploy gate (separate approval required)
+
+1. Merge only after review, then verify the implementation commit is reachable
+   from `origin/main`. Deploy only a clean exact-main checkout and record image,
+   release and in-container/repository SHA.
+2. Health gate: `/healthz`, SQLite quick-check, schema/index inventory, shared
+   limiter capability, scheduler configuration, runtime mirror and backlog. Stop
+   on any mismatch; do not apply recovery.
+3. Run one bounded configured-source canary. Prove raw packet before semantic
+   selection; one primary parse or exact replay; complete manifest for no-event;
+   accepted-only downstream; no technical terminal; balanced carrier/children.
+4. Observe backlog/oldest due, rate limits, reservation/actual ratio and created
+   events against comparable baseline. Capacity shortage increases backlog/
+   quota request; it never re-enables a semantic prefilter.
+5. Because daily slots were lost, execute a bounded current-day compensating
+   crawl/Telegram/parser/ticket/festival catch-up and verify canonical events and
+   public fanout before declaring deploy complete.
+
+### C. Future recovery apply (another explicit approval)
+
+1. Freeze the read-only plan/hash and evidence availability; take a fresh backup.
+2. Apply only durable requeue/source-refresh transitions in bounded batches. Do
+   not direct-INSERT Event. Normal raw→OCR→typed LLM→Smart Update owns replay.
+3. After each batch, compare planned/selected/resolved/retry/unavailable carrier,
+   occurrence and action counts; ensure idempotent repeats and zero balance gap.
+4. Stop on new unknown reason, semantic terminal without complete LLM evidence,
+   technical terminal, false merge, nonshrinking backlog or DB integrity change.
+
+### Rollback
+
+Rollback code first. Pause ingestion rather than run a binary that cannot read
+new packet/candidate/occurrence keys. Keep additive tables/nullable columns and
+never restore global one-canonical-URL/one-event uniqueness without a conflict
+audit. Production-data repair/reversal is a separately reviewed transaction
+with before/after hashes and quick-check.
+
 Цель: перед релизом (на **тесте**) и сразу после выката (на **проде**) подтвердить, что:
 - Smart Update используется во всех потоках (`/vk_auto_import`, Telegram Monitoring, `/parse`);
 - источники Telegram настроены корректно (trust + фестивальные каналы);

@@ -1,5 +1,45 @@
 # Smart Update production health audit
 
+## P0 LLM-first recall addendum (2026-08-11)
+
+For `INC-2026-08-10-smart-update-identity-terminal-loss`, audit units are
+carrier revisions, event occurrences and lifecycle actions separately. The
+legacy identity-only observer is necessary but not sufficient. On an immutable
+offline snapshot, also run:
+
+```bash
+python3 scripts/ops/smart_update_loss_census.py \
+  --db artifacts/<incident>/prod.sqlite \
+  --since 2026-08-04 --until 2026-08-12 --output artifacts/<incident>/census.json
+
+python3 scripts/ops/recover_smart_update_identity_losses.py \
+  --db artifacts/<incident>/prod.sqlite \
+  --since 2026-08-04 --until 2026-08-12 \
+  --read-only --dry-run --include-discovery-misses \
+  --output artifacts/<incident>/recovery-plan.json
+```
+
+Both tools must report `mode=read-only`, `quick_check=ok`, equal before/after
+main DB hashes and `changed=false/changed_rows=0`. Missing raw/schema/history is
+`unavailable`/class T, not zero and not an invitation to extrapolate sampled
+misses. `--until` is exclusive. Run twice from the same immutable inputs and
+require the same semantic inventory/plan hash. The recovery command is a plan,
+not a live LLM replay, unless a disposable clone and recorded/provider responses
+are explicitly wired; never label queue/source counts as model-derived events.
+
+The protected production observer below intentionally forbids DB download. A
+production-snapshot migration rehearsal is a separate, explicit incident
+procedure: fetch DB/WAL/SHM read-only into ignored artifacts, hash them, never
+open the remote DB writable, stage the bundle read-only, and run
+`rehearse_smart_update_migration.py` with every write confined to `--clone`. A
+sequential DB/WAL fetch is not an atomic snapshot and that caveat must be in the
+receipt even when `quick_check=ok`.
+
+Required funnel alerts: LLM coverage below 100%, semantic terminal before LLM,
+incomplete-evidence no-event, deterministic post-LLM veto, technical terminal
+failed, oldest due above SLO, backlog not shrinking, unknown typed reason and
+carrier/child balance violation.
+
 > **Status (2026-08-04 UTC):** one-shot, protected, read-only production
 > observer. This is the canonical operator runbook for
 > `.github/workflows/smart-update-prod-audit.yml` and

@@ -1,5 +1,24 @@
 # Telegram Monitoring
 
+## P0 typed LLM-first producer/consumer contract
+
+Kaggle producer сохраняет для каждого message/album один
+`source_parse_decision` (`source-parse-v1`) с closed disposition, всеми event
+children, всеми lifecycle actions и `evidence_manifest`. No-keyword/no-date/
+historical hints не завершают message до LLM. `CONFIRMED_NO_EVENT` допустим
+только при complete evidence и валидном structured response; video/media/OCR
+неполнота, empty/malformed/truncated/provider error дают `RETRY_REQUIRED`.
+
+Album aggregation объединяет typed decisions, сохраняя siblings и actions;
+ordinal не используется как единственная identity. Consumer
+`source_parsing/telegram/handlers.py` не продвигает cursor/force-message как
+успешный для legacy `events=[]`, technical failure или incomplete evidence.
+Только complete typed no-event может закрыть zero-event carrier. Positive child
+может быть принят при incomplete evidence, но message остаётся due для
+enrichment. Smart Update `diagnostic_event_id` не увеличивает imported counters
+и не запускает publication.
+
+
 Ежедневный мониторинг публичных Telegram‑каналов/групп с автоматическим импортом событий в БД бота через Smart Event Update.
 
 ## Что делает
@@ -11,9 +30,8 @@
   - Catbox используется только в `fallback/off` режимах.
   - Инвариант: extractor **не должен придумывать дату события** из даты публикации поста.
     - Дата/период должны быть явно в тексте/афише (или в виде относительных слов типа «сегодня/завтра», которые разрешено резолвить от даты поста).
-    - Для выставок/ярмарок extractor должен вернуть событие только если есть явный диапазон/дата закрытия или точный день открытия/начала. Teaser/pre-announcement без точного дня (`готовим выставку`, `анонс через пару дней`, `точную дату анонсируем позже`, `в мае откроем`) возвращает `[]`; `message_date` и первое число месяца запрещены как substitute date.
-    - Посты вида `open call` / «конкурсный отбор» / «приём заявок» считаются **не‑событиями** (это не «куда пойти») и должны отфильтровываться на стороне Kaggle (server-side guard существует как safety-net).
-    - Посты‑отчёты о уже прошедшем мероприятии (`приняли участие`, `встреча прошла`, `педагоги отметили`, `администрация выразила благодарность`) не должны создавать event card; серверный Smart Update режет их как `skipped_non_event:completed_event_report`, если в тексте нет invite/registration/ticket сигналов.
+    - Для выставок/ярмарок extractor не подставляет `message_date` или первое число месяца вместо недостающей даты. Teaser/pre-announcement без точного дня разрешается только типизированным complete-evidence LLM verdict; пустой/нетипизированный `[]` не считается no-event и повторяется.
+    - `open call` / «конкурсный отбор» / «приём заявок» и post-event recap — не deterministic filters. Эти признаки передаются как evidence: тольк complete typed LLM decision может подтвердить no-event/product exclusion, а любой future child или lifecycle action сохраняется.
     - Официальные уведомления администрации Калининграда о **разводе/разводке мостов** считаются событиями городской повестки: `@klgdcity` входит в мониторинг, Gemma 4 извлекает их как `Развод мостов`; если общий extractor вернул пустой или непригодный bridge-ответ, запускается узкий Gemma rescue-pass, и только затем структурный fallback сохраняет карточки по явно grounded дате/тексту. Для источника также включён `bridge_notice_daily`: после успешного `event_id` сервер отправляет notice в `/daily` каналы.
 - Для афиш (постеров) по умолчанию использует **managed storage** для стабильных URL:
   - `TG_MONITORING_POSTERS_SUPABASE_MODE=always` (default): upload в managed storage всегда включён; Catbox используется только если storage недоступен;
@@ -154,7 +172,7 @@
 - LLM-first local tuning pass по `TG-G4-EVAL-01..10` добавил staged Gemma prompts вместо semantic regex/fallback extraction: single invited lecture rescue, named ongoing exhibition rescue, museum spotlight rescue/repair и chunked schedule rescue. На полном локальном `extract_events` пути это закрыло `TG-G4-EVAL-02` (`Космос красного`, без `unknown`), `-03` (лекция Amber Museum с OCR date/time), `-04` (museum spotlight как exhibition-card), `-07` (одна лекция без дубля/venue-only row) и `-10` (positive-control exhibition остаётся одной строкой). `TG-G4-EVAL-08` теперь извлекает реальные zoo schedule rows без garbage placeholder row, но из-за provider `500`/timeout на отдельных schedule chunks recall может быть частичным; production-equivalent smoke через `GOOGLE_API_KEY3` всё ещё обязателен.
 - Controlled Kaggle smoke `tg_g4_key2_as_key3_forced_eval_70b4fc14` и focused extraction-only smoke `tg_g4_key2_as_key3_focused_eval_90e527f5` запускались с локальным `GOOGLE_API_KEY2`, замапленным в env-name `GOOGLE_API_KEY3` по тому же encrypted-dataset Kaggle path. Smoke подтвердил отсутствие старых leak/ghost/unknown/event_type drift классов на `@barn_kaliningrad/971`, `@domkitoboya/3170`, `@kldzoo/7089`, `@koihm/5505` и `@kaliningradartmuseum/7902`, но выявил новый prompt-contract риск: когда OCR не даёт дату/время, одиночная лекция `@ambermuseum/5600` не должна датироваться `message_date`. Prompt теперь явно запрещает использовать `message_date` как fallback event date для не-выставочных single events; он остаётся только контекстом для явных relative anchors (`сегодня`/`завтра`/`послезавтра`) и для museum/exhibition as-of merge cases. Дополнительный post-LLM guardrail `_lacks_supported_non_exhibition_date` только enforcing-уровня: он не извлекает и не переписывает смысл, а отбрасывает не-выставочные rows без поддержанной даты или с подставленным `message_date` без anchor.
 - Forced A/B regression gate на тех же 16 постах из ночного prod output `095e32fd497442258fb5675f65f43731` показал: legacy Gemma 3 notebook (`g3cmp095e0785bc`) извлёк `10` событий и имел `empty_date=1`, `english_event_type=4`; промежуточный Gemma 4 producer (`abfull095ef8e2d2`) извлёк `12` событий без leak/ghost/empty-date/bad-date/English-city smell-классов, но с quality regression на `@signalkld/10512`, где poster OCR heading `НАЧАЛО В 19:00` стал `title` вместо caption event name `Второй Большой киноквиз`. Prompt теперь явно закрепляет title-audit: OCR service headings/date/time/price/venue labels не должны заменять named event из message text, а используются только для date/time/venue/ticket facts. Targeted smokes `sig10512c3c25072`, `sig10512b518272c` и `sig10512r6cb27e5` показали, что prompt-only guidance и full-event repair было недостаточно, поэтому добавлен компактный LLM title-review stage: deterministic код только замечает service-heading title, а Gemma 4 возвращает replacement `title/event_type/search_digest` по original caption+OCR; event count/order сохраняются. Targeted validation `sig10512u8402a5b` подтвердил исправление (`title="Второй Большой киноквиз"`, `event_type="квиз"`), а полный повтор gate `abfinal095edeb15` извлёк `14` событий на тех же 16 постах и дал `0` smell-регрессий по проверяемым классам: thought/markdown leak, ghost row, empty title/date, bad date shape, English city/event_type, `unknown` literal и service-heading title. Это regression evidence для ветки hardening; production deploy/catch-up должен отдельно подтвердить импортный контур.
-- Закрыт latent regex-баг, появившийся в первом Gemma 4 migration commit: `open_call_re`/`anchor_re` гварды использовали double-escaped `\\b`/`\\s`/`\\d`/`\\w` в raw string и поэтому никогда не матчили реальный текст; это роняло `has_anchor=False` на большинстве постов и приводило к тому, что валидные события с `date == message_date` тихо отбрасывались. Теперь гварды реально фильтруют open-call посты и правильно распознают `сегодня`/`завтра`/`DD.MM`/`DD месяца` anchors.
+- Историческая запись: в первом Gemma 4 migration commit `open_call_re`/`anchor_re` гварды приводили к silent drop. В актуальном producer path эти сигналы ушли в typed primary/verifier evidence и не фильтруют positive child; legacy `extract_events` не вызывается production scan.
 - Для следующего prompt-quality pass собран компактный eval pack из реального full-run evidence: [tests/fixtures/telegram_monitor_gemma4_eval_pack_2026_04_23.json](/workspaces/events-bot-new-tg-g4-sU9xCP/tests/fixtures/telegram_monitor_gemma4_eval_pack_2026_04_23.json). В нём 10 именованных кейсов из `run_id=48fa98294333486d94dd0e14785d774f`: thought leak + ghost row (`@barn_kaliningrad/971`), `unknown` placeholders, city drift (`Saint Petersburg` вместо Калининграда), English `event_type`, markdown tail, retrospective/non-event posts, same-day anchor regression, schedule post with garbage placeholder row и один positive control. Этот fixture нужен для A/B prompt tuning и второго Opus-pass, чтобы оценивать изменения на одной и той же базе.
 - Kaggle notebook embed-ит в generated `.ipynb` **полное детерминированное Python-дерево** пакета `google_ai` (включая `limiter_supabase.py`, `interactions.py` и будущие вложенные модули), без ручного allowlist. Runner дополнительно ищет bundled package в kernel root, `/kaggle/working` и `/kaggle/input`; это нужно, потому что plain extra files рядом с notebook не гарантированно попадают в Kaggle runtime. Изолированный generated-notebook test обязан импортировать публичный package API и shared limiter до deploy.
 - Generated Kaggle `.ipynb` вырезает script-only tail `asyncio.run(main())` / `already running event loop` guard и запускает `main()` отдельной notebook-cell через `nest_asyncio`; иначе Papermill падает в уже запущенном event loop.
@@ -168,56 +186,26 @@ Live validation (`2026-04-22`):
 - Full-run log подтвердил `GOOGLE_API_KEY3`, отсутствие `GOOGLE_API_KEY2`, отсутствие `gemma-3`, `requested_model/provider_model/invoked_model=models/gemma-4-31b-it`, но также показал, что старый `180s` provider timeout слишком длинный для scheduled window; default снижен до `45s`.
 - Post-timeout smoke `tg_g4_45s_smoke_20260423a` завершился без recovery через primary `ops_run id=807` (`status=success`, `sources_scanned=3`, `messages_processed=3`, `messages_with_events=2`, `errors_count=0`, `duration_sec=279.22`). Log evidence: `GOOGLE_API_KEY3`, `GOOGLE_API_KEY2=0`, `gemma-3=0`, `Traceback=0`, `AuthKeyDuplicatedError=0`; два `45s` timeout на source metadata fail-open и не сорвали run.
 
-## Multi-event посты (несколько событий в одном сообщении)
+## Multi-event, multi-session и zero-event
 
-Требование: если один Telegram‑пост содержит **несколько будущих событий**, мониторинг должен:
+Один message/album может вернуть несколько событий/сеансов и несколько lifecycle
+actions. Producer не останавливается на первой дате, отличает historical recap
+от будущего анонса и возвращает `MIXED`, если отмена/перенос соседствует с новым
+event. Каждый child получает стабильный occurrence/candidate key и независимо
+проходит Smart Update; один retry не удаляет принятых siblings.
 
-- создать/обновить **каждое** событие отдельной записью (по `title + date + time + location` якорям);
-- **не создавать** события, которые уже в прошлом (по дате);
-- перед созданием нового события сначала попытаться найти матч в БД, чтобы не плодить дубли;
-- на странице Telegraph конкретного события не оставлять строки расписания/названия других событий из того же поста.
+`Событий извлечено` — occurrence count, не carrier count. Разница между
+extracted/imported обязана иметь typed retry/product/exact receipt. Legacy
+`skipped|partial|error`, `events_extracted > events_imported` и technical/identity
+losses остаются в automatic recovery selection. Complete typed
+`CONFIRMED_NO_EVENT` может продвинуть cursor без Event; untyped `events=[]` не
+может. Старые сообщения, прочитанные только для метрик после уже успешного exact
+revision, не вызывают LLM повторно.
 
-Проверки этого поведения зафиксированы в E2E сценариях: `tests/e2e/features/telegram_monitoring.feature`.
-
-## Почему «извлечено много, а создано мало»
-
-В отчёте мониторинга `Событий извлечено` — это количество кандидатов, которые Kaggle нашёл в сообщениях.
-Дальше на сервере часть кандидатов **не импортируется** и попадает в `Пропущено`, например:
-
-- событие уже в прошлом (по `date`, выставки/ярмарки — по `end_date` если он есть);
-- не хватает якорей для Smart Update (чаще всего нет `location_name` даже после восстановления из текста);
-- Smart Update нашёл матч, но изменений нет (`skipped_nochange`).
-
-Чтобы отчёт был объясним, бот выводит разбиение `Пропущено` по основным причинам (прошедшие/невалидные/без изменений и т.д.).
-Дополнительно бот отправляет оператору список **пропущенных/частично обработанных постов** (с ссылкой на пост, кратким фрагментом текста и breakdown причин), чтобы можно было вручную проверить “почему не импортировалось”.
-
-Успешно просмотренный producer-ом tail продвигает `telegram_source.last_scanned_message_id` даже для легитимных `events=[]`: такие сообщения не отправляются в Smart Update и не создают metrics/scanned rows, но не должны повторно сжигать media/LLM quota на следующем ежедневном запуске. Event-like `events=[]` по-прежнему получают durable `producer_zero_events` diagnostic.
-
-Telegram forum/multithread-группы настраиваются один раз по публичному
-`username` группы, а не отдельным источником на каждый топик.
-`Telethon.iter_messages(entity)` читает общую историю супергруппы без фильтра
-по топику, поэтому сообщения всех топиков участвуют в одном scan и общем
-message-id cursor источника. Ссылка вроде `t.me/klassster/8809` может вести на
-корневой `MessageActionTopicCreate` (`Анонсы мероприятий`): сам root не является
-event-постом, а следующие сообщения топика — обычные мониторимые сообщения,
-reply header которых ссылается на topic id `8809`.
-
-Также мониторинг может сканировать сообщения «на несколько дней назад» (для обновления просмотров/лайков).
-Такие сообщения **не прогоняются через Smart Update повторно** (идемпотентность по `message_id`), а учитываются как `Посты только для метрик` в отчёте.
-
-Исключение из этой идемпотентности: legacy/incomplete scan rows, где `telegram_scanned_message.status`
-равен `skipped`/`partial`/`error`, `events_extracted > events_imported`, `error` пустой, в новом payload есть
-будущее/актуальное событие и `event_source` ещё не содержит URL поста. Также переобрабатываются diagnostic rows
-с `error` содержащим `producer_zero_events`, если новый payload уже содержит актуальное event-поле. Такие строки считаются
-неполной попыткой импорта и переобрабатываются, чтобы валидный Telegram-пост не залипал навсегда как
-`metrics_only`. Новые неполные пропуски сохраняют компактный `skip_breakdown` в `telegram_scanned_message.error`;
-это делает намеренные/постоянные skip-решения диагностируемыми и не запускает бесконечный retry.
-Regression contract: `docs/reports/incidents/INC-2026-04-27-tg-monitoring-sticky-skipped-post.md`.
-
-Для Telegram payload free/paid остаётся LLM-first: `is_free=true` допускается только при явном
-free-attendance evidence в исходном тексте/OCR. Нулевой `ticket_price_min=0` больше не повышает
-событие до бесплатного сам по себе; розыгрыш билетов, включение программы во входной билет музея/зоопарка
-или положительная цена снимают free-флаг как fail-closed guardrail.
+Forum/multithread-группа остаётся одним source с общим message-id cursor; topic
+root сам по себе не event, но это решает typed source parse, а не local semantic
+filter. Point replay старого message выполняется по `message_id`, без расширения
+всего scan horizon.
 
 ## Метрики постов и популярность (⭐/👍)
 
@@ -450,15 +438,18 @@ free-attendance evidence в исходном тексте/OCR. Нулевой `t
   - если extractor выдал неподтверждённую off-site площадку или prose-фрагмент, сервер больше не заменяет её слепо на `default_location`: записывается только known/reference/text-grounded площадка, иначе candidate fail-closed без публичного venue-default drift.
 - Для постов-расписаний (несколько спектаклей в одном сообщении) применяется строгая фильтрация афиш по фактам события; если она неуверенна, но Kaggle уже выдал `event_data.posters` для конкретного события, используется event-level fallback (чтобы не терять релевантную афишу при отсутствующем времени в Telegram).
 
-## Фильтры и санитаризация
+## Санитаризация и semantic boundary
 
-- **Custom emoji** (Telegram `MessageEntityCustomEmoji` / `<tg-emoji>`) вычищаются из текста перед публикацией в Telegraph (обычные Unicode‑эмодзи остаются).
-- **Розыгрыши билетов** (giveaway): Smart Update отделяет механику розыгрыша от фактов события, LLM сохраняет только grounded event facts. Если после разбора не остаётся признаков события — пост скипается; если событие импортируется, giveaway не делает его бесплатным.
-- **Аренда/бронь площадок**: посты про свободные купола/домики/залы, варианты вместимости и price tiers не импортируются как события, если источник не объявляет отдельную публичную программу с собственной attendable intent.
-- **Поздравления** (не‑ивент контент) не импортируются как события и не должны становиться источниками события (например посты «Поздравляем…» со списком ближайших спектаклей).
-- **Акции/промо**: промо‑фрагменты (скидки/промокоды/«акция») должны игнорироваться/удаляться **внутри LLM** по инструкциям промпта (детерминированного regex‑стрипинга нет). Если в посте есть полноценный анонс события (дата/время/место), он импортируется/мерджится.
-- OCR‑подсказка времени стала устойчивее: поддерживаются диапазоны (`10:00–18:00`), выбор времени при множественных упоминаниях на афише и защита от ложных совпадений типа `05.02` → `05:02` (дата на афише не должна становиться временем).
-- Инференс года для дат без года ограничен границей года (декабрь → январь): посты февраля не должны превращать январские даты в `YYYY+1`.
+Custom emoji/transport escapes и URL формы нормализуются детерминированно.
+Giveaway, rental, congratulations, promo, recap, date/time и venue detectors
+передаются как neutral evidence или verification triggers. Они не удаляют
+положительный LLM child и не превращают carrier в `skipped/rejected`. Giveaway
+mechanics могут быть исключены из public prose внутри LLM, не теряя отдельно
+описанное событие. Objective impossible schema вызывает verification/retry.
+
+Poster/OCR assignment не имеет eventness authority. Если часть media
+недоступна, manifest запрещает semantic no-event и сохраняет message для
+enrichment; event-level positive children обрабатываются независимо.
 
 ## UI (/tg) — настройка источников без «параметров в сообщении»
 
@@ -568,7 +559,7 @@ Live E2E multi-source (VK+TG): `tests/e2e/features/multi_source_vk_tg.feature` (
 Сервер принимает `telegram_results.json`:
 
 - `schema_version=1` (legacy): только `messages[]` (без `sources_meta`);
-- `schema_version=2`: `messages[]` + top-level `sources_meta[]` с метаданными источников и подсказками.
+- `schema_version=2`: `messages[]` + top-level `sources_meta[]`; каждый новый message содержит `source_parse_decision` и `evidence_manifest`. Legacy payload без typed decision поддерживается только fail-closed: positive children можно адаптировать, zero-event не подтверждается.
 
 - Producer (Kaggle): `kaggle/TelegramMonitor/telegram_monitor.py` -> sync в `telegram_monitor.ipynb`
 - Consumer (server): `source_parsing/telegram/handlers.py`

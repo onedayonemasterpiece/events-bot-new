@@ -1,313 +1,179 @@
-# VK Auto Queue Import (авторазбор очереди VK постов)
+# VK Auto Queue Import
 
-Цель: убрать ручную работу оператора при обработке очереди VK постов и автоматически импортировать события через **Smart Update**.
+Канонический контракт автоматического VK ingestion после
+`INC-2026-08-10-smart-update-identity-terminal-loss`: максимальная полнота,
+raw-first durability и строгая LLM-first семантика. Очередь не требует
+операторского review и не имеет terminal technical failure.
 
-## Ключевая идея
+## Граница покрытия
 
-1. VK crawling (`vk_intake.crawl_once`) кладёт кандидаты постов в `vk_inbox`.
-2. Автоимпорт берёт элементы из `vk_inbox` и для каждого поста:
-   - выбирает посты в строгой глобальной хронологии (oldest → newest) по `event_ts_hint/date/id` без bucket-randomization;
-   - подтягивает текст/картинки (VK API `wall.getById`);
-   - извлекает 0..N событий (LLM Gemma, через `vk_intake.build_event_drafts`; для auto-import draft extraction по умолчанию `models/gemma-4-31b-it`);
-   - на каждое извлечённое событие запускает `vk_intake.persist_event_and_pages` (внутри Smart Update);
-   - пишет в лог источников факты (added/duplicate/conflict/note) и даёт оператору ссылки на Telegraph + `/log`.
+В обработку попадает каждый пост, который crawler фактически получил из
+настроенного `vk_source` внутри технического crawl/backfill horizon. До
+семантического LLM-решения разрешены только source allowlist, pagination,
+horizon, raw persistence, загрузка вложений, OCR, exact replay и quota
+admission. `no_keywords`, `no_date`, `past_event`, `too_far`, historical/admin,
+`event_ts_hint` и cancellation regex — только hints/verification evidence.
 
-Gemma 4 migration note: VK auto-import draft extraction — это не бинарная предклассификация “есть событие / нет события”, а полноценное извлечение черновиков событий с датой, временем, площадкой, билетами и служебными полями перед Smart Update. Поэтому production default для этого scoped stage — `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL=models/gemma-4-31b-it`; более маленькая `26b` допустима только как явный canary override. Smart Update routing и глобальный `/parse` этим переключателем не меняются.
-
-Draft date-anchor guards live inside `vk_intake.py`: numeric anchors like
-`15.06` and text anchors like `15 июня` must be detected before Smart Update
-post-processing, without importing or relying on Smart Update private regexes.
-
-После `INC-2026-05-02-pre-daily-event-quality` VK draft prompt явно требует event-local venue grounding: для репостов и постов с несколькими блоками площадка/адрес/город берутся из блока конкретного события, а дефолт источника используется только как fallback. Если пост явно говорит, что событие проходит в библиотеке/музее/баре/другой площадке, это важнее дефолтной площадки VK-группы. Literal placeholders (`location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, `город`) вычищаются как syntax-only guardrail и не должны доходить до Smart Update.
-
-После `INC-2026-05-05-kitoboya-garage-date` VK draft prompt также fail-closed для выставок/ярмарок без точной даты: teaser вроде `в мае откроем`, `готовим выставку`, `анонсируем дату позже` должен возвращать `[]`, а не материализоваться как первое число месяца. Смысловое решение остаётся LLM-first; детерминированный слой Smart Update только страхует unsupported teaser date как `skipped_non_event:unsupported_exhibition_teaser_date`.
-
-После `INC-2026-05-08-vk-quality-false-skips` VK draft prompt для ярмарок, арт-маркетов и праздничных программ явно предпочитает **один umbrella event**, если источник описывает одну программу в одном месте/день. Отдельные child events допустимы только когда у блока есть самостоятельный билет/регистрация, отдельная площадка или явный source anchor; иначе программа уходит в `description`/`search_digest`, а Smart Update получает один устойчивый кандидат.
-
-После `INC-2026-06-18-vk-title-shortlink-public-regression` deterministic title guard в `vk_intake` не имеет права заменять LLM-заголовок на шаблон `<event_type> — <venue>` (`Концерт — Бар Советов`). VK intake не должен делать deterministic title-grounding по словам вообще: не проверять LLM-title exact-token эвристиками, не объявлять его suspicious и не переписывать. Poster OCR heading может быть только evidence для Smart Update/review, а сам title остаётся LLM-owned и дальше проходит Smart Update LLM title-recovery/grounding. Ссылки регистрации из внешних shortener'ов вроде `clck.ru` раскрываются до конечного URL до сохранения `ticket_link`, чтобы публичный Telegram/VK/Telegraph не вёл пользователя через source shortlink.
-
-Иллюстрации для extracted events проходят через общий server-side `upload_images()` path:
-
-- при наличии `YC_SA_BOT_STORAGE` / `YC_SA_BOT_STORAGE_KEY` новые постеры пишутся в Yandex Object Storage (`kenigevents`);
-- `eventposter.supabase_url/supabase_path` остаются legacy именами полей, но могут хранить Yandex URL/paths;
-- именно эти URL дальше попадают в Telegraph-страницы и video announce pipelines без отдельной product-line логики.
-
-## Доступность VK поста (важно)
-
-Автоимпорт делает live‑запрос `wall.getById` и **не должен** создавать события, если пост уже недоступен в VK:
-
-- если VK API сообщает, что пост **удалён/не найден** — строка очереди помечается как `rejected`;
-- если VK API падает по технической причине (сеть/доступ/ошибка API) — строка очереди помечается как `failed` (чтобы можно было повторить прогон позже).
-
-По умолчанию автоимпорт **не использует** сохранённый `vk_inbox.text`, когда `wall.getById` недоступен: это защищает от “фантомных” событий из удалённых постов и от создания событий без афиши/фото.
-
-Для отладки можно разрешить fallback на `vk_inbox.text` при технических ошибках VK API:
+Инвариант одного revision:
 
 ```text
-VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL=1
+VK API fetch
+  -> vk_source_packet (commit)
+  -> vk_inbox due state
+  -> attachments/OCR + EvidenceManifest
+  -> SourceParseDecision
+  -> optional contradiction verifier
+  -> Smart Update per event child / typed lifecycle action
+  -> typed carrier terminal OR durable retry
 ```
 
-Примечание: для статуса `not_found` (удалён/не найден) fallback не применяется.
+Cursor не продвигается, пока не сохранены все полученные in-horizon packets.
+Page/hard cap создаёт `vk_crawl_continuation`. Неизменившийся revision с тем же
+payload/revision hash использует exact successful receipt без provider-вызова;
+изменившийся пост получает новый immutable revision и снова становится due.
+Blank/photo-only packets также сохраняются и идут через OCR и LLM.
 
-## Где живёт очередь
+## Durable schema
 
-- Таблица очереди: `vk_inbox` (`db.py`).
-- Состояния:
-  - `pending`, `locked` — активная очередь (готово к разбору / сейчас разбирается),
-  - `deferred` — пост временно отложен после LLM rate limit; `locked_at` хранит `retry_after`, а не “сиротский lock”; число таких defer-попыток хранится в `vk_inbox.attempts`,
-  - `imported` — пост успешно автоимпортирован (даже если он дал несколько событий),
-  - `rejected` — пост обработан и признан не-событием (0 событий / invalid / promo),
-  - `skipped` — оператор вручную отложил решение по посту,
-  - `failed` — автоимпорт упал на технической ошибке (OCR/сеть/LLM/исключение) и требует повторного прогона/ручного вмешательства.
-- Маппинг "пост -> события": `vk_inbox_import_event` (`db.py`).
-  - `vk_inbox.imported_event_id` хранит **первое** импортированное событие (для обратной совместимости UI),
-  - `vk_inbox_import_event` хранит **все** события (если пост содержит несколько).
-- Для multi-event row `Smart Update invalid/no event_id` является terminal semantic verdict только для конкретного draft. Auto-import продолжает bounded список sibling drafts; строка становится `rejected`, только если отклонены все карточки, и `imported`, если хотя бы одна независимая карточка успешно сохранена. `deferred` остаётся для retryable rate-limit/технического partial failure, а не для повторения уже terminal semantic reject.
+- `vk_source_packet` — immutable raw carrier revision: owner/post/revision,
+  source URL, publication/fetch time, raw JSON/text, attachment metadata,
+  payload/revision hashes, discovery/date hints, `event_ts_hint`, OCR/LLM
+  state, lease, attempts, prompt/model/quota scope, `next_attempt_at`, typed
+  reason and carrier outcome.
+- `vk_source_packet_attempt` — append-only receipt каждого physical primary,
+  repair, conditional-verification или exact-replay attempt: evidence manifest,
+  request/response/finish metadata, input/output/thought/reserved tokens,
+  disposition, child/action counts, Smart Update child outcomes and terminal.
+  API keys, secrets и полный payload сюда не пишутся.
+- `vk_crawl_continuation` — durable continuation для page/safety cap.
+- `vk_inbox` — совместимая due/claim projection, связанная через
+  `source_packet_id`; `vk_inbox_import_event` хранит все принятые Event ID.
 
-## Ручной запуск (для E2E)
+`event_ts_hint` влияет только на приоритет. `NULL`, ошибочно прошлое или далёкое
+значение не исключает carrier. Age-based ordering не даёт unknown-date rows
+голодать.
 
-Команда:
+## Evidence и source verdict
+
+`vk_intake.build_event_drafts` перед primary parse формирует
+`EvidenceManifest`: hash/длина полного source text, число вложений, доступные и
+включённые OCR blocks, included chars, недоступные/omitted blocks и truncation.
+Все доступные OCR blocks передаются независимо от длины текста и keyword regex.
+Транспортный недоступный attachment явно делает evidence incomplete.
+
+Typed `SourceParseDecision` допускает только:
+
+- `EVENTS_FOUND`;
+- `CONFIRMED_NO_EVENT`;
+- `LIFECYCLE_ONLY`;
+- `MIXED`;
+- `RETRY_REQUIRED`.
+
+Пустой ответ, malformed/schema mismatch, truncation, timeout, quota error,
+неполный OCR или unresolved lifecycle action не равны no-event. Положительные
+children из incomplete evidence можно провести через Smart Update, но carrier
+остаётся `RETRY_SCHEDULED` для enrichment. `CONFIRMED_NO_EVENT` принимается
+только при `llm_completed && structured_response_valid && evidence_complete`.
+
+Обычный carrier выполняет один primary semantic parse. Второй вызов допустим
+только как conditional verifier для закрытого набора противоречий: сильные
+signals против no-event, date/OCR conflict, collapsed occurrences, generic
+ungrounded title, mixed lifecycle conflict, impossible schema или incomplete
+coverage. Технически недоступная/неоднозначная verification означает retry.
+
+## Lifecycle и Smart Update
+
+Cancellation/reschedule regex не изменяет Event до primary parse. LLM может
+вернуть несколько `LifecycleAction` и одновременно новые event children.
+Действия применяются независимо; no-match action сохраняется как durable retry
+и не уничтожает siblings.
+
+Каждый child проходит Smart Update. Downstream Telegraph/ICS/publication/month
+rebuild запускаются только для typed accepted `CREATED`, `MERGED` или
+`NOOP_EXACT_REPLAY`; `diagnostic_event_id` не считается успехом. Carrier-level
+итоги: `EVENTS_RESOLVED`, `LIFECYCLE_RESOLVED`, `MIXED_RESOLVED`,
+`CONFIRMED_NO_EVENT`, `CONFIRMED_PRODUCT_EXCLUSION`, `RETRY_SCHEDULED` или
+`EXACT_REPLAY`.
+
+## Backpressure
+
+Quota/RPM/TPM/RPD/429, OCR/provider/schema/persist error, timeout, restart или
+orphaned lease освобождают claim и записывают due retry. Они не переводят row в
+terminal `failed`/`rejected`. Provider `retry_after` и `quota_scope` переносятся
+из typed parse boundary в packet/inbox и append-only attempt. После быстрых
+повторов применяется capped backoff, но row остаётся в automatic selection.
+Worker не спит десятки минут на carrier и может взять другой due row/scope.
+
+Prefetch загружает только transport evidence и не запускает второй LLM parse.
+Успешный `(payload hash, source revision, evidence manifest, prompt version,
+model)` receipt повторно используется.
+
+## Запуск
+
+Ручной E2E/операционный запуск:
 
 ```text
 /vk_auto_import
-```
-
-или коротко:
-
-```text
-/vk_auto_import 25
-```
-
-По умолчанию команда без аргументов разбирает **всю активную очередь**.
-Чтобы задать ограничение на количество постов:
-
-```text
 /vk_auto_import --limit=25
-```
-
-Если нужно включить в прогон посты, которые оператор ранее вручную отложил (`status=skipped`):
-
-```text
 /vk_auto_import --include-skipped
-```
-
-Ручной `/vk_auto_import` по умолчанию не ждёт общий heavy-job gate
-(`VK_AUTO_IMPORT_HEAVY_MODE=off`), чтобы оператор мог разбирать VK очередь во
-время удалённого Telegram/Kaggle monitoring. Scheduled `vk_auto_import`
-сохраняет сериализацию через heavy gate (`wait`), если env явно не переопределён.
-Если для ручного прогона принудительно включён `VK_AUTO_IMPORT_HEAVY_MODE=wait`,
-бот должен сразу написать, какую тяжёлую операцию он ждёт.
-
-Остановить текущий прогон (остановка произойдёт после завершения текущего поста):
-
-```text
 /vk_auto_import_stop
 ```
 
-Важно: автоимпорт обрабатывает **pending** (и один раз может «подтянуть» часть `skipped`, если включён `include_skipped`), но не гоняет `skipped/failed` по кругу в рамках одного запуска. Если пост ушёл в `failed` из‑за технической ошибки (OCR/сеть/LLM), он не будет автоматически повторно обработан в этом же прогоне.
+Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
+Основные ENV:
 
-Для provider-side `429` действует отдельный путь:
+- `ENABLE_VK_AUTO_IMPORT=1`;
+- `VK_AUTO_IMPORT_TIMES_LOCAL` (default
+  `06:15,10:15,12:00,15:30,18:30`);
+- `VK_AUTO_IMPORT_TZ` (default `Europe/Kaliningrad`);
+- `VK_AUTO_IMPORT_LIMIT` (default `15`);
+- `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` — существующий scoped model route;
+- `VK_AUTO_IMPORT_PREFETCH=0` по умолчанию; даже при включении semantic parse
+  принадлежит main worker;
+- `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` — timeout становится typed retry;
+- `VK_AUTO_IMPORT_INLINE_JOBS` / `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` управляют
+  только ожиданием downstream receipts после accepted result.
 
-- если `VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC>0`, строка уходит в `status='deferred'` с `retry_after` в `locked_at`;
-- такой post **не** подбирается повторно в том же batch;
-- в начале **следующего** run due-строки `deferred` автоматически возвращаются в `pending`;
-- каждый такой defer увеличивает `vk_inbox.attempts`;
-- после `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS` подряд (по умолчанию `3`) строка переводится в `failed`, чтобы один и тот же проблемный post не возвращался бесконечно в будущих batch;
-- `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS=0` отключает terminal cap и оставляет только deferred-поведение;
-- это защищает от цикла `rate limit -> restart/OOM -> startup recovery -> тот же post снова`.
+Старые `VK_AUTO_IMPORT_PREFILTER_OBVIOUS_NON_EVENTS` и semantic prefilter API
+удалены из production path. Старые photo/OCR semantic caps не являются
+допустимым способом экономии TPM: если transport не дал полный материал,
+negative outcome запрещён и планируется enrichment retry.
 
-Техническая деталь для SQLite: служебные обновления очереди (`locked/deferred -> imported/failed/rejected/pending/skipped`) и startup/scheduler recovery writes (`release_stale_locks`, `release_due_deferred`, `release_all_locks`, `ops_run` bootstrap/cleanup) теперь повторяют write+commit при кратковременном `database is locked`, чтобы локальный auto import и cron recovery не деградировали из-за transient lock на SQLite.
+## Recovery и observability
 
-### DEV/E2E: Telegraph страницы из prod snapshot
+Read-only inventory/census:
 
-При тестировании на prod snapshot БД у событий могут быть `telegraph_url/telegraph_path`, созданные под **другим** токеном (на проде). В DEV/E2E бот по умолчанию пытается “пере‑проверить редактируемость” Telegraph страницы даже если контент не менялся, и при `PAGE_ACCESS_DENIED` создаёт новую страницу и обновляет ссылку в событии.
+```bash
+python scripts/ops/smart_update_loss_census.py \
+  --db <snapshot.sqlite> --since 2026-08-04 --until 2026-08-12 --output -
 
-Управление:
-- `TELEGRAPH_VERIFY_EDITABLE_ON_NOCHANGE=1` — включить всегда.
-- `TELEGRAPH_VERIFY_EDITABLE_ON_NOCHANGE=0` — выключить (даже в DEV_MODE).
-
-Результат: бот отправляет унифицированные блоки по созданным/обновлённым событиям с ссылками:
-- название события кликабельно и ведёт на Telegraph (если `telegraph_url` уже есть)
-- `Источник: ...` (текущий пост)
-- `Источники:` (все ранее использованные источники события, компактно `DD.MM HH:MM <url>`)
-- `Лог: /log <id>` (deeplink в start payload)
-- `ICS: ics` (короткая кликабельная ссылка, либо `—/⏳`)
-- `Факты: ✅N ↩️M ⚠️K ℹ️L | Иллюстрации: +A, всего B | Видео: +V, всего T` (где возможно: `A/V` — добавлено в текущей итерации)
-
-Формат блока совпадает с Telegram Monitoring и `/parse`:
-
-- `Smart Update (детали событий):`
-- `✅ Созданные события: ...` / `🔄 Обновлённые события: ...`
-- для каждого события: `Источник`, `Источники`, кликабельный `Лог`, `ICS`, `Факты` (и при необходимости статус Telegraph, если ссылка ещё не готова).
-
-Если VK API вернул метрики поста (`views/likes`), то в блоке отчёта добавляется строка `Метрики поста: views=... likes=...`,
-а перед названием события появляется маркер популярности:
-
-- `⭐` (возможны уровни: `⭐⭐⭐`) — просмотры выше бейзлайна (медиана за 90 дней по группе и `age_day`);
-- `👍` (возможны уровни: `👍👍`) — лайки выше бейзлайна.
-
-Каноника (общая для TG/VK): `docs/features/post-metrics/README.md` (таблицы, медианы, уровни `⭐/👍`, retention, ENV).
-
-Снапшоты сохраняются в `vk_post_metric` (ключ `(group_id, post_id, age_day)`), чтобы можно было анализировать динамику по дням после публикации.
-Метрики сохраняются только для `age_day <= POST_POPULARITY_MAX_AGE_DAY` (по умолчанию `2`), чтобы рост БД был ограничен.
-
-Очистка старых метрик выполняется scheduler job `post_metrics_cleanup` (раз в сутки), retention по умолчанию `90` дней
-(настраивается через `POST_METRICS_RETENTION_DAYS`).
-
-Во время долгого прогона бот шлёт прогресс по очереди (сообщение **редактируется** в финальный статус):
-
-```text
-⏳ Разбираю VK пост 13/87: https://vk.com/wall-..._...
+python scripts/ops/recover_smart_update_identity_losses.py \
+  --db <snapshot.sqlite> --since 2026-08-04 --until 2026-08-12 \
+  --read-only --dry-run --include-discovery-misses --output -
 ```
 
-После обработки этого поста то же сообщение становится, например:
+В production snapshot новый schema может ещё отсутствовать; тогда отчёт обязан
+показать `unavailable`, а не подменять отсутствие evidence нулём. Recovery не
+делает прямых Event INSERT и в рамках incident разрешён только read-only dry-run.
 
-```text
-✅ Разбираю VK пост 13/87: https://vk.com/wall-..._...
-Smart Update: ✅1 🔄0
-Иллюстрации: +1
-Отчёт Smart Update: ✅
-```
+Zero-инварианты: semantic terminal before LLM, deterministic post-LLM veto,
+incomplete-evidence no-event, terminal technical failed и carrier/child balance
+violation. Канонический incident и release gates:
 
-Для постов об отмене/переносе (когда событие уже есть в базе) финальный статус такой:
+- `docs/reports/incidents/INC-2026-08-10-smart-update-identity-terminal-loss.md`;
+- `docs/operations/smart-update-prod-audit.md`;
+- `docs/operations/release-smoke-smart-update.md`.
 
-```text
-🛑 Разбираю VK пост 13/87: https://vk.com/wall-..._...
-Результат: отмена/перенос — событие помечено неактивным (status=cancelled|postponed)
-event_id: 2583
-```
+## Важные файлы и тесты
 
-## Запуск по расписанию
-
-Scheduler job: `vk_auto_queue.vk_auto_import_scheduler` (`scheduling.py`).
-
-ENV:
-- `ENABLE_VK_AUTO_IMPORT=1` включает job.
-- `VK_AUTO_IMPORT_TIMES_LOCAL` (по умолчанию `06:15,10:15,12:00,15:30,18:30`) локальные времена запуска.
-- `VK_AUTO_IMPORT_TZ` (по умолчанию `Europe/Kaliningrad`) таймзона расписания.
-- `VK_AUTO_IMPORT_LIMIT` (по умолчанию `15`) сколько постов обработать за один запуск.
-- `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` (по умолчанию `models/gemma-4-31b-it`) scoped model override только для VK auto-import draft extraction. Он передаётся в `event_parse` через `vk_intake`, но не меняет Smart Update и не меняет глобальный `/parse`.
-- `VK_AUTO_IMPORT_PREFETCH` (по умолчанию `0`) включает конвейер N/N+1: пока сохраняется пост N, параллельно подтягиваем лёгкие данные поста N+1 (wall.getById + мета). При `0` очередь держит только текущий row locked и берёт следующий post уже после завершения текущего, что безопаснее для startup recovery.
-- `VK_AUTO_IMPORT_PREFETCH_DRAFTS` (по умолчанию `0`) если включён — в префетче дополнительно выполняется (download media + OCR + LLM-parse) для N+1. ⚠️ Может заметно увеличить RAM и привести к OOM на маленьких машинах (например Fly `512MB`).
-- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) ограничивает число VK-афиш/фото, которые auto-import подтягивает в live row для OCR/upload/LLM. Это отдельный guardrail для production RAM и не меняет глобальный `MAX_ALBUM_IMAGES` для других путей. Для постов, где автор явно пишет, что расписание/места находятся в карточках, transport-only router использует отдельный `VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS` (по умолчанию `10`), а parse-prompt lane сохраняет OCR всех этих карточек в пределах отдельных schedule caps. LLM получает полный bounded-набор карточек вместо произвольных первых четырёх/трёх OCR-блоков, но семантическое решение о числе событий по-прежнему принадлежит extraction/Smart Update.
-- `VK_AUTO_IMPORT_INLINE_JOBS` (по умолчанию `1`) ждать inline-джобы для отчёта (Telegraph/ICS).
-- `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` (по умолчанию `0`) ждать ICS inline вместе с Telegraph (обычно не нужно для E2E/local).
-- `VK_AUTO_IMPORT_SLOW_ROW_LOG_SEC` (по умолчанию `60`) порог для автоматического stage timing log по одной строке очереди даже без `PIPELINE_TIMINGS=1`; `0` означает логировать все строки.
-- `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` (по умолчанию `1800`) жёсткий ceiling на один пост очереди; если обработка одного VK row зависла дольше лимита, строка помечается как `failed`, оператор получает timeout-сообщение, а run продолжает следующий пост. Значение `<=0` отключает guard.
-- `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS` (по умолчанию `3`) сколько раз один и тот же post можно подряд отложить из-за provider-side `429` перед переводом в terminal `failed`.
-- `VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS` (по умолчанию fallback к `VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS`, иначе `3`) сколько crash-recovery unlock’ов для `auto:*` row допускается до terminal `failed` при следующем startup.
-
-Плановый отчёт scheduler отправляется в чат superadmin из БД (`user.is_superadmin=1`). `ADMIN_CHAT_ID` больше не нужен для штатной работы и используется только как legacy fallback до регистрации superadmin в БД.
-
-Рекомендация по эксплуатации: для live очереди безопаснее частые меньшие батчи, чем редкие большие. Такой режим лучше переживает `SCHED_HEAVY_GUARD_MODE=skip`, быстрее подбирает свежие посты после crawl и реже создаёт длинные окна, где один пропущенный запуск мгновенно превращается в суточный backlog.
-
-Подбор дефолтных окон делался с запасом относительно типовых соседних задач в `Europe/Kaliningrad`: утренний run не ставится вплотную к `daily` на `08:00`, поздний run не ставится рядом с вечерним `tg_monitoring`, а дневные окна держат очередь более ровной. Слот `15:30` выбран как ближайшее безопасное окно после `15:15` `/3di`: он забирает свежие `pending` посты после дневного `13:15` VK crawl, но оставляет буфер до `16:30` festival queue.
-
-Recovery: legacy-строки `vk_inbox.status='importing'`, зависшие дольше lock timeout, автоматически возвращаются в `pending` на следующем run/выборе очереди. Иначе такие строки не видны текущему auto-import flow, который использует `locked` как рабочий статус.
-
-Диагностика scheduler:
-
-- если плановый запуск пропущен ещё **до входа** в `run_vk_auto_import()` (например, из-за `SCHED_HEAVY_GUARD_MODE=skip` или потому что не удалось определить chat superadmin ни из БД, ни из fallback env), теперь создаётся `ops_run` со `status='skipped'`;
-- в `details_json` пишется причина (`skip_reason`) и, для heavy-guard skip, `blocked_by_kind`;
-- scheduler entrypoint теперь создаёт bootstrap `ops_run` ещё до резолва superadmin/limit, а сам `run_vk_auto_import()` переиспользует эту же запись; поэтому ложный outer fire APScheduler без реального разбора очереди больше не должен исчезать бесследно;
-- если entrypoint или делегированный run падают до нормального summary, bootstrap-запись закрывается как `status='error'` с `fatal_error` в `details_json`;
-- `/general_stats` показывает такие записи в блоке `vk_auto_import runs`, чтобы было видно разницу между “очередь была пустой”, “run реально выполнился” и “scheduler попытался, но пропустил запуск”.
-- `persist_skipped ... skipped_festival_post` / `skipped_non_event:online_event` в `ops_run.details_json` считаются regression-сигналами, если исходный VK-пост описывает один конкретный офлайн event. Примеры guardrail: одиночный мастер-класс внутри цикла/программы не должен уходить в фестивальную очередь как whole-festival post, а «онлайн-регистрация» не делает офлайн велопробег онлайн-only событием.
-- `skipped_non_event:non_event_notice`, `skipped_non_event:online_event` и `rejected_out_of_region:unknown_region` считаются regression-сигналами, если LLM draft уже содержит дату/время/площадку/цену или физический venue anchor. `INC-2026-05-08-vk-quality-false-skips` фиксирует контрольные кейсы: платная экскурсия в зоопарке, Fort 11 Doenhoff и офлайн арт-маркет с упоминанием трансляции в программе.
-- Crawl admission is intentionally LLM-first for event-like edge cases: if a VK post has date-like text plus strong invite/registration/offline-place signals but deterministic `event_ts_hint` is missing or uncertain, crawl should fail open into `vk_inbox`/normal LLM import instead of terminally rejecting it as `past_event`. Deterministic normalization may preserve syntax (for example `16 мая 2026 г. в 16:00` must not be masked as phone-like noise), but semantic event acceptance stays in the LLM/Smart Update path.
-Важно: обработка событий остаётся последовательной и сериализована через `HEAVY_SEMAPHORE` и внутренний lock Smart Update. По умолчанию очередь идёт строго row-by-row без N+1 reserve; если `VK_AUTO_IMPORT_PREFETCH=1`, включается лёгкий prefetch следующего post, а полный (media/OCR/LLM) префетч по-прежнему включается только через `VK_AUTO_IMPORT_PREFETCH_DRAFTS=1`.
-
-Если `VK_AUTO_IMPORT_INLINE_JOBS=1`, то `persist_event_and_pages()` больше не ждёт отдельно появления `telegraph_url` до 10 секунд: очередь всё равно сразу запускает inline `telegraph_build` и `tg_event_publish`, поэтому двойное ожидание убрано без потери качества/полноты отчёта. ICS остаётся opt-in через `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS`.
-
-### Recovery after restart/OOM
-
-- При старте приложения в `pending` возвращаются только реальные рабочие locks: `vk_inbox.status='locked'`.
-- `status='deferred'` после рестарта **не** трогается: это не сиротский lock, а осознанный retry state после rate limit.
-- Due-строки `deferred` выпускаются обратно в `pending` только в начале нового `vk_auto_import` batch, а не в общем startup recovery.
-- Для `review_batch LIKE 'auto:%'` startup recovery увеличивает `vk_inbox.attempts`; после `VK_AUTO_IMPORT_RECOVERY_MAX_ATTEMPTS` такой row переводится в `failed`, чтобы crash/restart не возвращал один и тот же проблемный post бесконечно.
-- Любые `ops_run.status='running'` помечаются как `crashed` с `finished_at=now` (диагностика незавершённых прогонов).
-
-### Media safety
-
-- `ENSURE_JPEG_MAX_PIXELS` (по умолчанию `20000000`) — ограничение на конвертацию WEBP/AVIF→JPEG: слишком большие изображения пропускаются вместо риска OOM.
-- `VK_AUTO_IMPORT_MAX_PHOTOS` (по умолчанию `4`) — отдельный runtime cap для auto-import, чтобы обычные тяжёлые VK posts не тащили в row одновременно 10-12 больших афиш и не раздували RAM/OCR/upload path; `VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS` (по умолчанию `10`) применяется только к явным schedule-in-cards источникам.
-- Для multi-event source один `VK_MEDIA_ASSIGN_MODEL` call (default
-  `gemma-4-31b-it`) распределяет все source posters между всеми draft events и
-  может явно назвать одиночную roundup-афишу shared. Retrieval scores только
-  формируют подсказку; LLM принимает semantic decision. Это фиксированно один
-  запрос на source post, а не N×M запросов по событиям и изображениям.
-
-### LLM budget for poster OCR
-
-Чтобы VK-посты с несколькими афишами не раздували `event_parse` prompt до provider-side `429 TPM`, OCR афиш подмешивается в LLM-запрос с budget policy. Budget считается от **сырого текста источника**, а не от prompt после добавления policy-инструкций:
-
-- если основной текст поста уже длинный, остаются только компактные строки логистики poster OCR;
-- если текст короткий, в prompt попадает только ограниченное число OCR-блоков и символов;
-- если источник явно сообщает, что расписание/места находятся в карточках, все карточки являются первичным source evidence и получают отдельный bounded schedule budget вместо обычного cap в три блока;
-- festival normalisation JSON подмешивается только для источников `vk_source.festival_source=1`, а не для всей очереди подряд;
-- `poster_summary` сохраняется, а сами постеры и OCR по-прежнему доступны Smart Update как source facts/illustrations.
-
-ENV для тонкой настройки:
-- `VK_PARSE_POSTER_TEXT_SKIP_MAIN_TEXT_CHARS` (по умолчанию `1600`) — порог длины основного текста, после которого OCR не добавляется в parse prompt.
-- `VK_PARSE_POSTER_TEXT_MAX_BLOCKS` (по умолчанию `3`) — максимум OCR-блоков в prompt для коротких постов.
-- `VK_PARSE_POSTER_TEXT_MAX_BLOCK_CHARS` (по умолчанию `500`) — максимум символов на один OCR-блок.
-- `VK_PARSE_POSTER_TEXT_MAX_TOTAL_CHARS` (по умолчанию `1200`) — общий лимит символов OCR в parse prompt.
-- `VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCKS` (по умолчанию `10`) — максимум OCR-карточек для явного schedule-in-cards источника.
-- `VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCK_CHARS` (по умолчанию `1200`) — максимум символов одной schedule-карточки.
-- `VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_TOTAL_CHARS` (по умолчанию `9000`) — общий bounded OCR budget schedule-карточек.
-
-### Conservative prefilter for obvious non-events
-
-Перед полным `event_parse` VK auto-import теперь делает дешёвую предклассификацию только для **очевидных** long-form non-event постов:
-
-- длинные исторические/справочные тексты без признаков будущего посещаемого события;
-- длинные административные/новостные тексты без даты/времени/регистрации/билетов и без event-like сигналов.
-
-Важно:
-
-- prefilter включён только в пути `vk_auto_queue`, а не для всех вызовов `build_event_drafts`;
-- это консервативный guardrail: любой спорный пост всё равно идёт в обычный LLM parse;
-- ложный `event_ts_hint`, получившийся из исторической даты внутри длинного ретроспективного текста (`19 сентября 1970 года` и т.п.), сам по себе больше не отключает prefilter для очевидных historical/info non-event постов;
-- future date/time hint, event keywords, registration/ticket hints, poster OCR, `festival_hint` и `operator_extra` отключают fast reject и сохраняют полный разбор.
-
-ENV:
-
-- `VK_AUTO_IMPORT_PREFILTER_OBVIOUS_NON_EVENTS` (по умолчанию `1`) — включает conservative prefilter.
-- `VK_AUTO_IMPORT_PREFILTER_HISTORY_MIN_CHARS` (по умолчанию `2200`) — минимальная длина для historical/info reject.
-- `VK_AUTO_IMPORT_PREFILTER_ADMIN_MIN_CHARS` (по умолчанию `1800`) — минимальная длина для admin/news reject.
-
-## Инварианты (как у Telegram Monitoring)
-
-- Один VK пост может порождать несколько событий.
-- События в прошлом не должны создаваться.
-- Время начала берём из текста/афиши (OCR). Если время в посте не указано, можно подставить `vk_source.default_time` как **низкоприоритетный** fallback (помечается `event.time_is_default=1` и не является жёстким якорем: при появлении явного времени из других источников оно переопределяется).
-- `vk_source.location` / source-location hint — сильный, но не слепой prior для источников с постоянной площадкой. Если пост явно называет только помещение/этаж (`лекционный зал`, `аудитория`, `4 этаж`), LLM должен считать venue отсутствующим и восстанавливать здание/организацию из source context/OCR/hint; для `konb39` canonical default — `Научная библиотека, Мира 9, Калининград`.
-- Посты об **отмене/переносе** не создают новых событий: автоимпорт пытается найти соответствующее событие в базе и выставляет `event.lifecycle_status=cancelled|postponed` (событие становится неактивным и исчезает из дайджестов/анонсов/агрегированных страниц после ближайшего rebuild). Флаг `event.silent` остаётся для ручного скрытия оператором.
-  - Детектор отмены/переноса должен быть **консервативным**: он не должен срабатывать на “литературные” обороты вроде «перенесут вас в мир…».
-  - Посты о переносе только **времени начала** (`8 мая время начала ... перенесено на 19.30`, при этом событие остаётся открытым/регистрация продолжается) не идут в shortcut отмены: они проходят обычный LLM-first import + Smart Update. Cancellation matcher не имеет права деактивировать событие без date/title anchor.
-  - Если пост об отмене/переносе приходит как **редактура** исходного VK поста (тот же `source_url`), запись `event_source` переиспользуется (upsert), чтобы не падать на `UNIQUE(event_id, source_url)`.
-- Для неактивных событий Telegraph страница сохраняется, но в заголовке и верхнем инфоблоке показывается пометка `ОТМЕНЕНО/ПЕРЕНЕСЕНО`, чтобы по старой ссылке было видно актуальный статус.
-- Поддерживаются длинные события (`выставка`, `ярмарка`): при повторных источниках Smart Update обновляет период (`end_date`) по trust-правилам.
-- Если у выставки из VK есть только дата открытия, Smart Update выставляет `end_date` по умолчанию как `date + 1 календарный месяц`; последующий источник с явной датой закрытия обновляет период без дубля.
-- Все изменения события проходят через Smart Update:
-  - якоря защищены;
-  - факты дедуплицируются/конфликтуются через LLM;
-  - Telegraph страница строится из `event.description` (LLM-структурированный текст).
-  - Если у VK поста почти нет текста, но есть афиша, Smart Update использует OCR афиши как источник фактов для описания и включает защиту от “слишком короткого” текста (второй проход `rewrite_full`), чтобы на Telegraph не оставался пустой/обрезанный основной текст.
-  - Если текст поста уже подробный, OCR афиш считается вторичным контекстом и может быть урезан/пропущен именно в parse prompt, чтобы не тратить TPM на дублирующую информацию.
-- Для площадок с параллельными событиями используем `allow_parallel_events=true` (см. `docs/reference/location-flags.md`).
-
-## E2E покрытие
-
-- Smoke: `/vk_auto_import --limit=1` даёт унифицированный отчёт + рабочий `Telegraph` + `Лог`.
-- Проверка `/log`: из отчёта запрашивается `/log <event_id>`, валидируются факты и ссылка на Telegraph.
-- Параллельные события Научной библиотеки: пары постов в один `date/time` должны остаться разными событиями (без склейки):
-  - `14558` vs `14547` (`2026-02-11 18:30`)
-  - `14572` vs `14581` (`2026-02-13 18:30`)
-
-## Важные файлы
-
-- `vk_auto_queue.py` — автоимпорт очереди (manual + scheduled).
-- `vk_review.py` — очередь/локи + `mark_imported_events` (мульти-события).
-- `vk_intake.py` — LLM извлечение EventDraft + интеграция с Smart Update.
-- `smart_event_update.py` — матчинг/мердж/лог фактов.
+- `vk_intake.py` — raw-first crawl, evidence/OCR и source adapter;
+- `vk_auto_queue.py` — claim, typed processing и downstream boundary;
+- `vk_review.py` — durable state/attempt/retry receipts;
+- `source_parse_contract.py` — typed source/lifecycle/evidence contract;
+- `smart_event_update.py`, `smart_update_state.py` — child resolution;
+- `tests/test_vk_llm_first_discovery.py`;
+- `tests/test_vk_raw_first_llm_contract.py`;
+- `tests/test_vk_source_packet_state.py`;
+- `tests/test_vk_ingestion_static_contract.py`;
+- `tests/test_vk_auto_queue_import.py`;
+- `tests/test_vk_auto_queue_rate_limit.py`.
