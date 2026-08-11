@@ -244,6 +244,10 @@ Final forensic hashes:
   `07092f11d064f942d54ecd060ff6c9380a019e0d4953584499c05795111c1e0f`;
 - final provider path audit: PASS, 1,138 files, zero unapproved/unreadable;
   log SHA `16009d8e7922c173cf4ba8fcdcab4e63c40655658918d286648068b557660436`.
+- post-push CI compatibility correction: the exact 222-test Smart Update job
+  command passes locally after treating an absent optional legacy occurrence
+  conflict set as empty; log SHA
+  `dd426e47232aae2b5f621a27461879ccd2fd45261d76ac2d81f5461df3f59c77`.
 
 Current-source offline production-bundle recovery dry-run was repeated twice
 with the half-open window `[2026-08-04, 2026-08-12)`: both reports are

@@ -11,7 +11,7 @@ Branch: `integration/smart-update-identity-state-machine`
 - The branch was reconciled without dropping its newer commits and rebased onto
   `origin/main@f66330f8af81d4b898d137d83356e77914dce90a`.
 - Last implementation checkpoint before this closure report:
-  `987c4d2982dc0b50904c27be2dd660cf99dc2b0d`.
+  `02cba2c5416e1a60ed2be2270649c68f0eae0c90`.
 - The exact pushed delivery head is authoritative in the PR ref and final PR
   comment; this file intentionally does not pretend that a commit can contain
   its own SHA.
@@ -147,6 +147,11 @@ must remain visible at release review.
   `16009d8e7922c173cf4ba8fcdcab4e63c40655658918d286648068b557660436`.
 - Production-boundary `py_compile` and `git diff --check`: PASS. GitHub CI is
   not claimed green until it actually runs on the exact pushed head.
+- The first rebased-head CI exposed four legacy structural duplicate-probe
+  fixtures without the new optional explicit-occurrence conflict field. The
+  helper now treats an absent set as empty (without weakening an actual
+  conflict); the exact 222-test Smart Update CI command passes locally. Log
+  SHA-256 `dd426e47232aae2b5f621a27461879ccd2fd45261d76ac2d81f5461df3f59c77`.
 
 The current recovery source was also run twice against the offline production
 bundle with `--read-only --since 2026-08-04T00:00:00Z --until
