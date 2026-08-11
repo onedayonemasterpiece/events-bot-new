@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
+import io
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,6 +27,7 @@ from private_events_mcp.social_workspace import (
     SocialReadPurpose,
     SocialReadRequest,
     SocialTargetKind,
+    SocialWorkspaceValidationError,
     TargetLocator,
     TargetLocatorKind,
     validate_action_status_response,
@@ -38,6 +41,7 @@ from private_events_mcp_telegram_adapter import (
     TelegramLease,
     TelegramOperationClaim,
     TelegramTargetBinding,
+    TelegramVerifiedUpload,
     TelegramWorkspaceAdapter,
     TelegramWorkspaceError,
 )
@@ -52,7 +56,10 @@ NO_RIGHT_REF = "tgt_norightschannel001"
 ITEM_REF = "itm_channelmessage001"
 NO_RIGHT_ITEM_REF = "itm_norightsmessage0001"
 ASSET_REF = "ast_stagedimage000001"
+DOCUMENT_REF = "ast_stageddocument0001"
 EMOJI_REF = "ast_customemoji000001"
+DOCUMENT_BYTES = b"document-provider-fixture\n"
+DOCUMENT_MIME = "text/plain"
 
 
 class Entity:
@@ -141,6 +148,19 @@ class FakeTypes:
 
     def request(self, name, **values):
         return SimpleNamespace(workspace_name=name, values=values)
+
+    def document_filename(self, file_name):
+        return SimpleNamespace(file_name=file_name)
+
+
+class FakeAssetReader:
+    def __init__(self) -> None:
+        self.values = {"ing_documentfixture000000001": DOCUMENT_BYTES}
+        self.calls: list[tuple[str, str]] = []
+
+    def open_verified(self, storage_ref, owner_binding):
+        self.calls.append((storage_ref, owner_binding))
+        return self.values[storage_ref]
 
 
 class FakeRefs:
@@ -248,6 +268,7 @@ class FakeRefs:
         self.next_item = 1
         self.next_cursor = 1
         self.operations = {}
+        self.asset_reader = FakeAssetReader()
 
     def resolve_target(self, target_ref):
         return self.targets[target_ref]
@@ -283,6 +304,12 @@ class FakeRefs:
     def mint_read_asset(self, *, target_ref, media, role):
         del target_ref, media, role
         return ASSET_REF
+
+    def mint_upload_asset(self, *, role, upload):
+        assert isinstance(upload, TelegramVerifiedUpload)
+        binding = TelegramAssetBinding(DOCUMENT_REF, role, upload)
+        self.assets[DOCUMENT_REF] = binding
+        return binding
 
     def mint_cursor(self, *, family, state):
         cursor = f"cursor{self.next_cursor:08d}"
@@ -461,7 +488,25 @@ class FakeClient:
 
     async def send_file(self, entity, files, **kwargs):
         self.calls.append(("send_file", {"entity": entity, "files": files, **kwargs}))
-        return Message(910 + len(self.calls), kwargs.get("caption", ""))
+        if self.raise_on == "send_file":
+            raise TimeoutError("native document timeout")
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        message = Message(
+            910 + len(self.calls), kwargs.get("caption", ""), entity=entity
+        )
+        if isinstance(files, io.BytesIO) and kwargs.get("force_document") is True:
+            file_name = getattr(files, "name", None)
+            file_size = kwargs.get("file_size")
+            document = SimpleNamespace(
+                size=file_size,
+                attributes=[SimpleNamespace(file_name=file_name)],
+            )
+            message.media = SimpleNamespace(document=document)
+            message.document = document
+            message.file = SimpleNamespace(name=file_name, size=file_size)
+        self.messages[self._target_ref(entity)].append(message)
+        return message
 
     async def edit_message(self, entity, message_id, text, **kwargs):
         self.calls.append(("edit_message", {"entity": entity, "id": message_id, "text": text, **kwargs}))
@@ -520,6 +565,7 @@ def harness():
         refs=refs,
         governor=governor,
         telethon_types=FakeTypes(),
+        asset_reader=refs.asset_reader,
         operation_timeout_seconds=1,
     )
     return adapter, client, refs, governor
@@ -571,6 +617,273 @@ def intent(action, **changes):
 
 def op_ref(sequence: int) -> str:
     return f"op_testoperation{sequence:024d}"
+
+
+def verified_document(**changes):
+    values = {
+        "storage_ref": "ing_documentfixture000000001",
+        "owner_binding": "a" * 64,
+        "content_digest": f"sha256:{hashlib.sha256(DOCUMENT_BYTES).hexdigest()}",
+        "mime_type": DOCUMENT_MIME,
+        "byte_length": len(DOCUMENT_BYTES),
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+        "width": None,
+        "height": None,
+        "role": MediaRole.DOCUMENT,
+        "display_name": "acceptance.txt",
+        "classification": "utf8_text",
+    }
+    values.update(changes)
+    return SimpleNamespace(**values)
+
+
+@pytest.mark.asyncio
+async def test_document_stage_is_closed_metadata_binding_with_zero_provider_io(harness):
+    adapter, client, refs, _ = harness
+
+    asset_ref = await adapter.stage_asset(
+        verified_document(), role=MediaRole.DOCUMENT
+    )
+
+    assert asset_ref == DOCUMENT_REF
+    binding = refs.assets[asset_ref]
+    assert binding.role is MediaRole.DOCUMENT
+    assert binding.provider_media.display_name == "acceptance.txt"
+    assert binding.provider_media.classification == "utf8_text"
+    assert client.calls == []
+    assert refs.asset_reader.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"display_name": "../unsafe.txt"},
+        {"display_name": "unsafe\u202etxt.txt"},
+        {"display_name": "wrong.pdf"},
+        {"classification": None},
+    ],
+)
+async def test_document_stage_rejects_untrusted_transport_metadata_without_io(
+    harness, changes
+):
+    adapter, client, refs, _ = harness
+    with pytest.raises(SocialWorkspaceValidationError, match="verified document"):
+        await adapter.stage_asset(
+            verified_document(**changes), role=MediaRole.DOCUMENT
+        )
+    assert client.calls == []
+    assert refs.asset_reader.calls == []
+
+
+@pytest.mark.asyncio
+async def test_saved_document_no_caption_uses_one_named_bytesio_and_exact_call_shape(
+    harness,
+):
+    adapter, client, refs, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+
+    receipt = await adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=SELF_REF,
+            content=content(
+                "", media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+            ),
+        ),
+        operation_ref=op_ref(40),
+    )
+
+    assert receipt["status"] == "succeeded"
+    assert receipt["read_after_write"]["verified"] is True
+    calls = [values for name, values in client.calls if name == "send_file"]
+    assert len(calls) == 1
+    call = calls[0]
+    assert isinstance(call["files"], io.BytesIO)
+    assert not isinstance(call["files"], list)
+    assert call["files"].name == "acceptance.txt"
+    assert call["files"].getvalue() == DOCUMENT_BYTES
+    assert call["caption"] == ""
+    assert call["formatting_entities"] == []
+    assert call["parse_mode"] is None
+    assert call["force_document"] is True
+    assert call["mime_type"] == DOCUMENT_MIME
+    assert call["file_size"] == len(DOCUMENT_BYTES)
+    assert [value.file_name for value in call["attributes"]] == ["acceptance.txt"]
+    assert [name for name, _ in client.calls].count("send_file") == 1
+    assert "upload_file" not in [name for name, _ in client.calls]
+    assert refs.asset_reader.calls == [
+        ("ing_documentfixture000000001", "a" * 64)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_saved_document_preserves_rich_caption_entities(harness):
+    adapter, client, _, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    caption = "A bold caption"
+
+    await adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=SELF_REF,
+            content=content(
+                caption,
+                entities=(RichEntity(RichEntityKind.BOLD, 2, 4),),
+                media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),),
+            ),
+        ),
+        operation_ref=op_ref(41),
+    )
+
+    call = next(values for name, values in client.calls if name == "send_file")
+    assert call["caption"] == caption
+    assert call["formatting_entities"] == [
+        {"kind": "bold", "offset": 2, "length": 4}
+    ]
+    assert call["parse_mode"] is None
+
+
+@pytest.mark.asyncio
+async def test_document_commit_reopens_and_rehashes_before_provider_attempt(harness):
+    adapter, client, refs, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    refs.asset_reader.values["ing_documentfixture000000001"] = b"mutated"
+
+    with pytest.raises(
+        SocialWorkspaceValidationError, match="bytes do not match metadata"
+    ):
+        await adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=SELF_REF,
+                content=content(
+                    media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+                ),
+            ),
+            operation_ref=op_ref(42),
+        )
+    assert [name for name, _ in client.calls if name == "send_file"] == []
+    assert len(refs.asset_reader.calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "denied_intent",
+    [
+        intent(
+            SocialAction.PUBLISH,
+            target_ref=CHANNEL_REF,
+            content=content(
+                media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+            ),
+        ),
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=SELF_REF,
+            content=content(
+                media=(
+                    MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),
+                    MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),
+                )
+            ),
+        ),
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=SELF_REF,
+            content=content(
+                media=(
+                    MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),
+                    MediaAttachment(ASSET_REF, MediaRole.IMAGE),
+                )
+            ),
+        ),
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=GROUP_REF,
+            content=content(
+                media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+            ),
+        ),
+    ],
+)
+async def test_document_denies_other_action_multiple_mixed_and_group_before_send(
+    harness, denied_intent
+):
+    adapter, client, _, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    with pytest.raises(SocialWorkspaceValidationError):
+        await adapter.execute(denied_intent, operation_ref=op_ref(43))
+    assert [name for name, _ in client.calls if name == "send_file"] == []
+
+
+@pytest.mark.asyncio
+async def test_document_capability_is_target_bound_to_existing_send_message_rights(harness):
+    adapter, _, _, _ = harness
+    saved = await adapter.capabilities(SELF_REF)
+    group = await adapter.capabilities(GROUP_REF)
+    readonly = await adapter.capabilities(NO_RIGHT_REF)
+
+    assert "send_message" in saved["actions"]
+    assert "document" in saved["content_features"]
+    assert "send_message" not in group["actions"]
+    assert "document" not in group["content_features"]
+    assert "send_message" not in readonly["actions"]
+    assert "document" not in readonly["content_features"]
+
+
+@pytest.mark.asyncio
+async def test_document_timeout_is_one_attempt_unknown_and_replay_never_resends(harness):
+    adapter, client, _, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    request = intent(
+        SocialAction.SEND_MESSAGE,
+        target_ref=SELF_REF,
+        content=content(
+            media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+        ),
+    )
+    operation_ref = op_ref(44)
+    client.raise_on = "send_file"
+
+    first = await adapter.execute(request, operation_ref=operation_ref)
+    second = await adapter.execute(request, operation_ref=operation_ref)
+
+    assert first == second
+    assert first["status"] == "outcome_unknown"
+    assert first["retry_safe"] is False
+    assert [name for name, _ in client.calls].count("send_file") == 1
+
+
+@pytest.mark.asyncio
+async def test_document_readback_mismatch_is_unknown_and_never_resends(harness):
+    adapter, client, _, _ = harness
+    await adapter.stage_asset(verified_document(), role=MediaRole.DOCUMENT)
+    original_get_messages = client.get_messages
+
+    async def mismatched_get_messages(entity, *, ids):
+        observed = await original_get_messages(entity, ids=ids)
+        if getattr(observed, "document", None) is not None:
+            observed.file.name = "mismatch.txt"
+        return observed
+
+    client.get_messages = mismatched_get_messages
+    request = intent(
+        SocialAction.SEND_MESSAGE,
+        target_ref=SELF_REF,
+        content=content(
+            media=(MediaAttachment(DOCUMENT_REF, MediaRole.DOCUMENT),)
+        ),
+    )
+    operation_ref = op_ref(45)
+
+    first = await adapter.execute(request, operation_ref=operation_ref)
+    second = await adapter.execute(request, operation_ref=operation_ref)
+
+    assert first == second
+    assert first["status"] == "outcome_unknown"
+    assert first["retry_safe"] is False
+    assert [name for name, _ in client.calls].count("send_file") == 1
 
 
 @pytest.mark.asyncio
@@ -1431,3 +1744,6 @@ def test_installed_telethon_satisfies_the_guarded_fixed_feature_set():
     assert factory.entity(RichEntityKind.BOLD, offset=1, length=2).__class__.__name__ == (
         "MessageEntityBold"
     )
+    filename = factory.document_filename("acceptance.txt")
+    assert filename.__class__.__name__ == "DocumentAttributeFilename"
+    assert filename.file_name == "acceptance.txt"
