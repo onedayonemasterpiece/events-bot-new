@@ -205,6 +205,46 @@ def test_every_smart_result_event_id_side_effect_is_acceptance_dominated() -> No
     assert violations == []
 
 
+def test_diagnostic_event_id_cannot_be_assigned_or_passed_through() -> None:
+    """A diagnostic identity is observability-only, including indirect taint.
+
+    Rejecting the read at its source also rejects assignment, return, container
+    storage and helper pass-through before a downstream side effect can hide it.
+    Direct logger calls remain the sole exception.
+    """
+
+    violations: list[str] = []
+    for relative, _source, tree in _trees():
+        parents = {
+            child: parent
+            for parent in ast.walk(tree)
+            for child in ast.iter_child_nodes(parent)
+        }
+        for node in ast.walk(tree):
+            direct = (
+                isinstance(node, ast.Attribute)
+                and node.attr == "diagnostic_event_id"
+                and isinstance(node.value, ast.Name)
+                and node.value.id in SMART_RESULT_NAMES
+            )
+            indirect = (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "getattr"
+                and len(node.args) >= 2
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id in SMART_RESULT_NAMES
+                and isinstance(node.args[1], ast.Constant)
+                and node.args[1].value == "diagnostic_event_id"
+            )
+            if not (direct or indirect):
+                continue
+            if _inside_observability_call(node, parents):
+                continue
+            violations.append(f"{relative}:{node.lineno}:{ast.unparse(node)}")
+    assert violations == []
+
+
 def test_all_direct_boundaries_use_typed_helpers_or_terminal_enum() -> None:
     expected_markers = {
         "source_parsing/handlers.py": ("update_result.is_accepted", "occurrence_key"),

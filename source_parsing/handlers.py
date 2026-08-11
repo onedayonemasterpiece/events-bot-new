@@ -137,6 +137,49 @@ async def _smart_event_update_with_lock_retry(
     raise AssertionError("unreachable")
 
 
+async def _schedule_source_parser_recovery_request(
+    db: Database,
+    *,
+    source_type: str,
+    reason: str,
+) -> bool:
+    """Idempotently make an official source due after any item-level failure."""
+
+    source = str(source_type or "").strip().lower()
+    if not source:
+        return False
+    now = datetime.now(timezone.utc)
+    clean_reason = str(reason or "technical_failure").strip()[:300]
+    try:
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                INSERT INTO source_parser_recovery_request(
+                    source_type,requested_since,status,attempts,next_run_at,
+                    last_error,created_at,updated_at
+                ) VALUES(?,?,'pending',0,?,?,?,?)
+                ON CONFLICT(source_type) DO UPDATE SET
+                    requested_since=MIN(source_parser_recovery_request.requested_since,excluded.requested_since),
+                    status='pending',
+                    next_run_at=excluded.next_run_at,
+                    last_error=excluded.last_error,
+                    updated_at=excluded.updated_at
+                """,
+                (source, now, now, clean_reason, now, now),
+            )
+            await conn.commit()
+        return True
+    except Exception:
+        # The item remains visibly retry_scheduled even if the recovery ledger
+        # itself is temporarily unavailable; never misreport it as resolved.
+        logger.exception(
+            "source_parsing: recovery request persist failed source=%s reason=%s",
+            source,
+            clean_reason,
+        )
+        return False
+
+
 async def _fetch_og_image_for_dramteatr(page_url: str) -> str | None:
     """Best-effort cover extraction for dramteatr event pages.
 
@@ -270,11 +313,15 @@ def _source_parsing_terminal_status(result: SourceParsingResult) -> str:
         int(stats.failed or 0)
         for stats in (result.stats_by_source or {}).values()
     )
+    retry_items = sum(
+        int(stats.retry_scheduled or 0)
+        for stats in (result.stats_by_source or {}).values()
+    )
     if result.errors:
         # A run that imported some sources but lost another one is partial,
         # not green. If no source survived, expose the run as an error.
         return "partial" if result.stats_by_source else "error"
-    if failed_items:
+    if failed_items or retry_items:
         return "partial"
     return "success"
 
@@ -658,6 +705,8 @@ def unpack_add_event_result(
         )
     if len(raw) == 2:
         event_id, was_added = raw
+        if event_id is None:
+            return None, bool(was_added), SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         return event_id, bool(was_added), (
             SmartUpdateTerminalOutcome.CREATED
             if was_added
@@ -1771,12 +1820,14 @@ async def format_parsing_report(
     total_updated = 0
     total_failed = 0
     total_skipped = 0
+    total_retry_scheduled = 0
     
     for source, stats in result.stats_by_source.items():
         total_added += stats.new_added
         total_updated += stats.ticket_updated
         total_failed += stats.failed
         total_skipped += stats.skipped
+        total_retry_scheduled += stats.retry_scheduled
         
         # Use descriptive labels if available
         source_label = {
@@ -1795,6 +1846,8 @@ async def format_parsing_report(
             lines.append(f"  ❌ Ошибок: {stats.failed}")
         if stats.skipped:
             lines.append(f"  ⏭️ Пропущено: {stats.skipped}")
+        if stats.retry_scheduled:
+            lines.append(f"  🔁 Повтор назначен: {stats.retry_scheduled}")
     
     lines.append("")
     lines.append(f"**Итого:**")
@@ -1803,6 +1856,8 @@ async def format_parsing_report(
         lines.append(f"🔄 Всего обновлено: {total_updated}")
     if total_failed:
         lines.append(f"❌ Всего ошибок: {total_failed}")
+    if total_retry_scheduled:
+        lines.append(f"🔁 Всего автоматических повторов: {total_retry_scheduled}")
     
     if result.errors:
         lines.append("")
@@ -2886,6 +2941,19 @@ async def process_source_events(
         result_tag = "unknown"
         event_id: int | None = None
         llm_used = False
+        event_retry_scheduled = False
+
+        async def _retry_event(reason: str) -> None:
+            nonlocal event_retry_scheduled
+            if not event_retry_scheduled:
+                stats.retry_scheduled += 1
+                event_retry_scheduled = True
+            await _schedule_source_parser_recovery_request(
+                db,
+                source_type=source or event.source_type,
+                reason=reason,
+            )
+
         diag_enabled = bool(SOURCE_PARSING_DIAG_TITLE) and SOURCE_PARSING_DIAG_TITLE in (event.title or "").lower()
 
         # Update progress message for every event (new or existing).
@@ -2909,8 +2977,8 @@ async def process_source_events(
                 "source_parsing: skipping event without date title=%s",
                 event.title,
             )
-            stats.failed += 1
-            result_tag = "missing_date"
+            await _retry_event("missing_date")
+            result_tag = "missing_date_retry_scheduled"
             logger.info(
                 "source_parsing: event_result source=%s title=%s result=%s duration=%.2fs",
                 source,
@@ -3039,8 +3107,8 @@ async def process_source_events(
                             if info:
                                 updated_events.append(info)
                     else:
-                        stats.failed += 1
-                        result_tag = "existing_full_update_failed"
+                        await _retry_event("existing_full_update_failed")
+                        result_tag = "existing_full_update_retry_scheduled"
                 else:
                     # Source already imported via parser -> cheap status/ticket sync only.
                     ticket_sync = await update_event_ticket_status(
@@ -3077,8 +3145,8 @@ async def process_source_events(
                             if info:
                                 updated_events.append(info)
                     else:
-                        stats.already_exists += 1
-                        result_tag = "existing_ticket_update_failed"
+                        await _retry_event("existing_ticket_update_failed")
+                        result_tag = "existing_ticket_update_retry_scheduled"
 
                 # Always update linked events
                 await update_linked_events(db, existing_id, location_name, event.title)
@@ -3112,6 +3180,7 @@ async def process_source_events(
                         if media_changed:
                             await schedule_existing_event_update(db, existing_id)
                     except Exception:
+                        await _retry_event("existing_media_reconcile_failed")
                         logger.warning(
                             "source_parsing: existing media reconcile failed source=%s event_id=%s",
                             event.source_type,
@@ -3190,6 +3259,7 @@ async def process_source_events(
                                 )
                             except asyncio.TimeoutError:
                                 # Preserve poster hashes/URLs even if OCR is too slow.
+                                await _retry_event("ocr_timeout")
                                 poster_media_list, _ = await asyncio.wait_for(
                                     process_media(
                                         raw_images,
@@ -3210,12 +3280,14 @@ async def process_source_events(
                                 len(poster_media_list),
                             )
                     except asyncio.TimeoutError:
+                        await _retry_event("ocr_timeout")
                         logger.warning(
                             "source_parsing: ocr timeout title=%s after %ss",
                             event.title,
                             SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
                         )
                     except Exception as e:
+                        await _retry_event(f"ocr_failed:{type(e).__name__}")
                         logger.warning("source_parsing: ocr failed event=%s error=%s", event.title, e)
 
                 # Add/merge event through Smart Update.
@@ -3267,11 +3339,11 @@ async def process_source_events(
                     stats.skipped += 1
                     result_tag = f"{mode_prefix}_skipped"
                 elif outcome == "retry_scheduled":
-                    stats.retry_scheduled += 1
+                    await _retry_event("smart_update_retry_scheduled")
                     result_tag = f"{mode_prefix}_retry_scheduled"
                 else:
-                    stats.failed += 1
-                    result_tag = f"{mode_prefix}_failed"
+                    await _retry_event("untyped_or_failed_add_event_outcome")
+                    result_tag = f"{mode_prefix}_retry_scheduled"
 
                 if new_id and outcome in {"added", "updated"}:
                     await reconcile_existing_event_lifecycle(db, new_id, event)
@@ -3282,9 +3354,9 @@ async def process_source_events(
                     if DEBUG_MAX_EVENTS and stats.new_added >= DEBUG_MAX_EVENTS:
                         logger.info("source_parsing: DEBUG limit reached (%d events)", DEBUG_MAX_EVENTS)
                         break
-        except Exception:
-            stats.failed += 1
-            result_tag = "exception"
+        except Exception as exc:
+            await _retry_event(f"exception:{type(exc).__name__}")
+            result_tag = "exception_retry_scheduled"
             logger.exception(
                 "source_parsing: event_exception source=%s title=%s",
                 source,

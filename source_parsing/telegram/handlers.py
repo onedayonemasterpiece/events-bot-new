@@ -218,6 +218,28 @@ async def _clear_force_message(db: Database, *, source_id: int, message_id: int)
             await asyncio.sleep(0.15 * attempt)
 
 
+async def _ensure_force_message(db: Database, *, source_id: int, message_id: int) -> None:
+    """Keep an unresolved carrier visible to the normal monitoring scheduler."""
+
+    for attempt in range(1, 8):
+        try:
+            async with db.get_session() as session:
+                stmt = (
+                    sqlite_insert(TelegramSourceForceMessage)
+                    .values(source_id=int(source_id), message_id=int(message_id))
+                    .on_conflict_do_nothing(
+                        index_elements=["source_id", "message_id"]
+                    )
+                )
+                await session.execute(stmt)
+                await session.commit()
+            return
+        except OperationalError as exc:
+            if "database is locked" not in str(exc).lower() or attempt >= 7:
+                raise
+            await asyncio.sleep(0.15 * attempt)
+
+
 def _event_telegraph_url(event) -> str | None:
     url = getattr(event, "telegraph_url", None)
     if url:
@@ -4065,7 +4087,13 @@ def _scan_error_from_breakdown(
     status: str,
     skip_breakdown: dict[str, int] | defaultdict[str, int] | None,
 ) -> str | None:
-    if status not in {"skipped", "partial", "error"}:
+    if status not in {
+        "skipped",
+        "partial",
+        "error",
+        "retry_scheduled",
+        "partial_retry_scheduled",
+    }:
         return None
     if not skip_breakdown:
         return None
@@ -4106,6 +4134,111 @@ def _message_has_event_like_zero_extraction_signals(message: dict[str, Any]) -> 
         and _ZERO_EVENT_DATE_RE.search(text)
         and _ZERO_EVENT_TIME_RE.search(text)
         and _ZERO_EVENT_VENUE_OR_TICKET_RE.search(text)
+    )
+
+
+def _decision_value(value: Any, key: str, default: Any = None) -> Any:
+    if isinstance(value, dict):
+        return value.get(key, default)
+    return getattr(value, key, default)
+
+
+def _source_parse_decision(message: dict[str, Any]) -> Any | None:
+    """Accept the typed source verdict as either an object or JSON mapping.
+
+    The parser contract owns ``SourceParseDecision``.  This rolling-compatible
+    adapter deliberately does not define another verdict type.
+    """
+
+    for key in ("source_parse_decision", "parse_decision"):
+        value = message.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _source_parse_disposition(decision: Any | None) -> str | None:
+    raw = _decision_value(decision, "disposition") if decision is not None else None
+    value = getattr(raw, "value", raw)
+    clean = str(value or "").strip().upper()
+    return clean or None
+
+
+def _source_evidence_incomplete_reason(
+    message: dict[str, Any], decision: Any | None
+) -> str | None:
+    """Return a technical retry reason when semantic evidence is incomplete."""
+
+    if decision is not None and _decision_value(decision, "evidence_complete") is False:
+        return "source_evidence_incomplete"
+
+    verification = (
+        _decision_value(decision, "verification")
+        if decision is not None
+        else None
+    )
+    if verification is not None:
+        verification_disposition = _source_parse_disposition(verification)
+        if verification_disposition == "RETRY_REQUIRED":
+            return "source_verification_retry_required"
+        if _decision_value(verification, "evidence_complete") is False:
+            return "source_verification_evidence_incomplete"
+        if _decision_value(verification, "error"):
+            return "source_verification_error"
+
+    manifest = (
+        _decision_value(decision, "evidence_manifest")
+        if decision is not None
+        else None
+    )
+    if manifest is None:
+        manifest = message.get("evidence_manifest")
+    if manifest is not None:
+        if _decision_value(manifest, "evidence_complete") is False:
+            return "source_evidence_incomplete"
+        if bool(
+            _decision_value(manifest, "truncation_flag")
+            or _decision_value(manifest, "truncated")
+        ):
+            return "source_evidence_truncated"
+        if _decision_value(manifest, "omitted_blocks"):
+            return "source_evidence_omitted"
+        available = _decision_value(manifest, "ocr_blocks_available")
+        included = _decision_value(manifest, "ocr_blocks_included")
+        if isinstance(available, int) and isinstance(included, int) and included < available:
+            return "source_ocr_incomplete"
+
+    for status in (
+        message.get("ocr_status"),
+        message.get("media_status"),
+        message.get("evidence_status"),
+    ):
+        clean = str(getattr(status, "value", status) or "").strip().lower()
+        if clean in {"error", "failed", "incomplete", "missing", "timeout", "pending"}:
+            return f"source_evidence_{clean}"
+
+    return None
+
+
+def _source_zero_event_is_confirmed(
+    message: dict[str, Any], decision: Any | None
+) -> bool:
+    """Only a complete typed LLM verdict may resolve a zero-event carrier."""
+
+    verification = (
+        _decision_value(decision, "verification")
+        if decision is not None
+        else None
+    )
+    verification_disposition = (
+        _source_parse_disposition(verification) if verification is not None else None
+    )
+    return bool(
+        decision is not None
+        and _source_parse_disposition(decision) == "CONFIRMED_NO_EVENT"
+        and _decision_value(decision, "evidence_complete") is True
+        and verification_disposition in {None, "CONFIRMED_NO_EVENT"}
+        and _source_evidence_incomplete_reason(message, decision) is None
     )
 
 
@@ -5645,6 +5778,11 @@ async def process_telegram_results(
             message_id=message_id,
         )
         events_extracted = int(len(events) if isinstance(events, list) else 0)
+        source_decision = _source_parse_decision(message)
+        source_disposition = _source_parse_disposition(source_decision)
+        evidence_retry_reason = _source_evidence_incomplete_reason(
+            message, source_decision
+        )
         events_imported = 0
         message_created_events: list[TelegramMonitorEventInfo] = []
         message_merged_events: list[TelegramMonitorEventInfo] = []
@@ -5653,7 +5791,13 @@ async def process_telegram_results(
         event_ids_by_original_index: dict[int, set[int]] = defaultdict(set)
         accepted_candidate_identity_by_event_id: dict[int, tuple[str | None, str | None]] = {}
         added_posters_total = 0
-        message_retry_scheduled = False
+        # Positive children may still be persisted from partial evidence, but
+        # the carrier itself must remain due until enrichment is complete.
+        message_retry_scheduled = bool(evidence_retry_reason)
+        if events_extracted <= 0 and not _source_zero_event_is_confirmed(
+            message, source_decision
+        ):
+            message_retry_scheduled = True
 
         def _sorted_breakdown(value: dict[str, int] | defaultdict[str, int] | None) -> dict[str, int]:
             if not value:
@@ -5810,40 +5954,70 @@ async def process_telegram_results(
                         except Exception:
                             pass
 
-        # Drop "no events + not forced + not previously scanned" early.
-        # Kaggle may include such posts for completeness, but they are useless for server import
-        # and would pollute popularity baselines if we stored metrics for them.
+        # A zero-event carrier is terminal only after a complete typed LLM
+        # CONFIRMED_NO_EVENT verdict.  Legacy/unknown/technical empty results
+        # remain forced and therefore automatically reclaimable.
         if events_extracted <= 0 and not forced and not existing and not bridge_target:
-            if _message_has_event_like_zero_extraction_signals(message):
-                logger.warning(
-                    "tg_monitor: producer_zero_events source=%s message_id=%s source_link=%s",
-                    username,
-                    message_id,
-                    source_link,
-                )
+            if _source_zero_event_is_confirmed(message, source_decision):
                 await _mark_message_scanned(
                     db,
                     source_id=int(source.id),
                     message_id=int(message_id),
                     message_date=message_dt,
-                    status="skipped",
+                    status="confirmed_no_event",
                     events_extracted=0,
                     events_imported=0,
-                    error="producer_zero_events:clear_event_signals",
+                    error=None,
                 )
-                report.skipped_posts.append(
-                    {
-                        "source_username": username,
-                        "message_id": int(message_id),
-                        "source_link": source_link,
-                        "reason": "producer_zero_events:clear_event_signals",
-                        "text_excerpt": _build_excerpt(str(message.get("text") or ""), max_len=240),
-                    }
+                await _update_source_scan_meta(db, int(source.id), int(message_id))
+                if forced and not keep_force_message_ids:
+                    await _clear_force_message(
+                        db, source_id=int(source.id), message_id=int(message_id)
+                    )
+                continue
+
+            reason = evidence_retry_reason
+            if not reason and source_disposition == "RETRY_REQUIRED":
+                reason = "source_parse_retry_required"
+            if not reason and _message_has_event_like_zero_extraction_signals(message):
+                reason = "producer_zero_events:clear_event_signals"
+            reason = reason or "producer_zero_events:untyped_or_unknown"
+            logger.warning(
+                "tg_monitor: zero-event carrier retained for retry source=%s "
+                "message_id=%s disposition=%s reason=%s",
+                username,
+                message_id,
+                source_disposition,
+                reason,
+            )
+            await _ensure_force_message(
+                db, source_id=int(source.id), message_id=int(message_id)
+            )
+            await _mark_message_scanned(
+                db,
+                source_id=int(source.id),
+                message_id=int(message_id),
+                message_date=message_dt,
+                status="retry_scheduled",
+                events_extracted=0,
+                events_imported=0,
+                error=reason,
+            )
+            report.skipped_posts.append(
+                TelegramMonitorSkippedPostInfo(
+                    source_username=username,
+                    source_title=source_title or None,
+                    message_id=int(message_id),
+                    source_link=source_link,
+                    status="retry_scheduled",
+                    reason=reason,
+                    events_extracted=0,
+                    events_imported=0,
+                    skip_breakdown={f"retry_scheduled:{reason}": 1},
+                    event_titles=[],
+                    source_excerpt=_build_excerpt(source_text),
                 )
-            # The producer successfully scanned this message even when it is a
-            # legitimate non-event. Advancing only for event-like zero results
-            # makes the source tail sticky and repeats LLM/media work every day.
-            await _update_source_scan_meta(db, int(source.id), int(message_id))
+            )
             continue
 
         processed_no += 1
@@ -5954,20 +6128,22 @@ async def process_telegram_results(
                     for p in posters
                 )
                 if not has_any_ocr:
-                    skip_breakdown = {"poster_bridge_no_ocr": 1}
+                    skip_breakdown = {"retry_scheduled:poster_bridge_no_ocr": 1}
+                    await _ensure_force_message(
+                        db, source_id=int(source.id), message_id=int(message_id)
+                    )
                     await _mark_message_scanned(
                         db,
                         source_id=source.id,
                         message_id=message_id,
                         message_date=message_dt,
-                        status="skipped",
+                        status="retry_scheduled",
                         events_extracted=0,
                         events_imported=0,
                         error="poster_bridge_no_ocr",
                     )
-                    await _update_source_scan_meta(db, source.id, message_id)
                     await _notify_done(
-                        status="skipped",
+                        status="retry_scheduled",
                         reason="poster_bridge_no_ocr",
                         metrics_payload=None,
                         popularity_payload=None,
@@ -5985,20 +6161,22 @@ async def process_telegram_results(
                     event_time=str(getattr(ev, "time", "") or "").strip() or None,
                 )
                 if not filtered:
-                    skip_breakdown = {"poster_bridge_no_match": 1}
+                    skip_breakdown = {"retry_scheduled:poster_bridge_no_match": 1}
+                    await _ensure_force_message(
+                        db, source_id=int(source.id), message_id=int(message_id)
+                    )
                     await _mark_message_scanned(
                         db,
                         source_id=source.id,
                         message_id=message_id,
                         message_date=message_dt,
-                        status="skipped",
+                        status="retry_scheduled",
                         events_extracted=0,
                         events_imported=0,
                         error="poster_bridge_no_match",
                     )
-                    await _update_source_scan_meta(db, source.id, message_id)
                     await _notify_done(
-                        status="skipped",
+                        status="retry_scheduled",
                         reason="poster_bridge_no_match",
                         metrics_payload=None,
                         popularity_payload=None,
@@ -6078,7 +6256,14 @@ async def process_telegram_results(
                         events_imported=0,
                         error=result.reason,
                     )
-                    await _update_source_scan_meta(db, source.id, message_id)
+                    if result.is_retry:
+                        await _ensure_force_message(
+                            db,
+                            source_id=int(source.id),
+                            message_id=int(message_id),
+                        )
+                    else:
+                        await _update_source_scan_meta(db, source.id, message_id)
                     await _notify_done(
                         status=terminal_status,
                         reason=result.reason,
@@ -6115,6 +6300,8 @@ async def process_telegram_results(
                 poster_bridge.pop(username, None)
                 continue
             except Exception:
+                message_retry_scheduled = True
+                evidence_retry_reason = "poster_bridge_exception"
                 logger.warning(
                     "tg_monitor.poster_bridge failed source=%s message_id=%s",
                     username,
@@ -6122,91 +6309,23 @@ async def process_telegram_results(
                     exc_info=True,
                 )
 
+        # Legacy source filters are diagnostics only.  They may trigger
+        # producer-side verification, but cannot terminate an LLM-produced
+        # carrier or child at this caller boundary.
         if filters.get("skip_ads") and _is_ads_message(source_text):
-            report.messages_skipped += 1
             logger.info(
-                "tg_monitor.message skip reason=filtered_ads run_id=%s source=%s message_id=%s",
+                "tg_monitor.message semantic_hint=possible_ad run_id=%s source=%s message_id=%s",
                 report.run_id,
                 username,
                 message_id,
             )
-            await _mark_message_scanned(
-                db,
-                source_id=source.id,
-                message_id=message_id,
-                message_date=_parse_datetime(message.get("message_date")),
-                status="skipped",
-                events_extracted=0,
-                events_imported=0,
-                error="filtered_ads",
-            )
-            report.skipped_posts.append(
-                TelegramMonitorSkippedPostInfo(
-                    source_username=username,
-                    source_title=source_title or None,
-                    message_id=message_id,
-                    source_link=source_link,
-                    status="filtered",
-                    reason="filtered_ads",
-                    events_extracted=0,
-                    events_imported=0,
-                    skip_breakdown={"filtered_ads": 1},
-                    event_titles=[],
-                    source_excerpt=_build_excerpt(source_text),
-                )
-            )
-            await _notify_done(
-                status="filtered",
-                reason="filtered_ads",
-                metrics_payload=metrics,
-                popularity_payload=popularity,
-                skip_breakdown_payload={"filtered_ads": 1},
-            )
-            continue
-
         if filters.get("skip_esoterica") and _is_esoterica_message(source_text):
-            report.messages_skipped += 1
             logger.info(
-                "tg_monitor.message skip reason=filtered_esoterica run_id=%s source=%s message_id=%s",
+                "tg_monitor.message semantic_hint=possible_esoterica run_id=%s source=%s message_id=%s",
                 report.run_id,
                 username,
                 message_id,
             )
-            await _mark_message_scanned(
-                db,
-                source_id=source.id,
-                message_id=message_id,
-                message_date=_parse_datetime(message.get("message_date")),
-                status="skipped",
-                events_extracted=0,
-                events_imported=0,
-                error="filtered_esoterica",
-            )
-            report.skipped_posts.append(
-                TelegramMonitorSkippedPostInfo(
-                    source_username=username,
-                    source_title=source_title or None,
-                    message_id=message_id,
-                    source_link=source_link,
-                    status="filtered",
-                    reason="filtered_esoterica",
-                    events_extracted=0,
-                    events_imported=0,
-                    skip_breakdown={"filtered_esoterica": 1},
-                    event_titles=[],
-                    source_excerpt=_build_excerpt(source_text),
-                )
-            )
-            await _notify_done(
-                status="filtered",
-                reason="filtered_esoterica",
-                metrics_payload=metrics,
-                popularity_payload=popularity,
-                skip_breakdown_payload={"filtered_esoterica": 1},
-            )
-            if forced and not keep_force_message_ids:
-                await _clear_force_message(db, source_id=int(source.id), message_id=int(message_id))
-            continue
         if not source.enabled:
             report.messages_skipped += 1
             logger.info(
@@ -6595,25 +6714,17 @@ async def process_telegram_results(
                 if filters.get("skip_recurring_excursions") and _looks_like_recurring_excursion(
                     source_text, candidate
                 ):
-                    report.events_filtered += 1
-                    report.events_skipped += 1
-                    skip_breakdown["filtered_recurring_excursion"] += 1
                     logger.info(
-                        "tg_monitor.event skip reason=filtered_recurring_excursion source=%s message_id=%s title=%s",
+                        "tg_monitor.event semantic_hint=possible_recurring_excursion "
+                        "source=%s message_id=%s title=%s",
                         username,
                         message_id,
                         (candidate.title or "")[:80],
                     )
-                    continue
-                # Telegram monitoring extracts multiple events from schedule posts.
-                # Skip only truly past events: long-running events (exhibitions/fairs)
-                # remain valid while end_date is current/future.
                 if _should_skip_past_event_candidate(candidate):
-                    report.events_past += 1
-                    report.events_skipped += 1
-                    skip_breakdown["past_event"] += 1
                     logger.info(
-                        "tg_monitor.event skip reason=past_event source=%s message_id=%s title=%s date=%s end_date=%s event_type=%s",
+                        "tg_monitor.event semantic_hint=possible_past_event source=%s "
+                        "message_id=%s title=%s date=%s end_date=%s event_type=%s",
                         username,
                         message_id,
                         (candidate.title or "")[:80],
@@ -6621,7 +6732,6 @@ async def process_telegram_results(
                         candidate.end_date,
                         candidate.event_type,
                     )
-                    continue
                 # The primary Telegram import is a real event-ingest boundary:
                 # Smart Update must enqueue the standard publication jobs,
                 # including VK sync, so promo events can flow through VK and
@@ -6916,6 +7026,13 @@ async def process_telegram_results(
                 if not post_video_status:
                     post_video_status = "skipped:attach_error"
 
+        if message_retry_scheduled and not skip_breakdown:
+            retry_reason = evidence_retry_reason
+            if not retry_reason and source_disposition == "RETRY_REQUIRED":
+                retry_reason = "source_parse_retry_required"
+            retry_reason = retry_reason or "source_parse_unresolved"
+            skip_breakdown[f"retry_scheduled:{retry_reason}"] += 1
+
         final_status = "done"
         if message_retry_scheduled:
             final_status = (
@@ -6957,14 +7074,19 @@ async def process_telegram_results(
                 )
             except Exception:
                 pass
-        await _update_source_scan_meta(db, source.id, message_id)
+        if message_retry_scheduled:
+            await _ensure_force_message(
+                db, source_id=int(source.id), message_id=int(message_id)
+            )
+        else:
+            await _update_source_scan_meta(db, source.id, message_id)
         await _notify_done(
             status=final_status,
             metrics_payload=metrics,
             popularity_payload=popularity,
             skip_breakdown_payload=skip_breakdown,
         )
-        if forced and not keep_force_message_ids:
+        if forced and not message_retry_scheduled and not keep_force_message_ids:
             try:
                 await _clear_force_message(db, source_id=int(source.id), message_id=int(message_id))
             except Exception:

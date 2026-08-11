@@ -35,7 +35,7 @@ from markup import (
 )
 from llm_source_grounding import claim_is_grounded
 
-from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource
+from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource, TelegramSourceForceMessage
 from source_parsing.telegram.commands import tg_monitor_router
 from poster_media import PosterMedia
 from db import Database
@@ -19316,6 +19316,47 @@ async def finalize_album(gid: str, db: Database, bot: Bot) -> None:
     )
 
 
+async def _retain_forwarded_parse_retry(db: Database, link: str | None) -> bool:
+    """Route a registered public-channel forward back to normal monitoring."""
+
+    public_match = re.search(
+        r"https?://(?:t\.me|telegram\.me)/([A-Za-z0-9_]+)/([0-9]+)",
+        str(link or ""),
+        flags=re.IGNORECASE,
+    )
+    if not public_match:
+        return False
+    retry_username = str(public_match.group(1) or "").strip().lower()
+    retry_message_id = int(public_match.group(2))
+    try:
+        async with db.get_session() as session:
+            retry_source = (
+                await session.execute(
+                    select(TelegramSource).where(
+                        func.lower(TelegramSource.username) == retry_username
+                    )
+                )
+            ).scalar_one_or_none()
+            if not retry_source or retry_source.id is None:
+                return False
+            force_row = await session.get(
+                TelegramSourceForceMessage,
+                (int(retry_source.id), retry_message_id),
+            )
+            if not force_row:
+                session.add(
+                    TelegramSourceForceMessage(
+                        source_id=int(retry_source.id),
+                        message_id=retry_message_id,
+                    )
+                )
+            await session.commit()
+        return True
+    except Exception:
+        logging.exception("forward retry persist failed link=%s", link)
+        return False
+
+
 async def _process_forwarded(
     message: types.Message,
     db: Database,
@@ -19457,8 +19498,14 @@ async def _process_forwarded(
         )
     except Exception as e:
         logging.exception("forward parse failed")
+        retry_persisted = await _retain_forwarded_parse_retry(db, link)
         snippet = (text or "")[:200]
-        msg = f"Не удалось обработать сообщение: {type(e).__name__}: {e}"
+        msg = (
+            f"Не удалось обработать сообщение: {type(e).__name__}: {e}. "
+            "Это техническая ошибка, а не подтверждение отсутствия событий."
+        )
+        if retry_persisted:
+            msg += " Пост оставлен для автоматического повтора."
         if snippet:
             msg += f"\n\n{snippet}"
         if link:
@@ -19482,11 +19529,36 @@ async def _process_forwarded(
         else:
             ocr_line = base_line
     if not results:
-        logging.info("no events parsed from forwarded text")
+        disposition_raw = getattr(results, "disposition", None)
+        disposition = str(
+            getattr(disposition_raw, "value", disposition_raw) or ""
+        ).strip().upper()
+        evidence_complete = getattr(results, "evidence_complete", None)
+        if disposition == "CONFIRMED_NO_EVENT" and evidence_complete is True:
+            logging.info("forwarded source confirmed no-event by typed LLM decision")
+            await bot.send_message(
+                message.chat.id,
+                "В пересланном посте не найдено событий.",
+            )
+            return
+
+        retry_persisted = await _retain_forwarded_parse_retry(db, link)
+
+        logging.warning(
+            "forward parse unresolved disposition=%s evidence_complete=%s retry_persisted=%s",
+            disposition or None,
+            evidence_complete,
+            int(retry_persisted),
+        )
+        suffix = (
+            " Пост оставлен для автоматического повтора."
+            if retry_persisted
+            else " Попробуйте повторить позже."
+        )
         await bot.send_message(
             message.chat.id,
-            "Я не смог найти события в пересланном посте. "
-            "Попробуйте добавить событие вручную или свяжитесь с поддержкой.",
+            "Обработка поста технически не завершена; это не означает, что событий нет."
+            + suffix,
         )
         return
     for saved, added, lines, status in results:
