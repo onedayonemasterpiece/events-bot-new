@@ -148,6 +148,31 @@ def test_planned_raw_packet_schema_is_feature_detected(tmp_path: Path) -> None:
     assert report["totals"]["extracted_event_occurrences"] == 2
 
 
+def test_generic_ledger_fallback_respects_half_open_window(tmp_path: Path) -> None:
+    db = tmp_path / "db.sqlite"
+    con = sqlite3.connect(db)
+    con.executescript(
+        """
+        CREATE TABLE ingestion_funnel_ledger(
+          source_type TEXT, carrier_id TEXT, source_revision_hash TEXT,
+          evidence_json TEXT, observed_at TEXT
+        );
+        INSERT INTO ingestion_funnel_ledger VALUES
+          ('vk','before','r1','{"no_date":true}','2026-07-31T23:59:59Z'),
+          ('vk','inside','r2','{"no_date":true}','2026-08-01T00:00:00Z'),
+          ('vk','until','r3','{"no_date":true}','2026-08-06T00:00:00Z');
+        """
+    )
+    con.commit()
+    con.close()
+    report = census.run(db, since="2026-08-01", until="2026-08-06")
+    assert report["features"]["ingestion_funnel_ledger"] == {
+        "available": True, "rows": 1
+    }
+    assert report["totals"]["carrier_count"] == 1
+    assert report["inventory"][0]["loss_class"] == "B"
+
+
 def test_feb_jul_sampling_has_explicit_denominators_and_never_multiplies() -> None:
     rows = []
     for index in range(5):

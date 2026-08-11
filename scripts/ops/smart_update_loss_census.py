@@ -594,9 +594,17 @@ def _legacy_rows(con: sqlite3.Connection, since: datetime, until: datetime) -> t
     for table in ("ingestion_funnel_ledger", "source_packet_ledger", "source_packet_attempt"):
         cols = _table_columns(con, table)
         required = {"source_type", "carrier_id", "source_revision_hash", "evidence_json"}
-        if required.issubset(cols):
-            query = f'SELECT source_type,carrier_id,source_revision_hash,evidence_json FROM "{table}" ORDER BY source_type,carrier_id,source_revision_hash'
-            selected = con.execute(query).fetchall()
+        time_col = next(
+            (name for name in ("observed_at", "created_at", "started_at", "fetched_at") if name in cols),
+            None,
+        )
+        if required.issubset(cols) and time_col:
+            query = (
+                f'SELECT source_type,carrier_id,source_revision_hash,evidence_json FROM "{table}" '
+                f'WHERE datetime("{time_col}")>=datetime(?) AND datetime("{time_col}")<datetime(?) '
+                f'ORDER BY source_type,carrier_id,source_revision_hash'
+            )
+            selected = con.execute(query, (utc(since), utc(until))).fetchall()
             accepted = 0
             for item in selected:
                 try:
@@ -608,7 +616,10 @@ def _legacy_rows(con: sqlite3.Connection, since: datetime, until: datetime) -> t
                 accepted += 1
             features[table] = {"available": True, "rows": accepted}
             break
-        features[table] = {"available": False, "rows": 0}
+        features[table] = {
+            "available": False, "rows": 0,
+            "reason": "window_boundary_unavailable" if required.issubset(cols) else "schema_unavailable",
+        }
     return rows, features
 
 
