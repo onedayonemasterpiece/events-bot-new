@@ -5779,18 +5779,24 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             block = '\n'.join(part for part in block_parts if part)
             if block and block not in ocr_blocks:
                 ocr_blocks.append(block)
-        source_parse_decision = await extract_source_parse_decision(
-            text_for_extract,
-            ocr_blocks,
-            message_date=msg_date,
-            source_username=username,
-            source_title=(source_meta or {}).get('title') if isinstance(source_meta, dict) else None,
-            source_default_location=default_location,
-            attachment_count=attachment_count,
-            unavailable_attachment_count=unavailable_attachment_count,
-            ocr_complete=bool(ocr_succeeded),
-        )
-        events = list(source_parse_decision.get('events') or [])
+        # A Telegram album is one logical carrier.  Defer its only primary
+        # semantic call until every sibling's OCR block has been collected.
+        source_parse_pending = bool(grouped_id)
+        if source_parse_pending:
+            source_parse_decision = None
+        else:
+            source_parse_decision = await extract_source_parse_decision(
+                text_for_extract,
+                ocr_blocks,
+                message_date=msg_date,
+                source_username=username,
+                source_title=(source_meta or {}).get('title') if isinstance(source_meta, dict) else None,
+                source_default_location=default_location,
+                attachment_count=attachment_count,
+                unavailable_attachment_count=unavailable_attachment_count,
+                ocr_complete=bool(ocr_succeeded),
+            )
+        events = list((source_parse_decision or {}).get('events') or [])
 
         cleaned_events = []
         for ev in events or []:
@@ -5977,7 +5983,11 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             'videos': videos,
             'events': cleaned_events,
             'source_parse_decision': source_parse_decision,
-            'evidence_manifest': source_parse_decision.get('evidence_manifest'),
+            'evidence_manifest': (source_parse_decision or {}).get('evidence_manifest'),
+            '_source_parse_pending': source_parse_pending,
+            '_source_attachment_count': attachment_count,
+            '_source_unavailable_attachment_count': unavailable_attachment_count,
+            '_source_ocr_complete': bool(ocr_succeeded),
         })
 
         processed += 1
@@ -6070,16 +6080,71 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         msg['metrics']['channel_median_views'] = median_views
         msg['metrics']['channel_median_likes'] = median_likes
 
+    messages_out = _merge_media_groups(messages_out)
+    for item in messages_out:
+        source_parse_pending = bool(item.pop('_source_parse_pending', False))
+        attachment_count = max(0, int(item.pop('_source_attachment_count', 0) or 0))
+        unavailable_attachment_count = max(
+            0,
+            int(item.pop('_source_unavailable_attachment_count', 0) or 0),
+        )
+        ocr_complete = bool(item.pop('_source_ocr_complete', True))
+        if not source_parse_pending:
+            continue
+        album_ocr_blocks = []
+        for poster in item.get('posters') or []:
+            block = '\n'.join(
+                part
+                for part in (
+                    str(poster.get('ocr_title') or '').strip(),
+                    str(poster.get('ocr_text') or '').strip(),
+                )
+                if part
+            )
+            if block and block not in album_ocr_blocks:
+                album_ocr_blocks.append(block)
+        semantic_source_text = str(
+            item.get('semantic_source_text') or item.get('text') or ''
+        )
+        try:
+            decision = await extract_source_parse_decision(
+                semantic_source_text,
+                album_ocr_blocks,
+                message_date=item.get('message_date'),
+                source_username=username,
+                source_title=item.get('source_title'),
+                source_default_location=default_location,
+                attachment_count=attachment_count,
+                unavailable_attachment_count=unavailable_attachment_count,
+                ocr_complete=ocr_complete,
+            )
+        except Exception as exc:
+            logger.warning(
+                'source_parse.album_adapter technical_error source=%s grouped_id=%s: %s',
+                username,
+                item.get('grouped_id'),
+                exc,
+            )
+            manifest = _source_evidence_manifest(
+                semantic_source_text,
+                album_ocr_blocks,
+                attachment_count=attachment_count,
+                unavailable_attachment_count=unavailable_attachment_count,
+                ocr_complete=ocr_complete,
+            )
+            decision = _source_parse_retry('TECHNICAL_ERROR', manifest)
+        item['source_parse_decision'] = decision
+        item['evidence_manifest'] = decision.get('evidence_manifest')
+        item['events'] = list(decision.get('events') or [])
+        _assign_posters_to_events(item)
+
     for video_msg in pending_group_videos:
         grouped_id = getattr(video_msg, 'grouped_id', None)
         if not grouped_id:
             continue
         peers = [item for item in messages_out if item.get('grouped_id') == grouped_id]
         event_peer = next((item for item in peers if item.get('events')), None)
-        target = next(
-            (item for item in peers if item.get('message_id') == getattr(video_msg, 'id', None)),
-            None,
-        )
+        target = next(iter(peers), None)
         if target is None:
             continue
         if event_peer is None:
@@ -6097,6 +6162,9 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             post_text=group_text,
             cleaned_events=list(event_peer.get('events') or []),
         )
+
+    messages_with_events = sum(1 for item in messages_out if item.get('events'))
+    events_total = sum(len(item.get('events') or []) for item in messages_out)
 
     if not messages_out:
         logger.info(
@@ -6125,7 +6193,6 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             first_date,
             last_date,
         )
-    messages_out = _merge_media_groups(messages_out)
     return {'messages': messages_out, 'source_meta': source_meta}
 
 
@@ -6264,6 +6331,10 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
                 'events': [],
                 '_source_parse_decisions': [],
                 '_raw_text_blocks': [],
+                '_source_parse_pending': False,
+                '_source_attachment_count': 0,
+                '_source_unavailable_attachment_count': 0,
+                '_source_ocr_complete': True,
                 'grouped_id': gid_i,
             }
             by_gid[gid_i] = acc
@@ -6285,6 +6356,19 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
             acc['_raw_text_blocks'].append(semantic_source_text)
         if isinstance(msg.get('source_parse_decision'), dict):
             acc['_source_parse_decisions'].append(msg['source_parse_decision'])
+        acc['_source_parse_pending'] = bool(
+            acc.get('_source_parse_pending') or msg.get('_source_parse_pending')
+        )
+        acc['_source_attachment_count'] += max(
+            0, int(msg.get('_source_attachment_count') or 0)
+        )
+        acc['_source_unavailable_attachment_count'] += max(
+            0, int(msg.get('_source_unavailable_attachment_count') or 0)
+        )
+        acc['_source_ocr_complete'] = bool(
+            acc.get('_source_ocr_complete')
+            and msg.get('_source_ocr_complete', True)
+        )
 
         if msg.get('post_author') and not acc.get('post_author'):
             acc['post_author'] = msg.get('post_author')
@@ -6368,12 +6452,15 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
         m['semantic_source_text'] = '\n\n'.join(
             dict.fromkeys(str(item or '') for item in raw_text_blocks if str(item or ''))
         )
+        source_parse_pending = bool(m.get('_source_parse_pending'))
         if source_decisions:
             decision = _combine_source_parse_decisions(
                 source_decisions,
                 raw_text_blocks=raw_text_blocks,
                 ocr_blocks=album_ocr_blocks,
             )
+        elif source_parse_pending:
+            decision = None
         else:
             # Compatibility for historical/unit payloads created before the
             # typed producer.  Production scan results always take the branch
@@ -6388,9 +6475,10 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
             }
             if not legacy_events:
                 decision['retry_reason'] = 'TECHNICAL_ERROR'
-        m['source_parse_decision'] = decision
-        m['evidence_manifest'] = decision.get('evidence_manifest')
-        m['events'] = list(decision.get('events') or [])
+        if decision is not None:
+            m['source_parse_decision'] = decision
+            m['evidence_manifest'] = decision.get('evidence_manifest')
+            m['events'] = list(decision.get('events') or [])
         m['ocr_text'] = '\n\n'.join(album_ocr_blocks) or None
         _assign_posters_to_events(m)
 

@@ -310,6 +310,39 @@ def test_telegram_album_combiner_balances_all_children_and_ocr_evidence() -> Non
     assert combined["evidence_manifest"]["ocr_blocks_included"] == 2
 
 
+def test_telegram_primary_call_receives_every_multicard_ocr_block_once() -> None:
+    ns = _producer_contract_namespace()
+    prompts: list[dict] = []
+
+    async def model_call(kind, prompt, **kwargs):
+        prompts.append(json.loads(prompt))
+        return _provider_payload(
+            "EVENTS_FOUND",
+            events=[
+                {"title": "Лекция", "date": "2026-08-20"},
+                {"title": "Экскурсия", "date": "2026-08-21"},
+            ],
+        )
+
+    result = asyncio.run(
+        ns["extract_source_parse_decision"](
+            "Программа на двух карточках",
+            ["20 августа — лекция", "21 августа — экскурсия"],
+            attachment_count=2,
+            _model_call=model_call,
+        )
+    )
+
+    assert len(prompts) == 1
+    assert prompts[0]["ocr_blocks"] == [
+        "20 августа — лекция",
+        "21 августа — экскурсия",
+    ]
+    assert result["evidence_manifest"]["ocr_blocks_available"] == 2
+    assert result["evidence_manifest"]["ocr_blocks_included"] == 2
+    assert len(result["events"]) == 2
+
+
 def test_telegram_scan_has_no_free_form_or_regex_terminal_skip_authority() -> None:
     source = PRODUCER.read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -327,3 +360,6 @@ def test_telegram_scan_has_no_free_form_or_regex_terminal_skip_authority() -> No
     assert "cleaned_events = cleaned_events[:MAX_EVENTS_PER_MESSAGE]" not in scan_source
     assert "source_parse_decision" in scan_source
     assert "reject_reason" not in scan_source
+    assert "source_parse_pending = bool(grouped_id)" in scan_source
+    assert "messages_out = _merge_media_groups(messages_out)" in scan_source
+    assert "album_ocr_blocks" in scan_source
