@@ -74,8 +74,8 @@ lanes:
   - id: core_document_runtime
     role: worker
     requirement_ids: [R02, R05, R06, R10, R11]
-    depends_on: [document_policy_store, telegram_document_provider]
-    execution_mode: serial_after_dependency
+    depends_on: [doc_core_map, document_policy_store contract freeze]
+    execution_mode: parallel
     branch: agent/private-mcp-document-send/core-runtime
     worktree: /home/dev/.codex/worktrees/events-bot-new/document-core-runtime
     writable_files:
@@ -97,7 +97,7 @@ lanes:
       - .codex/lanes/core-document-runtime/RESULTS.md
     forbidden_files: [private_events_mcp_telegram_adapter.py, private_events_mcp_workspace_providers.py, docs, CHANGELOG.md]
     verification_scope: targeted
-    status: planned
+    status: spawned
   - id: docs_smoke
     role: worker
     requirement_ids: [R12]
