@@ -1,6 +1,16 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / Telegram documents (default off):** added one-file
+  Telegram `send_message` delivery from actual ChatGPT `fileParams` through the
+  existing immutable asset stage/prepare/commit boundary. The closed policy
+  accepts structurally verified APK/PDF/ZIP/UTF-8/Office files, binds sanitized
+  filename/MIME/size/SHA/expiry, performs one forced-document attempt with
+  read-back, exposes no URL/path/file/native ID, and leaves VK/mixed/multiple
+  media unsupported. Added a 48 MiB default/64 MiB hard cap, independent
+  fail-closed switch, sanitized smoke support and exact-main live/rollback gates
+  without changing the existing `eventsBot` connector identity.
+
 - **Private Events MCP / VK transport:** fixed intermittent rejection of valid
   VK dialog and other provider reads when aiohttp delivered compressed JSON in
   multiple chunks; the transport now reads through EOF while retaining its

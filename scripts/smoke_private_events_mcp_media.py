@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Bounded Private Events MCP media/story smoke.
+"""Bounded Private Events MCP media/story/document smoke.
 
 The default path lists the granted catalogue only. Provider reads require
-explicit opaque refs. Story preparation/commit additionally require
+explicit opaque refs. Story/document preparation and commit additionally require
 ``--allow-write`` and use an owner-only receipt file so exact preparation
-values are never printed.
+values are never printed. This script cannot create a genuine ChatGPT
+``fileParams`` object and never substitutes for the real ChatGPT upload UI.
 """
 
 from __future__ import annotations
@@ -201,7 +202,7 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
     scopes = list(EVIDENCE_SCOPES)
     if args.platform:
         scopes.append(f"{args.platform}:read")
-        if args.allow_write:
+        if args.allow_write or args.check_document_contract:
             scopes.append(f"{args.platform}:publish")
 
     timeout = aiohttp.ClientTimeout(total=30)
@@ -242,11 +243,55 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
             "tool_count": len(names),
             "media_story_tools": [name for name in names if name in MEDIA_TOOLS],
         }
+        descriptors = {
+            tool["name"]: tool
+            for tool in tools
+            if isinstance(tool, dict) and isinstance(tool.get("name"), str)
+        }
 
         async def call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return _structured(
                 await rpc("tools/call", {"name": name, "arguments": arguments})
             )
+
+        if args.check_document_contract:
+            stage = descriptors.get("social_asset_stage")
+            prepare = descriptors.get("social_action_prepare")
+            if not isinstance(stage, dict) or not isinstance(prepare, dict):
+                raise SmokeError("document_tools_missing")
+            try:
+                roles = stage["inputSchema"]["properties"]["role"]["enum"]
+                actions = prepare["inputSchema"]["properties"]["action"]["enum"]
+                file_params = stage["_meta"]["openai/fileParams"]
+            except (KeyError, TypeError):
+                raise SmokeError("document_descriptor_invalid") from None
+            if "document" not in roles or "send_message" not in actions:
+                raise SmokeError("document_contract_not_advertised")
+            if file_params != ["file"]:
+                raise SmokeError("document_fileparams_contract_invalid")
+            checked: dict[str, Any] = {
+                "fileparams_object_required": True,
+                "document_role_advertised": True,
+                "send_message_advertised": True,
+                "real_chatgpt_ui_acceptance_required": True,
+            }
+            if args.target_ref:
+                capabilities = await call(
+                    "social_capabilities",
+                    {"platform": "telegram", "target_ref": args.target_ref},
+                )
+                target_actions = capabilities.get("actions")
+                features = capabilities.get("content_features")
+                if (
+                    not isinstance(target_actions, list)
+                    or "send_message" not in target_actions
+                    or not isinstance(features, list)
+                    or "document" not in features
+                ):
+                    raise SmokeError("document_target_capability_missing")
+                checked["target_ref_fingerprint"] = _fingerprint(args.target_ref)
+                checked["target_send_message_document"] = True
+            receipt["document_contract"] = checked
 
         if args.preview_asset_ref:
             preview_response = await rpc(
@@ -351,6 +396,77 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 "next_step": "commit_exact_user_requested_preparation",
             }
 
+        if args.prepare_document:
+            asset_status = await call(
+                "social_asset_status", {"asset_ref": args.asset_ref}
+            )
+            if asset_status.get("status") != "ready" or any(
+                not asset_status.get(key)
+                for key in (
+                    "mime_type",
+                    "byte_length",
+                    "content_digest",
+                    "display_name",
+                    "expires_at",
+                )
+            ):
+                raise SmokeError("document_asset_not_ready")
+            prepared = await call(
+                "social_action_prepare",
+                {
+                    "platform": "telegram",
+                    "action": "send_message",
+                    "idempotency_key": args.idempotency_key,
+                    "target_ref": args.target_ref,
+                    "content": {
+                        "text": args.caption,
+                        "entities": [],
+                        "media": [
+                            {"asset_ref": args.asset_ref, "role": "document"}
+                        ],
+                    },
+                },
+            )
+            required = ("preparation_ref", "action_digest", "expires_at")
+            if any(
+                not isinstance(prepared.get(key), str) or not prepared[key]
+                for key in required
+            ):
+                raise SmokeError("document_preparation_invalid")
+            if prepared.get("status") != "approved" or "approval_url" in prepared:
+                raise SmokeError("document_preparation_not_directly_authorized")
+            _write_private_receipt(
+                args.receipt_file,
+                {
+                    "schema": 1,
+                    "kind": "telegram_document",
+                    "platform": "telegram",
+                    "preparation_ref": prepared["preparation_ref"],
+                    "action_digest": prepared["action_digest"],
+                    "expires_at": prepared["expires_at"],
+                },
+            )
+            receipt["document_prepare"] = {
+                "asset_ref_fingerprint": _fingerprint(args.asset_ref),
+                "target_ref_fingerprint": _fingerprint(args.target_ref),
+                "preparation_ref_fingerprint": _fingerprint(
+                    prepared["preparation_ref"]
+                ),
+                "action_digest_fingerprint": _fingerprint(
+                    prepared["action_digest"]
+                ),
+                "mime_type": asset_status["mime_type"],
+                "byte_length": asset_status["byte_length"],
+                "display_name": asset_status["display_name"],
+                "content_digest_fingerprint": _fingerprint(
+                    asset_status["content_digest"]
+                ),
+                "expires_at": asset_status["expires_at"],
+                "secure_receipt_written": True,
+                "provider_attempted": False,
+                "real_chatgpt_ui_acceptance_required": True,
+            }
+
         if args.commit_story:
             prepared = _load_json(args.preparation_receipt, owner_only=True)
             if prepared.get("schema") != 1 or prepared.get("platform") != args.platform:
@@ -371,12 +487,44 @@ async def run(args: argparse.Namespace) -> dict[str, Any]:
                 "status": committed.get("status") if isinstance(committed.get("status"), str) else "unknown",
             }
 
+        if args.commit_document:
+            prepared = _load_json(args.preparation_receipt, owner_only=True)
+            if (
+                prepared.get("schema") != 1
+                or prepared.get("kind") != "telegram_document"
+                or prepared.get("platform") != "telegram"
+            ):
+                raise SmokeError("preparation_receipt_invalid")
+            preparation_ref = prepared.get("preparation_ref")
+            action_digest = prepared.get("action_digest")
+            if not isinstance(preparation_ref, str) or not isinstance(
+                action_digest, str
+            ):
+                raise SmokeError("preparation_receipt_invalid")
+            committed = await call(
+                "social_action_commit",
+                {
+                    "preparation_ref": preparation_ref,
+                    "action_digest": action_digest,
+                },
+            )
+            operation_ref = committed.get("operation_ref")
+            if not isinstance(operation_ref, str):
+                raise SmokeError("document_commit_invalid")
+            receipt["document_commit"] = {
+                "operation_ref_fingerprint": _fingerprint(operation_ref),
+                "status": committed.get("status")
+                if isinstance(committed.get("status"), str)
+                else "unknown",
+                "real_chatgpt_ui_readback_still_required": True,
+            }
+
     return receipt
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run a sanitized, nonmutating-by-default MCP media/story smoke."
+        description="Run a sanitized, nonmutating-by-default MCP media/story/document smoke."
     )
     parser.add_argument("--credentials", required=True, type=Path)
     parser.add_argument("--platform", choices=("telegram", "vk"))
@@ -386,12 +534,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--read-stories", action="store_true")
     parser.add_argument("--read-statistics", action="store_true")
     parser.add_argument("--preview-asset-ref")
+    parser.add_argument("--check-document-contract", action="store_true")
     parser.add_argument("--allow-write", action="store_true")
     write_mode = parser.add_mutually_exclusive_group()
     write_mode.add_argument("--prepare-story", action="store_true")
     write_mode.add_argument("--commit-story", action="store_true")
+    write_mode.add_argument("--prepare-document", action="store_true")
+    write_mode.add_argument("--commit-document", action="store_true")
     parser.add_argument("--asset-ref")
     parser.add_argument("--idempotency-key")
+    parser.add_argument("--caption")
     parser.add_argument("--receipt-file", type=Path)
     parser.add_argument("--preparation-receipt", type=Path)
     return parser
@@ -404,15 +556,26 @@ def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
         or args.preview_asset_ref
         or args.prepare_story
         or args.commit_story
+        or args.check_document_contract
+        or args.prepare_document
+        or args.commit_document
     ) and not args.platform:
         parser.error("provider reads/writes require --platform")
     if args.read_stories and not args.target_ref:
         parser.error("--read-stories requires --target-ref")
     if args.read_statistics and not (args.item_ref or args.target_ref):
         parser.error("--read-statistics requires --item-ref or --target-ref")
-    if (args.prepare_story or args.commit_story) and not args.allow_write:
-        parser.error("story prepare/commit requires the explicit --allow-write gate")
-    if args.allow_write and not (args.prepare_story or args.commit_story):
+    if args.check_document_contract and args.platform != "telegram":
+        parser.error("--check-document-contract requires --platform telegram")
+    write_selected = (
+        args.prepare_story
+        or args.commit_story
+        or args.prepare_document
+        or args.commit_document
+    )
+    if write_selected and not args.allow_write:
+        parser.error("prepare/commit requires the explicit --allow-write gate")
+    if args.allow_write and not write_selected:
         parser.error("--allow-write requires exactly one write mode")
     if args.prepare_story and not all(
         (args.target_ref, args.asset_ref, args.idempotency_key, args.receipt_file)
@@ -422,6 +585,23 @@ def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
         )
     if args.commit_story and args.preparation_receipt is None:
         parser.error("--commit-story requires --preparation-receipt")
+    if args.prepare_document and not all(
+        (
+            args.target_ref,
+            args.asset_ref,
+            args.idempotency_key,
+            args.caption,
+            args.receipt_file,
+        )
+    ):
+        parser.error(
+            "--prepare-document requires --target-ref, --asset-ref, "
+            "--idempotency-key, --caption and --receipt-file"
+        )
+    if (args.prepare_document or args.commit_document) and args.platform != "telegram":
+        parser.error("document prepare/commit requires --platform telegram")
+    if args.commit_document and args.preparation_receipt is None:
+        parser.error("--commit-document requires --preparation-receipt")
 
 
 def main() -> int:

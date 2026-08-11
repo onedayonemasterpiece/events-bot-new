@@ -4,13 +4,24 @@ Prepared: 2026-08-11
 
 Repository: `onedayonemasterpiece/events-bot-new`
 
-Status: **designed and prototyped; implementation pending**.
+Status: **implemented and merge-ready; archived handoff evidence**.
+
+Production activation and the real ChatGPT APK -> Telegram Saved Messages
+acceptance are still pending. This archive status means the code and offline
+contracts are merge-ready; it does not claim deployment or live closure.
 
 The owner-supplied handoff has been unpacked here so the coding agent can read the contracts and executable prototype directly. The checked-in Python prototype and tests are byte-identical to the supplied package.
 
 The implementation agent must begin from a fresh `origin/main`, record the actual base SHA, and re-check every cited code location because production and public `main` may move independently.
 
-## Start here
+## Canonical current documentation
+
+Use [`docs/operations/private-events-mcp.md`](../../../operations/private-events-mcp.md)
+for the implemented contract, configuration, exact-main rollout, smoke and live
+acceptance. The files below remain immutable design/handoff evidence and are not
+the active implementation TODO. Do not delete them when rollout completes.
+
+## Archived execution handoff
 
 Use [`CODE_AGENT_EXECUTION_PROMPT.md`](CODE_AGENT_EXECUTION_PROMPT.md) for the complete one-pass task through implementation, review, merge, exact-main deployment, production activation, connector refresh, and real ChatGPT-file-to-Telegram acceptance.
 
@@ -51,6 +62,12 @@ Result:
 10 passed
 ```
 
-## Completion rule
+## Remaining production gate
 
-This directory remains backlog evidence until the feature is merged and deployed. At completion, the coding agent must make `docs/operations/private-events-mcp.md` canonical, mark this handoff implemented/archive, remove it from the active TODO list, and attach final PR/deployment/live-acceptance evidence.
+The merge-ready implementation remains source-disabled by default. Production
+closure requires an exact merged-main deploy, scoped configuration/preflight,
+refresh of the existing `eventsBot` connection in place, an actual ChatGPT
+`fileParams` APK send/read-back, a negative probe and the narrow file-send
+off/on rollback probe. Record that evidence in the canonical runbook/incident;
+do not rewrite or delete this source handoff. The separate active-backlog index
+entry must be removed by the owner of `docs/backlog/README.md` during integration.
