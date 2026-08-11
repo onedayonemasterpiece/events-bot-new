@@ -148,6 +148,19 @@ def test_telegram_producer_forbids_confirmed_no_event_on_incomplete_media_eviden
     assert result["evidence_manifest"]["unavailable_attachment_count"] == 1
 
 
+def test_telegram_manifest_builder_infers_missing_attachment_ocr() -> None:
+    ns = _producer_contract_namespace()
+    manifest = ns["_source_evidence_manifest"](
+        "caption",
+        ["one OCR block"],
+        attachment_count=2,
+    )
+    assert manifest["attachment_count"] == 2
+    assert manifest["unavailable_attachment_count"] == 1
+    assert manifest["ocr_complete"] is False
+    assert manifest["evidence_complete"] is False
+
+
 def test_telegram_producer_keeps_all_events_and_lifecycle_actions_in_mixed_decision() -> None:
     ns = _producer_contract_namespace()
     response = _provider_payload(
@@ -244,6 +257,24 @@ def test_telegram_producer_does_not_accept_free_form_reject_authority() -> None:
     assert result["retry_reason"] == "SCHEMA_MISMATCH"
 
 
+@pytest.mark.parametrize("retry_reason", [None, "UNKNOWN_REASON"])
+def test_telegram_producer_rejects_missing_or_unknown_retry_reason(retry_reason) -> None:
+    ns = _producer_contract_namespace()
+    manifest = ns["_source_evidence_manifest"]("raw", [], attachment_count=0)
+    payload = {
+        "disposition": "RETRY_REQUIRED",
+        "events": [],
+        "lifecycle_actions": [],
+        "evidence_complete": False,
+        "parse_version": "source-parse-v1",
+    }
+    if retry_reason is not None:
+        payload["retry_reason"] = retry_reason
+    result = ns["_parse_source_decision_response"](json.dumps(payload), manifest)
+    assert result["disposition"] == "RETRY_REQUIRED"
+    assert result["retry_reason"] == "SCHEMA_MISMATCH"
+
+
 def test_telegram_producer_verifies_only_explicit_contradictions() -> None:
     ns = _producer_contract_namespace()
     responses = iter(
@@ -308,6 +339,26 @@ def test_telegram_album_combiner_balances_all_children_and_ocr_evidence() -> Non
     assert [item["action"] for item in combined["lifecycle_actions"]] == ["CANCEL"]
     assert combined["evidence_manifest"]["ocr_blocks_available"] == 2
     assert combined["evidence_manifest"]["ocr_blocks_included"] == 2
+
+
+def test_telegram_album_combiner_missing_manifest_cannot_terminally_confirm_no_event() -> None:
+    ns = _producer_contract_namespace()
+    combined = ns["_combine_source_parse_decisions"](
+        [
+            {
+                "disposition": "CONFIRMED_NO_EVENT",
+                "events": [],
+                "lifecycle_actions": [],
+                "evidence_complete": True,
+                "parse_version": "source-parse-v1",
+            }
+        ],
+        raw_text_blocks=["caption"],
+        ocr_blocks=[],
+    )
+    assert combined["disposition"] == "RETRY_REQUIRED"
+    assert combined["retry_reason"] == "SCHEMA_MISMATCH"
+    assert combined["evidence_complete"] is False
 
 
 def test_telegram_primary_call_receives_every_multicard_ocr_block_once() -> None:

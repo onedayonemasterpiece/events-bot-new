@@ -2016,13 +2016,26 @@ def _source_evidence_manifest(
         len(blocks),
         int(attachment_count if attachment_count is not None else len(blocks)),
     )
-    unavailable = max(0, int(unavailable_attachment_count or 0))
+    # If an attachment exists without an available OCR block, the missing
+    # block is unavailable even when an older caller forgot to count it.
+    unavailable = max(
+        0,
+        int(unavailable_attachment_count or 0),
+        attachments - len(blocks),
+    )
+    effective_ocr_complete = bool(
+        ocr_complete
+        and unavailable == 0
+        and attachments == len(blocks)
+        and not omitted
+    )
     complete = bool(
         not source_text_truncated
         and not provider_output_truncated
-        and ocr_complete
+        and effective_ocr_complete
         and unavailable == 0
         and not omitted
+        and attachments == len(blocks)
     )
     return {
         'raw_text_chars': len(text),
@@ -2033,7 +2046,114 @@ def _source_evidence_manifest(
         'included_chars': len(text) + sum(len(block) for block in blocks),
         'omitted_blocks': omitted,
         'unavailable_attachment_count': unavailable,
-        'ocr_complete': bool(ocr_complete),
+        'ocr_complete': effective_ocr_complete,
+        'source_text_truncated': bool(source_text_truncated),
+        'provider_output_truncated': bool(provider_output_truncated),
+        'evidence_complete': complete,
+    }
+
+
+def _normalize_source_evidence_manifest(value) -> dict:
+    """Fail-closed validator for producer and durable receipt manifests."""
+
+    required = {
+        'raw_text_chars',
+        'raw_text_hash',
+        'attachment_count',
+        'ocr_blocks_available',
+        'ocr_blocks_included',
+        'included_chars',
+        'omitted_blocks',
+        'unavailable_attachment_count',
+        'ocr_complete',
+        'source_text_truncated',
+        'provider_output_truncated',
+    }
+    valid = isinstance(value, dict) and required.issubset(value)
+    raw = value if isinstance(value, dict) else {}
+
+    def count(key):
+        nonlocal valid
+        item = raw.get(key)
+        if isinstance(item, bool):
+            valid = False
+            return 0
+        try:
+            parsed = int(item)
+        except (TypeError, ValueError):
+            valid = False
+            return 0
+        if parsed < 0:
+            valid = False
+            return 0
+        return parsed
+
+    attachments = count('attachment_count')
+    available = count('ocr_blocks_available')
+    included = count('ocr_blocks_included')
+    included_chars = count('included_chars')
+    raw_text_chars = count('raw_text_chars')
+    unavailable = count('unavailable_attachment_count')
+    raw_hash = raw.get('raw_text_hash')
+    if (
+        not isinstance(raw_hash, str)
+        or len(raw_hash) != 64
+        or any(char not in '0123456789abcdefABCDEF' for char in raw_hash)
+    ):
+        valid = False
+        raw_hash = str(raw_hash or '')
+    if included_chars < raw_text_chars:
+        valid = False
+    omitted_raw = raw.get('omitted_blocks')
+    if not isinstance(omitted_raw, list):
+        valid = False
+        omitted_raw = []
+    omitted = [str(item) for item in omitted_raw if str(item)]
+    for key in ('ocr_complete', 'source_text_truncated', 'provider_output_truncated'):
+        if not isinstance(raw.get(key), bool):
+            valid = False
+
+    cardinality_valid = included <= available <= attachments
+    valid = bool(valid and cardinality_valid)
+    attachments = max(attachments, available, included)
+    available = max(available, included)
+    unavailable = max(unavailable, attachments - available)
+    omitted_gap = max(0, available - included)
+    while len(omitted) < omitted_gap:
+        omitted.append(f'ocr_block:{included + len(omitted) + 1}:omitted')
+    ocr_complete = bool(
+        valid
+        and raw.get('ocr_complete') is True
+        and attachments == available == included
+        and unavailable == 0
+        and not omitted
+    )
+    source_text_truncated = (
+        raw.get('source_text_truncated')
+        if isinstance(raw.get('source_text_truncated'), bool)
+        else True
+    )
+    provider_output_truncated = (
+        raw.get('provider_output_truncated')
+        if isinstance(raw.get('provider_output_truncated'), bool)
+        else True
+    )
+    complete = bool(
+        valid
+        and ocr_complete
+        and not source_text_truncated
+        and not provider_output_truncated
+    )
+    return {
+        'raw_text_chars': raw_text_chars,
+        'raw_text_hash': raw_hash,
+        'attachment_count': attachments,
+        'ocr_blocks_available': available,
+        'ocr_blocks_included': included,
+        'included_chars': included_chars,
+        'omitted_blocks': omitted,
+        'unavailable_attachment_count': unavailable,
+        'ocr_complete': ocr_complete,
         'source_text_truncated': bool(source_text_truncated),
         'provider_output_truncated': bool(provider_output_truncated),
         'evidence_complete': complete,
@@ -2099,6 +2219,7 @@ def _parse_source_decision_response(
 ) -> dict:
     """Validate the closed decision shape without turning failures into []."""
 
+    evidence_manifest = _normalize_source_evidence_manifest(evidence_manifest)
     if not str(raw_response or '').strip():
         return _source_parse_retry('EMPTY_PROVIDER_RESPONSE', evidence_manifest)
     parsed = _safe_json(str(raw_response))
@@ -2119,7 +2240,12 @@ def _parse_source_decision_response(
     if (
         disposition not in SOURCE_PARSE_DISPOSITIONS
         or not isinstance(events, list)
-        or not all(isinstance(item, dict) for item in events)
+        or not all(
+            isinstance(item, dict)
+            and isinstance(item.get('title'), str)
+            and bool(item.get('title', '').strip())
+            for item in events
+        )
         or not isinstance(lifecycle_actions, list)
         or not all(isinstance(item, dict) for item in lifecycle_actions)
         or not isinstance(declared_complete, bool)
@@ -2154,7 +2280,7 @@ def _parse_source_decision_response(
         )
 
     effective_complete = bool(
-        declared_complete and (evidence_manifest or {}).get('evidence_complete') is True
+        declared_complete and evidence_manifest.get('evidence_complete') is True
     )
     if disposition == 'CONFIRMED_NO_EVENT' and not effective_complete:
         return _source_parse_retry('EVIDENCE_INCOMPLETE', evidence_manifest)
@@ -6204,14 +6330,52 @@ def _combine_source_parse_decisions(
 ) -> dict:
     """Balance every album child into one typed source-level decision."""
 
-    typed = [item for item in (decisions or []) if isinstance(item, dict)]
+    supplied = list(decisions or [])
+    typed = [item for item in supplied if isinstance(item, dict)]
     raw_text = '\n\n'.join(
         dict.fromkeys(str(item or '') for item in (raw_text_blocks or []) if str(item or ''))
     )
     ocr = list(dict.fromkeys(str(item or '') for item in (ocr_blocks or []) if str(item or '')))
-    if not typed:
-        manifest = _source_evidence_manifest(raw_text, ocr)
-        return _source_parse_retry('TECHNICAL_ERROR', manifest)
+    if not typed or len(typed) != len(supplied):
+        manifest = _source_evidence_manifest(
+            raw_text,
+            ocr,
+            attachment_count=len(ocr) + 1,
+            unavailable_attachment_count=1,
+            ocr_complete=False,
+            omitted_blocks=['source_decision_or_manifest_missing'],
+        )
+        return _source_parse_retry('SCHEMA_MISMATCH', manifest)
+
+    canonical = []
+    for item in typed:
+        raw_manifest = item.get('evidence_manifest')
+        if not isinstance(raw_manifest, dict):
+            missing_manifest = _source_evidence_manifest(
+                '',
+                [],
+                attachment_count=1,
+                unavailable_attachment_count=1,
+                ocr_complete=False,
+                omitted_blocks=['evidence_manifest_missing'],
+            )
+            canonical.append(
+                _source_parse_retry(
+                    'SCHEMA_MISMATCH',
+                    missing_manifest,
+                    events=item.get('events'),
+                    lifecycle_actions=item.get('lifecycle_actions'),
+                )
+            )
+            continue
+        # Reuse the same closed semantic validator as fresh provider output.
+        canonical.append(
+            _parse_source_decision_response(
+                json.dumps(item, ensure_ascii=False),
+                _normalize_source_evidence_manifest(raw_manifest),
+            )
+        )
+    typed = canonical
 
     manifests = [
         item.get('evidence_manifest')
@@ -6233,7 +6397,10 @@ def _combine_source_parse_decisions(
         ocr,
         attachment_count=attachment_count,
         unavailable_attachment_count=unavailable,
-        ocr_complete=all(item.get('ocr_complete') is True for item in manifests),
+        ocr_complete=(
+            len(manifests) == len(typed)
+            and all(item.get('ocr_complete') is True for item in manifests)
+        ),
         omitted_blocks=omitted,
         source_text_truncated=any(
             bool(item.get('source_text_truncated')) for item in manifests

@@ -70,6 +70,51 @@ class EvidenceManifest:
     source_text_truncated: bool = False
     provider_output_truncated: bool = False
 
+    def __post_init__(self) -> None:
+        """Canonicalise cardinality so a manifest cannot overstate evidence.
+
+        One OCR block is the source-level evidence unit for one attachment.  A
+        producer may report fewer available blocks (OCR unavailable) or fewer
+        included blocks (available evidence omitted), but neither state can be
+        represented as complete.  Applying this invariant here also protects
+        direct dataclass construction, not only the mapping adapter.
+        """
+
+        attachment_count = max(0, int(self.attachment_count or 0))
+        available = max(0, int(self.ocr_blocks_available or 0))
+        included = max(0, int(self.ocr_blocks_included or 0))
+        unavailable = max(0, int(self.unavailable_attachment_count or 0))
+        omitted = tuple(str(item) for item in self.omitted_blocks if str(item))
+        cardinality_valid = included <= available <= attachment_count
+
+        # Be conservative when a caller supplied contradictory counts.  Keep
+        # every reported block visible while making the manifest incomplete.
+        attachment_count = max(attachment_count, available, included)
+        available = max(available, included)
+        unavailable = max(unavailable, attachment_count - available)
+        omitted_gap = max(0, available - included)
+        if omitted_gap > len(omitted):
+            omitted = (
+                *omitted,
+                *tuple(
+                    f"ocr_block:{included + idx + 1}:omitted"
+                    for idx in range(omitted_gap - len(omitted))
+                ),
+            )
+
+        complete_cardinality = (
+            cardinality_valid
+            and attachment_count == available == included
+            and unavailable == 0
+            and not omitted
+        )
+        object.__setattr__(self, "attachment_count", attachment_count)
+        object.__setattr__(self, "ocr_blocks_available", available)
+        object.__setattr__(self, "ocr_blocks_included", included)
+        object.__setattr__(self, "unavailable_attachment_count", unavailable)
+        object.__setattr__(self, "omitted_blocks", omitted)
+        object.__setattr__(self, "ocr_complete", bool(self.ocr_complete and complete_cardinality))
+
     @property
     def evidence_complete(self) -> bool:
         return (
@@ -91,12 +136,13 @@ class EvidenceManifest:
     ) -> "EvidenceManifest":
         text = source_text or ""
         blocks = tuple(str(block or "") for block in (ocr_blocks or ()))
+        attachments = max(
+            len(blocks), int(attachment_count if attachment_count is not None else len(blocks))
+        )
         return cls(
             raw_text_chars=len(text),
             raw_text_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
-            attachment_count=max(
-                len(blocks), int(attachment_count if attachment_count is not None else len(blocks))
-            ),
+            attachment_count=attachments,
             ocr_blocks_available=len(blocks),
             ocr_blocks_included=len(blocks),
             included_chars=len(text) + sum(len(block) for block in blocks),
@@ -104,21 +150,75 @@ class EvidenceManifest:
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "EvidenceManifest":
-        return cls(
-            raw_text_chars=max(0, int(value.get("raw_text_chars", 0) or 0)),
-            raw_text_hash=str(value.get("raw_text_hash") or ""),
-            attachment_count=max(0, int(value.get("attachment_count", 0) or 0)),
-            ocr_blocks_available=max(0, int(value.get("ocr_blocks_available", 0) or 0)),
-            ocr_blocks_included=max(0, int(value.get("ocr_blocks_included", 0) or 0)),
-            included_chars=max(0, int(value.get("included_chars", 0) or 0)),
-            omitted_blocks=tuple(str(v) for v in (value.get("omitted_blocks") or ())),
-            unavailable_attachment_count=max(
-                0, int(value.get("unavailable_attachment_count", 0) or 0)
-            ),
-            ocr_complete=bool(value.get("ocr_complete", True)),
-            source_text_truncated=bool(value.get("source_text_truncated", False)),
-            provider_output_truncated=bool(value.get("provider_output_truncated", False)),
+        required = {
+            "raw_text_chars",
+            "raw_text_hash",
+            "attachment_count",
+            "ocr_blocks_available",
+            "ocr_blocks_included",
+            "included_chars",
+            "omitted_blocks",
+            "unavailable_attachment_count",
+            "ocr_complete",
+            "source_text_truncated",
+            "provider_output_truncated",
+        }
+        structurally_valid = required.issubset(value)
+
+        def nonnegative_int(key: str) -> int:
+            nonlocal structurally_valid
+            raw = value.get(key)
+            if isinstance(raw, bool):
+                structurally_valid = False
+                return 0
+            try:
+                parsed = int(raw)
+            except (TypeError, ValueError):
+                structurally_valid = False
+                return 0
+            if parsed < 0:
+                structurally_valid = False
+                return 0
+            return parsed
+
+        omitted_raw = value.get("omitted_blocks")
+        if not isinstance(omitted_raw, (list, tuple)):
+            structurally_valid = False
+            omitted_raw = ()
+        for key in ("ocr_complete", "source_text_truncated", "provider_output_truncated"):
+            if not isinstance(value.get(key), bool):
+                structurally_valid = False
+        raw_hash = value.get("raw_text_hash")
+        if (
+            not isinstance(raw_hash, str)
+            or len(raw_hash) != 64
+            or any(char not in "0123456789abcdefABCDEF" for char in raw_hash)
+        ):
+            structurally_valid = False
+        raw_text_chars = nonnegative_int("raw_text_chars")
+        included_chars = nonnegative_int("included_chars")
+        if included_chars < raw_text_chars:
+            structurally_valid = False
+        manifest = cls(
+            raw_text_chars=raw_text_chars,
+            raw_text_hash=str(raw_hash or ""),
+            attachment_count=nonnegative_int("attachment_count"),
+            ocr_blocks_available=nonnegative_int("ocr_blocks_available"),
+            ocr_blocks_included=nonnegative_int("ocr_blocks_included"),
+            included_chars=included_chars,
+            omitted_blocks=tuple(str(v) for v in omitted_raw),
+            unavailable_attachment_count=nonnegative_int("unavailable_attachment_count"),
+            ocr_complete=bool(value.get("ocr_complete")) and structurally_valid,
+            source_text_truncated=bool(value.get("source_text_truncated", True)),
+            provider_output_truncated=bool(value.get("provider_output_truncated", True)),
         )
+        if structurally_valid:
+            return manifest
+        # Missing/invalid receipt fields are technical uncertainty.  Preserve
+        # the parseable diagnostics but force the derived completeness false.
+        payload = asdict(manifest)
+        payload["ocr_complete"] = False
+        return cls(**payload)
 
     def with_provider_truncation(self) -> "EvidenceManifest":
         payload = asdict(self)
@@ -212,18 +312,25 @@ class SourceParseDecision(list[dict[str, Any]]):
         event_items = list(events or ())
         super().__init__(event_items)
         actions = tuple(lifecycle_actions or ())
+        inferred_empty_retry = disposition is None and not event_items and not actions
         if disposition is None:
-            disposition = _infer_disposition(event_items, actions)
+            disposition = (
+                SourceDisposition.RETRY_REQUIRED
+                if inferred_empty_retry
+                else _infer_disposition(event_items, actions)
+            )
         self.disposition = SourceDisposition(disposition)
         self.lifecycle_actions = actions
         self.evidence_manifest = evidence_manifest
-        manifest_complete = evidence_manifest.evidence_complete if evidence_manifest else True
+        manifest_complete = evidence_manifest.evidence_complete if evidence_manifest else False
         self.evidence_complete = manifest_complete if evidence_complete is None else bool(evidence_complete and manifest_complete)
         self.parse_version = str(parse_version or PARSE_VERSION)
         self.festival = festival
         self.retry_reason = (
             SourceParseRetryReason(retry_reason) if retry_reason is not None else None
         )
+        if inferred_empty_retry and self.retry_reason is None:
+            self.retry_reason = SourceParseRetryReason.SCHEMA_MISMATCH
         self.verification_reasons = tuple(verification_reasons or ())
         self.verification = dict(verification) if verification is not None else None
         self.enrichment_required = (
@@ -238,6 +345,30 @@ class SourceParseDecision(list[dict[str, Any]]):
         self.provider_attempts = tuple(
             dict(item) for item in (provider_attempts or ()) if isinstance(item, Mapping)
         )
+
+        expected_disposition = _infer_disposition(event_items, actions)
+        invalid_events = any(
+            not isinstance(item, Mapping)
+            or not isinstance(item.get("title"), str)
+            or not item.get("title", "").strip()
+            for item in event_items
+        )
+        if self.disposition is not SourceDisposition.RETRY_REQUIRED and (
+            invalid_events or self.disposition is not expected_disposition
+        ):
+            self.disposition = SourceDisposition.RETRY_REQUIRED
+            self.retry_reason = SourceParseRetryReason.SCHEMA_MISMATCH
+            self.evidence_complete = False
+            self.enrichment_required = bool(event_items)
+
+        if self.disposition is SourceDisposition.CONFIRMED_NO_EVENT and not self.evidence_complete:
+            self.disposition = SourceDisposition.RETRY_REQUIRED
+            self.retry_reason = (
+                SourceParseRetryReason.EVIDENCE_INCOMPLETE
+                if evidence_manifest is not None
+                else SourceParseRetryReason.SCHEMA_MISMATCH
+            )
+            self.enrichment_required = False
 
     @property
     def events(self) -> list[dict[str, Any]]:
@@ -254,6 +385,7 @@ class SourceParseDecision(list[dict[str, Any]]):
             "lifecycle_actions": [action.to_payload() for action in self.lifecycle_actions],
             "evidence_complete": self.evidence_complete,
             "parse_version": self.parse_version,
+            "enrichment_required": self.enrichment_required,
         }
         if self.festival is not None:
             payload["festival"] = self.festival
@@ -408,7 +540,7 @@ def provider_attempt_metadata(metadata: Any, *, attempt_kind: str) -> dict[str, 
 def decision_from_provider_payload(
     payload: Any,
     *,
-    evidence_manifest: EvidenceManifest,
+    evidence_manifest: EvidenceManifest | None,
     provider_metadata: Any = None,
 ) -> SourceParseDecision:
     """Validate provider JSON and convert it to the closed source verdict.
@@ -419,6 +551,9 @@ def decision_from_provider_payload(
     object can carry that terminal semantic verdict.
     """
 
+    if evidence_manifest is None:
+        return SourceParseDecision.retry(SourceParseRetryReason.SCHEMA_MISMATCH)
+
     if provider_response_is_truncated(provider_metadata):
         return SourceParseDecision.retry(
             SourceParseRetryReason.OUTPUT_TRUNCATED,
@@ -427,7 +562,7 @@ def decision_from_provider_payload(
 
     festival = _festival_payload(payload)
     if isinstance(payload, list):
-        if not all(isinstance(item, dict) for item in payload):
+        if not all(_legacy_event_is_valid(item) for item in payload):
             return SourceParseDecision.retry(
                 SourceParseRetryReason.SCHEMA_MISMATCH,
                 evidence_manifest=evidence_manifest,
@@ -457,7 +592,7 @@ def decision_from_provider_payload(
     )
     if not typed_shape:
         # Temporary compatibility for the legacy single-event object.
-        if not payload or not isinstance(payload.get("title"), str):
+        if not _legacy_event_is_valid(payload):
             return SourceParseDecision.retry(
                 SourceParseRetryReason.SCHEMA_MISMATCH,
                 evidence_manifest=evidence_manifest,
@@ -482,7 +617,7 @@ def decision_from_provider_payload(
         )
     events = payload.get("events")
     actions_raw = payload.get("lifecycle_actions")
-    if not isinstance(events, list) or not all(isinstance(item, dict) for item in events):
+    if not isinstance(events, list) or not all(_event_mapping_is_valid(item) for item in events):
         return SourceParseDecision.retry(
             SourceParseRetryReason.SCHEMA_MISMATCH,
             evidence_manifest=evidence_manifest,
@@ -504,10 +639,10 @@ def decision_from_provider_payload(
         )
 
     if disposition is SourceDisposition.RETRY_REQUIRED:
-        raw_reason = payload.get("retry_reason") or SourceParseRetryReason.VERIFICATION_UNCERTAIN.value
+        raw_reason = payload.get("retry_reason")
         try:
             reason = SourceParseRetryReason(str(raw_reason))
-        except ValueError:
+        except (TypeError, ValueError):
             reason = SourceParseRetryReason.SCHEMA_MISMATCH
         return SourceParseDecision.retry(
             reason,
@@ -553,6 +688,20 @@ def decision_from_provider_payload(
         festival=festival,
         enrichment_required=bool(events and not effective_complete),
     )
+
+
+def _event_mapping_is_valid(value: Any) -> bool:
+    """Validate the minimum shared event envelope without semantic guessing."""
+
+    return isinstance(value, Mapping) and isinstance(value.get("title"), str) and bool(
+        value.get("title", "").strip()
+    )
+
+
+def _legacy_event_is_valid(value: Any) -> bool:
+    # Legacy positives remain a narrow rolling adapter.  Empty objects and
+    # arbitrary receipt mappings must never acquire EVENTS_FOUND authority.
+    return _event_mapping_is_valid(value)
 
 
 def _festival_payload(payload: Any) -> dict[str, Any] | None:

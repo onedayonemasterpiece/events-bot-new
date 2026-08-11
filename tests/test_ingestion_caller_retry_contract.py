@@ -19,6 +19,7 @@ from source_parsing.telegram.handlers import (
     _source_parse_decision,
     _source_zero_event_is_confirmed,
 )
+from source_parse_contract import EvidenceManifest, SourceDisposition, SourceParseRetryReason
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,7 +36,9 @@ def test_zero_extraction_requires_complete_typed_no_event() -> None:
             "disposition": "CONFIRMED_NO_EVENT",
             "events": [],
             "lifecycle_actions": [],
-            "evidence_manifest": {"ocr_blocks_available": 2, "ocr_blocks_included": 2},
+            "evidence_manifest": EvidenceManifest.complete_source(
+                "typed source", ["ocr 1", "ocr 2"], attachment_count=2
+            ).to_payload(),
             "evidence_complete": True,
             "parse_version": "test-v1",
         },
@@ -53,6 +56,58 @@ def test_zero_extraction_requires_complete_typed_no_event() -> None:
     assert not _source_zero_event_is_confirmed(
         retry, _source_parse_decision(retry)
     )
+
+
+def test_unknown_decision_and_event_mismatch_are_typed_schema_retries() -> None:
+    manifest = EvidenceManifest.complete_source("source", [], attachment_count=0).to_payload()
+    unknown = {
+        "events": [],
+        "source_parse_decision": {
+            "disposition": "UNKNOWN",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_manifest": manifest,
+            "evidence_complete": True,
+            "parse_version": "test-v1",
+        },
+    }
+    mismatch = {
+        "events": [{"title": "Outer"}],
+        "source_parse_decision": {
+            "disposition": "CONFIRMED_NO_EVENT",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_manifest": manifest,
+            "evidence_complete": True,
+            "parse_version": "test-v1",
+        },
+    }
+    for message in (unknown, mismatch):
+        decision = _source_parse_decision(message)
+        assert decision.disposition is SourceDisposition.RETRY_REQUIRED
+        assert decision.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+        assert not _source_zero_event_is_confirmed(message, decision)
+
+
+def test_manifest_hash_or_attachment_cardinality_mismatch_is_retryable() -> None:
+    manifest = EvidenceManifest.complete_source("different", [], attachment_count=0).to_payload()
+    message = {
+        "text": "actual source",
+        "_source_attachment_count": 1,
+        "events": [],
+        "source_parse_decision": {
+            "disposition": "CONFIRMED_NO_EVENT",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_manifest": manifest,
+            "evidence_complete": True,
+            "parse_version": "test-v1",
+        },
+    }
+    decision = _source_parse_decision(message)
+    assert decision.disposition is SourceDisposition.RETRY_REQUIRED
+    assert decision.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+    assert not _source_zero_event_is_confirmed(message, decision)
 
 
 def test_missing_ocr_or_truncation_keeps_carrier_unresolved() -> None:
@@ -74,9 +129,7 @@ def test_missing_ocr_or_truncation_keeps_carrier_unresolved() -> None:
         }
     }
     decision = _source_parse_decision(truncated)
-    assert _source_evidence_incomplete_reason(truncated, decision) == (
-        "source_evidence_truncated"
-    )
+    assert _source_evidence_incomplete_reason(truncated, decision)
     assert not _source_zero_event_is_confirmed(truncated, decision)
 
 
@@ -179,10 +232,9 @@ async def test_complete_typed_no_event_advances_telegram_cursor(tmp_path) -> Non
                                 "disposition": "CONFIRMED_NO_EVENT",
                                 "events": [],
                                 "lifecycle_actions": [],
-                                "evidence_manifest": {
-                                    "ocr_blocks_available": 0,
-                                    "ocr_blocks_included": 0,
-                                },
+                                "evidence_manifest": EvidenceManifest.complete_source(
+                                    "A typed legitimate non-event", [], attachment_count=0
+                                ).to_payload(),
                                 "evidence_complete": True,
                                 "parse_version": "test-v1",
                             },

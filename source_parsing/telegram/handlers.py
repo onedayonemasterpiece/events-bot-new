@@ -60,6 +60,12 @@ from source_parsing.post_metrics import (
     popularity_marks,
     upsert_telegram_post_metric,
 )
+from source_parse_contract import (
+    EvidenceManifest,
+    SourceParseDecision,
+    SourceParseRetryReason,
+    decision_from_provider_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -4143,18 +4149,84 @@ def _decision_value(value: Any, key: str, default: Any = None) -> Any:
     return getattr(value, key, default)
 
 
-def _source_parse_decision(message: dict[str, Any]) -> Any | None:
-    """Accept the typed source verdict as either an object or JSON mapping.
+def _source_parse_decision(message: dict[str, Any]) -> SourceParseDecision | None:
+    """Canonicalise a receipt through the central typed decision validator."""
 
-    The parser contract owns ``SourceParseDecision``.  This rolling-compatible
-    adapter deliberately does not define another verdict type.
-    """
-
+    raw: Any | None = None
     for key in ("source_parse_decision", "parse_decision"):
         value = message.get(key)
         if value is not None:
-            return value
-    return None
+            raw = value
+            break
+    if raw is None:
+        return None
+
+    if isinstance(raw, SourceParseDecision):
+        decision = raw
+        if decision.evidence_manifest is None:
+            decision = SourceParseDecision.retry(
+                SourceParseRetryReason.SCHEMA_MISMATCH,
+                events=list(decision),
+                lifecycle_actions=decision.lifecycle_actions,
+            )
+    elif isinstance(raw, dict):
+        manifest_raw = raw.get("evidence_manifest")
+        if not isinstance(manifest_raw, dict):
+            decision = SourceParseDecision.retry(
+                SourceParseRetryReason.SCHEMA_MISMATCH,
+                events=(raw.get("events") if isinstance(raw.get("events"), list) else None),
+            )
+        else:
+            manifest = EvidenceManifest.from_mapping(manifest_raw)
+            decision = decision_from_provider_payload(
+                raw,
+                evidence_manifest=manifest,
+            )
+    else:
+        return SourceParseDecision.retry(SourceParseRetryReason.SCHEMA_MISMATCH)
+
+    manifest = decision.evidence_manifest
+    if manifest is not None:
+        source_text_present = "semantic_source_text" in message or "text" in message
+        source_text = str(
+            message.get("semantic_source_text")
+            if message.get("semantic_source_text") is not None
+            else message.get("text") or ""
+        )
+        hash_mismatch = bool(
+            source_text_present
+            and (
+                manifest.raw_text_chars != len(source_text)
+                or manifest.raw_text_hash
+                != hashlib.sha256(source_text.encode("utf-8")).hexdigest()
+            )
+        )
+        known_attachments = message.get("_source_attachment_count")
+        attachment_mismatch = bool(
+            isinstance(known_attachments, int)
+            and not isinstance(known_attachments, bool)
+            and known_attachments != manifest.attachment_count
+        )
+        if hash_mismatch or attachment_mismatch:
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.SCHEMA_MISMATCH,
+                evidence_manifest=manifest,
+                events=list(decision),
+                lifecycle_actions=decision.lifecycle_actions,
+            )
+
+    # The outer message and the typed decision are one receipt.  A mismatch
+    # means the carrier is retryable; it must never terminally acknowledge a
+    # different set of children than the consumer is about to persist.
+    message_events = message.get("events")
+    if not isinstance(message_events, list) or message_events != list(decision):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=decision.evidence_manifest,
+            events=list(decision),
+            lifecycle_actions=decision.lifecycle_actions,
+        )
+    return decision
 
 
 def _source_parse_disposition(decision: Any | None) -> str | None:

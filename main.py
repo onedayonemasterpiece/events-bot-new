@@ -9963,7 +9963,13 @@ def _event_parse_normalize_parsed_events(
     evidence_manifest: EvidenceManifest | None = None,
     provider_metadata: Any = None,
 ) -> ParsedEvents:
-    evidence_manifest = evidence_manifest or EvidenceManifest.complete_source("")
+    if evidence_manifest is None:
+        decision = SourceParseDecision.retry(SourceParseRetryReason.SCHEMA_MISMATCH)
+        if provider_metadata is not None:
+            decision.with_provider_attempts(
+                [provider_attempt_metadata(provider_metadata, attempt_kind="primary")]
+            )
+        return decision
     festival = None
     if isinstance(data, dict):
         festival = data.get("festival")
@@ -17282,6 +17288,11 @@ async def add_events_from_text(
             for alias_norm in sorted(alias_map.get(fest_name, ())):
                 fest_alias_pairs.append((alias_norm, idx))
         parse_kwargs: dict[str, Any] = {}
+        # The direct ingestion facade owns attachment cardinality.  OCR text
+        # count alone must not make an attachment-bearing source look complete.
+        parse_kwargs["attachment_count"] = len(
+            poster_items or normalized_media or ()
+        )
         if poster_texts:
             parse_kwargs["poster_texts"] = poster_texts
         if poster_summary:

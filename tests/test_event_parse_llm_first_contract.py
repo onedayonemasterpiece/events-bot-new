@@ -165,6 +165,21 @@ def test_typed_provider_payload_preserves_multiple_actions_and_sessions():
     assert result.disposition is SourceDisposition.MIXED
 
 
+def test_production_normalizer_missing_manifest_is_typed_schema_retry():
+    result = main._event_parse_normalize_parsed_events(
+        {
+            "disposition": "CONFIRMED_NO_EVENT",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_complete": True,
+            "parse_version": "source-parse-v1",
+        },
+        evidence_manifest=None,
+    )
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
 @pytest.mark.asyncio
 async def test_mocked_empty_provider_response_is_typed_retry(monkeypatch):
     class FakeClient:

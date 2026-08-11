@@ -80,6 +80,65 @@ def test_t22_legacy_empty_array_cannot_claim_confirmed_no_event():
     assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
 
 
+def test_verdict_a_untyped_none_is_schema_retry():
+    result = decision_from_provider_payload(None, evidence_manifest=_manifest())
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
+def test_verdict_b_empty_inference_is_schema_retry_not_no_event():
+    result = SourceParseDecision([], evidence_manifest=_manifest())
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
+@pytest.mark.parametrize("payload", [[{}], {"date": "2026-09-01"}])
+def test_verdict_c_legacy_positive_adapter_requires_minimum_event_schema(payload):
+    result = decision_from_provider_payload(payload, evidence_manifest=_manifest())
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
+def test_verdict_d_schema_valid_legacy_positive_remains_supported():
+    result = decision_from_provider_payload(
+        [{"title": "Лекция", "date": "2026-09-01"}],
+        evidence_manifest=_manifest(),
+    )
+    assert result.disposition is SourceDisposition.EVENTS_FOUND
+    assert result.parse_version == "legacy-array-adapter-v1"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        _typed("NOT_A_DISPOSITION"),
+        {**_typed("RETRY_REQUIRED"), "retry_reason": "NOT_A_REASON"},
+        _typed("RETRY_REQUIRED"),
+    ],
+)
+def test_verdict_e_unknown_disposition_or_retry_reason_is_schema_retry(payload):
+    result = decision_from_provider_payload(payload, evidence_manifest=_manifest())
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
+def test_verdict_f_missing_manifest_is_schema_retry():
+    result = decision_from_provider_payload(_typed("CONFIRMED_NO_EVENT"), evidence_manifest=None)
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
+def test_explicit_typed_disposition_must_match_children():
+    result = SourceParseDecision(
+        [{"title": "Лекция"}],
+        disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+        evidence_manifest=_manifest(),
+        evidence_complete=True,
+    )
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
 @pytest.mark.parametrize(
     ("reason", "provider_metadata"),
     [
@@ -194,6 +253,62 @@ def test_positive_events_survive_partial_evidence_and_require_enrichment():
     assert result.disposition is SourceDisposition.EVENTS_FOUND
     assert result == [{"title": "Лекция"}]
     assert result.enrichment_required is True
+    assert result.to_payload()["enrichment_required"] is True
+
+
+def test_evidence_a_text_only_explicit_zero_attachments_is_complete():
+    manifest = EvidenceManifest.complete_source("text", [], attachment_count=0)
+    assert manifest.evidence_complete is True
+
+
+def test_evidence_b_attachment_without_ocr_is_counted_unavailable():
+    manifest = EvidenceManifest.complete_source("caption", [], attachment_count=1)
+    assert manifest.attachment_count == 1
+    assert manifest.unavailable_attachment_count == 1
+    assert manifest.ocr_complete is False
+    assert manifest.evidence_complete is False
+
+
+def test_evidence_c_available_but_omitted_ocr_is_incomplete():
+    manifest = EvidenceManifest(
+        raw_text_chars=7,
+        raw_text_hash="a" * 64,
+        attachment_count=2,
+        ocr_blocks_available=2,
+        ocr_blocks_included=1,
+        included_chars=10,
+    )
+    assert manifest.omitted_blocks
+    assert manifest.ocr_complete is False
+    assert manifest.evidence_complete is False
+
+
+def test_evidence_d_missing_or_inconsistent_mapping_fails_closed():
+    missing = EvidenceManifest.from_mapping({})
+    inconsistent = EvidenceManifest.from_mapping(
+        {
+            **_manifest().to_payload(),
+            "attachment_count": 1,
+            "ocr_blocks_available": 2,
+        }
+    )
+    assert missing.evidence_complete is False
+    assert inconsistent.evidence_complete is False
+
+
+def test_evidence_e_incomplete_positive_survives_but_no_event_retries():
+    manifest = EvidenceManifest.complete_source("caption", [], attachment_count=1)
+    positive = decision_from_provider_payload(
+        _typed(events=[{"title": "Лекция"}], complete=True),
+        evidence_manifest=manifest,
+    )
+    no_event = decision_from_provider_payload(
+        _typed("CONFIRMED_NO_EVENT"), evidence_manifest=manifest
+    )
+    assert positive.disposition is SourceDisposition.EVENTS_FOUND
+    assert positive.enrichment_required is True
+    assert no_event.disposition is SourceDisposition.RETRY_REQUIRED
+    assert no_event.retry_reason is SourceParseRetryReason.EVIDENCE_INCOMPLETE
 
 
 @pytest.mark.asyncio

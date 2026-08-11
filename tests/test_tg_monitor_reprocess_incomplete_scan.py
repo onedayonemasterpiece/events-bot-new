@@ -481,7 +481,7 @@ async def test_stores_skip_breakdown_for_new_incomplete_scan(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monkeypatch):
+async def test_no_manifest_zero_event_tail_remains_retryable(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     async with db.raw_conn() as conn:
@@ -562,10 +562,10 @@ async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monke
                 )
             ).fetchone()
         )[0]
-    assert row[0] == 935
-    assert row[1] is not None
-    # Complete typed no-event carriers are durable terminals, not invisible
-    # cursor-only skips.
+    assert row[0] is None
+    assert row[1] is None
+    # A decision without its producer-owned evidence manifest is not a typed
+    # terminal even when the old receipt claimed evidence_complete=true.
     assert scanned_count == 2
     await db.close()
 
