@@ -616,6 +616,14 @@ class EventCandidate:
     source_role: str = "identity_bearing"
     # Filled by Smart Update from the exact caller packet before normalization.
     source_fingerprint: str | None = None
+    # Typed upstream source-parse evidence.  A candidate represents a positive
+    # event child; Smart Update must not turn that child back into a semantic
+    # no-event through regex/date heuristics.  These fields are diagnostic and
+    # replay metadata, not a new source of deterministic terminal authority.
+    source_disposition: str | None = None
+    source_parse_version: str | None = None
+    source_evidence_complete: bool | None = None
+    source_verification_reasons: list[str] = field(default_factory=list)
     title: str | None = None
     date: str | None = None
     time: str | None = None
@@ -12920,8 +12928,6 @@ def _dedup_adjudicator_accept_merge(
     action = str(decision.get("action") or "").strip().lower()
     if action != "match":
         return False, "llm_create"
-    async def _create_from_prepared_candidate() -> SmartUpdateResult:
-        return False, "no_match_event"
     reason_code = str(decision.get("reason_code") or "").strip()
     if reason_code not in _DEDUP_ADJUDICATOR_MERGE_CODES:
         return False, f"non_merge_code:{reason_code or 'empty'}"
@@ -16916,6 +16922,11 @@ async def _smart_event_update_impl(
         int(bool(candidate.festival_source)) if candidate.festival_source is not None else None,
         _clip_title(candidate.festival_series, 80),
     )
+    upstream_source_disposition = str(candidate.source_disposition or "").strip().upper()
+    upstream_positive_child = upstream_source_disposition in {
+        "EVENTS_FOUND",
+        "MIXED",
+    }
     # Mixed recap + future-invite posts are reviewed before location defaults,
     # exhibition-duration fallbacks, vector identity recall or any write.  This
     # prevents past-occurrence facts from becoming future logistics.  Regex is
@@ -16928,6 +16939,7 @@ async def _smart_event_update_impl(
     early_eventness_reviewed = False
     if (
         mixed_occurrence_role_risk
+        and not upstream_positive_child
         and str(candidate.source_type or "").strip().lower() in {"vk", "tg", "telegram"}
         and not SMART_UPDATE_LLM_DISABLED
     ):
@@ -16949,9 +16961,13 @@ async def _smart_event_update_impl(
         )
         if decision != "event" or confidence < 0.70:
             suffix = "non_event" if decision == "non_event" else "uncertain"
+            # This stage is a contradiction verifier for an already-positive
+            # source child.  It may ask the durable source pipeline to retry,
+            # but it may not convert the child into a product no-event.
             return SmartUpdateResult(
-                status="skipped_non_event",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"mixed_occurrence_role_review_{suffix}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
         corpus = _candidate_location_grounding_corpus(candidate)
         if not (
@@ -16959,8 +16975,9 @@ async def _smart_event_update_impl(
             or _source_supports_location_value(corpus, candidate.location_address)
         ):
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason="mixed_occurrence_role_ungrounded_location",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
     # A digest/roundup must be scoped to one occurrence before date/range/time
     # role review.  Otherwise a roundup heading such as "01–07 August" can be
@@ -16977,8 +16994,9 @@ async def _smart_event_update_impl(
         )
         if not scope_ok:
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"occurrence_scope_review:{scope_result}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
     anchor_review_needed, anchor_review_trigger = _candidate_needs_llm_anchor_role_review(candidate)
     if anchor_review_needed and not SMART_UPDATE_LLM_DISABLED:
@@ -17000,8 +17018,9 @@ async def _smart_event_update_impl(
         )
         if not anchor_ok:
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"anchor_role_review:{anchor_result}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
         if (
             anchor_review_trigger == "explicit_unknown_start_time"
@@ -17042,8 +17061,9 @@ async def _smart_event_update_impl(
         )
         if not location_ok:
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"location_grounding_review:{location_review_result}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
         (
             candidate.location_name,
@@ -17060,14 +17080,22 @@ async def _smart_event_update_impl(
             candidate.source_url,
             _clip_title(candidate.title),
         )
-        return SmartUpdateResult(status="invalid", reason="missing_date", product_exclusion_reason=ProductExclusionReason.MISSING_DATE)
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="missing_date",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
     if not candidate.title:
         logger.warning(
             "smart_update.invalid reason=missing_title source_type=%s source_url=%s",
             candidate.source_type,
             candidate.source_url,
         )
-        return SmartUpdateResult(status="invalid", reason="missing_title", product_exclusion_reason=ProductExclusionReason.MISSING_TITLE)
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="missing_title",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
     candidate_location_unsupported_prose = _candidate_location_looks_unsupported_prose(candidate)
     if not candidate.location_name:
         logger.warning(
@@ -17076,27 +17104,28 @@ async def _smart_event_update_impl(
             candidate.source_url,
             _clip_title(candidate.title),
         )
-        return SmartUpdateResult(status="invalid", reason="missing_location", product_exclusion_reason=ProductExclusionReason.MISSING_LOCATION)
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="missing_location",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
 
     # A one-month fallback must never use exhibition words from a past recap to
     # invent the duration of the future occurrence.  Explicit extractor ranges
     # remain untouched; only the service fallback is suppressed.
-    inferred_default_end_date = (
-        None
-        if mixed_occurrence_role_risk
-        else _maybe_apply_default_end_date_for_long_event(candidate)
-    )
+    # Do not invent a semantic duration after a positive source parse.  An
+    # explicit end date survives; an absent end date stays absent.
+    inferred_default_end_date = None
 
     if _should_skip_past_smart_update_candidate(candidate):
         logger.info(
-            "smart_update.skip reason=past_event source_type=%s source_url=%s title=%s date=%s end_date=%s",
+            "smart_update.semantic_hint reason=possible_past_event source_type=%s source_url=%s title=%s date=%s end_date=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(candidate.title),
             candidate.date,
             candidate.end_date,
         )
-        return SmartUpdateResult(status="skipped_past_event", reason="past_event", product_exclusion_reason=ProductExclusionReason.PAST_EVENT)
 
     await _maybe_disambiguate_telegram_default_location_city(candidate)
     candidate_location_unsupported_prose = _candidate_location_looks_unsupported_prose(candidate)
@@ -17117,13 +17146,21 @@ async def _smart_event_update_impl(
                     location_address=candidate.location_address,
                     gemma_client=_get_gemma_client(),
                 )
-                strict = (os.getenv("REGION_FILTER_STRICT", "1") or "").strip().lower() in {
-                    "1",
-                    "true",
-                    "yes",
-                    "on",
-                }
-                if region_decision.allowed is False or (strict and region_decision.allowed is None):
+                if region_decision.allowed is None:
+                    logger.warning(
+                        "smart_update.region_filter_unresolved source_type=%s source_url=%s city=%s reason=%s source=%s",
+                        candidate.source_type,
+                        candidate.source_url,
+                        candidate.city,
+                        region_decision.reason,
+                        region_decision.source,
+                    )
+                    return SmartUpdateResult(
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        reason="region_filter_unresolved",
+                        retry_reason=RetryReason.SOURCE_VERIFICATION_TECHNICAL_FAILURE,
+                    )
+                if region_decision.allowed is False:
                     logger.info(
                         "smart_update.rejected reason=%s source_type=%s source_url=%s city=%s region=%s source=%s",
                         region_decision.reason,
@@ -17140,6 +17177,11 @@ async def _smart_event_update_impl(
                     )
     except Exception as e:  # pragma: no cover - must not crash ingestion
         logger.warning("smart_update.region_filter_failed err=%s", e)
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="region_filter_technical_failure",
+            retry_reason=RetryReason.SOURCE_VERIFICATION_TECHNICAL_FAILURE,
+        )
 
     clean_title = _strip_private_use(candidate.title) or (candidate.title or "")
     if not clean_title:
@@ -17148,15 +17190,18 @@ async def _smart_event_update_impl(
             candidate.source_type,
             candidate.source_url,
         )
-        return SmartUpdateResult(status="invalid", reason="empty_title_after_clean", product_exclusion_reason=ProductExclusionReason.EMPTY_TITLE_AFTER_CLEAN)
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="empty_title_after_clean",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
     if _should_skip_festival_post_candidate(candidate):
         logger.info(
-            "smart_update.skip reason=festival_post source_type=%s source_url=%s festival=%s",
+            "smart_update.semantic_hint reason=festival_post source_type=%s source_url=%s festival=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(candidate.festival or candidate.festival_series, 80),
         )
-        return SmartUpdateResult(status="skipped_festival_post", reason="festival_post", product_exclusion_reason=ProductExclusionReason.FESTIVAL_POST)
     raw_source_text = _strip_private_use(candidate.source_text) or (
         candidate.source_text or ""
     )
@@ -17252,51 +17297,38 @@ async def _smart_event_update_impl(
     if inferred_default_end_date:
         text_filter_facts.append(f"Дата окончания по умолчанию: {inferred_default_end_date}")
 
-    # Giveaways: keep event facts but strip giveaway mechanics when possible.
+    # Semantic detectors below are observability hints only.  This function is
+    # downstream of a positive source child; deleting prose or converting that
+    # child into a no-event would be a second shadow classifier.
     is_giveaway = _looks_like_ticket_giveaway(clean_title, raw_source_text, raw_excerpt)
     if is_giveaway:
-        before_src = raw_source_text
-        before_excerpt = raw_excerpt
-        raw_source_text = _strip_giveaway_lines(raw_source_text) or raw_source_text
-        raw_excerpt = _strip_giveaway_lines(raw_excerpt) or raw_excerpt
-        if (before_src or "") != (raw_source_text or "") or (before_excerpt or "") != (raw_excerpt or ""):
-            text_filter_facts.append("Убрана механика розыгрыша")
-        # If we still don't have a plausible event, treat as non-event content.
+        text_filter_facts.append("Semantic hint: source contains giveaway mechanics")
         if not (
             _giveaway_has_underlying_event_facts(raw_source_text)
             or _giveaway_has_underlying_event_facts(raw_excerpt)
         ):
             logger.info(
-                "smart_update.skip reason=giveaway_no_event source_type=%s source_url=%s title=%s",
+                "smart_update.semantic_hint reason=giveaway_without_local_anchors source_type=%s source_url=%s title=%s",
                 candidate.source_type,
                 candidate.source_url,
                 _clip_title(clean_title),
             )
-            return SmartUpdateResult(status="skipped_giveaway", reason="giveaway_no_event", product_exclusion_reason=ProductExclusionReason.GIVEAWAY_NO_EVENT)
 
-    # Congratulation posts must not become events or sources.
     if _looks_like_promo_or_congrats(clean_title, raw_source_text, raw_excerpt) and not _candidate_has_event_anchors(candidate):
         logger.info(
-            "smart_update.skip reason=promo_or_congrats source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=promo_or_congrats source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
         )
-        return SmartUpdateResult(status="skipped_promo", reason="promo_or_congrats", product_exclusion_reason=ProductExclusionReason.PROMO_OR_CONGRATS)
 
-    before_promo_src = raw_source_text
-    before_promo_excerpt = raw_excerpt
-    clean_source_text = _strip_promo_lines(raw_source_text) or raw_source_text or ""
-    clean_raw_excerpt = _strip_promo_lines(raw_excerpt) or raw_excerpt
-    if is_giveaway:
-        clean_source_text = _strip_giveaway_lines(clean_source_text) or clean_source_text
-        clean_raw_excerpt = _strip_giveaway_lines(clean_raw_excerpt) or clean_raw_excerpt
+    clean_source_text = raw_source_text or ""
+    clean_raw_excerpt = raw_excerpt
     clean_source_text = _normalize_bullet_markers(clean_source_text) or clean_source_text
     clean_raw_excerpt = _normalize_bullet_markers(clean_raw_excerpt) or clean_raw_excerpt
-    if (before_promo_src or "") != (clean_source_text or "") or (before_promo_excerpt or "") != (clean_raw_excerpt or ""):
-        text_filter_facts.append("Убраны промо-фрагменты")
 
-    # Non-event notices / course ads (VK/TG): skip early to avoid creating pseudo-events.
+    # High-recall detector inventory.  Every match is a warning/verification
+    # signal only; no branch may delete a positive event child.
     source_type_clean = str(candidate.source_type or "").strip().lower()
     if source_type_clean in {"vk", "telegram", "tg"}:
         combined_text = "\n".join(
@@ -17305,153 +17337,44 @@ async def _smart_event_update_impl(
                 clean_raw_excerpt or "",
             ]
         ).strip()
-        if _looks_like_open_call_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=open_call source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="open_call", product_exclusion_reason=ProductExclusionReason.OPEN_CALL)
-        if _looks_like_work_schedule_notice(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=work_schedule source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="work_schedule", product_exclusion_reason=ProductExclusionReason.WORK_SCHEDULE)
-        if _looks_like_non_event_notice(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=non_event_notice source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="non_event_notice", product_exclusion_reason=ProductExclusionReason.NON_EVENT_NOTICE)
-        if _looks_like_venue_status_update_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=venue_status_update source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="venue_status_update", product_exclusion_reason=ProductExclusionReason.VENUE_STATUS_UPDATE)
-        if _looks_like_congrats_notice_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=congrats_notice source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="congrats_notice", product_exclusion_reason=ProductExclusionReason.CONGRATS_NOTICE)
-        if _looks_like_unsupported_exhibition_teaser_date(candidate, combined_text):
-            logger.info(
-                "smart_update.skip reason=unsupported_exhibition_teaser_date source_type=%s source_url=%s title=%s date=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-                candidate.date,
-            )
-            return SmartUpdateResult(
-                status="skipped_non_event",
-                reason="unsupported_exhibition_teaser_date", product_exclusion_reason=ProductExclusionReason.UNSUPPORTED_EXHIBITION_TEASER_DATE,
-            )
-        if _looks_like_course_promo(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=course_promo source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="course_promo", product_exclusion_reason=ProductExclusionReason.COURSE_PROMO)
-        if _looks_like_service_promo_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=service_promo source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="service_promo", product_exclusion_reason=ProductExclusionReason.SERVICE_PROMO)
-        if _looks_like_rental_booking_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=rental_booking source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="rental_booking", product_exclusion_reason=ProductExclusionReason.RENTAL_BOOKING)
+        semantic_hints: list[str] = []
+        detector_map = (
+            ("open_call", _looks_like_open_call_not_event(clean_title, combined_text)),
+            ("work_schedule", _looks_like_work_schedule_notice(clean_title, combined_text)),
+            ("non_event_notice", _looks_like_non_event_notice(clean_title, combined_text)),
+            ("venue_status_update", _looks_like_venue_status_update_not_event(clean_title, combined_text)),
+            ("congrats_notice", _looks_like_congrats_notice_not_event(clean_title, combined_text)),
+            ("unsupported_exhibition_teaser_date", _looks_like_unsupported_exhibition_teaser_date(candidate, combined_text)),
+            ("course_promo", _looks_like_course_promo(clean_title, combined_text)),
+            ("service_promo", _looks_like_service_promo_not_event(clean_title, combined_text)),
+            ("rental_booking", _looks_like_rental_booking_not_event(clean_title, combined_text)),
+            ("too_soon", _looks_like_too_soon_notice(clean_title, combined_text)),
+            ("event_logistics_notice", _looks_like_event_logistics_notice_not_event(clean_title, combined_text)),
+            ("online_event", _looks_like_online_event(clean_title, combined_text) and not _candidate_has_physical_event_anchors(candidate)),
+            ("book_review", _looks_like_book_review_not_event(clean_title, combined_text)),
+            ("photo_day", _looks_like_photo_day_not_event(clean_title, combined_text, candidate=candidate)),
+            ("retrospective_future_teaser", _looks_like_retrospective_future_teaser_not_event(clean_title, combined_text, candidate=candidate)),
+            ("completed_event_report", _looks_like_completed_event_report_not_event(clean_title, combined_text, candidate=candidate)),
+        )
+        semantic_hints.extend(reason for reason, matched in detector_map if matched)
         outage_reason = _looks_like_utility_outage_or_road_closure(clean_title, combined_text)
         if outage_reason:
+            semantic_hints.append(str(outage_reason))
+        if semantic_hints:
+            for semantic_hint in semantic_hints:
+                text_filter_facts.append(f"Semantic hint: {semantic_hint}")
             logger.info(
-                "smart_update.skip reason=%s source_type=%s source_url=%s title=%s",
-                outage_reason,
+                "smart_update.semantic_hints hints=%s source_type=%s source_url=%s title=%s",
+                semantic_hints,
                 candidate.source_type,
                 candidate.source_url,
                 _clip_title(clean_title),
             )
-            return SmartUpdateResult(status="skipped_non_event", reason=outage_reason)
-        if _looks_like_too_soon_notice(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=too_soon source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="too_soon", product_exclusion_reason=ProductExclusionReason.TOO_SOON)
-        if _looks_like_event_logistics_notice_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=event_logistics_notice source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(
-                status="skipped_non_event",
-                reason="event_logistics_notice", product_exclusion_reason=ProductExclusionReason.EVENT_LOGISTICS_NOTICE,
-            )
-        # Project policy: auto-ingestion should not create online-only events.
-        if _looks_like_online_event(clean_title, combined_text) and not _candidate_has_physical_event_anchors(candidate):
-            logger.info(
-                "smart_update.skip reason=online_event source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="online_event", product_exclusion_reason=ProductExclusionReason.ONLINE_EVENT)
-        if _looks_like_book_review_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=book_review source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="book_review", product_exclusion_reason=ProductExclusionReason.BOOK_REVIEW)
-        if _looks_like_photo_day_not_event(clean_title, combined_text, candidate=candidate):
-            logger.info(
-                "smart_update.skip reason=photo_day source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="photo_day", product_exclusion_reason=ProductExclusionReason.PHOTO_DAY)
-        if _looks_like_retrospective_future_teaser_not_event(clean_title, combined_text, candidate=candidate):
-            logger.info(
-                "smart_update.skip reason=retrospective_future_teaser source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="retrospective_future_teaser", product_exclusion_reason=ProductExclusionReason.RETROSPECTIVE_FUTURE_TEASER)
-        if _looks_like_completed_event_report_not_event(clean_title, combined_text, candidate=candidate):
-            logger.info(
-                "smart_update.skip reason=completed_event_report source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="completed_event_report", product_exclusion_reason=ProductExclusionReason.COMPLETED_EVENT_REPORT)
-        if not early_eventness_reviewed and _candidate_needs_llm_eventness_review(candidate, combined_text):
+        if (
+            not upstream_positive_child
+            and not early_eventness_reviewed
+            and _candidate_needs_llm_eventness_review(candidate, combined_text)
+        ):
             decision, confidence, reason = await _llm_review_candidate_eventness(
                 candidate,
                 clean_title=clean_title,
@@ -17468,12 +17391,16 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             if decision != "event" or confidence < 0.55:
-                skip_reason = (
+                retry_reason = (
                     "weak_eventness_review_non_event"
                     if decision == "non_event"
                     else "weak_eventness_review_uncertain"
                 )
-                return SmartUpdateResult(status="skipped_non_event", reason=skip_reason)
+                return SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                    reason=retry_reason,
+                    retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
+                )
             text_filter_facts.append(f"LLM eventness review: event ({reason or 'weak candidate accepted'})")
 
     # Ticket price grounding: prevent hallucinated min/max prices for VK/TG sources.
@@ -17498,13 +17425,11 @@ async def _smart_event_update_impl(
         if not _has_price_evidence(price_probe, candidate.ticket_price_min, candidate.ticket_price_max):
             before_min = candidate.ticket_price_min
             before_max = candidate.ticket_price_max
-            candidate.ticket_price_min = None
-            candidate.ticket_price_max = None
-            note = "Цена отброшена: не найдена в источнике"
+            note = "Semantic hint: extracted price lacks deterministic source match"
             if note not in text_filter_facts:
                 text_filter_facts.append(note)
             logger.info(
-                "smart_update.price_dropped source_type=%s source_url=%s title=%s before=%s..%s",
+                "smart_update.semantic_hint reason=price_evidence_conflict source_type=%s source_url=%s title=%s value=%s..%s",
                 candidate.source_type,
                 candidate.source_url,
                 _clip_title(clean_title),
@@ -17520,12 +17445,11 @@ async def _smart_event_update_impl(
         ]
     ).strip()
     if candidate.is_free is True and _free_claim_contradicted_by_source(candidate, free_probe_text):
-        candidate.is_free = False
-        note = "Бесплатность снята: источник противоречит free-attendance"
+        note = "Semantic hint: source may contradict extracted free-attendance"
         if note not in text_filter_facts:
             text_filter_facts.append(note)
         logger.info(
-            "smart_update.free_dropped source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=source_contradicts_free source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
@@ -17544,8 +17468,7 @@ async def _smart_event_update_impl(
             [clean_title, clean_source_text or "", clean_raw_excerpt or ""]
         ).strip()
         if _looks_like_blood_donation_event(clean_title, free_probe):
-            candidate.is_free = True
-            note = "Помечено как бесплатное: донорская акция"
+            note = "Semantic hint: blood-donation event may be free"
             if note not in text_filter_facts:
                 text_filter_facts.append(note)
 
@@ -17671,21 +17594,17 @@ async def _smart_event_update_impl(
     except Exception:
         logger.warning("smart_update: festival_queue detection failed", exc_info=True)
 
-    # If the source is detected as a festival/program post, it must not create/update events.
-    # Some upstream extractors (notably Telegram Monitoring) may not populate `festival_context`,
-    # so we backfill it via deterministic detection above and enforce the policy here.
+    # Festival/program detection is routing metadata only.  It may enqueue the
+    # source for programme expansion, but it cannot erase an already-positive
+    # event child.
     if _should_skip_festival_post_candidate(candidate):
         logger.info(
-            "smart_update.skip reason=festival_post_detected source_type=%s source_url=%s festival=%s",
+            "smart_update.semantic_hint reason=festival_post_detected source_type=%s source_url=%s festival=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(candidate.festival or candidate.festival_series, 80),
         )
-        return SmartUpdateResult(
-            status="skipped_festival_post",
-            reason="festival_post", product_exclusion_reason=ProductExclusionReason.FESTIVAL_POST,
-            queue_notes=list(queue_notes or []),
-        )
+        text_filter_facts.append("Semantic hint: festival/program carrier")
 
     # Multi-event digests should not be imported as a single event.
     if (candidate.source_type in {"vk", "tg", "telegram"}) and _looks_like_schedule_digest(
@@ -17694,12 +17613,12 @@ async def _smart_event_update_impl(
         end_date=candidate.end_date,
     ):
         logger.info(
-            "smart_update.reject reason=schedule_digest source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=schedule_digest source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
         )
-        return SmartUpdateResult(status="rejected_schedule_digest", reason="schedule_digest", product_exclusion_reason=ProductExclusionReason.SCHEDULE_DIGEST)
+        text_filter_facts.append("Semantic hint: possible multi-event schedule")
 
     # "Акции" must not become events. If after promo/giveaway stripping there's no real event anchor,
     # treat it as non-event content.
@@ -17709,12 +17628,12 @@ async def _smart_event_update_impl(
         and len((clean_raw_excerpt or clean_source_text or "").strip()) < 140
     ):
         logger.info(
-            "smart_update.skip reason=promo_only source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=promo_only source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
         )
-        return SmartUpdateResult(status="skipped_promo", reason="promo_only", product_exclusion_reason=ProductExclusionReason.PROMO_ONLY)
+        text_filter_facts.append("Semantic hint: promo-only detector matched")
 
     # Posters policy:
     # Keep all posters (dedupe/order happens later). OCR is used for prioritization only.
@@ -17768,9 +17687,9 @@ async def _smart_event_update_impl(
     cand_start, cand_end = _candidate_date_range(candidate)
     if not cand_start or not cand_end:
         return SmartUpdateResult(
-            status="invalid",
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
             reason="invalid_date",
-            product_exclusion_reason=ProductExclusionReason.INVALID_DATE,
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
         )
 
     candidate.explicit_occurrence_conflict_event_ids = (
@@ -18753,7 +18672,11 @@ async def _smart_event_update_impl(
                 _clip_title(candidate.title),
                 _clip_title(candidate.location_name, 120),
             )
-            return SmartUpdateResult(status="invalid", reason="prose_location", product_exclusion_reason=ProductExclusionReason.PROSE_LOCATION)
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                reason="prose_location",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
+            )
 
         normalized_event_type = _normalize_event_type_value(
             candidate.title, candidate.raw_excerpt or candidate.source_text, candidate.event_type
@@ -18831,8 +18754,9 @@ async def _smart_event_update_impl(
                     )
                 else:
                     return SmartUpdateResult(
-                        status="invalid",
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                         reason=f"create_bundle_grounding:{bundle_grounding_result}",
+                        retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
                     )
         if isinstance(bundled, dict):
             bundled_age_payload = bundled.get("age_decision")
@@ -18903,8 +18827,9 @@ async def _smart_event_update_impl(
                     f"Заголовок отклонён: {clean_title} -> {bundled_title} (причина: ungrounded_title)"
                 )
                 return SmartUpdateResult(
-                    status="invalid",
+                    outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                     reason="ungrounded_create_bundle_title",
+                    retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
                 )
             elif (
                 _title_has_meaningful_tokens(clean_title)

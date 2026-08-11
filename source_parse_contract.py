@@ -326,9 +326,10 @@ def decision_from_provider_payload(
 ) -> SourceParseDecision:
     """Validate provider JSON and convert it to the closed source verdict.
 
-    Legacy arrays and single-event objects are accepted only as a temporary
-    adapter.  An actually empty HTTP response must be handled before JSON
-    decoding and can never reach this function as a legacy empty array.
+    Non-empty legacy arrays and single-event objects are accepted only as a
+    temporary positive-result adapter.  A legacy ``[]`` is intrinsically
+    ambiguous and can never prove ``CONFIRMED_NO_EVENT``; only the closed typed
+    object can carry that terminal semantic verdict.
     """
 
     if provider_response_is_truncated(provider_metadata):
@@ -344,19 +345,14 @@ def decision_from_provider_payload(
                 SourceParseRetryReason.SCHEMA_MISMATCH,
                 evidence_manifest=evidence_manifest,
             )
-        disposition = (
-            SourceDisposition.EVENTS_FOUND
-            if payload
-            else SourceDisposition.CONFIRMED_NO_EVENT
-        )
-        if not payload and not evidence_manifest.evidence_complete:
+        if not payload:
             return SourceParseDecision.retry(
-                SourceParseRetryReason.EVIDENCE_INCOMPLETE,
+                SourceParseRetryReason.SCHEMA_MISMATCH,
                 evidence_manifest=evidence_manifest,
             )
         return SourceParseDecision(
             payload,
-            disposition=disposition,
+            disposition=SourceDisposition.EVENTS_FOUND,
             evidence_manifest=evidence_manifest,
             evidence_complete=evidence_manifest.evidence_complete,
             festival=festival,

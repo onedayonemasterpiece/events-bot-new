@@ -503,7 +503,8 @@ async def test_smart_update_rejects_unmatched_prose_location_candidate(
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "invalid"
+        assert result.status == "retry_scheduled"
+        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
         assert result.reason == "prose_location"
     finally:
         await db.close()
@@ -539,7 +540,8 @@ async def test_smart_update_rejects_temporal_location_candidate(
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "invalid"
+        assert result.status == "retry_scheduled"
+        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
         assert result.reason == "prose_location"
     finally:
         await db.close()
@@ -577,7 +579,8 @@ async def test_smart_update_rejects_reaction_text_location_candidate(
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
+        assert result.status == "retry_scheduled"
+        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
         assert result.reason == "weak_eventness_review_uncertain"
     finally:
         await db.close()

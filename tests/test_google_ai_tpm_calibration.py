@@ -133,6 +133,31 @@ def test_calibration_is_scoped_persistable_and_decouples_output_ceiling() -> Non
     ) == 11_192
 
 
+def test_warm_calibration_retains_tail_margin_above_output_ceiling() -> None:
+    calibration = TokenReservationCalibration(
+        model="gemma-4-31b",
+        consumer="event_parse",
+        prompt_version="source-parse-v1",
+        observed_p99_output_thought_tokens=3_891,
+        safety_margin_tokens=2_798,
+        sample_count=502,
+    )
+    client = GoogleAIClient(consumer="event_parse")
+
+    reserved = client._calculate_reserved_tpm(
+        prompt="ignored when exact input is supplied",
+        max_output_tokens=6_000,
+        input_token_count=InputTokenCount(6_741, "provider_count_tokens"),
+        calibration=calibration,
+        model="gemma-4-31b",
+        prompt_version="source-parse-v1",
+    )
+
+    # Read-only acute telemetry: p99 completion=3891, observed max=5689;
+    # max-p99 + 1000 safety gives 2798 and a 13,430-token reservation.
+    assert reserved == 13_430
+
+
 def test_cold_start_reservation_remains_conservative() -> None:
     calibration = TokenReservationCalibration.from_observations(
         model="gemma-4-31b",

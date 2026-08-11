@@ -182,7 +182,17 @@ class TokenReservationCalibration:
         observed_with_margin = (
             self.observed_p99_output_thought_tokens + self.safety_margin_tokens
         )
-        return max(1, min(ceiling, observed_with_margin))
+        # Provider totals may include thought/tool overhead and a rolling tail
+        # above p99.  A calibrated safety allowance may therefore exceed the
+        # semantic generation ceiling.  Bound it by the old conservative
+        # ceiling+extra rather than clipping the safety margin away.
+        return max(
+            1,
+            min(
+                ceiling + GoogleAIClient.DEFAULT_TPM_RESERVE_EXTRA,
+                observed_with_margin,
+            ),
+        )
 
 
 @dataclass

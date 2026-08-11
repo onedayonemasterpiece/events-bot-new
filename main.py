@@ -9999,89 +9999,58 @@ def _event_parse_normalize_parsed_events(
     return decision
 
 
-def _event_parse_gemma_tpm_plan(
-    client: Any,
-    *,
-    model: str,
-    prompt: str,
-    configured_max_tokens: int,
-) -> tuple[int, int, int, int] | None:
-    """Return ``input, extra, target, min_output`` for Gemma 4 reservations."""
-
-    normalized_model = str(model or "").strip().lower()
-    if normalized_model.startswith("models/"):
-        normalized_model = normalized_model[7:]
-    if normalized_model.endswith("-it"):
-        normalized_model = normalized_model[:-3]
-    if normalized_model not in {"gemma-4-31b", "gemma-4-26b-a4b"}:
-        return None
-
-    estimate = getattr(client, "_estimate_prompt_tokens", None)
-    if not callable(estimate):
-        return None
-
-    try:
-        input_estimate = max(1, int(estimate(prompt)))
-        reserve_extra = max(
-            0,
-            int(getattr(client, "DEFAULT_TPM_RESERVE_EXTRA", 1000) or 0),
-        )
-        target = int(
-            os.getenv("EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET", "14500")
-            or "14500"
-        )
-        target = max(1000, min(target, 15000))
-        min_output = int(
-            os.getenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", "2400") or "2400"
-        )
-        min_output = max(400, min(min_output, int(configured_max_tokens)))
-    except Exception:
-        logging.warning("event_parse: invalid Gemma TPM budget config", exc_info=True)
-        return None
-    return input_estimate, reserve_extra, target, min_output
+_EVENT_PARSE_PROMPT_VERSION = "source-parse-v1"
 
 
-def _fit_event_parse_gemma_output_budget(
-    client: Any,
-    *,
-    model: str,
-    prompt: str,
-    configured_max_tokens: int,
-) -> int:
-    """Keep Gemma event-parse reservations below the real per-minute cap.
+def _event_parse_reservation_calibration(model: str, consumer: str):
+    """Return the redacted, version-bound acute p99 admission calibration.
 
-    The shared limiter reserves estimated input + output + safety overhead.
-    Only Gemma 4 is adjusted here. Other models retain their configured output
-    budget and are governed by their own registry limits.
+    The values come from the strict read-only 2026-08-01..11 provider ledger
+    audit.  They are admission metadata only: they never shorten source/OCR
+    evidence or the semantic output ceiling.  An operator may replace the
+    defaults with a same-shape JSON object after a newer audited window.
     """
 
-    plan = _event_parse_gemma_tpm_plan(
-        client,
-        model=model,
-        prompt=prompt,
-        configured_max_tokens=configured_max_tokens,
-    )
-    if plan is None:
-        return int(configured_max_tokens)
-    input_estimate, reserve_extra, target, min_output = plan
+    try:
+        from google_ai.client import TokenReservationCalibration
+    except Exception:
+        return None
 
-    fitted = min(
-        int(configured_max_tokens),
-        max(min_output, target - input_estimate - reserve_extra),
+    normalized = str(model or "").strip().lower()
+    if normalized.startswith("models/"):
+        normalized = normalized[7:]
+    if normalized.endswith("-it"):
+        normalized = normalized[:-3]
+
+    defaults: dict[str, dict[str, int]] = {
+        # n=502; output/thought p99=3891, observed max=5689, +1000 safety.
+        "gemma-4-31b": {"p99": 3891, "margin": 2798, "samples": 502},
+        # n=411; output/thought p99=407, observed max=4209, +1000 safety.
+        "gemini-3.1-flash-lite": {"p99": 407, "margin": 4802, "samples": 411},
+    }
+    raw_override = (os.getenv("EVENT_PARSE_RESERVATION_CALIBRATION_JSON") or "").strip()
+    if raw_override:
+        try:
+            parsed = json.loads(raw_override)
+            if isinstance(parsed, dict) and isinstance(parsed.get(normalized), dict):
+                defaults[normalized] = {
+                    "p99": int(parsed[normalized]["p99"]),
+                    "margin": int(parsed[normalized]["margin"]),
+                    "samples": int(parsed[normalized]["samples"]),
+                }
+        except Exception:
+            logging.warning("event_parse: invalid reservation calibration override", exc_info=True)
+    data = defaults.get(normalized)
+    if not data:
+        return None
+    return TokenReservationCalibration(
+        model=normalized,
+        consumer=str(consumer or "event_parse"),
+        prompt_version=_EVENT_PARSE_PROMPT_VERSION,
+        observed_p99_output_thought_tokens=max(0, int(data["p99"])),
+        safety_margin_tokens=max(0, int(data["margin"])),
+        sample_count=max(0, int(data["samples"])),
     )
-    if fitted < int(configured_max_tokens):
-        logging.info(
-            "event_parse: fitted Gemma output budget model=%s configured=%s fitted=%s "
-            "input_estimate=%s reserve_extra=%s target_tpm=%s target_reachable=%s",
-            model,
-            configured_max_tokens,
-            fitted,
-            input_estimate,
-            reserve_extra,
-            target,
-            int(input_estimate + reserve_extra + min_output <= target),
-        )
-    return int(fitted)
 
 
 async def _parse_event_via_gemma(
@@ -10098,7 +10067,7 @@ async def _parse_event_via_gemma(
     if client is None:
         raise RuntimeError("Gemma client unavailable for event_parse")
 
-    async def _generate_with_rate_limit_wait(
+    async def _generate_once(
         prompt_text: str,
         *,
         label: str,
@@ -10118,53 +10087,24 @@ async def _parse_event_via_gemma(
             }
         else:
             generation_config = {"temperature": 0}
-        extra_wait_raw = extra.get("rate_limit_max_wait_sec")
-        if extra_wait_raw not in (None, ""):
-            try:
-                max_wait_sec = float(str(extra_wait_raw).strip())
-            except Exception:
-                max_wait_sec = float(os.getenv("EVENT_PARSE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC", "120") or "120")
-        else:
-            max_wait_sec = float(os.getenv("EVENT_PARSE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC", "120") or "120")
-        max_wait_sec = max(0.0, min(max_wait_sec, 1800.0))
-        deadline = _time.monotonic() + max_wait_sec
-        while True:
-            try:
-                return await client.generate_content_async(
-                    model=model,
-                    prompt=prompt_text,
-                    generation_config=generation_config,
-                    max_output_tokens=max_tokens,
-                )
-            except Exception as exc:
-                try:
-                    from google_ai.exceptions import RateLimitError as _RateLimitError, ProviderError as _ProviderError
-                except Exception:
-                    _RateLimitError = None
-                    _ProviderError = None
-                retry_ms = 0
-                blocked_reason = ""
-                if _RateLimitError is not None and isinstance(exc, _RateLimitError):
-                    retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-                    blocked_reason = str(getattr(exc, "blocked_reason", "") or "").strip().lower()
-                if _ProviderError is not None and isinstance(exc, _ProviderError):
-                    if int(getattr(exc, "status_code", 0) or 0) == 429:
-                        retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-                        blocked_reason = (blocked_reason or "429").lower()
-                # Do not wait on daily quota blocks; it won't recover quickly.
-                if blocked_reason in {"rpd", "no_keys", "model_not_found"}:
-                    raise
-                if retry_ms > 0 and _time.monotonic() < deadline:
-                    sleep_sec = min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2))
-                    logging.warning(
-                        "event_parse: gemma rate_limited label=%s retry_in=%.1fs err=%s",
-                        label,
-                        sleep_sec,
-                        exc,
-                    )
-                    await asyncio.sleep(sleep_sec)
-                    continue
-                raise
+        calibration = _event_parse_reservation_calibration(
+            model,
+            str(getattr(client, "consumer", "event_parse") or "event_parse"),
+        )
+        # One physical attempt per durable carrier lease.  Quota errors bubble
+        # immediately to the owning queue, which releases the lease and stores
+        # provider retry metadata instead of sleeping on the row.
+        return await client.generate_content_async(
+            model=model,
+            prompt=prompt_text,
+            generation_config=generation_config,
+            max_output_tokens=max_tokens,
+            use_provider_count_tokens=True,
+            reservation_calibration=calibration,
+            prompt_version=_EVENT_PARSE_PROMPT_VERSION,
+            max_provider_attempts=1,
+            allow_model_fallback=False,
+        )
 
     if not source_channel:
         source_channel = extra.get("channel_title")
@@ -10212,7 +10152,11 @@ async def _parse_event_via_gemma(
             base_prompt = f"{base_prompt}\nPoster summary:\n{poster_summary.strip()}"
         return f"{base_prompt}\n\n{output_contract}\n\n{user_msg}"
 
-    full_prompt = _compose_full_prompt(omit_venue_catalog=False)
+    # Static venue aliases dominated prompt overhead in the incident audit.
+    # Omit that replaceable catalogue before touching any carrier/OCR evidence;
+    # location normalization still uses the canonical reference layer after
+    # parsing.  The venue-grounding rules themselves remain in the prompt.
+    full_prompt = _compose_full_prompt(omit_venue_catalog=True)
     model = (
         str(extra.get("gemma_model") or "").strip()
         or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it") or "").strip()
@@ -10225,47 +10169,8 @@ async def _parse_event_via_gemma(
     max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "6000") or "6000")
     max_tokens = max(400, min(max_tokens, 8000))
 
-    plan = _event_parse_gemma_tpm_plan(
-        client,
-        model=model,
-        prompt=full_prompt,
-        configured_max_tokens=max_tokens,
-    )
-    if plan is not None:
-        input_estimate, reserve_extra, target, min_output = plan
-        if input_estimate + reserve_extra + max_tokens > target:
-            compact_prompt = _compose_full_prompt(omit_venue_catalog=True)
-            compact_plan = _event_parse_gemma_tpm_plan(
-                client,
-                model=model,
-                prompt=compact_prompt,
-                configured_max_tokens=max_tokens,
-            )
-            if compact_plan is not None:
-                compact_input, compact_extra, compact_target, compact_min_output = compact_plan
-                logging.info(
-                    "event_parse: omitted global venue catalog to fit Gemma TPM "
-                    "model=%s full_input_estimate=%s compact_input_estimate=%s target_tpm=%s",
-                    model,
-                    input_estimate,
-                    compact_input,
-                    compact_target,
-                )
-                full_prompt = compact_prompt
-                if compact_input + compact_extra + compact_min_output > compact_target:
-                    raise RuntimeError(
-                        "event_parse Gemma prompt exceeds TPM cap even without venue catalog "
-                        f"(input_estimate={compact_input}, target={compact_target})"
-                    )
-    max_tokens = _fit_event_parse_gemma_output_budget(
-        client,
-        model=model,
-        prompt=full_prompt,
-        configured_max_tokens=max_tokens,
-    )
-
     evidence_manifest = _event_parse_evidence_manifest(text, poster_texts, extra)
-    raw, usage = await _generate_with_rate_limit_wait(
+    raw, usage = await _generate_once(
         full_prompt,
         label="parse",
         max_tokens=max_tokens,
@@ -10278,10 +10183,22 @@ async def _parse_event_via_gemma(
                 "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
                 "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
                 "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
+                "thought_tokens": int(getattr(usage, "thought_tokens", 0) or 0),
+                "reserved_tokens": int(getattr(usage, "reserved_tokens", 0) or 0),
             },
             endpoint="google_ai.generate_content",
-            request_id=None,
-            meta={k: extra[k] for k in ("feature", "version") if extra.get(k) is not None} or None,
+            request_id=(
+                getattr(usage, "provider_response_id", None)
+                or getattr(usage, "provider_request_id", None)
+            ),
+            meta={
+                **{k: extra[k] for k in ("feature", "version") if extra.get(k) is not None},
+                "prompt_version": _EVENT_PARSE_PROMPT_VERSION,
+                "finish_reason": getattr(usage, "finish_reason", None),
+                "provider_model_version": getattr(usage, "provider_model_version", None),
+                "input_count_source": getattr(usage, "input_count_source", None),
+                "reservation_actual_ratio": getattr(usage, "reservation_actual_ratio", None),
+            },
         )
     except Exception:
         # Token logging must not fail parsing.
@@ -10310,7 +10227,7 @@ async def _parse_event_via_gemma(
             "Invalid output:\n"
             + (raw or "")
         )
-        raw2, usage2 = await _generate_with_rate_limit_wait(
+        raw2, usage2 = await _generate_once(
             repair_prompt,
             label="repair",
             max_tokens=max_tokens,
@@ -17145,11 +17062,20 @@ class AddEventsResult(list):
         tokens_remaining: int | None,
         *,
         limit_notice: str | None = None,
+        source_decision: SourceParseDecision | None = None,
     ) -> None:
         super().__init__(entries)
         self.ocr_tokens_spent = tokens_spent
         self.ocr_tokens_remaining = tokens_remaining
         self.ocr_limit_notice = limit_notice
+        self.source_decision = source_decision
+        self.disposition = getattr(source_decision, "disposition", None)
+        self.evidence_complete = getattr(source_decision, "evidence_complete", None)
+        self.evidence_manifest = getattr(source_decision, "evidence_manifest", None)
+        self.parse_version = getattr(source_decision, "parse_version", None)
+        self.lifecycle_actions = tuple(
+            getattr(source_decision, "lifecycle_actions", ()) or ()
+        )
 
 
 async def add_events_from_text(
@@ -17385,11 +17311,50 @@ async def add_events_from_text(
         )
         if raise_exc:
             raise
-        return []
+        retry_decision = SourceParseDecision.retry(
+            SourceParseRetryReason.TECHNICAL_ERROR,
+            evidence_manifest=EvidenceManifest.complete_source(
+                llm_text,
+                poster_texts,
+                attachment_count=len(poster_items or normalized_media or ()),
+            ),
+        )
+        return AddEventsResult(
+            [],
+            ocr_tokens_spent,
+            ocr_tokens_remaining,
+            limit_notice=ocr_limit_notice,
+            source_decision=retry_decision,
+        )
 
     results: list[tuple[Event | Festival | None, bool, list[str], str]] = []
     first = True
     parsed_events = [ev for ev in list(parsed or []) if isinstance(ev, dict)]
+    if isinstance(parsed, SourceParseDecision):
+        if parsed.is_retry:
+            # A technical/schema/evidence failure is a durable carrier outcome,
+            # not an empty semantic answer.  In particular, do not enter the
+            # festival or Smart Update paths with a synthetic empty list.
+            return AddEventsResult(
+                [],
+                ocr_tokens_spent,
+                ocr_tokens_remaining,
+                limit_notice=ocr_limit_notice,
+                source_decision=parsed,
+            )
+        if (
+            parsed.disposition.value == "CONFIRMED_NO_EVENT"
+            and parsed.evidence_complete
+            and not parsed_events
+            and not parsed.lifecycle_actions
+        ):
+            return AddEventsResult(
+                [],
+                ocr_tokens_spent,
+                ocr_tokens_remaining,
+                limit_notice=ocr_limit_notice,
+                source_decision=parsed,
+            )
     links_iter = iter(extract_links_from_html(html_text) if html_text else [])
     source_text_clean = html_text or text
     program_url: str | None = None
@@ -17554,6 +17519,7 @@ async def add_events_from_text(
             ocr_tokens_spent,
             ocr_tokens_remaining,
             limit_notice=ocr_limit_notice,
+            source_decision=parsed,
         )
 
     festival_obj: Festival | None = None
@@ -17837,6 +17803,38 @@ async def add_events_from_text(
                 source_chat_username=source_channel,
                 creator_id=creator_id,
                 producer_ordinal=producer_ordinal,
+                source_native_occurrence_id=(
+                    str(
+                        data.get("source_native_occurrence_id")
+                        or data.get("occurrence_id")
+                        or ""
+                    ).strip()
+                    or None
+                ),
+                vendor_occurrence_id=(
+                    str(data.get("vendor_occurrence_id") or "").strip() or None
+                ),
+                    source_disposition=str(
+                        getattr(
+                            getattr(parsed, "disposition", None),
+                            "value",
+                            getattr(parsed, "disposition", None),
+                        )
+                        or "EVENTS_FOUND"
+                    ),
+                    source_parse_version=(
+                        str(getattr(parsed, "parse_version", "") or "").strip()
+                        or None
+                    ),
+                    source_evidence_complete=getattr(
+                        parsed, "evidence_complete", None
+                    ),
+                source_verification_reasons=[
+                    str(getattr(reason, "value", reason))
+                        for reason in (
+                            getattr(parsed, "verification_reasons", ()) or ()
+                        )
+                    ],
             )
             update_result = await smart_event_update(
                 db,
@@ -17993,6 +17991,7 @@ async def add_events_from_text(
             "festival %s %s", festival_obj.name, "created" if fest_created else "updated"
         )
     logging.info("add_events_from_text finished with %d results", len(results))
+    source_decision = parsed
     del parsed
     gc.collect()
     return AddEventsResult(
@@ -18000,6 +17999,7 @@ async def add_events_from_text(
         ocr_tokens_spent,
         ocr_tokens_remaining,
         limit_notice=ocr_limit_notice,
+        source_decision=source_decision,
     )
 
 

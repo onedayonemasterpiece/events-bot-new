@@ -80,6 +80,10 @@ class RetryReason(str, Enum):
     IDENTITY_SEMANTIC_UNKNOWN = "identity_semantic_unknown"
     DEDUP_ADJUDICATOR_TECHNICAL_FAILURE = "dedup_adjudicator_technical_failure"
     PRODUCT_REASON_UNTYPED = "product_reason_untyped"
+    SOURCE_DECISION_INVALID = "source_decision_invalid"
+    SOURCE_VERIFICATION_REQUIRED = "source_verification_required"
+    SOURCE_VERIFICATION_TECHNICAL_FAILURE = "source_verification_technical_failure"
+    SOURCE_EVIDENCE_INCOMPLETE = "source_evidence_incomplete"
 
 
 class IdentityDistinctReason(str, Enum):

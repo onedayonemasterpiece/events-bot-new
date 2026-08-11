@@ -362,7 +362,7 @@ async def test_vk_intake_does_not_overwrite_explicit_text_date_with_poster(monke
 
     assert len(drafts) == 1
     assert drafts[0].date == "2026-06-18"
-    assert drafts[0].time == ""
+    assert drafts[0].time is None
     assert drafts[0].venue == "Музей Мирового океана"
 
 
@@ -381,9 +381,10 @@ async def test_event_parse_gemma_model_extra_overrides_global_env(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeClient:
-        async def generate_content_async(self, *, model, prompt, generation_config, max_output_tokens):
+        async def generate_content_async(self, *, model, prompt, generation_config, max_output_tokens, **kwargs):
             captured["model"] = model
             captured["generation_config"] = generation_config
+            captured["gateway"] = kwargs
             return "[]", SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2)
 
     async def noop_log(*_args, **_kwargs):
@@ -406,6 +407,9 @@ async def test_event_parse_gemma_model_extra_overrides_global_env(monkeypatch):
         "top_k": 64,
         "thinking_config": {"thinking_level": "minimal"},
     }
+    assert captured["gateway"]["use_provider_count_tokens"] is True
+    assert captured["gateway"]["max_provider_attempts"] == 1
+    assert captured["gateway"]["allow_model_fallback"] is False
 
 
 def test_event_parse_client_uses_one_send_no_model_fallback_and_bounded_timeout(
@@ -429,7 +433,7 @@ def test_event_parse_client_uses_one_send_no_model_fallback_and_bounded_timeout(
 
 
 @pytest.mark.asyncio
-async def test_event_parse_gemma4_output_budget_fits_shared_15k_tpm(monkeypatch):
+async def test_event_parse_gemma4_keeps_semantic_output_and_uses_calibrated_admission(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeClient:
@@ -441,11 +445,12 @@ async def test_event_parse_gemma4_output_budget_fits_shared_15k_tpm(monkeypatch)
             # festival hint registry and poster OCR were included.
             return 10134
 
-        async def generate_content_async(
-            self, *, model, prompt, generation_config, max_output_tokens
-        ):
+        async def generate_content_async(self, **kwargs):
+            model = kwargs["model"]
+            max_output_tokens = kwargs["max_output_tokens"]
             captured["model"] = model
             captured["max_output_tokens"] = max_output_tokens
+            captured["calibration"] = kwargs["reservation_calibration"]
             return "[]", SimpleNamespace(
                 input_tokens=1, output_tokens=1, total_tokens=2
             )
@@ -455,7 +460,7 @@ async def test_event_parse_gemma4_output_budget_fits_shared_15k_tpm(monkeypatch)
 
     monkeypatch.delenv("EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET", raising=False)
     monkeypatch.delenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", raising=False)
-    monkeypatch.setenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "4000")
+    monkeypatch.setenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "6000")
     monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
     monkeypatch.setattr(main, "log_token_usage", noop_log)
 
@@ -466,8 +471,10 @@ async def test_event_parse_gemma4_output_budget_fits_shared_15k_tpm(monkeypatch)
 
     assert list(parsed) == []
     assert captured["model"] == "models/gemma-4-31b-it"
-    assert captured["max_output_tokens"] == 3366
-    assert 10134 + 1000 + int(captured["max_output_tokens"]) == 14500
+    assert captured["max_output_tokens"] == 6000
+    calibration = captured["calibration"]
+    assert calibration.sample_count == 502
+    assert calibration.completion_reservation(output_ceiling_tokens=6000) == 6689
 
 
 @pytest.mark.asyncio
@@ -481,9 +488,9 @@ async def test_event_parse_gemma4_omits_venue_catalog_when_full_prompt_cannot_fi
         def _estimate_prompt_tokens(prompt):
             return 21743 if "\nKnown venues:\n" in prompt else 9000
 
-        async def generate_content_async(
-            self, *, model, prompt, generation_config, max_output_tokens
-        ):
+        async def generate_content_async(self, **kwargs):
+            prompt = kwargs["prompt"]
+            max_output_tokens = kwargs["max_output_tokens"]
             captured["prompt"] = prompt
             captured["max_output_tokens"] = max_output_tokens
             return "[]", SimpleNamespace(
@@ -514,7 +521,7 @@ async def test_event_parse_gemma4_omits_venue_catalog_when_full_prompt_cannot_fi
 
 
 @pytest.mark.asyncio
-async def test_event_parse_gemma4_fails_before_provider_when_compact_prompt_too_large(monkeypatch):
+async def test_event_parse_gemma4_never_prefilter_rejects_large_complete_evidence(monkeypatch):
     called = False
 
     class FakeClient:
@@ -533,32 +540,21 @@ async def test_event_parse_gemma4_fails_before_provider_when_compact_prompt_too_
     monkeypatch.delenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", raising=False)
     monkeypatch.setattr(main, "_get_event_parse_gemma_client", lambda: FakeClient())
 
-    with pytest.raises(RuntimeError, match="exceeds TPM cap"):
-        await main._parse_event_via_gemma(
-            "Очень большой вход.",
-            gemma_model="models/gemma-4-31b-it",
-        )
-
-    assert called is False
-
-
-def test_event_parse_output_budget_does_not_rewrite_non_gemma_models():
-    class FakeClient:
-        DEFAULT_TPM_RESERVE_EXTRA = 1000
-
-        @staticmethod
-        def _estimate_prompt_tokens(_prompt):
-            return 200000
-
-    assert (
-        main._fit_event_parse_gemma_output_budget(
-            FakeClient(),
-            model="gemini-3.1-flash-lite",
-            prompt="large",
-            configured_max_tokens=4000,
-        )
-        == 4000
+    parsed = await main._parse_event_via_gemma(
+        "Очень большой вход.",
+        gemma_model="models/gemma-4-31b-it",
     )
+
+    assert list(parsed) == []
+    assert called is True
+
+
+def test_event_parse_flash_lite_uses_audited_calibration_without_budget_rewrite():
+    calibration = main._event_parse_reservation_calibration(
+        "gemini-3.1-flash-lite", "event_parse"
+    )
+    assert calibration.sample_count == 411
+    assert calibration.completion_reservation(output_ceiling_tokens=6000) == 5209
 
 
 @pytest.mark.asyncio
@@ -566,7 +562,7 @@ async def test_event_parse_gemma_default_is_gemma4_without_implicit_4o_fallback(
     captured: dict[str, object] = {"models": [], "four_o_called": False}
 
     class FakeClient:
-        async def generate_content_async(self, *, model, prompt, generation_config, max_output_tokens):
+        async def generate_content_async(self, *, model, prompt, generation_config, max_output_tokens, **_kwargs):
             captured["models"].append(model)
             return "not json", SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2)
 
@@ -584,9 +580,10 @@ async def test_event_parse_gemma_default_is_gemma4_without_implicit_4o_fallback(
     monkeypatch.setattr(main, "log_token_usage", noop_log)
     monkeypatch.setattr(main, "_parse_event_via_4o", fake_4o)
 
-    with pytest.raises(RuntimeError, match="bad gemma parse response"):
-        await main._parse_event_via_gemma("Некорректный ответ модели.")
+    parsed = await main._parse_event_via_gemma("Некорректный ответ модели.")
 
+    assert parsed.is_retry
+    assert parsed.retry_reason.value == "MALFORMED_JSON"
     assert captured["models"] == ["gemma-4-31b-it", "gemma-4-31b-it"]
     assert captured["four_o_called"] is False
 

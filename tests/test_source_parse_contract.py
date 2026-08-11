@@ -49,6 +49,12 @@ def test_t22_empty_provider_body_is_retry_not_no_event_contract():
     assert result.retry_reason is SourceParseRetryReason.EMPTY_PROVIDER_RESPONSE
 
 
+def test_t22_legacy_empty_array_cannot_claim_confirmed_no_event():
+    result = decision_from_provider_payload([], evidence_manifest=_manifest())
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
 @pytest.mark.parametrize(
     ("reason", "provider_metadata"),
     [

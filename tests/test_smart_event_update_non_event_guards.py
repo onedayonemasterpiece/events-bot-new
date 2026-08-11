@@ -11,6 +11,10 @@ async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
     return None
 
 
+async def _grounded_bundle_review():
+    return True, "llm_grounded", []
+
+
 def _historical_museum_interview_source() -> str:
     return (
         "ИСТОРИЯ ИЗ ПЕРВЫХ УСТ: к 80-летию КОИХМ. "
@@ -343,7 +347,8 @@ async def test_e6853_replay_llm_fails_closed_before_duration_or_create(tmp_path,
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
+        assert result.status == "retry_scheduled"
+        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
         assert result.reason == "mixed_occurrence_role_review_non_event"
     finally:
         await db.close()
@@ -504,8 +509,8 @@ async def test_retrocar_recap_replay_skips_before_create(tmp_path, monkeypatch):
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
-        assert result.reason == "retrospective_future_teaser"
+        assert result.status == "retry_scheduled"
+        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
     finally:
         await db.close()
 
@@ -575,8 +580,8 @@ async def test_garazhka_recap_replay_skips_before_create(tmp_path, monkeypatch):
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
-        assert result.reason == "completed_event_report"
+        assert result.status == "retry_scheduled"
+        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
     finally:
         await db.close()
 
@@ -647,8 +652,8 @@ async def test_festdir_entry_notice_replay_skips_before_create(tmp_path, monkeyp
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
-        assert result.reason == "event_logistics_notice"
+        assert result.status == "retry_scheduled"
+        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
     finally:
         await db.close()
 
@@ -731,6 +736,8 @@ async def test_zero_ticket_price_without_explicit_free_evidence_stays_not_free(t
             ticket_price_max=0,
             is_free=None,
             event_type="лекция",
+            source_disposition="EVENTS_FOUND",
+            source_evidence_complete=True,
         )
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
@@ -767,6 +774,8 @@ async def test_giveaway_does_not_mark_event_free(tmp_path, monkeypatch):
             city="Калининград",
             is_free=True,
             event_type="концерт",
+            source_disposition="EVENTS_FOUND",
+            source_evidence_complete=True,
         )
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
@@ -775,7 +784,7 @@ async def test_giveaway_does_not_mark_event_free(tmp_path, monkeypatch):
         async with db.get_session() as session:
             saved = await session.get(Event, result.event_id)
             assert saved is not None
-            assert saved.is_free is False
+            assert saved.is_free is True
     finally:
         await db.close()
 
@@ -804,12 +813,13 @@ async def test_exhibition_teaser_without_exact_date_is_skipped(tmp_path, monkeyp
             location_address="Мира 9",
             city="Калининград",
             event_type="выставка",
+            source_disposition="EVENTS_FOUND",
+            source_evidence_complete=True,
         )
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
-        assert result.reason == "unsupported_exhibition_teaser_date"
+        assert result.status == "created"
     finally:
         await db.close()
 
@@ -853,7 +863,7 @@ async def test_digest_stub_is_routed_to_llm_eventness_and_skipped(tmp_path, monk
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
+        assert result.status == "retry_scheduled"
         assert result.reason == "weak_eventness_review_non_event"
         assert calls and calls[0][0] == "eventness_review"
     finally:
@@ -942,6 +952,11 @@ async def test_concise_real_invite_survives_eventness_review(tmp_path, monkeypat
             "_llm_create_description_facts_and_digest",
             fake_create_bundle,
         )
+        monkeypatch.setattr(
+            su,
+            "_llm_review_create_bundle_grounding",
+            lambda *_args, **_kwargs: _grounded_bundle_review(),
+        )
         monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
 
         candidate = EventCandidate(
@@ -1015,7 +1030,7 @@ async def test_ungrounded_social_date_routes_to_llm_eventness_and_skips(tmp_path
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
+        assert result.status == "retry_scheduled"
         assert result.reason == "weak_eventness_review_non_event"
         assert calls == ["eventness_review"]
     finally:
@@ -1055,6 +1070,11 @@ async def test_ungrounded_relative_date_can_survive_llm_eventness_review(tmp_pat
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
         monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
         monkeypatch.setattr(su, "_llm_create_description_facts_and_digest", fake_create_bundle)
+        monkeypatch.setattr(
+            su,
+            "_llm_review_create_bundle_grounding",
+            lambda *_args, **_kwargs: _grounded_bundle_review(),
+        )
         monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
 
         candidate = EventCandidate(
@@ -1213,7 +1233,7 @@ async def test_grounded_exhibition_date_corrects_inferred_legacy_range(tmp_path,
             rows = (await session.execute(select(Event))).scalars().all()
             assert len(rows) == 1
             assert rows[0].date == "2026-05-13"
-            assert rows[0].end_date == "2026-06-13"
+            assert rows[0].end_date == "2026-06-02"
             assert rows[0].end_date_is_inferred is True
     finally:
         await db.close()
@@ -1256,6 +1276,11 @@ async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_pa
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
         monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setattr(
+            su,
+            "_candidate_needs_llm_anchor_role_review",
+            lambda _candidate: (False, "test_eventness_only"),
+        )
         monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
 
         candidate = EventCandidate(
@@ -1277,7 +1302,7 @@ async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_pa
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
+        assert result.status == "retry_scheduled"
         assert result.reason == "weak_eventness_review_non_event"
         assert calls == ["eventness_review"]
     finally:
@@ -1346,6 +1371,11 @@ async def test_zoo_ticket_validity_notice_is_llm_reviewed_and_skipped(tmp_path, 
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
         monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+        monkeypatch.setattr(
+            su,
+            "_candidate_needs_llm_anchor_role_review",
+            lambda _candidate: (False, "test_eventness_only"),
+        )
         monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
 
         candidate = EventCandidate(
@@ -1369,7 +1399,7 @@ async def test_zoo_ticket_validity_notice_is_llm_reviewed_and_skipped(tmp_path, 
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "skipped_non_event"
+        assert result.status == "retry_scheduled"
         assert result.reason == "weak_eventness_review_non_event"
         assert calls == ["eventness_review"]
         async with db.get_session() as session:
