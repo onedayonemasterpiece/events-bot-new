@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -107,9 +108,29 @@ def attach_private_events_mcp(
         social_workspace_adapters=social_workspace_adapters,
         asset_ingestor=asset_ingestor,
     )
+    # Audio transcription is an independent, default-off capability. It extends
+    # only the ChatGPT/OpenCode protocol and leaves the exact-seven Codex surface
+    # unchanged. Avoid importing the Kaggle/Telethon orchestration package unless
+    # the operator explicitly requests this capability. Invalid truthy values are
+    # still rejected by AudioTranscriptionConfig.from_env().
+    raw_audio_enabled = (
+        os.getenv("PRIVATE_EVENTS_MCP_AUDIO_TRANSCRIPTION_ENABLED") or ""
+    ).strip().casefold()
+    audio_requested = raw_audio_enabled not in {"", "0", "false", "no", "off"}
+    audio_service = None
+    if audio_requested:
+        from audio_transcription.mcp import attach_audio_transcription_mcp
+
+        audio_service = attach_audio_transcription_mcp(
+            app,
+            server,
+            mcp_enabled=resolved.enabled,
+            signing_key=resolved.signing_key,
+        )
     server.register(app)
     logger.info(
-        "private_events_mcp attached endpoint_fingerprint=%s mode=read_only",
+        "private_events_mcp attached endpoint_fingerprint=%s mode=%s",
         app.get(ENDPOINT_FINGERPRINT_APP_KEY, "unknown"),
+        "read_plus_audio_transcription" if audio_service is not None else "read_only",
     )
     return server

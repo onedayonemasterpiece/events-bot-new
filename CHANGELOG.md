@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / Telegram-native audio transcription (default off):**
+  added owner-bound audio `fileParams` ingress, durable idempotent jobs, a
+  pause-aware CPU Kaggle ffmpeg worker, dedicated guarded Telethon session,
+  native Telegram transcription, truthful relative/absolute timestamps and
+  digest-verified TXT/timeline/JSON/SRT/VTT exports. Codex remains exact-seven;
+  activation still requires a separate Premium-capable session and live canary.
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit
   controlled release operation.

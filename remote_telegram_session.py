@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 REMOTE_TELEGRAM_KAGGLE_JOB_TYPES = frozenset(
     {
+        "audio_transcription",
         "guide_monitoring",
         "kenigsberg_story",
         "tg_monitoring",
