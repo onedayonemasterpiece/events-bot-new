@@ -1,0 +1,59 @@
+name: Bootstrap audio transcription implementation
+
+on:
+  push:
+    branches:
+      - feature/audio-transcription-telegram-native
+    paths:
+      - .audio-transcription-bootstrap/**
+      - scripts/bootstrap_audio_transcription_branch.py
+      - .github/workflows/audio-transcription-bootstrap.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: audio-transcription-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  expand-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Expand implementation
+        run: python scripts/bootstrap_audio_transcription_branch.py
+      - name: Install focused test dependency
+        run: python -m pip install --disable-pip-version-check -q pytest
+      - name: Compile implementation
+        run: >-
+          python -m compileall -q
+          audio_transcription
+          kaggle/AudioTranscription
+          private_events_mcp
+          scripts/validate_audio_transcription_skeleton.py
+          tests/test_audio_transcription_*.py
+      - name: Run focused tests
+        env:
+          PYTHONPATH: .
+        run: >-
+          python -m pytest -q
+          tests/test_audio_transcription_*.py
+          tests/test_remote_telegram_session.py
+      - name: Run real ffmpeg smoke
+        env:
+          PYTHONPATH: .
+        run: python scripts/validate_audio_transcription_skeleton.py
+      - name: Commit expanded implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: add Telegram-native audio transcription skeleton"
+          git push origin HEAD:feature/audio-transcription-telegram-native
