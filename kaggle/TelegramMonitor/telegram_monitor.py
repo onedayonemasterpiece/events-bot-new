@@ -30,6 +30,17 @@ SCRIPT_DIR = Path(globals().get('__file__', Path.cwd() / 'telegram_monitor.py'))
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from source_parse_contract import (
+    EvidenceManifest,
+    SourceDisposition,
+    SourceNoEventReason,
+    SourceParseDecision,
+    SourceParseRetryReason,
+    VerificationReason,
+    decision_from_provider_payload,
+)
+from source_contradiction_facts import derive_source_contradiction_facts
+
 def _load_status_loader():
     try:
         from kaggle_status_client import load_status_client as loader
@@ -1706,6 +1717,90 @@ EVENT_ARRAY_SCHEMA = {
     },
 }
 
+# Source-level semantic result shared with source_parsing/telegram/handlers.py.
+# Keep this dependency-light because the Kaggle runner embeds this module and
+# the two shared source-parse modules as its complete import closure.
+# The producer, rather than the model, supplies the evidence manifest below.
+SOURCE_PARSE_DISPOSITIONS = {
+    'EVENTS_FOUND', 'CONFIRMED_NO_EVENT', 'LIFECYCLE_ONLY', 'MIXED', 'RETRY_REQUIRED'
+}
+SOURCE_PARSE_RETRY_REASONS = {
+    'EMPTY_PROVIDER_RESPONSE', 'MALFORMED_JSON', 'SCHEMA_MISMATCH',
+    'OUTPUT_TRUNCATED', 'TECHNICAL_ERROR', 'EVIDENCE_INCOMPLETE',
+    'VERIFICATION_TECHNICAL_ERROR', 'VERIFICATION_UNCERTAIN',
+}
+SOURCE_PARSE_NO_EVENT_REASONS = {
+    'NO_ATTENDABLE_EVENT', 'GIVEAWAY_ONLY', 'VAGUE_TEASER', 'REFERRAL_ONLY',
+    'SERVICE_OR_RENTAL', 'RECAP_ONLY', 'OUT_OF_SCOPE',
+}
+SOURCE_PARSE_LIFECYCLE_ACTIONS = {
+    'CANCEL',
+    'POSTPONE',
+    'RESCHEDULE_DATE',
+    'RESCHEDULE_TIME',
+    'UPDATE_DETAILS',
+}
+SOURCE_PARSE_VERIFICATION_REASONS = {
+    'NO_EVENT_WITH_STRONG_SIGNALS', 'EVENT_DATE_CONFLICT',
+    'MULTIPLE_OCCURRENCES_COLLAPSED', 'GENERIC_UNGROUNDED_TITLE',
+    'LIFECYCLE_MIXED_CONTENT_CONFLICT', 'IMPOSSIBLE_SCHEMA_VALUE',
+    'INCOMPLETE_EVIDENCE',
+}
+assert SOURCE_PARSE_DISPOSITIONS == {item.value for item in SourceDisposition}
+assert SOURCE_PARSE_RETRY_REASONS == {item.value for item in SourceParseRetryReason}
+assert SOURCE_PARSE_NO_EVENT_REASONS == {item.value for item in SourceNoEventReason}
+assert SOURCE_PARSE_VERIFICATION_REASONS == {item.value for item in VerificationReason}
+SOURCE_PARSE_VERSION = 'source-parse-v1'
+
+_LIFECYCLE_ACTION_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'action': {'type': 'string', 'enum': sorted(SOURCE_PARSE_LIFECYCLE_ACTIONS)},
+        'target_title': _string_schema(),
+        'target_date': _string_schema(),
+        'target_time': _string_schema(),
+        'target_location': _string_schema(),
+        'new_date': _string_schema(),
+        'new_time': _string_schema(),
+        'evidence': _string_schema(),
+    },
+    'required': [
+        'action',
+        'target_title',
+        'target_date',
+        'target_time',
+        'target_location',
+        'new_date',
+        'new_time',
+        'evidence',
+    ],
+}
+
+SOURCE_PARSE_DECISION_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'disposition': {'type': 'string', 'enum': sorted(SOURCE_PARSE_DISPOSITIONS)},
+        'events': EVENT_ARRAY_SCHEMA,
+        'lifecycle_actions': {'type': 'array', 'items': _LIFECYCLE_ACTION_SCHEMA},
+        'evidence_complete': {'type': 'boolean'},
+        'parse_version': _string_schema(),
+        'retry_reason': {'type': 'string', 'enum': sorted(SOURCE_PARSE_RETRY_REASONS)},
+        'no_event_reason': {
+            'type': 'string',
+            'enum': sorted(SOURCE_PARSE_NO_EVENT_REASONS),
+            'nullable': True,
+        },
+    },
+    'required': [
+        'disposition',
+        'events',
+        'lifecycle_actions',
+        'evidence_complete',
+        'parse_version',
+        'no_event_reason',
+    ],
+}
+
 SOURCE_METADATA_SCHEMA = {
     'type': 'object',
     'properties': {
@@ -1853,10 +1948,14 @@ VIDEO_ANALYSIS_SCHEMA = {
 }
 
 
-def _generation_config(response_schema: dict | None = None) -> dict:
+def _generation_config(
+    response_schema: dict | None = None,
+    *,
+    max_output_tokens: int = 800,
+) -> dict:
     cfg = {
         'temperature': 0,
-        'max_output_tokens': 800,
+        'max_output_tokens': max(1, int(max_output_tokens)),
         'response_mime_type': 'application/json',
     }
     if response_schema is not None:
@@ -1864,7 +1963,14 @@ def _generation_config(response_schema: dict | None = None) -> dict:
     return cfg
 
 
-async def _call_model(kind: str, prompt: str, images=None, *, response_schema: dict | None = None) -> str:
+async def _call_model(
+    kind: str,
+    prompt: str,
+    images=None,
+    *,
+    response_schema: dict | None = None,
+    max_output_tokens: int = 800,
+) -> str:
     model_state = MODEL_REGISTRY[kind]
     primary_model = (model_state.get('name') or '').strip()
     fallback_model = (model_state.get('fallback') or '').strip()
@@ -1882,8 +1988,11 @@ async def _call_model(kind: str, prompt: str, images=None, *, response_schema: d
             text, _usage = await client.generate_content_async(
                 model=model_name,
                 prompt=payload,
-                generation_config=_generation_config(response_schema=response_schema),
-                max_output_tokens=800,
+                generation_config=_generation_config(
+                    response_schema=response_schema,
+                    max_output_tokens=max_output_tokens,
+                ),
+                max_output_tokens=max(1, int(max_output_tokens)),
                 candidate_key_ids=candidate_key_ids,
             )
             return text
@@ -1895,6 +2004,525 @@ async def _call_model(kind: str, prompt: str, images=None, *, response_schema: d
             raise
 
     raise last_error or RuntimeError(f'tg_monitor model call failed kind={kind}')
+
+
+def _source_evidence_manifest(
+    raw_text: str | None,
+    ocr_blocks=None,
+    *,
+    attachment_count: int | None = None,
+    unavailable_attachment_count: int = 0,
+    ocr_complete: bool = True,
+    omitted_blocks=None,
+    source_text_truncated: bool = False,
+    provider_output_truncated: bool = False,
+) -> dict:
+    """Describe exactly which carrier evidence reached the semantic call.
+
+    The manifest is producer-owned.  Regex hints and model claims cannot mark
+    unavailable media as complete evidence.
+    """
+
+    text = str(raw_text or '')
+    blocks = [str(block or '') for block in (ocr_blocks or [])]
+    omitted = [str(item) for item in (omitted_blocks or []) if str(item)]
+    attachments = max(
+        len(blocks),
+        int(attachment_count if attachment_count is not None else len(blocks)),
+    )
+    # If an attachment exists without an available OCR block, the missing
+    # block is unavailable even when an older caller forgot to count it.
+    unavailable = max(
+        0,
+        int(unavailable_attachment_count or 0),
+        attachments - len(blocks),
+    )
+    effective_ocr_complete = bool(
+        ocr_complete
+        and unavailable == 0
+        and attachments == len(blocks)
+        and not omitted
+    )
+    complete = bool(
+        not source_text_truncated
+        and not provider_output_truncated
+        and effective_ocr_complete
+        and unavailable == 0
+        and not omitted
+        and attachments == len(blocks)
+    )
+    return {
+        'raw_text_chars': len(text),
+        'raw_text_hash': hashlib.sha256(text.encode('utf-8')).hexdigest(),
+        'attachment_count': attachments,
+        'ocr_blocks_available': len(blocks),
+        'ocr_blocks_included': len(blocks),
+        'included_chars': len(text) + sum(len(block) for block in blocks),
+        'omitted_blocks': omitted,
+        'unavailable_attachment_count': unavailable,
+        'ocr_complete': effective_ocr_complete,
+        'source_text_truncated': bool(source_text_truncated),
+        'provider_output_truncated': bool(provider_output_truncated),
+        'evidence_complete': complete,
+    }
+
+
+def _normalize_source_evidence_manifest(value) -> dict:
+    """Fail-closed validator for producer and durable receipt manifests."""
+
+    required = {
+        'raw_text_chars',
+        'raw_text_hash',
+        'attachment_count',
+        'ocr_blocks_available',
+        'ocr_blocks_included',
+        'included_chars',
+        'omitted_blocks',
+        'unavailable_attachment_count',
+        'ocr_complete',
+        'source_text_truncated',
+        'provider_output_truncated',
+    }
+    valid = isinstance(value, dict) and required.issubset(value)
+    raw = value if isinstance(value, dict) else {}
+
+    def count(key):
+        nonlocal valid
+        item = raw.get(key)
+        if isinstance(item, bool):
+            valid = False
+            return 0
+        try:
+            parsed = int(item)
+        except (TypeError, ValueError):
+            valid = False
+            return 0
+        if parsed < 0:
+            valid = False
+            return 0
+        return parsed
+
+    attachments = count('attachment_count')
+    available = count('ocr_blocks_available')
+    included = count('ocr_blocks_included')
+    included_chars = count('included_chars')
+    raw_text_chars = count('raw_text_chars')
+    unavailable = count('unavailable_attachment_count')
+    raw_hash = raw.get('raw_text_hash')
+    if (
+        not isinstance(raw_hash, str)
+        or len(raw_hash) != 64
+        or any(char not in '0123456789abcdefABCDEF' for char in raw_hash)
+    ):
+        valid = False
+        raw_hash = str(raw_hash or '')
+    if included_chars < raw_text_chars:
+        valid = False
+    omitted_raw = raw.get('omitted_blocks')
+    if not isinstance(omitted_raw, list):
+        valid = False
+        omitted_raw = []
+    omitted = [str(item) for item in omitted_raw if str(item)]
+    for key in ('ocr_complete', 'source_text_truncated', 'provider_output_truncated'):
+        if not isinstance(raw.get(key), bool):
+            valid = False
+
+    cardinality_valid = included <= available <= attachments
+    valid = bool(valid and cardinality_valid)
+    attachments = max(attachments, available, included)
+    available = max(available, included)
+    unavailable = max(unavailable, attachments - available)
+    omitted_gap = max(0, available - included)
+    while len(omitted) < omitted_gap:
+        omitted.append(f'ocr_block:{included + len(omitted) + 1}:omitted')
+    ocr_complete = bool(
+        valid
+        and raw.get('ocr_complete') is True
+        and attachments == available == included
+        and unavailable == 0
+        and not omitted
+    )
+    source_text_truncated = (
+        raw.get('source_text_truncated')
+        if isinstance(raw.get('source_text_truncated'), bool)
+        else True
+    )
+    provider_output_truncated = (
+        raw.get('provider_output_truncated')
+        if isinstance(raw.get('provider_output_truncated'), bool)
+        else True
+    )
+    complete = bool(
+        valid
+        and ocr_complete
+        and not source_text_truncated
+        and not provider_output_truncated
+    )
+    return {
+        'raw_text_chars': raw_text_chars,
+        'raw_text_hash': raw_hash,
+        'attachment_count': attachments,
+        'ocr_blocks_available': available,
+        'ocr_blocks_included': included,
+        'included_chars': included_chars,
+        'omitted_blocks': omitted,
+        'unavailable_attachment_count': unavailable,
+        'ocr_complete': ocr_complete,
+        'source_text_truncated': bool(source_text_truncated),
+        'provider_output_truncated': bool(provider_output_truncated),
+        'evidence_complete': complete,
+    }
+
+
+def _source_parse_retry(
+    reason: str,
+    evidence_manifest: dict,
+    *,
+    events=None,
+    lifecycle_actions=None,
+    verification: dict | None = None,
+) -> dict:
+    retry_reason = str(reason or 'TECHNICAL_ERROR').strip().upper()
+    if retry_reason not in SOURCE_PARSE_RETRY_REASONS:
+        retry_reason = 'SCHEMA_MISMATCH'
+    payload = {
+        'disposition': 'RETRY_REQUIRED',
+        'events': [item for item in (events or []) if isinstance(item, dict)],
+        'lifecycle_actions': [
+            item for item in (lifecycle_actions or []) if isinstance(item, dict)
+        ],
+        'evidence_manifest': dict(evidence_manifest or {}),
+        'evidence_complete': False,
+        'parse_version': SOURCE_PARSE_VERSION,
+        'retry_reason': retry_reason,
+        'enrichment_required': bool(events),
+    }
+    if verification is not None:
+        payload['verification'] = dict(verification)
+    return payload
+
+
+def _provider_output_looks_truncated(raw_response: str | None) -> bool:
+    raw = str(raw_response or '').strip()
+    if raw.startswith('```'):
+        raw = re.sub(r'^```[a-zA-Z]*\n?', '', raw).strip()
+        if raw.endswith('```'):
+            raw = raw[:-3].strip()
+    if not raw:
+        return False
+    if raw.startswith('{'):
+        return not raw.endswith('}')
+    if raw.startswith('['):
+        return not raw.endswith(']')
+    return False
+
+
+def _expected_source_disposition(events: list, lifecycle_actions: list) -> str:
+    if events and lifecycle_actions:
+        return 'MIXED'
+    if events:
+        return 'EVENTS_FOUND'
+    if lifecycle_actions:
+        return 'LIFECYCLE_ONLY'
+    return 'CONFIRMED_NO_EVENT'
+
+
+def _parse_source_decision_response(
+    raw_response: str | None,
+    evidence_manifest: dict,
+) -> dict:
+    """Validate the closed decision shape without turning failures into []."""
+
+    evidence_manifest = _normalize_source_evidence_manifest(evidence_manifest)
+    if not str(raw_response or '').strip():
+        return _source_parse_retry('EMPTY_PROVIDER_RESPONSE', evidence_manifest)
+    parsed = _safe_json(str(raw_response))
+    if parsed is None:
+        manifest = dict(evidence_manifest or {})
+        if _provider_output_looks_truncated(raw_response):
+            manifest['provider_output_truncated'] = True
+            manifest['evidence_complete'] = False
+            return _source_parse_retry('OUTPUT_TRUNCATED', manifest)
+        return _source_parse_retry('MALFORMED_JSON', manifest)
+    if not isinstance(parsed, dict):
+        return _source_parse_retry('SCHEMA_MISMATCH', evidence_manifest)
+
+    disposition = str(parsed.get('disposition') or '').strip().upper()
+    supplied_no_event_reason = parsed.get('no_event_reason')
+    no_event_reason = (
+        str(supplied_no_event_reason).strip().upper()
+        if supplied_no_event_reason is not None
+        else None
+    )
+    events = parsed.get('events')
+    lifecycle_actions = parsed.get('lifecycle_actions')
+    declared_complete = parsed.get('evidence_complete')
+    if (
+        disposition not in SOURCE_PARSE_DISPOSITIONS
+        or not isinstance(events, list)
+        or not all(
+            isinstance(item, dict)
+            and isinstance(item.get('title'), str)
+            and bool(item.get('title', '').strip())
+            for item in events
+        )
+        or not isinstance(lifecycle_actions, list)
+        or not all(isinstance(item, dict) for item in lifecycle_actions)
+        or not isinstance(declared_complete, bool)
+        or (
+            disposition == 'CONFIRMED_NO_EVENT'
+            and no_event_reason not in SOURCE_PARSE_NO_EVENT_REASONS
+        )
+        or (
+            no_event_reason is not None
+            and disposition != 'CONFIRMED_NO_EVENT'
+        )
+    ):
+        active_logger = globals().get('logger')
+        if active_logger is not None:
+            active_logger.warning(
+                'source_parse.schema_alert invalid_or_missing_no_event_reason disposition=%s reason=%r',
+                disposition,
+                supplied_no_event_reason,
+            )
+        return _source_parse_retry('SCHEMA_MISMATCH', evidence_manifest)
+
+    for action in lifecycle_actions:
+        if str(action.get('action') or '').strip().upper() not in SOURCE_PARSE_LIFECYCLE_ACTIONS:
+            return _source_parse_retry(
+                'SCHEMA_MISMATCH',
+                evidence_manifest,
+                events=events,
+                lifecycle_actions=lifecycle_actions,
+            )
+
+    if disposition == 'RETRY_REQUIRED':
+        raw_reason = str(parsed.get('retry_reason') or '').strip().upper()
+        return _source_parse_retry(
+            raw_reason if raw_reason in SOURCE_PARSE_RETRY_REASONS else 'SCHEMA_MISMATCH',
+            evidence_manifest,
+            events=events,
+            lifecycle_actions=lifecycle_actions,
+        )
+
+    expected = _expected_source_disposition(events, lifecycle_actions)
+    if disposition != expected:
+        return _source_parse_retry(
+            'SCHEMA_MISMATCH',
+            evidence_manifest,
+            events=events,
+            lifecycle_actions=lifecycle_actions,
+        )
+
+    effective_complete = bool(
+        declared_complete and evidence_manifest.get('evidence_complete') is True
+    )
+    if disposition == 'CONFIRMED_NO_EVENT' and not effective_complete:
+        return _source_parse_retry('EVIDENCE_INCOMPLETE', evidence_manifest)
+
+    result = {
+        'disposition': disposition,
+        'events': list(events),
+        'lifecycle_actions': list(lifecycle_actions),
+        'evidence_manifest': dict(evidence_manifest or {}),
+        'evidence_complete': effective_complete,
+        'parse_version': str(parsed.get('parse_version') or SOURCE_PARSE_VERSION),
+        'enrichment_required': bool(events and not effective_complete),
+    }
+    if no_event_reason is not None:
+        result['no_event_reason'] = no_event_reason
+    return result
+
+
+def _source_parse_contradictions(
+    decision: dict,
+    *,
+    source_text: str,
+    ocr_blocks=None,
+    source_metadata=None,
+) -> list[dict]:
+    """Adapt the local receipt to the one shared pure fact implementation."""
+
+    raw_manifest = decision.get('evidence_manifest')
+    manifest = EvidenceManifest.from_mapping(raw_manifest) if isinstance(raw_manifest, dict) else None
+    typed = decision_from_provider_payload(decision, evidence_manifest=manifest)
+    return [
+        fact.to_payload()
+        for fact in derive_source_contradiction_facts(
+            source_text,
+            ocr_blocks,
+            source_metadata or {},
+            typed,
+            manifest,
+        )
+    ]
+
+
+def _source_parse_prompt(
+    *,
+    source_text: str,
+    ocr_blocks,
+    evidence_manifest: dict,
+    message_date: str | None,
+    source_username: str | None,
+    source_title: str | None,
+    source_default_location: str | None,
+    primary_decision: dict | None = None,
+    contradiction_facts=None,
+) -> str:
+    task = 'conditionally_verify_source_parse' if primary_decision is not None else 'parse_source'
+    request = {
+        'task': task,
+        'rules': [
+            'Return one strict SourceParseDecision JSON object and no prose.',
+            'Regex, keyword, date, past/history, recap, admin, promo, and confidence signals are hints only; the LLM owns the semantic verdict.',
+            'Extract every event and every distinct occurrence/session; never cap or silently discard children.',
+            'Cancellation, postponement, reschedule, and detail changes are typed lifecycle_actions; use MIXED when new events and lifecycle actions coexist.',
+            'CONFIRMED_NO_EVENT is allowed only after considering the complete raw text and every OCR block; no_event_reason is mandatory and must be one of allowed_no_event_reasons.',
+            'no_event_reason is forbidden for every other disposition.',
+            'Giveaway-only content requires CONFIRMED_NO_EVENT with no_event_reason=GIVEAWAY_ONLY; a giveaway plus a real event preserves the event.',
+            'A recap, giveaway, historical/admin wrapper, or past date may coexist with a future event; preserve the future event.',
+            'Weak title, missing regex-visible date, suspicious venue, or low confidence never authorizes deletion of a positive child.',
+            'Technical uncertainty, malformed/incomplete reasoning, or inability to fit all children requires RETRY_REQUIRED with a typed retry_reason.',
+            'Free-form reject_reason or skip_reason fields have no authority and must not be returned.',
+        ],
+        'allowed_dispositions': sorted(SOURCE_PARSE_DISPOSITIONS),
+        'allowed_lifecycle_actions': sorted(SOURCE_PARSE_LIFECYCLE_ACTIONS),
+        'allowed_retry_reasons': sorted(SOURCE_PARSE_RETRY_REASONS),
+        'allowed_no_event_reasons': sorted(SOURCE_PARSE_NO_EVENT_REASONS),
+        'message_date': message_date,
+        'source_context': {
+            'username': source_username,
+            'title': source_title,
+            'default_location_hint': source_default_location,
+        },
+        'source_text': str(source_text or ''),
+        'ocr_blocks': [str(block or '') for block in (ocr_blocks or [])],
+        'evidence_manifest': dict(evidence_manifest or {}),
+    }
+    if primary_decision is not None:
+        request['primary_result'] = dict(primary_decision)
+        request['contradiction_facts'] = list(contradiction_facts or [])
+        request['rules'].append(
+            'Confirm or correct the primary result; verification uncertainty requires RETRY_REQUIRED.'
+        )
+    return json.dumps(request, ensure_ascii=False)
+
+
+async def extract_source_parse_decision(
+    source_text: str,
+    ocr_blocks=None,
+    *,
+    message_date: str | None = None,
+    source_username: str | None = None,
+    source_title: str | None = None,
+    source_default_location: str | None = None,
+    attachment_count: int | None = None,
+    unavailable_attachment_count: int = 0,
+    ocr_complete: bool = True,
+    omitted_blocks=None,
+    _model_call=None,
+) -> dict:
+    """Run one ordinary source parse and at most one contradiction verifier."""
+
+    blocks = [str(block or '') for block in (ocr_blocks or [])]
+    manifest = _source_evidence_manifest(
+        source_text,
+        blocks,
+        attachment_count=attachment_count,
+        unavailable_attachment_count=unavailable_attachment_count,
+        ocr_complete=ocr_complete,
+        omitted_blocks=omitted_blocks,
+    )
+    invoke = _model_call or _call_model
+    primary_prompt = _source_parse_prompt(
+        source_text=source_text,
+        ocr_blocks=blocks,
+        evidence_manifest=manifest,
+        message_date=message_date,
+        source_username=source_username,
+        source_title=source_title,
+        source_default_location=source_default_location,
+    )
+    try:
+        raw_primary = await invoke(
+            'text',
+            primary_prompt,
+            response_schema=SOURCE_PARSE_DECISION_SCHEMA,
+            max_output_tokens=4096,
+        )
+    except Exception as exc:
+        logger.warning(
+            'source_parse.primary technical_error source=%s: %s',
+            source_username,
+            exc,
+        )
+        return _source_parse_retry('TECHNICAL_ERROR', manifest)
+
+    primary = _parse_source_decision_response(raw_primary, manifest)
+    if primary.get('disposition') == 'RETRY_REQUIRED':
+        return primary
+    facts = _source_parse_contradictions(
+        primary,
+        source_text=source_text,
+        ocr_blocks=blocks,
+        source_metadata={
+            'today': date.today().isoformat(),
+            'published_at': message_date,
+            'source_username': source_username,
+        },
+    )
+    if not facts:
+        return primary
+
+    verify_prompt = _source_parse_prompt(
+        source_text=source_text,
+        ocr_blocks=blocks,
+        evidence_manifest=manifest,
+        message_date=message_date,
+        source_username=source_username,
+        source_title=source_title,
+        source_default_location=source_default_location,
+        primary_decision=primary,
+        contradiction_facts=facts,
+    )
+    verification_meta = {
+        'performed': True,
+        'reasons': [fact['reason'] for fact in facts],
+    }
+    try:
+        raw_verified = await invoke(
+            'text',
+            verify_prompt,
+            response_schema=SOURCE_PARSE_DECISION_SCHEMA,
+            max_output_tokens=4096,
+        )
+    except Exception as exc:
+        logger.warning(
+            'source_parse.verification technical_error source=%s reasons=%s: %s',
+            source_username,
+            verification_meta['reasons'],
+            exc,
+        )
+        return _source_parse_retry(
+            'VERIFICATION_TECHNICAL_ERROR',
+            manifest,
+            events=primary.get('events'),
+            lifecycle_actions=primary.get('lifecycle_actions'),
+            verification=verification_meta,
+        )
+
+    verified = _parse_source_decision_response(raw_verified, manifest)
+    if verified.get('disposition') == 'RETRY_REQUIRED':
+        return _source_parse_retry(
+            'VERIFICATION_UNCERTAIN',
+            manifest,
+            events=primary.get('events'),
+            lifecycle_actions=primary.get('lifecycle_actions'),
+            verification=verification_meta,
+        )
+    verified['verification'] = verification_meta
+    return verified
 
 
 _VIDEO_ALLOWED_RISK_FLAGS = {
@@ -4909,11 +5537,11 @@ async def extract_events(
 
 async def ocr_image(image_bytes: bytes, message_date: str | None = None):
     if not ENABLE_OCR:
-        return None, None
+        return None, None, False
     try:
         img = Image.open(io.BytesIO(image_bytes))
     except Exception:
-        return None, None
+        return None, None, False
     date_context = f"Message date (ISO, UTC): {message_date}" if message_date else 'Message date: unknown'
     prompt = (
         'Extract readable text from the image. '
@@ -4925,7 +5553,7 @@ async def ocr_image(image_bytes: bytes, message_date: str | None = None):
         text = await _call_model('vision', prompt, images=[img], response_schema=OCR_SCHEMA)
     except Exception as exc:
         logger.warning('ocr_image failed: %s', exc)
-        return None, None
+        return None, None, False
     data = _safe_json(text)
     if data is None:
         fix_prompt = (
@@ -4944,8 +5572,8 @@ async def ocr_image(image_bytes: bytes, message_date: str | None = None):
         title = data.get('title') or None
         if text and not title:
             title = text.split('\n', 1)[0].strip() if text else None
-        return text or None, title
-    return None, None
+        return text or None, title, True
+    return None, None, False
 
 
 async def scan_source(client: TelegramClient, source: dict) -> dict:
@@ -5035,7 +5663,10 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         text_for_links = strip_custom_emoji_entities(text_raw, entities)
         # Extract links using a stable-offset string (before any line dropping),
         # because Telegram text-url entities reference UTF-16 offsets.
-        text = strip_promo_lines(text_for_links)
+        # Preserve the complete carrier for the source-level LLM.  Promo,
+        # recap, admin and giveaway detectors may add hints but may not remove
+        # lines before the semantic decision.
+        text = text_for_links.strip()
 
         # Extract links from message text/entities/buttons.
         # We keep Telegram post links separately for linked-source processing, but also emit
@@ -5126,9 +5757,6 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 continue
             seen_linked.add(key)
             linked_urls_clean.append(canonical)
-        msg_date_obj = msg.date
-        msg_date_val = msg_date_obj.date() if msg_date_obj else None
-
         views = getattr(msg, 'views', None)
         likes = _message_likes(msg)
         comments = _message_comments(msg)
@@ -5142,17 +5770,21 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             # Do not mutate message text deterministically; let LLM ignore giveaway mechanics.
             logger.info('message.flag reason=ticket_giveaway username=%s message_id=%s', username, msg.id)
 
-        skip_promo = is_promo_or_congrats(text)
-        if skip_promo and not _has_strong_event_invitation_signal(text):
-            logger.info('message.skip reason=promo_or_congrats username=%s message_id=%s', username, msg.id)
-        elif skip_promo:
-            logger.info('message.flag reason=promo_or_congrats_strong_event_signal_pre_ocr username=%s message_id=%s', username, msg.id)
+        promo_hint = is_promo_or_congrats(text)
+        if promo_hint:
+            logger.info(
+                'message.hint reason=promo_or_congrats username=%s message_id=%s strong_event_signal=%s',
+                username,
+                msg.id,
+                bool(_has_strong_event_invitation_signal(text)),
+            )
 
         posters = []
         videos = []
         video_status = None
         ocr_text = None
         ocr_title = None
+        ocr_succeeded = True
         image_bytes = None
         grouped_id = getattr(msg, 'grouped_id', None)
         has_video = False
@@ -5176,6 +5808,13 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             wp = getattr(getattr(msg, 'media', None), 'webpage', None)
             if wp and getattr(wp, 'photo', None):
                 media_obj = wp.photo
+        attachment_count = (1 if media_obj is not None else 0) + (1 if has_video else 0)
+        # Video bytes/frames are not part of the primary text/OCR semantic
+        # call.  Keep that omission explicit so a video-only carrier cannot
+        # become a false CONFIRMED_NO_EVENT.
+        unavailable_attachment_count = 1 if has_video else 0
+        if media_obj is not None:
+            ocr_succeeded = False
         if media_obj is not None and media_downloaded < media_cap:
             # Media downloads are the most expensive Telegram calls and often trigger FloodWait.
             # Throttle them and cap per-source to keep monitoring stable.
@@ -5206,7 +5845,10 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 supabase_url, supabase_path, raw_sha256 = None, None, None
                 if SUPABASE_POSTERS_MODE == 'always' or (SUPABASE_POSTERS_MODE == 'fallback' and not catbox_url):
                     supabase_url, supabase_path, raw_sha256 = upload_to_supabase_storage(image_bytes, sha)
-                ocr_text, ocr_title = await ocr_image(image_bytes, message_date=msg_date)
+                ocr_text, ocr_title, ocr_succeeded = await ocr_image(
+                    image_bytes,
+                    message_date=msg_date,
+                )
                 posters.append({
                     'catbox_url': catbox_url,
                     'supabase_url': supabase_url,
@@ -5219,76 +5861,74 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 })
             except Exception as exc:
                 logger.warning('media process failed for %s/%s: %s', username, msg.id, exc)
+        if media_obj is not None and (not image_bytes or not ocr_succeeded):
+            unavailable_attachment_count += 1
 
-        if is_promo_or_congrats(text, ocr_text) and not _has_strong_event_invitation_signal(text, ocr_text):
-            logger.info('message.skip reason=promo_or_congrats_ocr username=%s message_id=%s', username, msg.id)
-            skip_promo = True
-            events = []
-            ocr_date_hint, ocr_time_hint = None, None
-        else:
-            if skip_promo:
-                logger.info(
-                    'message.flag reason=promo_or_congrats_strong_event_signal username=%s message_id=%s',
-                    username,
-                    msg.id,
-                )
-            # If OCR reveals giveaway terms, keep text intact; LLM should ignore mechanics.
-            if is_ticket_giveaway(text, ocr_text):
-                logger.info('message.flag reason=ticket_giveaway_ocr username=%s message_id=%s', username, msg.id)
-            linked_texts = []
-            text_for_extract = text
-            if linked_urls_clean:
-                for url in linked_urls_clean[:2]:
-                    try:
-                        mm = re.search(r't\.me/([^/]+)/([0-9]+)', url)
-                        if not mm:
-                            continue
-                        ln_user = mm.group(1)
-                        ln_id = int(mm.group(2))
-                        ent2 = await client.get_entity(ln_user)
-                        linked_msg = await client.get_messages(ent2, ids=ln_id)
-                        lt = (getattr(linked_msg, 'message', None) or '').strip()
-                        lt = strip_custom_emoji_entities(lt, getattr(linked_msg, 'entities', None))
-                        lt = strip_promo_lines(lt)
-                        lt = lt.strip()
-                        if lt:
-                            lt = lt[:900]
-                        if lt and lt not in linked_texts:
-                            linked_texts.append(lt)
-                    except Exception as exc:
-                        logger.info('linked.skip url=%s username=%s message_id=%s: %s', url, username, msg.id, exc)
+        if is_promo_or_congrats(text, ocr_text):
+            logger.info(
+                'message.hint reason=promo_or_congrats_with_ocr username=%s message_id=%s strong_event_signal=%s',
+                username,
+                msg.id,
+                bool(_has_strong_event_invitation_signal(text, ocr_text)),
+            )
+        # If OCR reveals giveaway terms, keep text intact; LLM should ignore mechanics.
+        if is_ticket_giveaway(text, ocr_text):
+            logger.info('message.hint reason=ticket_giveaway_ocr username=%s message_id=%s', username, msg.id)
+        linked_texts = []
+        text_for_extract = text
+        if linked_urls_clean:
+            for url in linked_urls_clean[:2]:
+                try:
+                    mm = re.search(r't\.me/([^/]+)/([0-9]+)', url)
+                    if not mm:
                         continue
-                if linked_texts:
-                    text_for_extract = (text + "\\n\\n" + "\\n\\n".join(linked_texts)).strip()
-            events = await extract_events(
+                    ln_user = mm.group(1)
+                    ln_id = int(mm.group(2))
+                    ent2 = await client.get_entity(ln_user)
+                    linked_msg = await client.get_messages(ent2, ids=ln_id)
+                    lt = (getattr(linked_msg, 'message', None) or '').strip()
+                    lt = strip_custom_emoji_entities(lt, getattr(linked_msg, 'entities', None))
+                    lt = lt.strip()
+                    if lt and lt not in linked_texts:
+                        linked_texts.append(lt)
+                except Exception as exc:
+                    logger.info('linked.unavailable url=%s username=%s message_id=%s: %s', url, username, msg.id, exc)
+                    continue
+            if linked_texts:
+                text_for_extract = (text + "\n\n" + "\n\n".join(linked_texts)).strip()
+
+        ocr_blocks = []
+        for poster in posters:
+            block_parts = [
+                str(poster.get('ocr_title') or '').strip(),
+                str(poster.get('ocr_text') or '').strip(),
+            ]
+            block = '\n'.join(part for part in block_parts if part)
+            if block and block not in ocr_blocks:
+                ocr_blocks.append(block)
+        # A Telegram album is one logical carrier.  Defer its only primary
+        # semantic call until every sibling's OCR block has been collected.
+        source_parse_pending = bool(grouped_id)
+        if source_parse_pending:
+            source_parse_decision = None
+        else:
+            source_parse_decision = await extract_source_parse_decision(
                 text_for_extract,
-                ocr_text,
+                ocr_blocks,
                 message_date=msg_date,
                 source_username=username,
                 source_title=(source_meta or {}).get('title') if isinstance(source_meta, dict) else None,
                 source_default_location=default_location,
+                attachment_count=attachment_count,
+                unavailable_attachment_count=unavailable_attachment_count,
+                ocr_complete=bool(ocr_succeeded),
             )
-            ocr_date_hint, ocr_time_hint = _extract_ocr_datetime(ocr_text, msg_date)
+        events = list((source_parse_decision or {}).get('events') or [])
 
         cleaned_events = []
         for ev in events or []:
             if not isinstance(ev, dict):
                 continue
-            year_hint_source = (ev.get('raw_excerpt') or text or '')
-            if msg_date_val and ev.get('date') and not re.search(r'\b20\d{2}\b', year_hint_source):
-                try:
-                    ev_date = datetime.fromisoformat(ev['date']).date()
-                    candidate = date(msg_date_val.year, ev_date.month, ev_date.day)
-                    if candidate < msg_date_val and msg_date_val.month == 12 and ev_date.month == 1:
-                        candidate = date(msg_date_val.year + 1, ev_date.month, ev_date.day)
-                    ev['date'] = candidate.isoformat()
-                except Exception:
-                    pass
-            if len(events or []) == 1:
-                if ocr_date_hint:
-                    ev['date'] = ocr_date_hint
-                if ocr_time_hint:
-                    ev['time'] = ocr_time_hint
             if default_location and not ev.get('location_name'):
                 ev.setdefault('source_default_location', default_location)
             if default_ticket_link and not ev.get('ticket_link'):
@@ -5296,13 +5936,11 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             if linked_texts and text_for_extract:
                 existing_src = (ev.get('source_text') or '').strip() if isinstance(ev.get('source_text'), str) else ''
                 if not existing_src or len(existing_src) < 80:
-                    ev['source_text'] = text_for_extract[:2500]
+                    ev['source_text'] = text_for_extract
             if linked_urls_clean:
-                ev['linked_source_urls'] = linked_urls_clean[:5]
+                ev['linked_source_urls'] = list(linked_urls_clean)
             cleaned_events.append(ev)
 
-        if len(cleaned_events) > MAX_EVENTS_PER_MESSAGE:
-            cleaned_events = cleaned_events[:MAX_EVENTS_PER_MESSAGE]
         # Best-effort: map message links to per-event ticket_link.
         # This helps when posts use hidden text-url entities or buttons ("More info", "билеты", "здесь").
         def _ticketish(label: str | None, url: str | None) -> bool:
@@ -5460,6 +6098,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             'post_author': _post_author_meta(msg),
             'source_link': f'https://t.me/{username}/{msg.id}',
             'text': text,
+            'semantic_source_text': text_for_extract,
             'ocr_text': ocr_text,
             'metrics': {
                 'views': views,
@@ -5470,6 +6109,12 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             'posters': posters,
             'videos': videos,
             'events': cleaned_events,
+            'source_parse_decision': source_parse_decision,
+            'evidence_manifest': (source_parse_decision or {}).get('evidence_manifest'),
+            '_source_parse_pending': source_parse_pending,
+            '_source_attachment_count': attachment_count,
+            '_source_unavailable_attachment_count': unavailable_attachment_count,
+            '_source_ocr_complete': bool(ocr_succeeded),
         })
 
         processed += 1
@@ -5562,16 +6207,71 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         msg['metrics']['channel_median_views'] = median_views
         msg['metrics']['channel_median_likes'] = median_likes
 
+    messages_out = _merge_media_groups(messages_out)
+    for item in messages_out:
+        source_parse_pending = bool(item.pop('_source_parse_pending', False))
+        attachment_count = max(0, int(item.pop('_source_attachment_count', 0) or 0))
+        unavailable_attachment_count = max(
+            0,
+            int(item.pop('_source_unavailable_attachment_count', 0) or 0),
+        )
+        ocr_complete = bool(item.pop('_source_ocr_complete', True))
+        if not source_parse_pending:
+            continue
+        album_ocr_blocks = []
+        for poster in item.get('posters') or []:
+            block = '\n'.join(
+                part
+                for part in (
+                    str(poster.get('ocr_title') or '').strip(),
+                    str(poster.get('ocr_text') or '').strip(),
+                )
+                if part
+            )
+            if block and block not in album_ocr_blocks:
+                album_ocr_blocks.append(block)
+        semantic_source_text = str(
+            item.get('semantic_source_text') or item.get('text') or ''
+        )
+        try:
+            decision = await extract_source_parse_decision(
+                semantic_source_text,
+                album_ocr_blocks,
+                message_date=item.get('message_date'),
+                source_username=username,
+                source_title=item.get('source_title'),
+                source_default_location=default_location,
+                attachment_count=attachment_count,
+                unavailable_attachment_count=unavailable_attachment_count,
+                ocr_complete=ocr_complete,
+            )
+        except Exception as exc:
+            logger.warning(
+                'source_parse.album_adapter technical_error source=%s grouped_id=%s: %s',
+                username,
+                item.get('grouped_id'),
+                exc,
+            )
+            manifest = _source_evidence_manifest(
+                semantic_source_text,
+                album_ocr_blocks,
+                attachment_count=attachment_count,
+                unavailable_attachment_count=unavailable_attachment_count,
+                ocr_complete=ocr_complete,
+            )
+            decision = _source_parse_retry('TECHNICAL_ERROR', manifest)
+        item['source_parse_decision'] = decision
+        item['evidence_manifest'] = decision.get('evidence_manifest')
+        item['events'] = list(decision.get('events') or [])
+        _assign_posters_to_events(item)
+
     for video_msg in pending_group_videos:
         grouped_id = getattr(video_msg, 'grouped_id', None)
         if not grouped_id:
             continue
         peers = [item for item in messages_out if item.get('grouped_id') == grouped_id]
         event_peer = next((item for item in peers if item.get('events')), None)
-        target = next(
-            (item for item in peers if item.get('message_id') == getattr(video_msg, 'id', None)),
-            None,
-        )
+        target = next(iter(peers), None)
         if target is None:
             continue
         if event_peer is None:
@@ -5589,6 +6289,9 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             post_text=group_text,
             cleaned_events=list(event_peer.get('events') or []),
         )
+
+    messages_with_events = sum(1 for item in messages_out if item.get('events'))
+    events_total = sum(len(item.get('events') or []) for item in messages_out)
 
     if not messages_out:
         logger.info(
@@ -5617,8 +6320,146 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             first_date,
             last_date,
         )
-    messages_out = _merge_media_groups(messages_out)
     return {'messages': messages_out, 'source_meta': source_meta}
+
+
+def _combine_source_parse_decisions(
+    decisions,
+    *,
+    raw_text_blocks=None,
+    ocr_blocks=None,
+) -> dict:
+    """Balance every album child into one typed source-level decision."""
+
+    supplied = list(decisions or [])
+    typed = [item for item in supplied if isinstance(item, dict)]
+    raw_text = '\n\n'.join(
+        dict.fromkeys(str(item or '') for item in (raw_text_blocks or []) if str(item or ''))
+    )
+    ocr = list(dict.fromkeys(str(item or '') for item in (ocr_blocks or []) if str(item or '')))
+    if not typed or len(typed) != len(supplied):
+        manifest = _source_evidence_manifest(
+            raw_text,
+            ocr,
+            attachment_count=len(ocr) + 1,
+            unavailable_attachment_count=1,
+            ocr_complete=False,
+            omitted_blocks=['source_decision_or_manifest_missing'],
+        )
+        return _source_parse_retry('SCHEMA_MISMATCH', manifest)
+
+    canonical = []
+    for item in typed:
+        raw_manifest = item.get('evidence_manifest')
+        if not isinstance(raw_manifest, dict):
+            missing_manifest = _source_evidence_manifest(
+                '',
+                [],
+                attachment_count=1,
+                unavailable_attachment_count=1,
+                ocr_complete=False,
+                omitted_blocks=['evidence_manifest_missing'],
+            )
+            canonical.append(
+                _source_parse_retry(
+                    'SCHEMA_MISMATCH',
+                    missing_manifest,
+                    events=item.get('events'),
+                    lifecycle_actions=item.get('lifecycle_actions'),
+                )
+            )
+            continue
+        # Reuse the same closed semantic validator as fresh provider output.
+        canonical.append(
+            _parse_source_decision_response(
+                json.dumps(item, ensure_ascii=False),
+                _normalize_source_evidence_manifest(raw_manifest),
+            )
+        )
+    typed = canonical
+
+    manifests = [
+        item.get('evidence_manifest')
+        for item in typed
+        if isinstance(item.get('evidence_manifest'), dict)
+    ]
+    attachment_count = sum(int(item.get('attachment_count') or 0) for item in manifests)
+    unavailable = sum(
+        int(item.get('unavailable_attachment_count') or 0) for item in manifests
+    )
+    omitted = [
+        block
+        for item in manifests
+        for block in (item.get('omitted_blocks') or [])
+        if str(block)
+    ]
+    manifest = _source_evidence_manifest(
+        raw_text,
+        ocr,
+        attachment_count=attachment_count,
+        unavailable_attachment_count=unavailable,
+        ocr_complete=(
+            len(manifests) == len(typed)
+            and all(item.get('ocr_complete') is True for item in manifests)
+        ),
+        omitted_blocks=omitted,
+        source_text_truncated=any(
+            bool(item.get('source_text_truncated')) for item in manifests
+        ),
+        provider_output_truncated=any(
+            bool(item.get('provider_output_truncated')) for item in manifests
+        ),
+    )
+    events = [
+        event
+        for item in typed
+        for event in (item.get('events') or [])
+        if isinstance(event, dict)
+    ]
+    actions = [
+        action
+        for item in typed
+        for action in (item.get('lifecycle_actions') or [])
+        if isinstance(action, dict)
+    ]
+    retry = next(
+        (item for item in typed if item.get('disposition') == 'RETRY_REQUIRED'),
+        None,
+    )
+    if retry is not None:
+        return _source_parse_retry(
+            str(retry.get('retry_reason') or 'TECHNICAL_ERROR'),
+            manifest,
+            events=events,
+            lifecycle_actions=actions,
+        )
+    disposition = _expected_source_disposition(events, actions)
+    if disposition == 'CONFIRMED_NO_EVENT' and not manifest.get('evidence_complete'):
+        return _source_parse_retry('EVIDENCE_INCOMPLETE', manifest)
+    combined = {
+        'disposition': disposition,
+        'events': events,
+        'lifecycle_actions': actions,
+        'evidence_manifest': manifest,
+        'evidence_complete': bool(manifest.get('evidence_complete')),
+        'parse_version': SOURCE_PARSE_VERSION,
+        'enrichment_required': bool(events and not manifest.get('evidence_complete')),
+    }
+    if disposition == 'CONFIRMED_NO_EVENT':
+        reasons = {
+            str(item.get('no_event_reason') or '').strip().upper()
+            for item in typed
+        }
+        if not reasons or '' in reasons or not reasons.issubset(SOURCE_PARSE_NO_EVENT_REASONS):
+            logger.warning(
+                'source_parse.album schema_alert missing_or_invalid_no_event_reason reasons=%s',
+                sorted(reasons),
+            )
+            return _source_parse_retry('SCHEMA_MISMATCH', manifest)
+        combined['no_event_reason'] = (
+            next(iter(reasons)) if len(reasons) == 1 else 'NO_ATTENDABLE_EVENT'
+        )
+    return combined
 
 
 def _merge_media_groups(messages: list[dict]) -> list[dict]:
@@ -5661,6 +6502,7 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
                 'message_date': msg.get('message_date'),
                 'post_author': msg.get('post_author'),
                 'text': msg.get('text') or '',
+                'semantic_source_text': msg.get('semantic_source_text') or msg.get('text') or '',
                 'ocr_text': msg.get('ocr_text'),
                 'metrics': msg.get('metrics') or {},
                 'posters': [],
@@ -5670,6 +6512,12 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
                 'videos': [],
                 'links': [],
                 'events': [],
+                '_source_parse_decisions': [],
+                '_raw_text_blocks': [],
+                '_source_parse_pending': False,
+                '_source_attachment_count': 0,
+                '_source_unavailable_attachment_count': 0,
+                '_source_ocr_complete': True,
                 'grouped_id': gid_i,
             }
             by_gid[gid_i] = acc
@@ -5686,6 +6534,24 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
         # prefer non-empty text (caption)
         if (msg.get('text') or '').strip() and len((msg.get('text') or '')) > len((acc.get('text') or '')):
             acc['text'] = msg.get('text') or ''
+        semantic_source_text = msg.get('semantic_source_text') or msg.get('text') or ''
+        if semantic_source_text.strip():
+            acc['_raw_text_blocks'].append(semantic_source_text)
+        if isinstance(msg.get('source_parse_decision'), dict):
+            acc['_source_parse_decisions'].append(msg['source_parse_decision'])
+        acc['_source_parse_pending'] = bool(
+            acc.get('_source_parse_pending') or msg.get('_source_parse_pending')
+        )
+        acc['_source_attachment_count'] += max(
+            0, int(msg.get('_source_attachment_count') or 0)
+        )
+        acc['_source_unavailable_attachment_count'] += max(
+            0, int(msg.get('_source_unavailable_attachment_count') or 0)
+        )
+        acc['_source_ocr_complete'] = bool(
+            acc.get('_source_ocr_complete')
+            and msg.get('_source_ocr_complete', True)
+        )
 
         if msg.get('post_author') and not acc.get('post_author'):
             acc['post_author'] = msg.get('post_author')
@@ -5734,9 +6600,12 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
             seen.add(k)
             acc['posters'].append(p)
 
-        # merge events (keep first non-empty set)
-        if msg.get('events') and not acc.get('events'):
-            acc['events'] = msg.get('events')
+        # Preserve every positive child.  Duplicate-looking children are left
+        # to typed identity handling downstream; recall wins over local vetoes.
+        if msg.get('events'):
+            acc['events'].extend(
+                item for item in msg.get('events') if isinstance(item, dict)
+            )
 
     merged = list(by_gid.values())
     for m in merged:
@@ -5749,6 +6618,51 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
         mid = m.get('message_id')
         if username and mid:
             m['source_link'] = f'https://t.me/{username}/{mid}'
+        album_ocr_blocks = []
+        for poster in m.get('posters') or []:
+            block = '\n'.join(
+                part
+                for part in (
+                    str(poster.get('ocr_title') or '').strip(),
+                    str(poster.get('ocr_text') or '').strip(),
+                )
+                if part
+            )
+            if block and block not in album_ocr_blocks:
+                album_ocr_blocks.append(block)
+        source_decisions = m.pop('_source_parse_decisions', [])
+        raw_text_blocks = m.pop('_raw_text_blocks', [])
+        m['semantic_source_text'] = '\n\n'.join(
+            dict.fromkeys(str(item or '') for item in raw_text_blocks if str(item or ''))
+        )
+        source_parse_pending = bool(m.get('_source_parse_pending'))
+        if source_decisions:
+            decision = _combine_source_parse_decisions(
+                source_decisions,
+                raw_text_blocks=raw_text_blocks,
+                ocr_blocks=album_ocr_blocks,
+            )
+        elif source_parse_pending:
+            decision = None
+        else:
+            # Compatibility for historical/unit payloads created before the
+            # typed producer.  Production scan results always take the branch
+            # above; the consumer keeps this untyped fallback retryable.
+            legacy_events = list(m.get('events') or [])
+            decision = {
+                'disposition': 'EVENTS_FOUND' if legacy_events else 'RETRY_REQUIRED',
+                'events': legacy_events,
+                'lifecycle_actions': [],
+                'evidence_complete': False,
+                'parse_version': 'legacy-media-group-adapter-v1',
+            }
+            if not legacy_events:
+                decision['retry_reason'] = 'TECHNICAL_ERROR'
+        if decision is not None:
+            m['source_parse_decision'] = decision
+            m['evidence_manifest'] = decision.get('evidence_manifest')
+            m['events'] = list(decision.get('events') or [])
+        m['ocr_text'] = '\n\n'.join(album_ocr_blocks) or None
         _assign_posters_to_events(m)
 
     all_msgs = passthrough + merged

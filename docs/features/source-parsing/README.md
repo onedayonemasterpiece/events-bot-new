@@ -26,41 +26,60 @@ gate; this surface must not assign `Event.photo_urls` directly. See
 - Для каждого источника создаются записи `event_source` и “факты” в `event_source_fact`, чтобы было видно вклад каждого источника в мердж.
 - Telegram Monitoring канонизирует `location_name/location_address/city` через `docs/reference/locations.md` + `docs/reference/location-aliases.md` ещё до создания `EventCandidate`, чтобы `/daily` и merge-path не расходились по написанию площадок.
 
-### LLM-first guardrails для VK/TG parse
+### Typed LLM-first boundary для VK/TG и official parsers
 
-- Для VK/TG draft extraction сохраняется LLM-first подход: массовые смысловые решения принимаются в prompt/parser, а не детерминированным “переписыванием” текста после разбора.
-- Отдельный targeted guard теперь добавляет в parse prompt узкий hint для giveaway/contest постов: если матч/концерт/другое событие упомянуто только как приз розыгрыша, parser должен вернуть `[]`, а не создавать pseudo-event.
-- Downstream Smart Update дублирует это как safety-net (`skipped_giveaway`), чтобы prize-only promo пост не проходил даже при неудачном upstream parse.
-- Для image-heavy intro posts (`листайте афиши`, `смотрите карточки`, weekly schedule wrapper без конкретных событий в тексте) parse prompt теперь явно разрешает вернуть `[]` как штатный результат, а не пытаться “додумать” события из обёртки.
-- Gemma parse path теперь жёстче требует чистый JSON (`[]` или объект с `events`) и, если Gemma после repair всё равно отдаёт битый JSON, переключается на fallback `4o` вместо немедленного падения.
-- VK poster OCR остаётся source evidence даже при длинных caption'ах: если полный OCR не помещается в token budget, parse boundary обязан сохранить компактные logistics lines (дата/время/город/площадка/адрес/вход) вместо полного drop. Это предотвращает потерю времени/места, когда caption содержит длинный новостной текст, а точные `HH:MM` или venue находятся только на афише.
-- Для VK multi-poster / schedule posts intake дополнительно схлопывает exact duplicate child drafts внутри одного parsed batch только при совпадении `date + explicit time + venue + normalized title`; это узкий safety-net против двойного извлечения одной и той же карточки из карусели/афиш.
-- Для VK/TG дайджеста с несколькими датированными пунктами Smart Update сначала
-  просит LLM выделить дословный occurrence-scoped блок и только затем проверяет
-  роль date/range/time. Заголовок дайджеста вроде «с 01 по 07 августа» не может
-  становиться диапазоном каждого дочернего события. Grounding остаётся
-  fail-closed; при проверке дословности VK transport wrapper `[target|label]`
-  эквивалентен только видимому `label`, а не произвольной перефразировке.
-- Если финальный LLM-grounding уверенно (`>=0.9`) помечает конкретные public
-  bundle fields как unsupported, Smart Update удаляет только перечисленные им
-  поля и использует уже grounded title/raw excerpt вместо отбрасывания всего
-  occurrence. `uncertain`, недословное evidence или пустой список unsupported
-  остаются fail-closed; deterministic код не переписывает смысл.
-- Для слабых VK/TG кандидатов-рубрик (`Дайджест`, `Афиша`, `куда сходить`,
-  `посмотри/приходи` вместо площадки) Smart Update теперь делает отдельную
-  LLM-first eventness проверку до создания события. Если LLM не подтверждает
-  одно конкретное событие, кандидат fail-closed как `skipped_non_event`; regex
-  здесь только маршрутизирует рискованный кейс в LLM, но не принимает
-  смысловое решение сам.
-- Для городских/фестивальных событий с тем же `title + date + time`, но
-  разъехавшимся extracted venue, Smart Update расширяет shortlist перед
-  матчингом, чтобы LLM увидела существующую карточку и решила merge/create.
-  Это recall-only guardrail: он не схлопывает такие события без LLM.
-- Reference normalization должна быть fail-closed для generic municipal venues:
-  `Городской парк`, `зал`, `центр`, `культура/искусство` и похожие broad tokens
-  не являются достаточным fuzzy evidence для привязки к известной площадке в
-  другом городе. Curated aliases/exact name/address evidence всё ещё могут
-  canonicalize venue, но одиночный generic token не должен менять city/venue.
+Source semantic parse возвращает `SourceParseDecision`, а не неразличимый
+`events=[]`. `CONFIRMED_NO_EVENT` допустим только из валидного structured LLM
+response при complete evidence; empty/malformed/truncated/provider failure или
+неполный OCR дают retry. Regex/date/history/giveaway/cancellation сигналы — hints
+или причины conditional verifier, но не terminal filters. Positive children не
+удаляются downstream guardrail-ами; field conflict очищает только неподтверждённое
+поле либо вызывает verification/retry.
+
+`SourceNoEventReason` обязателен **тогда и только тогда**, когда disposition —
+`CONFIRMED_NO_EVENT`. Закрытая матрица содержит семь значений:
+`NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`, `REFERRAL_ONLY`,
+`SERVICE_OR_RENTAL`, `RECAP_ONLY`, `OUT_OF_SCOPE`. Missing, неизвестный или
+помещённый в positive/lifecycle/retry verdict reason означает
+`RETRY_REQUIRED/SCHEMA_MISMATCH`; terminal receipt, terminal metric и cursor
+advance запрещены.
+
+Один dependency-light collector `source_contradiction_facts` используется
+shared main parse boundary, VK, direct/manual add-events и official parser
+adapters. Telegram producer получает **тот же файл** через staging service.
+Collector возвращает только факты и не исправляет решение:
+
+| `VerificationReason` | Объективный trigger |
+|---|---|
+| `NO_EVENT_WITH_STRONG_SIGNALS` | complete no-event против нескольких независимых invitation/event/attendance/date-time signals |
+| `EVENT_DATE_CONFLICT` | единственная source/OCR дата противоречит единственной parsed дате |
+| `MULTIPLE_OCCURRENCES_COLLAPSED` | независимых occurrence anchors больше, чем positive children |
+| `GENERIC_UNGROUNDED_TITLE` | positive child имеет пустой/placeholder/bare generic title |
+| `LIFECYCLE_MIXED_CONTENT_CONFLICT` | lifecycle-only соседствует с отдельным future invitation |
+| `IMPOSSIBLE_SCHEMA_VALUE` | объективно невозможные date/time/range/typed values |
+| `INCOMPLETE_EVIDENCE` | manifest отсутствует, неполон, truncated или имеет OCR cardinality gap |
+
+Эта матрица разрешает максимум один conditional verifier на carrier. Она не
+удаляет positive children и не является вторым semantic classifier. Verifier
+может дополнить/исправить typed decision, но uncertainty/technical failure
+остаётся retry; incomplete evidence с positive children требует enrichment.
+Тексты live prompts и provider examples не дублируются здесь — каноника:
+[`../../llm/prompts.md`](../../llm/prompts.md). Static prompt audit проверяет
+обязательный reason, enum parity, live-surface coverage и недоступность legacy
+Telegram extractor.
+
+Все доступные source text/OCR blocks представлены в semantic parse и отражены в
+`EvidenceManifest`. Multi-event/multi-session source сохраняет все children, а
+mixed lifecycle + new events обрабатывается независимо. Telegram, VK, parser,
+ticket/festival и manual adapters считают успехом только typed accepted Smart
+Update result; diagnostic ID не запускает downstream work.
+
+Official parser occurrence key стабилен: source-native/vendor identifier имеет
+приоритет, затем structured date/end-date/time schedule anchor, а producer
+ordinal — только tie-breaker. Поэтому перестановка siblings или новый первый
+сеанс не перепривязывает старые Events. Технический/identity retry создаёт
+идемпотентный `source_parser_recovery_request`, который scheduled parser
+подбирает автоматически до разрешения.
 
 ### Каноничность сайта (/parse) при конфликтах
 
@@ -94,7 +113,7 @@ Structured возраст Qtickets/Pyramida/Дом искусств/филарм
 ### Очередь обновления month/weekend страниц
 
 - Для созданных/обновлённых событий `/parse` использует общий `schedule_event_update_tasks` (как и VK/TG), где `month_pages`/`weekend_pages` ставятся как debounce-задачи с `next_run_at = now + 15 минут`.
-- Принятые активные parser-события считаются пользовательски ценными и по умолчанию попадают в managed Telegram/VK fanout (`skip_vk_sync=False`); исключения должны быть явными продуктово видимыми причинами (`silent`, cancelled/past/started, LLM/manual review blocker), а не скрытым page/calendar-only режимом.
+- Принятые активные parser-события по умолчанию попадают в managed Telegram/VK fanout (`skip_vk_sync=False`); downstream запускается только из typed accepted result. Retry/diagnostic ID не является product blocker или успехом.
 - В финальном safeguard `_process_parsing_files` гарантирует постановку задач по затронутым месяцам и выходным, и тоже ставит их отложенно (`+15 минут`), чтобы не было немедленной пересборки Telegraph-страниц после массового прогона.
 
 ### Расписание автозапуска
@@ -133,13 +152,13 @@ self-contained script: `kernel-metadata.json.code_file` указывает пр�
 Bitrix AJAX pagination до terminal page. Нулевой результат или HTTP/DOM failure
 попадает в `result.errors` и не может завершить общий run ложнозелёным.
 
-Создание нового parser occurrence повторяет только вызов Smart Update при
-транзиентном SQLite `database is locked` / `database table is locked`:
-по умолчанию до трёх попыток с задержками `2s`, `4s`
-(`SOURCE_PARSING_DB_LOCK_RETRY_ATTEMPTS`,
-`SOURCE_PARSING_DB_LOCK_RETRY_DELAY_SECONDS`). Иные ошибки не повторяются
-вслепую. Это защищает длинный catch-up от краткого writer-lock фоновой задачи,
-не превращая validation/semantic failures в ложный успех.
+Создание parser occurrence может сделать несколько коротких локальных повторов
+Smart Update при transient SQLite lock (`SOURCE_PARSING_DB_LOCK_RETRY_*`). Любая
+оставшаяся technical/identity/schema uncertainty не становится skip/error
+terminal: она увеличивает `retry_scheduled` и upsert-ит source-level
+`source_parser_recovery_request` с due time. Scheduled parser повторяет полный
+официальный каталог идемпотентно; product/validation uncertainty не маскируется
+ложным успехом.
 Внутреннее создание `event_media_pair_review` также использует idempotent
 `ON CONFLICT DO NOTHING`: параллельный media worker не должен срывать
 сохранение parser occurrence из-за гонки unique `pair_input_hash`.

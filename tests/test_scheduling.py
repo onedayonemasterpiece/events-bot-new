@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
 import pytest
+import pytest_asyncio
 
 import scheduling
 import vk_intake
@@ -19,6 +20,23 @@ from db import Database
 from heavy_ops import HeavyOpMeta
 from models import User
 from ops_run import finish_ops_run, start_ops_run
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_test_databases(monkeypatch):
+    """Dispose per-test SQLite engines so the focused CI process can exit."""
+
+    instances: list[Database] = []
+    original_init = Database.__init__
+
+    def tracked_init(instance, *args, **kwargs):
+        original_init(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(Database, "__init__", tracked_init)
+    yield
+    for instance in instances:
+        await instance.close()
 
 
 @pytest.mark.asyncio
@@ -104,6 +122,10 @@ def test_scheduler_and_extract_do_not_import_main(monkeypatch):
         )
         assert isinstance(scheduler, DummyScheduler)
         assert "main" not in sys.modules
+        assert "vk_crawl_continuation_worker" in scheduler.jobs
+        assert scheduler.jobs["vk_crawl_continuation_worker"].trigger == "interval"
+        assert scheduler.jobs["vk_crawl_continuation_worker"].kwargs["seconds"] == 60
+        assert scheduler.jobs["vk_crawl_continuation_worker"].kwargs["max_instances"] == 1
         assert {"region_talk_0", "region_talk_1", "region_talk_2", "region_talk_3", "region_talk_4"} <= set(scheduler.jobs)
         assert "region_talk_watchdog" in scheduler.jobs
         assert scheduler.jobs["region_talk_0"].kwargs["hour"] == "4"

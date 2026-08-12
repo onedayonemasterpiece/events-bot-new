@@ -210,6 +210,26 @@ def festival_queue_effective_limit(limit: int | None) -> int:
     return cap
 
 
+def festival_queue_retry_delay(attempts: int) -> timedelta:
+    """Bounded exponential backoff for automatically selectable error rows."""
+
+    try:
+        base_minutes = max(
+            1, int((os.getenv("FESTIVAL_QUEUE_RETRY_BASE_MINUTES") or "5").strip())
+        )
+    except Exception:
+        base_minutes = 5
+    try:
+        cap_minutes = max(
+            base_minutes,
+            int((os.getenv("FESTIVAL_QUEUE_RETRY_MAX_MINUTES") or "360").strip()),
+        )
+    except Exception:
+        cap_minutes = 360
+    exponent = max(0, min(int(attempts or 0) - 1, 10))
+    return timedelta(minutes=min(cap_minutes, base_minutes * (2**exponent)))
+
+
 def _unique_preserve(values: Sequence[str]) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
@@ -505,11 +525,13 @@ async def enqueue_festival_source(
                 select(FestivalQueueItem).where(
                     FestivalQueueItem.source_kind == clean_kind,
                     FestivalQueueItem.source_url == clean_url,
-                    FestivalQueueItem.status.in_(["pending", "running"]),
+                    FestivalQueueItem.status.in_(["pending", "running", "error"]),
                 )
             )
         ).scalar_one_or_none()
         if existing:
+            existing.status = "pending"
+            existing.last_error = None
             existing.source_text = source_text or existing.source_text
             existing.festival_context = clean_ctx or existing.festival_context
             existing.festival_name = festival_name or existing.festival_name
@@ -906,7 +928,11 @@ async def _process_vk_item(
         }
 
     import main as main_mod
-    from smart_event_update import EventCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        SmartUpdateTerminalOutcome,
+        smart_event_update,
+    )
 
     async with db.get_session() as session:
         fests = (await session.execute(select(Festival))).scalars().all()
@@ -933,6 +959,9 @@ async def _process_vk_item(
         festival_names=festival_names,
         festival_alias_pairs=alias_pairs or None,
     )
+    if getattr(parsed, "is_retry", False):
+        reason = getattr(getattr(parsed, "retry_reason", None), "value", None)
+        raise RuntimeError(f"source parse retry required: {reason or 'SCHEMA_MISMATCH'}")
     parsed_events = [ev for ev in list(parsed or []) if isinstance(ev, dict)]
     payload = getattr(parsed, "festival", None)
     decision = detect_festival_context(
@@ -1012,7 +1041,9 @@ async def _process_vk_item(
 
     created_events = 0
     program_only: list[dict[str, Any]] = []
-    for ev in parsed_events:
+    product_rejected = 0
+    retry_scheduled = 0
+    for producer_ordinal, ev in enumerate(parsed_events):
         if not _looks_like_strong_program_event(ev):
             program_only.append(ev)
             continue
@@ -1046,22 +1077,31 @@ async def _process_vk_item(
             festival_full=decision.festival_full or item.festival_full,
             festival_source=True,
             festival_series=item.festival_series,
+            producer_ordinal=producer_ordinal,
         )
         result = await smart_event_update(db, candidate, check_source_url=False)
-        if result.event_id:
+        if result.is_accepted:
             created_events += 1
+        elif result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
+            product_rejected += 1
         else:
-            program_only.append(ev)
+            retry_scheduled += 1
 
     added_activities = await _append_festival_activities(
         db,
         festival_name=fest_obj.name,
         activities=program_only,
     )
+    if retry_scheduled:
+        raise RuntimeError(
+            f"festival_children_retry_scheduled:{retry_scheduled}"
+        )
     return {
         "festival_name": fest_obj.name,
         "events_created": created_events,
         "activities_added": added_activities,
+        "product_rejected": product_rejected,
+        "retry_scheduled": retry_scheduled,
     }
 
 
@@ -1260,8 +1300,10 @@ async def _process_tg_item(
         "festival_name": fest_name,
     }
     if monitor_error:
-        result["monitor_error"] = monitor_error
-        result["mode"] = "fallback_ensure_festival"
+        # The fallback may preserve useful festival metadata, but it cannot
+        # turn a failed semantic import into queue success.  The outer runner
+        # stores bounded backoff and selects this error row automatically.
+        raise RuntimeError(f"telegram_monitor_retry_required:{monitor_error}")
     return result
 
 
@@ -1378,7 +1420,7 @@ async def process_festival_queue(
 
         async with db.get_session() as session:
             stmt = select(FestivalQueueItem).where(
-                FestivalQueueItem.status == "pending",
+                FestivalQueueItem.status.in_(["pending", "error"]),
                 FestivalQueueItem.next_run_at <= now,
             )
             if source_kind:
@@ -1395,7 +1437,7 @@ async def process_festival_queue(
                 url_stmt = (
                     select(FestivalQueueItem)
                     .where(
-                        FestivalQueueItem.status == "pending",
+                        FestivalQueueItem.status.in_(["pending", "error"]),
                         FestivalQueueItem.next_run_at <= now,
                         FestivalQueueItem.source_kind == "url",
                     )
@@ -1753,6 +1795,13 @@ async def process_festival_queue(
                 await _progress(f"🎪 Фестивальная очередь: {idx}/{total}\nСтатус: ✅ done\nfestival={fest_name or '—'}")
             except Exception as exc:
                 logger.exception("festival_queue group failed key=%s", g.get("key"))
+                retry_attempt = max(
+                    [int(getattr(it, "attempts", 0) or 0) + 1 for it in group_items]
+                    or [1]
+                )
+                retry_at = datetime.now(timezone.utc) + festival_queue_retry_delay(
+                    retry_attempt
+                )
                 async with db.get_session() as session:
                     await session.execute(
                         update(FestivalQueueItem)
@@ -1760,6 +1809,7 @@ async def process_festival_queue(
                         .values(
                             status="error",
                             last_error=str(exc),
+                            next_run_at=retry_at,
                             updated_at=datetime.now(timezone.utc),
                         )
                     )

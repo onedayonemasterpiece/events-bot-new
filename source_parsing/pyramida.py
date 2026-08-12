@@ -520,6 +520,7 @@ async def process_pyramida_events(
                     current_progress,
                     len(events),
                     poster_media=poster_media_list,
+                    producer_ordinal=i,
                 )
             )
 

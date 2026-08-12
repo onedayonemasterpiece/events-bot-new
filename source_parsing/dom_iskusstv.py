@@ -564,6 +564,7 @@ async def process_dom_iskusstv_events(
                     current_progress,
                     len(events),
                     poster_media=poster_media_list,
+                    producer_ordinal=i,
                 )
             )
 

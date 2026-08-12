@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 import main
+import smart_event_update as smart_update_module
 from main import Database, Event
 
 
@@ -38,7 +39,7 @@ async def test_add_events_from_text_assigns_topics(tmp_path: Path, monkeypatch):
     async def fake_classify(event: Event):
         return ["CONCERTS", "FAMILY", "KRAEVEDENIE_KALININGRAD_OBLAST"]
 
-    monkeypatch.setattr(main, "parse_event_via_4o", fake_parse)
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse)
     monkeypatch.setattr(main, "schedule_event_update_tasks", fake_schedule_event_update_tasks)
     monkeypatch.setattr(main, "create_source_page", fake_create_source_page)
     monkeypatch.setattr(main, "classify_event_topics", fake_classify)
@@ -89,10 +90,20 @@ async def test_add_events_from_text_multiday_inherits_topics(tmp_path: Path, mon
     async def fake_create_source_page(*args, **kwargs):
         return "https://t.me/test", "path", "", 0
 
-    monkeypatch.setattr(main, "parse_event_via_4o", fake_parse)
+    async def fake_distinct_adjudicator(*args, **kwargs):
+        return {
+            "action": "create",
+            "reason_code": "distinct_occurrence",
+            "confidence": 1.0,
+        }
+
+    monkeypatch.setattr(main, "parse_event_via_llm", fake_parse)
     monkeypatch.setattr(main, "classify_event_topics", fake_classify)
     monkeypatch.setattr(main, "schedule_event_update_tasks", fake_schedule_event_update_tasks)
     monkeypatch.setattr(main, "create_source_page", fake_create_source_page)
+    monkeypatch.setattr(
+        smart_update_module, "_llm_dedup_adjudicator", fake_distinct_adjudicator
+    )
 
     results = await main.add_events_from_text(db, "t", None, None, None)
     event_ids = [saved.id for saved, *_ in results if isinstance(saved, Event)]

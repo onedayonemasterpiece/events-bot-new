@@ -29,6 +29,75 @@ def _load_tg_function(name: str, namespace: dict | None = None):
     return ns[name]
 
 
+def _load_live_source_parse_validator() -> dict:
+    source = _TG_MONITOR_SOURCE.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    assignment_names = {
+        "SOURCE_PARSE_DISPOSITIONS",
+        "SOURCE_PARSE_RETRY_REASONS",
+        "SOURCE_PARSE_NO_EVENT_REASONS",
+        "SOURCE_PARSE_LIFECYCLE_ACTIONS",
+        "SOURCE_PARSE_VERSION",
+    }
+    function_names = {
+        "_source_evidence_manifest",
+        "_normalize_source_evidence_manifest",
+        "_source_parse_retry",
+        "_provider_output_looks_truncated",
+        "_expected_source_disposition",
+        "_parse_source_decision_response",
+    }
+    nodes = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id in assignment_names
+            for target in node.targets
+        ):
+            nodes.append(node)
+        elif isinstance(node, ast.FunctionDef) and node.name in function_names:
+            nodes.append(node)
+    ns = {
+        "hashlib": hashlib,
+        "json": json,
+        "re": re,
+        "_safe_json": lambda value: json.loads(value),
+    }
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "<source-parse-validator>", "exec"), ns)
+    return ns
+
+
+def test_tg_live_source_parse_preserves_closed_giveaway_only_reason() -> None:
+    ns = _load_live_source_parse_validator()
+    manifest = ns["_source_evidence_manifest"]("source", [])
+    payload = {
+        "disposition": "CONFIRMED_NO_EVENT",
+        "events": [],
+        "lifecycle_actions": [],
+        "evidence_complete": True,
+        "parse_version": "source-parse-v1",
+        "no_event_reason": "GIVEAWAY_ONLY",
+    }
+    result = ns["_parse_source_decision_response"](json.dumps(payload), manifest)
+    assert result["disposition"] == "CONFIRMED_NO_EVENT"
+    assert result["no_event_reason"] == "GIVEAWAY_ONLY"
+
+
+def test_tg_live_source_parse_unknown_no_event_reason_is_schema_retry() -> None:
+    ns = _load_live_source_parse_validator()
+    manifest = ns["_source_evidence_manifest"]("source", [])
+    payload = {
+        "disposition": "CONFIRMED_NO_EVENT",
+        "events": [],
+        "lifecycle_actions": [],
+        "evidence_complete": True,
+        "parse_version": "source-parse-v1",
+        "no_event_reason": "UNKNOWN_REASON",
+    }
+    result = ns["_parse_source_decision_response"](json.dumps(payload), manifest)
+    assert result["disposition"] == "RETRY_REQUIRED"
+    assert result["retry_reason"] == "SCHEMA_MISMATCH"
+
+
 def _load_video_analysis_helpers() -> dict:
     source = _TG_MONITOR_SOURCE.read_text(encoding="utf-8")
     start = source.index("_VIDEO_ALLOWED_RISK_FLAGS =")

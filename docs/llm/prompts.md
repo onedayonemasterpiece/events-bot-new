@@ -13,8 +13,30 @@ The other sections in this file document separate prompts/workflows and must not
 ```
 MASTER-PROMPT for Codex ― Telegram Event Bot
 You receive long multi-line text describing one **or several** events.
-Extract structured information and respond **only** with JSON.
-If multiple events are found, return an array of objects. Each object uses these keys:
+Extract structured information and respond **only** with one typed JSON object:
+`{"disposition":"EVENTS_FOUND|CONFIRMED_NO_EVENT|LIFECYCLE_ONLY|MIXED|RETRY_REQUIRED","events":[],"lifecycle_actions":[],"evidence_complete":true,"parse_version":"source-parse-v1","no_event_reason":"NO_ATTENDABLE_EVENT|GIVEAWAY_ONLY|VAGUE_TEASER|REFERRAL_ONLY|SERVICE_OR_RENTAL|RECAP_ONLY|OUT_OF_SCOPE"}`.
+Never use an empty HTTP/body response, malformed/partial JSON, a schema mismatch, a provider error, or a finish/truncation signal to express no-event; those cases require `RETRY_REQUIRED`.
+`CONFIRMED_NO_EVENT` is valid only after examining the complete source text and every supplied OCR block and finding neither an attendable event nor a lifecycle action.
+Typed carrier policy is mandatory:
+- `no_event_reason` is mandatory with `CONFIRMED_NO_EVENT`, forbidden with every other disposition, and must be one of `NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`, `REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY`, `OUT_OF_SCOPE`;
+- a proven complete non-event uses `CONFIRMED_NO_EVENT` with the applicable closed `no_event_reason`; a complete generic non-event, location hint alone, or ticket-link hint alone uses `NO_ATTENDABLE_EVENT`;
+- missing/omitted cards or OCR use `RETRY_REQUIRED` with `retry_reason=EVIDENCE_INCOMPLETE`;
+- positive children found from incomplete evidence survive as `EVENTS_FOUND` or `MIXED` with `evidence_complete=false` so downstream enrichment/retry can continue;
+- giveaway-only content is `CONFIRMED_NO_EVENT` with `no_event_reason=GIVEAWAY_ONLY` only with complete evidence, while giveaway plus a real event preserves the event;
+- a vague teaser with no concrete attendable slot is `CONFIRMED_NO_EVENT` with `no_event_reason=VAGUE_TEASER` when evidence is complete and `RETRY_REQUIRED/EVIDENCE_INCOMPLETE` otherwise;
+- referral-only, service/rental-only, recap-only, and out-of-scope complete carriers respectively use `REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY`, and `OUT_OF_SCOPE`;
+- a carrier containing only cancellation/postponement/reschedule/update facts uses `LIFECYCLE_ONLY` and populated `lifecycle_actions`.
+
+**Maximum-recall source rules (highest priority):**
+- Examine all supplied source text and all poster/card OCR. Never silently omit the end of a long text, an OCR block, or a card. Regex/keyword/date hints are neutral evidence only and can never order a no-event verdict or delete an LLM draft.
+- Find every future or currently continuing attendable event. Do not stop after the first apparent date: evaluate every explicit date/time/card as an occurrence candidate unless the source proves that it is only one range.
+- Separate every independently attendable sibling and every distinct session into its own event child. Do not merge festival siblings merely because they share a venue, programme, festival, or carrier.
+- A past recap/history section plus a concrete future announcement must preserve the future event. A historical/background date is not automatically an event date.
+- Giveaway mechanics do not erase the real event being promoted: when the carrier contains both, return the event and exclude only the giveaway mechanics from event facts.
+- Mixed content may contain cancellations/postponements/updates **and** new events. Return both sides with `MIXED`; an unresolved lifecycle target must not destroy new event children.
+- Distinguish an update to an existing occurrence from a distinct new event. Return lifecycle actions separately from `events`.
+
+Each object in `events` uses these keys:
 title             - name of the event
 short_description - **REQUIRED** one-sentence summary of the event (see **short_description** rules below)
 festival          - festival name or empty string
@@ -55,7 +77,7 @@ Always put the emoji at the start of `title` so headings are easily scannable.
 
 **title** rules:
 - The title MUST be grounded in the source text (or poster OCR if provided). Do not invent names, nicknames, or weird words that do not appear in the input.
-- If the post does not contain an explicit name, use a neutral descriptive title that names the program theme or activity (e.g. `Хиты советской эстрады`, `Танцевальный вечер`, `Чтения новой поэзии`). Do NOT use the bare `<event_type> — <venue>` template (`Концерт — Янтарь холл`, `Лекция — Музей янтаря`); a venue is not a title. If neither name nor program theme is recoverable from the source, return `[]` instead of inventing one.
+- If the post does not contain an explicit name, use a neutral descriptive title that names the program theme or activity (e.g. `Хиты советской эстрады`, `Танцевальный вечер`, `Чтения новой поэзии`). Do NOT use the bare `<event_type> — <venue>` template (`Концерт — Янтарь холл`, `Лекция — Музей янтаря`); a venue is not a title. If neither name nor program theme is recoverable, use the typed non-event/retry policy above instead of inventing one.
 - If the source contains an explicit proper name / brand / program title (often in quotes, ALL CAPS, or Latin), use it as the basis for `title` — do NOT downgrade it to "`event_type` — <venue>" when a name exists (e.g. "ЕвроДэнс'90", not "Концерт — Янтарь холл").
 - If the caption/source text names the attendee-facing event or project, and poster OCR contains a slogan, genre phrase, reading imperative, or CTA, prefer the caption/source event name over the poster slogan. Do not rename an event to a poster motto like “Читайте бумажные книги!” when the source identifies the event as “Живой сундук”.
 - If the source explicitly classifies the event with a format-anchor word at the start (`мастер-класс`, `лекция`, `спектакль`, `концерт`, `экскурсия`, `кинопоказ`, `воркшоп`, `выставка`, `ярмарка`, `встреча`), keep that word as a prefix of the title together with the proper name in quotes — e.g. source `Мастер-класс «Натюрморт. Старые и новые вещи»` → title `Мастер-класс «Натюрморт. Старые и новые вещи»`, not just `Натюрморт. Старые и новые вещи`. The format-anchor changes how the attendee plans and dresses, so do not strip it as redundant. Use Russian guillemets `«…»` for the proper name; do not use ASCII `"..."`.
@@ -102,8 +124,15 @@ What to include:
 Length guide: 25–55 words (20-80 allowed if necessary for search uniqueness).
 If an array of events is returned, `search_digest` must be present in every object.
 
+Each object in `lifecycle_actions` uses these keys:
+- `action`: exactly one of `CANCEL`, `POSTPONE`, `RESCHEDULE_DATE`, `RESCHEDULE_TIME`, `UPDATE_DETAILS`;
+- `target_title`, `target_date`, `target_time`, `target_location`;
+- `new_date`, `new_time` where relevant;
+- `evidence`: the source/OCR evidence supporting the action.
+One carrier may contain multiple independent lifecycle actions.
+
 **multi-event digest rule:**
-- If the post is a roundup/digest where each event is ONE short line with only `<date>. <city>. <"NAME">. Билеты: <link or name>` and there is NO per-event description, time, venue/address, programme, or independent OCR poster — return `[]`.
+- If the post is a roundup/digest where each event is ONE short line with only `<date>. <city>. <"NAME">. Билеты: <link or name>` and there is NO per-event description, time, venue/address, programme, or independent OCR poster, use `CONFIRMED_NO_EVENT` only when the complete carrier proves those are referral stubs; missing cards require `RETRY_REQUIRED/EVIDENCE_INCOMPLETE`.
 - Detection heuristic: 3+ bulleted items (e.g. lines starting with `🌿`, `•`, `-`, `🟥`, or numbered) where every item is just date+city+title (and optional ticket marker) without further details. Such posts point readers to other organizers' standalone announcements; the bot ingests each concrete event from its own dedicated post.
 - Anti-fabrication: do NOT pick the longest line and call the whole post one event; do NOT mix `city` from one bullet with `location_name` or `time` from another; do NOT invent a programme to compensate for the missing per-event detail.
 
@@ -118,36 +147,44 @@ If an array of events is returned, `search_digest` must be present in every obje
 - If the source only describes the place by an oblique reference (e.g. "На Понарте", "у пивоварни Понарт", "наш зал") and "Known venues" contains the canonical row, copy the canonical `location_name`/`location_address`/`city`.
 - If neither the source/OCR nor a clear reference match a known venue, return empty strings — do NOT fall back to a "plausible" Kaliningrad venue from world knowledge (no `Киноленд`, `Янтарь холл`, `Дом искусств` etc. as default guesses).
 - **Meeting-point override for excursions/walking tours/прогулок/тематических туров/стендап-экскурсий.** When the source uses meeting-point markers `Встреча:`/`Место встречи:`/`Сбор:`/`Точка старта:`/`Встречаемся у/возле/около/на` followed by a **non-venue landmark** (sculpture/памятник/монумент, остановка/bus stop, площадь, ворота, мост, фонтан, угол улиц, парк-entrance, etc. — i.e. NOT a building with its own paid programme), this OVERRIDES "Known venues" matching by address. Do NOT snap the meeting-point address to a nearby known venue. Two acceptable shapes (pick whichever fits — both are valid):  (a) `location_name="Скульптура «Борющиеся зубры»"`, `location_address=""`, `city="Калининград"`; or  (b) `location_name=""`, `location_address=""`, `city="Калининград"`. The wrong shape is anything like `location_name="Калининградский зоопарк"` for an excursion meeting **at** the bull sculpture, because the zoo is not in the post and its real address (пр-т Мира 26) does not match the meeting point (просп. Мира 2). Forbidden across the whole excursion family: copying a Known-venues `location_name` because its **address is geographically close** to the landmark in the post.
-- `location_name` and `city` MUST agree inside one event. If the source says the event happens in another city (e.g. `Пятигорск`, `Москва`), do NOT pair that city with a Калининград venue from "Known venues" — return no event for the out-of-region row instead. Mixed `city=Пятигорск` + `location_name=Театр Третий этаж, Коммунальная 6, Калининград` is a fabrication and is forbidden.
+- `location_name` and `city` MUST agree inside one event. If the source says the event happens in another city (e.g. `Пятигорск`, `Москва`), do NOT pair that city with a Калининград venue from "Known venues"; exclude that row and derive the carrier disposition from the remaining events/actions. Mixed `city=Пятигорск` + `location_name=Театр Третий этаж, Коммунальная 6, Калининград` is a fabrication and is forbidden.
 - Never output literal field-name placeholders such as `location_address`, `address`, `location_name`, `venue`, `city`, `адрес`, or `город`; use an empty string when the value is unresolved.
 - `location_address` MUST be a real street address in the form `<улица> <дом>` (`Ленина 11`, `Судостроительная 6/1`). Strip prefixes like `ул.`/`улица`/`пр-кт`/`дом`/`д.` and city names. Do NOT include any of: foreign-language tokens (`asignatura`, `street`, `building`, etc. — they are OCR/typo noise, drop them), ticket-sales points or third-party landmarks (`ТРЦ "Европа"`/`атриум "Лондон"`/`информационная стойка` etc. — those are box-office locations for the venue, NOT the venue address), prose phrases / sentence fragments / curator quotes / event programme text (`перетекающие жизненные этапы…`, `Это приглашение к воспоминанию…` — these belong to the description, never to `location_address`), event subtitles or sub-venues (`2 этаж`, `атриум "Лондон"` go into `location_name` only when they are part of the canonical venue name in "Known venues").
 - For venues whose box-office sits inside a different building (classic example: `Янтарь холл` in Светлогорск sells tickets at `ТРЦ "Европа", 2 этаж` in Калининград): the EVENT happens at the canonical venue (`Янтарь холл, Ленина 11, Светлогорск`) — that is what `location_name`/`location_address`/`city` must encode. The ticket-sales point belongs only in `ticket_link` if it is a URL, never in `location_address`.
 
 **service / rental / promo ad rule:**
-- If the post advertises a recurring service or rental (not a single attendable event), return `[]`.
+- If the post advertises a recurring service or rental (not a single attendable event), use `CONFIRMED_NO_EVENT` when evidence is complete and `RETRY_REQUIRED/EVIDENCE_INCOMPLETE` when relevant attachments are missing.
 - Detection signals: title or first lines built around `Аренда`, `Сдаётся в аренду`, `Закажите`, `Принимаем заявки на`, `Цены на услуги`, `Прайс`, `Купола в аренду`, `Аренда зала / купола / беседки / площадки`, `Корпоративы`, `Снять / арендовать / забронировать` (when the booking is about renting capacity, not buying a ticket to a concrete dated event), continuous availability wording (`в любой день`, `по запросу`, `работаем ежедневно`, `с понедельника по воскресенье`).
 - Concrete prod regression that shipped without this rule: `АгроПарк "Некрасово поле"` post `Аренда куполов для отдыха` → was extracted as a fake `2026-05-11 10:00` event (4568/4570). Such posts are a price-list / rental ad, not an attendable event.
 - Distinguish from a real event at a rental-friendly venue: if the post names a specific concrete dated session (`9 мая 14:00 мастер-класс по флористике в наших куполах`), extract that single session normally; do NOT skip the whole post because the venue also rents out spaces.
 
 **historical/background date rule:**
 - Do NOT use historical/background dates from a story, exhibit text, document quote, or noisy poster OCR as the event date. For example, a line like `9 октября 1947 года...` inside an exhibition narrative is historical content, not an upcoming schedule anchor.
-- If the source only says an exhibition already opened and can be visited during institution work hours, return no future event unless it also gives an explicit future attendee-facing opening, lecture, curator talk, excursion, or other scheduled slot.
+- If the source only says an exhibition already opened and can be visited during institution work hours, use the typed non-event policy unless it also gives an explicit future attendee-facing opening, lecture, curator talk, excursion, or other scheduled slot.
 
 **report / recap rule:**
-- If the text is mainly a post-event report / recap about something that already happened, return no events.
+- If the text is mainly a post-event report / recap about something that already happened, use the typed non-event policy.
 - Typical clues: past-tense narrative ("мы провели/исследовали/работали"), after-the-fact summary ("было здорово"),
   gratitude/wrap-up ("спасибо ...", "увидимся вновь"), but no concrete attendable future anchor.
 - A recap that only says "следующий фестиваль" with dates while the location/place/address is "уточняется" is not
-  a concrete future event; return no events instead of inventing a venue from gratitude text or source context.
+  a concrete future event; use the typed non-event policy instead of inventing a venue from gratitude text or source context.
 - If a post mixes recap/background about past meetings with a real future invite, ignore the recap part and extract
   only the future attendable event with its explicit future anchor (date/venue/time/registration/ticket).
 
 **logistics update rule:**
 - Operational updates for people already attending an event are not standalone new events: "важная информация для
   гостей/зрителей", changed entry route, navigation, parking, queue, cloakroom, seating, or similar instructions.
-- Return no events unless the same post is also a full new invitation with a concrete future date, title, venue,
+- Use the typed non-event policy unless the same post is also a full new invitation with a concrete future date, title, venue,
   and ticket/registration signal.
 ```
+
+The prompt CI gate covers only production source-parse surfaces: this fenced
+`MASTER-PROMPT`, the live VK draft builder, and Telegram Monitor's
+`_source_parse_prompt`.  Telegram Monitor's large legacy `extract_events`
+function is intentionally excluded: the current producer call sites invoke
+`extract_source_parse_decision`, and there are no runtime calls to
+`extract_events`.  The gate verifies that call-graph fact so the exclusion
+cannot silently outlive a future reactivation of the legacy function.
 
 Examples of the desired venue formatting:
 - «Центральная городская библиотека им. А. Лунина, ул. Калинина, д. 4, Черняховск» → `location_name`: «Библиотека А. Лунина», `location_address`: «Калинина 4», `city`: «Черняховск».

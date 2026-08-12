@@ -89,6 +89,58 @@ def test_database_uses_schema_adaptive_read_only_metrics(tmp_path: Path) -> None
     assert any("PRAGMA quick_check" in item["statement"] for item in queries)
 
 
+def test_database_reports_closed_state_funnel_and_attempt_balance(tmp_path: Path) -> None:
+    db_path = tmp_path / "state-audit.sqlite"
+    con = sqlite3.connect(db_path)
+    con.executescript(
+        """
+        CREATE TABLE smart_update_candidate_state(
+            id INTEGER PRIMARY KEY,
+            current_outcome TEXT NOT NULL,
+            accepted_event_id INTEGER,
+            next_retry_at TEXT,
+            retry_exhausted INTEGER NOT NULL DEFAULT 0,
+            claimed_by TEXT,
+            claim_expires_at TEXT
+        );
+        CREATE TABLE smart_update_attempt(
+            id INTEGER PRIMARY KEY,
+            candidate_state_id INTEGER NOT NULL,
+            finished_at TEXT
+        );
+        INSERT INTO smart_update_candidate_state VALUES
+          (1,'CREATED',10,NULL,0,NULL,NULL),
+          (2,'RETRY_SCHEDULED',NULL,'2026-08-04 04:00:00',0,NULL,NULL);
+        INSERT INTO smart_update_attempt VALUES
+          (1,1,'2026-08-04 04:30:00'),
+          (2,2,NULL);
+        """
+    )
+    con.commit()
+    con.close()
+
+    gaps: list[dict[str, str]] = []
+    start, end = _window()
+    metrics, _samples, _manifest, _queries, available = AUDIT.collect_database(
+        start,
+        end,
+        gaps,
+        db_uri=f"file:{db_path}?mode=ro",
+    )
+
+    assert available is True
+    state = metrics["smart_update_state"]
+    assert state["by_outcome"]["CREATED"] == 1
+    assert state["by_outcome"]["RETRY_SCHEDULED"] == 1
+    assert state["candidates_total"] == state["terminal_balance"] == 2
+    assert state["terminal_unresolved"] == 0
+    assert state["retry_due"] == 1
+    assert state["attempt_starts"] == 2
+    assert state["attempt_terminals"] == 1
+    assert state["attempt_unresolved"] == 1
+    assert state["attempt_orphaned"] == 1
+
+
 def test_runtime_log_window_is_exact_and_excerpts_are_synthesized(tmp_path: Path, monkeypatch) -> None:
     log = tmp_path / "events-bot.log"
     log.write_text(

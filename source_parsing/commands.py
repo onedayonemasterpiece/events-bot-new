@@ -10,7 +10,7 @@ import logging
 import os
 import re
 from functools import partial
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import hashlib
 import json
@@ -82,6 +82,104 @@ def _save_source_parsing_guard(signatures: dict[str, str]) -> None:
         )
     except Exception as e:
         logger.warning("source_parsing: guard write failed: %s", e)
+
+
+async def _claim_source_parser_recovery_requests(db: Database) -> list[str]:
+    """Claim due legacy parser source replays for one scheduled full refresh."""
+
+    now = datetime.now(timezone.utc)
+    stale_before = now - timedelta(hours=2)
+    async with db.raw_conn() as conn:
+        table_cursor = await conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='source_parser_recovery_request'"
+        )
+        table_exists = await table_cursor.fetchone()
+        await table_cursor.close()
+        if table_exists is None:
+            # Safe during a two-stage rollback/rolling startup where scheduler
+            # code may briefly run before the additive schema is available.
+            return []
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            await conn.execute(
+                "UPDATE source_parser_recovery_request SET status='pending',"
+                "next_run_at=?,last_error='stale_running_recovered',updated_at=? "
+                "WHERE status='running' AND updated_at<?",
+                (now, now, stale_before),
+            )
+            cursor = await conn.execute(
+                "SELECT source_type FROM source_parser_recovery_request "
+                "WHERE status IN ('pending','error') AND next_run_at<=? "
+                "ORDER BY created_at,source_type",
+                (now,),
+            )
+            rows = await cursor.fetchall()
+            await cursor.close()
+            sources = [str(row[0]) for row in rows if str(row[0] or "").strip()]
+            if sources:
+                placeholders = ",".join("?" for _ in sources)
+                await conn.execute(
+                    "UPDATE source_parser_recovery_request SET status='running',"
+                    "attempts=attempts+1,last_error=NULL,updated_at=? "
+                    f"WHERE source_type IN ({placeholders})",
+                    (now, *sources),
+                )
+            await conn.commit()
+            return sources
+        except Exception:
+            await conn.rollback()
+            raise
+
+
+async def _settle_source_parser_recovery_requests(
+    db: Database,
+    sources: list[str],
+    result: object | None,
+    *,
+    error: str | None = None,
+) -> None:
+    """Complete healthy source refreshes and keep incomplete ones automatically due."""
+
+    if not sources:
+        return
+    now = datetime.now(timezone.utc)
+    retry_at = now + timedelta(minutes=30)
+    stats_by_source = getattr(result, "stats_by_source", None) or {}
+    async with db.raw_conn() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            for source in sources:
+                stats = stats_by_source.get(source)
+                failed = int(getattr(stats, "failed", 0) or 0) if stats else 0
+                retries = int(getattr(stats, "retry_scheduled", 0) or 0) if stats else 0
+                resolved = bool(stats is not None and failed == 0 and retries == 0 and not error)
+                reason = None
+                if not resolved:
+                    if error:
+                        reason = str(error)[:300]
+                    elif stats is None:
+                        reason = "source_not_processed"
+                    else:
+                        reason = (
+                            f"source_incomplete:failed={failed}:"
+                            f"retry_scheduled={retries}"
+                        )
+                await conn.execute(
+                    "UPDATE source_parser_recovery_request SET status=?,next_run_at=?,"
+                    "last_error=?,updated_at=? WHERE source_type=? AND status='running'",
+                    (
+                        "done" if resolved else "pending",
+                        now if resolved else retry_at,
+                        reason,
+                        now,
+                        source,
+                    ),
+                )
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
 
 
 async def _collect_source_parsing_signatures() -> dict[str, str]:
@@ -449,6 +547,7 @@ async def source_parsing_scheduler(db: Database, bot: Bot, *, run_id: str | None
     """
     logger.info("source_parsing_scheduler started run_id=%s", run_id)
     
+    recovery_sources = await _claim_source_parser_recovery_requests(db)
     try:
         result = await run_source_parsing(
             db,
@@ -457,6 +556,7 @@ async def source_parsing_scheduler(db: Database, bot: Bot, *, run_id: str | None
             operator_id=0,
             run_id=run_id,
         )
+        await _settle_source_parser_recovery_requests(db, recovery_sources, result)
 
         should_update_guard = result.total_events > 0 or not result.errors
         if should_update_guard:
@@ -484,6 +584,12 @@ async def source_parsing_scheduler(db: Database, bot: Bot, *, run_id: str | None
             result.total_events,
         )
     except Exception as e:
+        await _settle_source_parser_recovery_requests(
+            db,
+            recovery_sources,
+            None,
+            error=f"{type(e).__name__}: {e}",
+        )
         logger.exception("source_parsing_scheduler failed run_id=%s", run_id)
 
 
@@ -498,13 +604,14 @@ async def source_parsing_scheduler_if_changed(
     Skips Kaggle if source pages did not change since the last successful run.
     """
     logger.info("source_parsing_scheduler_if_changed started run_id=%s", run_id)
+    recovery_sources = await _claim_source_parser_recovery_requests(db)
     try:
         signatures = await _collect_source_parsing_signatures()
         if not signatures:
             logger.info("source_parsing_guard: signatures unavailable, running parse")
         else:
             guard_state = _load_source_parsing_guard()
-            if guard_state.get("signatures") == signatures:
+            if guard_state.get("signatures") == signatures and not recovery_sources:
                 logger.info("source_parsing_guard: no changes, skipping parse")
                 ops_run_id = await start_ops_run(
                     db,
@@ -534,10 +641,12 @@ async def source_parsing_scheduler_if_changed(
         result = await run_source_parsing(
             db,
             bot,
+            only_sources=recovery_sources or None,
             trigger="scheduled",
             operator_id=0,
             run_id=run_id,
         )
+        await _settle_source_parser_recovery_requests(db, recovery_sources, result)
         should_update_guard = result.total_events > 0 or not result.errors
         if should_update_guard and signatures:
             await _update_source_parsing_guard(signatures)
@@ -564,7 +673,13 @@ async def source_parsing_scheduler_if_changed(
             run_id,
             result.total_events,
         )
-    except Exception:
+    except Exception as exc:
+        await _settle_source_parser_recovery_requests(
+            db,
+            recovery_sources,
+            None,
+            error=f"{type(exc).__name__}: {exc}",
+        )
         logger.exception("source_parsing_scheduler_if_changed failed run_id=%s", run_id)
 
 

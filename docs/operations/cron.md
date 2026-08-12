@@ -27,6 +27,27 @@ To avoid parallel long-running operations (especially **manual** starts overlapp
 
 VK crawling runs six times per day by default at `05:15`, `09:15`, `13:15`, `17:15`, `21:15` and `22:45` Europe/Kaliningrad time (`VK_CRAWL_TIMES_LOCAL` / `VK_CRAWL_TZ`).
 
+Production keeps automatic VK typed ingestion **default-on** through
+`ENABLE_VK_AUTO_IMPORT=1` in `fly.toml`; local/test environments remain explicit
+opt-in. The scheduled consumer does not wait for accept/reject UI. It processes
+durable raw source revisions through evidence/OCR, typed source decision,
+optional conditional verification, Smart Update, and a closed automatic outcome
+or durable retry.
+
+The continuation worker must drain crawl caps using the durable sequence
+`pending/retry due -> leased/running -> persist every raw packet in one fetched
+page -> advance/done`. Provider/backpressure errors produce a typed due retry;
+restart recovery reclaims a stale lease. It must never advance the continuation
+or source cursor after a partially persisted page. Manual queue review is a
+diagnostic/admin surface only. Canonical semantics and acceptance tests are in
+`docs/features/vk-auto-queue/README.md`.
+
+For mutable VK offsets, `done` means only empty page, short page, backfill
+horizon, or original incremental cursor overlap. The worker durably preserves
+the deepest `(date, post_id)` boundary. Repeated fingerprint, all-duplicate full
+page, or no deeper full-page progress is `OFFSET_DRIFT`/`NO_PROGRESS` retry with
+offset rebase, never completion; old exact-full-page terminal rows are reopened.
+
 Region Talk autonomous discovery is opt-in via
 `ENABLE_REGION_TALK_SCHEDULED=1`. It is currently forced off after
 `INC-2026-08-03-ydb-request-unit-billing` while the new serverless database is
@@ -338,10 +359,14 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `VIDEO_ANNOUNCE_STORY_USE_MAIN_CHANNEL` – use the profile `main` channel as the first story target (default `1`).
 - `VIDEO_ANNOUNCE_STORY_EXTRA_TARGETS_JSON` – optional extra story targets with per-target `delay_seconds`.
 - `VIDEO_ANNOUNCE_STORY_PERIOD_SECONDS` – story TTL passed to Telegram (default `86400`).
-- `ENABLE_VK_AUTO_IMPORT` – enable VK inbox auto import job.
+- `ENABLE_VK_AUTO_IMPORT` – enable VK typed auto-import job. It is default-on in
+  production `fly.toml`; local/dev remains explicit opt-in.
 - `VK_AUTO_IMPORT_TIMES_LOCAL` / `VK_AUTO_IMPORT_TZ` – VK auto-import schedule times in local time zone.
 - `VK_AUTO_IMPORT_LIMIT` – max number of VK inbox rows to process per scheduled run (default `15`).
-- `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` – max seconds per VK inbox row before auto-import marks that post as `failed` and continues with the next row (default `1800`; set `<=0` to disable).
+- `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` – max seconds per VK carrier attempt before
+  auto-import records a typed timeout and releases it to durable due retry
+  (default `1800`; set `<=0` to disable). Timeout is not a terminal `failed` or
+  semantic rejection.
 - `VK_AUTO_IMPORT_MISFIRE_GRACE_SECONDS` – per-job APScheduler misfire window for VK auto-import (default: `1800`).
 - `VK_AUTO_IMPORT_CATCHUP_LOOKBACK_SECONDS` – startup/watchdog lookback for the last missed VK auto-import slot (default: `86400`).
 - `ENABLE_VK_POST_PRUNE` – enable twice-daily auto-deletion of past-event `klgdevents` VK posts (default: enabled in production).

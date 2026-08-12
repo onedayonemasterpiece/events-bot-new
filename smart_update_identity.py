@@ -18,6 +18,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from telegram_sources import canonicalize_tg_url
+from smart_update_state import IdentityDistinctReason
 
 
 class IdentityGateMode(str, Enum):
@@ -44,7 +45,7 @@ class MergeIdentityAction(str, Enum):
     ALLOW_MERGE = "allow_merge"
     ALLOW_SAFE_METADATA_ONLY = "allow_safe_metadata_only"
     SKIP_MERGE_SIDE_EFFECTS = "skip_merge_side_effects"
-    REVIEW_REQUIRED = "review_required"
+    AUTOMATIC_RESOLUTION_REQUIRED = "automatic_resolution_required"
 
 
 class MergeIdentityRelation(str, Enum):
@@ -152,20 +153,22 @@ class MergeIdentityGateVerdict:
     allowed_fields: tuple[str, ...] = ()
     deterministic: bool = False
     llm: Mapping[str, Any] | None = None
+    llm_contract_valid: bool = False
+    identity_distinct_reason: IdentityDistinctReason | None = None
     fail_safe: bool = False
 
     @property
     def should_skip_side_effects(self) -> bool:
         return self.mode is IdentityGateMode.ENFORCE and self.action in {
             MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
-            MergeIdentityAction.REVIEW_REQUIRED,
+            MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
         }
 
     @property
     def would_skip_side_effects(self) -> bool:
         return self.action in {
             MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
-            MergeIdentityAction.REVIEW_REQUIRED,
+            MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
         }
 
 
@@ -523,7 +526,7 @@ def build_merge_identity_gate_verdict(
     )
 
     if not llm_contract_valid:
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         relation = MergeIdentityRelation.UNKNOWN
         reason_code = "merge_identity_llm_unavailable"
         reasons = reasons or ("merge identity decision is unavailable or invalid",)
@@ -533,7 +536,7 @@ def build_merge_identity_gate_verdict(
     }:
         # Context sources may be attached to a caller-selected event for provenance,
         # but their text/link must never assert event identity or authorize a merge.
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         relation = MergeIdentityRelation.UNKNOWN
         reason_code = "context_only_cannot_assert_identity"
         reasons = tuple(dict.fromkeys((*reasons, "context-only source cannot assert SAME_EVENT")))
@@ -543,12 +546,18 @@ def build_merge_identity_gate_verdict(
         MergeIdentityRelation.UNSAFE_TO_MERGE,
     }:
         action = MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
-    elif action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
-        relation = relation if relation is not MergeIdentityRelation.UNKNOWN else MergeIdentityRelation.UNSAFE_TO_MERGE
+    elif action in {
+        MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
+        MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
+    }:
+        # Keep an explicit UNKNOWN as uncertainty. It must take the bounded
+        # retry path; rewriting UNKNOWN to UNSAFE_TO_MERGE would incorrectly
+        # turn an abstention into a positive CREATE_DISTINCT decision.
+        relation = relation
     elif relation in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE}:
         action = MergeIdentityAction.ALLOW_MERGE
     else:
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         reason_code = "merge_identity_uncertain"
         reasons = tuple(dict.fromkeys((*reasons, "identity relation is not affirmative")))
 
@@ -557,12 +566,18 @@ def build_merge_identity_gate_verdict(
         # either deterministic plumbing or its own result reports a blocker.
         if action not in {
             MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS,
-            MergeIdentityAction.REVIEW_REQUIRED,
+            MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED,
         }:
-            action = MergeIdentityAction.REVIEW_REQUIRED
+            action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
             relation = MergeIdentityRelation.UNSAFE_TO_MERGE
             reason_code = "merge_identity_blocking_conflict"
-            reasons = tuple(dict.fromkeys((*reasons, "blocking identity conflict requires review")))
+            reasons = tuple(dict.fromkeys((*reasons, "blocking identity conflict requires automatic resolution")))
+        elif llm_contract_valid and relation is MergeIdentityRelation.UNKNOWN:
+            # A valid semantic response that explicitly reports structural
+            # blockers is positive evidence that these are distinct. Invalid
+            # or unavailable LLM output remains UNKNOWN and is retried instead.
+            relation = MergeIdentityRelation.UNSAFE_TO_MERGE
+            reason_code = reason_code or "merge_identity_blocking_conflict"
 
     deterministic_code = _deterministic_merge_identity_veto_reason(candidate_subject, existing_subject)
     deterministic = False
@@ -574,7 +589,7 @@ def build_merge_identity_gate_verdict(
     if deterministic_code and (force_structural_veto or not has_strong_shared_anchor):
         # A high-confidence LLM can still allow genuinely same long-running events,
         # but not when it already says uncertainty/distinctness or has low confidence.
-        if action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.REVIEW_REQUIRED}:
+        if action in {MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS, MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED}:
             conflicts = tuple(dict.fromkeys((*conflicts, deterministic_code)))
         elif force_structural_veto or relation not in {MergeIdentityRelation.SAME_EVENT, MergeIdentityRelation.SOURCE_UPDATE} or confidence < 0.9:
             action = MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
@@ -593,6 +608,7 @@ def build_merge_identity_gate_verdict(
     existing_ticket_identity = specific_ticket_occurrence_identity(
         existing_subject.ticket_link
     )
+    specific_ticket_conflict = False
     if (
         candidate_ticket_identity is not None
         and existing_ticket_identity is not None
@@ -610,18 +626,29 @@ def build_merge_identity_gate_verdict(
             f"{existing_ticket_identity[0]}:{existing_ticket_identity[1]}:"
             f"{existing_ticket_identity[2]}:{existing_ticket_identity[3]}"
         )
-        action = MergeIdentityAction.REVIEW_REQUIRED
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
         relation = MergeIdentityRelation.UNSAFE_TO_MERGE
         reason_code = "specific_ticket_occurrence_conflict"
+        specific_ticket_conflict = True
         deterministic = True
         conflicts = tuple(dict.fromkeys((*conflicts, conflict)))
         reasons = tuple(
             dict.fromkeys(
                 (
                     *reasons,
-                    "different explicit ticket occurrence identities require review",
+                    "different explicit ticket occurrence identities require automatic resolution",
                 )
             )
+        )
+
+    identity_distinct_reason = {
+        MergeIdentityRelation.RELATED_BUT_DISTINCT: IdentityDistinctReason.RELATED_BUT_DISTINCT,
+        MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING: IdentityDistinctReason.FESTIVAL_CONTEXT_SIBLING,
+        MergeIdentityRelation.UNSAFE_TO_MERGE: IdentityDistinctReason.UNSAFE_TO_MERGE,
+    }.get(relation)
+    if specific_ticket_conflict:
+        identity_distinct_reason = (
+            IdentityDistinctReason.SPECIFIC_TICKET_OCCURRENCE_CONFLICT
         )
 
     return MergeIdentityGateVerdict(
@@ -637,6 +664,8 @@ def build_merge_identity_gate_verdict(
         allowed_fields=allowed_fields,
         deterministic=deterministic,
         llm=llm or None,
+        llm_contract_valid=llm_contract_valid,
+        identity_distinct_reason=identity_distinct_reason,
     )
 
 
@@ -1064,6 +1093,79 @@ def canonicalize_identity_url(
             # an analytics fragment. #buy and #/buy converge to #/buy.
             fragment = "/" + route
     return urlunsplit(("https", host, path, query, fragment))
+
+
+def stable_candidate_identity(value: Any) -> tuple[str, str]:
+    """Return ``(candidate_key, occurrence_key)`` without prose semantics.
+
+    Occurrence identity follows a strict precedence: source-native occurrence
+    ID, vendor occurrence ID/ticket identity, structured schedule anchor, then
+    producer ordinal only as a same-anchor collision tie-breaker.  The
+    structured fallback intentionally excludes title,
+    description, OCR and occurrence-scope prose so an edited packet remains the
+    same candidate and can be treated as an authoritative update.
+    """
+
+    explicit_candidate = str(getattr(value, "candidate_key", None) or "").strip()
+    explicit_occurrence = str(getattr(value, "occurrence_key", None) or "").strip()
+    source_native_occurrence = str(
+        getattr(value, "source_native_occurrence_id", None)
+        or getattr(value, "source_occurrence_id", None)
+        or ""
+    ).strip()
+    vendor_occurrence = str(getattr(value, "vendor_occurrence_id", None) or "").strip()
+    canonical_source = canonicalize_identity_url(getattr(value, "source_url", None)) or ""
+    if explicit_occurrence:
+        occurrence_key = explicit_occurrence
+    elif source_native_occurrence:
+        occurrence_key = "source-native:" + _stable_occurrence_component(source_native_occurrence)
+    elif vendor_occurrence:
+        occurrence_key = "vendor:" + _stable_occurrence_component(vendor_occurrence)
+    else:
+        ticket_identity = specific_ticket_occurrence_identity(
+            getattr(value, "ticket_link", None)
+        )
+        if ticket_identity is not None:
+            occurrence_key = "ticket:" + ":".join(ticket_identity)
+        else:
+            structured = {
+                "date": str(getattr(value, "date", None) or "").strip(),
+                "end_date": str(getattr(value, "end_date", None) or "").strip(),
+                "time": str(getattr(value, "time", None) or "").strip().replace(".", ":"),
+            }
+            structured_key = "structured:" + hashlib.sha256(
+                json.dumps(structured, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+            ordinal = getattr(value, "producer_ordinal", None)
+            occurrence_key = (
+                f"{structured_key}:ordinal:{int(ordinal)}"
+                if ordinal is not None
+                else structured_key
+            )
+    if explicit_candidate:
+        return explicit_candidate, occurrence_key
+    material = json.dumps(
+        {"canonical_source_url": canonical_source, "occurrence_key": occurrence_key},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest(), occurrence_key
+
+
+def _stable_occurrence_component(value: object) -> str:
+    """Keep readable native IDs while preventing delimiter ambiguity."""
+
+    raw = unicodedata.normalize("NFKC", str(value or "")).strip()
+    compact = re.sub(r"[^\w.~-]+", "-", raw, flags=re.UNICODE).strip("-")
+    return compact or hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def is_explicit_occurrence_key(value: object) -> bool:
+    """Whether a key carries source/vendor identity rather than fallback order."""
+
+    key = str(value or "").strip()
+    return bool(key and not key.startswith("structured:") and not key.startswith("ordinal:"))
 
 
 def _canonical_query(raw_query: str, *, ignored: set[str] | None = None) -> str:

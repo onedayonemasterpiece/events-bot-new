@@ -1,0 +1,193 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: f72dce8164c5b77a22865032dbbedbc4fd0817d9
+base_branch: integration/smart-update-identity-state-machine
+integration_branch: integration/smart-update-identity-state-machine
+global_constraints:
+  - continue Draft PR 494; no new PR or issue
+  - no merge, deploy, production writes, or recovery apply
+  - no new model/provider/always-on verifier/operator workflow/semantic regex classifier/TPM filtering
+  - preserve completed Smart Update, occurrence-key, caller migration, and recovery architecture
+  - production access is strict read-only only
+verification_owner: /root
+stop_conditions:
+  - branch no longer matches the reviewed base without an audited delta
+  - a required production operation would write
+  - a worker would edit outside its owned scope
+lanes:
+  - id: MAP-CONTINUATION
+    role: planner
+    effort: medium
+    requirement_ids: [R1.1-R1.12, R5.model, R7.3-R7.4]
+    target: map exact continuation schema, paths, scheduler, tests
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: authoritative implementation map
+    verification_scope: inspection_only
+    status: completed
+  - id: MAP-TYPED
+    role: planner
+    effort: medium
+    requirement_ids: [R2.1-R2.6, R7.1-R7.2]
+    target: map typed/untyped parse and receipt boundaries
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: exact fail-open inventory
+    verification_scope: inspection_only
+    status: completed
+  - id: MAP-EVIDENCE
+    role: planner
+    effort: medium
+    requirement_ids: [R3.1-R3.6]
+    target: map attachment evidence completeness and all facades
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence truth-path inventory
+    verification_scope: inspection_only
+    status: completed
+  - id: MAP-PROMPTS-DOCS
+    role: planner
+    effort: medium
+    requirement_ids: [R4.1-R4.7, R4.static, R5.docs]
+    target: map prompt markers, gates, and stale canonical docs
+    depends_on: []
+    execution_mode: parallel
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: marker and documentation inventory
+    verification_scope: inspection_only
+    status: completed
+  - id: CONTINUATION
+    implementation_commit: fe625286c
+    results_commit: bec1997d4
+    role: worker
+    effort: high
+    requirement_ids: [R1.1-R1.12, R5.model, R7.3-R7.4]
+    target: production VK crawl continuation consumer and scheduler
+    depends_on: [MAP-CONTINUATION]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-llm-first-final/continuation
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-final-continuation
+    writable_files:
+      - db.py
+      - models.py
+      - vk_intake.py
+      - scheduling.py
+      - tests/test_vk_crawl_continuation.py
+      - tests/test_vk_raw_source_packet.py
+      - .codex/lanes/CONTINUATION/RESULTS.md
+    forbidden_files:
+      - source_parse_contract.py
+      - main.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed consumer, scheduler registration, mandatory A-G tests
+    verification_scope: targeted
+    status: completed
+  - id: TYPED-EVIDENCE
+    implementation_commit: 2fd3bda4b
+    results_commit: e460704bf
+    role: worker
+    effort: high
+    requirement_ids: [R2.1-R2.6, R3.1-R3.6, R7.1-R7.2]
+    target: fail-closed legacy verdict and truthful attachment manifests
+    depends_on: [CONTINUATION, MAP-TYPED, MAP-EVIDENCE]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-llm-first-final/typed-evidence
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-final-typed-evidence
+    writable_files:
+      - source_parse_contract.py
+      - main.py
+      - vk_intake.py
+      - poster_media.py
+      - kaggle/TelegramMonitor/telegram_monitor.py
+      - tests/test_source_parse_contract.py
+      - tests/test_vk_source_packet_contract.py
+      - tests/test_vk_intake_poster_budget.py
+      - tests/test_telegram_monitor_llm_first_producer_contract.py
+      - .codex/lanes/TYPED-EVIDENCE/RESULTS.md
+    forbidden_files:
+      - db.py
+      - models.py
+      - scheduling.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed typed adapter/receipt/evidence fixes and tests
+    verification_scope: targeted
+    status: completed
+  - id: PROMPT-GATES
+    implementation_commit: f2f08f6f1
+    results_commit: f521f13ff
+    role: worker
+    effort: high
+    requirement_ids: [R4.1-R4.7, R4.static, R7.5-R7.7]
+    target: typed production source prompts and static empty-array gate
+    depends_on: [TYPED-EVIDENCE, MAP-PROMPTS-DOCS]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-llm-first-final/prompt-gates
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-final-prompt-gates
+    writable_files:
+      - main.py
+      - kaggle/TelegramMonitor/telegram_monitor.py
+      - docs/llm/prompts.md
+      - scripts/inspect/audit_source_parse_prompt_contract.py
+      - tests/test_source_parse_prompt_contract.py
+      - tests/test_source_parse_static_gates.py
+      - .codex/lanes/PROMPT-GATES/RESULTS.md
+    forbidden_files:
+      - db.py
+      - models.py
+      - vk_intake.py
+      - scheduling.py
+      - CHANGELOG.md
+    expected_output: committed prompt migration and static gate
+    verification_scope: targeted
+    status: completed
+  - id: DOCS-RELEASE
+    docs_commit: 0b5b04317
+    docs_results_commit: 09a0d6d0f
+    role: worker
+    effort: high
+    requirement_ids: [R5.docs, R7.8, R8.1-R8.12]
+    target: canonical docs, changelog, CI receipts, strict RO recovery evidence, incident update
+    depends_on: [PROMPT-GATES]
+    execution_mode: serial_after_dependency
+    branch: integration/smart-update-identity-state-machine
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files:
+      - docs/**
+      - CHANGELOG.md
+      - .codex/integration/smart-update-llm-first-final-remediation/**
+      - artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/**
+    forbidden_files: []
+    expected_output: exact-SHA integration report, incident and release evidence
+    verification_scope: full_local
+    status: completed
+  - id: FINAL-REVIEW
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [R6, R8.gates]
+    target: requirement-by-requirement closure and no-scope-expansion audit
+    depends_on: [DOCS-RELEASE]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: read-only final integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: final Done/Partial/Missing/Blocked table
+    verification_scope: full_local
+    status: completed

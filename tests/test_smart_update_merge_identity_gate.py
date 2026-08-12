@@ -74,7 +74,7 @@ async def _seed_zhenitba_performance(db: Database, event_id: int = 5756) -> None
                 id=event_id,
                 title="Женитьба",
                 description="Спектакль по пьесе Николая Гоголя.",
-                date="2026-08-09",
+                date="2099-08-09",
                 time="18:00",
                 location_name="Драматический театр",
                 location_address="проспект Мира, 4",
@@ -95,14 +95,14 @@ def _theatre_tour_candidate() -> EventCandidate:
         source_url='https://dramteatr39.ru/spektakli/ekskursiya-"zakulise-teatra"',
         source_text=(
             "Название: Экскурсия «Закулисье театра»\n"
-            "Дата: 2026-08-09\n"
+            "Дата: 2099-08-09\n"
             "Время: 14:30\n"
             "Площадка: Драматический театр\n"
             "Описание: экскурсия по сцене и закулисным помещениям театра."
         ),
         raw_excerpt="9 августа в 14:30 — экскурсия «Закулисье театра».",
         title="Экскурсия «Закулисье театра»",
-        date="2026-08-09",
+        date="2099-08-09",
         time="14:30",
         location_name="Драматический театр",
         location_address="проспект Мира, 4",
@@ -120,7 +120,7 @@ def _zhenitba_source_update_candidate() -> EventCandidate:
         source_text="9 августа в 18:00 — спектакль «Женитьба». Обновлено описание постановки.",
         raw_excerpt="9 августа в 18:00 — спектакль «Женитьба».",
         title="Женитьба",
-        date="2026-08-09",
+        date="2099-08-09",
         time="18:00",
         location_name="Драматический театр",
         location_address="проспект Мира, 4",
@@ -259,7 +259,7 @@ def test_theatre_tour_vs_performance_explicit_slot_conflict_is_structural_veto()
     verdict = build_merge_identity_gate_verdict(
         _Obj(
             title="Экскурсия «Закулисье театра»",
-            date="2026-08-09",
+            date="2099-08-09",
             time="14:30",
             location_name="Драматический театр",
             event_type="экскурсия",
@@ -268,7 +268,7 @@ def test_theatre_tour_vs_performance_explicit_slot_conflict_is_structural_veto()
         _Obj(
             id=5756,
             title="Женитьба",
-            date="2026-08-09",
+            date="2099-08-09",
             time="18:00",
             location_name="Драматический театр",
             event_type="спектакль",
@@ -300,7 +300,7 @@ def test_same_performance_time_correction_with_specific_ticket_anchor_stays_allo
     verdict = build_merge_identity_gate_verdict(
         _Obj(
             title="Женитьба",
-            date="2026-08-09",
+            date="2099-08-09",
             time="18:30",
             location_name="Драматический театр",
             event_type="спектакль",
@@ -309,7 +309,7 @@ def test_same_performance_time_correction_with_specific_ticket_anchor_stays_allo
         _Obj(
             id=5756,
             title="Женитьба",
-            date="2026-08-09",
+            date="2099-08-09",
             time="18:00",
             location_name="Драматический театр",
             event_type="спектакль",
@@ -337,7 +337,7 @@ def test_same_date_venue_without_two_explicit_times_is_not_a_structural_veto() -
     verdict = build_merge_identity_gate_verdict(
         _Obj(
             title="Экскурсия «Закулисье театра»",
-            date="2026-08-09",
+            date="2099-08-09",
             time=None,
             location_name="Драматический театр",
             event_type="экскурсия",
@@ -346,7 +346,7 @@ def test_same_date_venue_without_two_explicit_times_is_not_a_structural_veto() -
         _Obj(
             id=5756,
             title="Женитьба",
-            date="2026-08-09",
+            date="2099-08-09",
             time="18:00",
             location_name="Драматический театр",
             event_type="спектакль",
@@ -375,7 +375,7 @@ def test_same_programme_multi_session_same_place_date_stays_allowed() -> None:
     verdict = build_merge_identity_gate_verdict(
         _Obj(
             title="Кураторская экскурсия по выставке",
-            date="2026-08-09",
+            date="2099-08-09",
             time="15:00",
             location_name="Музей",
             event_type="экскурсия",
@@ -384,7 +384,7 @@ def test_same_programme_multi_session_same_place_date_stays_allowed() -> None:
         _Obj(
             id=5426,
             title="Кураторская экскурсия по выставке",
-            date="2026-08-09",
+            date="2099-08-09",
             time="12:00",
             location_name="Музей",
             event_type="экскурсия",
@@ -515,13 +515,26 @@ async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_pa
             schedule_tasks=False,
         )
 
-        assert result.status == "skipped_identity_gate"
-        assert result.event_id == 5077
-        assert result.reason == "festival_sibling_not_same_event"
+        assert result.outcome is su.SmartUpdateTerminalOutcome.CREATED
+        assert result.event_id is not None
+        assert result.event_id != 5077
+        assert result.diagnostic_event_id == 5077
+        assert result.reason == (
+            "create_distinct:festival_context_sibling:"
+            "festival_sibling_not_same_event"
+        )
         async with db.get_session() as session:
             ev = await session.get(Event, 5077)
-            sources_count = await session.scalar(select(func.count()).select_from(EventSource))
-            posters_count = await session.scalar(select(func.count()).select_from(EventPoster))
+            sources_count = await session.scalar(
+                select(func.count()).select_from(EventSource).where(
+                    EventSource.event_id == 5077
+                )
+            )
+            posters_count = await session.scalar(
+                select(func.count()).select_from(EventPoster).where(
+                    EventPoster.event_id == 5077
+                )
+            )
             logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
         assert ev is not None
         assert ev.title == "Калининград и область как кинодекорация"
@@ -535,6 +548,14 @@ async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_pa
         assert logs[-1].decision == "skip_merge_side_effects"
         assert logs[-1].decision_payload["stage"] == "merge_identity_gate"
         assert logs[-1].decision_payload["would_skip_side_effects"] is True
+
+        async with db.get_session() as session:
+            assert int(
+                await session.scalar(select(func.count()).select_from(Event))
+            ) == 2
+            original = await session.get(Event, 5077)
+        assert original is not None
+        assert original.title == "Калининград и область как кинодекорация"
     finally:
         await db.close()
 
@@ -565,7 +586,10 @@ async def test_merge_gate_internal_error_enforce_is_zero_side_effect_fail_closed
         result = await smart_event_update(
             db, _boyko_exhibition_candidate(), check_source_url=False, schedule_tasks=True
         )
-        assert result.status == "skipped_identity_gate"
+        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.event_id is None
+        assert result.diagnostic_event_id == 5077
+        assert result.reason == "merge_identity_gate_error"
         assert result.created is False and result.merged is False
 
         async with db.get_session() as session:
@@ -586,7 +610,7 @@ async def test_merge_gate_internal_error_enforce_is_zero_side_effect_fail_closed
     ("mode", "expected_status", "expected_source_delta"),
     [
         (IdentityGateMode.SHADOW, "merged_or_nochange", 1),
-        (IdentityGateMode.ENFORCE, "skipped_identity_gate", 0),
+        (IdentityGateMode.ENFORCE, "created", 0),
     ],
 )
 async def test_theatre_tour_performance_incident_replay_requires_enforce(
@@ -638,6 +662,10 @@ async def test_theatre_tour_performance_incident_replay_requires_enforce(
             assert result.status != "skipped_identity_gate"
         else:
             assert result.status == expected_status
+            assert result.event_id is not None
+            assert result.event_id != 5756
+            assert result.diagnostic_event_id == 5756
+            assert result.reason and result.reason.startswith("create_distinct:")
         async with db.get_session() as session:
             event = await session.get(Event, 5756)
             source_count = await session.scalar(

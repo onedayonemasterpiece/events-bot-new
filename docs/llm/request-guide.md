@@ -4,6 +4,17 @@ This document describes how the bot communicates with model **4o**.
 
 ## LLM-first policy (applies to all LLM providers)
 
+For configured-source ingestion, every fetched in-horizon carrier revision must
+be an exact successful replay, receive a complete-evidence typed semantic LLM
+decision, or remain durably retryable. Keyword/date/history/past/too-far/
+cancellation/giveaway/title/venue regexes are hints or contradiction triggers
+only. They cannot produce `rejected`, `failed`, `skipped`, `silent`, delete an
+LLM child, or confirm no-event. `CONFIRMED_NO_EVENT` requires a completed, valid
+structured response and complete `EvidenceManifest`. Cost, latency and TPM are
+handled by durable admission/backpressure and never by removing source evidence.
+Normal path is one primary parse; a second call is conditional on a closed
+contradiction reason and reuses an existing configured model.
+
 ## Google AI request admission (all agents and runtimes)
 
 Every API-key-authenticated Gemini, Gemma or Antigravity provider attempt must
@@ -102,35 +113,12 @@ reserve; provider `429` сначала закрывает весь фактич�
 `quota_scope/model`, поэтому другой key того же Cloud project не получает
 повторный send.
 
-Documented exceptions (rare, guardrail-only):
-- Collapsing duplicate drafts produced from a single umbrella “program/schedule” post
-  into one event with a `time` range (prevents accidental duplicates).
-- Fail-closed contradiction guards: a zero/missing price never creates a free
-  label; explicit giveaway/included-entry-ticket/positive-price evidence can only
-  clear `is_free`, not invent paid/free meaning.
-- Exact identity plumbing: a specific ticket URL plus same date/place, a specific
-  ticket URL plus same date/time with no explicit time conflict when venue is
-  already suspected to come from a wrong source default, or near-identical source
-  text plus same date/time/place, may keep candidates visible for LLM/dedupe or
-  converge them before create to prevent duplicate public cards. Generic ticket
-  landing pages and ambiguous title/location-only matches remain LLM-owned.
-- Event-quality safety rails from `INC-2026-06-07-future-event-quality-recurrence.md`:
-  deterministic code may preserve short LLM-produced titles that are already
-  contentful (`Идиот`, `Гараж`, `№ 13`) and may reject ambiguous dotted
-  OCR tokens such as `9.08` as times when there is no nearby time context. These
-  checks do not choose the event title or classify the post; they only stop a
-  fallback/parser ambiguity from overwriting LLM-owned meaning.
-- Weak rubric/digest routing from
-  `INC-2026-06-16-vk-quality-duplicates-non-events.md`: deterministic code may
-  detect high-risk shapes such as `Дайджест`, `Афиша`, or imperative junk in
-  `location_name` and send them to a small LLM eventness reviewer. The
-  reviewer owns the semantic `event/non_event` decision; for these already
-  suspicious candidates uncertainty fails closed instead of publishing a
-  guessed event.
-- Citywide/festival duplicate recall from the same incident: deterministic
-  code may keep same-title/date/time citywide candidates visible in the LLM
-  duplicate shortlist even when extracted venues differ. It is recall-only and
-  must not merge ambiguous citywide vs venue-specific events without LLM.
+Documented deterministic support is limited to syntax/transport validation,
+reference normalization, exact replay identity, shortlist recall and objective
+schema contradictions. Any ambiguous semantic consequence is decided by the LLM
+or becomes retry. In particular, deterministic code must not collapse
+multi-session children, convert a positive source child to product exclusion,
+or suppress it from public fanout.
 
 Requests are sent as HTTP `POST` to the URL stored in the environment variable
 `FOUR_O_URL` (defaults to `https://api.openai.com/v1/chat/completions`). The

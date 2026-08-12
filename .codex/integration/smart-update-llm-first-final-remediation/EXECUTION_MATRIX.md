@@ -1,0 +1,33 @@
+# P0 Final Review Remediation — Execution Matrix
+
+Base and reviewed HEAD: `f72dce8164c5b77a22865032dbbedbc4fd0817d9` (no delta at intake).
+
+| ID | Requirement | Area / likely files | Dependencies | Conflict risk | Primary lane | Mode | Done when |
+|---|---|---|---|---|---|---|---|
+| R1.1–R1.3 | Atomically claim due pending/retry continuation, assign running lease/run id, increment attempt, and reload the persisted crawl parameters/boundaries. | `db.py`, `models.py`, `vk_intake.py` | Existing RAW-VK schema | High: shared SQLite/schema | CONTINUATION | worktree worker | Durable atomic claim proves one owner and preserves group/mode/offset/since/horizon/cursor boundary. |
+| R1.4–R1.6 | Persist every fetched post as a source packet before page progress; advance only after the whole page; finish only at a documented short/empty, horizon, overlap, or exact-replay boundary. | `vk_intake.py` | R1.1–R1.3 | High | CONTINUATION | worktree worker | Page commit is fail-closed and termination reasons are typed/tested. |
+| R1.7–R1.12 | Typed retry/backoff, stale lease recovery, concurrency exclusion, idempotence, actual scheduler registration, distinct backfill/incremental operation. | `vk_intake.py`, `scheduling.py`, continuation tests | R1.1–R1.6 | High | CONTINUATION | worktree worker | Mandatory continuation tests A–G pass, including production scheduler registration. |
+| R2.1–R2.3 | Remove default no-event; send all untyped results through `decision_from_provider_payload`; legacy `[]`/`None` are schema-mismatch retries. | `source_parse_contract.py`, parse adapters | Existing typed source contract | High: public compatibility boundary | TYPED-EVIDENCE | serial-after-continuation | Only explicit typed structured no-event can terminate. |
+| R2.4–R2.6 | Validate legacy positive-list adapter; old receipts missing decision/manifest retry/reparse; unknown disposition/reason retries and alerts. | `source_parse_contract.py`, `vk_intake.py`, TG producer/receipts | R2.1–R2.3 | High | TYPED-EVIDENCE | serial-after-continuation | Mandatory verdict tests A–F pass. |
+| R3.1–R3.2 | Missing/unavailable OCR and available-but-omitted blocks make the manifest incomplete and are counted. | `source_parse_contract.py`, evidence builders | R2 contract | High | TYPED-EVIDENCE | Evidence truth table and tests A–D prove no attachment is hidden. |
+| R3.3–R3.4 | Direct/legacy poster-media facades pass explicit manifests; `complete_source` cannot mask unknown attachments. | `main.py`, `vk_intake.py`, `poster_media.py`, TG facade as applicable | R3.1–R3.2 | High | TYPED-EVIDENCE | All production adapters construct truthful manifests. |
+| R3.5–R3.6 | Incomplete-evidence no-event becomes retry; positive children persist while carrier remains enrichment/retryable. | contract + VK/TG consumers | R2, R3.1–R3.4 | High | TYPED-EVIDENCE | Mandatory evidence test E and dynamic gate pass. |
+| R4.1–R4.7 | Remove legacy empty-array instructions from every production source-parse prompt and replace them with typed no-event/retry/events/lifecycle policies. | `main.py`, `docs/llm/prompts.md`, `kaggle/TelegramMonitor/telegram_monitor.py`, prompt tests | R2/R3 typed schema | High: prompt contract | PROMPT-GATES | serial-after-typed | Prompt cases A–G return typed outcomes without schema-mismatch loops. |
+| R4.static | Add CI/static gate for agreed legacy-empty prompt markers. | inspect script / static tests / CI inventory | R4.1–R4.7 | Medium | PROMPT-GATES | serial-after-typed | Gate fails on every forbidden marker and passes production prompt inventory. |
+| R5.docs | Replace stale manual/filter-first docs with raw packet → hints → typed automatic pipeline; manual UI is diagnostic only. | canonical feature/architecture/LLM docs | Final implementation semantics | Medium | DOCS-RELEASE | serial integrator | Canonical README/architecture match runtime. |
+| R5.model | Remove duplicated `provider_retry_after` model field. | `models.py` | CONTINUATION schema review | High: shared model file | CONTINUATION | worktree worker | Exactly one authoritative field remains and tests compile. |
+| R6 | Enforce the explicit no-scope-expansion constraints (no provider/model/always-on call/operator/semantic regex/TPM filtering; no rework of completed Smart Update/caller/recovery architecture beyond typed adapter needs). | Diff audit | All implementation lanes | Low | FINAL-REVIEW | reviewer | Final diff contains no forbidden expansion. |
+| R7.1–R7.2 | Static/dynamic gates: typed explicit complete no-event only; untyped/unknown retry. | verdict/static tests | R2 | Medium | TYPED-EVIDENCE | New negative/positive matrix passes. |
+| R7.3–R7.4 | Continuation consumer exists and deep synthetic crawl persists every fetched post. | continuation tests | R1 | Medium | CONTINUATION | Registered consumer + eventual-count tests pass. |
+| R7.5–R7.7 | No prompt `[]`; no default no-event adapter; no complete evidence with missing attachment OCR. | static/contract tests | R2–R4 | Medium | PROMPT-GATES | Static gates pass and mutation fixtures fail. |
+| R7.8 | Existing funnel invariants remain green. | relevant CI suite | All lanes | Medium | DOCS-RELEASE | Full relevant CI passes. |
+| R8.1–R8.10 | Record final HEAD, blocker table, continuation state machine, scheduler receipt, legacy matrix, evidence truth table, prompt diff, focused/full CI receipts, and updated caller/static inventory. | integration report / incident record | All code/tests | Medium | DOCS-RELEASE | Evidence is tied to exact final SHA. |
+| R8.11 | Repeat strict read-only production recovery dry-run with zero changes and carrier counts. | production RO CLI/artifacts | Final source | High: production access, read-only | DOCS-RELEASE | `query_only`, `quick_check`, zero mutations, carrier counts and source hash recorded. |
+| R8.12 | Update the canonical incident report. | incident record | R8.1–R8.11 | Medium | DOCS-RELEASE | Incident remains open and records residual deploy gates. |
+| R8.gates | Do not declare deploy-ready before real provider quota/tier, atomic prod snapshot rehearsal, FK-orphan disposition, and model-derived recovery replay are separately proven. | release conclusion | None | Critical | FINAL-REVIEW | Closure says not deploy-ready unless all four independently become proven. |
+
+## Dependency graph
+
+`CONTINUATION → TYPED-EVIDENCE → PROMPT-GATES → DOCS-RELEASE → FINAL-REVIEW`
+
+Read-only mapping of continuation, verdicts, evidence, and prompts/docs runs in parallel before the first write lane. Write phases are deliberately serial where `models.py`, `vk_intake.py`, the public parse contract, and canonical prompts would otherwise conflict.

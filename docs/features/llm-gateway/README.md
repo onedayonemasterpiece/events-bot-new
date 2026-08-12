@@ -6,6 +6,33 @@
 > `INC-2026-07-31-google-ai-parallel-limiter-bypass`.
 > **Component:** `google_ai.client.GoogleAIClient`
 
+
+## P0 ingestion capacity/backpressure contract
+
+For automatic ingestion, TPM is admission control, never a semantic filter.
+`GoogleAIClient.generate_content_async` can use provider `countTokens` for input
+and a persisted/serializable `(model, consumer, prompt_version)` p99 completion
+calibration. Cold start remains conservative; calibrated reserve is based on
+counted input plus observed output+thought tail and safety margin, while
+`max_output_tokens` remains large enough for every child. `UsageInfo` exposes
+input/output/thought/reserved/actual totals, finish reason, request/response IDs
+and provider model version. Non-success finish reasons, truncation and malformed
+output remain typed errors with usage retained.
+
+A durable owner such as VK queue uses one physical provider attempt per lease.
+RPM/TPM/RPD/429 releases the carrier and stores quota scope/reason and
+`retry_after`; it does not sleep on the row or mark it terminal failed. Distinct
+keys are not distinct capacity unless the operator-owned registry proves
+different Google projects. The current production registry exposes six
+redacted scopes, but provider billing tier, active provider-side quota and spend
+limit were **not** independently verified in the incident audit; repository
+config values are application admission limits, not provider entitlement proof.
+
+Read-only acute telemetry showed severe over-reservation versus actual use; the
+canonical capacity evidence and its limitations are linked from
+`INC-2026-08-10-smart-update-identity-terminal-loss`. No new provider/model or
+always-on call is introduced by calibration.
+
 ## 1. Цель
 Обеспечить надежную работу с LLM (Gemma 2/3, Gemini) в условиях жестких ограничений API (RPM, TPM, Daily Limit), исключая "молчаливые" падения и превышения квот.
 
@@ -25,12 +52,11 @@
 *   **Dedicated Supabase Database**:
     *   Таблицы `google_ai_*` хранят лимиты/счётчики/аудит. Схема описана в `docs/architecture/eve-arch-phase-1.md`.
     *   *Примечание:* Сами ключи хранятся в ENV, а Supabase возвращает имя переменной окружения для выбранного ключа.
-    *   Все шесть production API keys оператором подтверждены как ключи шести
-        разных Google Cloud projects. Поэтому registry содержит шесть разных
-        redacted `quota_scope`; объединять их в один общий scope нельзя — это
-        искусственно суммирует независимые RPM/TPM/RPD и лишает gateway
-        доступной ёмкости. Сам limiter не пытается угадывать Cloud project по
-        значению секрета: mapping является явной operator-owned metadata.
+    *   Registry stores operator-owned redacted `quota_scope` metadata and never
+        infers a Cloud project from secret bytes. Different env/key aliases are
+        independent only after that mapping is verified against the provider
+        project. Incident evidence currently proves six configured scopes, not
+        the provider billing tier/quota entitlement behind each scope.
 *   **Supabase RPC (`google_ai_reserve`)**: Резервирование лимитов. Оно является
     атомарным между процессами только для версии
     `google_ai_project_model_atomic_v1`. Каноническая self-contained схема —
@@ -305,9 +331,9 @@ fail-closed завершаться при недоступном shared limiter.
 *   при чтении `candidates[].content.parts[]` клиент отбрасывает `parts[].thought = true`, чтобы Gemma 4 thought-channel не утекал в parsed JSON, persisted history или operator-facing surfaces.
 
 ### 2.2. Алгоритм работы
-1.  **Reserve**: Клиент запрашивает резерв (примерно `max_output_tokens + 1000`).
-    *   Для длинных текстовых prompt’ов используется консервативная оценка по байтам **и** символам; это особенно важно для русскоязычных/OCR-heavy запросов, где простой `bytes/4` может занизить реальный input TPM.
-    *   Для multimodal prompt parts текст оценивается отдельно от binary blobs, а каждый image/blob получает дополнительный safety reserve, чтобы raw bytes не раздували estimate строковым `repr`, но image-heavy OCR calls всё равно не уходили в систематическое under-reserve.
+1.  **Reserve**: клиент считает input через provider `countTokens`, когда caller включает этот режим, и применяет model/consumer/prompt-version p99 completion calibration. При недоступном countTokens используется помеченный conservative fallback; старое резервирование полного output ceiling не является steady-state calibration.
+    *   Для multimodal prompt parts текст и binary safety считаются раздельно.
+    *   Admission reserve и semantic output ceiling разнесены: снижение резерва не обрезает multi-event output.
     *   *Успех:* Получает `api_key` и разрешение.
     *   *Отказ:* Получает `RateLimitError` (Fail Fast, NO_WAIT).
 2.  **Execute**: Вызов API провайдера (Google AI Studio).
@@ -316,7 +342,7 @@ fail-closed завершаться при недоступном shared limiter.
         pool, где клиент сразу резервирует следующего ещё не использованного
         участника того же пула и не меняет модель.
     *   *Пустой ответ:* трактуется как `ProviderError(empty_response)` и ретраится.
-3.  **Finalize**: Клиент отправляет реальную статистику (`input_tokens`, `output_tokens`) в БД для корректировки квот.
+3.  **Finalize**: клиент отправляет input/output/thought/actual/reserved usage, finish/request/response metadata и outcome. Эти наблюдения обновляют калибровку; failed/truncated attempt не теряет accounting receipt.
 
 ## 3. Возможности
 *   **Multi-Account Sharding**: Поддержка ротации ключей/аккаунтов через переменную `GOOGLE_API_LOCALNAME`.

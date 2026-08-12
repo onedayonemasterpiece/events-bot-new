@@ -168,6 +168,21 @@ import httpx
 import hashlib
 import unicodedata
 from html import escape
+from source_parse_contract import (
+    ContradictionFact,
+    EvidenceManifest,
+    ParsedEvents,
+    SourceParseDecision,
+    SourceNoEventReason,
+    SourceParseRetryReason,
+    VerificationReason,
+    build_verification_request,
+    conditionally_verify_source_decision,
+    decision_from_provider_payload,
+    provider_attempt_metadata,
+    provider_response_is_truncated,
+)
+from source_contradiction_facts import derive_source_contradiction_facts
 from telegram_business import (
     WEBHOOK_ALLOWED_UPDATES,
     cache_business_connection,
@@ -3694,24 +3709,6 @@ async def vk_resolve_group(
         raise
 
 
-def _pick_biggest_photo(photo: dict) -> str | None:
-    sizes = photo.get("sizes") or []
-    if not sizes:
-        return None
-    best = max(sizes, key=lambda s: s.get("width", 0))
-    return best.get("url")
-
-
-def _extract_post_photos(post: dict) -> list[str]:
-    photos: list[str] = []
-    for att in post.get("attachments", []):
-        if att.get("type") == "photo":
-            url = _pick_biggest_photo(att["photo"])
-            if url:
-                photos.append(url)
-    return photos
-
-
 async def vk_wall_since(
     group_id: int,
     since_ts: int,
@@ -3734,6 +3731,7 @@ async def vk_wall_since(
     pagination.
     """
     from vk_owner import normalize_owner_type, signed_owner_id, vk_wall_url
+    from vk_source_envelope import build_vk_source_envelope
 
     owner_type_norm = normalize_owner_type(owner_type)
     owner_id = signed_owner_id(group_id, owner_type_norm)
@@ -3749,35 +3747,19 @@ async def vk_wall_since(
     for item in items:
         if item.get("date", 0) < since_ts:
             continue
-        src = item.get("copy_history", [item])[0]
-        photos = _extract_post_photos(src)
-        views = None
-        likes = None
-        try:
-            v = (item.get("views") or {}).get("count")
-            if isinstance(v, int):
-                views = v
-        except Exception:
-            views = None
-        try:
-            l = (item.get("likes") or {}).get("count")
-            if isinstance(l, int):
-                likes = l
-        except Exception:
-            likes = None
-        posts.append(
-            {
-                "group_id": group_id,
-                "owner_type": owner_type_norm,
-                "post_id": item["id"],
-                "date": item["date"],
-                "text": src.get("text", ""),
-                "photos": photos,
-                "url": vk_wall_url(group_id, item["id"], owner_type_norm),
-                "views": views,
-                "likes": likes,
-            }
+        source_url = vk_wall_url(group_id, item["id"], owner_type_norm)
+        envelope = build_vk_source_envelope(
+            item,
+            owner_id=group_id,
+            owner_type=owner_type_norm,
+            source_url=source_url,
+            # VK wall pages are already provider-bounded. Preserve every media
+            # candidate in the durable crawl packet; OCR selection is a later
+            # concern and must not alter the captured revision.
+            media_limit=None,
         )
+        envelope["group_id"] = group_id
+        posts.append(envelope)
     posts.sort(key=lambda p: (p["date"], p["post_id"]), reverse=True)
     return posts
 
@@ -9791,19 +9773,6 @@ def _build_prompt(
     return prompt
 
 
-class ParsedEvents(list):
-    """List-like container that also exposes festival metadata."""
-
-    def __init__(
-        self,
-        events: Sequence[dict[str, Any]] | None = None,
-        *,
-        festival: dict[str, Any] | None = None,
-    ) -> None:
-        super().__init__(events or [])
-        self.festival = festival
-
-
 def _configure_event_parse_gemma_client(client: Any) -> Any:
     """Apply the explicit one-send event-parse provider contract."""
 
@@ -9933,7 +9902,43 @@ def _event_parse_defender_check(events: Sequence[dict[str, Any]] | None) -> list
     return reasons
 
 
-def _event_parse_normalize_parsed_events(data: Any) -> ParsedEvents:
+def _event_parse_evidence_manifest(
+    text: str,
+    poster_texts: Sequence[str] | None,
+    extra: Mapping[str, Any] | None = None,
+) -> EvidenceManifest:
+    supplied = (extra or {}).get("evidence_manifest")
+    if isinstance(supplied, EvidenceManifest):
+        return supplied
+    if isinstance(supplied, Mapping):
+        return EvidenceManifest.from_mapping(supplied)
+    attachment_count_raw = (extra or {}).get("attachment_count")
+    try:
+        attachment_count = (
+            int(attachment_count_raw) if attachment_count_raw is not None else None
+        )
+    except (TypeError, ValueError):
+        attachment_count = None
+    return EvidenceManifest.complete_source(
+        text or "",
+        poster_texts,
+        attachment_count=attachment_count,
+    )
+
+
+def _event_parse_normalize_parsed_events(
+    data: Any,
+    *,
+    evidence_manifest: EvidenceManifest | None = None,
+    provider_metadata: Any = None,
+) -> ParsedEvents:
+    if evidence_manifest is None:
+        decision = SourceParseDecision.retry(SourceParseRetryReason.SCHEMA_MISMATCH)
+        if provider_metadata is not None:
+            decision.with_provider_attempts(
+                [provider_attempt_metadata(provider_metadata, attempt_kind="primary")]
+            )
+        return decision
     festival = None
     if isinstance(data, dict):
         festival = data.get("festival")
@@ -9956,105 +9961,76 @@ def _event_parse_normalize_parsed_events(data: Any) -> ParsedEvents:
         ):
             if k in data and fest is not None and fest.get(k) in (None, ""):
                 fest[k] = data[k]
-        if "events" in data and isinstance(data["events"], list):
-            for obj in data["events"]:
-                if isinstance(obj, dict):
-                    _normalise_event_location_from_reference(obj)
-            return ParsedEvents(data["events"], festival=fest)
-        _normalise_event_location_from_reference(data)
-        return ParsedEvents([data], festival=fest)
-    if isinstance(data, list):
-        for obj in data:
-            if isinstance(obj, dict):
-                _normalise_event_location_from_reference(obj)
-        return ParsedEvents(data)
-    logging.error("Unexpected parse format: %s", data)
-    raise RuntimeError("bad parse response")
-
-
-def _event_parse_gemma_tpm_plan(
-    client: Any,
-    *,
-    model: str,
-    prompt: str,
-    configured_max_tokens: int,
-) -> tuple[int, int, int, int] | None:
-    """Return ``input, extra, target, min_output`` for Gemma 4 reservations."""
-
-    normalized_model = str(model or "").strip().lower()
-    if normalized_model.startswith("models/"):
-        normalized_model = normalized_model[7:]
-    if normalized_model.endswith("-it"):
-        normalized_model = normalized_model[:-3]
-    if normalized_model not in {"gemma-4-31b", "gemma-4-26b-a4b"}:
-        return None
-
-    estimate = getattr(client, "_estimate_prompt_tokens", None)
-    if not callable(estimate):
-        return None
-
-    try:
-        input_estimate = max(1, int(estimate(prompt)))
-        reserve_extra = max(
-            0,
-            int(getattr(client, "DEFAULT_TPM_RESERVE_EXTRA", 1000) or 0),
+        if fest is not None:
+            data = dict(data)
+            data["festival"] = fest
+    decision = decision_from_provider_payload(
+        data,
+        evidence_manifest=evidence_manifest,
+        provider_metadata=provider_metadata,
+    )
+    if provider_metadata is not None:
+        decision.with_provider_attempts(
+            [provider_attempt_metadata(provider_metadata, attempt_kind="primary")]
         )
-        target = int(
-            os.getenv("EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET", "14500")
-            or "14500"
-        )
-        target = max(1000, min(target, 15000))
-        min_output = int(
-            os.getenv("EVENT_PARSE_GEMMA_MIN_OUTPUT_TOKENS", "2400") or "2400"
-        )
-        min_output = max(400, min(min_output, int(configured_max_tokens)))
-    except Exception:
-        logging.warning("event_parse: invalid Gemma TPM budget config", exc_info=True)
-        return None
-    return input_estimate, reserve_extra, target, min_output
+    for obj in decision:
+        if isinstance(obj, dict):
+            _normalise_event_location_from_reference(obj)
+    return decision
 
 
-def _fit_event_parse_gemma_output_budget(
-    client: Any,
-    *,
-    model: str,
-    prompt: str,
-    configured_max_tokens: int,
-) -> int:
-    """Keep Gemma event-parse reservations below the real per-minute cap.
+_EVENT_PARSE_PROMPT_VERSION = "source-parse-v1"
 
-    The shared limiter reserves estimated input + output + safety overhead.
-    Only Gemma 4 is adjusted here. Other models retain their configured output
-    budget and are governed by their own registry limits.
+
+def _event_parse_reservation_calibration(model: str, consumer: str):
+    """Return the redacted, version-bound acute p99 admission calibration.
+
+    The values come from the strict read-only 2026-08-01..11 provider ledger
+    audit.  They are admission metadata only: they never shorten source/OCR
+    evidence or the semantic output ceiling.  An operator may replace the
+    defaults with a same-shape JSON object after a newer audited window.
     """
 
-    plan = _event_parse_gemma_tpm_plan(
-        client,
-        model=model,
-        prompt=prompt,
-        configured_max_tokens=configured_max_tokens,
-    )
-    if plan is None:
-        return int(configured_max_tokens)
-    input_estimate, reserve_extra, target, min_output = plan
+    try:
+        from google_ai.client import TokenReservationCalibration
+    except Exception:
+        return None
 
-    fitted = min(
-        int(configured_max_tokens),
-        max(min_output, target - input_estimate - reserve_extra),
+    normalized = str(model or "").strip().lower()
+    if normalized.startswith("models/"):
+        normalized = normalized[7:]
+    if normalized.endswith("-it"):
+        normalized = normalized[:-3]
+
+    defaults: dict[str, dict[str, int]] = {
+        # n=502; output/thought p99=3891, observed max=5689, +1000 safety.
+        "gemma-4-31b": {"p99": 3891, "margin": 2798, "samples": 502},
+        # n=411; output/thought p99=407, observed max=4209, +1000 safety.
+        "gemini-3.1-flash-lite": {"p99": 407, "margin": 4802, "samples": 411},
+    }
+    raw_override = (os.getenv("EVENT_PARSE_RESERVATION_CALIBRATION_JSON") or "").strip()
+    if raw_override:
+        try:
+            parsed = json.loads(raw_override)
+            if isinstance(parsed, dict) and isinstance(parsed.get(normalized), dict):
+                defaults[normalized] = {
+                    "p99": int(parsed[normalized]["p99"]),
+                    "margin": int(parsed[normalized]["margin"]),
+                    "samples": int(parsed[normalized]["samples"]),
+                }
+        except Exception:
+            logging.warning("event_parse: invalid reservation calibration override", exc_info=True)
+    data = defaults.get(normalized)
+    if not data:
+        return None
+    return TokenReservationCalibration(
+        model=normalized,
+        consumer=str(consumer or "event_parse"),
+        prompt_version=_EVENT_PARSE_PROMPT_VERSION,
+        observed_p99_output_thought_tokens=max(0, int(data["p99"])),
+        safety_margin_tokens=max(0, int(data["margin"])),
+        sample_count=max(0, int(data["samples"])),
     )
-    if fitted < int(configured_max_tokens):
-        logging.info(
-            "event_parse: fitted Gemma output budget model=%s configured=%s fitted=%s "
-            "input_estimate=%s reserve_extra=%s target_tpm=%s target_reachable=%s",
-            model,
-            configured_max_tokens,
-            fitted,
-            input_estimate,
-            reserve_extra,
-            target,
-            int(input_estimate + reserve_extra + min_output <= target),
-        )
-    return int(fitted)
 
 
 async def _parse_event_via_gemma(
@@ -10065,13 +10041,13 @@ async def _parse_event_via_gemma(
     festival_alias_pairs: Sequence[tuple[str, int]] | None = None,
     poster_texts: Sequence[str] | None = None,
     poster_summary: str | None = None,
-    **extra: str | None,
+    **extra: Any,
 ) -> ParsedEvents:
     client = _get_event_parse_gemma_client()
     if client is None:
         raise RuntimeError("Gemma client unavailable for event_parse")
 
-    async def _generate_with_rate_limit_wait(
+    async def _generate_once(
         prompt_text: str,
         *,
         label: str,
@@ -10091,78 +10067,59 @@ async def _parse_event_via_gemma(
             }
         else:
             generation_config = {"temperature": 0}
-        extra_wait_raw = extra.get("rate_limit_max_wait_sec")
-        if extra_wait_raw not in (None, ""):
-            try:
-                max_wait_sec = float(str(extra_wait_raw).strip())
-            except Exception:
-                max_wait_sec = float(os.getenv("EVENT_PARSE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC", "120") or "120")
-        else:
-            max_wait_sec = float(os.getenv("EVENT_PARSE_GEMMA_RATE_LIMIT_MAX_WAIT_SEC", "120") or "120")
-        max_wait_sec = max(0.0, min(max_wait_sec, 1800.0))
-        deadline = _time.monotonic() + max_wait_sec
-        while True:
-            try:
-                return await client.generate_content_async(
-                    model=model,
-                    prompt=prompt_text,
-                    generation_config=generation_config,
-                    max_output_tokens=max_tokens,
-                )
-            except Exception as exc:
-                try:
-                    from google_ai.exceptions import RateLimitError as _RateLimitError, ProviderError as _ProviderError
-                except Exception:
-                    _RateLimitError = None
-                    _ProviderError = None
-                retry_ms = 0
-                blocked_reason = ""
-                if _RateLimitError is not None and isinstance(exc, _RateLimitError):
-                    retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-                    blocked_reason = str(getattr(exc, "blocked_reason", "") or "").strip().lower()
-                if _ProviderError is not None and isinstance(exc, _ProviderError):
-                    if int(getattr(exc, "status_code", 0) or 0) == 429:
-                        retry_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-                        blocked_reason = (blocked_reason or "429").lower()
-                # Do not wait on daily quota blocks; it won't recover quickly.
-                if blocked_reason in {"rpd", "no_keys", "model_not_found"}:
-                    raise
-                if retry_ms > 0 and _time.monotonic() < deadline:
-                    sleep_sec = min(60.0, max(0.2, (retry_ms / 1000.0) + 0.2))
-                    logging.warning(
-                        "event_parse: gemma rate_limited label=%s retry_in=%.1fs err=%s",
-                        label,
-                        sleep_sec,
-                        exc,
-                    )
-                    await asyncio.sleep(sleep_sec)
-                    continue
-                raise
+        calibration = _event_parse_reservation_calibration(
+            model,
+            str(getattr(client, "consumer", "event_parse") or "event_parse"),
+        )
+        # One physical attempt per durable carrier lease.  Quota errors bubble
+        # immediately to the owning queue, which releases the lease and stores
+        # provider retry metadata instead of sleeping on the row.
+        return await client.generate_content_async(
+            model=model,
+            prompt=prompt_text,
+            generation_config=generation_config,
+            max_output_tokens=max_tokens,
+            use_provider_count_tokens=True,
+            reservation_calibration=calibration,
+            prompt_version=_EVENT_PARSE_PROMPT_VERSION,
+            max_provider_attempts=1,
+            allow_model_fallback=False,
+        )
 
     if not source_channel:
         source_channel = extra.get("channel_title")
     today = datetime.now(LOCAL_TZ).date().isoformat()
-    user_msg_parts = [f"Today is {today}. "]
-    if source_channel:
-        user_msg_parts.append(f"Channel: {source_channel}. ")
-    user_msg = "".join(user_msg_parts)
-
-    poster_lines: list[str] = []
-    if poster_texts:
-        poster_lines.append(
-            "Poster OCR may contain recognition mistakes; cross-check with the main text."
+    verification_request = extra.get("verification_request")
+    if isinstance(verification_request, Mapping):
+        user_msg = (
+            f"Today is {today}. Conditional source-parse verification.\n"
+            + json.dumps(verification_request, ensure_ascii=False, separators=(",", ":"))
         )
-        poster_lines.append("Poster OCR:")
-        for idx, block in enumerate(poster_texts, start=1):
-            poster_lines.append(f"[{idx}] {block.strip()}")
-        poster_lines.append("")
-    if poster_lines:
-        user_msg += "\n" + "\n".join(poster_lines)
-    user_msg += text
+    else:
+        user_msg_parts = [f"Today is {today}. "]
+        if source_channel:
+            user_msg_parts.append(f"Channel: {source_channel}. ")
+        user_msg = "".join(user_msg_parts)
+
+        poster_lines: list[str] = []
+        if poster_texts:
+            poster_lines.append(
+                "Poster OCR may contain recognition mistakes; cross-check with the main text."
+            )
+            poster_lines.append("Poster OCR:")
+            for idx, block in enumerate(poster_texts, start=1):
+                poster_lines.append(f"[{idx}] {block.strip()}")
+            poster_lines.append("")
+        if poster_lines:
+            user_msg += "\n" + "\n".join(poster_lines)
+        user_msg += text
 
     output_contract = (
-        "Return ONLY JSON: either a JSON array of events or a JSON object with an `events` array.\n"
-        "If the text is only an intro for attached posters/cards and the concrete event details are not present in the text itself, return [] as a valid empty JSON array.\n"
+        "Return ONLY one typed JSON object with keys: disposition, events, lifecycle_actions, evidence_complete, parse_version, no_event_reason.\n"
+        "disposition is exactly one of EVENTS_FOUND, CONFIRMED_NO_EVENT, LIFECYCLE_ONLY, MIXED, RETRY_REQUIRED.\n"
+        "Return every event/session in events and every cancellation/postponement/reschedule/update in lifecycle_actions.\n"
+        "CONFIRMED_NO_EVENT is allowed only after all supplied source text and OCR were examined, evidence_complete is true, and no_event_reason is exactly one of NO_ATTENDABLE_EVENT, GIVEAWAY_ONLY, VAGUE_TEASER, REFERRAL_ONLY, SERVICE_OR_RENTAL, RECAP_ONLY, OUT_OF_SCOPE.\n"
+        "no_event_reason is mandatory only for CONFIRMED_NO_EVENT and forbidden for every other disposition.\n"
         "CRITICAL: No comments. No markdown. No trailing commas. No text outside JSON."
     )
 
@@ -10176,7 +10133,11 @@ async def _parse_event_via_gemma(
             base_prompt = f"{base_prompt}\nPoster summary:\n{poster_summary.strip()}"
         return f"{base_prompt}\n\n{output_contract}\n\n{user_msg}"
 
-    full_prompt = _compose_full_prompt(omit_venue_catalog=False)
+    # Static venue aliases dominated prompt overhead in the incident audit.
+    # Omit that replaceable catalogue before touching any carrier/OCR evidence;
+    # location normalization still uses the canonical reference layer after
+    # parsing.  The venue-grounding rules themselves remain in the prompt.
+    full_prompt = _compose_full_prompt(omit_venue_catalog=True)
     model = (
         str(extra.get("gemma_model") or "").strip()
         or (os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it") or "").strip()
@@ -10189,50 +10150,16 @@ async def _parse_event_via_gemma(
     max_tokens = int(os.getenv("EVENT_PARSE_GEMMA_MAX_TOKENS", "6000") or "6000")
     max_tokens = max(400, min(max_tokens, 8000))
 
-    plan = _event_parse_gemma_tpm_plan(
-        client,
-        model=model,
-        prompt=full_prompt,
-        configured_max_tokens=max_tokens,
-    )
-    if plan is not None:
-        input_estimate, reserve_extra, target, min_output = plan
-        if input_estimate + reserve_extra + max_tokens > target:
-            compact_prompt = _compose_full_prompt(omit_venue_catalog=True)
-            compact_plan = _event_parse_gemma_tpm_plan(
-                client,
-                model=model,
-                prompt=compact_prompt,
-                configured_max_tokens=max_tokens,
-            )
-            if compact_plan is not None:
-                compact_input, compact_extra, compact_target, compact_min_output = compact_plan
-                logging.info(
-                    "event_parse: omitted global venue catalog to fit Gemma TPM "
-                    "model=%s full_input_estimate=%s compact_input_estimate=%s target_tpm=%s",
-                    model,
-                    input_estimate,
-                    compact_input,
-                    compact_target,
-                )
-                full_prompt = compact_prompt
-                if compact_input + compact_extra + compact_min_output > compact_target:
-                    raise RuntimeError(
-                        "event_parse Gemma prompt exceeds TPM cap even without venue catalog "
-                        f"(input_estimate={compact_input}, target={compact_target})"
-                    )
-    max_tokens = _fit_event_parse_gemma_output_budget(
-        client,
-        model=model,
-        prompt=full_prompt,
-        configured_max_tokens=max_tokens,
-    )
-
-    raw, usage = await _generate_with_rate_limit_wait(
+    evidence_manifest = _event_parse_evidence_manifest(text, poster_texts, extra)
+    initial_attempt_kind = "verification" if isinstance(verification_request, Mapping) else "primary"
+    raw, usage = await _generate_once(
         full_prompt,
         label="parse",
         max_tokens=max_tokens,
     )
+    provider_attempts = [
+        provider_attempt_metadata(usage, attempt_kind=initial_attempt_kind)
+    ]
     try:
         await log_token_usage(
             BOT_CODE,
@@ -10241,34 +10168,68 @@ async def _parse_event_via_gemma(
                 "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
                 "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
                 "total_tokens": int(getattr(usage, "total_tokens", 0) or 0),
+                "thought_tokens": int(getattr(usage, "thought_tokens", 0) or 0),
+                "reserved_tokens": int(getattr(usage, "reserved_tokens", 0) or 0),
             },
             endpoint="google_ai.generate_content",
-            request_id=None,
-            meta={k: extra[k] for k in ("feature", "version") if extra.get(k) is not None} or None,
+            request_id=(
+                getattr(usage, "provider_response_id", None)
+                or getattr(usage, "provider_request_id", None)
+            ),
+            meta={
+                **{k: extra[k] for k in ("feature", "version") if extra.get(k) is not None},
+                "prompt_version": _EVENT_PARSE_PROMPT_VERSION,
+                "finish_reason": getattr(usage, "finish_reason", None),
+                "provider_model_version": getattr(usage, "provider_model_version", None),
+                "input_count_source": getattr(usage, "input_count_source", None),
+                "reservation_actual_ratio": getattr(usage, "reservation_actual_ratio", None),
+            },
         )
     except Exception:
         # Token logging must not fail parsing.
         pass
+    if provider_response_is_truncated(usage):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.OUTPUT_TRUNCATED,
+            evidence_manifest=evidence_manifest.with_provider_truncation(),
+            provider_attempts=provider_attempts,
+        )
+    if not str(raw or "").strip():
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.EMPTY_PROVIDER_RESPONSE,
+            evidence_manifest=evidence_manifest,
+            provider_attempts=provider_attempts,
+        )
     data = _event_parse_extract_json(raw or "")
     if data is None:
         # Best-effort repair attempt (Gemma may occasionally emit a trailing comma / commentary).
         repair_prompt = (
             "Your previous answer was NOT valid JSON.\n"
-            "Return ONLY corrected JSON: either a JSON array of events or a JSON object with an `events` array.\n"
-            "If the source text itself has no concrete event details and only points to posters/cards/images, return [] as a valid empty JSON array.\n"
+            "Return ONLY corrected typed SourceParseDecision JSON.\n"
             "No markdown. No explanations. No comments. No trailing commas. No text outside JSON.\n"
             "Do NOT change the meaning or drop fields; only fix formatting so it parses.\n\n"
-            "Original input:\n"
-            + (text or "")[:7000]
+            "Complete original semantic request (including all text/OCR):\n"
+            + full_prompt
             + "\n\n"
             "Invalid output:\n"
-            + (raw or "")[:7000]
+            + (raw or "")
         )
-        raw2, _usage2 = await _generate_with_rate_limit_wait(
+        raw2, usage2 = await _generate_once(
             repair_prompt,
             label="repair",
             max_tokens=max_tokens,
         )
+        provider_attempts.append(
+            provider_attempt_metadata(
+                usage2, attempt_kind=f"{initial_attempt_kind}_repair"
+            )
+        )
+        if provider_response_is_truncated(usage2):
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.OUTPUT_TRUNCATED,
+                evidence_manifest=evidence_manifest.with_provider_truncation(),
+                provider_attempts=provider_attempts,
+            )
         data = _event_parse_extract_json(raw2 or "")
     if data is None:
         logging.error("Invalid JSON from Gemma parse: %s", (raw or "")[:2000])
@@ -10309,8 +10270,17 @@ async def _parse_event_via_gemma(
             except Exception:
                 logging.exception("event_parse: 4o fallback failed after gemma parse JSON error")
                 raise
-        raise RuntimeError("bad gemma parse response")
-    return _event_parse_normalize_parsed_events(data)
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.MALFORMED_JSON,
+            evidence_manifest=evidence_manifest,
+            provider_attempts=provider_attempts,
+        )
+    decision = _event_parse_normalize_parsed_events(
+        data,
+        evidence_manifest=evidence_manifest,
+        provider_metadata=(usage2 if len(provider_attempts) > 1 else usage),
+    )
+    return decision.with_provider_attempts(provider_attempts)
 
 
 async def _parse_event_via_4o(
@@ -10321,7 +10291,7 @@ async def _parse_event_via_4o(
     festival_alias_pairs: Sequence[tuple[str, int]] | None = None,
     poster_texts: Sequence[str] | None = None,
     poster_summary: str | None = None,
-    **extra: str | None,
+    **extra: Any,
 ) -> ParsedEvents:
     token = os.getenv("FOUR_O_TOKEN")
     if not token:
@@ -10334,25 +10304,32 @@ async def _parse_event_via_4o(
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    if not source_channel:
-        source_channel = extra.get("channel_title")
     today = datetime.now(LOCAL_TZ).date().isoformat()
-    user_msg_parts = [f"Today is {today}. "]
-    if source_channel:
-        user_msg_parts.append(f"Channel: {source_channel}. ")
-    user_msg = "".join(user_msg_parts)
-    poster_lines: list[str] = []
-    if poster_texts:
-        poster_lines.append(
-            "Poster OCR may contain recognition mistakes; cross-check with the main text."
+    verification_request = extra.get("verification_request")
+    if isinstance(verification_request, Mapping):
+        user_msg = (
+            f"Today is {today}. Conditional source-parse verification.\n"
+            + json.dumps(verification_request, ensure_ascii=False, separators=(",", ":"))
         )
-        poster_lines.append("Poster OCR:")
-        for idx, block in enumerate(poster_texts, start=1):
-            poster_lines.append(f"[{idx}] {block.strip()}")
-        poster_lines.append("")
-    if poster_lines:
-        user_msg += "\n" + "\n".join(poster_lines)
-    user_msg += text
+    else:
+        if not source_channel:
+            source_channel = extra.get("channel_title")
+        user_msg_parts = [f"Today is {today}. "]
+        if source_channel:
+            user_msg_parts.append(f"Channel: {source_channel}. ")
+        user_msg = "".join(user_msg_parts)
+        poster_lines: list[str] = []
+        if poster_texts:
+            poster_lines.append(
+                "Poster OCR may contain recognition mistakes; cross-check with the main text."
+            )
+            poster_lines.append("Poster OCR:")
+            for idx, block in enumerate(poster_texts, start=1):
+                poster_lines.append(f"[{idx}] {block.strip()}")
+            poster_lines.append("")
+        if poster_lines:
+            user_msg += "\n" + "\n".join(poster_lines)
+        user_msg += text
     messages = [
         {"role": "system", "content": prompt},
         {"role": "user", "content": user_msg},
@@ -10425,16 +10402,29 @@ async def _parse_event_via_4o(
         request_id=request_id,
         meta=meta_payload or None,
     )
+    choice = (data_raw.get("choices") or [{}])[0]
+    provider_metadata = {"finish_reason": choice.get("finish_reason")}
     content = (
-        data_raw.get("choices", [{}])[0]
+        choice
         .get("message", {})
         .get("content")
-        or "{}"
+        or ""
     ).strip()
     if logging.getLogger().isEnabledFor(logging.DEBUG):
         logging.debug("4o content snippet: %s", content[:1000])
     del data_raw
     gc.collect()
+    evidence_manifest = _event_parse_evidence_manifest(text, poster_texts, extra)
+    if provider_response_is_truncated(provider_metadata):
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.OUTPUT_TRUNCATED,
+            evidence_manifest=evidence_manifest.with_provider_truncation(),
+        )
+    if not content:
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.EMPTY_PROVIDER_RESPONSE,
+            evidence_manifest=evidence_manifest,
+        )
     if content.startswith("```"):
         content = content.strip("`\n")
         if content.lower().startswith("json"):
@@ -10443,8 +10433,15 @@ async def _parse_event_via_4o(
         data = json.loads(content)
     except json.JSONDecodeError:
         logging.error("Invalid JSON from 4o: %s", content)
-        raise
-    return _event_parse_normalize_parsed_events(data)
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.MALFORMED_JSON,
+            evidence_manifest=evidence_manifest,
+        )
+    return _event_parse_normalize_parsed_events(
+        data,
+        evidence_manifest=evidence_manifest,
+        provider_metadata=provider_metadata,
+    )
 
 
 async def parse_event_via_llm(
@@ -10455,7 +10452,7 @@ async def parse_event_via_llm(
     festival_alias_pairs: Sequence[tuple[str, int]] | None = None,
     poster_texts: Sequence[str] | None = None,
     poster_summary: str | None = None,
-    **extra: str | None,
+    **extra: Any,
 ) -> ParsedEvents:
     """Parse raw VK/TG text into structured event drafts via an LLM.
 
@@ -10463,16 +10460,8 @@ async def parse_event_via_llm(
     """
     backend_raw = os.getenv("EVENT_PARSE_LLM")
     backend = (backend_raw or "").strip().lower()
-    if backend in {"4o", "openai", "gpt-4o", "chatgpt"}:
-        return await _parse_event_via_4o(
-            text,
-            source_channel,
-            festival_names=festival_names,
-            festival_alias_pairs=festival_alias_pairs,
-            poster_texts=poster_texts,
-            poster_summary=poster_summary,
-            **extra,
-        )
+    use_4o = backend in {"4o", "openai", "gpt-4o", "chatgpt"}
+    semantic_source_text = str(extra.get("semantic_source_text") or text or "")
     # Hard wall-clock cap on the Gemma event_parse stage.
     #
     # Without this, a Gemma 4 ``500 INTERNAL`` storm can keep the rate-limit
@@ -10502,7 +10491,7 @@ async def parse_event_via_llm(
     # below that Gemma still leads. Size, not token count, is used because
     # the system prompt (~6000 tokens of venues/holidays/rules) dominates the
     # provider-reported input_tokens and would mask the per-post signal.
-    if "gemma_model" not in extra:
+    if not use_4o and "gemma_model" not in extra:
         try:
             threshold_chars = int(
                 os.getenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "2500") or "2500"
@@ -10528,8 +10517,18 @@ async def parse_event_via_llm(
                     large_model,
                 )
 
-    try:
-        result = await asyncio.wait_for(
+    async def _invoke_primary(parse_extra: Mapping[str, Any]) -> ParsedEvents:
+        if use_4o:
+            return await _parse_event_via_4o(
+                text,
+                source_channel,
+                festival_names=festival_names,
+                festival_alias_pairs=festival_alias_pairs,
+                poster_texts=poster_texts,
+                poster_summary=poster_summary,
+                **dict(parse_extra),
+            )
+        return await asyncio.wait_for(
             _parse_event_via_gemma(
                 text,
                 source_channel,
@@ -10537,63 +10536,141 @@ async def parse_event_via_llm(
                 festival_alias_pairs=festival_alias_pairs,
                 poster_texts=poster_texts,
                 poster_summary=poster_summary,
-                **extra,
-            ),
-            timeout=cap_sec,
+                **dict(parse_extra),
+            ), timeout=cap_sec
         )
-    except asyncio.TimeoutError as exc:
+
+    try:
+        result = await _invoke_primary(extra)
+    except asyncio.TimeoutError:
         logging.warning(
             "event_parse: gemma wall_clock_timeout cap_sec=%.1f source_channel=%s; raising",
             cap_sec,
             source_channel,
         )
-        raise RuntimeError(
-            f"event_parse Gemma wall-clock timeout after {cap_sec:.0f}s"
-        ) from exc
-
-    # Defender + escalation: when Gemma's output matches a known "principal
-    # failure" pattern that is explicitly forbidden by the master prompt
-    # (currently only the bare `<event_type> — <venue>` title fallback —
-    # see INC-2026-05-11-bar-bastion-stochastic-title-fallback-and-semantic-dup),
-    # re-call the same stage on the escalation model. Disabled when the
-    # caller already pre-routed (`gemma_model` in extra) or when the escalation
-    # model is empty.
-    if "gemma_model" not in extra:
-        escalation_model = (
-            os.getenv("EVENT_PARSE_DEFENDER_ESCALATION_MODEL", "gemini-3.1-flash-lite") or ""
-        ).strip()
-        if escalation_model:
-            defender_reasons = _event_parse_defender_check(result)
-            if defender_reasons:
-                logging.info(
-                    "event_parse: defender flagged source_channel=%s reasons=%s; escalating primary=%s",
-                    source_channel,
-                    defender_reasons,
-                    escalation_model,
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.TECHNICAL_ERROR,
+            evidence_manifest=_event_parse_evidence_manifest(
+                semantic_source_text, poster_texts, extra
+            ),
+            provider_attempts=[
+                provider_attempt_metadata(
+                    {"error_type": "wall_clock_timeout"}, attempt_kind="primary"
                 )
-                extra["gemma_model"] = escalation_model
-                try:
-                    return await asyncio.wait_for(
-                        _parse_event_via_gemma(
-                            text,
-                            source_channel,
-                            festival_names=festival_names,
-                            festival_alias_pairs=festival_alias_pairs,
-                            poster_texts=poster_texts,
-                            poster_summary=poster_summary,
-                            **extra,
-                        ),
-                        timeout=cap_sec,
-                    )
-                except asyncio.TimeoutError:
-                    logging.warning(
-                        "event_parse: defender escalation timed out cap_sec=%.1f source_channel=%s; "
-                        "returning original Gemma output",
-                        cap_sec,
-                        source_channel,
-                    )
-                    # Fall through to return the un-escalated result.
-    return result
+            ],
+        )
+    except Exception as exc:
+        logging.exception(
+            "event_parse: primary provider/schema technical failure source_channel=%s; retry required",
+            source_channel,
+        )
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.TECHNICAL_ERROR,
+            evidence_manifest=_event_parse_evidence_manifest(
+                semantic_source_text, poster_texts, extra
+            ),
+            provider_attempts=[provider_attempt_metadata(exc, attempt_kind="primary")],
+        )
+
+    # A typed primary retry is already a terminal technical outcome for this
+    # attempt.  Do not recursively "verify" schema/provider uncertainty.
+    if result.is_retry:
+        return result
+
+    # The verifier is not an always-on stage.  Deterministic checks can only
+    # supply one of the seven closed contradiction facts; they never delete a
+    # draft or decide that a source is a no-event by themselves.
+    evidence_manifest = result.evidence_manifest or _event_parse_evidence_manifest(
+        semantic_source_text, poster_texts, extra
+    )
+    source_context = (
+        dict(extra.get("source_context"))
+        if isinstance(extra.get("source_context"), Mapping)
+        else {}
+    )
+    supplied_facts = list(extra.get("contradiction_facts") or ())
+    supplied_facts.extend(
+        derive_source_contradiction_facts(
+            semantic_source_text,
+            poster_texts,
+            {
+                **source_context,
+                "today": datetime.now(LOCAL_TZ).date().isoformat(),
+                "published_at": extra.get("published_at"),
+                "source_channel": source_channel,
+            },
+            result,
+            evidence_manifest,
+        )
+    )
+    defender_reasons = _event_parse_defender_check(result)
+    if defender_reasons:
+        supplied_facts.append(
+            ContradictionFact(
+                VerificationReason.GENERIC_UNGROUNDED_TITLE,
+                "; ".join(defender_reasons),
+            )
+        )
+
+    async def _invoke_verifier(
+        facts: tuple[ContradictionFact, ...],
+    ) -> SourceParseDecision:
+        verification_request = build_verification_request(
+            source_text=semantic_source_text,
+            ocr_blocks=poster_texts,
+            evidence_manifest=evidence_manifest,
+            primary_decision=result,
+            contradiction_facts=facts,
+            today=datetime.now(LOCAL_TZ).date().isoformat(),
+            published_at=(
+                str(extra.get("published_at"))
+                if extra.get("published_at") is not None
+                else None
+            ),
+            source_context={
+                "channel": source_channel,
+                **source_context,
+            },
+        )
+        verify_extra = dict(extra)
+        verify_extra.pop("contradiction_facts", None)
+        verify_extra["verification_request"] = verification_request
+        if not use_4o:
+            escalation_model = (
+                os.getenv("EVENT_PARSE_DEFENDER_ESCALATION_MODEL", "") or ""
+            ).strip()
+            if escalation_model:
+                verify_extra["gemma_model"] = escalation_model
+            elif "gemma_model" not in verify_extra:
+                verify_extra["gemma_model"] = (
+                    os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it")
+                    or "gemma-4-31b-it"
+                ).strip()
+        logging.info(
+            "event_parse: conditional verifier source_channel=%s reasons=%s model=%s",
+            source_channel,
+            [fact.reason.value for fact in facts],
+            "configured-4o" if use_4o else verify_extra.get("gemma_model"),
+        )
+        try:
+            return await _invoke_primary(verify_extra)
+        except Exception as exc:
+            return SourceParseDecision.retry(
+                SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR,
+                evidence_manifest=evidence_manifest,
+                events=list(result),
+                lifecycle_actions=result.lifecycle_actions,
+                provider_attempts=[
+                    provider_attempt_metadata(exc, attempt_kind="verification")
+                ],
+            )
+
+    resolved = await conditionally_verify_source_decision(
+        result,
+        contradiction_facts=supplied_facts,
+        invoke=_invoke_verifier,
+    )
+    return resolved
 
 
 async def parse_event_via_4o(
@@ -17022,11 +17099,20 @@ class AddEventsResult(list):
         tokens_remaining: int | None,
         *,
         limit_notice: str | None = None,
+        source_decision: SourceParseDecision | None = None,
     ) -> None:
         super().__init__(entries)
         self.ocr_tokens_spent = tokens_spent
         self.ocr_tokens_remaining = tokens_remaining
         self.ocr_limit_notice = limit_notice
+        self.source_decision = source_decision
+        self.disposition = getattr(source_decision, "disposition", None)
+        self.evidence_complete = getattr(source_decision, "evidence_complete", None)
+        self.evidence_manifest = getattr(source_decision, "evidence_manifest", None)
+        self.parse_version = getattr(source_decision, "parse_version", None)
+        self.lifecycle_actions = tuple(
+            getattr(source_decision, "lifecycle_actions", ()) or ()
+        )
 
 
 async def add_events_from_text(
@@ -17055,7 +17141,12 @@ async def add_events_from_text(
     logging.info(
         "add_events_from_text start: len=%d source=%s", len(text), source_link
     )
-    from smart_event_update import EventCandidate, PosterCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        PosterCandidate,
+        SmartUpdateTerminalOutcome,
+        smart_event_update,
+    )
     poster_items: list[PosterMedia] = []
     ocr_tokens_spent = 0
     ocr_tokens_remaining: int | None = None
@@ -17191,6 +17282,11 @@ async def add_events_from_text(
             for alias_norm in sorted(alias_map.get(fest_name, ())):
                 fest_alias_pairs.append((alias_norm, idx))
         parse_kwargs: dict[str, Any] = {}
+        # The direct ingestion facade owns attachment cardinality.  OCR text
+        # count alone must not make an attachment-bearing source look complete.
+        parse_kwargs["attachment_count"] = len(
+            poster_items or normalized_media or ()
+        )
         if poster_texts:
             parse_kwargs["poster_texts"] = poster_texts
         if poster_summary:
@@ -17257,11 +17353,51 @@ async def add_events_from_text(
         )
         if raise_exc:
             raise
-        return []
+        retry_decision = SourceParseDecision.retry(
+            SourceParseRetryReason.TECHNICAL_ERROR,
+            evidence_manifest=EvidenceManifest.complete_source(
+                llm_text,
+                poster_texts,
+                attachment_count=len(poster_items or normalized_media or ()),
+            ),
+        )
+        return AddEventsResult(
+            [],
+            ocr_tokens_spent,
+            ocr_tokens_remaining,
+            limit_notice=ocr_limit_notice,
+            source_decision=retry_decision,
+        )
 
     results: list[tuple[Event | Festival | None, bool, list[str], str]] = []
     first = True
     parsed_events = [ev for ev in list(parsed or []) if isinstance(ev, dict)]
+    if isinstance(parsed, SourceParseDecision):
+        if parsed.is_retry:
+            # A technical/schema/evidence failure is a durable carrier outcome,
+            # not an empty semantic answer.  In particular, do not enter the
+            # festival or Smart Update paths with a synthetic empty list.
+            return AddEventsResult(
+                [],
+                ocr_tokens_spent,
+                ocr_tokens_remaining,
+                limit_notice=ocr_limit_notice,
+                source_decision=parsed,
+            )
+        if (
+            parsed.disposition.value == "CONFIRMED_NO_EVENT"
+            and parsed.evidence_complete
+            and isinstance(parsed.no_event_reason, SourceNoEventReason)
+            and not parsed_events
+            and not parsed.lifecycle_actions
+        ):
+            return AddEventsResult(
+                [],
+                ocr_tokens_spent,
+                ocr_tokens_remaining,
+                limit_notice=ocr_limit_notice,
+                source_decision=parsed,
+            )
     links_iter = iter(extract_links_from_html(html_text) if html_text else [])
     source_text_clean = html_text or text
     program_url: str | None = None
@@ -17426,6 +17562,7 @@ async def add_events_from_text(
             ocr_tokens_spent,
             ocr_tokens_remaining,
             limit_notice=ocr_limit_notice,
+            source_decision=parsed,
         )
 
     festival_obj: Festival | None = None
@@ -17647,7 +17784,7 @@ async def add_events_from_text(
                     copy_e.topics = list(base_event.topics or [])
                     copy_e.topics_manual = base_event.topics_manual
                     events_to_add.append(copy_e)
-        for event in events_to_add:
+        for producer_ordinal, event in enumerate(events_to_add):
             rejected_links: list[str] = []
             if event.ticket_link and is_tg_folder_link(event.ticket_link):
                 rejected_links.append(event.ticket_link)
@@ -17708,6 +17845,39 @@ async def add_events_from_text(
                 source_message_id=source_message_id,
                 source_chat_username=source_channel,
                 creator_id=creator_id,
+                producer_ordinal=producer_ordinal,
+                source_native_occurrence_id=(
+                    str(
+                        data.get("source_native_occurrence_id")
+                        or data.get("occurrence_id")
+                        or ""
+                    ).strip()
+                    or None
+                ),
+                vendor_occurrence_id=(
+                    str(data.get("vendor_occurrence_id") or "").strip() or None
+                ),
+                    source_disposition=str(
+                        getattr(
+                            getattr(parsed, "disposition", None),
+                            "value",
+                            getattr(parsed, "disposition", None),
+                        )
+                        or "EVENTS_FOUND"
+                    ),
+                    source_parse_version=(
+                        str(getattr(parsed, "parse_version", "") or "").strip()
+                        or None
+                    ),
+                    source_evidence_complete=getattr(
+                        parsed, "evidence_complete", None
+                    ),
+                source_verification_reasons=[
+                    str(getattr(reason, "value", reason))
+                        for reason in (
+                            getattr(parsed, "verification_reasons", ()) or ()
+                        )
+                    ],
             )
             update_result = await smart_event_update(
                 db,
@@ -17715,11 +17885,21 @@ async def add_events_from_text(
                 check_source_url=False,
             )
             saved: Event | None = None
-            if update_result.event_id:
+            if update_result.is_accepted:
                 async with db.get_session() as session:
                     saved = await session.get(Event, update_result.event_id)
             if saved is None:
-                results.append((None, False, ["smart_update_failed"], "error"))
+                result_lines = [
+                    f"smart_update: {update_result.outcome.value}",
+                    f"reason: {update_result.reason or 'unspecified'}",
+                ]
+                result_status = (
+                    "rejected_product_policy"
+                    if update_result.outcome
+                    is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+                    else "retry_scheduled"
+                )
+                results.append((None, False, result_lines, result_status))
                 continue
             if rejected_links:
                 for url in rejected_links:
@@ -17827,15 +18007,11 @@ async def add_events_from_text(
                 lines.append(f"price_max: {saved.ticket_price_max}")
             if saved.ticket_link:
                 lines.append(f"ticket_link: {saved.ticket_link}")
-            added_flag = bool(update_result.created)
+            added_flag = update_result.outcome is SmartUpdateTerminalOutcome.CREATED
             status = (
                 "added"
-                if update_result.created
-                else (
-                    "updated"
-                    if update_result.merged or update_result.status == "skipped_nochange"
-                    else "skipped"
-                )
+                if added_flag
+                else "updated"
             )
             results.append((saved, added_flag, lines, status))
             first = False
@@ -17858,6 +18034,7 @@ async def add_events_from_text(
             "festival %s %s", festival_obj.name, "created" if fest_created else "updated"
         )
     logging.info("add_events_from_text finished with %d results", len(results))
+    source_decision = parsed
     del parsed
     gc.collect()
     return AddEventsResult(
@@ -17865,6 +18042,7 @@ async def add_events_from_text(
         ocr_tokens_spent,
         ocr_tokens_remaining,
         limit_notice=ocr_limit_notice,
+        source_decision=source_decision,
     )
 
 
@@ -18163,7 +18341,11 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         html_text = html_text[len("/addevent_raw") :].lstrip()
     source_clean = html_text or parts[1]
 
-    from smart_event_update import EventCandidate, smart_event_update
+    from smart_event_update import (
+        EventCandidate,
+        SmartUpdateTerminalOutcome,
+        smart_event_update,
+    )
 
     source_marker = f"bot:{message.chat.id}/{message.message_id}"
     candidate = EventCandidate(
@@ -18175,18 +18357,25 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         time=time,
         location_name=location,
         creator_id=creator_id,
+        producer_ordinal=0,
     )
     update_result = await smart_event_update(
         db,
         candidate,
         check_source_url=False,
     )
+    if not update_result.is_accepted:
+        if update_result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
+            message_text = f"Event rejected: {update_result.reason or 'product policy'}"
+        else:
+            message_text = (
+                "Event save retry scheduled: "
+                f"{update_result.reason or 'transient Smart Update failure'}"
+            )
+        await bot.send_message(message.chat.id, message_text)
+        return
     async with db.get_session() as session:
-        event = (
-            await session.get(Event, update_result.event_id)
-            if update_result.event_id
-            else None
-        )
+        event = await session.get(Event, update_result.event_id)
     if event is None:
         await bot.send_message(message.chat.id, "Failed to save event")
         return
@@ -18197,7 +18386,7 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
         f"time: {event.time}",
         f"location_name: {event.location_name}",
     ]
-    added = bool(update_result.created)
+    added = update_result.outcome is SmartUpdateTerminalOutcome.CREATED
     status = "added" if added else "updated"
     logging.info("handle_add_event_raw %s event id=%s", status, event.id)
     buttons_first: list[types.InlineKeyboardButton] = []

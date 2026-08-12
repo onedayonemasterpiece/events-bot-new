@@ -10,6 +10,37 @@
 
 Это означает, что “миграция” для SQLite = изменение `db.py`. Любой деплой/запуск бота автоматически подтянет схему до актуальной.
 
+## Smart Update candidate-state migration
+
+The automatic identity state machine is an additive `Database.init()`
+migration:
+
+- `event_source` receives nullable candidate-state, candidate-key, and
+  occurrence-key linkage;
+- `smart_update_candidate_state` stores the current durable automatic outcome,
+  accepted versus diagnostic IDs, replay payload/locator, retry budget, and
+  claim lease;
+- `smart_update_attempt` is an append-only one-terminal-per-attempt ledger;
+- `source_parser_recovery_request` stores idempotent source-level full-catalogue
+  catch-up requests for legacy official-parser losses;
+- new keyed source ownership is unique by canonical source plus candidate key,
+  with a canonical-source plus occurrence-key collision invariant, so one
+  Telegram/VK carrier may contain several event children.
+
+Legacy source rows remain null and are not blanket backfilled. Historical
+programme/context roles and producer child slots cannot be inferred safely.
+Required new indexes/checks are readiness invariants: initialization must not
+silently warn and continue if they cannot be activated.
+
+Rollback is code-first and non-destructive. Keep the additive tables/columns
+for a forward-compatible binary. Do not recreate the old one-source-URL/
+one-Event unique index after keyed sibling bindings exist unless a separate
+audit proves it safe. Removing SQLite columns requires table rebuilds and is not
+part of the normal rollback.
+
+The full terminal/key/retry contract is canonical in
+`docs/features/smart-event-update/identity-state-machine.md`.
+
 ## Где лежат сиды/дефолты (данные)
 
 В `Database.init()` допускается добавлять **идемпотентные** “seeding”‑операции, которые:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import re
@@ -38,6 +40,7 @@ from kaggle_registry import list_jobs, remove_job
 from video_announce.kaggle_client import KaggleClient
 from models import Event, EventSource
 from smart_update_identity import canonicalize_identity_url
+from smart_event_update import SmartUpdateTerminalOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +137,49 @@ async def _smart_event_update_with_lock_retry(
     raise AssertionError("unreachable")
 
 
+async def _schedule_source_parser_recovery_request(
+    db: Database,
+    *,
+    source_type: str,
+    reason: str,
+) -> bool:
+    """Idempotently make an official source due after any item-level failure."""
+
+    source = str(source_type or "").strip().lower()
+    if not source:
+        return False
+    now = datetime.now(timezone.utc)
+    clean_reason = str(reason or "technical_failure").strip()[:300]
+    try:
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                INSERT INTO source_parser_recovery_request(
+                    source_type,requested_since,status,attempts,next_run_at,
+                    last_error,created_at,updated_at
+                ) VALUES(?,?,'pending',0,?,?,?,?)
+                ON CONFLICT(source_type) DO UPDATE SET
+                    requested_since=MIN(source_parser_recovery_request.requested_since,excluded.requested_since),
+                    status='pending',
+                    next_run_at=excluded.next_run_at,
+                    last_error=excluded.last_error,
+                    updated_at=excluded.updated_at
+                """,
+                (source, now, now, clean_reason, now, now),
+            )
+            await conn.commit()
+        return True
+    except Exception:
+        # The item remains visibly retry_scheduled even if the recovery ledger
+        # itself is temporarily unavailable; never misreport it as resolved.
+        logger.exception(
+            "source_parsing: recovery request persist failed source=%s reason=%s",
+            source,
+            clean_reason,
+        )
+        return False
+
+
 async def _fetch_og_image_for_dramteatr(page_url: str) -> str | None:
     """Best-effort cover extraction for dramteatr event pages.
 
@@ -199,6 +245,7 @@ class SourceParsingStats:
     already_exists: int = 0
     failed: int = 0
     skipped: int = 0  # Explicitly skipped by Smart Update (e.g. no changes / promo filters)
+    retry_scheduled: int = 0
     added_event_ids: list[int] = field(default_factory=list)
     updated_event_ids: list[int] = field(default_factory=list)  # For displaying Telegraph links
 
@@ -266,11 +313,15 @@ def _source_parsing_terminal_status(result: SourceParsingResult) -> str:
         int(stats.failed or 0)
         for stats in (result.stats_by_source or {}).values()
     )
+    retry_items = sum(
+        int(stats.retry_scheduled or 0)
+        for stats in (result.stats_by_source or {}).values()
+    )
     if result.errors:
         # A run that imported some sources but lost another one is partial,
         # not green. If no source survived, expose the run as an error.
         return "partial" if result.stats_by_source else "error"
-    if failed_items:
+    if failed_items or retry_items:
         return "partial"
     return "success"
 
@@ -630,38 +681,56 @@ async def find_exact_parser_ticket_slot(
 
 
 def unpack_add_event_result(
-    raw: tuple[int | None, bool] | tuple[int | None, bool, str | None],
-) -> tuple[int | None, bool, str]:
+    raw: tuple[int | None, bool]
+    | tuple[int | None, bool, SmartUpdateTerminalOutcome | None],
+) -> tuple[int | None, bool, SmartUpdateTerminalOutcome]:
     """Normalize add_new_event_via_queue result.
 
     Backward-compatible with older 2-field tuples used in tests/mocks.
     """
     if not isinstance(raw, tuple):
-        return None, False, "failed"
+        return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
     if len(raw) >= 3:
-        event_id, was_added, status = raw[0], bool(raw[1]), str(raw[2] or "")
-        return event_id, was_added, status or ("created" if was_added else "merged")
+        event_id, was_added, outcome = raw[0], bool(raw[1]), raw[2]
+        if isinstance(outcome, SmartUpdateTerminalOutcome):
+            return event_id, was_added, outcome
+        return event_id, was_added, (
+            SmartUpdateTerminalOutcome.CREATED
+            if was_added
+            else (
+                SmartUpdateTerminalOutcome.MERGED
+                if event_id is not None
+                else SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            )
+        )
     if len(raw) == 2:
         event_id, was_added = raw
-        return event_id, bool(was_added), "created" if was_added else "merged"
-    return None, False, "failed"
+        if event_id is None:
+            return None, bool(was_added), SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        return event_id, bool(was_added), (
+            SmartUpdateTerminalOutcome.CREATED
+            if was_added
+            else SmartUpdateTerminalOutcome.MERGED
+        )
+    return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
 
 def classify_add_event_outcome(
     event_id: int | None,
     was_added: bool,
-    status: str | None,
+    terminal: SmartUpdateTerminalOutcome,
 ) -> str:
-    if was_added or status == "created":
+    del event_id, was_added
+    if terminal is SmartUpdateTerminalOutcome.CREATED:
         return "added"
-    st = (status or "").strip().lower()
-    if st.startswith("skipped"):
+    if terminal in {
+        SmartUpdateTerminalOutcome.MERGED,
+        SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY,
+    }:
+        return "updated"
+    if terminal is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
         return "skipped"
-    if event_id and st in {"merged", "updated"}:
-        return "updated"
-    if event_id and st:
-        return "updated"
-    return "failed"
+    return "retry_scheduled"
 
 
 def _format_parser_ticket_price(
@@ -1302,6 +1371,35 @@ async def schedule_existing_event_update(db: Database, event_id: int) -> None:
     )
 
 
+def _parser_occurrence_key(
+    *,
+    source_type: str | None,
+    source_url: str,
+    date_value: Any,
+    end_date_value: Any,
+    time_value: Any,
+    producer_ordinal: int,
+) -> str:
+    """Build one stable official-parser slot identity without prose fields."""
+
+    occurrence_material = {
+        "source_type": str(source_type or "theatre").strip().lower(),
+        "source_url": canonicalize_identity_url(source_url) or str(source_url),
+        "date": str(date_value or "").strip(),
+        "end_date": str(end_date_value or "").strip(),
+        "time": str(time_value or "00:00").strip().replace(".", ":"),
+        "producer_ordinal": int(producer_ordinal),
+    }
+    return "parser-slot:" + hashlib.sha256(
+        json.dumps(
+            occurrence_material,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 async def add_new_event_via_queue(
     db: Database,
     bot: Bot | None,
@@ -1309,7 +1407,8 @@ async def add_new_event_via_queue(
     progress_current: int,
     progress_total: int,
     poster_media: Sequence[PosterMedia] | None = None,
-) -> tuple[int | None, bool, str]:
+    producer_ordinal: int | None = None,
+) -> tuple[int | None, bool, SmartUpdateTerminalOutcome]:
     """Add a new event through the existing LLM queue system.
     
     Uses build_event_drafts_from_vk for consistent event creation.
@@ -1322,7 +1421,7 @@ async def add_new_event_via_queue(
         progress_total: Total events to process
     
     Returns:
-        Tuple: (event_id, was_added, smart_update_status)
+        Tuple: (accepted event_id, was_added, typed Smart Update terminal)
     """
     from vk_intake import build_event_drafts_from_vk
     import main as main_mod
@@ -1396,7 +1495,7 @@ async def add_new_event_via_queue(
                 PARSE_EVENT_TIMEOUT_SECONDS,
                 theatre_event.title[:50],
             )
-            return None, False, "llm_timeout"
+            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         if diag_enabled:
             logger.info(
                 "source_parsing: diag LLM done title=%s drafts=%d duration=%.2fs",
@@ -1410,7 +1509,7 @@ async def add_new_event_via_queue(
                 "source_parsing: no drafts returned title=%s",
                 theatre_event.title,
             )
-            return None, False, "llm_no_drafts"
+            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         
         draft = drafts[0]
         
@@ -1433,20 +1532,18 @@ async def add_new_event_via_queue(
         # Use smart update (no VK posting here)
         try:
             import sys
-            import hashlib
             from datetime import datetime, timezone
             from models import Event
             from smart_event_update import (
                 EventCandidate,
                 PosterCandidate,
                 smart_event_update,
-                smart_update_result_allows_caller_side_effects,
             )
             
             main_mod = sys.modules.get("main") or sys.modules.get("__main__")
             if main_mod is None:
                 logger.error("source_parsing: main module not found")
-                return None, False, "main_module_missing"
+                return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
             
             # Build final description - should come from LLM (short_description)
             # If LLM didn't return it, use title as fallback and log warning
@@ -1496,6 +1593,24 @@ async def add_new_event_via_queue(
             )
             fallback_hash = hashlib.sha256(fallback_key.encode("utf-8")).hexdigest()[:16]
             source_url = theatre_event.url or f"parser:{theatre_event.source_type}:{fallback_hash}"
+            # Parser catalogues regularly use one performance page for several
+            # dated/timed sessions.  URL ownership alone therefore identifies a
+            # carrier, not a source-local occurrence.  Keep the producer ordinal
+            # as a deterministic tie-breaker for two structured rows sharing the
+            # same slot, but never derive identity from mutable title/prose.
+            effective_producer_ordinal = (
+                int(producer_ordinal)
+                if producer_ordinal is not None
+                else max(0, int(progress_current) - 1)
+            )
+            parser_occurrence_key = _parser_occurrence_key(
+                source_type=theatre_event.source_type,
+                source_url=source_url,
+                date_value=draft.date,
+                end_date_value=draft.end_date or theatre_event.end_date,
+                time_value=draft.time,
+                producer_ordinal=effective_producer_ordinal,
+            )
 
             candidate = EventCandidate(
                 source_type=f"parser:{theatre_event.source_type}",
@@ -1524,6 +1639,8 @@ async def add_new_event_via_queue(
                 search_digest=draft.search_digest,
                 raw_excerpt=final_description,
                 posters=posters,
+                producer_ordinal=effective_producer_ordinal,
+                occurrence_key=parser_occurrence_key,
             )
 
             logger.info(
@@ -1543,27 +1660,26 @@ async def add_new_event_via_queue(
                 candidate,
                 smart_event_update,
             )
-            if not smart_update_result_allows_caller_side_effects(update_result):
-                status = str(getattr(update_result, "status", "") or "not_accepted")
+            if not update_result.is_accepted:
                 logger.warning(
-                    "source_parsing: smart_update not accepted title=%s status=%s reason=%s matched_event_id=%s",
+                    "source_parsing: smart_update not accepted title=%s outcome=%s reason=%s diagnostic_event_id=%s",
                     theatre_event.title[:80],
-                    status,
-                    getattr(update_result, "reason", None),
-                    getattr(update_result, "event_id", None),
+                    update_result.outcome.value,
+                    update_result.reason,
+                    update_result.diagnostic_event_id,
                 )
-                return None, False, status
+                return None, False, update_result.outcome
             event_id = update_result.event_id
-            was_added = bool(update_result.created)
+            was_added = update_result.outcome is SmartUpdateTerminalOutcome.CREATED
 
-            if not event_id:
+            if event_id is None:
                 logger.error(
-                    "source_parsing: smart_update failed title=%s status=%s reason=%s",
+                    "source_parsing: accepted smart_update result has no event_id title=%s outcome=%s reason=%s",
                     theatre_event.title[:80],
-                    update_result.status,
+                    update_result.outcome.value,
                     update_result.reason,
                 )
-                return None, False, update_result.status
+                return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
             async with db.get_session() as session:
                 saved = await session.get(Event, event_id)
@@ -1578,11 +1694,11 @@ async def add_new_event_via_queue(
                 )
             
             logger.info(
-                "source_parsing: smart_update result event_id=%d status=%s created=%s merged=%s",
+                "source_parsing: smart_update result event_id=%d outcome=%s created=%s merged=%s",
                 event_id,
-                update_result.status,
-                int(update_result.created),
-                int(update_result.merged),
+                update_result.outcome.value,
+                int(update_result.outcome is SmartUpdateTerminalOutcome.CREATED),
+                int(update_result.outcome is SmartUpdateTerminalOutcome.MERGED),
             )
             
             # Update ticket status
@@ -1614,7 +1730,7 @@ async def add_new_event_via_queue(
                     exc_info=True,
                 )
             
-            return event_id, was_added, update_result.status
+            return event_id, was_added, update_result.outcome
                 
         except Exception as persist_err:
             logger.error(
@@ -1623,7 +1739,7 @@ async def add_new_event_via_queue(
                 persist_err,
                 exc_info=True,
             )
-            return None, False, "persist_failed"
+            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         
     except Exception as e:
         logger.error(
@@ -1632,7 +1748,7 @@ async def add_new_event_via_queue(
             e,
             exc_info=True,
         )
-        return None, False, "add_failed"
+        return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
 
 def escape_md(text: str) -> str:
@@ -1704,12 +1820,14 @@ async def format_parsing_report(
     total_updated = 0
     total_failed = 0
     total_skipped = 0
+    total_retry_scheduled = 0
     
     for source, stats in result.stats_by_source.items():
         total_added += stats.new_added
         total_updated += stats.ticket_updated
         total_failed += stats.failed
         total_skipped += stats.skipped
+        total_retry_scheduled += stats.retry_scheduled
         
         # Use descriptive labels if available
         source_label = {
@@ -1728,6 +1846,8 @@ async def format_parsing_report(
             lines.append(f"  ❌ Ошибок: {stats.failed}")
         if stats.skipped:
             lines.append(f"  ⏭️ Пропущено: {stats.skipped}")
+        if stats.retry_scheduled:
+            lines.append(f"  🔁 Повтор назначен: {stats.retry_scheduled}")
     
     lines.append("")
     lines.append(f"**Итого:**")
@@ -1736,6 +1856,8 @@ async def format_parsing_report(
         lines.append(f"🔄 Всего обновлено: {total_updated}")
     if total_failed:
         lines.append(f"❌ Всего ошибок: {total_failed}")
+    if total_retry_scheduled:
+        lines.append(f"🔁 Всего автоматических повторов: {total_retry_scheduled}")
     
     if result.errors:
         lines.append("")
@@ -2643,6 +2765,7 @@ async def run_source_parsing(
                 "updated_events": int(stats.ticket_updated + stats.already_exists),
                 "failed": int(stats.failed),
                 "skipped": int(stats.skipped),
+                "retry_scheduled": int(stats.retry_scheduled),
             }
             for source, stats in (result.stats_by_source or {}).items()
         }
@@ -2818,6 +2941,19 @@ async def process_source_events(
         result_tag = "unknown"
         event_id: int | None = None
         llm_used = False
+        event_retry_scheduled = False
+
+        async def _retry_event(reason: str) -> None:
+            nonlocal event_retry_scheduled
+            if not event_retry_scheduled:
+                stats.retry_scheduled += 1
+                event_retry_scheduled = True
+            await _schedule_source_parser_recovery_request(
+                db,
+                source_type=source or event.source_type,
+                reason=reason,
+            )
+
         diag_enabled = bool(SOURCE_PARSING_DIAG_TITLE) and SOURCE_PARSING_DIAG_TITLE in (event.title or "").lower()
 
         # Update progress message for every event (new or existing).
@@ -2841,8 +2977,8 @@ async def process_source_events(
                 "source_parsing: skipping event without date title=%s",
                 event.title,
             )
-            stats.failed += 1
-            result_tag = "missing_date"
+            await _retry_event("missing_date")
+            result_tag = "missing_date_retry_scheduled"
             logger.info(
                 "source_parsing: event_result source=%s title=%s result=%s duration=%.2fs",
                 source,
@@ -2971,8 +3107,8 @@ async def process_source_events(
                             if info:
                                 updated_events.append(info)
                     else:
-                        stats.failed += 1
-                        result_tag = "existing_full_update_failed"
+                        await _retry_event("existing_full_update_failed")
+                        result_tag = "existing_full_update_retry_scheduled"
                 else:
                     # Source already imported via parser -> cheap status/ticket sync only.
                     ticket_sync = await update_event_ticket_status(
@@ -3009,8 +3145,8 @@ async def process_source_events(
                             if info:
                                 updated_events.append(info)
                     else:
-                        stats.already_exists += 1
-                        result_tag = "existing_ticket_update_failed"
+                        await _retry_event("existing_ticket_update_failed")
+                        result_tag = "existing_ticket_update_retry_scheduled"
 
                 # Always update linked events
                 await update_linked_events(db, existing_id, location_name, event.title)
@@ -3044,6 +3180,7 @@ async def process_source_events(
                         if media_changed:
                             await schedule_existing_event_update(db, existing_id)
                     except Exception:
+                        await _retry_event("existing_media_reconcile_failed")
                         logger.warning(
                             "source_parsing: existing media reconcile failed source=%s event_id=%s",
                             event.source_type,
@@ -3122,6 +3259,7 @@ async def process_source_events(
                                 )
                             except asyncio.TimeoutError:
                                 # Preserve poster hashes/URLs even if OCR is too slow.
+                                await _retry_event("ocr_timeout")
                                 poster_media_list, _ = await asyncio.wait_for(
                                     process_media(
                                         raw_images,
@@ -3142,12 +3280,14 @@ async def process_source_events(
                                 len(poster_media_list),
                             )
                     except asyncio.TimeoutError:
+                        await _retry_event("ocr_timeout")
                         logger.warning(
                             "source_parsing: ocr timeout title=%s after %ss",
                             event.title,
                             SOURCE_PARSING_OCR_TIMEOUT_SECONDS,
                         )
                     except Exception as e:
+                        await _retry_event(f"ocr_failed:{type(e).__name__}")
                         logger.warning("source_parsing: ocr failed event=%s error=%s", event.title, e)
 
                 # Add/merge event through Smart Update.
@@ -3160,6 +3300,7 @@ async def process_source_events(
                         current_progress,
                         total_count,
                         poster_media=poster_media_list,
+                        producer_ordinal=i,
                     )
                 )
 
@@ -3197,9 +3338,12 @@ async def process_source_events(
                 elif outcome == "skipped":
                     stats.skipped += 1
                     result_tag = f"{mode_prefix}_skipped"
+                elif outcome == "retry_scheduled":
+                    await _retry_event("smart_update_retry_scheduled")
+                    result_tag = f"{mode_prefix}_retry_scheduled"
                 else:
-                    stats.failed += 1
-                    result_tag = f"{mode_prefix}_failed"
+                    await _retry_event("untyped_or_failed_add_event_outcome")
+                    result_tag = f"{mode_prefix}_retry_scheduled"
 
                 if new_id and outcome in {"added", "updated"}:
                     await reconcile_existing_event_lifecycle(db, new_id, event)
@@ -3210,9 +3354,9 @@ async def process_source_events(
                     if DEBUG_MAX_EVENTS and stats.new_added >= DEBUG_MAX_EVENTS:
                         logger.info("source_parsing: DEBUG limit reached (%d events)", DEBUG_MAX_EVENTS)
                         break
-        except Exception:
-            stats.failed += 1
-            result_tag = "exception"
+        except Exception as exc:
+            await _retry_event(f"exception:{type(exc).__name__}")
+            result_tag = "exception_retry_scheduled"
             logger.exception(
                 "source_parsing: event_exception source=%s title=%s",
                 source,

@@ -3938,6 +3938,126 @@ def startup(
         )
         return job
 
+    if _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=True):
+        try:
+            smart_update_retry_interval = max(
+                15,
+                min(
+                    3600,
+                    int(os.getenv("SMART_UPDATE_RETRY_INTERVAL_SECONDS", "60") or "60"),
+                ),
+            )
+        except ValueError:
+            smart_update_retry_interval = 60
+        try:
+            smart_update_retry_batch = max(
+                1,
+                min(
+                    100,
+                    int(os.getenv("SMART_UPDATE_RETRY_BATCH_SIZE", "25") or "25"),
+                ),
+            )
+        except ValueError:
+            smart_update_retry_batch = 25
+
+        async def smart_update_retry_scheduler(
+            db_obj,
+            _bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            del run_id
+            from smart_event_update import retry_due_smart_update_candidates
+            from smart_update_state import smart_update_funnel_counts
+
+            counters = await retry_due_smart_update_candidates(
+                db_obj,
+                limit=smart_update_retry_batch,
+            )
+            funnel = await smart_update_funnel_counts(db_obj)
+            logging.info(
+                "smart_update_retry_worker counters=%s funnel=%s",
+                counters,
+                funnel,
+            )
+
+        _register_job(
+            "smart_update_retry_worker",
+            _job_wrapper("smart_update_retry_worker", smart_update_retry_scheduler),
+            "interval",
+            id="smart_update_retry_worker",
+            seconds=smart_update_retry_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=smart_update_retry_interval,
+        )
+    else:
+        logging.info(
+            "SCHED skipping smart_update_retry_worker "
+            "(SMART_UPDATE_RETRY_WORKER_ENABLED!=1)"
+        )
+
+    if _env_enabled("VK_CRAWL_CONTINUATION_WORKER_ENABLED", default=True):
+        def _bounded_int(name: str, default: int, low: int, high: int) -> int:
+            try:
+                return max(low, min(high, int(os.getenv(name, str(default)) or default)))
+            except ValueError:
+                return default
+
+        continuation_interval = _bounded_int(
+            "VK_CRAWL_CONTINUATION_INTERVAL_SECONDS", 60, 15, 3600
+        )
+        continuation_batch = _bounded_int(
+            "VK_CRAWL_CONTINUATION_BATCH_SIZE", 2, 1, 25
+        )
+        continuation_pages = _bounded_int(
+            "VK_CRAWL_CONTINUATION_PAGES_PER_JOB", 3, 1, 25
+        )
+        continuation_lease = _bounded_int(
+            "VK_CRAWL_CONTINUATION_LEASE_SECONDS", 300, 30, 3600
+        )
+
+        async def durable_vk_crawl_continuation_scheduler(
+            db_obj,
+            bot_obj,
+            *,
+            run_id: str | None = None,
+        ) -> None:
+            from vk_intake import vk_crawl_continuation_scheduler
+
+            counters = await vk_crawl_continuation_scheduler(
+                db_obj,
+                bot_obj,
+                run_id=run_id,
+                max_jobs=continuation_batch,
+                max_pages_per_job=continuation_pages,
+                lease_seconds=continuation_lease,
+            )
+            logging.info("vk_crawl_continuation_worker counters=%s", counters)
+
+        _register_job(
+            "vk_crawl_continuation_worker",
+            _job_wrapper(
+                "vk_crawl_continuation_worker",
+                durable_vk_crawl_continuation_scheduler,
+            ),
+            "interval",
+            id="vk_crawl_continuation_worker",
+            seconds=continuation_interval,
+            args=[db, bot],
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=continuation_interval,
+        )
+    else:
+        logging.info(
+            "SCHED skipping vk_crawl_continuation_worker "
+            "(VK_CRAWL_CONTINUATION_WORKER_ENABLED!=1)"
+        )
+
     enable_core_schedulers = _env_enabled("ENABLE_CORE_SCHEDULERS", default=True)
     if enable_core_schedulers:
         _register_job(

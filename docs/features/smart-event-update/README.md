@@ -1,5 +1,47 @@
 # Smart Event Update (Интеллектуальный импорт)
 
+## P0 automatic identity and source-decision contract
+
+После `INC-2026-08-10-smart-update-identity-terminal-loss` Smart Update —
+child-resolution boundary, а не второй eventness classifier. Для кандидата с
+`source_disposition=EVENTS_FOUND|MIXED` regex/date/title/venue/promo/recap
+детекторы могут только добавить evidence или инициировать LLM verification; они
+не удаляют child, не ставят `silent` и не создают product terminal. Legacy
+caller без typed source decision проходит существующий LLM eventness verifier;
+provider/schema/DB/vector uncertainty всегда даёт durable retry.
+
+Публичный результат закрыт структурно:
+
+- accepted: `CREATED`, `MERGED`, `NOOP_EXACT_REPLAY`; только они несут
+  `event_id` и разрешают downstream side effects;
+- product terminal: `REJECTED_PRODUCT_POLICY` только вместе с
+  `ProductExclusionReason`; free-form/unknown reason превращается в
+  `RETRY_SCHEDULED`;
+- retry: `RETRY_SCHEDULED` + `RetryReason`; технические причины не
+  исчерпываются в create-distinct;
+- distinct create: `IdentityDistinctReason` (`RELATED_BUT_DISTINCT`,
+  `FESTIVAL_CONTEXT_SIBLING`, `UNSAFE_TO_MERGE`, explicit occurrence conflict,
+  incoherent merge rollback или semantic unknown after bounded adjudication);
+- provenance action: `LifecycleReason` для `ATTACH_CONTEXT`.
+
+`diagnostic_event_id` никогда не является accepted ID. Incoherent merge
+откатывается и создаёт подготовленный distinct Event. Provider/DB/vector failure
+остаётся due retry; только semantic identity unknown после bounded adjudication
+может закончиться distinct create. Occurrence identity выбирается в порядке
+source-native ID → vendor/ticket ID → structured schedule anchor → ordinal
+только как tie-breaker; разные explicit occurrence IDs являются hard distinct
+rail.
+
+Durable authority — `smart_update_candidate_state` плюс append-only
+`smart_update_attempt`; Event/EventSource/facts/terminal attempt коммитятся в
+одной write transaction, а LLM не выполняется под SQLite transaction.
+`EventSource` связывается с `candidate_key`/`occurrence_key`; canonical source URL
+может быть carrier нескольких независимых children. Legacy/structural
+candidate без optional in-memory conflict set означает «нет доказанных
+explicit conflicts», а не technical failure в duplicate probe. Полный
+контракт:
+[`identity-state-machine.md`](identity-state-machine.md).
+
 Автоматический мердж события из разных источников без ручной модерации, с сохранением списка источников и защитой якорных полей.
 
 ## Transport-scoped duration forecast
@@ -158,60 +200,40 @@ must re-render the calendar line even when the event body itself is unchanged.
 - `GEO_REGION_GEMMA_MODEL=gemma-4-31b-it` (default) — Smart Update's region-filter LLM fallback also stays on Gemma 4.
 - `SMART_UPDATE_G4_LOLLIPOP_LIGHT_CREATE=1` — off-by-default production-candidate create path для Gemma 4 migration: тяжёлый `create_bundle` остаётся ответственным за извлечение фактов, а сопутствующая работа делится на лёгкие Gemma 4 native-schema стадии `lollipop.bucket_facts`, `lollipop.prioritize.weight`, `lollipop.prioritize.lead`, `lollipop.editorial.layout` и финальный writer (`smart_update.g4_lollipop_light.final_writer.v3`). Writer выводит `- item` bullets только когда соответствующая секция writer_pack содержит non-empty `literal_items`; для остальных секций требует непрерывной прозы и сливает несколько фактов, отличающихся только именем (композитор/исполнитель/произведение/роль), в одно компактное предложение, чтобы не получалась одно-словная россыпь bullets. Чтобы убрать ложно-положительный `infoblock.leak:LG03` (когда короткое имя площадки естественно встречается в narrative как «в «Сигнале»»), `_g4_lollipop_light_normalize_bucket_payload` помечает `location_name` без признаков адреса (без улицы/цифр/двух запятых) как `narrative_policy=suppress` для writer-pack infoblock-валидатора; при адресоподобном `location_name` (`ул.`, цифры, две запятые) leak-guard сохраняется. `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4|4o|adaptive` выбирает writer lane; в adaptive dense packs (`facts_text_clean` больше `SMART_UPDATE_G4_LOLLIPOP_LIGHT_4O_FACT_THRESHOLD`, default `14`) идут в один явный final `4o` writer call, остальные остаются на Gemma 4. Production canary должен ставить `SMART_UPDATE_G4_LOLLIPOP_LIGHT_WRITER_LANE=gemma4`, если `FOUR_O_TOKEN` намеренно не выдан, иначе writer попытается dispatch 4o call, который без авторизации сразу падает (token не тратится, но trace покажет `writer.final_4o failed` и работа уйдёт в legacy fact-first fallback вместо новой v3-prose-prompt дорожки). Лёгкие native stages ограничены `SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_TIMEOUT_SEC` (default `70`) и имеют короткий retry на transient provider failures (`SMART_UPDATE_G4_LOLLIPOP_LIGHT_STAGE_RETRIES`, default `2`).
 - `SMART_UPDATE_G4_SPLIT_CREATE=1` — экспериментальный вариант `g4-split-create-v2-rich-facts` для миграции на Gemma 4: create-path не вызывает тяжёлый `create_bundle`, а делает quality-critical `rich_facts_extract` с секциями фактов, ответственный `split_description_writer` для основного Telegraph/body текста и лёгкий `split_derived_fields` для `short_description` / `search_digest`. По умолчанию выключен; `rich_facts_extract` остаётся тяжёлым fact-ledger этапом и может откатиться с native schema на prompt-schema. Основной writer не запускает повторный prompt-schema вызов, пока явно не задан `SMART_UPDATE_G4_SPLIT_CREATE_PROMPT_FALLBACK=1`; лёгкий `split_derived_fields` может откатиться на prompt-schema. Split-create стадии отключают legacy 4o fallback, чтобы Gemma 4 benchmark оставался model-clean. Основной writer ограничен `SMART_UPDATE_G4_DESCRIPTION_WRITER_TIMEOUT_SEC` (default `90`), derived stage — `SMART_UPDATE_G4_DERIVED_FIELDS_TIMEOUT_SEC` (default `20`). Если description writer недоступен после успешного извлечения фактов, create использует bounded fact-ledger fallback вместо старого многошагового fact-first/rewrite/reflow каскада. Для лекций/паблик-токов `rich_facts_extract` обязан сохранять каждый блок `ИМЯ` + роль как отдельный named-roster fact; `split_description_writer` обязан включать такие факты в narrative и не сворачивать участников в категории вроде «краеведы/учёные/эксперты». Если draft writer попал под logistics reject, Smart Update делает LLM-pass `split_description_writer_remove_logistics`, чтобы убрать повтор даты/адреса/билетов без потери фактов, и только потом переходит к fallback.
-- `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce` — create-path identity gate after the widened-recall `_llm_dedup_adjudicator` and before a new event row is created. `off` is the default and does nothing. `shadow` builds/logs a structured verdict but never changes behavior. `enforce` may veto create on narrow deterministic evidence (same source identity, same ticket+slot, same poster identity) or vector identity evidence from `related_v1`/`search_v3`; it never auto-merges. If the gate itself errors in `enforce`, Smart Update fails safe with `skipped_identity_gate` instead of creating or merging automatically. Vector recall is controlled by `SMART_UPDATE_IDENTITY_VECTOR_RECALL`, `SMART_UPDATE_IDENTITY_VECTOR_TOP_K`, `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY`, `SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS`, `SMART_UPDATE_IDENTITY_EMBEDDING_MODEL`, `SMART_UPDATE_IDENTITY_EMBEDDING_DIM`, and `SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV`.
-- `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` — merge-path identity gate after final `match_event` selection and before any merge side effects (`event` fields, `event_source`, posters, facts, outbox/jobs). This is a separate LLM-first decision-only stage: the model classifies the candidate vs existing row as `same_event` / `source_update` / `related_but_distinct` / `festival_context_sibling` / `unsafe_to_merge`, and `enforce` returns `skipped_identity_gate` for unsafe/review verdicts instead of mutating the matched row. Deterministic code is limited to narrow fail-closed structural rails (for example single-slot lecture vs long-running exhibition with unrelated title/type) and does not replace the LLM semantic decision. Decisions are persisted to `event_identity_decision_log` with `decision_payload.stage=merge_identity_gate`.
-- Production runs both identity gates in `enforce`. A merge verdict with any
-  blocking conflict, `related_but_distinct`, `festival_context_sibling`,
-  `unsafe_to_merge`, `review_required`, malformed/unavailable provider output,
-  or an internal gate error fails closed before Event, EventSource, facts,
-  posters, festival queue or publication/outbox writes. The append-only identity
-  decision log is the only permitted write for a rejected/reviewed decision.
+- `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce` and
+  `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` keep their existing
+  create/merge semantic evidence stages. In `enforce`, a same/source decision
+  merges, a distinct/sibling/unsafe or explicit occurrence conflict creates a
+  distinct Event, and provider/schema/vector/DB uncertainty becomes a durable
+  bounded retry. There is no terminal veto or human review. Production runs
+  both gates in `enforce`. Vector recall remains controlled by
+  `SMART_UPDATE_IDENTITY_VECTOR_RECALL`, `SMART_UPDATE_IDENTITY_VECTOR_TOP_K`,
+  `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY`,
+  `SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS`,
+  `SMART_UPDATE_IDENTITY_EMBEDDING_MODEL`,
+  `SMART_UPDATE_IDENTITY_EMBEDDING_DIM`, and
+  `SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV`.
 - After switching the identity gate to `enforce`, production should also enable the read-only `/vystavki/` acceptance audit with `ENABLE_EXHIBITION_DUPLICATE_AUDIT=1`; it records `ops_run(kind='exhibition_duplicate_audit')` and fails/alerts on high-confidence public exhibition duplicate pairs during the 14-day rollout window.
 
-### Canonical source identity and exact replay
+### Canonical source identity and automatic terminals
 
-Every newly accepted Smart Update source carries three additive identity
-attributes on `EventSource`:
+The canonical five-terminal result, `UPSERT_EVENT` / `ATTACH_CONTEXT` intents,
+stable producer-child and occurrence keys, candidate-key/occurrence-scoped
+EventSource uniqueness, durable attempt ledger, retry rules, caller/queue
+contract, funnel balance, recovery, migration, and rollback are specified in
+[`identity-state-machine.md`](identity-state-machine.md).
 
-- `canonical_source_url` — presentation/tracking variants converge, while a
-  semantic ticket SPA route remains part of the identity;
-- `source_role=identity_bearing|context_only` — a direct event/slot source is
-  exclusive to one event identity, while an explicitly classified programme or
-  festival overview may be contextual for several children;
-- `source_fingerprint` — stable SHA-256 of the pre-normalization input packet.
+Exact replay means the same canonical source, candidate/occurrence key, and
+packet fingerprint. It performs zero provider or Event/EventSource/fact/poster/
+outbox work; only its durable attempt receipt may be written. A changed packet
+with the same key proceeds as an update, while a different key in the same
+carrier may create a distinct Event.
 
-Canonicalization collapses Telegram host, `/s/`, `?single`, case and trailing
-slash variants; removes tracking parameters; normalizes `#buy` and `#/buy`
-ticket routes without erasing ticket event ID/date/time; and keeps distinct
-ticket IDs distinct. A nonblank identity-bearing canonical source is protected
-by the SQLite partial uniqueness invariant. Legacy rows stay unclassified until
-an evidence-backed intake/repair touches them; shared historical sources are
-never blanket reclassified.
-
-New Smart Update, exact official-parser, VK cancellation and multi-event
-Telegram source writes always provide a canonical URL and an explicit role.
-Renderer-only reconstruction of legacy provenance is explicitly
-`context_only`; legacy migration rows may remain `NULL` rather than being
-guessed into an identity role.
-
-`context_only` never participates in SAME_EVENT matching and cannot authorize
-changes to title, occurrence, type, location, ticket/price or festival identity.
-It may be attached only as explicitly grounded non-identity provenance.
-Canonical-NULL legacy rows are excluded from source-URL force matching. Newly
-reconstructed legacy provenance is written explicitly as `context_only`; it can
-no longer bypass the identity-bearing uniqueness contract or become a raw-URL
-merge anchor.
-
-Before the first provider call or database write, Smart Update fingerprints the
-canonical URL, source type, normalized original text, message/post identity,
-stable media hashes and meaningful structured input fields. Processing-time
-timestamps, request IDs and generated/provider output are excluded. When the
-same canonical source is already accepted on the same event with the identical
-fingerprint, Smart Update returns `noop_exact_source_replay` with zero provider,
-Event, source/fact/poster/age and outbox work. A changed packet at the same URL
-continues normally; an ambiguous or cross-event identity binding goes to
-`review_required` rather than being treated as replay.
-  For read-only rollout evidence independent of the scheduler, run `python3 scripts/inspect/audit_identity_gate_rollout.py --db /data/db.sqlite --since-days 14 --format both`; it reports decision/veto/fail-safe/vector-error counts from `event_identity_decision_log` and env-readiness booleans without printing secrets. Low-risk vector recall failures that are allowed to continue are still persisted in `decision_payload.suppressed_vector_error` and counted as vector errors.
+For read-only rollout evidence independent of the scheduler, run
+`python3 scripts/inspect/audit_identity_gate_rollout.py --db /data/db.sqlite --since-days 14 --format both`.
+It reports decision/gate/vector-error evidence
+without printing secrets; candidate and attempt balance is reported separately
+by the state-machine audit.
 
 Канонический контракт и детали реализации:
 
@@ -222,16 +244,15 @@ continues normally; an ambiguous or cross-event identity binding goes to
 - чувствительные LLM-факты из linked-source merge/create (возрастные ограничения, лимиты группы/мест, длительность, концертно-музыкальные утверждения и т.п.) попадают в `event_source_fact` и публичный fact-first narrative только если подтверждаются `source_text` / `raw_excerpt` / OCR этого же кандидата; неподтверждённые факты отбрасываются как hallucination-prone.
 
 
-## VK intake quality boundary (INC-2026-07-07)
+## VK/source parse quality boundary
 
-Vector identity recall is not a quality approval. For VK-originated candidates, the LLM remains responsible for semantic extraction, but the intake boundary now adds narrow fail-closed guardrails before Smart Update create/fanout:
-
-- prompt guidance requires a structured footer like `📅 31 июля, начало в 21:00` to override contextual prose dates, forbids schedule fragments such as `пятница 22:00` as titles, and tells the model to leave unsupported `location_name` empty instead of inferring a known venue;
-- unsupported venue names are cleared when neither source text, OCR, source title/default hint nor location hint contains the venue evidence; this prevents an identity/vector `allow_create` from publishing a hallucinated place;
-- VK contact mentions that arrive as `tg://user?id=...` are converted to public `https://vk.com/id...` links for VK-source events;
-- for multi-event VK posts, one bounded Gemma media-assignment contract receives all child drafts, source/OCR and retrieval scores and decides specific/shared poster ownership in one request per source post (not per child/photo); if it is unavailable, only an unambiguous high-confidence retrieval match survives and raw-gallery fallback remains disabled.
-
-These guards do not rewrite event meaning. They either pass source-grounded LLM output through, normalize transport-safe links, or fail closed/drop ambiguous media until the LLM/source provides grounded evidence.
+Smart Update получает уже типизированный source verdict и полный evidence
+manifest от producer. Source/OCR-grounded normalization ссылок, placeholder
+очистка и reference venue normalization допустимы; подозрительная площадка,
+weak title, date/OCR conflict, collapsed occurrences или incomplete evidence
+маршрутизируются в existing LLM verifier/retry. Ни один такой сигнал не удаляет
+положительный child или siblings. Media assignment остаётся отдельным
+условным media task и не владеет eventness.
 
 ## Что реализовано
 
@@ -322,10 +343,7 @@ These guards do not rewrite event meaning. They either pass source-grounded LLM 
     - если LLM всё же “раздула” описание (hallucination-prone вода/клише), Smart Update делает дополнительный LLM‑pass `shrink_desc` (без добавления новых фактов), чтобы привести объём к бюджету источников.
   - лимит генерации рерайта Gemma настраивается через `SMART_UPDATE_REWRITE_MAX_TOKENS` (важно: это не “краткий тизер”, а полный текст для Telegraph), а сколько исходного `source_text` попадает в prompt рерайта — через `SMART_UPDATE_REWRITE_SOURCE_MAX_CHARS` (полезно для длинных страниц/программ).
   - лимиты мерджа (LLM JSON merge) настраиваются отдельно: `SMART_UPDATE_MERGE_MAX_TOKENS`, `SMART_UPDATE_MERGE_EVENT_DESC_MAX_CHARS`, `SMART_UPDATE_MERGE_CANDIDATE_TEXT_MAX_CHARS`.
-  - детерминированные non-event фильтры (без LLM) для авто-источников VK/TG:
-    - рубрики типа `Фото дня` считаются **подозрительными** и не создают событие, если нет сильных признаков реального мероприятия (время/период/приглашение/билеты/регистрация).
-    - выставочные/ярмарочные teaser-кандидаты без source-grounded exact day/range/end date скипаются как `skipped_non_event:unsupported_exhibition_teaser_date`; Smart Update не должен превращать `в мае откроем`, `готовим выставку`, `анонс через пару дней` или `точную дату анонсируем позже` в первое число месяца или дату публикации.
-    - `course_promo` guard требует сильный учебный/курсовой сигнал; одно только `куратор*` / `кураторская экскурсия` внутри датированного, билетного объявления выставки не должно блокировать импорт как курс.
+  - legacy non-event/promo/recap/date detectors сохранены только как diagnostic hints. Для automatic VK/TG они не имеют terminal authority: semantic product exclusion приходит из complete-evidence structured source verdict, а конфликт или uncertainty планирует verification/retry.
   - в Telegram UI длинный `description` показывается усечённо (по умолчанию до 900 символов) чтобы не упираться в лимит 4096 символов сообщения; настраивается через `EVENT_DESCRIPTION_TELEGRAM_PREVIEW_CHARS`. Полный текст публикуется на Telegraph.
 - Санитаризация текста:
   - хештеги на страницах события запрещаются инструкциями LLM (rewrite/merge/facts/reflow); детерминированный regex-strip `#...` в event-pipeline не используется.
@@ -338,12 +356,10 @@ These guards do not rewrite event meaning. They either pass source-grounded LLM 
   - разделители `---` / `<hr>` в описании считаются **внутренними** (body dividers): они не должны “обрывать” основной текст при вставке месячной навигации в футер Telegraph.
   - для коротких Telegram-списков (2–6 пунктов) есть safety‑net: если рерайт потерял список целиком, он добавляется в `description` как отдельный блок (без ссылок/контактов).
   - для коротких Telegram-сниппетов (примерно до 350 символов) рерайт дополнительно ограничивается по длине (≈ исходник + 100) и вычищает типовые нейро‑клише (например «это создаёт ...»), чтобы не раздувать текст и не “допридумывать”.
-- Фильтры:
-  - розыгрыши билетов (ticket giveaway): Smart Update не делает детерминированного “вырезания” текста. LLM получает исходный текст и по инструкции убирает механику розыгрыша, сохраняя факты о событии (если они есть). Если в тексте нет фактов события (например, есть только дедлайн/«итоги 14.03») — кандидаты скипаются (`skipped_giveaway`, reason=`giveaway_no_event`).
-    - prize-only посты тоже скипаются: если матч/концерт/другое событие упомянуто только как приз розыгрыша (`разыгрываем билеты на ...`, `главный приз — два билета ...`) и нет отдельного анонса самого посещаемого события, Smart Update не создаёт событие.
-  - поздравления (не‑ивент контент) не импортируются как события (`skipped_promo`).
+- Semantic filters:
+  - giveaway/promo/recap wording передаётся source LLM как evidence. Complete-evidence typed verdict может подтвердить no-event/product exclusion; положительный event child не отменяется повторным regex-классификатором Smart Update.
   - даты без явного года теперь якорятся к дате публикации источника с окном `recent past`: если пост вышел `12 марта 2026`, то `11 марта` трактуется как `2026-03-11`, а не `2027-03-11`; на следующий год дата переносится только когда anchor-year вариант действительно слишком далеко в прошлом.
-  - прошедшие события (когда `end_date`/дата события строго меньше сегодняшней **локальной** даты) скипаются (`skipped_past_event`, reason=`past_event`), чтобы не создавать лишние события/Telegraph/ICS. По умолчанию включено; отключение — `SMART_UPDATE_SKIP_PAST_EVENTS=0`. Для ручных операторских действий (`source_type=bot`) фильтр не применяется.
+  - Детерминированный `possible_past_event` — только semantic hint/verification fact. Он не может удалить positive typed source child или запустить `skipped_past_event`; конфликт publish date/source/OCR/event date разрешает source LLM/verifier.
   - посты‑расписания (несколько событий в одном Telegram сообщении): LLM инструктируется писать описание только про **конкретное** событие и не переносить “чужие” строки расписания. Детерминированного разрезания/удаления расписания после LLM сейчас нет.
   - строки вида `DD.MM | Название` считаются **низкосигнальным шумом** и должны не попадать в итоговый narrative‑текст по инструкции LLM.
   - LLM отдельно инструктируется держать narrative-структуру: короткие абзацы (обычно 1-2 предложения), без «стены текста», с логичным порядком фактов.
@@ -386,7 +402,7 @@ These guards do not rewrite event meaning. They either pass source-grounded LLM 
 - Источники:
   - таблица `event_source` хранит все источники события;
   - idempotency по `telegram_scanned_message`;
-  - если `check_source_url=True`, Smart Update делает быстрый idempotency‑lookup по `event_source` и возвращает `skipped_same_source_url`, если такой источник уже привязан к событию;
+  - URL сам по себе не является idempotency verdict: exact replay требует совпадения stable candidate/occurrence identity и fingerprint и возвращает typed `NOOP_EXACT_REPLAY`; изменённый packet проходит update/match pipeline;
   - если `check_source_url=False` (переобработка разрешена), Smart Update всё равно пытается **сойтись** в уже созданное событие по якорям источника, чтобы ретраи/повторные импорты не плодили дубли:
     - Telegram: `(source_message_id + source_url)`,
     - VK: `source_vk_post_url/source_post_url`,
@@ -470,7 +486,7 @@ Smart Update содержит детекцию фестивалей как ча�
 ## Примечания
 
 - Smart Update защищает якорные поля и дополняет данные из разных источников.
-- `skipped_non_event:non_event_notice` и `skipped_non_event:online_event` не должны перекрывать LLM-grounded физическое событие с датой/временем/площадкой/ценой. Stream/broadcast wording считается online-only только когда нет физических event anchors; discount/ticket wording inside an excursion/invitation stays on the normal create/update path.
+- Legacy `skipped_non_event:*` strings are compatibility inputs only and cannot authorize a terminal without a closed `ProductExclusionReason`. Unknown/free-form reasons fail closed to durable retry.
 - Каждый вызов Smart Update должен иметь заполненные `source_type` и `source_url` (они влияют на лог источников и счётчик в Telegraph).
 - Для ручного добавления через бота (`/addevent`, `/addevent_raw`) источник фиксируется как **bot**.
   - Для источника `bot` deterministic region filter не блокирует создание при пустом `city`.
@@ -522,18 +538,10 @@ Smart Update содержит детекцию фестивалей как ча�
 - Географические слова `остров` и `озеро` также не являются identity-токенами площадки: `Верхнее озеро, остров Шайба` не может fuzzy-схлопнуться в `Остров Канта` только по слову `остров`.
 - После reference-нормализации подозрительные social-source локации проходят отдельный LLM-first `location_grounding_review`. Детерминированный слой только маршрутизирует случаи, где итоговая площадка/адрес отсутствуют в source+OCR, reference-recall нашёл более конкретную площадку, **адрес подтверждён, но подставленное каноническое `location_name` в источнике отсутствует**, `location_name` совпал со структурированным названием фестиваля/праздника, либо явный attendee-facing marker (`📍`, `место`, `площадка`) называет не candidate label; решение `keep|repair|uncertain` принимает LLM. Подтверждённая строка адреса сама по себе не доказывает имя организации/площадки, а название клуба/программы не становится venue только из-за дословного присутствия в тексте: это закрывает случаи `Советский 12, студия 809` → `ИЦАЭ` и `Детский книжный клуб` → `Летний читальный зал`. После `llm_repair` reference-normalization может привести только source-grounded эквивалент; если она снова подставляет неподтверждённое имя, сохраняется LLM-repaired venue вместо повторного deterministic overwrite. Поэтому source-grounded фраза вроде `День города в Янтарном` не принимается за venue только из-за дословного присутствия в источнике: если источник подтверждает лишь город/посёлок, review fail-closes и не синтезирует площадку. `repair` принимается только с дословной source/OCR evidence quote и source-grounded новым значением, а provider/grounding uncertainty fail-closes до create/merge/publication. Это предотвращает подмены вида парк `Юность` → одноимённый дворец спорта, `остров Шайба` → `Остров Канта`, `Бастион Холл` → широкий квартал `Понарт`, `Советский 12` → `ИЦАЭ` и programme/occasion label → venue. Эти triggers добавляют не более одного существующего grounding-вызова только high-risk кандидатам; это не per-event стадия и не deterministic semantic rewrite.
 - Цель: стабильный dedup/merge и единообразный summary-блок Telegraph.
-- Детерминированные ранние фильтры “не-событий” (без LLM), чтобы не создавать псевдо-ивенты:
-  - `skipped_non_event:non_event_notice` (инфо‑объявления/госуслуги и т.п.)
-  - `skipped_non_event:course_promo` (реклама курсов/обучения без конкретного разового события)
-  - `skipped_non_event:service_promo` (промо услуг/пакетных программ «организуем/бронирование открыто» без конкретной даты/времени)
-  - `skipped_non_event:work_schedule` (только явные посты про режим/график/часы работы учреждений или закрытие/санитарный день; обычные лекции/шоу/фестивальные слоты в музеях/библиотеках или на адресах вроде `Музейная аллея` не режутся этим guard — их смысл должен решаться LLM/extractor path)
-  - `skipped_non_event:venue_status_update` (статус‑обновления площадок: «отсрочка до …», новости о закрытии/выселении/аренде, петиции/сборы)
-  - `skipped_non_event:completed_event_report` (report/recap‑посты о уже прошедшем мероприятии: прошедшее время, «приняли участие/встреча прошла/выразили благодарность», без invite/registration/ticket сигналов; continuation-анонсы вроде `следующий показ будет ...`, `в следующий раз встречаемся ...`, `вас вновь ждёт ...` не режем этим guard и оставляем в event-пайплайне; отдельный узкий safety-net режет recap, где есть только `следующий фестиваль` + даты и `локация/место/адрес уточняется`, потому что это ещё не source-grounded future event)
-  - `skipped_non_event:retrospective_future_teaser` (узкий fail-closed guard для report/recap‑постов, где основная часть описывает уже прошедшее событие, а в конце есть только короткий teaser вида `ждём вас на следующей выставке ...`; если LLM/extractor добавил venue/address, которых нет в source text, Smart Update не публикует карточку автоматически и оставляет кейс для ручного/LLM reprocess; форма добавлена по `INC-2026-07-02`/E6691).
-  - `skipped_non_event:event_logistics_notice` (операционные updates для уже пришедших/купивших гостей: «важная информация для гостей/зрителей», вход/проход/парковка/навигация/очереди/гардероб; полноценные новые invite‑посты с датой, названием, площадкой и ticket/registration сигналом не режутся)
-  - `skipped_non_event:utility_outage` (коммунальные отключения: свет/вода/тепло/газ)
-  - `skipped_non_event:road_closure` (перекрытия/ограничения движения/проезда)
-  - `skipped_non_event:online_event` применяется только к онлайн-only форматам (вебинар/Zoom/стрим/трансляция); фраза «онлайн-регистрация» при офлайн-площадке, маршруте или месте старта не считается онлайн-only событием.
+- Legacy eventness detectors in this layer are warning/verification routers only.
+  Positive typed source children are never converted to `skipped_non_event`;
+  incomplete/contradictory cases return typed retry.
+
 
 ## Summary-блок для выставок
 
@@ -591,18 +599,12 @@ Smart Update содержит детекцию фестивалей как ча�
   - если extractor нашёл явно подтверждённую текстом off-site площадку/адрес, candidate сохраняет её вместо слепой подмены на `default_location`.
 - В сценариях E2E есть проверка, что локация события из @kaliningradlibrary остаётся «Научная библиотека», даже если OCR даёт шум.
 
-### Дальние даты и конфликт с афишей (risk‑guard)
+### Дальние даты и конфликт с афишей
 
-Проблема: источники (особенно VK) иногда содержат **конфликтующие даты** (например в тексте одно, на афише другое). Ошибка даты у события дальше чем на несколько месяцев становится максимально заметной (сразу “торчит” всем в агрегатах/анонсах).
-
-Митигируемо (встроено в Smart Update create‑путь):
-- если извлечённая дата события дальше, чем `SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS` месяцев от текущей даты,
-  и OCR афиши содержит **явную** дату `DD/MM` (или `DD <месяц>`) с другим `day/month`,
-  то событие создаётся как `event.silent=1` (не попадает в дайджесты/анонсы/ICS/VK sync) и в лог источника добавляется `ℹ️` заметка с причиной.
-- оператор проверяет `/log <id>` (и/или исходник) и при необходимости снимает `silent` через меню редактирования.
-
-ENV:
-- `SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS` (default: `6`, `0` = отключить guard).
+Date/OCR mismatch — contradiction evidence for source verification. Smart Update
+может записать diagnostic note, но не ставит accepted child в `event.silent=1` и
+не отменяет его публикацию. Неоднозначная или технически недоступная verification
+даёт `RETRY_SCHEDULED`.
 
 ### Free / Location / Duplicate Fail-Closed Guards
 
@@ -610,7 +612,7 @@ LLM остаётся владельцем смысловых решений, н�
 
 - `is_free=true` не выводится из `ticket_price_min=0`; free-флаг принимается только как явный LLM/source факт. Положительная цена, розыгрыш билетов или формулировка «входит во входной билет» снимают free-флаг.
 - VK intake больше не делает библиотечные события бесплатными только по площадке: нужна явная формулировка вроде `вход свободный`/`бесплатно` или LLM `is_free=true`.
-- rental/booking availability (`аренда куполов`, свободные домики/залы, price tiers/варианты вместимости) скипается как `skipped_non_event:rental_booking`, если нет отдельной публичной программы.
+- rental/booking wording is a semantic hint; only the typed source decision may confirm a product exclusion.
 - duplicate matching до LLM учитывает normalized specific ticket URL + same date/place даже при пустом времени и rewritten title, а также same date/time/place + near-identical source text без требования одинакового заголовка.
 - Telegram `default_location` остаётся prior, но не подставляется вместо неподтверждённой off-site/prose локации: в event row попадает known/reference/text-grounded площадка или candidate fail-closed.
 
@@ -797,14 +799,17 @@ old SQLite snapshots are treated as absent schema, so old DB rows still export
 if their required public fields are valid.
 
 Identity gate observability is persisted in `event_identity_decision_log` for
-every enabled create-path gate invocation, including allow/veto/fail-safe
-results and compact vector evidence.  Newly created events also store
+every enabled create-path gate invocation, including allow/retry/distinct
+evidence and compact vector evidence. Newly created events also store
 `date_provenance`, `date_confidence`, `date_is_inferred`,
 `end_date_provenance`, and `end_date_confidence` derived from source/OCR
-grounding.  Immediately before inserting a new event row, Smart Update reruns a
-cheap duplicate probe inside the create transaction window; if it finds a fresh
-duplicate it records a decision-log row and returns `skipped_identity_gate`
-instead of creating another public row.
+grounding. Immediately before inserting a new event row, Smart Update reruns a
+cheap duplicate probe at the final write boundary. A fresh authoritative match
+is reloaded and revalidated in the same facade operation: a confirmed duplicate
+receives the keyed source packet and returns `MERGED`, while a stale/disproved
+match proceeds as distinct `CREATED`. Only a missing authoritative row or
+transient storage failure rolls back to durable `RETRY_SCHEDULED`; the probe
+never emits a veto/review terminal and does not add another LLM pass.
 
 The `/vystavki/` enforce rollout is monitored independently from page rendering
 with `scripts/inspect/audit_public_exhibition_duplicates.py`.  It scans the

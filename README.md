@@ -3,59 +3,71 @@
 Telegram bot for publishing event announcements. Daily announcements can also be posted to a VK group.
 Use `/regdailychannels` and `/daily` to manage both Telegram channels and the VK group including posting times.
 
-Superadmins can use `/vk` to manage VK Intake: add or list sources, check or review events, and open the queue summary. The review UI highlights the bucket (URGENT/SOON/LONG/FAR) that produced the current card so operators understand the selection. Команда `/ocrtest` помогает сравнить распознавание афиш между `gpt-4o-mini` и `gpt-4o` на загруженных постерах.
+Superadmins can use `/vk` to configure VK sources and inspect ingestion state.
+The manual queue/review screens remain diagnostic/admin tools; they are not a
+required admission or terminal step. Команда `/ocrtest` помогает сравнить
+распознавание афиш на загруженных постерах.
 
-## VK Intake & Review v1.1
+## VK automatic LLM-first ingestion
 
 Commands:
 
-- `/vk` — add/list sources, check/review events, and open queue summary.
-- `/vk_queue` — show VK inbox summary (pending/locked/skipped/imported/rejected) and a "🔎 Проверить события" button to start the review flow.
-- `/vk_misses [N]` — superadmins review fresh misses sampled from Supabase: the bot loads the post text and up to ten images, shows the filter reason and matched keywords, and records feedback for "На доработку" to `VK_MISS_REVIEW_FILE` (default `/data/vk_miss_review.md`).
+- `/vk` — add/list configured sources and open diagnostic queue state.
+- `/vk_queue` — inspect the compatibility inbox and, when debugging, open its
+  legacy manual review surface.
+- `/vk_misses [N]` — inspect legacy discovery hints sampled to Supabase. Keyword
+  and date matches shown here are diagnostics only and never decide admission.
 - `/vk_crawl_now [--backfill-days=N]` — run VK crawling now (admin only); reports "добавлено N, всего постов M" to the admin chat. Passing `--backfill-days=N` forces a full backfill with a horizon of up to `N` days (capped at 60 to avoid excessive API calls); without the option the incremental mode is used.
+- `/vk_auto_import [--limit=N]` — run the same automatic typed consumer used by
+  the scheduler; no accept/reject click is required.
 
-Background crawling collects posts from configured VK communities and filters
-them by event keywords and date patterns. Matching posts land in the persistent
-`vk_inbox` queue where an operator can accept, enrich with extra info, reject or
-skip a candidate. Accepted items go through the standard import pipeline to
-create a Telegraph page and calendar links. After each import the admin chat
-receives links to the generated Telegraph and ICS pages, and the operator can
-manually repost the source to the Afisha VK group via a dedicated button. Choosing
-the ✂️ "Short post" action shows the draft with Publish/Edit buttons in the same
-chat where the operator clicked. The
-batch can be finished with "🧹 Завершить…" which sequentially rebuilds all
-affected month pages. Operators can run `/vk_queue` to see current inbox counts
-and get a button to start reviewing candidates.
+Every post fetched from a configured VK source inside the technical crawl
+horizon follows one durable path:
 
-When the reviewer taps «Создать историю», the bot first asks whether extra
-editor guidance is needed. Selecting «Да, нужны правки» opens a short reply
-prompt where the operator can describe tone, required facts or off-limit
-topics. Send the message to save it, or skip by tapping «Пропустить», leaving
-the field empty, or sending `-`. Answering «Нет, всё понятно» proceeds without
-collecting extra text. The yes/no choice and any saved instructions are then
-inserted into both 4o prompts that produce the outline and final VK story so
-the generation follows the editor’s decisions.
+```text
+configured source -> immutable raw source packet/revision
+  -> discovery/date hints (priority and verification only)
+  -> attachment/OCR evidence manifest
+  -> automatic typed SourceParseDecision
+  -> optional conditional contradiction verification
+  -> Smart Update for event children and lifecycle actions
+  -> closed typed automatic outcome or durable due retry
+```
 
-Even terse posts—such as a single photo with an empty caption—also enter the
-queue and are marked as **Ожидает OCR** so operators know they still require
-text extraction before review.
+Keyword/date patterns and `event_ts_hint` never decide whether a fetched post
+enters the durable inbox. A missing, old, or inaccurate hint changes ordering at
+most; it does not reject the carrier. Blank/photo-only posts are persisted before
+OCR and semantic parsing. The evidence manifest truthfully records attachment
+counts, included OCR blocks, omissions, unavailability, and truncation, so
+incomplete evidence cannot be labelled confirmed no-event.
 
-### Bucket windows and priorities
+Typed source dispositions are closed: `EVENTS_FOUND`, `LIFECYCLE_ONLY`, `MIXED`,
+`CONFIRMED_NO_EVENT`, or `RETRY_REQUIRED`. Technical/provider/schema/quota
+failures stay non-terminal and due for bounded automatic retry. Only typed
+accepted Smart Update outcomes schedule downstream Telegraph, ICS, publication,
+and page rebuild work; diagnostic IDs do not count as accepted events.
 
-Each queue item is assigned to a time-based bucket by comparing its `event_ts_hint` with the current moment:
+`CONFIRMED_NO_EVENT` additionally requires exactly one closed
+`SourceNoEventReason`: `NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`,
+`REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY`, or `OUT_OF_SCOPE`. Missing,
+unknown, or reason-on-a-positive disposition is a schema retry, never a terminal
+negative. One shared pure contradiction collector may request at most one
+fact-only verifier; verification preserves positive children and uncertainty
+remains retryable. The prompt wording is canonical in
+[`docs/llm/prompts.md`](docs/llm/prompts.md), not duplicated here.
 
-- **URGENT** – events happening right now or within the next 48 hours (`VK_REVIEW_URGENT_MAX_H`). These are always served first if any exist.
-- **SOON** – events between the urgent horizon and 14 days ahead (`VK_REVIEW_SOON_MAX_D`).
-- **LONG** – events between the SOON limit and 30 days ahead (`VK_REVIEW_LONG_MAX_D`).
-- **FAR** – events with hints beyond the LONG limit or without a parsed date at all.
+VK crawl continuations remember the deepest durable `(date, post_id)` boundary.
+A repeated fingerprint, full duplicate page, or boundary with no deeper
+progress becomes typed `OFFSET_DRIFT`/`NO_PROGRESS` retry with an offset rebase;
+it is never proof of completion. Only an empty page, short page, backfill
+horizon, or original incremental cursor overlap closes a continuation. Legacy
+rows that were incorrectly closed on an exact full page are reopened.
 
-Items with hints older than two hours (`VK_REVIEW_REJECT_H`) are automatically rejected and, if the queue is empty, previously skipped cards are re-opened. Within the SOON/LONG/FAR buckets the reviewer sees cards chosen by a weighted lottery that multiplies the bucket size by its weight (`VK_REVIEW_W_SOON=3`, `VK_REVIEW_W_LONG=2`, `VK_REVIEW_W_FAR=6`). After five non-FAR selections (`VK_REVIEW_FAR_GAP_K=5`) the system forces a FAR pick as a streak breaker so distant events do not get starved.
-
-Within the winning bucket, cards are ordered by date with a tiny per-`group_id` jitter scaled by the square root of that group’s queue size. This spreads reviews across sources even when one community produces a large batch of similar events.
-
-Reposts use images from the original post, link and doc attachments rely on their
-previews, and only preview frames from videos are shown—video files are never
-downloaded.
+The production VK auto-import scheduler is enabled in `fly.toml` and drains the
+queue automatically at configured local slots. Manual review, miss samples,
+short-post/story tools, and legacy queue buckets remain available for diagnosis
+or editorial administration but are not the canonical ingestion workflow. See
+[`docs/features/vk-auto-queue/README.md`](docs/features/vk-auto-queue/README.md).
 
 This is an MVP using **aiogram 3** and SQLite. It is designed for deployment on
 Fly.io with a webhook.
@@ -243,16 +255,11 @@ line under the button row. The command accepts dates like `2025-07-10`,
   export VK_CRAWL_BACKFILL_DAYS=14
   export VK_CRAWL_BACKFILL_AFTER_IDLE_H=24
   export VK_CRAWL_JITTER_SEC=600
-  export VK_REVIEW_REJECT_H=2         # reject hints older than this many hours
-  export VK_REVIEW_URGENT_MAX_H=48    # URGENT bucket spans up to this many hours ahead
-  export VK_REVIEW_SOON_MAX_D=14      # SOON bucket reaches this many days ahead
-  export VK_REVIEW_LONG_MAX_D=30      # LONG bucket extends to this many days ahead
-  export VK_REVIEW_W_SOON=3           # weight for SOON in the bucket lottery
-  export VK_REVIEW_W_LONG=2           # weight for LONG in the bucket lottery
-  export VK_REVIEW_W_FAR=6            # weight for FAR in the bucket lottery
-  export VK_REVIEW_FAR_GAP_K=5        # force FAR after this many non-FAR picks
-  # keyword matching: regex by default; set to true to use pymorphy3 lemmas
-  export VK_USE_PYMORPHY=false
+  # Production keeps automatic typed ingestion on; local runs opt in explicitly.
+  export ENABLE_VK_AUTO_IMPORT=1
+  export VK_AUTO_IMPORT_TIMES_LOCAL=06:15,10:15,12:00,15:30,18:30
+  export VK_AUTO_IMPORT_TZ=Europe/Kaliningrad
+  export VK_AUTO_IMPORT_LIMIT=15
   python main.py
   ```
 
@@ -261,7 +268,9 @@ line under the button row. The command accepts dates like `2025-07-10`,
 Каноническая документация по `/v` находится в [docs/features/crumple-video/README.md](/workspaces/events-bot-new/docs/features/crumple-video/README.md).
 Продовый roadmap и TODO вынесены в [docs/features/crumple-video/tasks/README.md](/workspaces/events-bot-new/docs/features/crumple-video/tasks/README.md).
 
-By default the crawler uses regular-expression stems to detect event keywords.
+Crawler keyword/date recognizers emit discovery hints for observability,
+priority, and conditional verification only. They do not filter fetched source
+packets or authorize a terminal semantic result.
 
 ### Token usage logging
 
@@ -321,8 +330,8 @@ scanning the raw table.
 Operators can verify that logging works by querying the table directly or, once
 deployed, visiting the `/usage_test` diagnostic endpoint which exercises the
 logging pipeline end to end.
-Setting `VK_USE_PYMORPHY=true` (and installing `pymorphy3`) switches matching to
-lemmatised forms for better coverage of Russian morphology.
+`VK_USE_PYMORPHY=true` (with `pymorphy3`) may improve the diagnostic keyword
+hints, but it does not change source admission or terminal semantics.
 
 ## Service token
 
@@ -393,7 +402,8 @@ A VK service (server) token helps keep read-only API traffic away from the user 
 - `docs/operations/commands.md` – full list of bot commands.
 - `docs/USER_STORIES.md` – user stories.
 - `docs/ARCHITECTURE.md` – system architecture.
-- `docs/PROMPTS.md` – base prompt for model 4o (edit this for parsing rules).
+- `docs/llm/prompts.md` – canonical typed source-parse prompt contract and
+  provider-facing examples.
 - `docs/FOUR_O_REQUEST.md` – how requests to 4o are formed.
 - `docs/LOCATIONS.md` – list of standard venues used when parsing events.
 - `docs/RECURRING_EVENTS.md` – design notes for repeating events.

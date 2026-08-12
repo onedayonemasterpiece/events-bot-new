@@ -1738,6 +1738,9 @@ async def test_init_db_logs_catbox_state(tmp_path: Path, monkeypatch, caplog):
     bot = DummyBot()
     await main.init_db_and_scheduler(app, db, bot, "https://example.com")
 
+    assert not any(
+        "startup_recovery failed" in message for message in caplog.messages
+    )
     assert any(
         "CATBOX_ENABLED resolved to False" in message for message in caplog.messages
     )

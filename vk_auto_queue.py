@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import math
 import os
 import time
 import re
@@ -16,11 +18,77 @@ from ops_run import finish_ops_run, start_ops_run
 
 import vk_intake
 import vk_review
+from smart_event_update import SmartUpdateTerminalOutcome
 from smart_update_identity import canonicalize_identity_url
+from source_parse_contract import (
+    decision_from_provider_payload,
+    EvidenceManifest,
+    PARSE_VERSION,
+    SourceDisposition,
+    SourceNoEventReason,
+    SourceParseDecision,
+    SourceParseRetryReason,
+)
+from vk_source_envelope import (
+    build_vk_source_envelope,
+    is_vk_source_envelope,
+    vk_source_envelope_replayability,
+)
 
 logger = logging.getLogger(__name__)
 
 _vk_auto_import_cancel_requests: set[tuple[int, int]] = set()
+
+
+def _adapt_vk_draft_result(
+    value: Any,
+    *,
+    source_text: str,
+    attachment_count: int = 0,
+) -> vk_intake.DraftParseResult:
+    """Put legacy/mock VK draft results through the one validated adapter.
+
+    The production builder already returns ``DraftParseResult``.  This boundary
+    exists for rolling compatibility and tests; in particular a bare empty
+    list, ``None`` or malformed object is uncertainty, never no-event proof.
+    """
+
+    if isinstance(value, vk_intake.DraftParseResult) and isinstance(
+        getattr(value, "decision", None), SourceParseDecision
+    ):
+        return value
+
+    manifest = EvidenceManifest.complete_source(
+        source_text or "", attachment_count=max(0, int(attachment_count or 0))
+    )
+    legacy_drafts = list(value) if isinstance(value, (list, tuple)) else []
+    provider_payload: Any
+    if isinstance(value, (list, tuple)):
+        provider_payload = [
+            {
+                key: field_value
+                for key, field_value in vars(item).items()
+                if key != "poster_media"
+            }
+            if isinstance(item, vk_intake.EventDraft)
+            else item
+            for item in value
+        ]
+    else:
+        provider_payload = value
+    decision = decision_from_provider_payload(
+        provider_payload,
+        evidence_manifest=manifest,
+    )
+    if decision.disposition is SourceDisposition.RETRY_REQUIRED:
+        logger.warning(
+            "vk_auto: untyped/invalid draft result requires reparse/retry "
+            "payload_type=%s retry_reason=%s",
+            type(value).__name__,
+            getattr(decision.retry_reason, "value", decision.retry_reason),
+        )
+        legacy_drafts = []
+    return vk_intake.DraftParseResult(legacy_drafts, decision=decision)
 
 
 def _vk_auto_parse_gemma_model() -> str:
@@ -146,39 +214,6 @@ def _looks_like_time_reschedule_notice(text: str | None) -> bool:
     return bool(_VK_TIME_RESCHEDULE_RE.search(raw))
 
 
-def _looks_like_cancellation_notice(text: str | None) -> bool:
-    raw = (text or "").strip()
-    if not raw:
-        return False
-    if not _VK_CANCEL_RE.search(raw):
-        return False
-    if _looks_like_retrospective_reschedule_context(raw):
-        return False
-    # "Время начала перенесено на 19:30" is a time update for an event that
-    # still happens, not a cancellation/postponement that should deactivate a
-    # public event card. Let the normal LLM-first VK import path parse it.
-    if _looks_like_time_reschedule_notice(raw) and not re.search(
-        r"(?iu)\b(?:отмен\w*|не\s+состо\w*|отложен\w*|показ\s+не\s+состо\w*)\b",
-        raw,
-    ):
-        return False
-    # Require at least one anchor to avoid silencing on generic news posts.
-    # Prefer using the same extraction helpers as the cancellation flow.
-    try:
-        year_hint = datetime.now(timezone.utc).year
-    except Exception:
-        year_hint = None
-    if year_hint and _parse_ru_date_from_text(raw, year_hint=year_hint):
-        return True
-    if _extract_title_hint(raw):
-        return True
-    if re.search(r"\b\d{1,2}[:.]\d{2}\b", raw):
-        return True
-    if re.search(r"\b\d{1,2}\.\d{1,2}\b", raw):
-        return True
-    return False
-
-
 def _parse_ru_date_from_text(text: str, *, year_hint: int | None) -> str | None:
     raw = (text or "").strip()
     if not raw:
@@ -258,10 +293,16 @@ async def _cancel_matching_event_from_notice(
     source_name: str | None,
     location_hint: str | None,
     published_at: datetime | None,
+    lifecycle_action: Any | None = None,
 ) -> tuple[int | None, str | None]:
     """Try to find a matching event and mark it as cancelled/postponed (inactive)."""
-    from sqlalchemy import and_, or_, select
+    from sqlalchemy import select
     from models import Event, EventSource, EventSourceFact
+    from smart_event_update import (
+        EventCandidate,
+        SmartUpdateIntent,
+        smart_event_update,
+    )
     import main as main_mod
 
     year_hint = None
@@ -273,7 +314,10 @@ async def _cancel_matching_event_from_notice(
     if year_hint is None:
         year_hint = datetime.now(timezone.utc).year
 
-    date_hint = _parse_ru_date_from_text(notice_text, year_hint=year_hint)
+    date_hint = (
+        str(getattr(lifecycle_action, "target_date", "") or "").strip()
+        or _parse_ru_date_from_text(notice_text, year_hint=year_hint)
+    )
     time_hint = None
     m_time = re.search(r"\b(\d{1,2})[:.](\d{2})\b", notice_text or "")
     if m_time:
@@ -284,10 +328,22 @@ async def _cancel_matching_event_from_notice(
                 time_hint = f"{hh:02d}:{mm:02d}"
         except Exception:
             time_hint = None
-    title_hint = _extract_title_hint(notice_text)
+    title_hint = (
+        str(getattr(lifecycle_action, "target_title", "") or "").strip()
+        or _extract_title_hint(notice_text)
+    )
+    time_hint = (
+        str(getattr(lifecycle_action, "target_time", "") or "").strip()
+        or time_hint
+    )
+    location_hint = (
+        str(getattr(lifecycle_action, "target_location", "") or "").strip()
+        or location_hint
+    )
     if not date_hint and not title_hint:
         return None, "insufficient_anchors:no_date_no_title"
-    is_postponed = bool(
+    action_name = str(getattr(getattr(lifecycle_action, "action", None), "value", "") or "")
+    is_postponed = action_name == "POSTPONE" or bool(
         re.search(
             r"(?i)\b(?:перенос\w*|перенес(?:ен(?:а|о)?|ена|ено|ены|ён(?:а|о)?|ёна|ёно|ёны|ли|ем|ём)|сдвинул\w*)\b",
             notice_text or "",
@@ -340,79 +396,87 @@ async def _cancel_matching_event_from_notice(
         canonical_source_url = canonicalize_identity_url(str(source_url))
         if not canonical_source_url:
             return None, "invalid_source_identity"
-        conflicting_owner = (
-            await session.execute(
-                select(EventSource.event_id).where(
-                    EventSource.canonical_source_url == canonical_source_url,
-                    EventSource.source_role == "identity_bearing",
-                    EventSource.event_id != int(best.id),
-                ).limit(1)
-            )
-        ).scalar_one_or_none()
-        if conflicting_owner is not None:
-            return None, "review_required:source_binding_conflict"
-
-        best.lifecycle_status = next_status
+        best_id = int(best.id)
+        if action_name == "CANCEL" or not action_name:
+            best.lifecycle_status = "cancelled"
+        elif action_name == "POSTPONE":
+            best.lifecycle_status = "postponed"
+        elif action_name == "RESCHEDULE_DATE":
+            new_date = str(getattr(lifecycle_action, "new_date", "") or "").strip()
+            if not new_date:
+                return None, "typed_action_missing_new_date"
+            best.date = new_date
+            best.lifecycle_status = "active"
+        elif action_name == "RESCHEDULE_TIME":
+            new_time = str(getattr(lifecycle_action, "new_time", "") or "").strip()
+            if not new_time:
+                return None, "typed_action_missing_new_time"
+            best.time = new_time
+            best.lifecycle_status = "active"
+        elif action_name == "UPDATE_DETAILS":
+            best.lifecycle_status = best.lifecycle_status or "active"
         session.add(best)
-        await session.flush()
+        await session.commit()
 
-        # Source URLs are unique per event (ux_event_source_event_url); cancellation notices can
-        # arrive as an edit of the original post. Reuse existing source row when present.
-        src = (
-            (
-                await session.execute(
-                    select(EventSource).where(
-                        EventSource.event_id == int(best.id),
-                        or_(
-                            EventSource.canonical_source_url == canonical_source_url,
-                            and_(
-                                EventSource.canonical_source_url.is_(None),
-                                EventSource.source_url == str(source_url),
-                            ),
-                        ),
-                    )
-                )
-            )
-            .scalars()
-            .first()
-        )
-        if src is None:
-            src = EventSource(
-                event_id=int(best.id),
-                source_type="vk_cancel",
+        context_result = await smart_event_update(
+            db,
+            EventCandidate(
+                intent=SmartUpdateIntent.ATTACH_CONTEXT,
+                target_event_id=best_id,
+                source_type="vk_lifecycle",
                 source_url=str(source_url),
-                canonical_source_url=canonical_source_url,
-                source_role="identity_bearing",
                 source_text=(notice_text or "")[:4000],
-            )
-            session.add(src)
-            await session.flush()
-        else:
-            src.source_type = "vk_cancel"
-            src.canonical_source_url = canonical_source_url
-            src.source_role = "identity_bearing"
-            src.source_text = (notice_text or "")[:4000]
-            session.add(src)
-            await session.flush()
+                occurrence_key=f"lifecycle:{action_name or 'CANCEL'}:{best_id}:{canonical_source_url}",
+            ),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
         note = f"❌ {kind}: событие помечено как {next_status} по источнику VK"
         if source_name:
             note += f" ({source_name})"
-        session.add(
-            EventSourceFact(
-                event_id=int(best.id),
-                source_id=int(src.id),
-                fact=note,
-                status="note",
+        if context_result.is_accepted:
+            src = (
+                (
+                    await session.execute(
+                        select(EventSource).where(
+                            EventSource.event_id == best_id,
+                            EventSource.canonical_source_url == canonical_source_url,
+                        )
+                    )
+                )
+                .scalars()
+                .first()
             )
-        )
-        await session.commit()
+            if src is not None:
+                session.add(
+                    EventSourceFact(
+                        event_id=best_id,
+                        source_id=int(src.id),
+                        fact=note,
+                        status="note",
+                    )
+                )
+                await session.commit()
+        elif context_result.is_retry:
+            logger.warning(
+                "vk_auto.cancel context retry_scheduled event_id=%s reason=%s",
+                best_id,
+                context_result.reason,
+            )
 
         try:
-            await main_mod.schedule_event_update_tasks(db, best, skip_vk_sync=True)
+            async with db.get_session() as reload_session:
+                updated_event = await reload_session.get(Event, best_id)
+            if updated_event is not None:
+                await main_mod.schedule_event_update_tasks(
+                    db,
+                    updated_event,
+                    skip_vk_sync=True,
+                )
         except Exception:
             logger.warning("vk_auto: failed to schedule rebuild after cancel", exc_info=True)
 
-        return int(best.id), None
+        return best_id, None
 
 
 def request_vk_auto_import_cancel(*, chat_id: int, operator_id: int) -> None:
@@ -446,60 +510,19 @@ def _vk_wall_url(group_id: int, post_id: int, owner_type: str | None = "group") 
     return _vk_wall_url_helper(group_id, post_id, owner_type)
 
 
-def _best_url(sizes: Sequence[Mapping[str, Any]]) -> str:
-    if not sizes:
-        return ""
-    best = max(
-        sizes,
-        key=lambda s: (s.get("width", 0) or 0) * (s.get("height", 0) or 0),
-    )
-    return str(best.get("url") or best.get("src") or "")
-
-
 def _extract_media_urls(item: Mapping[str, Any], *, limit: int = 12) -> list[str]:
-    """Extract image URLs from a VK wall item (photos + some common thumbnails)."""
-    urls: list[str] = []
-    seen: set[str] = set()
+    """Compatibility facade over the shared recursive envelope builder."""
 
-    def _add(url: str) -> None:
-        u = (url or "").strip()
-        if not u or u in seen:
-            return
-        seen.add(u)
-        urls.append(u)
-
-    def _process_atts(atts: Sequence[Mapping[str, Any]] | None) -> None:
-        for att in atts or []:
-            if len(urls) >= limit:
-                return
-            url = ""
-            if att.get("type") == "photo":
-                photo = att.get("photo") or {}
-                url = _best_url(photo.get("sizes") or [])
-            elif att.get("type") == "link":
-                link = att.get("link") or {}
-                url = _best_url(((link.get("photo") or {}).get("sizes") or []))
-            elif att.get("type") == "video":
-                video = att.get("video") or {}
-                url = _best_url(video.get("first_frame") or video.get("image") or [])
-            elif att.get("type") == "doc":
-                sizes = (
-                    ((att.get("doc") or {}).get("preview") or {})
-                    .get("photo", {})
-                    .get("sizes", [])
-                )
-                url = _best_url(sizes or [])
-            if url:
-                _add(url)
-
-    _process_atts(item.get("attachments") or [])
-    copy_history = item.get("copy_history") or []
-    if copy_history and isinstance(copy_history, list):
-        first = copy_history[0] if copy_history else None
-        if isinstance(first, Mapping):
-            _process_atts(first.get("attachments") or [])
-
-    return urls
+    owner_signed = int(item.get("owner_id") or 0)
+    return list(
+        build_vk_source_envelope(
+            item,
+            owner_id=abs(owner_signed),
+            owner_type="user" if owner_signed > 0 else "group",
+            media_limit=limit,
+        ).get("photos")
+        or ()
+    )
 
 
 @dataclass(frozen=True)
@@ -508,6 +531,11 @@ class VkFetchStatus:
     kind: Literal["ok", "not_found", "access_denied", "vk_api_error", "network_error"]
     error_code: int | None = None
     error: str | None = None
+    attachment_count: int = 0
+    unavailable_attachment_count: int = 0
+    source_envelope: dict[str, Any] | None = None
+    source_replayed: bool = False
+    source_unavailable: bool = False
 
 
 def _vk_auto_allow_stale_inbox_text() -> bool:
@@ -524,6 +552,7 @@ async def fetch_vk_post_text_and_photos(
     db: Database | None = None,
     bot: Any | None = None,
     limit: int = 12,
+    owner_type: str = "group",
 ) -> tuple[str, list[str], datetime | None, dict[str, Any] | None, VkFetchStatus]:
     """Fetch VK wall post (text + image URLs) via VK API.
 
@@ -531,14 +560,22 @@ async def fetch_vk_post_text_and_photos(
     """
     import main as main_mod
 
+    from vk_owner import normalize_owner_type, signed_owner_id
+
+    normalized_owner_type = normalize_owner_type(owner_type)
+    owner_signed = signed_owner_id(group_id, normalized_owner_type)
     try:
-        resp = await main_mod.vk_api("wall.getById", posts=f"-{int(group_id)}_{int(post_id)}")
+        resp = await main_mod.vk_api(
+            "wall.getById", posts=f"{owner_signed}_{int(post_id)}"
+        )
     except Exception as exc:
         # NOTE: VKAPIError is defined in main.py. We inspect it dynamically to avoid
         # a hard import cycle and still keep error codes for decision-making.
         code = None
         msg = str(exc or "").strip()
-        kind: VkFetchStatus["kind"] = "network_error"
+        kind: Literal[
+            "ok", "not_found", "access_denied", "vk_api_error", "network_error"
+        ] = "network_error"
         try:
             VKAPIError = getattr(main_mod, "VKAPIError", None)
             if VKAPIError is not None and isinstance(exc, VKAPIError):
@@ -556,8 +593,8 @@ async def fetch_vk_post_text_and_photos(
         except Exception:
             kind = "network_error"
         logger.warning(
-            "vk_auto: wall.getById failed -%s_%s kind=%s code=%s err=%s",
-            group_id,
+            "vk_auto: wall.getById failed owner=%s post=%s kind=%s code=%s err=%s",
+            owner_signed,
             post_id,
             kind,
             code,
@@ -580,80 +617,135 @@ async def fetch_vk_post_text_and_photos(
     elif isinstance(raw, list):
         items = [it for it in raw if isinstance(it, Mapping)]
 
-    text = ""
-    published_at: datetime | None = None
-    photos: list[str] = []
-    metrics: dict[str, Any] | None = None
-    for it in items:
-        candidate_text = it.get("text") if isinstance(it.get("text"), str) else ""
-        repost_text = ""
-        copy_history = it.get("copy_history")
-        if isinstance(copy_history, list) and copy_history:
-            first = copy_history[0]
-            if isinstance(first, Mapping):
-                rt = first.get("text")
-                if isinstance(rt, str) and rt.strip():
-                    repost_text = rt.strip()
-        base = candidate_text.strip() if isinstance(candidate_text, str) else ""
-        combined = base
-        if repost_text:
-            if not combined:
-                combined = repost_text
-            elif repost_text not in combined:
-                combined = f"{combined}\n\n[Репост]\n{repost_text}".strip()
-        if combined:
-            text = combined
-        ts = it.get("date")
-        if isinstance(ts, (int, float)):
-            try:
-                published_at = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-            except Exception:
-                published_at = None
-        if metrics is None:
-            m: dict[str, Any] = {}
-            try:
-                v = (it.get("views") or {}).get("count")
-                if isinstance(v, int) and v >= 0:
-                    m["views"] = v
-            except Exception:
-                pass
-            try:
-                l = (it.get("likes") or {}).get("count")
-                if isinstance(l, int) and l >= 0:
-                    m["likes"] = l
-            except Exception:
-                pass
-            try:
-                c = (it.get("comments") or {}).get("count")
-                if isinstance(c, int) and c >= 0:
-                    m["comments"] = c
-            except Exception:
-                pass
-            try:
-                r = (it.get("reposts") or {}).get("count")
-                if isinstance(r, int) and r >= 0:
-                    m["reposts"] = r
-            except Exception:
-                pass
-            metrics = m or None
-        photos.extend(_extract_media_urls(it, limit=limit))
-        if text:
-            break
-
     if not items:
         return "", [], None, None, VkFetchStatus(False, "not_found", error="empty_response")
 
-    # Deduplicate photos while preserving order.
-    out_photos: list[str] = []
-    seen: set[str] = set()
-    for u in photos:
-        if u and u not in seen:
-            seen.add(u)
-            out_photos.append(u)
-        if len(out_photos) >= limit:
-            break
+    # wall.getById is a one-post method. If a compatibility response contains
+    # several items, prefer the requested id and otherwise use the first.
+    item = next(
+        (
+            candidate
+            for candidate in items
+            if int(candidate.get("id") or 0) == int(post_id)
+        ),
+        items[0],
+    )
+    envelope = build_vk_source_envelope(
+        item,
+        owner_id=int(group_id),
+        owner_type=normalized_owner_type,
+        post_id=int(post_id),
+        source_url=_vk_wall_url(group_id, post_id, normalized_owner_type),
+        media_limit=limit,
+    )
+    published_at: datetime | None = None
+    try:
+        published_at = datetime.fromtimestamp(
+            float(envelope.get("published_at") or 0), tz=timezone.utc
+        )
+    except (OSError, TypeError, ValueError, OverflowError):
+        published_at = None
+    counts = envelope.get("counts") if isinstance(envelope.get("counts"), Mapping) else {}
+    visual_count = int(counts.get("visual_candidate_count") or 0)
+    unavailable_visual = int(counts.get("unavailable_visual_count") or 0)
+    omitted_media = int(counts.get("omitted_media_count") or 0)
+    return (
+        str(envelope.get("text") or ""),
+        [str(value) for value in (envelope.get("photos") or ())],
+        published_at,
+        dict(envelope.get("metrics") or {}) or None,
+        VkFetchStatus(
+            True,
+            "ok",
+            # EvidenceManifest counts visual/OCR candidates, not every
+            # semantic nonvisual attachment retained in the inventory.
+            attachment_count=visual_count + unavailable_visual,
+            unavailable_attachment_count=unavailable_visual + omitted_media,
+            source_envelope=envelope,
+        ),
+    )
 
-    return text, out_photos, published_at, metrics, VkFetchStatus(True, "ok")
+
+async def _load_vk_durable_packet_evidence(
+    db: Database,
+    *,
+    group_id: int,
+    post_id: int,
+    source_packet_id: int | None,
+    media_limit: int,
+) -> dict[str, Any]:
+    """Load the immutable packet for source-unavailable processing.
+
+    A legacy text/photos projection is detectable but not lossless enough to
+    support a terminal negative decision.  Only a complete v1 envelope is
+    returned as parseable evidence.
+    """
+
+    async with db.raw_conn() as conn:
+        row = None
+        if source_packet_id is not None:
+            row = await (await conn.execute(
+                """
+                SELECT id,raw_text,raw_payload_json,attachment_metadata_json,published_at
+                FROM vk_source_packet WHERE id=?
+                """,
+                (int(source_packet_id),),
+            )).fetchone()
+        if row is None:
+            row = await (await conn.execute(
+                """
+                SELECT id,raw_text,raw_payload_json,attachment_metadata_json,published_at
+                FROM vk_source_packet
+                WHERE source_type='vk' AND owner_id=? AND post_id=?
+                ORDER BY revision DESC LIMIT 1
+                """,
+                (int(group_id), int(post_id)),
+            )).fetchone()
+    if row is None:
+        return {"replayability": "unavailable"}
+    try:
+        raw_payload = json.loads(row[2] or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raw_payload = {}
+    replayability = vk_source_envelope_replayability(raw_payload)
+    if replayability != "replayable_lossless" or not is_vk_source_envelope(raw_payload):
+        return {
+            "packet_id": int(row[0]),
+            "replayability": "replayable_legacy_incomplete",
+        }
+
+    candidates = [
+        item
+        for item in (raw_payload.get("all_media_candidates") or ())
+        if isinstance(item, Mapping) and str(item.get("url") or "").strip()
+    ]
+    selected = candidates[: max(0, int(media_limit))]
+    counts = raw_payload.get("counts") if isinstance(raw_payload.get("counts"), Mapping) else {}
+    unavailable_visual = int(counts.get("unavailable_visual_count") or 0)
+    omitted = max(0, len(candidates) - len(selected))
+    published_at: datetime | None = None
+    try:
+        published_at = datetime.fromtimestamp(float(row[4] or 0), tz=timezone.utc)
+    except (OSError, TypeError, ValueError, OverflowError):
+        published_at = None
+    status = VkFetchStatus(
+        True,
+        "ok",
+        attachment_count=len(candidates) + unavailable_visual,
+        unavailable_attachment_count=omitted + unavailable_visual,
+        source_envelope=dict(raw_payload),
+        source_replayed=True,
+        source_unavailable=True,
+    )
+    return {
+        "packet_id": int(row[0]),
+        "replayability": replayability,
+        "text": str(raw_payload.get("text") or row[1] or ""),
+        "photos": [str(item.get("url")) for item in selected],
+        "published_at": published_at,
+        "metrics": dict(raw_payload.get("metrics") or {}) or None,
+        "status": status,
+    }
 
 
 async def _load_festival_hints(db: Database) -> tuple[list[str], list[tuple[str, int]]]:
@@ -816,15 +908,10 @@ def _vk_auto_import_schedule_max_photos() -> int:
 
 
 def _vk_auto_import_photo_limit_for_text(text: str | None) -> int:
-    """Expand transport completeness only for explicit schedule-card posts."""
+    """Return a transport ceiling independent of semantic source text."""
 
-    normalized = re.sub(r"\s+", " ", str(text or "").casefold().replace("ё", "е")).strip()
-    if re.search(
-        r"\b(?:расписание|места?\s+проведения|подробности)\b[^.!?\n]{0,80}\b(?:в|на)\s+карточках\b",
-        normalized,
-    ):
-        return _vk_auto_import_schedule_max_photos()
-    return _vk_auto_import_max_photos()
+    del text
+    return 100
 
 
 def _render_progress_text(
@@ -1193,19 +1280,25 @@ async def _prefetch_vk_inbox_row(
 
     # Refresh text/photos from VK (best effort) to include attachments.
     t0 = time.monotonic()
+    fetch_kwargs: dict[str, Any] = {
+        "db": db,
+        "bot": bot,
+        "limit": _vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+    }
+    post_owner_type = str(getattr(post, "owner_type", None) or "group")
+    # Keep the default group call shape compatible with rolling workers/tests;
+    # personal pages must explicitly carry their positive signed owner id.
+    if post_owner_type == "user":
+        fetch_kwargs["owner_type"] = "user"
     fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
-        post.group_id,
-        post.post_id,
-        db=db,
-        bot=bot,
-        limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+        post.group_id, post.post_id, **fetch_kwargs
     )
     stage["vk_fetch_post"] = float(time.monotonic() - t0)
     allow_stale = _vk_auto_allow_stale_inbox_text()
     text = ""
     if vk_fetch.ok:
-        text = (fetched_text or post.text or "").strip()
-    elif allow_stale and vk_fetch.kind != "not_found":
+        text = (fetched_text or "").strip()
+    elif allow_stale and vk_fetch.kind not in {"not_found", "access_denied"}:
         text = (post.text or "").strip()
     publish_ts: datetime | int | float | None = getattr(post, "date", None)
     if published_at is not None:
@@ -1231,45 +1324,12 @@ async def _prefetch_vk_inbox_row(
         except Exception:
             logger.warning("vk_auto: prefetch canonicalize location_hint failed", exc_info=True)
 
-    parse_festival_names = festival_names if source_is_festival else None
-    parse_festival_alias_pairs = festival_alias_pairs if source_is_festival else None
+    # Semantic parsing is deliberately not started by prefetch. The main
+    # worker owns one durable parse receipt per packet revision; prefetch only
+    # transports source/attachment evidence.
     drafts: Any | None = None
     err: str | None = None
-    prefetch_drafts = (os.getenv("VK_AUTO_IMPORT_PREFETCH_DRAFTS") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    t0 = time.monotonic()
-    try:
-        if (
-            prefetch_drafts
-            and vk_fetch.ok
-            and text
-            and (not _looks_like_cancellation_notice(text))
-        ):
-            drafts, _festival_info = await vk_intake.build_event_drafts(
-                text,
-                photos=photos,
-                source_name=source_name_val,
-                location_hint=location_hint_val,
-                default_time=default_time_val,
-                default_ticket_link=default_ticket_link_val,
-                operator_extra=None,
-                festival_names=parse_festival_names,
-                festival_alias_pairs=parse_festival_alias_pairs or None,
-                festival_hint=bool(source_is_festival),
-                publish_ts=publish_ts,
-                event_ts_hint=post.event_ts_hint,
-                parse_gemma_model=_vk_auto_parse_gemma_model(),
-                prefilter_obvious_non_events=True,
-                db=db,
-            )
-    except Exception as exc:
-        drafts = None
-        err = str(exc)
-    stage["build_drafts_total"] = float(time.monotonic() - t0)
+    stage["build_drafts_total"] = 0.0
 
     return VkInboxPrefetch(
         source_url=source_url,
@@ -1359,11 +1419,7 @@ async def run_vk_auto_import(
     # Optional: include previously skipped rows in the run. This is useful for
     # E2E over a prod DB snapshot where an operator may have skipped items
     # earlier, but we still want to validate Smart Update correctness.
-    reject_cutoff = 0
     if include_skipped:
-        reject_window_h = float(os.getenv("VK_REVIEW_REJECT_H", "2") or "2")
-        reject_window_h = max(0.0, reject_window_h)
-        reject_cutoff = int(time.time()) + int(reject_window_h * 3600)
         async with db.raw_conn() as conn:
             cur = await conn.execute("SELECT COUNT(1) FROM vk_inbox WHERE status='pending'")
             row = await cur.fetchone()
@@ -1381,14 +1437,14 @@ async def run_vk_auto_import(
                 """
                 SELECT id
                 FROM vk_inbox
-                WHERE status='skipped' AND (event_ts_hint IS NULL OR event_ts_hint >= ?)
-                ORDER BY CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
+                WHERE status='skipped'
+                ORDER BY date ASC,
+                         CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
                          event_ts_hint ASC,
-                         date ASC,
                          id ASC
                 LIMIT ?
                 """,
-                (reject_cutoff, requeue_limit),
+                (requeue_limit,),
             )
             ids = [int(r[0]) for r in (await cur.fetchall() or [])]
             if ids:
@@ -1407,16 +1463,11 @@ async def run_vk_auto_import(
                 await conn.commit()
                 report.skipped_requeued = len(ids)
                 logger.info(
-                    "vk_auto: requeued_skipped=%s cutoff=%s pending=%s limit=%s",
+                    "vk_auto: requeued_skipped=%s pending=%s limit=%s",
                     len(ids),
-                    reject_cutoff,
                     pending_count,
                     limit,
                 )
-    elif not reject_cutoff:
-        reject_window_h = float(os.getenv("VK_REVIEW_REJECT_H", "2") or "2")
-        reject_window_h = max(0.0, reject_window_h)
-        reject_cutoff = int(time.time()) + int(reject_window_h * 3600)
 
     # Preload festival hints once per run.
     try:
@@ -1435,9 +1486,8 @@ async def run_vk_auto_import(
                 SELECT COUNT(1)
                 FROM vk_inbox
                 WHERE status IN ({placeholders})
-                  AND (event_ts_hint IS NULL OR event_ts_hint >= ?)
                 """,
-                (*statuses, int(reject_cutoff)),
+                statuses,
             )
             row = await cur.fetchone()
             total_estimate = int((row[0] if row else 0) or 0)
@@ -1567,9 +1617,9 @@ async def run_vk_auto_import(
                     f"timeout_failed {source_url}: row timed out after {row_timeout_sec:.1f}s"
                 )
                 try:
-                    await vk_review.mark_failed(db, int(post_obj.id))
+                    await vk_review.schedule_retry(db, int(post_obj.id), typed_reason="ROW_TIMEOUT", batch_id=batch_id)
                 except Exception:
-                    logger.warning("vk_auto: mark_failed failed after timeout", exc_info=True)
+                    logger.warning("vk_auto: schedule_retry failed after timeout", exc_info=True)
                 logger.warning(
                     "vk_auto: inbox row timeout id=%s url=%s timeout_sec=%.1f",
                     getattr(post_obj, "id", None),
@@ -1592,9 +1642,9 @@ async def run_vk_auto_import(
                 report.inbox_failed += 1
                 report.errors.append(f"unexpected_failed {source_url}: {exc}")
                 try:
-                    await vk_review.mark_failed(db, int(post_obj.id))
+                    await vk_review.schedule_retry(db, int(post_obj.id), typed_reason="UNEXPECTED_ERROR", batch_id=batch_id)
                 except Exception:
-                    logger.warning("vk_auto: mark_failed failed after exception", exc_info=True)
+                    logger.warning("vk_auto: schedule_retry failed after exception", exc_info=True)
                 logger.exception(
                     "vk_auto: unexpected exception in inbox row processing id=%s url=%s",
                     getattr(post_obj, "id", None),
@@ -1993,18 +2043,22 @@ async def _process_vk_inbox_row(
 
         # Refresh text/photos from VK (best effort) to include attachments.
         t0 = time.monotonic()
+        fetch_kwargs: dict[str, Any] = {
+            "db": db,
+            "bot": bot,
+            "limit": _vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+        }
+        post_owner_type = str(getattr(post, "owner_type", None) or "group")
+        if post_owner_type == "user":
+            fetch_kwargs["owner_type"] = "user"
         fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
-            post.group_id,
-            post.post_id,
-            db=db,
-            bot=bot,
-            limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+            post.group_id, post.post_id, **fetch_kwargs
         )
         _tmark("vk_fetch_post", time.monotonic() - t0)
         allow_stale = _vk_auto_allow_stale_inbox_text()
         if vk_fetch.ok:
-            text = (fetched_text or post.text or "").strip()
-        elif allow_stale and vk_fetch.kind != "not_found":
+            text = (fetched_text or "").strip()
+        elif allow_stale and vk_fetch.kind not in {"not_found", "access_denied"}:
             text = (post.text or "").strip()
         else:
             text = ""
@@ -2036,14 +2090,73 @@ async def _process_vk_inbox_row(
                 logger.warning("vk_auto: failed to canonicalize location_hint", exc_info=True)
 
     if vk_fetch is not None and not vk_fetch.ok:
+        durable = await _load_vk_durable_packet_evidence(
+            db,
+            group_id=int(post.group_id),
+            post_id=int(post.post_id),
+            source_packet_id=getattr(post, "source_packet_id", None),
+            media_limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+        )
+        replayability = str(durable.get("replayability") or "unavailable")
+        if replayability == "replayable_lossless":
+            post.source_packet_id = int(durable["packet_id"])
+            text = str(durable.get("text") or "")
+            photos = list(durable.get("photos") or ())
+            published_at = durable.get("published_at")
+            metrics = durable.get("metrics")
+            if published_at is not None:
+                publish_ts = int(published_at.timestamp())
+            vk_fetch = durable["status"]
+            logger.info(
+                "vk_auto: source unavailable; replaying complete durable packet gid=%s post=%s packet=%s",
+                post.group_id,
+                post.post_id,
+                post.source_packet_id,
+            )
+        elif replayability == "replayable_legacy_incomplete":
+            # Legacy projections prove that some material once existed but do
+            # not prove complete outer/copy/attachment coverage. Never turn
+            # that incomplete capture into a terminal semantic negative.
+            report.inbox_deferred += 1
+            await vk_review.schedule_retry(
+                db,
+                int(post.id),
+                typed_reason="EVIDENCE_INCOMPLETE",
+                batch_id=batch_id,
+                retry_after_sec=86400,
+            )
+            await _emit_progress(
+                "🧩",
+                [
+                    "Результат: сохранённый пакет неполон, повтор запланирован",
+                    "Причина: legacy packet lacks complete VK attachment/copy evidence",
+                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
+                ],
+            )
+            return
+        else:
+            # An inbox text projection is not a captured revision. With no
+            # durable packet, retain the original typed fetch failure path
+            # below instead of permitting the optional stale-text switch to
+            # create an unrefreshed semantic negative.
+            text = ""
+            photos = []
+
+    if vk_fetch is not None and not vk_fetch.ok:
         allow_stale = _vk_auto_allow_stale_inbox_text()
         if vk_fetch.kind == "not_found":
-            report.inbox_rejected += 1
-            await vk_review.mark_rejected(db, int(post.id))
+            report.inbox_deferred += 1
+            await vk_review.schedule_retry(
+                db,
+                int(post.id),
+                typed_reason="EVIDENCE_UNAVAILABLE",
+                batch_id=batch_id,
+                retry_after_sec=86400,
+            )
             await _emit_progress(
                 "🗑️",
                 [
-                    "Результат: пост недоступен в VK (удалён/не найден)",
+                    "Результат: evidence недоступен, повтор запланирован",
                     f"Причина: {vk_fetch.error_code or ''} {_shorten_reason(vk_fetch.error) or ''}".strip(),
                     f"took_sec: {(time.monotonic() - start_ts):.1f}",
                 ],
@@ -2054,7 +2167,7 @@ async def _process_vk_inbox_row(
             report.errors.append(
                 f"vk_fetch_failed {source_url}: kind={vk_fetch.kind} code={vk_fetch.error_code} err={vk_fetch.error}"
             )
-            await vk_review.mark_failed(db, int(post.id))
+            await vk_review.schedule_retry(db, int(post.id), typed_reason="SOURCE_FETCH_ERROR", batch_id=batch_id)
             await _emit_progress(
                 "❌",
                 [
@@ -2125,320 +2238,398 @@ async def _process_vk_inbox_row(
                 exc_info=True,
             )
 
-    # Cancellation/transfer notices: do not create new events. Instead, try to find the
-    # matching existing event and mark it inactive (cancelled/postponed).
-    if _looks_like_cancellation_notice(text):
-        event_id, err = await _cancel_matching_event_from_notice(
+    # ``wall.getById`` may observe an edit after the crawler created the inbox
+    # row. Never attach a new provider call (or an old successful receipt) to
+    # that stale revision: append the fetched revision first, repoint the
+    # carrier, and retain the current lease while this worker processes it.
+    fetched_envelope = getattr(vk_fetch, "source_envelope", None)
+    if (
+        vk_fetch is not None
+        and vk_fetch.ok
+        and not vk_fetch.source_replayed
+        and is_vk_source_envelope(fetched_envelope)
+    ):
+        # Persist every successful provider fetch before any LLM call. The
+        # semantic revision hash makes this idempotent for exact/counter-only
+        # replay and appends on edits anywhere in the recursive source packet.
+        current_packet_id, _is_new = await vk_intake._persist_vk_source_packet(
             db,
-            notice_text=text,
+            group_id=int(post.group_id),
+            owner_type=str(getattr(post, "owner_type", None) or "group"),
+            post=dict(fetched_envelope),
             source_url=source_url,
-            source_name=source_name_val,
-            location_hint=location_hint_val,
-            published_at=published_at,
+            keyword_hints=("hint:queue_refetch_revision",),
+            date_hints=(),
+            event_ts_hint=getattr(post, "event_ts_hint", None),
         )
-        if event_id:
-            # Fetch canonical date for batch month accounting.
-            event_date_val: str | None = None
-            try:
-                async with db.raw_conn() as conn:
-                    cur = await conn.execute("SELECT date FROM event WHERE id=?", (int(event_id),))
-                    row = await cur.fetchone()
-                    event_date_val = str(row[0]) if row and row[0] else None
-            except Exception:
-                event_date_val = None
-            report.inbox_imported += 1
-            report.updated_event_ids.append(int(event_id))
-            # Link inbox row with the canceled event to keep queue idempotent.
-            await vk_review.mark_imported_events(
-                db,
-                inbox_id=int(post.id),
-                batch_id=batch_id,
-                operator_id=operator_id,
-                event_ids=[int(event_id)],
-                event_dates=[event_date_val],
+        post.source_packet_id = int(current_packet_id)
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                UPDATE vk_inbox SET status='locked',locked_by=?,locked_at=CURRENT_TIMESTAMP,
+                    review_batch=? WHERE id=?
+                """,
+                (operator_id, batch_id, int(post.id)),
             )
-            await _emit_progress(
-                "🛑",
-                [
-                    "Результат: отмена/перенос — событие помечено неактивным",
-                    f"event_id: {int(event_id)}",
-                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                ],
+            await conn.execute(
+                """
+                UPDATE vk_source_packet SET status='processing',lease_owner=?,
+                    lease_expires_at=datetime('now','+15 minutes'),updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (str(operator_id), int(current_packet_id)),
             )
-            # Unified report for operator (as an "updated" event).
-            await _send_unified_event_report(
-                db,
-                bot,
-                chat_id,
-                created=[],
-                updated=[int(event_id)],
-                source_url=source_url,
-                added_posters_by_event_id={int(event_id): 0},
-                post_metrics=metrics,
-                post_popularity=post_popularity,
-            )
-            return
-        # Cancellation notices must not create new events.
-        report.inbox_rejected += 1
-        await vk_review.mark_rejected(db, post.id)
-        await _emit_progress(
-            "⛔",
-            [
-                "Результат: отмена/перенос — событие не найдено в базе",
-                f"Причина: {_shorten_reason(err) or 'no_match'}",
-                f"took_sec: {(time.monotonic() - start_ts):.1f}",
-            ],
-        )
-        return
+            await conn.commit()
 
-    if pf is not None and pf.drafts is not None and not (pf.error or "").strip():
-        drafts = pf.drafts
-        _tmark("build_drafts_total", float(pf.stage_sec.get("build_drafts_total", 0.0) or 0.0))
-    else:
+    model_name = _vk_auto_parse_gemma_model()
+    receipt = await vk_review.load_successful_parse_receipt(
+        db,
+        source_packet_id=getattr(post, "source_packet_id", None),
+        prompt_version=PARSE_VERSION,
+        model=model_name,
+    )
+    exact_parse_replay = receipt is not None
+    if receipt is not None:
+        try:
+            drafts = vk_intake.DraftParseResult.from_receipt_payload(receipt)
+        except Exception as exc:
+            receipt = None
+            exact_parse_replay = False
+            logger.warning("vk_auto: invalid durable parse receipt; reparsing url=%s err=%s", source_url, exc)
+
+    if receipt is None:
         try:
             parse_festival_names = festival_names if source_is_festival else None
             parse_festival_alias_pairs = festival_alias_pairs if source_is_festival else None
-            rl_max_wait_sec = float(os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC", "120") or "120")
-            rl_max_wait_sec = max(0.0, min(rl_max_wait_sec, 1800.0))
-            rl_deadline = time.monotonic() + rl_max_wait_sec
             t0 = time.monotonic()
-            build_attempt = 1
-            while True:
-                try:
-                    drafts, _festival_info = await vk_intake.build_event_drafts(
-                        text,
-                        photos=photos,
-                        source_name=source_name_val,
-                        location_hint=location_hint_val,
-                        default_time=default_time_val,
-                        default_ticket_link=default_ticket_link_val,
-                        operator_extra=None,
-                        festival_names=parse_festival_names,
-                        festival_alias_pairs=parse_festival_alias_pairs or None,
-                        festival_hint=bool(source_is_festival),
-                        publish_ts=publish_ts,
-                        event_ts_hint=post.event_ts_hint,
-                        rate_limit_max_wait_sec=0,
-                        parse_gemma_model=_vk_auto_parse_gemma_model(),
-                        prefilter_obvious_non_events=True,
-                        db=db,
-                    )
-                    break
-                except Exception as exc:
-                    is_rate_limit = False
-                    retry_after_ms = 0
-                    try:
-                        from google_ai.exceptions import (
-                            RateLimitError as _RateLimitError,
-                            ProviderError as _ProviderError,
-                        )
-                    except Exception:
-                        _RateLimitError = None
-                        _ProviderError = None
-                    if _RateLimitError is not None and isinstance(exc, _RateLimitError):
-                        is_rate_limit = True
-                        retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-                    elif _ProviderError is not None and isinstance(exc, _ProviderError):
-                        if int(getattr(exc, "status_code", 0) or 0) == 429:
-                            is_rate_limit = True
-                            retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-
-                    if not is_rate_limit:
-                        raise
-                    if rl_max_wait_sec <= 0:
-                        raise
-                    if time.monotonic() >= rl_deadline:
-                        raise
-
-                    wait_sec = (
-                        min(60.0, max(0.2, (retry_after_ms / 1000.0) + 0.2))
-                        if retry_after_ms
-                        else 1.0
-                    )
-                    logger.warning(
-                        "vk_auto: rate_limited build_drafts attempt=%d retry_in=%.1fs url=%s err=%s",
-                        build_attempt,
-                        wait_sec,
-                        source_url,
-                        exc,
-                    )
-                    build_attempt += 1
-                    await asyncio.sleep(wait_sec)
-                    continue
-
-            _tmark("build_drafts_total", time.monotonic() - t0)
-        except Exception as exc:
-            is_rate_limit = False
-            retry_after_ms = 0
-            try:
-                from google_ai.exceptions import RateLimitError as _RateLimitError, ProviderError as _ProviderError
-            except Exception:
-                _RateLimitError = None
-                _ProviderError = None
-            if _RateLimitError is not None and isinstance(exc, _RateLimitError):
-                is_rate_limit = True
-                retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-            elif _ProviderError is not None and isinstance(exc, _ProviderError):
-                if int(getattr(exc, "status_code", 0) or 0) == 429:
-                    is_rate_limit = True
-                    retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-
-            if is_rate_limit:
-                max_defers = _rate_limit_max_defers()
-                queue_state = "deferred"
-                attempts = 1
-                try:
-                    rl_max_wait_sec = float(os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC", "120") or "120")
-                    rl_max_wait_sec = max(0.0, min(rl_max_wait_sec, 1800.0))
-                    retry_after_sec = (
-                        max(1.0, retry_after_ms / 1000.0)
-                        if retry_after_ms
-                        else rl_max_wait_sec
-                    )
-                    queue_state, attempts = await vk_review.mark_rate_limited(
-                        db,
-                        int(post.id),
-                        batch_id=batch_id,
-                        retry_after_sec=retry_after_sec,
-                        max_attempts=max_defers,
-                    )
-                except Exception:
-                    logger.warning("vk_auto: defer_lock_failed after rate limit", exc_info=True)
-                retry_hint = (
-                    f"Retry-after: {max(1, int(retry_after_ms / 1000))}s"
-                    if retry_after_ms
-                    else "Retry-after: —"
-                )
-                attempts_hint = (
-                    f"Попытка: {attempts}/{max_defers}"
-                    if max_defers > 0
-                    else f"Попытка: {attempts}"
-                )
-                if queue_state == "failed":
-                    report.inbox_failed += 1
-                    report.errors.append(f"drafts_rate_limited_terminal {source_url}: {exc}")
-                    await _emit_progress(
-                        "⛔",
-                        [
-                            "Результат: лимит LLM — пост помечен failed",
-                            f"Причина: {_shorten_reason(str(exc)) or '—'}",
-                            attempts_hint,
-                            retry_hint,
-                            f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                        ],
-                    )
-                    _log_row_timing(drafts_count=0, ok_value=False)
-                    return
-
-                report.inbox_deferred += 1
-                report.errors.append(f"drafts_rate_limited {source_url}: {exc}")
-                await _emit_progress(
-                    "⏸️",
-                    [
-                        "Результат: лимит LLM — пост отложен",
-                        f"Причина: {_shorten_reason(str(exc)) or '—'}",
-                        attempts_hint,
-                        retry_hint,
-                        f"took_sec: {(time.monotonic() - start_ts):.1f}",
-                    ],
-                )
-                return
-
-            report.inbox_failed += 1
-            report.errors.append(f"drafts_failed {source_url}: {exc}")
-            logger.error(
-                "vk_auto: build_event_drafts failed inbox_id=%s source=%s",
-                int(post.id),
-                source_url,
-                exc_info=True,
+            drafts, _festival_info = await vk_intake.build_event_drafts(
+                text,
+                photos=photos,
+                source_name=source_name_val,
+                location_hint=location_hint_val,
+                default_time=default_time_val,
+                default_ticket_link=default_ticket_link_val,
+                operator_extra=None,
+                festival_names=parse_festival_names,
+                festival_alias_pairs=parse_festival_alias_pairs or None,
+                festival_hint=bool(source_is_festival),
+                publish_ts=publish_ts,
+                event_ts_hint=post.event_ts_hint,
+                rate_limit_max_wait_sec=0,
+                parse_gemma_model=model_name,
+                attachment_count_hint=int(getattr(vk_fetch, "attachment_count", 0) or len(photos)),
+                unavailable_attachment_count_hint=int(
+                    getattr(vk_fetch, "unavailable_attachment_count", 0) or 0
+                ),
+                db=db,
             )
-            await vk_review.mark_failed(db, int(post.id))
+            drafts = _adapt_vk_draft_result(
+                drafts,
+                source_text=text or "",
+                attachment_count=int(
+                    getattr(vk_fetch, "attachment_count", 0) or len(photos)
+                ),
+            )
+            _tmark("build_drafts_total", time.monotonic() - t0)
+            decision = getattr(drafts, "decision", None)
+            if decision is None:
+                # The adapter above owns every legacy shape.  Reaching this
+                # branch means the builder violated the boundary contract.
+                drafts = _adapt_vk_draft_result(
+                    None,
+                    source_text=text or "",
+                    attachment_count=int(
+                        getattr(vk_fetch, "attachment_count", 0) or len(photos)
+                    ),
+                )
+                decision = drafts.decision
+            manifest = getattr(decision, "evidence_manifest", None)
+            provider_attempts = list(getattr(decision, "provider_attempts", ()) or ())
+            if not provider_attempts:
+                provider_attempts = [{}]
+            decision_reason = (
+                str(getattr(getattr(decision, "retry_reason", None), "value", ""))
+                or None
+            )
+            final_parse_result = (
+                drafts.to_receipt_payload()
+                if hasattr(drafts, "to_receipt_payload") and not decision_reason
+                else None
+            )
+            verification_reasons = [
+                str(getattr(item, "value", item))
+                for item in (getattr(decision, "verification_reasons", ()) or ())
+            ]
+            for attempt_index, provider_attempt in enumerate(provider_attempts):
+                is_final_attempt = attempt_index == len(provider_attempts) - 1
+                retry_after_ms = int(
+                    provider_attempt.get("provider_retry_after_ms", 0) or 0
+                )
+                attempt_error = provider_attempt.get("error_type")
+                finish_reason = provider_attempt.get("finish_reason")
+                provider_completed = bool(
+                    finish_reason
+                    or provider_attempt.get("actual_total_tokens")
+                    or provider_attempt.get("output_tokens")
+                ) and not attempt_error
+                await vk_review.record_source_parse_attempt(
+                    db,
+                    source_packet_id=getattr(post, "source_packet_id", None),
+                    prompt_version=PARSE_VERSION,
+                    model=str(provider_attempt.get("model") or model_name),
+                    evidence_manifest=(
+                        manifest.to_payload() if manifest is not None else {}
+                    ),
+                    parse_result=(final_parse_result if is_final_attempt else None),
+                    disposition=(
+                        str(getattr(decision.disposition, "value", decision.disposition))
+                        if is_final_attempt
+                        else SourceDisposition.RETRY_REQUIRED.value
+                    ),
+                    retry_reason=(
+                        decision_reason
+                        if is_final_attempt
+                        else SourceParseRetryReason.MALFORMED_JSON.value
+                    ),
+                    event_child_count=(len(drafts or ()) if is_final_attempt else 0),
+                    lifecycle_action_count=(
+                        len(getattr(decision, "lifecycle_actions", ()) or ())
+                        if is_final_attempt
+                        else 0
+                    ),
+                    no_event_reason=(
+                        str(getattr(decision.no_event_reason, "value", decision.no_event_reason))
+                        if is_final_attempt and decision.no_event_reason is not None
+                        else None
+                    ),
+                    quota_scope=provider_attempt.get("quota_scope"),
+                    request_id=provider_attempt.get("request_id"),
+                    response_id=provider_attempt.get("response_id"),
+                    finish_reason=finish_reason,
+                    input_tokens=provider_attempt.get("input_tokens"),
+                    output_tokens=provider_attempt.get("output_tokens"),
+                    thought_tokens=provider_attempt.get("thought_tokens"),
+                    reserved_tokens=provider_attempt.get("reserved_tokens"),
+                    provider_retry_after=(
+                        int(math.ceil(retry_after_ms / 1000))
+                        if retry_after_ms
+                        else None
+                    ),
+                    attempt_kind=str(provider_attempt.get("attempt_kind") or "primary"),
+                    llm_started=True,
+                    llm_completed=(
+                        provider_completed
+                        or bool(final_parse_result and is_final_attempt)
+                    ),
+                    structured_response_valid=bool(
+                        final_parse_result and is_final_attempt
+                    ),
+                    verification_triggered=bool(verification_reasons),
+                    verification_reason=(
+                        ",".join(verification_reasons) or None
+                    ),
+                    verification_disposition=(
+                        str(getattr(decision.disposition, "value", decision.disposition))
+                        if verification_reasons and is_final_attempt
+                        else None
+                    ),
+                )
+        except Exception as exc:
+            retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
+            status_code = int(getattr(exc, "status_code", 0) or 0)
+            typed_reason = "RATE_LIMITED" if (status_code == 429 or retry_after_ms) else "TECHNICAL_ERROR"
+            await vk_review.record_source_parse_attempt(
+                db,
+                source_packet_id=getattr(post, "source_packet_id", None),
+                prompt_version=PARSE_VERSION,
+                model=model_name,
+                evidence_manifest={"evidence_complete": False},
+                parse_result=None,
+                disposition="RETRY_REQUIRED",
+                retry_reason=typed_reason,
+                event_child_count=0,
+                lifecycle_action_count=0,
+                provider_retry_after=(int(retry_after_ms / 1000) if retry_after_ms else None),
+            )
+            _state, attempts = await vk_review.schedule_retry(
+                db,
+                int(post.id),
+                typed_reason=typed_reason,
+                batch_id=batch_id,
+                retry_after_sec=(retry_after_ms / 1000 if retry_after_ms else None),
+                provider_retry_after=(int(retry_after_ms / 1000) if retry_after_ms else None),
+            )
+            report.inbox_deferred += 1
+            report.errors.append(f"retry_scheduled {source_url}: {typed_reason}: {exc}")
             await _emit_progress(
-                "❌",
+                "⏳",
                 [
-                    "Результат: ошибка извлечения событий (drafts)",
-                    f"Причина: {_shorten_reason(str(exc)) or '—'}",
+                    "Результат: технический повтор запланирован",
+                    f"Причина: {typed_reason}",
+                    f"Попытка: {attempts}",
                     f"took_sec: {(time.monotonic() - start_ts):.1f}",
                 ],
             )
             _log_row_timing(drafts_count=0, ok_value=False)
             return
 
+    decision = getattr(drafts, "decision", None)
+    if decision is None:  # defensive compatibility for corrupted in-memory state
+        drafts = _adapt_vk_draft_result(
+            drafts,
+            source_text=text or "",
+            attachment_count=int(
+                getattr(vk_fetch, "attachment_count", 0) or len(photos)
+            ),
+        )
+        decision = drafts.decision
+
+    if decision.disposition is SourceDisposition.RETRY_REQUIRED:
+        reason = str(getattr(getattr(decision, "retry_reason", None), "value", "RETRY_REQUIRED"))
+        latest_provider_attempt = (
+            dict((getattr(decision, "provider_attempts", ()) or ())[-1])
+            if getattr(decision, "provider_attempts", ())
+            else {}
+        )
+        retry_after_ms = int(
+            latest_provider_attempt.get("provider_retry_after_ms", 0) or 0
+        )
+        await vk_review.schedule_retry(
+            db,
+            int(post.id),
+            typed_reason=reason,
+            batch_id=batch_id,
+            retry_after_sec=(retry_after_ms / 1000 if retry_after_ms else None),
+            quota_scope=latest_provider_attempt.get("quota_scope"),
+            provider_retry_after=(
+                int(math.ceil(retry_after_ms / 1000)) if retry_after_ms else None
+            ),
+        )
+        report.inbox_deferred += 1
+        report.errors.append(f"source_retry {source_url}: {reason}")
+        await vk_review.record_carrier_resolution(
+            db,
+            source_packet_id=getattr(post, "source_packet_id", None),
+            child_outcomes=[],
+            terminal_carrier_outcome="RETRY_SCHEDULED",
+            typed_error_reason=reason,
+        )
+        return
+
+    lifecycle_event_ids: list[int] = []
+    lifecycle_unresolved: list[str] = []
+    for action in tuple(getattr(decision, "lifecycle_actions", ()) or ()):
+        action_evidence = "\n".join(
+            value for value in (text, getattr(action, "evidence", "")) if value
+        )
+        event_id, error = await _cancel_matching_event_from_notice(
+            db,
+            notice_text=action_evidence,
+            source_url=source_url,
+            source_name=source_name_val,
+            location_hint=location_hint_val,
+            published_at=published_at,
+            lifecycle_action=action,
+        )
+        if event_id is not None:
+            lifecycle_event_ids.append(int(event_id))
+        else:
+            lifecycle_unresolved.append(error or "lifecycle_no_match")
+
+    if exact_parse_replay:
+        await vk_review.record_exact_parse_replay(
+            db,
+            source_packet_id=getattr(post, "source_packet_id", None),
+            prompt_version=PARSE_VERSION,
+            model=model_name,
+        )
+        logger.info("vk_auto: exact successful source parse replay packet=%s", getattr(post, "source_packet_id", None))
+
     if not drafts:
-        report.inbox_rejected += 1
-        await vk_review.mark_rejected(db, post.id)
-        reason_line = None
-        try:
-            import re
-
-            tzinfo = getattr(main_mod, "LOCAL_TZ", None) or timezone.utc
-            now_dt = datetime.now(tzinfo)
-            pub_dt = None
-            if isinstance(publish_ts, (int, float)) and publish_ts:
-                try:
-                    pub_dt = datetime.fromtimestamp(float(publish_ts), tzinfo)
-                except Exception:
-                    pub_dt = None
-            year = (pub_dt.year if pub_dt else now_dt.year)
-
-            # Simple, explainable inference for operator messaging: dd.mm + optional HH:MM.
-            m_date = re.search(r"\b(\d{1,2})\.(\d{1,2})\b", text or "")
-            m_time = re.search(r"\b(\d{1,2})[:.](\d{2})\b", text or "")
-            inferred_dt = None
-            if m_date:
-                day = int(m_date.group(1))
-                month = int(m_date.group(2))
-                hour = int(m_time.group(1)) if m_time else 0
-                minute = int(m_time.group(2)) if m_time else 0
-                try:
-                    inferred_dt = datetime(year, month, day, hour, minute, tzinfo=tzinfo)
-                except Exception:
-                    inferred_dt = None
-
-            if inferred_dt and inferred_dt < now_dt:
-                reason_line = f"Причина: событие в прошлом: {inferred_dt.strftime('%Y-%m-%d %H:%M')}"
-        except Exception:
-            reason_line = None
-        await _emit_progress(
-            "⏭️",
-            [
-                "Результат: событий не найдено (LLM вернул 0)",
-                reason_line or "",
-                f"took_sec: {(time.monotonic() - start_ts):.1f}",
-            ],
+        if lifecycle_unresolved:
+            reason = lifecycle_unresolved[0]
+            await vk_review.schedule_retry(
+                db,
+                int(post.id),
+                typed_reason="LIFECYCLE_NO_MATCH",
+                batch_id=batch_id,
+            )
+            report.inbox_deferred += 1
+            report.errors.append(f"lifecycle_retry {source_url}: {reason}")
+            await vk_review.record_carrier_resolution(
+                db,
+                source_packet_id=getattr(post, "source_packet_id", None),
+                child_outcomes=[],
+                terminal_carrier_outcome="RETRY_SCHEDULED",
+                typed_error_reason="LIFECYCLE_NO_MATCH",
+            )
+            return
+        if decision.disposition is SourceDisposition.LIFECYCLE_ONLY and lifecycle_event_ids:
+            report.inbox_imported += 1
+            report.updated_event_ids.extend(lifecycle_event_ids)
+            await vk_review.mark_imported_events(
+                db,
+                inbox_id=int(post.id),
+                batch_id=batch_id,
+                operator_id=operator_id,
+                event_ids=lifecycle_event_ids,
+                event_dates=[],
+            )
+            await vk_review.mark_carrier_outcome(
+                db, inbox_id=int(post.id), outcome="LIFECYCLE_RESOLVED"
+            )
+            await vk_review.record_carrier_resolution(
+                db,
+                source_packet_id=getattr(post, "source_packet_id", None),
+                child_outcomes=["LIFECYCLE_APPLIED" for _ in lifecycle_event_ids],
+                terminal_carrier_outcome="LIFECYCLE_RESOLVED",
+            )
+            return
+        if (
+            decision.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+            and bool(getattr(decision, "evidence_complete", False))
+            and isinstance(getattr(decision, "no_event_reason", None), SourceNoEventReason)
+        ):
+            report.inbox_rejected += 1
+            no_event_reason = decision.no_event_reason.value
+            await vk_review.mark_rejected(
+                db,
+                int(post.id),
+                no_event_reason=no_event_reason,
+            )
+            await vk_review.record_carrier_resolution(
+                db,
+                source_packet_id=getattr(post, "source_packet_id", None),
+                child_outcomes=[],
+                terminal_carrier_outcome="CONFIRMED_NO_EVENT",
+                typed_error_reason=f"CONFIRMED_NO_EVENT:{no_event_reason}",
+            )
+            await _emit_progress(
+                "⏭️",
+                [
+                    "Результат: LLM подтвердил отсутствие события",
+                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
+                ],
+            )
+            return
+        await vk_review.schedule_retry(
+            db,
+            int(post.id),
+            typed_reason="EVIDENCE_INCOMPLETE",
+            batch_id=batch_id,
+        )
+        report.inbox_deferred += 1
+        await vk_review.record_carrier_resolution(
+            db,
+            source_packet_id=getattr(post, "source_packet_id", None),
+            child_outcomes=[],
+            terminal_carrier_outcome="RETRY_SCHEDULED",
+            typed_error_reason="EVIDENCE_INCOMPLETE",
         )
         return
 
-    # Filter low-confidence drafts (e.g. title likely copied from a recap of a past event).
-    kept_drafts: list[Any] = []
-    rejected_reasons: list[str] = []
-    for d in list(drafts):
-        reason = str(getattr(d, "reject_reason", "") or "").strip()
-        if reason:
-            rejected_reasons.append(reason)
-            continue
-        kept_drafts.append(d)
-
-    if rejected_reasons and not kept_drafts:
-        report.inbox_rejected += 1
-        reason_short = _shorten_reason(rejected_reasons[0])
-        report.errors.append(f"low_confidence {source_url}: {reason_short or 'low_confidence'}")
-        await vk_review.mark_rejected(db, post.id)
-        await _emit_progress(
-            "⛔",
-            [
-                "Результат: низкая уверенность — событие пропущено",
-                f"Причина: {reason_short or '—'}",
-                f"took_sec: {(time.monotonic() - start_ts):.1f}",
-            ],
-        )
-        return
-
-    if rejected_reasons and kept_drafts:
-        reason_short = _shorten_reason(rejected_reasons[0])
-        report.errors.append(f"low_confidence_partial {source_url}: {reason_short or 'low_confidence'}")
-
-    drafts = kept_drafts
+    # Deterministic warnings have no authority to delete a positive LLM child
+    # or its siblings.
 
     # If LLM returned drafts without location, use the source-level hint as a fallback.
     # This prevents Smart Update from rejecting otherwise valid events due to missing location.
@@ -2454,7 +2645,9 @@ async def _process_vk_inbox_row(
     added_posters_total = 0
     added_posters_by_event_id: dict[int, int] = {}
     partial_error: str | None = None
+    smart_retry_reasons: list[str] = []
     semantic_rejections: list[str] = []
+    child_outcomes: list[str] = []
     inline_jobs_enabled = (os.getenv("VK_AUTO_IMPORT_INLINE_JOBS", "1") or "").strip().lower() in {
         "1",
         "true",
@@ -2464,7 +2657,7 @@ async def _process_vk_inbox_row(
 
     ok = True
     persist_total_sec = 0.0
-    for draft in drafts:
+    for producer_ordinal, draft in enumerate(drafts):
         try:
             t0 = time.monotonic()
             res = await vk_intake.persist_event_and_pages(
@@ -2473,13 +2666,35 @@ async def _process_vk_inbox_row(
                 db,
                 source_post_url=source_url,
                 wait_for_telegraph_url=not inline_jobs_enabled,
+                producer_ordinal=producer_ordinal,
             )
             took_one = time.monotonic() - t0
             persist_total_sec += float(took_one)
 
+            smart_result = res.smart_result
+            if smart_result is None:
+                raise RuntimeError("persist boundary returned no typed Smart Update result")
+            if smart_result.is_rejected:
+                child_outcomes.append("CONFIRMED_PRODUCT_EXCLUSION")
+                semantic_rejections.append(
+                    smart_result.reason or "unspecified_product_policy"
+                )
+                continue
+            if smart_result.is_retry:
+                child_outcomes.append("RETRY_SCHEDULED")
+                # A roundup contains independent candidates. Keep the durable
+                # retry for this child while allowing valid siblings to finish.
+                smart_retry_reasons.append(
+                    smart_result.reason or "smart_update_retry"
+                )
+                continue
+            if not smart_result.is_accepted or res.event_id is None:
+                raise RuntimeError("invalid typed Smart Update result at VK boundary")
+
             imported_event_ids.append(int(res.event_id))
+            child_outcomes.append(str(smart_result.outcome.value))
             imported_event_dates.append(res.event_date)
-            if getattr(res, "smart_created", False) or getattr(res, "smart_status", "") == "created":
+            if smart_result.outcome is SmartUpdateTerminalOutcome.CREATED:
                 created_ids.append(int(res.event_id))
             else:
                 updated_ids.append(int(res.event_id))
@@ -2489,27 +2704,10 @@ async def _process_vk_inbox_row(
         except Exception as exc:
             ok = False
             exc_txt = str(exc)
-            if "smart_update rejected:" in exc_txt:
-                report.errors.append(f"persist_rejected {source_url}: {exc_txt}")
-                # A roundup is one queue row but its drafts are independent
-                # semantic candidates. One invalid/past/ungrounded card must not
-                # discard valid siblings that follow it. Structured output only
-                # guarantees shape, not semantic correctness, so Smart Update's
-                # rejection is a terminal per-draft validation result; continue
-                # through the bounded draft list and decide the row afterwards.
-                semantic_rejections.append(exc_txt)
-                ok = True
-                continue
-            if "smart_update returned no event_id:" in exc_txt:
-                report.errors.append(f"persist_skipped {source_url}: {exc_txt}")
-                semantic_rejections.append(exc_txt)
-                ok = True
-                continue
-
             report.errors.append(f"persist_failed {source_url}: {exc_txt}")
             if not imported_event_ids:
                 report.inbox_failed += 1
-                await vk_review.mark_failed(db, post.id)
+                await vk_review.schedule_retry(db, int(post.id), typed_reason="PERSIST_ERROR", batch_id=batch_id)
                 await _emit_progress(
                     "❌",
                     [
@@ -2527,9 +2725,35 @@ async def _process_vk_inbox_row(
     if drafts:
         _tmark("persist_total", persist_total_sec)
 
+    smart_retry_reason = smart_retry_reasons[0] if smart_retry_reasons else None
+    if smart_retry_reason and not imported_event_ids:
+        report.inbox_deferred += 1
+        report.errors.append(f"retry_scheduled {source_url}: {smart_retry_reason}")
+        await vk_review.mark_deferred(
+            db,
+            int(post.id),
+            batch_id=batch_id,
+            retry_after_sec=_partial_import_retry_sec(),
+        )
+        await _emit_progress(
+            "⏳",
+            [
+                "Результат: Smart Update запланировал автоматический повтор",
+                f"Причина: {_shorten_reason(smart_retry_reason) or 'transient'}",
+                f"took_sec: {(time.monotonic() - start_ts):.1f}",
+            ],
+        )
+        _log_row_timing(drafts_count=len(drafts or []), ok_value=True)
+        return
+
     if semantic_rejections and not imported_event_ids:
         report.inbox_rejected += 1
-        await vk_review.mark_rejected(db, post.id)
+        await vk_review.mark_carrier_outcome(
+            db,
+            inbox_id=int(post.id),
+            outcome="CONFIRMED_PRODUCT_EXCLUSION",
+            typed_reason=semantic_rejections[0],
+        )
         await _emit_progress(
             "⏭️",
             [
@@ -2556,21 +2780,55 @@ async def _process_vk_inbox_row(
         event_dates=imported_event_dates,
     )
     _tmark("mark_imported_events", time.monotonic() - t0)
-    partial_queue_state: str | None = None
-    partial_attempts = 0
-    if partial_error:
-        partial_queue_state, partial_attempts = await vk_review.mark_rate_limited(
+    report.updated_event_ids.extend(lifecycle_event_ids)
+    enrichment_retry = (
+        "EVIDENCE_INCOMPLETE"
+        if not bool(getattr(decision, "evidence_complete", False))
+        else None
+    )
+    lifecycle_retry = lifecycle_unresolved[0] if lifecycle_unresolved else None
+    durable_retry_reason = smart_retry_reason or partial_error or lifecycle_retry or enrichment_retry
+    if durable_retry_reason:
+        await vk_review.mark_deferred(
             db,
             int(post.id),
             batch_id=batch_id,
             retry_after_sec=_partial_import_retry_sec(),
-            max_attempts=_partial_import_max_attempts(),
+            typed_reason=(
+                "LIFECYCLE_NO_MATCH" if lifecycle_retry
+                else "EVIDENCE_INCOMPLETE" if enrichment_retry
+                else "SMART_UPDATE_RETRY" if smart_retry_reason
+                else "PERSIST_ERROR"
+            ),
         )
-        if partial_queue_state == "failed":
-            report.inbox_failed += 1
-        else:
-            report.inbox_deferred += 1
+        report.inbox_deferred += 1
+        await vk_review.record_carrier_resolution(
+            db,
+            source_packet_id=getattr(post, "source_packet_id", None),
+            child_outcomes=child_outcomes,
+            terminal_carrier_outcome="RETRY_SCHEDULED",
+            typed_error_reason=str(durable_retry_reason),
+        )
     else:
+        if exact_parse_replay and child_outcomes and all(
+            outcome == "NOOP_EXACT_REPLAY" for outcome in child_outcomes
+        ):
+            carrier_outcome = "EXACT_REPLAY"
+        elif lifecycle_event_ids:
+            carrier_outcome = "MIXED_RESOLVED"
+        else:
+            carrier_outcome = "EVENTS_RESOLVED"
+        await vk_review.mark_carrier_outcome(
+            db,
+            inbox_id=int(post.id),
+            outcome=carrier_outcome,
+        )
+        await vk_review.record_carrier_resolution(
+            db,
+            source_packet_id=getattr(post, "source_packet_id", None),
+            child_outcomes=child_outcomes,
+            terminal_carrier_outcome=carrier_outcome,
+        )
         report.inbox_imported += 1
     report.created_event_ids.extend(created_ids)
     report.updated_event_ids.extend(updated_ids)
@@ -2593,15 +2851,12 @@ async def _process_vk_inbox_row(
     ]
     if semantic_rejections:
         extra_lines.insert(0, f"⚠️ Отклонено независимых карточек: {len(semantic_rejections)}")
-    if partial_error:
-        retry_state = (
-            f"повтор {partial_attempts}/{_partial_import_max_attempts()}"
-            if partial_queue_state != "failed"
-            else f"failed после {partial_attempts} попыток"
-        )
+    effective_retry_reason = durable_retry_reason
+    if effective_retry_reason:
         extra_lines.insert(
             0,
-            f"⚠️ Частично ({retry_state}): {_shorten_reason(partial_error) or 'persist error'}",
+            "⚠️ Частично (автоматический повтор запланирован): "
+            f"{_shorten_reason(effective_retry_reason) or 'transient'}",
         )
     await _emit_progress(icon, extra_lines)
 

@@ -41,11 +41,20 @@ class _FakeModel:
         )
         return self.owner.response
 
+    async def count_tokens_async(self, prompt):
+        self.owner.count_calls.append({"model_name": self.model_name, "prompt": prompt})
+        if self.owner.count_error is not None:
+            raise self.owner.count_error
+        return self.owner.count_response
+
 
 class _FakeGenAI:
-    def __init__(self, response):
+    def __init__(self, response, *, count_response=None, count_error=None):
         self.response = response
         self.calls: list[dict] = []
+        self.count_calls: list[dict] = []
+        self.count_response = count_response or SimpleNamespace(total_tokens=0)
+        self.count_error = count_error
         self.configured_key: str | None = None
 
     def configure(self, api_key: str) -> None:
@@ -243,7 +252,9 @@ async def test_thought_only_response_raises_instead_of_leaking_sdk_repr():
         )
 
     err = exc_info.value
-    assert getattr(err, "error_type", "") == "empty_response"
+    assert getattr(err, "error_type", "") == "output_truncated"
+    assert err.finish_reason == "MAX_TOKENS"
+    assert err.usage.thought_tokens == 1897
     # The raw SDK repr must never be surfaced as model output or in the error.
     assert "sdk_http_response" not in str(err)
     assert "HttpResponse" not in str(err)

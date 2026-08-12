@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Release control:** disabled the workflow that automatically promoted Draft
+  PRs and enabled auto-merge; readiness and merge now require an explicit
+  controlled release operation.
+- **VK startup recovery:** aligned bootstrap logging with the durable retry-only
+  lock recovery result, removing a stale terminal-failure counter access that
+  raised during every startup cleanup.
 - **Private Events MCP / Telegram documents (default off):** added one-file
   Telegram `send_message` delivery from actual ChatGPT `fileParams` through the
   existing immutable asset stage/prepare/commit boundary. The closed policy
@@ -43,6 +49,43 @@
   existing-identity-preserving generator mode. Codex remains exactly seven
   read-only tools; OpenCode local-file media still requires the separately
   authenticated streaming bridge rather than accepting Windows paths.
+- **P0 / SEV-1 LLM-first ingestion recall remediation (Draft PR #494, not deployed):** added raw-first immutable VK revisions before semantic selection, cursor-safe continuation, complete source/OCR manifests, one typed source verdict with mixed lifecycle/events, conditional contradiction verification, durable provider/backpressure receipts, fair automatic retry and exact successful parse replay. Removed production VK pre-LLM semantic filters, cancellation bypass, post-LLM child veto and technical terminal failure. The Google gateway now exposes countTokens-backed calibrated admission plus input/output/thought/reserved/finish metadata without reducing semantic output/evidence. Completed Smart Update with closed reasons, accepted/diagnostic ID isolation, occurrence-scoped bindings, stable source-native/vendor/structured keys, incoherent-merge distinct create and durable technical retry across Telegram, parser, ticket/festival and manual callers. Added A–T all-source census/recovery planning, February–July availability-aware sampling, funnel/static gates and clone-only production-snapshot migration rehearsal. Production audits/rehearsal were read-only; historical/model-derived recovery totals, provider-tier verification, merge, deploy and recovery apply remain explicitly pending.
+  Preserved compatibility for legacy/structural Smart Update candidates without
+  an optional explicit-occurrence conflict set, so the duplicate probe treats
+  it as empty instead of failing before identity resolution.
+- **Fixed — VK continuation consumer:** crawl caps now have a documented durable
+  automatic lifecycle from due claim through leased page raw-persist and
+  advance/done, with typed retry and stale-lease recovery instead of an orphaned
+  continuation row.
+- **Fixed — fail-closed legacy source verdict:** untyped/legacy empty extraction
+  is compatibility diagnostics only; it cannot confirm no-event, advance a
+  carrier as successful, or substitute for `SourceParseDecision`.
+- **Fixed — truthful attachment evidence:** the typed evidence manifest records
+  total, included, unavailable, omitted, and truncated attachment/OCR evidence,
+  so incomplete media cannot produce a confirmed negative verdict.
+- **Changed — typed prompts/static gate:** source parsing prompts and repository
+  static acceptance are bound to the closed typed disposition/retry contract and
+  reject reintroduction of deterministic semantic shortcuts.
+- **Release gate — not deploy-ready:** real provider quota/tier proof, an atomic
+  fresh-production-snapshot rehearsal, explicit FK-orphan disposition, and
+  model-derived recovery replay through typed Smart Update remain required.
+- **Fixed — mutable VK continuation drift:** repeated/full-duplicate/non-deeper
+  pages now retain the deepest durable `(date, post_id)` and become typed
+  `OFFSET_DRIFT`/`NO_PROGRESS` retry/rebase; only empty, short, horizon, or
+  original-cursor pages complete, and legacy false-terminal exact rows reopen.
+- **Fixed — one pure contradiction matrix:** shared main/VK/direct/parser and
+  exact staged Telegram use the same dependency-light seven-reason fact
+  collector, at most one verifier, positive-child preservation, and retry on
+  verifier uncertainty.
+- **Fixed — mandatory typed no-event reason:** `CONFIRMED_NO_EVENT` now requires
+  exactly one closed seven-value `SourceNoEventReason`; missing, unknown, or
+  misplaced reasons fail schema, receipts, metrics, and terminal gates closed.
+- **Fixed — lossless VK raw envelope and recovery contract:** v1 persists outer
+  and copy text trees, all attachments and link/doc/video previews with semantic
+  hashes and a recursive secret denylist; deleted complete packets replay while
+  legacy-incomplete evidence retries. Audit docs now use mutually exclusive
+  `--read-only` correctly and distinguish half-open carrier/occurrence counts.
+
 
 - **my-data-hub daily statistics producer (default off)**: added a non-sensitive
   `events-bot.daily-statistics.v1` aggregate command with RFC 8785 canonical envelope

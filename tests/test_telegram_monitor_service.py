@@ -55,11 +55,18 @@ def test_generated_telegram_notebook_imports_complete_google_ai_package(tmp_path
 
 from google_ai import AntigravityInteractionsClient, GoogleAIClient
 from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+from source_contradiction_facts import derive_source_contradiction_facts
+from source_parse_contract import EvidenceManifest, SourceParseDecision
 
 assert GoogleAIClient is not None
 assert AntigravityInteractionsClient is not None
 assert build_google_ai_limiter_supabase_client is not None
-print("tg-google-ai-import-closure-ok")
+assert derive_source_contradiction_facts(
+    "clean", [], {"today": "2026-08-12"},
+    SourceParseDecision([{"title": "Named event"}], evidence_manifest=EvidenceManifest.complete_source("clean")),
+    EvidenceManifest.complete_source("clean"),
+) == ()
+print("tg-shared-source-parse-import-closure-ok")
 """,
         encoding="utf-8",
     )
@@ -80,7 +87,7 @@ print("tg-google-ai-import-closure-ok")
     )
 
     assert completed.returncode == 0, completed.stderr
-    assert "tg-google-ai-import-closure-ok" in completed.stdout
+    assert "tg-shared-source-parse-import-closure-ok" in completed.stdout
 
 
 @pytest.fixture(autouse=True)

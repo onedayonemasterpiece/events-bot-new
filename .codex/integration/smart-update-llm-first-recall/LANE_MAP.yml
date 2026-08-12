@@ -1,0 +1,341 @@
+mode: staged_full_fanout
+repo: /home/dev/projects/events-bot-new
+base_ref: 8614262f2c2a5489169cf3c7fa5bf8ab19c83b97
+base_branch: integration/smart-update-identity-state-machine
+integration_branch: integration/smart-update-identity-state-machine
+global_constraints:
+  - continue draft PR 494 only
+  - no new PR or GitHub issue
+  - no production writes, recovery apply, deploy, or merge
+  - do not add a provider or unbenchmarked model
+  - no operator review queue or UI
+  - preserve complete source evidence and LLM-first semantics
+  - artifacts and reports must redact secrets and distinguish carriers from event occurrences
+verification_owner: /root
+stop_conditions:
+  - any attempted production write
+  - unavailable evidence must be recorded, not guessed
+  - migration conflicts fail readiness closed
+  - no readiness claim merely because CI is green
+lanes:
+  - id: MAP-TIMELINE-CONTROL
+    role: planner
+    supporting_requirement_ids: [R05, R06]
+    target: git/deploy/env timeline and both production control-flow graphs
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: bounded report with exact commits, paths, branches, and gap list
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: MAP-SEMANTIC
+    role: planner
+    supporting_requirement_ids: [R03, R10, R11, R12, R13, R14, R16, R18]
+    target: parse/evidence/OCR/cancellation/post-filter/verification architecture
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: exact production paths, ownership-safe file split and test gaps
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: MAP-TPM
+    role: planner
+    supporting_requirement_ids: [R15, R21]
+    target: Google quota/project routing, reservation, queue/backpressure and metrics
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: capacity code map, current failure modes and disjoint implementation scope
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: MAP-CENSUS-RECOVERY
+    role: planner
+    supporting_requirement_ids: [R07, R19, R20, R23]
+    target: audit/recovery/schema/snapshot/historical inventory surfaces
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: data-source map, read-only plan, schema ownership and evidence gaps
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: MAP-SMART-GATES
+    role: planner
+    supporting_requirement_ids: [R17, R22, T56-T76]
+    target: remaining Smart Update reason/identity/caller/static-gate gaps
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: exact violations and smallest conflict-free implementation/test scope
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: PROD-FORENSICS
+    role: planner
+    supporting_requirement_ids: [R05, R07, R15, R20]
+    target: strict read-only Fly/SQLite/runtime/OpsRun/Supabase-capability evidence plan and initial timeline/census
+    depends_on: []
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files:
+      - artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/p0-llm-first-audit/**
+    forbidden_files:
+      - '**/*.py'
+      - docs/**
+      - .github/**
+    expected_output: redacted immutable evidence with query_only/hash/no-write receipts and explicit unavailable sources
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+  - id: SEMANTIC-CONTRACT
+    role: worker
+    requirement_ids: [R03, R10, R11, R12, R13, R14, R16, R18]
+    test_ids: [T15-T44]
+    target: typed source verdict/evidence contract, primary parse schema, conditional verifier and maximum-recall prompt
+    depends_on: [MAP-SEMANTIC, MAP-TIMELINE-CONTROL, PROD-FORENSICS.timeline]
+    execution_mode: parallel
+    branch: agent/smart-update-llm-first/semantic-contract
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-semantic-contract
+    writable_files:
+      - source_parse_contract.py
+      - main.py
+      - docs/llm/prompts.md
+      - tests/test_source_parse_contract.py
+      - tests/test_event_parse_llm_first_contract.py
+      - .codex/lanes/SEMANTIC-CONTRACT/RESULTS.md
+    forbidden_files:
+      - vk_intake.py
+      - vk_auto_queue.py
+      - vk_review.py
+      - db.py
+      - models.py
+      - smart_event_update.py
+      - google_ai/**
+      - CHANGELOG.md
+    expected_output: committed typed parse boundary with one-call normal path and deterministic mocked tests
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: RAW-VK
+    role: worker
+    requirement_ids: [R04, R08, R09, R10.vk, R12.vk, R13.vk, R15.queue, R18.vk, R21]
+    test_ids: [T01-T20, T31, T39-T55, T71-T75]
+    target: raw-first revision durability, complete attachment/OCR evidence, VK typed outcomes and fair durable backpressure
+    depends_on: [SEMANTIC-CONTRACT, MAP-TIMELINE-CONTROL, MAP-TPM, PROD-FORENSICS.timeline]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-llm-first/raw-vk
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-raw-vk
+    writable_files:
+      - db.py
+      - models.py
+      - vk_intake.py
+      - vk_auto_queue.py
+      - vk_review.py
+      - poster_media.py
+      - tests/test_vk_llm_first_discovery.py
+      - tests/test_vk_source_packet_state.py
+      - tests/test_vk_intake_poster_budget.py
+      - tests/test_vk_auto_queue_import.py
+      - tests/test_vk_auto_queue_rate_limit.py
+      - tests/test_vk_ingestion_static_contract.py
+      - .codex/lanes/RAW-VK/RESULTS.md
+    forbidden_files:
+      - main.py
+      - source_parse_contract.py
+      - google_ai/**
+      - smart_event_update.py
+      - smart_update_identity.py
+      - source_parsing/**
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed raw carrier/attempt/continuation schema and production VK flow with zero semantic/technical terminal shortcuts
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: TPM-GATEWAY
+    role: worker
+    requirement_ids: [R15.gateway]
+    test_ids: [T46, T47, T54, T55]
+    target: provider usage/finish metadata, exact-input counting support and calibrated reservation contract
+    depends_on: [MAP-TPM, PROD-FORENSICS.timeline]
+    execution_mode: parallel
+    branch: agent/smart-update-llm-first/tpm-gateway
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-tpm-gateway
+    writable_files:
+      - google_ai/client.py
+      - google_ai/exceptions.py
+      - tests/test_google_ai_client.py
+      - tests/test_google_ai_tpm_calibration.py
+      - .codex/lanes/TPM-GATEWAY/RESULTS.md
+    forbidden_files:
+      - main.py
+      - vk_intake.py
+      - vk_auto_queue.py
+      - vk_review.py
+      - db.py
+      - models.py
+      - supabase/**
+      - CHANGELOG.md
+    expected_output: committed backward-compatible gateway metadata/calibration primitives and tests
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: SMART-CLOSURE
+    role: worker
+    requirement_ids: [R17]
+    test_ids: [T56-T65]
+    target: closed typed reasons, technical retry, distinct rollback and stable occurrence identity
+    depends_on: [MAP-SMART-GATES, MAP-TIMELINE-CONTROL]
+    execution_mode: parallel
+    branch: agent/smart-update-llm-first/smart-closure
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-smart-closure
+    writable_files:
+      - smart_event_update.py
+      - smart_update_state.py
+      - smart_update_identity.py
+      - tests/test_smart_update_typed_reasons.py
+      - tests/test_smart_update_occurrence_stability.py
+      - tests/test_smart_update_automatic_identity_resolution.py
+      - .codex/lanes/SMART-CLOSURE/RESULTS.md
+    forbidden_files:
+      - main.py
+      - vk_*.py
+      - db.py
+      - models.py
+      - source_parsing/**
+      - CHANGELOG.md
+    expected_output: committed residual Smart Update closure with focused DB/facade tests
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: CALLER-RETRY
+    role: worker
+    requirement_ids: [R17.callers, R18.callers]
+    test_ids: [T63, T74, T76]
+    target: Telegram/parser/festival/manual automatic retry and accepted-result-only side effects
+    depends_on: [MAP-SMART-GATES, MAP-SEMANTIC]
+    execution_mode: parallel
+    branch: agent/smart-update-llm-first/caller-retry
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-caller-retry
+    writable_files:
+      - source_parsing/telegram/handlers.py
+      - source_parsing/handlers.py
+      - source_parsing/commands.py
+      - festival_queue.py
+      - main_part2.py
+      - tests/test_ingestion_caller_retry_contract.py
+      - tests/test_smart_update_caller_typed_contract.py
+      - .codex/lanes/CALLER-RETRY/RESULTS.md
+    forbidden_files:
+      - main.py
+      - vk_*.py
+      - db.py
+      - models.py
+      - smart_event_update.py
+      - smart_update_identity.py
+      - CHANGELOG.md
+    expected_output: committed due/reclaimable technical outcomes and strengthened caller AST/behavior tests
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: RECOVERY-CENSUS
+    role: worker
+    requirement_ids: [R07, R19, R20, R23]
+    test_ids: [T66-T70]
+    target: A-T census, expanded strict read-only recovery planner, historical sampling and snapshot rehearsal tooling
+    depends_on: [MAP-CENSUS-RECOVERY, MAP-TIMELINE-CONTROL, PROD-FORENSICS.timeline]
+    execution_mode: parallel
+    branch: agent/smart-update-llm-first/recovery-census
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-recovery-census
+    writable_files:
+      - scripts/ops/recover_smart_update_identity_losses.py
+      - scripts/ops/smart_update_prod_audit.py
+      - scripts/ops/smart_update_loss_census.py
+      - scripts/ops/rehearse_smart_update_migration.py
+      - tests/test_recover_smart_update_identity_losses.py
+      - tests/test_smart_update_loss_census.py
+      - tests/test_smart_update_migration_rehearsal.py
+      - .codex/lanes/RECOVERY-CENSUS/RESULTS.md
+    forbidden_files:
+      - db.py
+      - models.py
+      - main.py
+      - vk_*.py
+      - smart_event_update.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: committed pure selectors/reports/rehearsal tools with byte/query-only/idempotence tests
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: TG-PRODUCER
+    role: worker
+    requirement_ids: [R03, R10, R11, R12, R13, R14, R16, R18]
+    test_ids: [T01-T44]
+    target: self-contained Telegram Monitoring typed source verdict, complete album OCR and conditional verifier
+    depends_on: [SEMANTIC-CONTRACT, MAP-SEMANTIC]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-llm-first/tg-producer
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-tg-producer
+    writable_files:
+      - kaggle/TelegramMonitor/telegram_monitor.py
+      - tests/test_telegram_monitor_llm_first_producer_contract.py
+      - .codex/lanes/TG-PRODUCER/RESULTS.md
+    forbidden_files:
+      - source_parsing/**
+      - db.py
+      - models.py
+      - docs/**
+      - CHANGELOG.md
+    expected_output: typed every-message/album decision with complete OCR manifest and no semantic short circuit
+    verification_scope: targeted
+    effort: high
+    status: completed
+  - id: ORCH
+    role: merge_reviewer
+    requirement_ids: [R01, R02, R22, R24, R25, R26]
+    target: incident formalization, integration, aggregate verification and PR evidence
+    depends_on: [MAP-TIMELINE-CONTROL, MAP-SEMANTIC, MAP-TPM, MAP-CENSUS-RECOVERY, MAP-SMART-GATES, PROD-FORENSICS]
+    execution_mode: serial_integrator
+    branch: integration/smart-update-identity-state-machine
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: repository-wide only after worker ownership is released
+    forbidden_files: production state
+    expected_output: clean pushed PR head, integration report and full verification receipts
+    verification_scope: full_local
+    effort: max
+    status: completed
+  - id: CLOSURE-REVIEW
+    role: reviewer
+    requirement_ids: [R27]
+    target: independent R01-R27/T01-T76/criterion audit
+    depends_on: [ORCH]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: []
+    forbidden_files: ['**/*']
+    expected_output: Done/Partial/Missing/Blocked table with no hidden gaps
+    verification_scope: inspection_only
+    effort: high
+    status: completed
+    closure_outcome: blocked_by_explicit_no_deploy_no_write_and_unavailable_historical_provider_evidence

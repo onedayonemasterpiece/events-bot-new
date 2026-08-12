@@ -1,0 +1,159 @@
+mode: serial_integrator_with_parallel_read_only_mapping
+repo: onedayonemasterpiece/events-bot-new
+base_ref: 5291c42897db8a157f0f9699bc678be42f96a331
+base_branch: integration/smart-update-identity-state-machine
+integration_branch: integration/smart-update-identity-state-machine
+global_constraints:
+  - continue Draft PR 494; no new PR or issue
+  - no merge, deploy, production mutation, refetch/model replay, or recovery apply
+  - preserve accepted typed verdict, evidence, continuation and Smart Update architecture
+  - no new model/provider, always-on verifier, operator gate, semantic regex verdict, or TPM filter
+  - production evidence is strict read-only only
+verification_owner: /root
+stop_conditions:
+  - PR head advances beyond reviewed base before implementation without audited delta
+  - a requested operation would write production state
+  - any lane needs to turn deterministic facts into a product verdict
+lanes:
+  - id: MAP-CONTINUATION
+    role: planner
+    effort: high
+    requirement_ids: [C1-C8]
+    target: root-cause map offset drift, legacy replay rows and safe rebase algorithm
+    depends_on: []
+    execution_mode: parallel_read_only
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: exact implementation/test map
+    verification_scope: inspection_only
+    status: completed
+  - id: MAP-VERIFY-NOEVENT
+    role: planner
+    effort: high
+    requirement_ids: [V1-V11, N1-N9]
+    target: trace all source facades, verifier wiring, no-event authority and prompt/receipt schemas
+    depends_on: []
+    execution_mode: parallel_read_only
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: seven-reason producer map and fail-closed adapter map
+    verification_scope: inspection_only
+    status: completed
+  - id: MAP-RAW-PACKET
+    role: planner
+    effort: high
+    requirement_ids: [R1-R8]
+    target: trace VK API flattening, durable packet envelope, fallback and revision keys
+    depends_on: []
+    execution_mode: parallel_read_only
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: exact loss boundary and minimal lossless-enough schema
+    verification_scope: inspection_only
+    status: completed
+  - id: MAP-CLOSURE
+    role: planner
+    effort: medium
+    requirement_ids: [E2-E10, E13-E14]
+    target: map docs/static/incident/RO evidence deltas and acceptance gaps
+    depends_on: []
+    execution_mode: parallel_read_only
+    branch: null
+    worktree: read-only integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: final evidence checklist
+    verification_scope: inspection_only
+    status: completed
+  - id: IMPL-CONTINUATION
+    role: worker
+    effort: high
+    requirement_ids: [C1-C8]
+    target: offset-drift-safe continuation and regressions A-H
+    depends_on: [MAP-CONTINUATION]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-final-code/continuation-drift
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-continuation-drift
+    writable_files: [vk_intake.py, db.py, models.py, tests/test_vk_crawl_continuation.py, .codex/lanes/CONTINUATION-DRIFT/RESULTS.md]
+    forbidden_files: [source_parse_contract.py, main.py, docs/**, CHANGELOG.md]
+    expected_output: committed implementation and test receipt
+    verification_scope: targeted
+    status: merged
+  - id: IMPL-VERIFY-NOEVENT
+    role: worker
+    effort: high
+    requirement_ids: [V1-V11, N1-N9]
+    target: seven-reason collector/wiring and mandatory no-event reason
+    depends_on: [IMPL-CONTINUATION, MAP-VERIFY-NOEVENT]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-final-code/verification-noevent
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-verification-noevent
+    writable_files: [source_contradiction_facts.py, source_parse_contract.py, main.py, main_part2.py, festival_queue.py, vk_intake.py, vk_auto_queue.py, vk_review.py, db.py, models.py, source_parsing/telegram/handlers.py, source_parsing/telegram/service.py, kaggle/TelegramMonitor/telegram_monitor.py, docs/llm/prompts.md, scripts/inspect/audit_source_parse_prompt_contract.py, tests/test_source_parse_contract.py, tests/test_event_parse_llm_first_contract.py, tests/test_vk_raw_first_llm_contract.py, tests/test_vk_auto_queue_import.py, tests/test_telegram_monitor_llm_first_producer_contract.py, tests/test_telegram_monitor_service.py, tests/test_tg_monitor_reprocess_incomplete_scan.py, tests/test_ingestion_caller_retry_contract.py, tests/test_add_events_from_text_source_decision.py, tests/test_source_parse_prompt_contract.py, .codex/lanes/VERIFICATION-NOEVENT/RESULTS.md]
+    forbidden_files: [smart_event_update.py, smart_update_state.py, scripts/ops/recover_smart_update_identity_losses.py]
+    expected_output: committed collector/facades/schema/static gate and E2E tests
+    verification_scope: targeted
+    status: merged
+  - id: IMPL-RAW-PACKET
+    role: worker
+    effort: high
+    requirement_ids: [R1-R8]
+    target: durable lossless-enough outer+nested VK source envelope and fallback
+    depends_on: [IMPL-VERIFY-NOEVENT, MAP-RAW-PACKET]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-final-code/raw-packet
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-raw-packet
+    writable_files: [vk_source_envelope.py, main.py, main_part2.py, vk_intake.py, vk_auto_queue.py, db.py, models.py, scripts/ops/smart_update_loss_census.py, scripts/ops/recover_smart_update_identity_losses.py, tests/test_vk_source_envelope.py, tests/test_vk_raw_first_llm_contract.py, tests/test_vk_crawl_continuation.py, tests/test_vk_auto_queue_import.py, tests/test_vkrev_fetch_photos.py, tests/test_smart_update_loss_census.py, tests/test_recover_smart_update_identity_losses.py, .codex/lanes/RAW-PACKET/RESULTS.md]
+    forbidden_files: [source_parse_contract.py, smart_event_update.py, docs/**, CHANGELOG.md]
+    expected_output: committed packet schema/builder/fallback and regressions A-G
+    verification_scope: targeted
+    status: merged
+  - id: DOCS-EVIDENCE
+    role: worker
+    effort: high
+    requirement_ids: [E1, E11-E12]
+    target: canonical docs/changelog/incident/integration report/strict RO evidence
+    depends_on: [IMPL-RAW-PACKET, MAP-CLOSURE]
+    execution_mode: serial_after_dependency
+    branch: agent/smart-update-final-code/docs-ci
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-final-docs-ci
+    writable_files: [.github/workflows/ci.yaml, README.md, CHANGELOG.md, docs/features/source-parsing/README.md, docs/features/vk-auto-queue/README.md, docs/features/telegram-monitoring/README.md, docs/architecture/overview.md, docs/operations/cron.md, docs/operations/smart-update-prod-audit.md, docs/operations/release-smoke-smart-update.md, .codex/lanes/DOCS-CI/RESULTS.md]
+    forbidden_files: []
+    expected_output: exact-SHA report, incident and production RO receipts
+    verification_scope: full_local
+    status: merged
+  - id: FINAL-EVIDENCE
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [E1-E14]
+    target: exact-SHA integration report, incident update, strict read-only production receipts and PR evidence
+    depends_on: [DOCS-EVIDENCE]
+    execution_mode: serial_after_dependency
+    branch: integration/smart-update-identity-state-machine
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: [docs/reports/incidents/INC-2026-08-10-smart-update-identity-terminal-loss.md, .codex/integration/smart-update-llm-first-final-code-remediation/**, artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/**]
+    forbidden_files: []
+    expected_output: immutable local/prod-read-only receipts and exact closure report
+    verification_scope: full_local
+    status: completed
+    result: committed report/incident closure evidence plus deterministic strict read-only receipts; incident remains open
+  - id: FINAL-REVIEW
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [G1-G8]
+    target: requirement closure/no-scope-expansion/exact-PR audit
+    depends_on: [FINAL-EVIDENCE]
+    execution_mode: serial_after_dependency
+    branch: null
+    worktree: read-only final integration worktree
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: Done/Partial/Missing/Blocked matrix
+    verification_scope: full_local
+    status: completed
+    result: four reviewed code blockers Done; T68 Partial and four external release gates Blocked; no merge/deploy/apply

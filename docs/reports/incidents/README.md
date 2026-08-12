@@ -2,6 +2,12 @@
 
 Канонический индекс production incidents и post-incident разборов. Эти записи должны использоваться как обязательный regression-check перед любыми новыми изменениями в затронутых prod-поверхностях.
 
+- `INC-2026-08-10-smart-update-identity-terminal-loss.md`
+  — P0 / sev1: configured-source ingestion recall collapsed from 30+ to 2–5
+  events/day through acute Smart Update terminal loss plus chronic pre/post-LLM
+  semantic shortcuts; raw-first typed LLM decisions, durable backpressure,
+  occurrence-safe Smart Update and all-source recovery are the active contract.
+
 - `INC-2026-08-04-smart-update-identity-source-replay-corruption.md`
   — sev1 recurrence: distinct-event merge/source binding corruption and
   identical Telegram/VK warm-replay mutations; exact-main repair is in progress.

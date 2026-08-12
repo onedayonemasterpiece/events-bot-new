@@ -14,8 +14,10 @@ from dataclasses import dataclass, field
 from typing import Any, List, Sequence
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 import aiohttp
+import aiosqlite
 from db import Database
 from poster_media import (
     PosterMedia,
@@ -27,6 +29,16 @@ from poster_media import (
 )
 import poster_ocr
 from source_parsing.date_utils import normalize_implicit_iso_date_to_anchor
+from source_parse_contract import (
+    decision_from_provider_payload,
+    EvidenceManifest,
+    LifecycleAction,
+    PARSE_VERSION,
+    SourceDisposition,
+    SourceNoEventReason,
+    SourceParseDecision,
+    SourceParseRetryReason,
+)
 
 from sections import MONTHS_RU
 from runtime import require_main_attr
@@ -218,107 +230,19 @@ def _clean_llm_text_field(value: Any, *, field_name: str | None = None) -> str |
 
 
 def _budget_vk_parse_poster_texts(post_text: str, poster_texts: Sequence[str]) -> list[str]:
-    cleaned = [
+    """Return every available OCR block without semantic budgeting.
+
+    Source evidence is never shortened because the post is long, lacks a
+    logistics keyword, or has many cards. Provider/context overflow is a typed
+    retry concern, not permission to omit a carrier fragment silently.
+    """
+
+    del post_text  # inclusion is deliberately independent of text shape
+    return [
         block
         for block in (_normalize_prompt_ocr_block(text) for text in poster_texts)
         if block
     ]
-    if not cleaned:
-        return []
-
-    main_text_len = len((post_text or "").strip())
-    schedule_cards = bool(
-        re.search(
-            r"\b(?:расписание|места?\s+проведения|подробности)\b[^.!?\n]{0,80}\b(?:в|на)\s+карточках\b",
-            unicodedata.normalize("NFKC", post_text or "").casefold().replace("ё", "е"),
-            flags=re.I | re.U,
-        )
-    )
-    if schedule_cards:
-        # This is source-completeness transport, not a semantic event rule.  An
-        # explicit "schedule/venues are in the cards" caption says that every
-        # card is primary evidence.  Applying the ordinary three-block budget
-        # here can hide sibling occurrences and invite the LLM to collapse the
-        # cover range into one synthetic event.
-        max_blocks = max(1, _read_int_env("VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCKS", 10))
-        max_block_chars = max(80, _read_int_env("VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_BLOCK_CHARS", 1200))
-        max_total_chars = max(
-            max_block_chars,
-            _read_int_env("VK_PARSE_SCHEDULE_POSTER_TEXT_MAX_TOTAL_CHARS", 9000),
-        )
-        selected: list[str] = []
-        remaining = max_total_chars
-        for block in cleaned:
-            if len(selected) >= max_blocks or remaining <= 0:
-                break
-            trimmed = _truncate_prompt_block(block, min(max_block_chars, remaining)).strip()
-            if not trimmed:
-                continue
-            selected.append(trimmed)
-            remaining -= len(trimmed)
-        logger.info(
-            "vk.parse budget: explicit schedule cards kept blocks=%s/%s chars=%s/%s",
-            len(selected),
-            len(cleaned),
-            sum(len(block) for block in selected),
-            sum(len(block) for block in cleaned),
-        )
-        return selected
-
-    skip_main_text_chars = max(0, _read_int_env("VK_PARSE_POSTER_TEXT_SKIP_MAIN_TEXT_CHARS", 1600))
-    max_blocks = max(1, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCKS", 3))
-    max_block_chars = max(80, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_BLOCK_CHARS", 500))
-    max_total_chars = max(max_block_chars, _read_int_env("VK_PARSE_POSTER_TEXT_MAX_TOTAL_CHARS", 1200))
-    if skip_main_text_chars and main_text_len >= skip_main_text_chars:
-        selected: list[str] = []
-        remaining = max_total_chars
-        for block in cleaned:
-            if len(selected) >= max_blocks or remaining <= 0:
-                break
-            limit = min(max_block_chars, remaining)
-            trimmed = _extract_vk_parse_poster_logistics_block(block, limit)
-            if not trimmed:
-                continue
-            selected.append(trimmed)
-            remaining -= len(trimmed)
-        if selected:
-            logger.info(
-                "vk.parse budget: poster OCR logistics kept for long post text_len=%s posters=%s blocks=%s chars=%s",
-                main_text_len,
-                len(cleaned),
-                len(selected),
-                sum(len(block) for block in selected),
-            )
-            return selected
-        logger.info(
-            "vk.parse budget: skip poster OCR for long post text_len=%s posters=%s logistics_blocks=0",
-            main_text_len,
-            len(cleaned),
-        )
-        return []
-
-    selected: list[str] = []
-    remaining = max_total_chars
-    for block in cleaned:
-        if len(selected) >= max_blocks or remaining <= 0:
-            break
-        limit = min(max_block_chars, remaining)
-        trimmed = _truncate_prompt_block(block, limit).strip()
-        if not trimmed:
-            continue
-        selected.append(trimmed)
-        remaining -= len(trimmed)
-
-    if len(selected) != len(cleaned):
-        logger.info(
-            "vk.parse budget: poster OCR reduced blocks=%s->%s total_chars=%s->%s",
-            len(cleaned),
-            len(selected),
-            sum(len(block) for block in cleaned),
-            sum(len(block) for block in selected),
-        )
-    return selected
-
 
 def _normalize_group_title(value: str | None) -> str | None:
     if not value:
@@ -939,97 +863,6 @@ def _vk_should_rescue_to_llm_without_ts_hint(text: str) -> bool:
     return True
 
 
-def _vk_parse_preclassify(
-    text: str,
-    *,
-    source_name: str | None = None,
-    poster_texts: Sequence[str] | None = None,
-    publish_ts: datetime | int | float | None = None,
-    event_ts_hint: int | None = None,
-    operator_extra: str | None = None,
-    festival_hint: bool = False,
-) -> tuple[str, str | None]:
-    """Cheap conservative gate before the full VK parse prompt.
-
-    The goal is not to classify every post, only to skip obvious long-form
-    non-events that would otherwise reserve >12k TPM and still end up rejected.
-    Anything even slightly ambiguous stays in ``maybe_event`` and proceeds to
-    the normal LLM parser unchanged.
-    """
-    if festival_hint or (operator_extra or "").strip():
-        return "maybe_event", None
-
-    enabled = (os.getenv("VK_AUTO_IMPORT_PREFILTER_OBVIOUS_NON_EVENTS", "1") or "").strip().lower()
-    if enabled not in {"1", "true", "yes", "on"}:
-        return "maybe_event", None
-
-    text_clean = (text or "").strip()
-    if not text_clean:
-        return "maybe_event", None
-
-    history_min_chars = max(800, _read_int_env("VK_AUTO_IMPORT_PREFILTER_HISTORY_MIN_CHARS", 2200))
-    admin_min_chars = max(800, _read_int_env("VK_AUTO_IMPORT_PREFILTER_ADMIN_MIN_CHARS", 1800))
-    if len(text_clean) < min(history_min_chars, admin_min_chars):
-        return "maybe_event", None
-
-    context_parts: list[str] = [text_clean]
-    source_clean = (source_name or "").strip()
-    if source_clean:
-        context_parts.append(source_clean)
-    for block in list(poster_texts or [])[:3]:
-        block_clean = (block or "").strip()
-        if block_clean:
-            context_parts.append(block_clean)
-    combined_text = "\n".join(context_parts)
-    combined_norm = unicodedata.normalize("NFKC", combined_text).casefold().replace("ё", "е")
-
-    future_hint = int(event_ts_hint) if isinstance(event_ts_hint, int) and event_ts_hint > 0 else None
-    if future_hint is None:
-        try:
-            tzinfo = require_main_attr("LOCAL_TZ")
-            future_hint = extract_event_ts_hint(
-                combined_text,
-                default_time=None,
-                publish_ts=publish_ts,
-                allow_past=False,
-                tz=tzinfo,
-            )
-        except Exception:
-            future_hint = None
-    if future_hint:
-        return "maybe_event", None
-
-    kw_ok, _matched = match_keywords(combined_text)
-    visitable_signal = bool(
-        kw_ok
-        or PRICE_RE.search(combined_norm)
-        or _VK_PARSE_PREFILTER_VISIT_HINT_RE.search(combined_norm)
-    )
-    if visitable_signal:
-        return "maybe_event", None
-
-    historical_years = {
-        int(match)
-        for match in HISTORICAL_YEAR_RE.findall(combined_norm)
-        if str(match).isdigit() and int(match) <= 1994
-    }
-    historical_hit = detect_historical_context(combined_norm)
-    if len(text_clean) >= history_min_chars and historical_hit and historical_years:
-        return (
-            "non_event",
-            "Длинный исторический/справочный пост без признаков будущего посещаемого события",
-        )
-
-    admin_hits = len(_VK_PARSE_PREFILTER_ADMIN_RE.findall(combined_norm))
-    if len(text_clean) >= admin_min_chars and admin_hits >= 3:
-        return (
-            "non_event",
-            "Длинный административный/новостной пост без признаков посещаемого события",
-        )
-
-    return "maybe_event", None
-
-
 def normalize_phone_candidates(text: str) -> str:
     """Strip separators from phone-like sequences without touching valid dates."""
 
@@ -1516,8 +1349,148 @@ class EventDraft:
     ocr_tokens_spent: int = 0
     ocr_tokens_remaining: int | None = None
     ocr_limit_notice: str | None = None
+    ocr_failed: bool = False
     search_digest: str | None = None
-    reject_reason: str | None = None
+    verification_warnings: list[str] = field(default_factory=list)
+
+
+class DraftParseResult(list[EventDraft]):
+    """Legacy-compatible draft list carrying the typed source verdict."""
+
+    def __init__(
+        self,
+        drafts: Sequence[EventDraft] | None = None,
+        *,
+        decision: SourceParseDecision | None = None,
+    ) -> None:
+        super().__init__(drafts or ())
+        self.decision = decision if decision is not None else SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+        )
+        self.disposition = self.decision.disposition
+        self.lifecycle_actions = self.decision.lifecycle_actions
+        self.evidence_manifest = self.decision.evidence_manifest
+        self.evidence_complete = self.decision.evidence_complete
+        self.parse_version = self.decision.parse_version
+        self.retry_reason = self.decision.retry_reason
+        self.no_event_reason = self.decision.no_event_reason
+        self.enrichment_required = self.decision.enrichment_required
+
+    def to_receipt_payload(self) -> dict[str, Any]:
+        return {
+            "decision": self.decision.to_payload(),
+            "drafts": [
+                {
+                    key: value
+                    for key, value in vars(draft).items()
+                    if key not in {"poster_media"}
+                }
+                for draft in self
+            ],
+        }
+
+    @classmethod
+    def from_receipt_payload(cls, payload: dict[str, Any]) -> "DraftParseResult":
+        decision_payload = payload.get("decision") if isinstance(payload, dict) else None
+        if not isinstance(decision_payload, dict):
+            raise ValueError("missing typed decision receipt")
+        manifest_payload = decision_payload.get("evidence_manifest")
+        if not isinstance(manifest_payload, dict):
+            raise ValueError("missing evidence_manifest in typed decision receipt")
+        required_decision_fields = {
+            "disposition",
+            "events",
+            "lifecycle_actions",
+            "evidence_complete",
+            "parse_version",
+        }
+        missing_fields = sorted(required_decision_fields - decision_payload.keys())
+        if missing_fields:
+            if missing_fields == ["disposition"]:
+                raise ValueError("missing disposition in typed decision receipt")
+            raise ValueError(
+                "missing typed decision receipt fields: " + ",".join(missing_fields)
+            )
+        disposition = decision_payload.get("disposition")
+        try:
+            typed_disposition = SourceDisposition(str(disposition))
+        except ValueError as exc:
+            raise ValueError(f"unknown disposition in typed decision receipt: {disposition!r}") from exc
+        retry_reason = decision_payload.get("retry_reason")
+        if typed_disposition is SourceDisposition.RETRY_REQUIRED and retry_reason is None:
+            raise ValueError("missing retry_reason in retry receipt")
+        if retry_reason is not None:
+            try:
+                SourceParseRetryReason(str(retry_reason))
+            except ValueError as exc:
+                raise ValueError(
+                    f"unknown retry_reason in typed decision receipt: {retry_reason!r}"
+                ) from exc
+        no_event_reason = decision_payload.get("no_event_reason")
+        if (
+            typed_disposition is SourceDisposition.CONFIRMED_NO_EVENT
+            and no_event_reason is None
+        ):
+            raise ValueError("missing no_event_reason in confirmed no-event receipt")
+        if no_event_reason is not None:
+            try:
+                SourceNoEventReason(str(no_event_reason))
+            except ValueError as exc:
+                raise ValueError(
+                    f"unknown no_event_reason in typed decision receipt: {no_event_reason!r}"
+                ) from exc
+            if typed_disposition is not SourceDisposition.CONFIRMED_NO_EVENT:
+                raise ValueError("no_event_reason is only valid for CONFIRMED_NO_EVENT")
+        manifest = EvidenceManifest.from_mapping(manifest_payload)
+        events_payload = decision_payload.get("events")
+        actions_payload = decision_payload.get("lifecycle_actions")
+        if not isinstance(events_payload, list):
+            raise ValueError("events is not a list in typed decision receipt")
+        if not isinstance(actions_payload, list) or not all(
+            isinstance(item, dict) for item in actions_payload
+        ):
+            raise ValueError("lifecycle_actions is invalid in typed decision receipt")
+        actions = tuple(
+            LifecycleAction.from_mapping(item)
+            for item in actions_payload
+        )
+        decision = SourceParseDecision(
+            events_payload,
+            disposition=typed_disposition,
+            lifecycle_actions=actions,
+            evidence_manifest=manifest,
+            evidence_complete=bool(decision_payload.get("evidence_complete", False)),
+            parse_version=str(decision_payload.get("parse_version") or PARSE_VERSION),
+            retry_reason=retry_reason,
+            no_event_reason=no_event_reason,
+            festival=decision_payload.get("festival"),
+            enrichment_required=bool(decision_payload.get("enrichment_required", False)),
+            provider_attempts=decision_payload.get("provider_attempts") or (),
+        )
+        drafts: list[EventDraft] = []
+        allowed = set(EventDraft.__dataclass_fields__)
+        drafts_payload = payload.get("drafts")
+        if not isinstance(drafts_payload, list) or not all(
+            isinstance(item, dict) for item in drafts_payload
+        ):
+            raise ValueError("drafts is invalid in typed decision receipt")
+        for item in drafts_payload:
+            drafts.append(EventDraft(**{k: v for k, v in item.items() if k in allowed}))
+        decision_events = list(decision.events)
+        if len(decision_events) != len(drafts):
+            raise ValueError("decision/draft child count mismatch in typed receipt")
+
+        def title_key(value: Any) -> str:
+            text = unicodedata.normalize("NFKC", str(value or "")).casefold().strip()
+            return re.sub(r"^[^0-9a-zа-я]+", "", text)
+
+        if any(
+            not title_key(event.get("title"))
+            or title_key(event.get("title")) != title_key(draft.title)
+            for event, draft in zip(decision_events, drafts)
+        ):
+            raise ValueError("decision/draft title mismatch in typed receipt")
+        return cls(drafts, decision=decision)
 
 
 async def _llm_assign_source_posters_to_drafts(
@@ -1818,7 +1791,7 @@ class PosterDatetimeAnchor:
 
 @dataclass
 class PersistResult:
-    event_id: int
+    event_id: int | None
     telegraph_url: str
     ics_supabase_url: str
     ics_tg_url: str
@@ -1832,6 +1805,9 @@ class PersistResult:
     smart_created: bool = False
     smart_merged: bool = False
     smart_added_posters: int = 0
+    # Typed Smart Update boundary. Legacy booleans above remain constructor
+    # compatible for older fixtures, but production callers use this result.
+    smart_result: Any | None = None
 
 
 _EXTERNAL_SHORT_TICKET_HOSTS = {"clck.ru"}
@@ -2084,7 +2060,6 @@ async def _download_photo_media(urls: Sequence[str]) -> list[tuple[bytes, str]]:
     validate_jpeg_markers = getattr(main_mod, "validate_jpeg_markers", None)
     if validate_jpeg_markers is None:  # pragma: no cover - defensive
         raise RuntimeError("validate_jpeg_markers not found")
-    limit = getattr(main_mod, "MAX_ALBUM_IMAGES", 3)
     results: list[tuple[bytes, str]] = []
 
     request_headers = getattr(main_mod, "VK_PHOTO_FETCH_HEADERS", None)
@@ -2116,7 +2091,7 @@ async def _download_photo_media(urls: Sequence[str]) -> list[tuple[bytes, str]]:
     else:
         request_headers = dict(request_headers)
 
-    for idx, url in enumerate(urls[:limit]):
+    for idx, url in enumerate(urls):
 
         async def _fetch() -> tuple[bytes, str | None, str | None]:
             async with semaphore:
@@ -2193,6 +2168,7 @@ async def vk_intake_parse_llm(
     poster_media: Sequence[PosterMedia] | None = None,
     rate_limit_max_wait_sec: float | int | str | None = None,
     parse_gemma_model: str | None = None,
+    evidence_manifest: EvidenceManifest | None = None,
 ) -> Any:
     """Parse a VK post text into structured events using the universal LLM parser.
 
@@ -2222,6 +2198,13 @@ async def vk_intake_parse_llm(
         parse_kwargs["rate_limit_max_wait_sec"] = str(rate_limit_max_wait_sec)
     if parse_gemma_model:
         parse_kwargs["gemma_model"] = str(parse_gemma_model).strip()
+    if evidence_manifest is not None:
+        parse_kwargs["evidence_manifest"] = evidence_manifest.to_payload()
+    if source_text is not None:
+        # The primary prompt contains VK policy overlays.  Contradiction facts
+        # and the verifier must receive the untouched carrier, not those
+        # instructions as if they were source evidence.
+        parse_kwargs["semantic_source_text"] = source_text
 
     return await parse_event_via_llm(
         prompt_text,
@@ -2249,7 +2232,7 @@ async def build_event_drafts_from_vk(
     ocr_tokens_remaining: int | None = None,
     rate_limit_max_wait_sec: float | int | str | None = None,
     parse_gemma_model: str | None = None,
-    prefilter_obvious_non_events: bool = False,
+    evidence_manifest: EvidenceManifest | None = None,
 ) -> tuple[list[EventDraft], dict[str, Any] | None]:
     """Return normalised event drafts extracted from a VK post.
 
@@ -2272,6 +2255,9 @@ async def build_event_drafts_from_vk(
     poster_items = list(poster_media or [])
     poster_texts = collect_poster_texts(poster_items)
     poster_summary = build_poster_summary(poster_items)
+    evidence_manifest = evidence_manifest or EvidenceManifest.complete_source(
+        text or "", poster_texts, attachment_count=len(poster_items)
+    )
 
     fallback_ticket_link = (
         default_ticket_link.strip()
@@ -2289,6 +2275,22 @@ async def build_event_drafts_from_vk(
     # nudge the parser to make the format visible in the title (without hardcoding
     # deterministic renames after parsing).
     llm_text += (
+        "\nОбязательный source-level verdict: верни один типизированный объект "
+        "SourceParseDecision с disposition, events, lifecycle_actions, evidence_complete, parse_version и no_event_reason. "
+        "Допустимы только EVENTS_FOUND, CONFIRMED_NO_EVENT, LIFECYCLE_ONLY, MIXED и RETRY_REQUIRED. "
+        "CONFIRMED_NO_EVENT допустим только для доказанного полного non-event при полном тексте и всех OCR-карточках; "
+        "no_event_reason обязателен только для этого disposition и должен быть одним из NO_ATTENDABLE_EVENT, "
+        "GIVEAWAY_ONLY, VAGUE_TEASER, REFERRAL_ONLY, SERVICE_OR_RENTAL, RECAP_ONLY, OUT_OF_SCOPE. "
+        "Если карточки/вложения доступны не полностью, используй RETRY_REQUIRED с retry_reason=EVIDENCE_INCOMPLETE. "
+        "Если при неполных доказательствах найдены положительные события, сохрани их с EVENTS_FOUND либо MIXED "
+        "и evidence_complete=false: они требуют дальнейшего enrichment, но не должны исчезнуть. "
+        "Для сообщения только об отмене, переносе или изменении уже известного события используй LIFECYCLE_ONLY. "
+        "Розыгрыш без самостоятельного описания посещаемого события — доказанный non-event и получает "
+        "CONFIRMED_NO_EVENT с no_event_reason=GIVEAWAY_ONLY только при полном evidence; "
+        "розыгрыш вместе с реальным событием сохраняет событие. "
+        "Расплывчатый тизер без конкретного посещаемого слота получает CONFIRMED_NO_EVENT "
+        "с no_event_reason=VAGUE_TEASER при полном evidence, "
+        "а при неполных карточках — RETRY_REQUIRED/EVIDENCE_INCOMPLETE. "
         "\nПравила извлечения локации: если пост содержит несколько дат/блоков/репостов, "
         "для каждого события бери площадку, адрес и город из ближайшего к нему блока даты/названия. "
         "Хинт источника или дефолт группы используй только когда в самом блоке нет своей площадки. "
@@ -2307,10 +2309,13 @@ async def build_event_drafts_from_vk(
         "разные соревнования/события, даты, города или площадки, верни отдельный event для каждой "
         "достаточно подтверждённой карточки; диапазон с обложки — только envelope, не date/end_date "
         "одного события. Не создавай aggregate event. Если видна лишь часть карточек и нельзя "
-        "надёжно восстановить конкретный пункт, fail closed (`[]`) вместо свёртки подборки. "
+        "надёжно восстановить конкретный пункт, используй RETRY_REQUIRED с "
+        "retry_reason=EVIDENCE_INCOMPLETE вместо свёртки подборки. "
         "Если пост про выставку/ярмарку только тизерит будущий анонс без точного дня, периода или даты окончания "
         "(например «готовим выставку», «анонс через пару дней», «точную дату анонсируем позже», «в мае откроем»), "
-        "верни `[]`: не ставь дату публикации и не подставляй первое число месяца. "
+        "используй CONFIRMED_NO_EVENT с no_event_reason=VAGUE_TEASER при полном evidence "
+        "или RETRY_REQUIRED/EVIDENCE_INCOMPLETE "
+        "при неполных карточках: не ставь дату публикации и не подставляй первое число месяца. "
         "Если текст поста даёт относительный или разговорный якорь даты вроде «в этот четверг», "
         "а OCR афиши даёт точные `DD месяц HH:MM` и площадку/адрес, считай OCR афиши более точным "
         "источником для date/time/location и обязательно перенеси эти значения в событие. "
@@ -2359,9 +2364,11 @@ async def build_event_drafts_from_vk(
     if _vk_parse_should_add_giveaway_prize_hint(text, poster_texts=poster_texts):
         llm_text += (
             "\nЕсли это розыгрыш/конкурс и мероприятие упомянуто только как приз "
-            "(например билеты на матч/концерт), не создавай событие и верни `[]`. "
+            "(например билеты на матч/концерт), не создавай событие: при полном evidence используй "
+            "CONFIRMED_NO_EVENT с no_event_reason=GIVEAWAY_ONLY, при неполном — "
+            "RETRY_REQUIRED/EVIDENCE_INCOMPLETE. "
             "Извлекай событие только если пост отдельно описывает само посещаемое "
-            "мероприятие, а не только механику розыгрыша."
+            "мероприятие, а не только механику розыгрыша; тогда используй EVENTS_FOUND или MIXED."
         )
     if location_hint:
         hint_clean = str(location_hint).strip()
@@ -2370,14 +2377,16 @@ async def build_event_drafts_from_vk(
                 f"{llm_text}\n"
                 "Хинт по локации (используй ТОЛЬКО если пост действительно описывает посещаемое событие, "
                 f"но место не указано явно): {hint_clean}. "
-                "Не создавай событие только из-за этого хинта. Если пост не про событие — верни `[]`."
+                "Не создавай событие только из-за этого хинта. Доказанный полный non-event обозначай "
+                "disposition=CONFIRMED_NO_EVENT с no_event_reason=NO_ATTENDABLE_EVENT."
             )
     if fallback_ticket_link:
         llm_text = (
             f"{llm_text}\n"
             "Хинт по ссылке: если и только если это событие и в посте нет ссылки на билеты/регистрацию, "
             f"используй {fallback_ticket_link} как ссылку по умолчанию. "
-            "Не заменяй ссылки, которые уже указаны. Если пост не про событие — верни `[]`."
+            "Не заменяй ссылки, которые уже указаны. Доказанный полный non-event обозначай "
+            "disposition=CONFIRMED_NO_EVENT с no_event_reason=NO_ATTENDABLE_EVENT."
         )
     if festival_hint:
         llm_text = (
@@ -2386,35 +2395,8 @@ async def build_event_drafts_from_vk(
             "Сопоставь с существующими фестивалями (JSON ниже) или создай новый."
         )
 
-    if prefilter_obvious_non_events:
-        verdict, reason = _vk_parse_preclassify(
-            text,
-            source_name=source_name,
-            poster_texts=poster_texts,
-            publish_ts=publish_ts,
-            event_ts_hint=event_ts_hint,
-            operator_extra=operator_extra,
-            festival_hint=festival_hint,
-        )
-        if verdict == "non_event" and reason:
-            logger.info(
-                "vk.parse prefilter verdict=%s reason=%s source=%s text_len=%s posters=%s",
-                verdict,
-                reason,
-                source_name or "vk",
-                len((text or "").strip()),
-                len(poster_items),
-            )
-            return [
-                EventDraft(
-                    title="",
-                    source_text=text or None,
-                    reject_reason=reason,
-                )
-            ], None
-
     t0 = time.monotonic()
-    parsed = await vk_intake_parse_llm(
+    raw_parsed = await vk_intake_parse_llm(
         llm_text,
         source_text=text,
         source_name=source_name,
@@ -2423,6 +2405,7 @@ async def build_event_drafts_from_vk(
         poster_media=poster_media,
         rate_limit_max_wait_sec=rate_limit_max_wait_sec,
         parse_gemma_model=parse_gemma_model,
+        evidence_manifest=evidence_manifest,
     )
     if timings_on:
         try:
@@ -2434,13 +2417,30 @@ async def build_event_drafts_from_vk(
             )
         except Exception:
             pass
+    if isinstance(raw_parsed, SourceParseDecision):
+        parsed = raw_parsed
+    else:
+        parsed = decision_from_provider_payload(
+            raw_parsed,
+            evidence_manifest=evidence_manifest,
+        )
+        legacy_festival = getattr(raw_parsed, "festival", None)
+        if parsed.festival is None and isinstance(legacy_festival, dict):
+            parsed.festival = dict(legacy_festival)
+        if parsed.disposition is SourceDisposition.RETRY_REQUIRED:
+            logger.warning(
+                "vk_intake: untyped/invalid source parse payload rejected "
+                "payload_type=%s retry_reason=%s",
+                type(raw_parsed).__name__,
+                getattr(parsed.retry_reason, "value", parsed.retry_reason),
+            )
     festival_payload = getattr(parsed, "festival", None)
     parsed_events = list(parsed or [])
     if not parsed_events and not festival_payload:
         # For VK auto-import we treat "no events extracted" as a valid outcome (0 drafts),
         # not a technical failure. Callers that require an event (manual flows) can
         # enforce that at a higher level (see build_event_draft/build_event_payload_from_vk).
-        return [], None
+        return DraftParseResult([], decision=parsed), None
 
     combined_text = text or ""
     extra_clean = (operator_extra or "").strip()
@@ -2843,21 +2843,21 @@ async def build_event_drafts_from_vk(
 
         draft = drafts[-1]
         if _vk_title_is_schedule_fragment(draft.title):
-            draft.reject_reason = "Слабый заголовок-расписание без названия события"
-        if structured_footer_datetime_anchor and not (draft.reject_reason or "").strip():
+            draft.verification_warnings.append("GENERIC_UNGROUNDED_TITLE")
+        if structured_footer_datetime_anchor:
             footer_date, footer_time = structured_footer_datetime_anchor
             draft_date = (draft.date or "").split("..", 1)[0].strip()
             draft_time = (draft.time or "").strip().replace(".", ":")
             if draft_date and draft_date != footer_date:
-                draft.reject_reason = (
-                    f"Дата противоречит структурной строке источника: {draft_date} != {footer_date}"
+                draft.verification_warnings.append(
+                    f"EVENT_DATE_CONFLICT:{draft_date}!={footer_date}"
                 )
             elif draft_time and re.match(r"^\d{1,2}:\d{2}$", draft_time):
                 hh, mm = draft_time.split(":", 1)
                 draft_time_norm = f"{int(hh):02d}:{int(mm):02d}"
                 if draft_time_norm != footer_time:
-                    draft.reject_reason = (
-                        f"Время противоречит структурной строке источника: {draft_time_norm} != {footer_time}"
+                    draft.verification_warnings.append(
+                        f"EVENT_TIME_CONFLICT:{draft_time_norm}!={footer_time}"
                     )
 
     # If a single VK post describes multiple events, do not blindly attach the whole
@@ -3073,20 +3073,11 @@ async def build_event_drafts_from_vk(
             return True
         return False
 
-    kept: list[EventDraft] = []
-    dropped = 0
     for draft in drafts:
         if _venue_looks_like_organizer_not_place(draft.venue, draft.location_address):
-            dropped += 1
-            continue
-        kept.append(draft)
-    if dropped:
-        logging.info(
-            "vk_intake: dropped drafts due to suspicious venue: dropped=%s kept=%s",
-            dropped,
-            len(kept),
-        )
-    drafts = kept
+            draft.verification_warnings.append("SUSPICIOUS_VENUE_CLEARED")
+            draft.venue = None
+            draft.location_address = None
 
     combined_lower = (combined_text or "").lower()
     paid_keywords = ("руб", "₽", "платн", "стоимост", "взнос", "донат")
@@ -3097,15 +3088,17 @@ async def build_event_drafts_from_vk(
     for draft in drafts:
         venue_text = (draft.venue or "").lower()
         address_text = (draft.location_address or "").lower()
-        if "библиотек" not in venue_text and "библиотек" not in address_text:
-            continue
         if draft.ticket_price_min is not None or draft.ticket_price_max is not None:
             continue
         if has_paid_keywords:
             continue
         if not has_explicit_free_keywords:
             continue
-        if not draft.is_free:
+        if not draft.is_free and (
+            "библиотек" in venue_text
+            or "библиотек" in address_text
+            or has_explicit_free_keywords
+        ):
             draft.is_free = True
 
     # Guardrail: do not accept a parsed `date` when the source contains no explicit/relative
@@ -3123,17 +3116,13 @@ async def build_event_drafts_from_vk(
     has_datetime_evidence = bool(datetime_signal_re.search(source_norm or ""))
     if not has_datetime_evidence:
         for draft in drafts:
-            if (draft.reject_reason or "").strip():
-                continue
             if (draft.date or "").strip() or (draft.end_date or "").strip():
-                draft.reject_reason = "Нет сигналов даты/времени в источнике"
+                draft.verification_warnings.append("EVENT_DATE_NOT_REGEX_VISIBLE")
 
     # Guardrail: do not create one-off events that are already in the past relative to
     # the post publish time. Recap posts may contain past dates (for context), but those
     # should not become standalone events.
     for draft in drafts:
-        if (draft.reject_reason or "").strip():
-            continue
         start_d, end_d = _parse_iso_date_range(draft.date, end_value=draft.end_date)
         if not start_d:
             continue
@@ -3145,14 +3134,12 @@ async def build_event_drafts_from_vk(
         if ".." not in str(draft.date or "") and not str(draft.end_date or "").strip():
             if event_type_cf in {"выставка", "экспозиция", "ярмарка"}:
                 continue
-        draft.reject_reason = f"Событие в прошлом: {end_d.isoformat()}"
+        draft.verification_warnings.append(f"EVENT_DATE_POSSIBLY_PAST:{end_d.isoformat()}")
 
     # Low-confidence guardrail: do not create events when the extracted title appears
     # to be copied from a recap of a past event, while the future announcement lacks
     # an explicit title. Mark drafts as rejected so callers can skip with a clear reason.
     for draft in drafts:
-        if (draft.reject_reason or "").strip():
-            continue
         reason = _looks_like_recap_title_copied_to_future_event(
             source_text=combined_text,
             title=draft.title,
@@ -3161,7 +3148,7 @@ async def build_event_drafts_from_vk(
             anchor_date=anchor_dt.date(),
         )
         if reason:
-            draft.reject_reason = reason
+            draft.verification_warnings.append(f"RECAP_CONFLICT:{reason}")
 
     # Additional guardrail for recap-style posts: if the post looks like a recent recap,
     # and the "future mention" is too generic (e.g. "тематический концерт"), skip it.
@@ -3171,8 +3158,6 @@ async def build_event_drafts_from_vk(
     )
     if recap_reason:
         for draft in drafts:
-            if (draft.reject_reason or "").strip():
-                continue
             if not _looks_like_vague_teaser_title(draft.title):
                 continue
             try:
@@ -3181,12 +3166,9 @@ async def build_event_drafts_from_vk(
                 continue
             if d_obj < anchor_dt.date():
                 continue
-            draft.reject_reason = recap_reason
+            draft.verification_warnings.append(f"RECAP_CONFLICT:{recap_reason}")
 
-    drafts = _maybe_collapse_program_schedule_drafts(drafts)
-    drafts = _collapse_same_post_exact_drafts(drafts)
-
-    return drafts, festival_payload
+    return DraftParseResult(drafts, decision=parsed), festival_payload
 
 
 async def build_event_payload_from_vk(
@@ -3235,7 +3217,8 @@ async def build_event_drafts(
     festival_hint: bool = False,
     rate_limit_max_wait_sec: float | int | str | None = None,
     parse_gemma_model: str | None = None,
-    prefilter_obvious_non_events: bool = False,
+    attachment_count_hint: int | None = None,
+    unavailable_attachment_count_hint: int = 0,
     db: Database,
 ) -> tuple[list[EventDraft], dict[str, Any] | None]:
     """Download posters, run OCR and return event drafts for a VK post.
@@ -3254,6 +3237,10 @@ async def build_event_drafts(
     photo_bytes = await _download_photo_media(photos or [])
     _tmark("download_photos", time.monotonic() - t0)
     poster_items: list[PosterMedia] = []
+    # This flag participates in the source-level evidence verdict even when a
+    # post has no downloadable photos.  Keep it explicitly initialised rather
+    # than relying on one of the OCR branches to assign it.
+    ocr_failed = False
     ocr_tokens_spent = 0
     ocr_tokens_remaining: int | None = None
     ocr_limit_notice: str | None = None
@@ -3274,6 +3261,7 @@ async def build_event_drafts(
         ocr_results: list[poster_ocr.PosterOcrCache] = []
         if ocr_disabled:
             logging.info("vk.build_event_draft OCR disabled via POSTER_OCR_DISABLED=1", extra=ocr_log_context)
+            ocr_failed = True
         else:
             try:
                 t0 = time.monotonic()
@@ -3297,6 +3285,7 @@ async def build_event_drafts(
                 ocr_limit_notice = (
                     "OCR недоступен: дневной лимит токенов исчерпан, распознавание пропущено."
                 )
+                ocr_failed = len(ocr_results) < len(photo_bytes)
             except Exception as exc:
                 # OCR is a best-effort enrichment. Do not fail the entire VK post import
                 # when OCR backend is temporarily unavailable (network/provider errors).
@@ -3308,6 +3297,7 @@ async def build_event_drafts(
                 )
                 ocr_results = []
                 ocr_limit_notice = "OCR недоступен: ошибка распознавания, распознавание пропущено."
+                ocr_failed = True
         if ocr_results:
             apply_ocr_results_to_media(
                 poster_items,
@@ -3326,6 +3316,27 @@ async def build_event_drafts(
             _, _, ocr_tokens_remaining = await poster_ocr.recognize_posters(
                 db, [], log_context=ocr_log_context
             )
+    photo_urls = list(photos or ())
+    ocr_blocks = collect_poster_texts(poster_items)
+    attachment_count = max(len(photo_urls), int(attachment_count_hint or 0))
+    unavailable_count = max(
+        int(unavailable_attachment_count_hint or 0),
+        max(0, attachment_count - len(photo_bytes)),
+    )
+    missing_ocr_count = max(0, len(photo_bytes) - len(ocr_blocks))
+    evidence_manifest = EvidenceManifest(
+        raw_text_chars=len(text or ""),
+        raw_text_hash=hashlib.sha256((text or "").encode("utf-8")).hexdigest(),
+        attachment_count=attachment_count,
+        ocr_blocks_available=len(ocr_blocks),
+        ocr_blocks_included=len(ocr_blocks),
+        included_chars=len(text or "") + sum(len(block) for block in ocr_blocks),
+        omitted_blocks=tuple(
+            f"attachment:{idx}:ocr_unavailable" for idx in range(missing_ocr_count)
+        ),
+        unavailable_attachment_count=unavailable_count,
+        ocr_complete=(not ocr_failed and unavailable_count == 0 and missing_ocr_count == 0),
+    )
     drafts, festival_payload = await build_event_drafts_from_vk(
         text,
         source_name=source_name,
@@ -3343,7 +3354,7 @@ async def build_event_drafts(
         ocr_tokens_remaining=ocr_tokens_remaining,
         rate_limit_max_wait_sec=rate_limit_max_wait_sec,
         parse_gemma_model=parse_gemma_model,
-        prefilter_obvious_non_events=prefilter_obvious_non_events,
+        evidence_manifest=evidence_manifest,
     )
     _tmark("build_drafts_from_vk_total", time.monotonic() - t_all)
     for draft in drafts:
@@ -4058,6 +4069,7 @@ async def persist_event_and_pages(
     *,
     holiday_tolerance_days: int | None = None,
     wait_for_telegraph_url: bool = True,
+    producer_ordinal: int | None = None,
 ) -> PersistResult:
     """Store a drafted event and produce all public artefacts.
 
@@ -4074,24 +4086,15 @@ async def persist_event_and_pages(
     main_mod = sys.modules.get("main") or sys.modules.get("__main__")
     if main_mod is None:  # pragma: no cover - defensive
         raise RuntimeError("main module not found")
-    schedule_event_update_tasks = main_mod.schedule_event_update_tasks
     rebuild_fest_nav_if_changed = main_mod.rebuild_fest_nav_if_changed
     normalize_event_type = getattr(main_mod, "normalize_event_type", None)
 
     from smart_event_update import (
         EventCandidate,
         PosterCandidate,
+        SmartUpdateTerminalOutcome,
         smart_event_update,
-        smart_update_result_allows_caller_side_effects,
     )
-
-    if (getattr(draft, "reject_reason", None) or "").strip():
-        # Keep the error string compatible with vk_auto_queue handler that treats
-        # "smart_update rejected:" as an expected rejection (not a technical failure).
-        raise RuntimeError(
-            "smart_update rejected: rejected_low_confidence "
-            f"reason={str(getattr(draft, 'reject_reason', '')).strip()}"
-        )
 
     posters = _build_smart_update_posters(
         draft,
@@ -4144,6 +4147,7 @@ async def persist_event_and_pages(
         raw_excerpt=draft.description or "",
         posters=posters,
         organizer_names=_curated_vk_event_organizers(vk_source_chat_id),
+        producer_ordinal=producer_ordinal,
     )
 
     update_result = await smart_event_update(
@@ -4151,39 +4155,33 @@ async def persist_event_and_pages(
         candidate,
         check_source_url=False,
     )
-    if str(getattr(update_result, "status", "") or "").startswith("rejected_"):
-        # Preserve the established expected-rejection contract consumed by the
-        # VK queue. Identity review/skip outcomes use the generic fail-closed
-        # branch below and must never be reported as successful imports.
-        raise RuntimeError(
-            f"smart_update rejected: {getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)}"
+    if not update_result.is_accepted:
+        return PersistResult(
+            event_id=None,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date=str(draft.date or ""),
+            event_end_date=draft.end_date or None,
+            event_time=str(draft.time or ""),
+            event_type=draft.event_type or None,
+            is_free=bool(draft.is_free),
+            smart_result=update_result,
         )
-    if not smart_update_result_allows_caller_side_effects(update_result):
+    if update_result.event_id is None:
         raise RuntimeError(
-            "smart_update not accepted: "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)} "
-            f"matched_event_id={getattr(update_result, 'event_id', None)}"
-        )
-    if not getattr(update_result, "event_id", None):
-        raise RuntimeError(
-            "smart_update returned no event_id: "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)}"
+            "accepted smart_update result returned no event_id: "
+            f"outcome={update_result.outcome.value} reason={update_result.reason}"
         )
     async with db.get_session() as session:
         saved = (
             await session.get(Event, update_result.event_id)
-            if update_result.event_id
-            else None
         )
     if saved is None:
         raise RuntimeError(
             "smart_update failed to persist event: "
             f"event_id={getattr(update_result, 'event_id', None)} "
-            f"status={getattr(update_result, 'status', None)} "
-            f"reason={getattr(update_result, 'reason', None)}"
+            f"outcome={update_result.outcome.value} reason={update_result.reason}"
         )
     text_length = len(saved.title or "") + len(saved.description or "") + len(saved.source_text or "")
     logging.info(
@@ -4198,7 +4196,10 @@ async def persist_event_and_pages(
     )
 
     nav_update_needed = False
-    if update_result.status != "noop_exact_source_replay" and saved.festival:
+    if (
+        update_result.outcome is not SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+        and saved.festival
+    ):
         parts = [p.strip() for p in (saved.date or "").split("..") if p.strip()]
         start_str = parts[0] if parts else None
         end_str = parts[-1] if len(parts) > 1 else None
@@ -4233,9 +4234,6 @@ async def persist_event_and_pages(
                         nav_update_needed = True
     if nav_update_needed:
         await rebuild_fest_nav_if_changed(db)
-    if update_result.status in ("skipped_nochange", "skipped_same_source_url"):
-        await schedule_event_update_tasks(db, saved)
-
     if wait_for_telegraph_url:
         # Wait for Telegraph URL to become available (async job). Callers that
         # already run inline Telegraph jobs can skip this extra wait.
@@ -4259,10 +4257,14 @@ async def persist_event_and_pages(
         event_time=saved.time,
         event_type=saved.event_type,
         is_free=bool(saved.is_free),
-        smart_status=getattr(update_result, "status", None),
-        smart_created=bool(getattr(update_result, "created", False)),
-        smart_merged=bool(getattr(update_result, "merged", False)),
+        smart_created=(
+            update_result.outcome is SmartUpdateTerminalOutcome.CREATED
+        ),
+        smart_merged=(
+            update_result.outcome is SmartUpdateTerminalOutcome.MERGED
+        ),
         smart_added_posters=int(getattr(update_result, "added_posters", 0) or 0),
+        smart_result=update_result,
     )
 
 
@@ -4368,6 +4370,863 @@ async def process_event(
     return results
 
 
+def _vk_packet_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _vk_source_revision_payload(post: dict[str, Any]) -> dict[str, Any]:
+    """Return semantic source bytes excluding volatile popularity counters."""
+
+    from vk_source_envelope import is_vk_source_envelope, vk_source_semantic_projection
+
+    if is_vk_source_envelope(post):
+        return vk_source_semantic_projection(post)
+    return {
+        "text": str(post.get("text") or ""),
+        "photos": list(post.get("photos") or ()),
+        "attachments": post.get("attachments") or (),
+        "copy_history": post.get("copy_history") or (),
+    }
+
+
+async def _persist_vk_source_packet(
+    db: Database,
+    *,
+    group_id: int,
+    owner_type: str,
+    post: dict[str, Any],
+    source_url: str,
+    keyword_hints: Sequence[str],
+    date_hints: Sequence[str],
+    event_ts_hint: int | None,
+) -> tuple[int, bool]:
+    """Durably append one fetched revision and point the inbox at it.
+
+    The caller must not advance its crawl cursor unless this succeeds for every
+    fetched in-horizon post.  Exact unchanged revisions reuse their immutable
+    packet; changed revisions append a new row and re-open the inbox.
+    """
+
+    from vk_source_envelope import (
+        VK_SOURCE_ENVELOPE_VERSION,
+        is_vk_source_envelope,
+        sanitize_vk_source_value,
+        vk_source_envelope_attachment_metadata,
+        vk_source_envelope_replayability,
+        vk_source_packet_hashes,
+    )
+
+    if is_vk_source_envelope(post):
+        sanitized_post = sanitize_vk_source_value(post)
+        if isinstance(sanitized_post, dict):
+            post = sanitized_post
+    raw_payload_json = _vk_packet_json(post)
+    revision_payload_json = _vk_packet_json(_vk_source_revision_payload(post))
+    if is_vk_source_envelope(post):
+        payload_hash, revision_hash = vk_source_packet_hashes(post)
+    else:
+        payload_hash = hashlib.sha256(raw_payload_json.encode("utf-8")).hexdigest()
+        revision_hash = hashlib.sha256(
+            revision_payload_json.encode("utf-8")
+        ).hexdigest()
+    post_id = int(post["post_id"])
+    published_at = int(post["date"])
+    raw_text = str(post.get("text") or "")
+    envelope_version: int | None = None
+    capture_complete = False
+    replayability = "replayable_legacy_incomplete"
+    if is_vk_source_envelope(post):
+        envelope_version = VK_SOURCE_ENVELOPE_VERSION
+        replayability = vk_source_envelope_replayability(post)
+        capture_complete = replayability == "replayable_lossless"
+        attachment_metadata = vk_source_envelope_attachment_metadata(post)
+    else:
+        attachment_metadata = {
+            "photos": list(post.get("photos") or ()),
+            "attachments": post.get("attachments") or (),
+            "copy_history": post.get("copy_history") or (),
+        }
+    keyword_json = _vk_packet_json(list(keyword_hints))
+    date_json = _vk_packet_json(list(date_hints))
+    if OCR_PENDING_SENTINEL in keyword_hints:
+        inbox_matched_kw = OCR_PENDING_SENTINEL
+    elif HISTORY_MATCHED_KEYWORD in keyword_hints:
+        inbox_matched_kw = HISTORY_MATCHED_KEYWORD
+    else:
+        inbox_matched_kw = ",".join(
+            value for value in keyword_hints if not str(value).startswith("hint:")
+        )
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT id FROM vk_source_packet
+            WHERE source_type='vk' AND owner_id=? AND post_id=? AND source_revision_hash=?
+            """,
+            (int(group_id), post_id, revision_hash),
+        )
+        row = await cur.fetchone()
+        is_new = row is None
+        if row is None:
+            cur = await conn.execute(
+                """
+                SELECT COALESCE(MAX(revision), 0) + 1
+                FROM vk_source_packet
+                WHERE source_type='vk' AND owner_id=? AND post_id=?
+                """,
+                (int(group_id), post_id),
+            )
+            revision_row = await cur.fetchone()
+            revision = int((revision_row[0] if revision_row else 1) or 1)
+            cur = await conn.execute(
+                """
+                INSERT INTO vk_source_packet(
+                    source_type, owner_id, owner_type, post_id, revision,
+                    source_url, published_at, raw_text, raw_payload_json,
+                    attachment_metadata_json, envelope_version, capture_complete,
+                    evidence_replayability, payload_hash, source_revision_hash,
+                    discovery_keyword_hints_json, discovered_date_hints_json,
+                    event_ts_hint, ocr_status, llm_status, status
+                ) VALUES('vk',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending','pending','pending')
+                """,
+                (
+                    int(group_id), owner_type, post_id, revision, source_url,
+                    published_at, raw_text, raw_payload_json,
+                    _vk_packet_json(attachment_metadata), envelope_version,
+                    1 if capture_complete else 0, replayability,
+                    payload_hash, revision_hash,
+                    keyword_json, date_json, event_ts_hint,
+                ),
+            )
+            packet_id = int(cur.lastrowid)
+        else:
+            packet_id = int(row[0])
+
+        # A changed revision must re-enter automatic parsing. Exact replay keeps
+        # the current queue terminal/due state and therefore cannot duplicate a
+        # successful provider call.
+        await conn.execute(
+            """
+            INSERT INTO vk_inbox(
+                group_id,post_id,date,text,matched_kw,has_date,event_ts_hint,
+                status,owner_type,source_packet_id,next_attempt_at
+            ) VALUES(?,?,?,?,?,?,?,'pending',?,?,CURRENT_TIMESTAMP)
+            ON CONFLICT(group_id,post_id) DO UPDATE SET
+                date=excluded.date,
+                text=excluded.text,
+                matched_kw=excluded.matched_kw,
+                has_date=excluded.has_date,
+                event_ts_hint=excluded.event_ts_hint,
+                owner_type=excluded.owner_type,
+                source_packet_id=excluded.source_packet_id,
+                status=CASE
+                    WHEN COALESCE(vk_inbox.source_packet_id,0)<>excluded.source_packet_id
+                    THEN 'pending' ELSE vk_inbox.status END,
+                next_attempt_at=CASE
+                    WHEN COALESCE(vk_inbox.source_packet_id,0)<>excluded.source_packet_id
+                    THEN CURRENT_TIMESTAMP ELSE vk_inbox.next_attempt_at END,
+                locked_by=CASE
+                    WHEN COALESCE(vk_inbox.source_packet_id,0)<>excluded.source_packet_id
+                    THEN NULL ELSE vk_inbox.locked_by END,
+                locked_at=CASE
+                    WHEN COALESCE(vk_inbox.source_packet_id,0)<>excluded.source_packet_id
+                    THEN NULL ELSE vk_inbox.locked_at END
+            """,
+            (
+                int(group_id), post_id, published_at, raw_text,
+                inbox_matched_kw, 1 if date_hints else 0,
+                event_ts_hint, owner_type, packet_id,
+            ),
+        )
+        await conn.commit()
+    return packet_id, is_new
+
+
+async def _schedule_vk_crawl_continuation(
+    db: Database,
+    *,
+    group_id: int,
+    owner_type: str,
+    since_ts: int,
+    offset: int,
+    horizon_ts: int,
+    scan_mode: str,
+    page_size: int,
+    original_cursor_ts: int,
+    original_cursor_post_id: int,
+    reason: str,
+    last_page_fingerprint: str | None = None,
+    deepest_page_ts: int | None = None,
+    deepest_page_post_id: int | None = None,
+) -> None:
+    continuation_key = hashlib.sha256(
+        _vk_packet_json(
+            {
+                "source_type": "vk",
+                "owner_id": int(group_id),
+                "owner_type": owner_type,
+                "scan_mode": scan_mode,
+                "since_ts": int(since_ts),
+                "horizon_ts": int(horizon_ts),
+                "original_cursor_ts": int(original_cursor_ts),
+                "original_cursor_post_id": int(original_cursor_post_id),
+            }
+        ).encode("utf-8")
+    ).hexdigest()
+    async with db.raw_conn() as conn:
+        # Adopt an older pre-key row instead of creating parallel work for the
+        # same immutable crawl boundary after its mutable offset has advanced.
+        existing = await conn.execute(
+            """
+            SELECT id,status,last_typed_reason FROM vk_crawl_continuation
+            WHERE source_type='vk' AND owner_id=? AND COALESCE(owner_type,'group')=?
+              AND COALESCE(scan_mode,'incremental')=? AND since_ts=? AND horizon_ts=?
+              AND COALESCE(original_cursor_ts,0)=?
+              AND COALESCE(original_cursor_post_id,0)=?
+            ORDER BY id LIMIT 1
+            """,
+            (
+                int(group_id), owner_type, scan_mode, int(since_ts), int(horizon_ts),
+                int(original_cursor_ts), int(original_cursor_post_id),
+            ),
+        )
+        existing_row = await existing.fetchone()
+        if existing_row is not None:
+            await conn.execute(
+                """
+                UPDATE vk_crawl_continuation
+                SET continuation_key=COALESCE(continuation_key,?),
+                    deepest_page_ts=COALESCE(deepest_page_ts,?),
+                    deepest_page_post_id=COALESCE(deepest_page_post_id,?),
+                    status=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN 'retry' ELSE status END,
+                    next_attempt_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN CURRENT_TIMESTAMP ELSE next_attempt_at END,
+                    completed_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE completed_at END,
+                    lease_owner=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE lease_owner END,
+                    locked_by=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE locked_by END,
+                    lease_expires_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE lease_expires_at END,
+                    locked_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE locked_at END,
+                    run_id=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE run_id END,
+                    last_typed_reason=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN 'LEGACY_EXACT_PAGE_REPLAY_REOPENED'
+                        ELSE last_typed_reason END,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    continuation_key,
+                    int(deepest_page_ts) if deepest_page_ts is not None else None,
+                    (
+                        int(deepest_page_post_id)
+                        if deepest_page_post_id is not None
+                        else None
+                    ),
+                    int(existing_row[0]),
+                ),
+            )
+            await conn.commit()
+            return
+        await conn.execute(
+            """
+            INSERT OR IGNORE INTO vk_crawl_continuation(
+                source_type,owner_id,owner_type,continuation_key,scan_mode,page_size,since_ts,offset,
+                horizon_ts,original_cursor_ts,original_cursor_post_id,reason,status,
+                last_page_fingerprint,deepest_page_ts,deepest_page_post_id
+            ) VALUES('vk',?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?)
+            """,
+            (
+                int(group_id), owner_type, continuation_key, scan_mode, max(1, int(page_size)),
+                int(since_ts), int(offset), int(horizon_ts),
+                int(original_cursor_ts), int(original_cursor_post_id), reason,
+                last_page_fingerprint,
+                int(deepest_page_ts) if deepest_page_ts is not None else None,
+                (
+                    int(deepest_page_post_id)
+                    if deepest_page_post_id is not None
+                    else None
+                ),
+            ),
+        )
+        await conn.commit()
+
+
+@dataclass(frozen=True)
+class VKCrawlContinuationClaim:
+    id: int
+    owner_id: int
+    owner_type: str
+    scan_mode: str
+    page_size: int
+    since_ts: int
+    offset: int
+    horizon_ts: int
+    original_cursor_ts: int
+    original_cursor_post_id: int
+    attempts: int
+    lease_owner: str
+    run_id: str
+    last_page_fingerprint: str | None
+    deepest_page_ts: int | None
+    deepest_page_post_id: int | None
+    stale_recovered: bool = False
+
+
+class VKCrawlContinuationLeaseLost(RuntimeError):
+    """The continuation no longer belongs to this worker/run."""
+
+
+async def _open_vk_continuation_conn(db: Database) -> aiosqlite.Connection:
+    """Open a dedicated connection so BEGIN IMMEDIATE cannot interleave.
+
+    ``Database.raw_conn`` intentionally reuses one connection. A queue claim is
+    a cross-process synchronization primitive, so it must own its transaction
+    and connection from BEGIN through COMMIT.
+    """
+
+    conn = await aiosqlite.connect(db.path, timeout=db._sqlite_timeout_sec())
+    await conn.execute(f"PRAGMA busy_timeout={db._sqlite_busy_timeout_ms()}")
+    await conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+async def _claim_vk_crawl_continuation(
+    db: Database,
+    *,
+    lease_owner: str,
+    run_id: str,
+    lease_seconds: int,
+    excluded_ids: Sequence[int] = (),
+) -> VKCrawlContinuationClaim | None:
+    """Atomically claim one due row, including an expired running lease."""
+
+    owner = str(lease_owner or "").strip()
+    run = str(run_id or "").strip()
+    if not owner or not run:
+        raise ValueError("vk_crawl_continuation_owner_and_run_required")
+    lease_seconds = max(30, min(int(lease_seconds), 3600))
+    excluded = tuple(int(value) for value in excluded_ids)
+    exclusion_sql = ""
+    params: list[Any] = []
+    if excluded:
+        exclusion_sql = f" AND id NOT IN ({','.join('?' for _ in excluded)})"
+        params.extend(excluded)
+    conn = await _open_vk_continuation_conn(db)
+    try:
+        await conn.execute("BEGIN IMMEDIATE")
+        cursor = await conn.execute(
+            f"""
+            SELECT id,owner_id,COALESCE(owner_type,'group'),
+                   COALESCE(scan_mode,'incremental'),COALESCE(page_size,30),
+                   since_ts,offset,horizon_ts,COALESCE(original_cursor_ts,0),
+                   COALESCE(original_cursor_post_id,0),attempts,
+                   last_page_fingerprint,status,deepest_page_ts,deepest_page_post_id
+            FROM vk_crawl_continuation
+            WHERE (
+                    (status IN ('pending','retry')
+                     AND (next_attempt_at IS NULL OR next_attempt_at<=CURRENT_TIMESTAMP))
+                 OR (status='running'
+                     AND (lease_expires_at IS NULL OR lease_expires_at<=CURRENT_TIMESTAMP))
+                  )
+              {exclusion_sql}
+            ORDER BY COALESCE(next_attempt_at,created_at),id
+            LIMIT 1
+            """,
+            tuple(params),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        if row is None:
+            await conn.commit()
+            return None
+        stale_recovered = str(row[12]) == "running"
+        update = await conn.execute(
+            f"""
+            UPDATE vk_crawl_continuation
+            SET status='running', attempts=attempts+1, lease_owner=?, locked_by=?, run_id=?,
+                locked_at=CURRENT_TIMESTAMP,
+                lease_expires_at=datetime(CURRENT_TIMESTAMP,'+{lease_seconds} seconds'),
+                last_typed_reason=CASE WHEN status='running'
+                    THEN 'STALE_LEASE_RECOVERED' ELSE last_typed_reason END,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=? AND (
+                    (status IN ('pending','retry')
+                     AND (next_attempt_at IS NULL OR next_attempt_at<=CURRENT_TIMESTAMP))
+                 OR (status='running'
+                     AND (lease_expires_at IS NULL OR lease_expires_at<=CURRENT_TIMESTAMP))
+                  )
+            """,
+            (owner, owner, run, int(row[0])),
+        )
+        if update.rowcount != 1:
+            await conn.rollback()
+            return None
+        await conn.commit()
+        return VKCrawlContinuationClaim(
+            id=int(row[0]), owner_id=int(row[1]), owner_type=str(row[2]),
+            scan_mode=str(row[3]), page_size=max(1, int(row[4])),
+            since_ts=int(row[5]), offset=int(row[6]), horizon_ts=int(row[7]),
+            original_cursor_ts=int(row[8]), original_cursor_post_id=int(row[9]),
+            attempts=int(row[10]) + 1, lease_owner=owner, run_id=run,
+            last_page_fingerprint=(str(row[11]) if row[11] else None),
+            deepest_page_ts=(int(row[13]) if row[13] is not None else None),
+            deepest_page_post_id=(int(row[14]) if row[14] is not None else None),
+            stale_recovered=stale_recovered,
+        )
+    except Exception:
+        await conn.rollback()
+        raise
+    finally:
+        await conn.close()
+
+
+async def _continuation_cas_update(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    sql_set: str,
+    params: Sequence[Any],
+) -> None:
+    conn = await _open_vk_continuation_conn(db)
+    try:
+        cursor = await conn.execute(
+            f"""
+            UPDATE vk_crawl_continuation SET {sql_set},updated_at=CURRENT_TIMESTAMP
+            WHERE id=? AND status='running' AND lease_owner=? AND run_id=?
+            """,
+            (*params, claim.id, claim.lease_owner, claim.run_id),
+        )
+        await conn.commit()
+        if cursor.rowcount != 1:
+            raise VKCrawlContinuationLeaseLost(f"continuation_lease_lost:{claim.id}")
+    finally:
+        await conn.close()
+
+
+async def _renew_vk_crawl_continuation_lease(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    *,
+    lease_seconds: int,
+) -> None:
+    lease_seconds = max(30, min(int(lease_seconds), 3600))
+    await _continuation_cas_update(
+        db,
+        claim,
+        f"lease_expires_at=datetime(CURRENT_TIMESTAMP,'+{lease_seconds} seconds')",
+        (),
+    )
+
+
+def _vk_continuation_page_fingerprint(page: Sequence[dict[str, Any]]) -> str:
+    canonical = _vk_packet_json(list(page))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _vk_continuation_deepest_boundary(
+    page: Sequence[dict[str, Any]],
+) -> tuple[int, int] | None:
+    """Return the oldest durable page key under VK's reverse wall ordering."""
+
+    if not page:
+        return None
+    return min((int(post["date"]), int(post["post_id"])) for post in page)
+
+
+def _vk_continuation_retry_reason(exc: BaseException, *, stage: str) -> str:
+    status = getattr(exc, "status", None)
+    if status == 429:
+        return "VK_CRAWL_RATE_LIMITED"
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return "VK_CRAWL_FETCH_TIMEOUT" if stage == "fetch" else "VK_CRAWL_PERSIST_TIMEOUT"
+    if isinstance(exc, (aiohttp.ClientError, OSError)):
+        return "VK_CRAWL_TRANSPORT" if stage == "fetch" else "VK_CRAWL_PERSIST_FAILED"
+    return "VK_CRAWL_FETCH_FAILED" if stage == "fetch" else "VK_CRAWL_PERSIST_FAILED"
+
+
+def _vk_continuation_retry_after_seconds(exc: BaseException) -> int | None:
+    for name, divisor in (("retry_after_ms", 1000), ("retry_after", 1)):
+        raw = getattr(exc, name, None)
+        try:
+            if raw is not None:
+                return max(1, int(float(raw) / divisor))
+        except (TypeError, ValueError):
+            pass
+    headers = getattr(exc, "headers", None)
+    if headers:
+        try:
+            return max(1, int(float(headers.get("Retry-After"))))
+        except (AttributeError, TypeError, ValueError):
+            pass
+    return None
+
+
+async def _retry_vk_crawl_continuation(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    exc: BaseException,
+    *,
+    stage: str,
+) -> int:
+    base = max(1, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_BASE_SECONDS", 30))
+    cap = max(base, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_MAX_SECONDS", 3600))
+    exponential = base * (2 ** min(max(0, claim.attempts - 1), 16))
+    provider_delay = _vk_continuation_retry_after_seconds(exc) or 0
+    delay = min(cap, max(exponential, provider_delay))
+    reason = _vk_continuation_retry_reason(exc, stage=stage)
+    await _continuation_cas_update(
+        db,
+        claim,
+        "status='retry',next_attempt_at=datetime(CURRENT_TIMESTAMP,?),"
+        "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+        "last_typed_reason=?",
+        (f"+{delay} seconds", reason),
+    )
+    return delay
+
+
+async def _defer_vk_crawl_offset_drift(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    *,
+    next_offset: int,
+    fingerprint: str,
+    deepest_boundary: tuple[int, int] | None,
+    reason: str,
+) -> int:
+    """Durably rebase a mutable VK offset without claiming false completion."""
+
+    base = max(1, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_BASE_SECONDS", 30))
+    cap = max(base, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_MAX_SECONDS", 3600))
+    delay = min(cap, base * (2 ** min(max(0, claim.attempts - 1), 16)))
+    deepest_ts = deepest_boundary[0] if deepest_boundary is not None else None
+    deepest_post_id = deepest_boundary[1] if deepest_boundary is not None else None
+    try:
+        await _continuation_cas_update(
+            db,
+            claim,
+            "status='retry',offset=?,next_attempt_at=datetime(CURRENT_TIMESTAMP,?),"
+            "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+            "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+            "last_typed_reason=?",
+            (
+                max(0, int(next_offset)),
+                f"+{delay} seconds",
+                fingerprint,
+                deepest_ts,
+                deepest_post_id,
+                reason,
+            ),
+        )
+    except aiosqlite.IntegrityError:
+        # New producers have one stable continuation_key, so supported rows
+        # cannot collide while their mutable offset advances. A pre-key legacy
+        # duplicate may still occupy the target offset under the historical
+        # UNIQUE(source,owner,since,offset,horizon). Fail durable/observable at
+        # the current offset rather than losing the lease into stale-running or
+        # declaring completion; the duplicate row remains independently due.
+        await _continuation_cas_update(
+            db,
+            claim,
+            "status='retry',next_attempt_at=datetime(CURRENT_TIMESTAMP,?),"
+            "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+            "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+            "last_typed_reason='OFFSET_DRIFT_COLLISION'",
+            (f"+{delay} seconds", fingerprint, deepest_ts, deepest_post_id),
+        )
+    return delay
+
+
+async def _persist_vk_continuation_page(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    page: Sequence[dict[str, Any]],
+    *,
+    lease_seconds: int,
+) -> tuple[int, int]:
+    """Persist the whole fetched page before any durable offset movement."""
+
+    added = duplicates = 0
+    from vk_owner import vk_wall_url
+
+    for post in page:
+        await _renew_vk_crawl_continuation_lease(
+            db, claim, lease_seconds=lease_seconds
+        )
+        post_id = int(post["post_id"])
+        source_url = str(post.get("url") or vk_wall_url(
+            claim.owner_id, post_id, claim.owner_type
+        ))
+        _packet_id, is_new = await _persist_vk_source_packet(
+            db,
+            group_id=claim.owner_id,
+            owner_type=claim.owner_type,
+            post=post,
+            source_url=source_url,
+            keyword_hints=(),
+            date_hints=(),
+            event_ts_hint=None,
+        )
+        if is_new:
+            added += 1
+        else:
+            duplicates += 1
+    return added, duplicates
+
+
+async def process_vk_crawl_continuations(
+    db: Database,
+    *,
+    max_jobs: int = 2,
+    max_pages_per_job: int = 3,
+    lease_seconds: int = 300,
+    worker_id: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, int]:
+    """Consume due durable VK crawl pages with bounded, idempotent work.
+
+    The canonical ``vk_crawl_cursor`` is deliberately untouched. The stored
+    offset advances only after every post in the fetched page has reached the
+    immutable raw packet ledger.
+    """
+
+    max_jobs = max(1, min(int(max_jobs), 25))
+    max_pages_per_job = max(1, min(int(max_pages_per_job), 25))
+    lease_seconds = max(30, min(int(lease_seconds), 3600))
+    worker = str(worker_id or f"vk-continuation:{os.getpid()}:{uuid4().hex[:8]}")
+    invocation_run = str(run_id or uuid4().hex)
+    result = {
+        "claimed": 0, "pages": 0, "posts": 0, "added": 0,
+        "duplicates": 0, "completed": 0, "retried": 0,
+        "stale_recovered": 0, "lease_lost": 0, "rebased": 0,
+    }
+    processed_ids: list[int] = []
+    vk_wall_since = require_main_attr("vk_wall_since")
+
+    for job_index in range(max_jobs):
+        claim = await _claim_vk_crawl_continuation(
+            db,
+            lease_owner=worker,
+            run_id=f"{invocation_run}:{job_index}",
+            lease_seconds=lease_seconds,
+            excluded_ids=processed_ids,
+        )
+        if claim is None:
+            break
+        processed_ids.append(claim.id)
+        result["claimed"] += 1
+        if claim.stale_recovered:
+            result["stale_recovered"] += 1
+        current_offset = claim.offset
+        previous_fingerprint = claim.last_page_fingerprint
+        deepest_boundary = (
+            (claim.deepest_page_ts, claim.deepest_page_post_id)
+            if claim.deepest_page_ts is not None
+            and claim.deepest_page_post_id is not None
+            else None
+        )
+
+        for page_index in range(max_pages_per_job):
+            try:
+                await _renew_vk_crawl_continuation_lease(
+                    db, claim, lease_seconds=lease_seconds
+                )
+                page = await vk_wall_since(
+                    claim.owner_id,
+                    claim.since_ts,
+                    count=claim.page_size,
+                    offset=current_offset,
+                    owner_type=claim.owner_type,
+                )
+            except VKCrawlContinuationLeaseLost:
+                result["lease_lost"] += 1
+                break
+            except Exception as exc:
+                await _retry_vk_crawl_continuation(db, claim, exc, stage="fetch")
+                result["retried"] += 1
+                logging.warning(
+                    "vk.crawl.continuation retry id=%s stage=fetch offset=%s",
+                    claim.id, current_offset, exc_info=True,
+                )
+                break
+
+            page = list(page or ())
+            fingerprint = _vk_continuation_page_fingerprint(page)
+            try:
+                added, duplicates = await _persist_vk_continuation_page(
+                    db, claim, page, lease_seconds=lease_seconds
+                )
+            except VKCrawlContinuationLeaseLost:
+                result["lease_lost"] += 1
+                break
+            except Exception as exc:
+                await _retry_vk_crawl_continuation(db, claim, exc, stage="persist")
+                result["retried"] += 1
+                logging.warning(
+                    "vk.crawl.continuation retry id=%s stage=persist offset=%s",
+                    claim.id, current_offset, exc_info=True,
+                )
+                break
+
+            result["pages"] += 1
+            result["posts"] += len(page)
+            result["added"] += added
+            result["duplicates"] += duplicates
+
+            dates = [int(post["date"]) for post in page]
+            page_deepest = _vk_continuation_deepest_boundary(page)
+            made_deeper_progress = bool(
+                page_deepest is not None
+                and (
+                    deepest_boundary is None
+                    or page_deepest < deepest_boundary
+                )
+            )
+            effective_deepest = deepest_boundary
+            if page_deepest is not None and (
+                effective_deepest is None or page_deepest < effective_deepest
+            ):
+                effective_deepest = page_deepest
+            cursor_overlap = claim.scan_mode == "incremental" and any(
+                int(post["date"]) < claim.original_cursor_ts
+                or (
+                    int(post["date"]) == claim.original_cursor_ts
+                    and int(post["post_id"]) <= claim.original_cursor_post_id
+                )
+                for post in page
+            )
+            horizon_reached = (
+                claim.scan_mode == "backfill"
+                and bool(dates)
+                and min(dates) < claim.horizon_ts
+            )
+            terminal_reason: str | None = None
+            if not page:
+                terminal_reason = "EMPTY_PAGE"
+            elif len(page) < claim.page_size:
+                terminal_reason = "SHORT_PAGE"
+            elif horizon_reached:
+                terminal_reason = "HORIZON_REACHED"
+            elif cursor_overlap:
+                terminal_reason = "ORIGINAL_CURSOR_OVERLAP"
+
+            if terminal_reason:
+                await _continuation_cas_update(
+                    db,
+                    claim,
+                    "status='done',lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,"
+                    "locked_at=NULL,run_id=NULL,completed_at=CURRENT_TIMESTAMP,"
+                    "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+                    "last_typed_reason=?",
+                    (
+                        fingerprint,
+                        effective_deepest[0] if effective_deepest else None,
+                        effective_deepest[1] if effective_deepest else None,
+                        terminal_reason,
+                    ),
+                )
+                result["completed"] += 1
+                break
+
+            next_offset = current_offset + claim.page_size
+            same_full_page = bool(
+                previous_fingerprint and fingerprint == previous_fingerprint
+            )
+            duplicate_full_page = bool(page) and duplicates == len(page)
+            boundary_not_deeper = bool(
+                page_deepest is not None
+                and deepest_boundary is not None
+                and not made_deeper_progress
+            )
+            if same_full_page or duplicate_full_page or boundary_not_deeper:
+                # VK wall offsets are relative to a mutable head. A full page
+                # already at/above the deepest durable boundary means head
+                # insertions displaced our absolute offset; moving it by one
+                # full page deterministically consumes that drift. It is never
+                # evidence that the older tail ended.
+                reason = "OFFSET_DRIFT" if (
+                    same_full_page or boundary_not_deeper
+                ) else "NO_PROGRESS"
+                await _defer_vk_crawl_offset_drift(
+                    db,
+                    claim,
+                    next_offset=next_offset,
+                    fingerprint=fingerprint,
+                    deepest_boundary=effective_deepest,
+                    reason=reason,
+                )
+                result["retried"] += 1
+                result["rebased"] += 1
+                break
+
+            current_offset = next_offset
+            previous_fingerprint = fingerprint
+            deepest_boundary = effective_deepest
+            if page_index + 1 >= max_pages_per_job:
+                await _continuation_cas_update(
+                    db,
+                    claim,
+                    "status='pending',offset=?,next_attempt_at=CURRENT_TIMESTAMP,"
+                    "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+                    "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+                    "last_typed_reason='BOUNDED_YIELD'",
+                    (
+                        current_offset,
+                        fingerprint,
+                        deepest_boundary[0] if deepest_boundary else None,
+                        deepest_boundary[1] if deepest_boundary else None,
+                    ),
+                )
+                break
+            await _continuation_cas_update(
+                db,
+                claim,
+                f"offset=?,last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+                f"lease_expires_at=datetime(CURRENT_TIMESTAMP,'+{lease_seconds} seconds'),"
+                "last_typed_reason='PAGE_ADVANCED'",
+                (
+                    current_offset,
+                    fingerprint,
+                    deepest_boundary[0] if deepest_boundary else None,
+                    deepest_boundary[1] if deepest_boundary else None,
+                ),
+            )
+
+    return result
+
+
+async def vk_crawl_continuation_scheduler(
+    db: Database,
+    _bot: Any | None = None,
+    *,
+    run_id: str | None = None,
+    max_jobs: int = 2,
+    max_pages_per_job: int = 3,
+    lease_seconds: int = 300,
+) -> dict[str, int]:
+    return await process_vk_crawl_continuations(
+        db,
+        max_jobs=max_jobs,
+        max_pages_per_job=max_pages_per_job,
+        lease_seconds=lease_seconds,
+        run_id=run_id,
+    )
+
+
 async def crawl_once(
     db,
     *,
@@ -4379,9 +5238,10 @@ async def crawl_once(
     """Crawl configured VK groups once and enqueue matching posts.
 
     The function scans groups listed in ``vk_source`` and uses cursors from
-    ``vk_crawl_cursor`` to fetch only new posts. Posts containing event
-    keywords and a date mention are inserted into ``vk_inbox`` with status
-    ``pending``. Basic statistics are returned for reporting purposes.
+    ``vk_crawl_cursor`` to fetch in-horizon posts. Every fetched post is first
+    persisted as an immutable ``vk_source_packet`` revision and projected into
+    the due inbox; keyword/date/history checks are hints only. Basic statistics
+    are returned for reporting purposes.
 
     If ``broadcast`` is True and ``bot`` is supplied, a crawl summary is sent
     to the admin chat specified by ``ADMIN_CHAT_ID`` environment variable.
@@ -4392,32 +5252,9 @@ async def crawl_once(
     )  # imported lazily to avoid circular import
     get_supabase_client = require_main_attr("get_supabase_client")
     get_tz_offset = require_main_attr("get_tz_offset")
-    mark_vk_import_result = require_main_attr("mark_vk_import_result")
-    VkImportRejectCode = require_main_attr("VkImportRejectCode")
     await get_tz_offset(db)
     local_tz = require_main_attr("LOCAL_TZ")
     exporter = SBExporter(get_supabase_client)
-
-    def _record_rejection(
-        group_id: int,
-        post_id: int,
-        url: str,
-        code: Any,
-        note: str | None = None,
-    ) -> None:
-        try:
-            code_value = getattr(code, "value", code)
-            mark_vk_import_result(
-                group_id=group_id,
-                post_id=post_id,
-                url=url,
-                outcome="rejected",
-                event_id=None,
-                reject_code=str(code_value),
-                reject_note=note,
-            )
-        except Exception:
-            logging.exception("vk_import_result.supabase_failed")
 
     start = time.perf_counter()
     override_backfill_days = (
@@ -4456,11 +5293,6 @@ async def crawl_once(
         _upsert_vk_post_metric = None
 
     async with db.raw_conn() as conn:
-        cutoff = int(time.time()) + 2 * 3600
-        await conn.execute(
-            "UPDATE vk_inbox SET status='rejected' WHERE status IN ('pending','skipped') AND (event_ts_hint IS NULL OR event_ts_hint < ?)",
-            (cutoff,),
-        )
         cur = await conn.execute(
             """
             SELECT
@@ -4531,6 +5363,8 @@ async def crawl_once(
         safety_cap_triggered = False
         hard_cap_triggered = False
         reached_cursor_overlap = False
+        scan_terminal_reached = False
+        last_fetched_page: list[dict[str, Any]] = []
         deep_backfill_scheduled = False
         mode = "inc"
         try:
@@ -4594,11 +5428,16 @@ async def crawl_once(
                         offset=offset,
                         owner_type=owner_type,
                     )
+                    last_fetched_page = list(page)
                     pages_loaded += 1
-                    posts.extend(p for p in page if p["date"] >= horizon)
+                    # Raw-first means even the boundary-crossing page is
+                    # persisted in full; the horizon only terminates paging.
+                    posts.extend(page)
                     if len(page) < VK_CRAWL_PAGE_SIZE_BACKFILL:
+                        scan_terminal_reached = True
                         break
                     if page and min(p["date"] for p in page) < horizon:
+                        scan_terminal_reached = True
                         break
                     offset += VK_CRAWL_PAGE_SIZE_BACKFILL
             else:
@@ -4614,6 +5453,7 @@ async def crawl_once(
                         offset=offset,
                         owner_type=owner_type,
                     )
+                    last_fetched_page = list(page)
                     pages_loaded += 1
                     posts.extend(page)
 
@@ -4628,9 +5468,11 @@ async def crawl_once(
                             reached_cursor_overlap = True
 
                     if not page or len(page) < VK_CRAWL_PAGE_SIZE:
+                        scan_terminal_reached = True
                         break
 
                     if reached_cursor_overlap:
+                        scan_terminal_reached = True
                         break
 
                     if pages_loaded >= safety_cap_threshold:
@@ -4666,272 +5508,186 @@ async def crawl_once(
             max_ts, max_pid = last_seen_ts, last_post_id
 
             for post in posts:
-                ts = post["date"]
-                pid = post["post_id"]
-                matched_kw_value = ""
-                has_date_value = 0
-                event_ts_hint: int | None = None
-                matched_kw_list: list[str] = []
-                is_match = False
-                history_hit = False
-                has_date = False
-                kw_ok = False
-                if ts < last_seen_ts or (ts == last_seen_ts and pid <= last_post_id):
-                    continue
-                if ts > max_ts or (ts == max_ts and pid > max_pid):
+                ts = int(post["date"])
+                pid = int(post["post_id"])
+                is_new_for_cursor = ts > last_seen_ts or (
+                    ts == last_seen_ts and pid > last_post_id
+                )
+                if is_new_for_cursor and (
+                    ts > max_ts or (ts == max_ts and pid > max_pid)
+                ):
                     max_ts, max_pid = ts, pid
                 stats["posts_scanned"] += 1
                 group_posts += 1
-                post_text = post.get("text", "")
-                photos = post.get("photos", []) or []
+
+                post_text = str(post.get("text") or "")
+                photos = list(post.get("photos") or ())
                 post_url = post.get("url")
                 if post_url:
-                    miss_url = post_url
+                    source_url = str(post_url)
                 else:
                     from vk_owner import vk_wall_url as _vk_wall_url
+                    source_url = _vk_wall_url(gid, pid, owner_type)
 
-                    miss_url = _vk_wall_url(gid, pid, owner_type)
-                blank_single_photo = not post_text.strip() and len(photos) == 1
+                history_hit = detect_historical_context(post_text)
+                kw_ok, kws = match_keywords(post_text)
+                has_date = detect_date(post_text)
+                matched_kw_list = list(dict.fromkeys(str(kw) for kw in kws if kw))
+                if history_hit:
+                    matched_kw_list.append(HISTORY_MATCHED_KEYWORD)
+                if not kw_ok:
+                    matched_kw_list.append("hint:no_keywords")
+                if not has_date:
+                    matched_kw_list.append("hint:no_date")
+                if not post_text.strip():
+                    matched_kw_list.append(OCR_PENDING_SENTINEL)
+                matched_kw_list = list(dict.fromkeys(matched_kw_list))
 
-                if blank_single_photo:
-                    matched_kw_value = OCR_PENDING_SENTINEL
-                    matched_kw_list = [OCR_PENDING_SENTINEL]
-                    is_match = True
-                else:
-                    history_hit = detect_historical_context(post_text)
-                    kw_ok, kws = match_keywords(post_text)
-                    has_date = detect_date(post_text)
-                    seen_kws: set[str] = set()
-                    unique_kws: list[str] = []
-                    for kw in kws:
-                        if kw not in seen_kws:
-                            seen_kws.add(kw)
-                            unique_kws.append(kw)
-                    if kw_ok and has_date:
-                        log_keywords = list(unique_kws)
-                        if history_hit and HISTORY_MATCHED_KEYWORD not in seen_kws:
-                            log_keywords.append(HISTORY_MATCHED_KEYWORD)
-                        event_ts_hint = extract_event_ts_hint(
-                            post_text,
-                            default_time,
-                            publish_ts=ts,
-                            tz=local_tz,
-                        )
-                        min_event_ts = int(time.time()) + 2 * 3600
-                        fallback_applied = False
-                        if event_ts_hint is None or event_ts_hint < min_event_ts:
-                            allow_without_hint = False
-                            year_match = re.search(r"\b20\d{2}\b", post_text)
-                            if year_match:
-                                try:
-                                    year_val = int(year_match.group(0))
-                                except ValueError:
-                                    year_val = None
-                                else:
-                                    publish_year = datetime.fromtimestamp(
-                                        ts, local_tz
-                                    ).year
-                                    if year_val is not None and year_val > publish_year:
-                                        allow_without_hint = True
-                            if not allow_without_hint and _vk_should_rescue_to_llm_without_ts_hint(post_text):
-                                allow_without_hint = True
-                                logger.info(
-                                    "vk_intake.crawl_rescue_to_llm group_id=%s post_id=%s url=%s reason=event_like_without_ts_hint",
-                                    gid,
-                                    pid,
-                                    post_url,
-                                )
-                            if not allow_without_hint:
-                                exporter.log_miss(
-                                    group_id=gid,
-                                    group_title=group_title_display,
-                                    group_screen_name=group_screen_name_display,
-                                    post_id=pid,
-                                    url=post_url,
-                                    ts=int(time.time()),
-                                    reason="past_event",
-                                    matched_kw=log_keywords,
-                                    kw_ok=bool(kw_ok),
-                                    has_date=bool(has_date),
-                                )
-                                _record_rejection(
-                                    gid,
-                                    pid,
-                                    miss_url,
-                                    VkImportRejectCode.PAST_EVENT,
-                                    "past_event",
-                                )
-                                continue
-                            fallback_applied = True
-                        if not fallback_applied:
-                            far_threshold = int(time.time()) + 2 * 365 * 86400
-                            if event_ts_hint > far_threshold:
-                                exporter.log_miss(
-                                    group_id=gid,
-                                    group_title=group_title_display,
-                                    group_screen_name=group_screen_name_display,
-                                    post_id=pid,
-                                    url=post_url,
-                                    ts=int(time.time()),
-                                    reason="too_far",
-                                    matched_kw=log_keywords,
-                                    kw_ok=bool(kw_ok),
-                                    has_date=bool(has_date),
-                                )
-                                _record_rejection(
-                                    gid,
-                                    pid,
-                                    miss_url,
-                                    VkImportRejectCode.TOO_FAR,
-                                    "too_far",
-                                )
-                                continue
-                        matched_kw_list = log_keywords
-                        matched_kw_value = ",".join(matched_kw_list)
-                        has_date_value = 1
-                        if fallback_applied:
-                            event_ts_hint = None
-                        is_match = True
-                    elif history_hit:
-                        matched_kw_value = HISTORY_MATCHED_KEYWORD
-                        matched_kw_list = [HISTORY_MATCHED_KEYWORD]
-                        has_date_value = int(has_date)
-                        is_match = True
-                    else:
-                        reason = "no_date" if kw_ok else "no_keywords"
-                        exporter.log_miss(
-                            group_id=gid,
-                            group_title=group_title_display,
-                            group_screen_name=group_screen_name_display,
-                            post_id=pid,
-                            url=post_url,
-                            ts=int(time.time()),
-                            reason=reason,
-                            matched_kw=unique_kws,
-                            kw_ok=bool(kw_ok),
-                            has_date=bool(has_date),
-                        )
-                        code = (
-                            VkImportRejectCode.NO_DATE
-                            if reason == "no_date"
-                            else VkImportRejectCode.NO_KEYWORDS
-                        )
-                        _record_rejection(gid, pid, miss_url, code, reason)
-                        continue
+                date_hints = [
+                    match.group(0)
+                    for pattern in (DATE_RANGE_RE, NUM_DATE_RE, MONTH_NAME_RE)
+                    for match in pattern.finditer(post_text)
+                ]
+                event_ts_hint = extract_event_ts_hint(
+                    post_text,
+                    default_time,
+                    publish_ts=ts,
+                    tz=local_tz,
+                )
+                now_priority = int(time.time())
+                if event_ts_hint is None and has_date:
+                    past_probe = extract_event_ts_hint(
+                        post_text,
+                        default_time,
+                        publish_ts=ts,
+                        allow_past=True,
+                        tz=local_tz,
+                    )
+                    if past_probe is not None and past_probe < now_priority + 2 * 3600:
+                        matched_kw_list.append("hint:past_event")
+                if event_ts_hint is not None and event_ts_hint < now_priority + 2 * 3600:
+                    matched_kw_list.append("hint:past_event")
+                if event_ts_hint is not None and event_ts_hint > now_priority + 2 * 365 * 86400:
+                    matched_kw_list.append("hint:too_far")
 
                 stats["matches"] += 1
                 group_matches += 1
                 if history_hit:
                     group_history_matches += 1
-                if blank_single_photo:
+                if not post_text.strip() and photos:
                     group_blank_single_photo_matches += 1
+
+                # Popularity metrics are optional. Raw packet persistence below
+                # is the cursor-advancement boundary and is never best-effort.
                 try:
-                    try:
-                        collected_ts = int(time.time())
-                        age_raw = (
-                            _compute_age_day(published_ts=int(ts), collected_ts=int(collected_ts))
-                            if _compute_age_day
-                            else None
-                        )
-                        age_day = _normalize_age_day(age_raw) if _normalize_age_day else age_raw
-                        if (
-                            _upsert_vk_post_metric
-                            and isinstance(age_day, int)
-                            and age_day >= 0
-                        ):
-                            views = post.get("views")
-                            likes = post.get("likes")
-                            if isinstance(views, int) or isinstance(likes, int):
-                                await _upsert_vk_post_metric(
-                                    db,
-                                    group_id=int(gid),
-                                    post_id=int(pid),
-                                    age_day=int(age_day),
-                                    source_url=miss_url,
-                                    post_ts=int(ts),
-                                    views=int(views) if isinstance(views, int) else None,
-                                    likes=int(likes) if isinstance(likes, int) else None,
-                                    collected_ts=int(collected_ts),
-                                )
-                    except Exception:
-                        logging.warning(
-                            "vk.crawl.metrics persist failed gid=%s post_id=%s",
-                            gid,
-                            pid,
-                            exc_info=True,
-                        )
-                    async with db.raw_conn() as conn:
-                        cur = await conn.execute(
-                            """
-                            INSERT OR IGNORE INTO vk_inbox(
-                                group_id, post_id, date, text, matched_kw, has_date, event_ts_hint, status, owner_type
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-                            """,
-                            (
-                                gid,
-                                pid,
-                                ts,
-                                post["text"],
-                                matched_kw_value,
-                                has_date_value,
-                                event_ts_hint,
-                                owner_type,
-                            ),
-                        )
-                        await conn.commit()
-                        if cur.rowcount == 0:
-                            stats["duplicates"] += 1
-                            group_duplicates += 1
-                            existing_status: str | None = None
-                            async with db.raw_conn() as conn:
-                                cur_status = await conn.execute(
-                                    "SELECT status FROM vk_inbox WHERE group_id=? AND post_id=? LIMIT 1",
-                                    (gid, pid),
-                                )
-                                row_status = await cur_status.fetchone()
-                            if row_status:
-                                existing_status = row_status[0]
-                            reason = (
-                                "already_inbox"
-                                if existing_status in {"pending", "locked", "skipped"}
-                                else "duplicate"
-                            )
-                            exporter.log_miss(
-                                group_id=gid,
-                                group_title=group_title_display,
-                                group_screen_name=group_screen_name_display,
+                    collected_ts = int(time.time())
+                    age_raw = (
+                        _compute_age_day(published_ts=ts, collected_ts=collected_ts)
+                        if _compute_age_day else None
+                    )
+                    age_day = _normalize_age_day(age_raw) if _normalize_age_day else age_raw
+                    if _upsert_vk_post_metric and isinstance(age_day, int) and age_day >= 0:
+                        views = post.get("views")
+                        likes = post.get("likes")
+                        if isinstance(views, int) or isinstance(likes, int):
+                            await _upsert_vk_post_metric(
+                                db,
+                                group_id=int(gid),
                                 post_id=pid,
-                                url=post_url,
-                                ts=int(time.time()),
-                                reason=reason,
-                                matched_kw=matched_kw_list,
-                                kw_ok=bool(kw_ok),
-                                has_date=bool(has_date),
+                                age_day=int(age_day),
+                                source_url=source_url,
+                                post_ts=ts,
+                                views=int(views) if isinstance(views, int) else None,
+                                likes=int(likes) if isinstance(likes, int) else None,
+                                collected_ts=collected_ts,
                             )
-                            code = (
-                                VkImportRejectCode.ALREADY_INBOX
-                                if reason == "already_inbox"
-                                else VkImportRejectCode.DUPLICATE
-                            )
-                            _record_rejection(gid, pid, miss_url, code, reason)
-                        else:
-                            stats["added"] += 1
-                            group_added += 1
-                            has_new_posts = True
+                except Exception:
+                    logging.warning(
+                        "vk.crawl.metrics persist failed gid=%s post_id=%s",
+                        gid,
+                        pid,
+                        exc_info=True,
+                    )
+
+                try:
+                    _packet_id, packet_is_new = await _persist_vk_source_packet(
+                        db,
+                        group_id=int(gid),
+                        owner_type=owner_type,
+                        post=post,
+                        source_url=source_url,
+                        keyword_hints=matched_kw_list,
+                        date_hints=date_hints,
+                        event_ts_hint=event_ts_hint,
+                    )
                 except Exception:
                     stats["errors"] += 1
                     group_errors += 1
-                    continue
+                    logging.exception(
+                        "vk.crawl.raw_packet_persist_failed group=%s post=%s; cursor blocked",
+                        gid,
+                        pid,
+                    )
+                    raise
+
+                if packet_is_new:
+                    stats["added"] += 1
+                    group_added += 1
+                    has_new_posts = True
+                else:
+                    stats["duplicates"] += 1
+                    group_duplicates += 1
 
             next_cursor_ts = max_ts
             next_cursor_pid = max_pid
+            continuation_needed = bool(
+                hard_cap_triggered
+                or (
+                    backfill
+                    and pages_loaded >= VK_CRAWL_MAX_PAGES_BACKFILL
+                    and not scan_terminal_reached
+                    and len(last_fetched_page) >= VK_CRAWL_PAGE_SIZE_BACKFILL
+                )
+            )
+            if continuation_needed:
+                page_size = (
+                    VK_CRAWL_PAGE_SIZE_BACKFILL if backfill else VK_CRAWL_PAGE_SIZE
+                )
+                await _schedule_vk_crawl_continuation(
+                    db,
+                    group_id=int(gid),
+                    owner_type=owner_type,
+                    since_ts=(0 if backfill else max(0, last_seen_ts - VK_CRAWL_OVERLAP_SEC)),
+                    offset=max(0, pages_loaded * page_size),
+                    horizon_ts=(horizon if backfill else max(0, last_seen_ts - VK_CRAWL_OVERLAP_SEC)),
+                    scan_mode=("backfill" if backfill else "incremental"),
+                    page_size=page_size,
+                    original_cursor_ts=int(last_seen_ts),
+                    original_cursor_post_id=int(last_post_id),
+                    reason=("hard_cap" if hard_cap_triggered else "page_safety_cap"),
+                    last_page_fingerprint=(
+                        _vk_continuation_page_fingerprint(last_fetched_page)
+                        if last_fetched_page
+                        else None
+                    ),
+                    deepest_page_ts=(
+                        _vk_continuation_deepest_boundary(last_fetched_page)[0]
+                        if last_fetched_page
+                        else None
+                    ),
+                    deepest_page_post_id=(
+                        _vk_continuation_deepest_boundary(last_fetched_page)[1]
+                        if last_fetched_page
+                        else None
+                    ),
+                )
             if hard_cap_triggered and max_ts > 0 and not reached_cursor_overlap:
                 deep_backfill_scheduled = True
                 next_cursor_ts = last_seen_ts
                 next_cursor_pid = last_post_id
                 idle_threshold = VK_CRAWL_BACKFILL_AFTER_IDLE_H * 3600
                 cursor_updated_at_override = max(0, now_ts - idle_threshold - 60)
-            elif safety_cap_triggered and max_ts > 0:
+            elif safety_cap_triggered and not scan_terminal_reached and max_ts > 0:
                 adjusted_ts = max(last_seen_ts, max_ts - VK_CRAWL_OVERLAP_SEC)
                 if adjusted_ts < next_cursor_ts:
                     next_cursor_ts = adjusted_ts

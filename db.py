@@ -904,6 +904,125 @@ class Database:
             dbg("event_source")
             await conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS smart_update_candidate_state(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    candidate_key TEXT NOT NULL UNIQUE,
+                    occurrence_key TEXT NOT NULL,
+                    canonical_source_url TEXT,
+                    source_type TEXT NOT NULL,
+                    intent TEXT NOT NULL CHECK(intent IN ('UPSERT_EVENT','ATTACH_CONTEXT')),
+                    source_fingerprint TEXT NOT NULL,
+                    candidate_payload JSON NOT NULL DEFAULT '{}',
+                    current_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                        CHECK(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                    accepted_event_id INTEGER,
+                    diagnostic_event_id INTEGER,
+                    reason TEXT,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    retry_attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    retry_exhausted INTEGER NOT NULL DEFAULT 0,
+                    next_retry_at TIMESTAMP,
+                    claimed_by TEXT,
+                    claim_expires_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_smart_update_candidate_due "
+                "ON smart_update_candidate_state(current_outcome, next_retry_at, claim_expires_at)"
+            )
+            await _add_column(
+                conn,
+                "smart_update_candidate_state",
+                "retry_attempts INTEGER NOT NULL DEFAULT 0",
+            )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_smart_update_candidate_source_occurrence "
+                "ON smart_update_candidate_state(canonical_source_url, occurrence_key) "
+                "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS smart_update_attempt(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    candidate_state_id INTEGER NOT NULL,
+                    attempt_no INTEGER NOT NULL,
+                    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    finished_at TIMESTAMP,
+                    terminal_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                        CHECK(terminal_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                    accepted_event_id INTEGER,
+                    diagnostic_event_id INTEGER,
+                    reason TEXT,
+                    UNIQUE(candidate_state_id, attempt_no),
+                    FOREIGN KEY(candidate_state_id) REFERENCES smart_update_candidate_state(id) ON DELETE CASCADE,
+                    FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                    FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_smart_update_attempt_terminal "
+                "ON smart_update_attempt(terminal_outcome, finished_at)"
+            )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS source_parser_recovery_request(
+                    source_type TEXT PRIMARY KEY,
+                    requested_since TIMESTAMP NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending'
+                        CHECK(status IN ('pending','running','done','error')),
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    next_run_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_error TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_source_parser_recovery_due "
+                "ON source_parser_recovery_request(status,next_run_at)"
+            )
+            accepted_terminals_sql = "'CREATED','MERGED','NOOP_EXACT_REPLAY'"
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_candidate_terminal_insert "
+                "BEFORE INSERT ON smart_update_candidate_state FOR EACH ROW WHEN "
+                f"(NEW.current_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.current_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_candidate_terminal_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_candidate_terminal_update "
+                "BEFORE UPDATE OF current_outcome,accepted_event_id ON smart_update_candidate_state "
+                "FOR EACH ROW WHEN "
+                f"(NEW.current_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.current_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_candidate_terminal_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_attempt_terminal_insert "
+                "BEFORE INSERT ON smart_update_attempt FOR EACH ROW WHEN "
+                f"(NEW.terminal_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.terminal_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_attempt_terminal_contract'); END"
+            )
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_smart_update_attempt_terminal_update "
+                "BEFORE UPDATE OF terminal_outcome,accepted_event_id ON smart_update_attempt "
+                "FOR EACH ROW WHEN "
+                f"(NEW.terminal_outcome IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NULL) OR "
+                f"(NEW.terminal_outcome NOT IN ({accepted_terminals_sql}) AND NEW.accepted_event_id IS NOT NULL) "
+                "BEGIN SELECT RAISE(ABORT,'smart_update_attempt_terminal_contract'); END"
+            )
+            await conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS event_source(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     event_id INTEGER NOT NULL,
@@ -912,6 +1031,9 @@ class Database:
                     canonical_source_url TEXT,
                     source_role TEXT,
                     source_fingerprint TEXT,
+                    candidate_key TEXT,
+                    occurrence_key TEXT,
+                    smart_update_candidate_id INTEGER,
                     source_chat_username TEXT,
                     source_chat_id INTEGER,
                     source_message_id INTEGER,
@@ -919,6 +1041,7 @@ class Database:
                     imported_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     trust_level TEXT,
                     FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE CASCADE,
+                    FOREIGN KEY(smart_update_candidate_id) REFERENCES smart_update_candidate_state(id) ON DELETE SET NULL,
                     UNIQUE(event_id, source_url)
                 )
                 """
@@ -930,6 +1053,9 @@ class Database:
             await _add_column(conn, "event_source", "canonical_source_url TEXT")
             await _add_column(conn, "event_source", "source_role TEXT")
             await _add_column(conn, "event_source", "source_fingerprint TEXT")
+            await _add_column(conn, "event_source", "candidate_key TEXT")
+            await _add_column(conn, "event_source", "occurrence_key TEXT")
+            await _add_column(conn, "event_source", "smart_update_candidate_id INTEGER")
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_event ON event_source(event_id)"
             )
@@ -949,6 +1075,14 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_source_fingerprint "
                 "ON event_source(source_fingerprint)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_source_candidate "
+                "ON event_source(candidate_key)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_source_occurrence "
+                "ON event_source(canonical_source_url, occurrence_key)"
             )
             # Classified source rows must be complete and role-valid. Legacy
             # rows may remain NULL until an evidence-backed intake/repair
@@ -971,48 +1105,78 @@ class Database:
                 "AND TRIM(COALESCE(NEW.canonical_source_url,''))='') "
                 "BEGIN SELECT RAISE(ABORT,'event_source_identity_contract'); END"
             )
-            event_conflict_cursor = await conn.execute(
-                "SELECT event_id, canonical_source_url FROM event_source "
-                "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
-                "GROUP BY event_id, canonical_source_url HAVING COUNT(*) > 1 LIMIT 1"
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_candidate_insert "
+                "BEFORE INSERT ON event_source FOR EACH ROW WHEN "
+                "((NEW.candidate_key IS NULL) != (NEW.occurrence_key IS NULL)) OR "
+                "(NEW.smart_update_candidate_id IS NOT NULL AND "
+                "(TRIM(COALESCE(NEW.candidate_key,''))='' OR TRIM(COALESCE(NEW.occurrence_key,''))='')) "
+                "BEGIN SELECT RAISE(ABORT,'event_source_candidate_contract'); END"
             )
-            event_identity_conflict = await event_conflict_cursor.fetchone()
-            await event_conflict_cursor.close()
-            if event_identity_conflict is None:
+            await conn.execute(
+                "CREATE TRIGGER IF NOT EXISTS trg_event_source_candidate_update "
+                "BEFORE UPDATE OF candidate_key,occurrence_key,smart_update_candidate_id ON event_source "
+                "FOR EACH ROW WHEN "
+                "((NEW.candidate_key IS NULL) != (NEW.occurrence_key IS NULL)) OR "
+                "(NEW.smart_update_candidate_id IS NOT NULL AND "
+                "(TRIM(COALESCE(NEW.candidate_key,''))='' OR TRIM(COALESCE(NEW.occurrence_key,''))='')) "
+                "BEGIN SELECT RAISE(ABORT,'event_source_candidate_contract'); END"
+            )
+            # A carrier URL may contain several independent occurrences.  The
+            # previous global URL indexes encoded the false premise "one URL =
+            # one Event"; replace them without rewriting/classifying legacy rows.
+            await conn.execute("DROP INDEX IF EXISTS ux_event_source_event_canonical")
+            await conn.execute("DROP INDEX IF EXISTS ux_event_source_identity_canonical")
+            occurrence_conflict_cursor = await conn.execute(
+                "SELECT canonical_source_url, occurrence_key FROM event_source "
+                "WHERE source_role='identity_bearing' AND canonical_source_url IS NOT NULL "
+                "AND canonical_source_url<>'' AND occurrence_key IS NOT NULL AND occurrence_key<>'' "
+                "GROUP BY canonical_source_url, occurrence_key HAVING COUNT(*) > 1 LIMIT 1"
+            )
+            occurrence_conflict = await occurrence_conflict_cursor.fetchone()
+            await occurrence_conflict_cursor.close()
+            if occurrence_conflict is None:
                 await conn.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_event_canonical "
-                    "ON event_source(event_id, canonical_source_url) "
-                    "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_identity_occurrence "
+                    "ON event_source(canonical_source_url, occurrence_key) "
+                    "WHERE source_role='identity_bearing' "
+                    "AND canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
+                    "AND occurrence_key IS NOT NULL AND occurrence_key<>''"
                 )
             else:
-                logging.warning(
-                    "event_source per-event canonical uniqueness not activated: event_id=%s source_alias=%s",
-                    event_identity_conflict[0],
-                    hashlib.sha256(str(event_identity_conflict[1]).encode("utf-8")).hexdigest()[:12],
+                raise RuntimeError(
+                    "event_source_identity_occurrence_conflict:"
+                    + hashlib.sha256(str(occurrence_conflict[0]).encode("utf-8")).hexdigest()[:12]
+                    + ":"
+                    + hashlib.sha256(str(occurrence_conflict[1]).encode("utf-8")).hexdigest()[:12]
                 )
-            # Activate global identity uniqueness only when current data proves
-            # it is safe. Never guess roles or rewrite conflicting legacy rows at
-            # startup: an explicit repair/audit must resolve those first.
-            conflict_cursor = await conn.execute(
+            legacy_conflict_cursor = await conn.execute(
                 "SELECT canonical_source_url FROM event_source "
                 "WHERE source_role='identity_bearing' AND canonical_source_url IS NOT NULL "
-                "AND canonical_source_url<>'' "
+                "AND canonical_source_url<>'' AND occurrence_key IS NULL "
                 "GROUP BY canonical_source_url HAVING COUNT(*) > 1 LIMIT 1"
             )
-            identity_conflict = await conflict_cursor.fetchone()
-            await conflict_cursor.close()
-            if identity_conflict is None:
-                await conn.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_identity_canonical "
-                    "ON event_source(canonical_source_url) "
-                    "WHERE source_role='identity_bearing' "
-                    "AND canonical_source_url IS NOT NULL AND canonical_source_url<>''"
+            legacy_conflict = await legacy_conflict_cursor.fetchone()
+            await legacy_conflict_cursor.close()
+            if legacy_conflict is not None:
+                raise RuntimeError(
+                    "event_source_legacy_identity_conflict:"
+                    + hashlib.sha256(str(legacy_conflict[0]).encode("utf-8")).hexdigest()[:12]
                 )
-            else:
-                logging.warning(
-                    "event_source identity uniqueness not activated: source_alias=%s",
-                    hashlib.sha256(str(identity_conflict[0]).encode("utf-8")).hexdigest()[:12],
-                )
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_identity_canonical_legacy "
+                "ON event_source(canonical_source_url) "
+                "WHERE source_role='identity_bearing' "
+                "AND canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
+                "AND occurrence_key IS NULL"
+            )
+            await conn.execute("DROP INDEX IF EXISTS ux_event_source_smart_candidate")
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_event_source_smart_candidate "
+                "ON event_source(canonical_source_url,candidate_key) "
+                "WHERE canonical_source_url IS NOT NULL AND canonical_source_url<>'' "
+                "AND candidate_key IS NOT NULL AND candidate_key<>''"
+            )
 
             dbg("event_identity")
             await conn.execute(
@@ -2538,6 +2702,259 @@ class Database:
             # legacy contract for existing inbox rows.
             await _add_column(
                 conn, "vk_inbox", "owner_type TEXT NOT NULL DEFAULT 'group'"
+            )
+            await _add_column(conn, "vk_inbox", "source_packet_id INTEGER")
+            await _add_column(conn, "vk_inbox", "next_attempt_at TIMESTAMP")
+            await _add_column(conn, "vk_inbox", "last_typed_reason TEXT")
+            await _add_column(conn, "vk_inbox", "quota_scope TEXT")
+            await _add_column(conn, "vk_inbox", "provider_retry_after INTEGER")
+
+            # Raw-first VK ingestion ledger.  A row is an immutable fetched
+            # revision; semantic state lives beside it but the source payload is
+            # never overwritten.  The inbox points at the newest revision.
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_source_packet (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_type TEXT NOT NULL DEFAULT 'vk',
+                    owner_id INTEGER NOT NULL,
+                    owner_type TEXT NOT NULL DEFAULT 'group',
+                    post_id INTEGER NOT NULL,
+                    revision INTEGER NOT NULL,
+                    source_url TEXT NOT NULL,
+                    published_at INTEGER NOT NULL,
+                    fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    raw_text TEXT NOT NULL,
+                    raw_payload_json TEXT NOT NULL,
+                    attachment_metadata_json TEXT NOT NULL DEFAULT '[]',
+                    envelope_version INTEGER,
+                    capture_complete INTEGER NOT NULL DEFAULT 0,
+                    evidence_replayability TEXT NOT NULL DEFAULT 'replayable_legacy_incomplete',
+                    payload_hash TEXT NOT NULL,
+                    source_revision_hash TEXT NOT NULL,
+                    discovery_keyword_hints_json TEXT NOT NULL DEFAULT '[]',
+                    discovered_date_hints_json TEXT NOT NULL DEFAULT '[]',
+                    event_ts_hint INTEGER,
+                    ocr_status TEXT NOT NULL DEFAULT 'pending',
+                    llm_status TEXT NOT NULL DEFAULT 'pending',
+                    evidence_manifest_json TEXT,
+                    parse_result_json TEXT,
+                    successful_parse_key TEXT,
+                    prompt_version TEXT,
+                    model TEXT,
+                    quota_scope TEXT,
+                    provider_retry_after INTEGER,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    lease_owner TEXT,
+                    lease_expires_at TIMESTAMP,
+                    last_typed_reason TEXT,
+                    terminal_carrier_outcome TEXT,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_type, owner_id, post_id, revision),
+                    UNIQUE(source_type, owner_id, post_id, source_revision_hash)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_source_packet_due ON vk_source_packet(status,next_attempt_at,published_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_source_packet_post ON vk_source_packet(source_type,owner_id,post_id,revision)"
+            )
+            await _add_column(conn, "vk_source_packet", "provider_retry_after INTEGER")
+            await _add_column(conn, "vk_source_packet", "envelope_version INTEGER")
+            await _add_column(
+                conn, "vk_source_packet", "capture_complete INTEGER NOT NULL DEFAULT 0"
+            )
+            await _add_column(
+                conn,
+                "vk_source_packet",
+                "evidence_replayability TEXT NOT NULL DEFAULT 'replayable_legacy_incomplete'",
+            )
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_source_packet_attempt (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_packet_id INTEGER NOT NULL,
+                    attempt_no INTEGER NOT NULL,
+                    attempt_kind TEXT NOT NULL DEFAULT 'primary',
+                    parse_key TEXT,
+                    payload_hash TEXT NOT NULL,
+                    source_type TEXT NOT NULL DEFAULT 'vk',
+                    source_url TEXT NOT NULL,
+                    source_revision_hash TEXT NOT NULL,
+                    discovery_hints_json TEXT NOT NULL DEFAULT '{}',
+                    evidence_manifest_json TEXT,
+                    llm_started INTEGER NOT NULL DEFAULT 0,
+                    llm_completed INTEGER NOT NULL DEFAULT 0,
+                    structured_response_valid INTEGER NOT NULL DEFAULT 0,
+                    model TEXT,
+                    quota_scope TEXT,
+                    request_id TEXT,
+                    response_id TEXT,
+                    finish_reason TEXT,
+                    provider_retry_after INTEGER,
+                    input_tokens INTEGER,
+                    output_tokens INTEGER,
+                    thought_tokens INTEGER,
+                    reserved_tokens INTEGER,
+                    primary_disposition TEXT,
+                    no_event_reason TEXT,
+                    verification_triggered INTEGER NOT NULL DEFAULT 0,
+                    verification_reason TEXT,
+                    verification_disposition TEXT,
+                    event_child_count INTEGER NOT NULL DEFAULT 0,
+                    lifecycle_action_count INTEGER NOT NULL DEFAULT 0,
+                    smart_update_child_outcomes_json TEXT NOT NULL DEFAULT '[]',
+                    terminal_carrier_outcome TEXT,
+                    next_attempt_at TIMESTAMP,
+                    typed_error_reason TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    FOREIGN KEY(source_packet_id) REFERENCES vk_source_packet(id) ON DELETE CASCADE
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_packet_attempt_packet ON vk_source_packet_attempt(source_packet_id,attempt_no)"
+            )
+            await _add_column(conn, "vk_source_packet_attempt", "payload_hash TEXT")
+            await _add_column(conn, "vk_source_packet_attempt", "response_id TEXT")
+            await _add_column(conn, "vk_source_packet_attempt", "finish_reason TEXT")
+            await _add_column(conn, "vk_source_packet_attempt", "provider_retry_after INTEGER")
+            await _add_column(conn, "vk_source_packet_attempt", "no_event_reason TEXT")
+            await conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_vk_packet_success_parse
+                ON vk_source_packet_attempt(parse_key)
+                WHERE parse_key IS NOT NULL
+                  AND llm_completed=1
+                  AND structured_response_valid=1
+                """
+            )
+
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_crawl_continuation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_type TEXT NOT NULL DEFAULT 'vk',
+                    owner_id INTEGER NOT NULL,
+                    owner_type TEXT NOT NULL DEFAULT 'group',
+                    continuation_key TEXT,
+                    scan_mode TEXT NOT NULL DEFAULT 'incremental',
+                    page_size INTEGER NOT NULL DEFAULT 30,
+                    since_ts INTEGER NOT NULL,
+                    offset INTEGER NOT NULL,
+                    horizon_ts INTEGER NOT NULL,
+                    original_cursor_ts INTEGER NOT NULL DEFAULT 0,
+                    original_cursor_post_id INTEGER NOT NULL DEFAULT 0,
+                    reason TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    lease_owner TEXT,
+                    locked_by TEXT,
+                    lease_expires_at TIMESTAMP,
+                    locked_at TIMESTAMP,
+                    run_id TEXT,
+                    last_page_fingerprint TEXT,
+                    deepest_page_ts INTEGER,
+                    deepest_page_post_id INTEGER,
+                    last_typed_reason TEXT,
+                    completed_at TIMESTAMP,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(source_type, owner_id, since_ts, offset, horizon_ts)
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_vk_crawl_continuation_due ON vk_crawl_continuation(status,next_attempt_at)"
+            )
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "scan_mode TEXT NOT NULL DEFAULT 'incremental'",
+            )
+            await _add_column(conn, "vk_crawl_continuation", "continuation_key TEXT")
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "page_size INTEGER NOT NULL DEFAULT 30",
+            )
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "original_cursor_ts INTEGER NOT NULL DEFAULT 0",
+            )
+            await _add_column(
+                conn,
+                "vk_crawl_continuation",
+                "original_cursor_post_id INTEGER NOT NULL DEFAULT 0",
+            )
+            await _add_column(conn, "vk_crawl_continuation", "locked_at TIMESTAMP")
+            await _add_column(conn, "vk_crawl_continuation", "locked_by TEXT")
+            await _add_column(conn, "vk_crawl_continuation", "run_id TEXT")
+            await _add_column(
+                conn, "vk_crawl_continuation", "last_page_fingerprint TEXT"
+            )
+            await _add_column(conn, "vk_crawl_continuation", "deepest_page_ts INTEGER")
+            await _add_column(
+                conn, "vk_crawl_continuation", "deepest_page_post_id INTEGER"
+            )
+            await _add_column(conn, "vk_crawl_continuation", "completed_at TIMESTAMP")
+            # Rows may have been queued by an older producer before the
+            # continuation consumer existed. Recover the immutable boundary
+            # from the canonical cursor where possible, without advancing it.
+            await conn.execute(
+                """
+                UPDATE vk_crawl_continuation
+                SET scan_mode='backfill', page_size=50
+                WHERE since_ts=0 AND horizon_ts>0 AND scan_mode='incremental'
+                """
+            )
+            await conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS ux_vk_crawl_continuation_key
+                ON vk_crawl_continuation(continuation_key)
+                WHERE continuation_key IS NOT NULL
+                """
+            )
+            await conn.execute(
+                """
+                UPDATE vk_crawl_continuation
+                SET original_cursor_ts=COALESCE(
+                        (SELECT last_seen_ts FROM vk_crawl_cursor
+                         WHERE group_id=vk_crawl_continuation.owner_id),
+                        since_ts
+                    ),
+                    original_cursor_post_id=COALESCE(
+                        (SELECT last_post_id FROM vk_crawl_cursor
+                         WHERE group_id=vk_crawl_continuation.owner_id),
+                        0
+                    )
+                WHERE original_cursor_ts=0 AND scan_mode='incremental'
+                """
+            )
+            # The first continuation implementation incorrectly treated a
+            # repeated full page as proof of completion. Head insertions can
+            # shift an absolute VK offset by exactly one page and produce that
+            # shape while an older tail still exists. Reopen only that poisoned
+            # terminal state; real empty/short/horizon/cursor terminals remain
+            # immutable. This update is intentionally idempotent across init×2.
+            await conn.execute(
+                """
+                UPDATE vk_crawl_continuation
+                SET status='retry', next_attempt_at=CURRENT_TIMESTAMP,
+                    lease_owner=NULL, locked_by=NULL, lease_expires_at=NULL,
+                    locked_at=NULL, run_id=NULL, completed_at=NULL,
+                    last_typed_reason='LEGACY_EXACT_PAGE_REPLAY_REOPENED',
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                """
             )
 
             await conn.execute(

@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -72,6 +73,126 @@ class UsageInfo:
     output_tokens: int = 0
     total_tokens: int = 0
     model: str = ""
+    # New telemetry fields are appended after the original four positional
+    # fields so legacy UsageInfo(input, output, total, model) stays compatible.
+    thought_tokens: int = 0
+    reserved_tokens: int = 0
+    finish_reason: Optional[str] = None
+    provider_response_id: Optional[str] = None
+    provider_request_id: Optional[str] = None
+    provider_model_version: Optional[str] = None
+    input_count_source: str = "provider_usage"
+
+    @property
+    def actual_total_tokens(self) -> int:
+        """Comparable actual usage without double-counting provider totals."""
+
+        if self.total_tokens > 0:
+            return int(self.total_tokens)
+        return max(
+            0,
+            int(self.input_tokens) + int(self.output_tokens) + int(self.thought_tokens),
+        )
+
+    @property
+    def reservation_actual_ratio(self) -> Optional[float]:
+        """Reserved/actual ratio used by capacity calibration reports."""
+
+        actual = self.actual_total_tokens
+        if actual <= 0:
+            return None
+        return float(self.reserved_tokens) / float(actual)
+
+
+@dataclass(frozen=True)
+class InputTokenCount:
+    """Admission input count and whether it came from countTokens or fallback."""
+
+    tokens: int
+    source: str
+    provider_model_name: Optional[str] = None
+    fallback_error_type: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class TokenReservationCalibration:
+    """Persistable p99 completion reservation for one prompt family.
+
+    ``output_ceiling_tokens`` remains a semantic generation ceiling.  This
+    contract only changes the amount admitted against TPM, using observed
+    output+thought usage plus an explicit safety margin.  A missing/empty
+    calibration retains the conservative cold-start reservation.
+    """
+
+    model: str
+    consumer: str
+    prompt_version: str
+    observed_p99_output_thought_tokens: int
+    safety_margin_tokens: int
+    sample_count: int
+
+    @classmethod
+    def from_observations(
+        cls,
+        *,
+        model: str,
+        consumer: str,
+        prompt_version: str,
+        output_thought_observations: Sequence[int],
+        safety_margin_tokens: int,
+    ) -> "TokenReservationCalibration":
+        values = sorted(max(0, int(value)) for value in output_thought_observations)
+        p99 = values[max(0, math.ceil(0.99 * len(values)) - 1)] if values else 0
+        return cls(
+            model=str(model),
+            consumer=str(consumer),
+            prompt_version=str(prompt_version),
+            observed_p99_output_thought_tokens=p99,
+            safety_margin_tokens=max(0, int(safety_margin_tokens)),
+            sample_count=len(values),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "consumer": self.consumer,
+            "prompt_version": self.prompt_version,
+            "observed_p99_output_thought_tokens": self.observed_p99_output_thought_tokens,
+            "safety_margin_tokens": self.safety_margin_tokens,
+            "sample_count": self.sample_count,
+        }
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "TokenReservationCalibration":
+        return cls(
+            model=str(value["model"]),
+            consumer=str(value["consumer"]),
+            prompt_version=str(value["prompt_version"]),
+            observed_p99_output_thought_tokens=max(
+                0, int(value["observed_p99_output_thought_tokens"])
+            ),
+            safety_margin_tokens=max(0, int(value["safety_margin_tokens"])),
+            sample_count=max(0, int(value["sample_count"])),
+        )
+
+    def completion_reservation(self, *, output_ceiling_tokens: int) -> int:
+        ceiling = max(1, int(output_ceiling_tokens))
+        if self.sample_count <= 0:
+            return ceiling + GoogleAIClient.DEFAULT_TPM_RESERVE_EXTRA
+        observed_with_margin = (
+            self.observed_p99_output_thought_tokens + self.safety_margin_tokens
+        )
+        # Provider totals may include thought/tool overhead and a rolling tail
+        # above p99.  A calibrated safety allowance may therefore exceed the
+        # semantic generation ceiling.  Bound it by the old conservative
+        # ceiling+extra rather than clipping the safety margin away.
+        return max(
+            1,
+            min(
+                ceiling + GoogleAIClient.DEFAULT_TPM_RESERVE_EXTRA,
+                observed_with_margin,
+            ),
+        )
 
 
 @dataclass
@@ -87,6 +208,7 @@ class RequestContext:
     provider_model_name: Optional[str] = None
     api_key_id: Optional[str] = None
     quota_scope: Optional[str] = None
+    input_count_source: str = "heuristic_fallback"
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -1241,6 +1363,8 @@ class GoogleAIClient:
                 api_key_id=last_result.api_key_id,
                 minute_bucket=last_result.minute_bucket,
                 day_bucket=last_result.day_bucket,
+                quota_scope=last_result.quota_scope,
+                quota_reason=last_result.blocked_reason or "unknown",
             )
         if not last_result.api_key_id or not last_result.env_var_name:
             raise ReservationError("external reservation returned incomplete key metadata")
@@ -1422,6 +1546,10 @@ class GoogleAIClient:
         allow_model_fallback: bool = True,
         max_provider_attempts: Optional[int] = None,
         attempt_observer: Optional[Callable[[dict[str, Any]], None]] = None,
+        use_provider_count_tokens: bool = False,
+        input_token_count: Optional[InputTokenCount] = None,
+        reservation_calibration: Optional[TokenReservationCalibration] = None,
+        prompt_version: Optional[str] = None,
     ) -> tuple[str, UsageInfo]:
         """Generate content with rate limiting and retries.
         
@@ -1440,6 +1568,14 @@ class GoogleAIClient:
             attempt_observer: Optional synchronous hook called after the shared
                 limiter marks an attempt sent and before the provider request.
                 Only non-secret model/attempt metadata is exposed.
+            use_provider_count_tokens: Use Google's input-only ``countTokens``
+                endpoint before admission. Any counting failure safely falls
+                back to the conservative local estimate.
+            input_token_count: Optional previously counted input, allowing a
+                caller to persist/reuse exact counting evidence.
+            reservation_calibration: Optional persisted p99 output+thought
+                contract for this exact model/consumer/prompt version.
+            prompt_version: Prompt-family version used to bind calibration.
             
         Returns:
             Tuple of (response_text, usage_info)
@@ -1448,12 +1584,13 @@ class GoogleAIClient:
             RateLimitError: If rate limits exceeded (NO_WAIT)
             ProviderError: If provider error after max retries
         """
-        request_uid = str(uuid.uuid4())
-        reserved_tpm = self._calculate_reserved_tpm(
-            prompt=prompt,
-            max_output_tokens=max_output_tokens or self.DEFAULT_MAX_OUTPUT_TOKENS,
-        )
         requested_model = (model or "").strip()
+        if input_token_count is None and use_provider_count_tokens:
+            input_token_count = await self.count_input_tokens_async(
+                model=requested_model,
+                prompt=prompt,
+            )
+        request_uid = str(uuid.uuid4())
         model_chain = self._build_model_chain(requested_model, fallback_models)
         if not allow_model_fallback:
             model_chain = [requested_model]
@@ -1467,6 +1604,18 @@ class GoogleAIClient:
         last_error: Optional[Exception] = None
         for model_index, model_name in enumerate(model_chain):
             limit_model = self._normalize_rate_limit_model(model_name)
+            # countTokens is model-specific. Reuse its exact value only for the
+            # requested model; a fallback model returns to conservative input
+            # estimation unless the caller invokes it separately.
+            model_input_count = input_token_count if model_index == 0 else None
+            reserved_tpm = self._calculate_reserved_tpm(
+                prompt=prompt,
+                max_output_tokens=max_output_tokens or self.DEFAULT_MAX_OUTPUT_TOKENS,
+                input_token_count=model_input_count,
+                calibration=reservation_calibration,
+                model=limit_model,
+                prompt_version=prompt_version,
+            )
             provider_model, provider_model_name = self._resolve_provider_model(
                 model_name or limit_model
             )
@@ -1479,6 +1628,11 @@ class GoogleAIClient:
                 provider_model=provider_model,
                 provider_model_name=provider_model_name,
                 reserved_tpm=reserved_tpm,
+                input_count_source=(
+                    model_input_count.source
+                    if model_input_count is not None
+                    else "heuristic_fallback"
+                ),
             )
 
             local_attempt_no = 0
@@ -1503,6 +1657,10 @@ class GoogleAIClient:
                     usage.model = limit_model
                     return response_text, usage
                 except RateLimitError as e:
+                    if not e.quota_scope:
+                        e.quota_scope = ctx.quota_scope
+                    if not e.quota_reason:
+                        e.quota_reason = e.blocked_reason
                     blocked_reason = (e.blocked_reason or "").strip().lower()
                     has_quota_fallback = (
                         allow_model_fallback
@@ -1560,6 +1718,10 @@ class GoogleAIClient:
                     raise
                 except ProviderError as e:
                     last_error = e
+                    if not e.quota_scope:
+                        e.quota_scope = ctx.quota_scope
+                    if not e.model:
+                        e.model = ctx.model
                     if int(getattr(e, "status_code", 0) or 0) == 429:
                         if not self.allow_provider_429_rotation:
                             raise
@@ -1785,6 +1947,8 @@ class GoogleAIClient:
                 api_key_id=reserve_result.api_key_id,
                 minute_bucket=reserve_result.minute_bucket,
                 day_bucket=reserve_result.day_bucket,
+                quota_scope=reserve_result.quota_scope,
+                quota_reason=reserve_result.blocked_reason or "unknown",
             )
 
         ctx.api_key_id = reserve_result.api_key_id
@@ -1892,6 +2056,8 @@ class GoogleAIClient:
                 api_key_id=reserve_result.api_key_id,
                 minute_bucket=reserve_result.minute_bucket,
                 day_bucket=reserve_result.day_bucket,
+                quota_scope=reserve_result.quota_scope,
+                quota_reason=reserve_result.blocked_reason or "unknown",
             )
 
         ctx.api_key_id = reserve_result.api_key_id
@@ -1932,7 +2098,12 @@ class GoogleAIClient:
                 # Dry run mode for testing
                 prompt_preview = self._prompt_text_for_estimate(prompt)[:50]
                 response_text = f"[DRY RUN] Response for: {prompt_preview}..."
-                usage = UsageInfo(input_tokens=100, output_tokens=50, total_tokens=150)
+                usage = UsageInfo(
+                    input_tokens=100,
+                    output_tokens=50,
+                    total_tokens=150,
+                    finish_reason="STOP",
+                )
             else:
                 response_text, usage = await self._call_provider(
                     api_key=api_key,
@@ -1985,11 +2156,25 @@ class GoogleAIClient:
             # Classify error
             provider_error = self._classify_error(e)
             
-            # Finalize with error
+            if not provider_error.quota_scope:
+                provider_error.quota_scope = ctx.quota_scope
+            if not provider_error.model:
+                provider_error.model = ctx.model
+            error_usage = (
+                provider_error.usage
+                if isinstance(provider_error.usage, UsageInfo)
+                else None
+            )
+            if error_usage is not None:
+                error_usage.reserved_tokens = int(ctx.reserved_tpm)
+                error_usage.input_count_source = ctx.input_count_source
+
+            # Finalize with all accounting evidence returned by the provider,
+            # even when its finish reason makes the semantic response unusable.
             await self._finalize(
                 ctx=ctx,
                 attempt_no=attempt_no,
-                usage=None,
+                usage=error_usage,
                 duration_ms=duration_ms,
                 error=provider_error,
             )
@@ -2004,6 +2189,9 @@ class GoogleAIClient:
             
             raise provider_error
         
+        usage.reserved_tokens = int(ctx.reserved_tpm)
+        usage.input_count_source = ctx.input_count_source
+
         # 5. Finalize (update usage, reconcile TPM)
         await self._finalize(
             ctx=ctx,
@@ -2753,15 +2941,66 @@ class GoogleAIClient:
                 if isinstance(meta, dict):
                     usage.input_tokens = int(meta.get("prompt_token_count") or 0)
                     usage.output_tokens = int(meta.get("candidates_token_count") or 0)
+                    usage.thought_tokens = int(meta.get("thoughts_token_count") or 0)
                     usage.total_tokens = int(meta.get("total_token_count") or 0)
                 else:
                     usage.input_tokens = int(getattr(meta, "prompt_token_count", 0) or 0)
                     usage.output_tokens = int(getattr(meta, "candidates_token_count", 0) or 0)
+                    usage.thought_tokens = int(
+                        getattr(meta, "thoughts_token_count", 0) or 0
+                    )
                     usage.total_tokens = int(getattr(meta, "total_token_count", 0) or 0)
             except Exception:
                 # Best-effort only; token accounting must not break requests.
                 pass
             return usage
+
+        def _response_scalar(resp: Any, *names: str) -> Optional[str]:
+            for name in names:
+                value = getattr(resp, name, None)
+                if value is None and isinstance(resp, dict):
+                    value = resp.get(name)
+                if isinstance(value, (str, int)) and str(value).strip():
+                    return str(value).strip()
+            return None
+
+        def _request_id(resp: Any) -> Optional[str]:
+            direct = _response_scalar(resp, "request_id", "requestId")
+            if direct:
+                return direct
+            # google.genai may expose transport headers through sdk_http_response.
+            # Read only known scalar headers; never stringify the response.
+            http_response = getattr(resp, "sdk_http_response", None)
+            headers = getattr(http_response, "headers", None)
+            if headers is not None:
+                for name in ("x-request-id", "x-goog-request-id"):
+                    try:
+                        value = headers.get(name)
+                    except Exception:
+                        value = None
+                    if isinstance(value, str) and value.strip():
+                        return value.strip()
+            return None
+
+        def _normalized_finish_reason(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            raw = getattr(value, "name", None) or str(value)
+            normalized = str(raw or "").strip().upper()
+            if "." in normalized:
+                normalized = normalized.rsplit(".", 1)[-1]
+            return normalized or None
+
+        def _finish_reasons(resp: Any) -> list[str]:
+            out: list[str] = []
+            for cand in list(getattr(resp, "candidates", None) or []):
+                value = getattr(cand, "finish_reason", None)
+                if value is None and isinstance(cand, dict):
+                    value = cand.get("finish_reason")
+                normalized = _normalized_finish_reason(value)
+                if normalized:
+                    out.append(normalized)
+            return out
 
         def _extract_text(resp: Any) -> str:
             # Newer responses often store content in candidates[].content.parts[].text.
@@ -2833,7 +3072,9 @@ class GoogleAIClient:
                     if fr is None and isinstance(cand, dict):
                         fr = cand.get("finish_reason")
                     if fr is not None:
-                        finish_reasons.append(getattr(fr, "name", None) or str(fr))
+                        normalized = _normalized_finish_reason(fr)
+                        if normalized:
+                            finish_reasons.append(normalized)
                     content = getattr(cand, "content", None)
                     if content is None and isinstance(cand, dict):
                         content = cand.get("content")
@@ -2858,7 +3099,83 @@ class GoogleAIClient:
             )
 
         usage = _get_usage(response)
+        finish_reasons = _finish_reasons(response)
+        usage.finish_reason = ",".join(finish_reasons) if finish_reasons else None
+        usage.provider_response_id = _response_scalar(response, "response_id", "id")
+        usage.provider_request_id = _request_id(response)
+        usage.provider_model_version = _response_scalar(
+            response,
+            "model_version",
+            "modelVersion",
+        )
         response_text = _extract_text(response)
+        if "MAX_TOKENS" in finish_reasons:
+            raise ProviderError(
+                error_type="output_truncated",
+                error_code="MAX_TOKENS",
+                error_message=(
+                    "Provider response reached the output token ceiling; "
+                    "partial content is not a successful semantic result"
+                ),
+                retryable=True,
+                finish_reason="MAX_TOKENS",
+                provider_response_id=usage.provider_response_id,
+                provider_request_id=usage.provider_request_id,
+                provider_model_version=usage.provider_model_version,
+                usage=usage,
+            )
+        known_finish_reasons = {
+            "STOP",
+            "MAX_TOKENS",
+            "SAFETY",
+            "RECITATION",
+            "LANGUAGE",
+            "OTHER",
+            "BLOCKLIST",
+            "PROHIBITED_CONTENT",
+            "SPII",
+            "MALFORMED_FUNCTION_CALL",
+            "IMAGE_SAFETY",
+            "IMAGE_PROHIBITED_CONTENT",
+            "IMAGE_OTHER",
+            "NO_IMAGE",
+            "IMAGE_RECITATION",
+            "UNEXPECTED_TOOL_CALL",
+            "TOO_MANY_TOOL_CALLS",
+            "MISSING_THOUGHT_SIGNATURE",
+        }
+        malformed_finish = next(
+            (reason for reason in finish_reasons if reason not in known_finish_reasons),
+            None,
+        )
+        if malformed_finish is not None:
+            raise ProviderError(
+                error_type="invalid_finish_reason",
+                error_code=malformed_finish,
+                error_message="Provider returned an unrecognized finish reason",
+                retryable=True,
+                finish_reason=malformed_finish,
+                provider_response_id=usage.provider_response_id,
+                provider_request_id=usage.provider_request_id,
+                provider_model_version=usage.provider_model_version,
+                usage=usage,
+            )
+        non_success_finish = next(
+            (reason for reason in finish_reasons if reason != "STOP"),
+            None,
+        )
+        if non_success_finish is not None:
+            raise ProviderError(
+                error_type="provider_finish_non_success",
+                error_code=non_success_finish,
+                error_message="Provider response has a non-success finish reason",
+                retryable=non_success_finish in {"OTHER"},
+                finish_reason=non_success_finish,
+                provider_response_id=usage.provider_response_id,
+                provider_request_id=usage.provider_request_id,
+                provider_model_version=usage.provider_model_version,
+                usage=usage,
+            )
         if not response_text:
             diag = _diagnose_empty(response)
             logger.warning(
@@ -2874,6 +3191,11 @@ class GoogleAIClient:
                     f"(requested_model={model}, provider_model_name={model_name}; {diag})"
                 ),
                 retryable=True,
+                finish_reason=usage.finish_reason,
+                provider_response_id=usage.provider_response_id,
+                provider_request_id=usage.provider_request_id,
+                provider_model_version=usage.provider_model_version,
+                usage=usage,
             )
         return response_text, usage
     
@@ -2939,6 +3261,80 @@ class GoogleAIClient:
         text, _blob_count = self._prompt_estimate_components(prompt)
         return text
 
+    async def count_input_tokens_async(
+        self,
+        *,
+        model: str,
+        prompt: Any,
+        api_key: Optional[str] = None,
+    ) -> InputTokenCount:
+        """Count input tokens with Google's countTokens API, safely falling back.
+
+        countTokens counts only the supplied input and never changes the
+        generation output ceiling.  Failure is deliberately non-terminal:
+        admission uses the existing conservative local estimator and records
+        the fallback source/error type for telemetry.
+        """
+
+        _provider_model, model_name = self._resolve_provider_model(model)
+        selected_key = api_key or self._get_api_key(self.default_env_var_name)
+        if not selected_key:
+            return InputTokenCount(
+                tokens=self._estimate_prompt_tokens(prompt),
+                source="heuristic_fallback",
+                provider_model_name=model_name,
+                fallback_error_type="missing_api_key",
+            )
+        try:
+            new_sdk = None if self._genai is not None else self.genai_new
+            if new_sdk is not None:
+                client_kwargs: dict[str, Any] = {}
+                if self.hard_single_provider_attempt:
+                    client_kwargs["http_options"] = {
+                        "retry_options": {"attempts": 1},
+                    }
+                count_client = new_sdk.Client(api_key=selected_key, **client_kwargs)
+                result = await count_client.aio.models.count_tokens(
+                    model=model_name,
+                    contents=prompt,
+                )
+            else:
+                self.genai.configure(api_key=selected_key)
+                count_model = self.genai.GenerativeModel(model_name)
+                count_method = getattr(count_model, "count_tokens_async", None)
+                if count_method is None:
+                    count_method = getattr(count_model, "count_tokens", None)
+                if count_method is None:
+                    raise RuntimeError("provider SDK does not expose count_tokens")
+                result = count_method(prompt)
+                if hasattr(result, "__await__"):
+                    result = await result
+            raw_total = (
+                result.get("total_tokens")
+                if isinstance(result, dict)
+                else getattr(result, "total_tokens", None)
+            )
+            total = int(raw_total or 0)
+            if total < 1:
+                raise ValueError("count_tokens returned no positive total_tokens")
+            return InputTokenCount(
+                tokens=total,
+                source="provider_count_tokens",
+                provider_model_name=model_name,
+            )
+        except Exception as exc:
+            logger.warning(
+                "google_ai.count_tokens_fallback model=%s error_type=%s",
+                model_name,
+                type(exc).__name__,
+            )
+            return InputTokenCount(
+                tokens=self._estimate_prompt_tokens(prompt),
+                source="heuristic_fallback",
+                provider_model_name=model_name,
+                fallback_error_type=type(exc).__name__,
+            )
+
     def _estimate_prompt_tokens(self, prompt: Any) -> int:
         """Best-effort token estimate for prompts.
 
@@ -2978,16 +3374,49 @@ class GoogleAIClient:
         extra = self._read_int_env("GOOGLE_AI_EMBEDDING_TPM_RESERVE_EXTRA", self.DEFAULT_EMBEDDING_TPM_RESERVE_EXTRA)
         return max(1, int(input_est) + int(extra))
 
-    def _calculate_reserved_tpm(self, *, prompt: Any, max_output_tokens: int) -> int:
+    def _calculate_reserved_tpm(
+        self,
+        *,
+        prompt: Any,
+        max_output_tokens: int,
+        input_token_count: Optional[InputTokenCount] = None,
+        calibration: Optional[TokenReservationCalibration] = None,
+        model: Optional[str] = None,
+        prompt_version: Optional[str] = None,
+    ) -> int:
         """Calculate tokens to reserve for TPM check.
 
-        Supabase reservation must cover BOTH prompt (input) and output tokens.
-        Under-reserving here can lead to provider 429 (ResourceExhausted) even
-        when Supabase reserve() returned ok=true.
+        Input is exact when countTokens evidence is supplied. Completion
+        admission is calibrated independently from the semantic output ceiling;
+        cold start retains the legacy ceiling + 1000 conservative reservation.
         """
-        input_est = self._estimate_prompt_tokens(prompt)
+        input_est = (
+            max(1, int(input_token_count.tokens))
+            if input_token_count is not None
+            else self._estimate_prompt_tokens(prompt)
+        )
         output_budget = max(1, int(max_output_tokens))
-        return input_est + output_budget + int(self.DEFAULT_TPM_RESERVE_EXTRA)
+        completion_reservation = output_budget + int(self.DEFAULT_TPM_RESERVE_EXTRA)
+        if calibration is not None:
+            calibration_matches = (
+                self._normalize_rate_limit_model(calibration.model)
+                == self._normalize_rate_limit_model(model or "")
+                and calibration.consumer == self.consumer
+                and bool(prompt_version)
+                and calibration.prompt_version == str(prompt_version)
+            )
+            if calibration_matches:
+                completion_reservation = calibration.completion_reservation(
+                    output_ceiling_tokens=output_budget,
+                )
+            else:
+                logger.warning(
+                    "google_ai.calibration_scope_mismatch model=%s consumer=%s prompt_version=%s",
+                    model,
+                    self.consumer,
+                    prompt_version,
+                )
+        return input_est + completion_reservation
     
     def _classify_error(self, error: Exception) -> ProviderError:
         """Classify exception into ProviderError."""
@@ -3038,6 +3467,13 @@ class GoogleAIClient:
             retryable = True
         if not retryable and status_code == 429:
             retryable = True
+
+        quota_reason: Optional[str] = None
+        raw_reason = getattr(error, "reason", None)
+        if isinstance(raw_reason, str) and raw_reason.strip():
+            quota_reason = raw_reason.strip()
+        elif status_code == 429 and "resource_exhausted" in error_lower:
+            quota_reason = "RESOURCE_EXHAUSTED"
         
         return ProviderError(
             error_type=error_type,
@@ -3045,6 +3481,7 @@ class GoogleAIClient:
             retryable=retryable,
             status_code=status_code,
             retry_after_ms=retry_after_ms,
+            quota_reason=quota_reason,
         )
     
     def _log_event(

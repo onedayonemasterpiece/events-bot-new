@@ -1,65 +1,17 @@
-name: Auto ready + enable auto-merge
+name: Auto ready + enable auto-merge (disabled)
 
+# Release-control invariant: Draft PRs must never be made ready or merged by a
+# workflow. A human-controlled release may invoke this no-op workflow only as
+# an audit receipt; readiness and merge remain explicit GitHub operations.
 on:
-  workflow_run:
-    workflows: ["CI"]     # должно совпасть с `name:` вашего CI workflow
-    types: [completed]
+  workflow_dispatch:
 
 permissions:
-  actions: read
-  pull-requests: write
-  contents: write
+  contents: read
 
 jobs:
-  enable:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - name: Mark PR ready (if draft) and enable auto-merge
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-
-            const prs = context.payload.workflow_run.pull_requests || [];
-            if (prs.length === 0) {
-              core.info("No PRs in workflow_run payload; nothing to do.");
-              return;
-            }
-
-            for (const prRef of prs) {
-              const { data: pr } = await github.rest.pulls.get({
-                owner,
-                repo,
-                pull_number: prRef.number,
-              });
-
-              if (pr.base.ref !== "main") {
-                core.info(`Skip PR #${pr.number}: base=${pr.base.ref}`);
-                continue;
-              }
-
-              if (pr.draft) {
-                core.info(`Mark ready: PR #${pr.number}`);
-                await github.graphql(
-                  `mutation($id:ID!) {
-                    markPullRequestReadyForReview(input:{pullRequestId:$id}) { clientMutationId }
-                  }`,
-                  { id: pr.node_id }
-                );
-              } else {
-                core.info(`Already ready: PR #${pr.number}`);
-              }
-
-              core.info(`Enable auto-merge: PR #${pr.number}`);
-              await github.graphql(
-                `mutation($id:ID!) {
-                  enablePullRequestAutoMerge(input:{pullRequestId:$id, mergeMethod:SQUASH}) {
-                    pullRequest { number }
-                  }
-                }`,
-                { id: pr.node_id }
-              );
-            }
+      - name: Confirm automatic merge is disabled
+        run: echo "Draft readiness and merge require an explicit controlled release"

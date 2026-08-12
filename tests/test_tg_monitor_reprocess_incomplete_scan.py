@@ -3,11 +3,29 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
 
 from db import Database
 from models import TelegramSource
 from smart_event_update import SmartUpdateResult
 from source_parsing.telegram import handlers as tg_handlers
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_test_databases(monkeypatch):
+    """Close SQLAlchemy/aiosqlite workers created by every test in this module."""
+
+    instances: list[Database] = []
+    original_init = Database.__init__
+
+    def tracked_init(instance, *args, **kwargs):
+        original_init(instance, *args, **kwargs)
+        instances.append(instance)
+
+    monkeypatch.setattr(Database, "__init__", tracked_init)
+    yield
+    for instance in instances:
+        await instance.close()
 
 
 @pytest.fixture(autouse=True)
@@ -216,7 +234,7 @@ async def test_reprocesses_legacy_skipped_scan_without_reason(tmp_path, monkeypa
 
     async def fake_smart_update(db_arg, candidate, **kwargs):
         calls.append(candidate)
-        return SmartUpdateResult(status="created")
+        return SmartUpdateResult(status="created", event_id=5656)
 
     monkeypatch.setattr(tg_handlers, "smart_event_update", fake_smart_update)
 
@@ -445,7 +463,7 @@ async def test_stores_skip_breakdown_for_new_incomplete_scan(tmp_path, monkeypat
 
     report = await tg_handlers.process_telegram_results(_results_path(tmp_path), db)
 
-    assert report.events_invalid == 1
+    assert report.events_rejected == 1
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
@@ -457,11 +475,13 @@ async def test_stores_skip_breakdown_for_new_incomplete_scan(tmp_path, monkeypat
         )
         row = await cur.fetchone()
     assert row[0:3] == ("skipped", 1, 0)
-    assert json.loads(row[3]) == {"skip_breakdown": {"invalid:missing_location": 1}}
+    assert json.loads(row[3]) == {
+        "skip_breakdown": {"rejected_product_policy:missing_location": 1}
+    }
 
 
 @pytest.mark.asyncio
-async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monkeypatch):
+async def test_no_manifest_zero_event_tail_remains_retryable(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     async with db.raw_conn() as conn:
@@ -491,6 +511,14 @@ async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monke
                 "source_link": "https://t.me/ecodvor39/934",
                 "text": "История фриганской жизни. Подробности программы будут позже.",
                 "events": [],
+                "source_parse_decision": {
+                    "disposition": "CONFIRMED_NO_EVENT",
+                    "no_event_reason": "VAGUE_TEASER",
+                    "events": [],
+                    "lifecycle_actions": [],
+                    "evidence_complete": True,
+                    "parse_version": "source-parse-v1",
+                },
             },
             {
                 "source_username": "ecodvor39",
@@ -499,6 +527,14 @@ async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monke
                 "source_link": "https://t.me/ecodvor39/935",
                 "text": "Что можно принести в зону рукодельного свопа.",
                 "events": [],
+                "source_parse_decision": {
+                    "disposition": "CONFIRMED_NO_EVENT",
+                    "no_event_reason": "NO_ATTENDABLE_EVENT",
+                    "events": [],
+                    "lifecycle_actions": [],
+                    "evidence_complete": True,
+                    "parse_version": "source-parse-v1",
+                },
             },
         ],
     }
@@ -528,9 +564,11 @@ async def test_legitimate_zero_event_tail_advances_source_cursor(tmp_path, monke
                 )
             ).fetchone()
         )[0]
-    assert row[0] == 935
-    assert row[1] is not None
-    assert scanned_count == 0
+    assert row[0] is None
+    assert row[1] is None
+    # A decision without its producer-owned evidence manifest is not a typed
+    # terminal even when the old receipt claimed evidence_complete=true.
+    assert scanned_count == 2
     await db.close()
 
 

@@ -12,7 +12,7 @@ import re
 import textwrap
 import unicodedata
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields as dataclass_fields
 from enum import Enum
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
@@ -55,13 +55,28 @@ from telegram_sources import canonicalize_tg_url
 from smart_update_identity import (
     IdentityGateMode,
     IdentityVectorEvidence,
+    MergeIdentityRelation,
     build_merge_identity_gate_verdict,
     build_identity_gate_verdict,
     canonicalize_identity_url,
     identity_gate_fail_safe_verdict,
     input_packet_fingerprint,
+    is_explicit_occurrence_key,
     merge_identity_gate_fail_safe_verdict,
     parse_identity_gate_mode,
+    stable_candidate_identity,
+)
+from smart_update_state import (
+    CandidateAttemptInProgress,
+    CandidateAttemptReceipt,
+    IdentityDistinctReason,
+    LifecycleReason,
+    ProductExclusionReason,
+    RetryReason,
+    SmartUpdateTerminalOutcome,
+    begin_candidate_attempt,
+    claim_due_candidates,
+    finish_candidate_attempt,
 )
 
 logger = logging.getLogger(__name__)
@@ -560,6 +575,11 @@ class PosterCandidate:
     completion_tokens: int = 0
     total_tokens: int = 0
 
+
+class SmartUpdateIntent(str, Enum):
+    UPSERT_EVENT = "UPSERT_EVENT"
+    ATTACH_CONTEXT = "ATTACH_CONTEXT"
+
 def _poster_candidate_evidence_url(poster: PosterCandidate) -> str | None:
     """Return the real URL fields used for provenance-only grounding."""
 
@@ -571,11 +591,39 @@ class EventCandidate:
     source_type: str
     source_url: str | None
     source_text: str
+    # Product action is explicit. Context attachment never drives identity LLM.
+    intent: SmartUpdateIntent = SmartUpdateIntent.UPSERT_EVENT
+    target_event_id: int | None = None
+    producer_ordinal: int | None = None
+    source_native_occurrence_id: str | None = None
+    vendor_occurrence_id: str | None = None
+    occurrence_key: str | None = None
+    candidate_key: str | None = None
+    smart_update_candidate_id: int | None = None
+    # Internal retry-state instruction. It is set only after an existing
+    # identity decision classified the candidate as distinct or uncertainty
+    # exhausted its bounded attempts.
+    force_create_distinct: bool = False
+    force_create_distinct_reason: IdentityDistinctReason | None = None
+    explicit_occurrence_conflict_event_ids: list[int] = field(default_factory=list)
+    force_match_event_id: int | None = None
+    # Replay the original facade semantics after a durable retry claim.
+    replay_check_source_url: bool = True
+    replay_schedule_tasks: bool = True
+    replay_schedule_kwargs: dict[str, Any] | None = None
     # Only identity-bearing sources may participate in event matching. Linked
     # roundups/program pages are provenance context and must use context_only.
     source_role: str = "identity_bearing"
     # Filled by Smart Update from the exact caller packet before normalization.
     source_fingerprint: str | None = None
+    # Typed upstream source-parse evidence.  A candidate represents a positive
+    # event child; Smart Update must not turn that child back into a semantic
+    # no-event through regex/date heuristics.  These fields are diagnostic and
+    # replay metadata, not a new source of deterministic terminal authority.
+    source_disposition: str | None = None
+    source_parse_version: str | None = None
+    source_evidence_complete: bool | None = None
+    source_verification_reasons: list[str] = field(default_factory=list)
     title: str | None = None
     date: str | None = None
     time: str | None = None
@@ -1679,10 +1727,12 @@ def _should_skip_festival_post_candidate(candidate: EventCandidate) -> bool:
     return context == "festival_post" and not source_type.startswith("parser:")
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class SmartUpdateResult:
-    status: str
+    outcome: SmartUpdateTerminalOutcome
     event_id: int | None = None
+    diagnostic_event_id: int | None = None
+    attempt: int = 0
     created: bool = False
     merged: bool = False
     added_posters: int = 0
@@ -1690,7 +1740,155 @@ class SmartUpdateResult:
     added_facts: list[str] = field(default_factory=list)
     skipped_conflicts: list[str] = field(default_factory=list)
     reason: str | None = None
+    product_exclusion_reason: ProductExclusionReason | None = None
+    retry_reason: RetryReason | None = None
+    identity_distinct_reason: IdentityDistinctReason | None = None
+    lifecycle_reason: LifecycleReason | None = None
     queue_notes: list[str] = field(default_factory=list)
+
+    def __init__(
+        self,
+        outcome: SmartUpdateTerminalOutcome | str | None = None,
+        *,
+        status: str | None = None,
+        event_id: int | None = None,
+        diagnostic_event_id: int | None = None,
+        attempt: int = 0,
+        created: bool = False,
+        merged: bool = False,
+        added_posters: int = 0,
+        added_sources: bool = False,
+        added_facts: list[str] | None = None,
+        skipped_conflicts: list[str] | None = None,
+        reason: str | None = None,
+        product_exclusion_reason: ProductExclusionReason | None = None,
+        retry_reason: RetryReason | None = None,
+        identity_distinct_reason: IdentityDistinctReason | None = None,
+        lifecycle_reason: LifecycleReason | None = None,
+        queue_notes: list[str] | None = None,
+    ) -> None:
+        legacy = str(status or "").strip().lower()
+        if (
+            product_exclusion_reason is None
+            and legacy in _LEGACY_PRODUCT_REJECT_STATUSES
+        ):
+            try:
+                product_exclusion_reason = ProductExclusionReason(str(reason or ""))
+            except ValueError:
+                product_exclusion_reason = None
+        if outcome is None:
+            outcome = _terminal_outcome_from_legacy_status(
+                legacy,
+                product_exclusion_reason=product_exclusion_reason,
+            )
+        elif not isinstance(outcome, SmartUpdateTerminalOutcome):
+            raw = str(outcome).strip()
+            try:
+                outcome = SmartUpdateTerminalOutcome(raw)
+            except ValueError:
+                outcome = _terminal_outcome_from_legacy_status(
+                    raw.lower(),
+                    product_exclusion_reason=product_exclusion_reason,
+                )
+        if outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY and not isinstance(
+            product_exclusion_reason, ProductExclusionReason
+        ):
+            outcome = SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            retry_reason = RetryReason.PRODUCT_REASON_UNTYPED
+        if outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED and not isinstance(
+            retry_reason, RetryReason
+        ):
+            retry_reason = RetryReason.UNKNOWN
+        accepted = outcome in {
+            SmartUpdateTerminalOutcome.CREATED,
+            SmartUpdateTerminalOutcome.MERGED,
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY,
+        }
+        self.outcome = outcome
+        self.event_id = int(event_id) if accepted and event_id is not None else None
+        self.diagnostic_event_id = (
+            int(diagnostic_event_id)
+            if diagnostic_event_id is not None
+            else (int(event_id) if not accepted and event_id is not None else None)
+        )
+        self.attempt = max(0, int(attempt))
+        self.created = outcome is SmartUpdateTerminalOutcome.CREATED or bool(created and accepted)
+        self.merged = outcome is SmartUpdateTerminalOutcome.MERGED or bool(merged and accepted)
+        self.added_posters = int(added_posters)
+        self.added_sources = bool(added_sources)
+        self.added_facts = list(added_facts or [])
+        self.skipped_conflicts = list(skipped_conflicts or [])
+        self.reason = reason
+        self.product_exclusion_reason = product_exclusion_reason
+        self.retry_reason = retry_reason
+        self.identity_distinct_reason = identity_distinct_reason
+        self.lifecycle_reason = lifecycle_reason
+        self.queue_notes = list(queue_notes or [])
+
+    @property
+    def status(self) -> str:
+        """Deprecated read-only bridge; new callers must consume ``outcome``."""
+
+        return {
+            SmartUpdateTerminalOutcome.CREATED: "created",
+            SmartUpdateTerminalOutcome.MERGED: "merged",
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY: "noop_exact_source_replay",
+            SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY: "rejected_product_policy",
+            SmartUpdateTerminalOutcome.RETRY_SCHEDULED: "retry_scheduled",
+        }[self.outcome]
+
+    @property
+    def is_accepted(self) -> bool:
+        return self.outcome in {
+            SmartUpdateTerminalOutcome.CREATED,
+            SmartUpdateTerminalOutcome.MERGED,
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY,
+        }
+
+    @property
+    def is_retry(self) -> bool:
+        return self.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+
+    @property
+    def is_rejected(self) -> bool:
+        return self.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+
+    @property
+    def is_changed(self) -> bool:
+        return self.outcome in {
+            SmartUpdateTerminalOutcome.CREATED,
+            SmartUpdateTerminalOutcome.MERGED,
+        }
+
+
+_LEGACY_PRODUCT_REJECT_STATUSES = frozenset(
+    {
+        "invalid",
+        "rejected_out_of_region",
+        "rejected_schedule_digest",
+        "skipped_festival_post",
+        "skipped_giveaway",
+        "skipped_non_event",
+        "skipped_past_event",
+        "skipped_promo",
+    }
+)
+
+
+def _terminal_outcome_from_legacy_status(
+    status: str,
+    *,
+    product_exclusion_reason: ProductExclusionReason | None = None,
+) -> SmartUpdateTerminalOutcome:
+    if status == "created":
+        return SmartUpdateTerminalOutcome.CREATED
+    if status == "merged":
+        return SmartUpdateTerminalOutcome.MERGED
+    if status in {"skipped_nochange", "skipped_same_source_url", "noop_exact_source_replay"}:
+        return SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+    if isinstance(product_exclusion_reason, ProductExclusionReason):
+        return SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+    return SmartUpdateTerminalOutcome.RETRY_SCHEDULED
 
 
 class SmartUpdateOutcomeKind(str, Enum):
@@ -1721,10 +1919,9 @@ def classify_smart_update_status(status: str | None) -> SmartUpdateOutcomeKind:
 
 
 def smart_update_result_allows_caller_side_effects(result: Any) -> bool:
-    return (
-        classify_smart_update_status(getattr(result, "status", None))
-        is not SmartUpdateOutcomeKind.NOT_ACCEPTED
-    )
+    if isinstance(result, SmartUpdateResult):
+        return result.is_accepted
+    return classify_smart_update_status(getattr(result, "status", None)) is not SmartUpdateOutcomeKind.NOT_ACCEPTED
 
 
 class SourceBindingConflict(RuntimeError):
@@ -2189,7 +2386,6 @@ MERGE_IDENTITY_GATE_RESPONSE_FORMAT = {
                         "allow_merge",
                         "allow_safe_metadata_only",
                         "skip_merge_side_effects",
-                        "review_required",
                     ],
                 },
                 "relation": {
@@ -10771,7 +10967,8 @@ def _far_future_poster_date_mismatch_note(
     pairs_label = _format_day_month_pairs(pairs)
     extracted_label = f"{start.day:02d}/{start.month:02d}"
     return (
-        f"⚠️ Дата: конфликт с афишей (OCR={pairs_label}, extracted={extracted_label}) → event.silent=1"
+        f"⚠️ Дата: конфликт с афишей (OCR={pairs_label}, extracted={extracted_label}); "
+        "semantic resolution belongs to source verification"
     )
 
 
@@ -12732,8 +12929,6 @@ def _dedup_adjudicator_accept_merge(
     action = str(decision.get("action") or "").strip().lower()
     if action != "match":
         return False, "llm_create"
-    if match_event is None:
-        return False, "no_match_event"
     reason_code = str(decision.get("reason_code") or "").strip()
     if reason_code not in _DEDUP_ADJUDICATOR_MERGE_CODES:
         return False, f"non_merge_code:{reason_code or 'empty'}"
@@ -13034,7 +13229,7 @@ async def _llm_merge_identity_gate(
         "НЕ доказывают same_event. Нужен конкретный общий identity anchor: тот же показ/лекция/выставка, "
         "та же программа/название/персона в той же роли, та же билетная ссылка, та же афиша или явный текст "
         "источника, что это обновление уже существующего события.\n\n"
-        "Когда выбрать skip_merge_side_effects/review_required:\n"
+        "Когда выбрать skip_merge_side_effects:\n"
         "- candidate описывает выставку/длинный диапазон, а event_before — отдельную лекцию/встречу/показ, "
         "даже если дата открытия и музей совпадают;\n"
         "- candidate — точная single-date occurrence регулярного/сезонного события (например `10 июля 20:00`), "
@@ -13054,8 +13249,9 @@ async def _llm_merge_identity_gate(
         "Изменение времени может быть обычной коррекцией только при сильном общем anchor: та же конкретная "
         "билетная/источниковая ссылка, та же афиша или явно то же название/программа. Не считай смену времени "
         "коррекцией только потому, что дата и площадка совпали.\n\n"
-        "Если сомневаешься — выбирай skip_merge_side_effects или review_required. Лучше не добавить источник, "
-        "чем склеить разные события и испортить публичную карточку. Не придумывай фактов, опирайся только на данные.\n\n"
+        "Если сомневаешься — выбирай skip_merge_side_effects с relation=unknown. Автоматическая state machine "
+        "сама выполнит bounded retry и затем безопасный distinct create; human review здесь нет. Не придумывай "
+        "фактов, опирайся только на данные.\n\n"
         "Коды reason_code делай короткими snake_case, например: same_event_update, same_ticket_source_update, "
         "festival_sibling_not_same_event, long_running_vs_single_slot, unrelated_title_type_conflict, "
         "insufficient_identity_evidence.\n\n"
@@ -14709,6 +14905,50 @@ def _pick_best_duplicate_event(candidates: Sequence[Event]) -> Event | None:
     return max(candidates, key=_score)
 
 
+def _event_blocked_by_explicit_occurrence(
+    candidate: EventCandidate,
+    event: Event | None,
+) -> bool:
+    event_id = int(getattr(event, "id", 0) or 0)
+    conflict_ids = getattr(candidate, "explicit_occurrence_conflict_event_ids", ()) or ()
+    return bool(
+        event_id
+        and event_id
+        in {int(value) for value in conflict_ids}
+    )
+
+
+async def _explicit_occurrence_conflict_ids(
+    db: Database,
+    candidate: EventCandidate,
+) -> list[int]:
+    """Return same-source Events bound to a different explicit occurrence ID."""
+
+    occurrence_key = str(candidate.occurrence_key or "").strip()
+    canonical_source_url = canonicalize_identity_url(candidate.source_url)
+    if not canonical_source_url or not is_explicit_occurrence_key(occurrence_key):
+        return []
+    async with db.get_session() as session:
+        rows = (
+            await session.execute(
+                select(EventSource.event_id, EventSource.occurrence_key).where(
+                    EventSource.canonical_source_url == canonical_source_url,
+                    EventSource.source_role == "identity_bearing",
+                    EventSource.source_type == candidate.source_type,
+                    EventSource.occurrence_key.is_not(None),
+                    EventSource.occurrence_key != occurrence_key,
+                )
+            )
+        ).all()
+    return sorted(
+        {
+            int(event_id)
+            for event_id, existing_key in rows
+            if event_id and is_explicit_occurrence_key(existing_key)
+        }
+    )
+
+
 async def _match_existing_event_by_source_anchor(
     db: Database,
     candidate: EventCandidate,
@@ -14759,6 +14999,8 @@ async def _match_existing_event_by_source_anchor(
     anchor_filtered: list[Event] = []
     filtered: list[Event] = []
     for ev in anchored:
+        if _event_blocked_by_explicit_occurrence(candidate, ev):
+            continue
         if date_raw and str(getattr(ev, "date", "") or "").strip() != date_raw:
             continue
         if _has_explicit_time_conflict(cand_time_anchor, _event_anchor_time(ev)):
@@ -14822,6 +15064,8 @@ async def _match_existing_event_by_event_source_url(
         )
         if candidate.source_type:
             stmt = stmt.where(EventSource.source_type == candidate.source_type)
+        if is_explicit_occurrence_key(candidate.occurrence_key):
+            stmt = stmt.where(EventSource.occurrence_key == candidate.occurrence_key)
         stmt = _apply_soft_city_filter(stmt, candidate.city)
         res = await session.execute(stmt)
         anchored = list(res.scalars().all())
@@ -14837,6 +15081,8 @@ async def _match_existing_event_by_event_source_url(
     anchor_filtered: list[Event] = []
     filtered: list[Event] = []
     for ev in anchored:
+        if _event_blocked_by_explicit_occurrence(candidate, ev):
+            continue
         if date_raw and str(getattr(ev, "date", "") or "").strip() != date_raw:
             continue
         if _has_explicit_time_conflict(cand_time_anchor, _event_anchor_time(ev)):
@@ -15015,6 +15261,8 @@ def _pre_create_duplicate_probe(
     # Branch 1: identical ticket_link parity. Strongest signal.
     if cand_ticket:
         for ev in events:
+            if _event_blocked_by_explicit_occurrence(candidate, ev):
+                continue
             if not getattr(ev, "id", None):
                 continue
             ev_ticket = _normalize_url(getattr(ev, "ticket_link", None))
@@ -15037,6 +15285,8 @@ def _pre_create_duplicate_probe(
     if not cand_loc_norm or not cand_time_anchor:
         return None
     for ev in events:
+        if _event_blocked_by_explicit_occurrence(candidate, ev):
+            continue
         if not getattr(ev, "id", None):
             continue
         if not _date_overlaps(ev):
@@ -15946,47 +16196,368 @@ async def smart_event_update(
     check_source_url: bool = True,
     schedule_tasks: bool = True,
     schedule_kwargs: dict[str, Any] | None = None,
+    _lease_owner: str | None = None,
 ) -> SmartUpdateResult:
+    try:
+        intent = (
+            candidate.intent
+            if isinstance(candidate.intent, SmartUpdateIntent)
+            else SmartUpdateIntent(str(candidate.intent or ""))
+        )
+    except ValueError:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="invalid_smart_update_intent", retry_reason=RetryReason.INVALID_INTENT,
+        )
+    candidate.intent = intent
+    candidate.replay_check_source_url = bool(check_source_url)
+    candidate.replay_schedule_tasks = bool(schedule_tasks)
+    candidate.replay_schedule_kwargs = dict(schedule_kwargs or {})
+    if intent is SmartUpdateIntent.UPSERT_EVENT:
+        candidate.source_role = "identity_bearing"
+    else:
+        candidate.source_role = "context_only"
+    canonical_source_url = canonicalize_identity_url(candidate.source_url)
+    if canonical_source_url:
+        candidate.source_url = canonical_source_url
+    candidate_key, occurrence_key = stable_candidate_identity(candidate)
+    candidate.candidate_key = candidate_key
+    candidate.occurrence_key = occurrence_key
+    # The public facade captures this before any normalization/LLM enrichment.
+    # Reuse it on an in-attempt CREATE_DISTINCT reroute so EventSource keeps the
+    # exact caller-packet fingerprint rather than a fingerprint of mutated
+    # working state.
+    source_fingerprint = (
+        str(candidate.source_fingerprint or "").strip()
+        or input_packet_fingerprint(candidate)
+    )
+    candidate.source_fingerprint = source_fingerprint
+    receipt: CandidateAttemptReceipt
+    try:
+        receipt = await begin_candidate_attempt(
+            db,
+            candidate_key=candidate_key,
+            occurrence_key=occurrence_key,
+            canonical_source_url=canonical_source_url,
+            source_type=str(candidate.source_type or "unknown"),
+            intent=intent.value,
+            source_fingerprint=source_fingerprint,
+            candidate_payload=asdict(candidate),
+            max_attempts=int(os.getenv("SMART_UPDATE_MAX_ATTEMPTS", "3") or 3),
+            lease_owner=(
+                _lease_owner
+                or f"smart-update-direct:{os.getpid()}:{id(asyncio.current_task())}"
+            ),
+        )
+        candidate.smart_update_candidate_id = receipt.candidate_state_id
+        # Only a typed semantic UNKNOWN may spend the bounded identity budget.
+        # Provider/schema/DB/vector failures are technical and remain retries
+        # forever (with the durable counter clamped by smart_update_state).
+        candidate.force_create_distinct = bool(
+            receipt.attempt >= receipt.max_attempts
+            and receipt.previous_retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
+        )
+        if candidate.force_create_distinct:
+            candidate.force_create_distinct_reason = (
+                IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION
+            )
+        candidate.force_match_event_id = None
+    except CandidateAttemptInProgress:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="candidate_attempt_in_progress", retry_reason=RetryReason.CANDIDATE_ATTEMPT_IN_PROGRESS,
+        )
+    except Exception:
+        logger.exception("smart_update: durable candidate registration failed")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="candidate_state_unavailable", retry_reason=RetryReason.CANDIDATE_STATE_UNAVAILABLE,
+        )
     async with _SMART_UPDATE_LOCK:
         try:
-            result = await _smart_event_update_impl(
-                db,
-                candidate,
-                check_source_url=check_source_url,
-                schedule_tasks=schedule_tasks,
-                schedule_kwargs=schedule_kwargs,
-            )
+            if intent is SmartUpdateIntent.ATTACH_CONTEXT:
+                result = await _attach_context_source(db, candidate)
+            else:
+                result = await _smart_event_update_impl(
+                    db,
+                    candidate,
+                    check_source_url=check_source_url,
+                    schedule_tasks=schedule_tasks,
+                    schedule_kwargs=schedule_kwargs,
+                )
         except SourceBindingConflict as exc:
             result = SmartUpdateResult(
-                status="review_required",
-                event_id=exc.existing_event_id,
-                reason="source_binding_conflict",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=exc.existing_event_id,
+                reason="source_binding_conflict", retry_reason=RetryReason.SOURCE_BINDING_CONFLICT,
             )
         except IntegrityError as exc:
             # The partial unique indexes are the authoritative cross-process
-            # source ownership guard. Translate only their race failure; every
-            # unrelated integrity error remains visible to the caller.
+            # source ownership guard. Every integrity failure is technical and
+            # therefore remains a durable retry rather than escaping as a
+            # caller-level generic failure.
             message = str(getattr(exc, "orig", exc) or "").casefold()
-            if "event_source.canonical_source_url" not in message:
-                raise
+            binding_race = "event_source.canonical_source_url" in message
             canonical = canonicalize_identity_url(candidate.source_url)
             owner_id: int | None = None
-            if canonical:
+            if binding_race and canonical:
                 async with db.raw_conn() as conn:
                     cursor = await conn.execute(
                         "SELECT event_id FROM event_source WHERE canonical_source_url=? "
-                        "AND source_role='identity_bearing' ORDER BY id LIMIT 1",
-                        (canonical,),
+                        "AND source_role='identity_bearing' AND occurrence_key=? "
+                        "ORDER BY id LIMIT 1",
+                        (canonical, candidate.occurrence_key),
                     )
                     row = await cursor.fetchone()
                     await cursor.close()
                     owner_id = int(row[0]) if row and row[0] is not None else None
             result = SmartUpdateResult(
-                status="review_required",
-                event_id=owner_id,
-                reason="source_binding_conflict",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=owner_id,
+                reason=(
+                    "source_binding_conflict"
+                    if binding_race
+                    else "smart_update_integrity_error"
+                ),
             )
+        except Exception:
+            logger.exception("smart_update: processing failed; scheduling durable retry")
+            result = SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                reason="smart_update_processing_error", retry_reason=RetryReason.SMART_UPDATE_PROCESSING_ERROR,
+            )
+    result.attempt = receipt.attempt
+    try:
+        await finish_candidate_attempt(
+            db,
+            receipt,
+            outcome=result.outcome,
+            event_id=result.event_id,
+            diagnostic_event_id=result.diagnostic_event_id,
+            reason=result.reason,
+            retry_reason=result.retry_reason,
+            product_exclusion_reason=result.product_exclusion_reason,
+            identity_distinct_reason=result.identity_distinct_reason,
+            lifecycle_reason=result.lifecycle_reason,
+        )
+    except Exception:
+        logger.exception("smart_update: durable terminal acknowledgement failed")
+        if result.is_accepted:
+            # The domain write is already authoritative. Regressing the caller
+            # to RETRY would recreate the observed "imported pointer + failed
+            # queue status" incident. Candidate state remains RETRY_SCHEDULED
+            # from attempt start and exact replay will reconcile its ledger.
+            return result
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=result.event_id or result.diagnostic_event_id,
+            reason="candidate_state_ack_failed", retry_reason=RetryReason.CANDIDATE_STATE_ACK_FAILED,
+            attempt=receipt.attempt,
+        )
     return result
+
+
+async def _attach_context_source(db: Database, candidate: EventCandidate) -> SmartUpdateResult:
+    """Attach provenance to an explicit target without identity matching/LLM."""
+
+    target_event_id = int(candidate.target_event_id or 0)
+    if target_event_id <= 0:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="attach_context_target_required", retry_reason=RetryReason.ATTACH_CONTEXT_TARGET_REQUIRED,
+        )
+    candidate.source_role = "context_only"
+    canonical = canonicalize_identity_url(candidate.source_url)
+    if not canonical:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=target_event_id,
+            reason="attach_context_source_url_required", retry_reason=RetryReason.ATTACH_CONTEXT_SOURCE_URL_REQUIRED,
+        )
+    candidate.source_url = canonical
+    async with db.get_session() as session:
+        target = await session.get(Event, target_event_id)
+        if target is None:
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=target_event_id,
+                reason="attach_context_target_missing", retry_reason=RetryReason.ATTACH_CONTEXT_TARGET_MISSING,
+            )
+        added, same_source = await _ensure_event_source(session, target_event_id, candidate)
+        await session.commit()
+    return SmartUpdateResult(
+        outcome=(
+            SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+            if same_source and not added
+            else SmartUpdateTerminalOutcome.MERGED
+        ),
+        event_id=target_event_id,
+        added_sources=added,
+        reason="context_provenance_attached" if added else "context_provenance_replay",
+        lifecycle_reason=(
+            LifecycleReason.CONTEXT_PROVENANCE_ATTACHED
+            if added
+            else LifecycleReason.CONTEXT_PROVENANCE_REPLAY
+        ),
+    )
+
+
+async def _accept_final_probe_match(
+    db: Database,
+    session: Any,
+    *,
+    event: Event,
+    candidate: EventCandidate,
+    schedule_tasks: bool,
+    schedule_kwargs: dict[str, Any] | None,
+    enqueue_ticket_sites: Any,
+) -> SmartUpdateResult | None:
+    """Accept an authoritative last-moment duplicate without a second LLM pass.
+
+    The normal matcher/adjudicator has already run for this packet.  This path
+    exists only for a row that appeared or changed after that read.  The final
+    deterministic probe is deliberately strong, so reloading and re-running it
+    can safely converge the race by attaching the packet to the authoritative
+    Event instead of emitting a veto or scheduling a redundant second Smart
+    Update operation.
+    """
+
+    event_id = int(event.id or 0)
+    if event_id <= 0:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="final_probe_event_missing", retry_reason=RetryReason.FINAL_PROBE_EVENT_MISSING,
+        )
+    if _event_blocked_by_explicit_occurrence(candidate, event):
+        return None
+    authoritative = await session.get(Event, event_id, populate_existing=True)
+    if authoritative is None:
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=event_id,
+            reason="final_probe_event_missing", retry_reason=RetryReason.FINAL_PROBE_EVENT_MISSING,
+        )
+    if _pre_create_duplicate_probe(candidate, [authoritative]) is None:
+        # The authoritative reload disproved the stale duplicate signal. The
+        # caller remains in this transaction-local create operation and may
+        # insert the distinct Event; no retry or identity veto is needed.
+        return None
+
+    added_posters, _urls, _preview, _pruned, _photos_changed = await _apply_posters(
+        session,
+        event_id,
+        candidate.posters,
+        poster_scope_hashes=candidate.poster_scope_hashes,
+        event_title=authoritative.title,
+    )
+    added_sources, same_source = await _ensure_event_source(session, event_id, candidate)
+    await session.flush()
+    if candidate.source_text:
+        await _sync_source_texts(session, authoritative)
+    await enqueue_ticket_sites(session, event_id=event_id)
+    await _record_source_facts(
+        session,
+        event_id,
+        candidate,
+        [("Матчинг: authoritative final duplicate probe", "note")],
+    )
+    await session.commit()
+
+    canonical_changed = bool(added_posters or (added_sources and not same_source))
+    if canonical_changed:
+        try:
+            await _classify_topics(db, event_id)
+        except Exception:
+            logger.warning(
+                "smart_update: final probe topic classification failed event_id=%s",
+                event_id,
+                exc_info=True,
+            )
+    if schedule_tasks and canonical_changed:
+        try:
+            from main import schedule_event_update_tasks
+
+            async with db.get_session() as refresh_session:
+                refreshed = await refresh_session.get(Event, event_id)
+            if refreshed is not None:
+                task_kwargs = dict(schedule_kwargs or {})
+                task_kwargs["refresh_existing_vk"] = True
+                await schedule_event_update_tasks(db, refreshed, **task_kwargs)
+        except Exception:
+            logger.warning(
+                "smart_update: final probe scheduling failed event_id=%s",
+                event_id,
+                exc_info=True,
+            )
+    return SmartUpdateResult(
+        outcome=SmartUpdateTerminalOutcome.MERGED,
+        event_id=event_id,
+        merged=canonical_changed,
+        added_posters=added_posters,
+        added_sources=added_sources,
+        reason="final_transaction_duplicate_probe",
+    )
+
+
+async def retry_due_smart_update_candidates(
+    db: Database,
+    *,
+    limit: int = 25,
+    lease_seconds: int = 300,
+) -> dict[str, int]:
+    """Claim and automatically replay due durable candidates.
+
+    The periodic scheduler imports this function lazily. Rehydration does not
+    select a provider or add an LLM stage; it invokes the same Smart Update
+    facade with the original packet and existing configured calls.
+    """
+
+    owner = f"smart-update:{os.getpid()}:{id(asyncio.current_task())}"
+    claimed = await claim_due_candidates(
+        db,
+        lease_owner=owner,
+        limit=limit,
+        lease_seconds=lease_seconds,
+    )
+    result_counts = {item.value: 0 for item in SmartUpdateTerminalOutcome}
+    result_counts["claimed"] = len(claimed)
+    result_counts["rehydration_failed"] = 0
+    allowed_fields = {item.name for item in dataclass_fields(EventCandidate)}
+    for item in claimed:
+        try:
+            payload = {
+                key: value
+                for key, value in item.candidate_payload.items()
+                if key in allowed_fields
+            }
+            payload["candidate_key"] = item.candidate_key
+            intent_raw = str(payload.get("intent") or SmartUpdateIntent.UPSERT_EVENT.value)
+            if intent_raw.startswith("SmartUpdateIntent."):
+                intent_raw = intent_raw.rsplit(".", 1)[-1]
+            payload["intent"] = SmartUpdateIntent(intent_raw)
+            payload["posters"] = [
+                value if isinstance(value, PosterCandidate) else PosterCandidate(**value)
+                for value in (payload.get("posters") or [])
+                if isinstance(value, (PosterCandidate, dict))
+            ]
+            candidate = EventCandidate(**payload)
+        except Exception:
+            result_counts["rehydration_failed"] += 1
+            logger.exception(
+                "smart_update.retry rehydration_failed candidate_key=%s",
+                item.candidate_key,
+            )
+            continue
+        result = await smart_event_update(
+            db,
+            candidate,
+            check_source_url=bool(candidate.replay_check_source_url),
+            schedule_tasks=bool(candidate.replay_schedule_tasks),
+            schedule_kwargs=dict(candidate.replay_schedule_kwargs or {}),
+            _lease_owner=owner,
+        )
+        result_counts[result.outcome.value] += 1
+    return result_counts
 
 
 def _candidate_source_role(candidate: EventCandidate) -> str:
@@ -16003,17 +16574,26 @@ async def _exact_input_noop_event_id(
     canonical_source_url: str | None,
     source_role: str,
     source_fingerprint: str,
+    occurrence_key: str | None = None,
+    candidate_key: str | None = None,
 ) -> tuple[int | None, bool]:
     if not canonical_source_url or not source_fingerprint:
         return None, False
     try:
         async with db.raw_conn() as conn:
-            cursor = await conn.execute(
-                "SELECT DISTINCT event_id FROM event_source "
-                "WHERE canonical_source_url=? AND source_role=? AND source_fingerprint=? "
-                "ORDER BY event_id LIMIT 2",
-                (canonical_source_url, source_role, source_fingerprint),
-            )
+            if candidate_key:
+                cursor = await conn.execute(
+                    "SELECT DISTINCT event_id FROM event_source "
+                    "WHERE candidate_key=? AND source_fingerprint=? ORDER BY event_id LIMIT 2",
+                    (candidate_key, source_fingerprint),
+                )
+            else:
+                cursor = await conn.execute(
+                    "SELECT DISTINCT event_id FROM event_source "
+                    "WHERE canonical_source_url=? AND source_role=? AND source_fingerprint=? "
+                    "AND COALESCE(occurrence_key,'')=COALESCE(?,'') ORDER BY event_id LIMIT 2",
+                    (canonical_source_url, source_role, source_fingerprint, occurrence_key),
+                )
             rows = await cursor.fetchall()
             await cursor.close()
         event_ids = [int(row[0]) for row in rows if row and row[0] is not None]
@@ -16023,7 +16603,7 @@ async def _exact_input_noop_event_id(
     except Exception:
         logger.warning("smart_update: exact input noop lookup failed", exc_info=True)
         # Observer failure cannot authorize LLM work or domain writes: the
-        # binding may already exist and must be reviewed once storage recovers.
+        # binding may already exist, so the durable facade must retry it.
         return None, True
 
 
@@ -16247,6 +16827,10 @@ async def _smart_event_update_impl(
     # An exact accepted retry can then stop before every LLM and domain write.
     source_fingerprint = input_packet_fingerprint(candidate)
     source_role = _candidate_source_role(candidate)
+    # Intent owns behavior. A complete UPSERT candidate must not be silently
+    # discarded because an older caller mislabeled its source as context-only.
+    if candidate.intent is SmartUpdateIntent.UPSERT_EVENT:
+        source_role = "identity_bearing"
     canonical_source_url = canonicalize_identity_url(candidate.source_url)
     if canonical_source_url:
         candidate.source_url = canonical_source_url
@@ -16263,13 +16847,18 @@ async def _smart_event_update_impl(
         canonical_source_url=canonical_source_url,
         source_role=source_role,
         source_fingerprint=source_fingerprint,
+        occurrence_key=candidate.occurrence_key,
+        candidate_key=candidate.candidate_key,
     )
     if noop_binding_conflict:
         logger.warning(
             "smart_update.replay_review reason=source_binding_conflict source_alias=%s",
             hashlib.sha256(str(canonical_source_url or "").encode("utf-8")).hexdigest()[:12],
         )
-        return SmartUpdateResult(status="review_required", reason="source_binding_conflict")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="source_binding_conflict", retry_reason=RetryReason.SOURCE_BINDING_CONFLICT,
+        )
     if noop_event_id is not None:
         logger.info(
             "smart_update.noop event_id=%s source_role=%s source_alias=%s fingerprint=%s",
@@ -16282,16 +16871,6 @@ async def _smart_event_update_impl(
             status="noop_exact_source_replay",
             event_id=noop_event_id,
             reason="exact_input_packet",
-        )
-    if source_role == "context_only":
-        logger.info(
-            "smart_update.skip reason=context_only_source source_type=%s source_url=%s",
-            candidate.source_type,
-            candidate.source_url,
-        )
-        return SmartUpdateResult(
-            status="skipped_context_only",
-            reason="context_only_cannot_drive_identity",
         )
     grounded_festival, dropped_kgd80 = ground_kgd80_festival(
         candidate.festival,
@@ -16345,6 +16924,11 @@ async def _smart_event_update_impl(
         int(bool(candidate.festival_source)) if candidate.festival_source is not None else None,
         _clip_title(candidate.festival_series, 80),
     )
+    upstream_source_disposition = str(candidate.source_disposition or "").strip().upper()
+    upstream_positive_child = upstream_source_disposition in {
+        "EVENTS_FOUND",
+        "MIXED",
+    }
     # Mixed recap + future-invite posts are reviewed before location defaults,
     # exhibition-duration fallbacks, vector identity recall or any write.  This
     # prevents past-occurrence facts from becoming future logistics.  Regex is
@@ -16357,6 +16941,7 @@ async def _smart_event_update_impl(
     early_eventness_reviewed = False
     if (
         mixed_occurrence_role_risk
+        and not upstream_positive_child
         and str(candidate.source_type or "").strip().lower() in {"vk", "tg", "telegram"}
         and not SMART_UPDATE_LLM_DISABLED
     ):
@@ -16378,9 +16963,13 @@ async def _smart_event_update_impl(
         )
         if decision != "event" or confidence < 0.70:
             suffix = "non_event" if decision == "non_event" else "uncertain"
+            # This stage is a contradiction verifier for an already-positive
+            # source child.  It may ask the durable source pipeline to retry,
+            # but it may not convert the child into a product no-event.
             return SmartUpdateResult(
-                status="skipped_non_event",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"mixed_occurrence_role_review_{suffix}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
         corpus = _candidate_location_grounding_corpus(candidate)
         if not (
@@ -16388,8 +16977,9 @@ async def _smart_event_update_impl(
             or _source_supports_location_value(corpus, candidate.location_address)
         ):
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason="mixed_occurrence_role_ungrounded_location",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
     # A digest/roundup must be scoped to one occurrence before date/range/time
     # role review.  Otherwise a roundup heading such as "01–07 August" can be
@@ -16406,8 +16996,9 @@ async def _smart_event_update_impl(
         )
         if not scope_ok:
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"occurrence_scope_review:{scope_result}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
     anchor_review_needed, anchor_review_trigger = _candidate_needs_llm_anchor_role_review(candidate)
     if anchor_review_needed and not SMART_UPDATE_LLM_DISABLED:
@@ -16429,8 +17020,9 @@ async def _smart_event_update_impl(
         )
         if not anchor_ok:
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"anchor_role_review:{anchor_result}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
         if (
             anchor_review_trigger == "explicit_unknown_start_time"
@@ -16471,8 +17063,9 @@ async def _smart_event_update_impl(
         )
         if not location_ok:
             return SmartUpdateResult(
-                status="invalid",
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"location_grounding_review:{location_review_result}",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
         (
             candidate.location_name,
@@ -16489,14 +17082,22 @@ async def _smart_event_update_impl(
             candidate.source_url,
             _clip_title(candidate.title),
         )
-        return SmartUpdateResult(status="invalid", reason="missing_date")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="missing_date",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
     if not candidate.title:
         logger.warning(
             "smart_update.invalid reason=missing_title source_type=%s source_url=%s",
             candidate.source_type,
             candidate.source_url,
         )
-        return SmartUpdateResult(status="invalid", reason="missing_title")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="missing_title",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
     candidate_location_unsupported_prose = _candidate_location_looks_unsupported_prose(candidate)
     if not candidate.location_name:
         logger.warning(
@@ -16505,27 +17106,28 @@ async def _smart_event_update_impl(
             candidate.source_url,
             _clip_title(candidate.title),
         )
-        return SmartUpdateResult(status="invalid", reason="missing_location")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="missing_location",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
 
     # A one-month fallback must never use exhibition words from a past recap to
     # invent the duration of the future occurrence.  Explicit extractor ranges
     # remain untouched; only the service fallback is suppressed.
-    inferred_default_end_date = (
-        None
-        if mixed_occurrence_role_risk
-        else _maybe_apply_default_end_date_for_long_event(candidate)
-    )
+    # Do not invent a semantic duration after a positive source parse.  An
+    # explicit end date survives; an absent end date stays absent.
+    inferred_default_end_date = None
 
     if _should_skip_past_smart_update_candidate(candidate):
         logger.info(
-            "smart_update.skip reason=past_event source_type=%s source_url=%s title=%s date=%s end_date=%s",
+            "smart_update.semantic_hint reason=possible_past_event source_type=%s source_url=%s title=%s date=%s end_date=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(candidate.title),
             candidate.date,
             candidate.end_date,
         )
-        return SmartUpdateResult(status="skipped_past_event", reason="past_event")
 
     await _maybe_disambiguate_telegram_default_location_city(candidate)
     candidate_location_unsupported_prose = _candidate_location_looks_unsupported_prose(candidate)
@@ -16546,13 +17148,21 @@ async def _smart_event_update_impl(
                     location_address=candidate.location_address,
                     gemma_client=_get_gemma_client(),
                 )
-                strict = (os.getenv("REGION_FILTER_STRICT", "1") or "").strip().lower() in {
-                    "1",
-                    "true",
-                    "yes",
-                    "on",
-                }
-                if region_decision.allowed is False or (strict and region_decision.allowed is None):
+                if region_decision.allowed is None:
+                    logger.warning(
+                        "smart_update.region_filter_unresolved source_type=%s source_url=%s city=%s reason=%s source=%s",
+                        candidate.source_type,
+                        candidate.source_url,
+                        candidate.city,
+                        region_decision.reason,
+                        region_decision.source,
+                    )
+                    return SmartUpdateResult(
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        reason="region_filter_unresolved",
+                        retry_reason=RetryReason.SOURCE_VERIFICATION_TECHNICAL_FAILURE,
+                    )
+                if region_decision.allowed is False:
                     logger.info(
                         "smart_update.rejected reason=%s source_type=%s source_url=%s city=%s region=%s source=%s",
                         region_decision.reason,
@@ -16565,9 +17175,15 @@ async def _smart_event_update_impl(
                     return SmartUpdateResult(
                         status="rejected_out_of_region",
                         reason=region_decision.reason,
+                        product_exclusion_reason=ProductExclusionReason.OUT_OF_REGION,
                     )
     except Exception as e:  # pragma: no cover - must not crash ingestion
         logger.warning("smart_update.region_filter_failed err=%s", e)
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="region_filter_technical_failure",
+            retry_reason=RetryReason.SOURCE_VERIFICATION_TECHNICAL_FAILURE,
+        )
 
     clean_title = _strip_private_use(candidate.title) or (candidate.title or "")
     if not clean_title:
@@ -16576,15 +17192,18 @@ async def _smart_event_update_impl(
             candidate.source_type,
             candidate.source_url,
         )
-        return SmartUpdateResult(status="invalid", reason="empty_title_after_clean")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="empty_title_after_clean",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
     if _should_skip_festival_post_candidate(candidate):
         logger.info(
-            "smart_update.skip reason=festival_post source_type=%s source_url=%s festival=%s",
+            "smart_update.semantic_hint reason=festival_post source_type=%s source_url=%s festival=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(candidate.festival or candidate.festival_series, 80),
         )
-        return SmartUpdateResult(status="skipped_festival_post", reason="festival_post")
     raw_source_text = _strip_private_use(candidate.source_text) or (
         candidate.source_text or ""
     )
@@ -16680,51 +17299,38 @@ async def _smart_event_update_impl(
     if inferred_default_end_date:
         text_filter_facts.append(f"Дата окончания по умолчанию: {inferred_default_end_date}")
 
-    # Giveaways: keep event facts but strip giveaway mechanics when possible.
+    # Semantic detectors below are observability hints only.  This function is
+    # downstream of a positive source child; deleting prose or converting that
+    # child into a no-event would be a second shadow classifier.
     is_giveaway = _looks_like_ticket_giveaway(clean_title, raw_source_text, raw_excerpt)
     if is_giveaway:
-        before_src = raw_source_text
-        before_excerpt = raw_excerpt
-        raw_source_text = _strip_giveaway_lines(raw_source_text) or raw_source_text
-        raw_excerpt = _strip_giveaway_lines(raw_excerpt) or raw_excerpt
-        if (before_src or "") != (raw_source_text or "") or (before_excerpt or "") != (raw_excerpt or ""):
-            text_filter_facts.append("Убрана механика розыгрыша")
-        # If we still don't have a plausible event, treat as non-event content.
+        text_filter_facts.append("Semantic hint: source contains giveaway mechanics")
         if not (
             _giveaway_has_underlying_event_facts(raw_source_text)
             or _giveaway_has_underlying_event_facts(raw_excerpt)
         ):
             logger.info(
-                "smart_update.skip reason=giveaway_no_event source_type=%s source_url=%s title=%s",
+                "smart_update.semantic_hint reason=giveaway_without_local_anchors source_type=%s source_url=%s title=%s",
                 candidate.source_type,
                 candidate.source_url,
                 _clip_title(clean_title),
             )
-            return SmartUpdateResult(status="skipped_giveaway", reason="giveaway_no_event")
 
-    # Congratulation posts must not become events or sources.
     if _looks_like_promo_or_congrats(clean_title, raw_source_text, raw_excerpt) and not _candidate_has_event_anchors(candidate):
         logger.info(
-            "smart_update.skip reason=promo_or_congrats source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=promo_or_congrats source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
         )
-        return SmartUpdateResult(status="skipped_promo", reason="promo_or_congrats")
 
-    before_promo_src = raw_source_text
-    before_promo_excerpt = raw_excerpt
-    clean_source_text = _strip_promo_lines(raw_source_text) or raw_source_text or ""
-    clean_raw_excerpt = _strip_promo_lines(raw_excerpt) or raw_excerpt
-    if is_giveaway:
-        clean_source_text = _strip_giveaway_lines(clean_source_text) or clean_source_text
-        clean_raw_excerpt = _strip_giveaway_lines(clean_raw_excerpt) or clean_raw_excerpt
+    clean_source_text = raw_source_text or ""
+    clean_raw_excerpt = raw_excerpt
     clean_source_text = _normalize_bullet_markers(clean_source_text) or clean_source_text
     clean_raw_excerpt = _normalize_bullet_markers(clean_raw_excerpt) or clean_raw_excerpt
-    if (before_promo_src or "") != (clean_source_text or "") or (before_promo_excerpt or "") != (clean_raw_excerpt or ""):
-        text_filter_facts.append("Убраны промо-фрагменты")
 
-    # Non-event notices / course ads (VK/TG): skip early to avoid creating pseudo-events.
+    # High-recall detector inventory.  Every match is a warning/verification
+    # signal only; no branch may delete a positive event child.
     source_type_clean = str(candidate.source_type or "").strip().lower()
     if source_type_clean in {"vk", "telegram", "tg"}:
         combined_text = "\n".join(
@@ -16733,153 +17339,44 @@ async def _smart_event_update_impl(
                 clean_raw_excerpt or "",
             ]
         ).strip()
-        if _looks_like_open_call_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=open_call source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="open_call")
-        if _looks_like_work_schedule_notice(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=work_schedule source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="work_schedule")
-        if _looks_like_non_event_notice(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=non_event_notice source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="non_event_notice")
-        if _looks_like_venue_status_update_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=venue_status_update source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="venue_status_update")
-        if _looks_like_congrats_notice_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=congrats_notice source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="congrats_notice")
-        if _looks_like_unsupported_exhibition_teaser_date(candidate, combined_text):
-            logger.info(
-                "smart_update.skip reason=unsupported_exhibition_teaser_date source_type=%s source_url=%s title=%s date=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-                candidate.date,
-            )
-            return SmartUpdateResult(
-                status="skipped_non_event",
-                reason="unsupported_exhibition_teaser_date",
-            )
-        if _looks_like_course_promo(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=course_promo source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="course_promo")
-        if _looks_like_service_promo_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=service_promo source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="service_promo")
-        if _looks_like_rental_booking_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=rental_booking source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="rental_booking")
+        semantic_hints: list[str] = []
+        detector_map = (
+            ("open_call", _looks_like_open_call_not_event(clean_title, combined_text)),
+            ("work_schedule", _looks_like_work_schedule_notice(clean_title, combined_text)),
+            ("non_event_notice", _looks_like_non_event_notice(clean_title, combined_text)),
+            ("venue_status_update", _looks_like_venue_status_update_not_event(clean_title, combined_text)),
+            ("congrats_notice", _looks_like_congrats_notice_not_event(clean_title, combined_text)),
+            ("unsupported_exhibition_teaser_date", _looks_like_unsupported_exhibition_teaser_date(candidate, combined_text)),
+            ("course_promo", _looks_like_course_promo(clean_title, combined_text)),
+            ("service_promo", _looks_like_service_promo_not_event(clean_title, combined_text)),
+            ("rental_booking", _looks_like_rental_booking_not_event(clean_title, combined_text)),
+            ("too_soon", _looks_like_too_soon_notice(clean_title, combined_text)),
+            ("event_logistics_notice", _looks_like_event_logistics_notice_not_event(clean_title, combined_text)),
+            ("online_event", _looks_like_online_event(clean_title, combined_text) and not _candidate_has_physical_event_anchors(candidate)),
+            ("book_review", _looks_like_book_review_not_event(clean_title, combined_text)),
+            ("photo_day", _looks_like_photo_day_not_event(clean_title, combined_text, candidate=candidate)),
+            ("retrospective_future_teaser", _looks_like_retrospective_future_teaser_not_event(clean_title, combined_text, candidate=candidate)),
+            ("completed_event_report", _looks_like_completed_event_report_not_event(clean_title, combined_text, candidate=candidate)),
+        )
+        semantic_hints.extend(reason for reason, matched in detector_map if matched)
         outage_reason = _looks_like_utility_outage_or_road_closure(clean_title, combined_text)
         if outage_reason:
+            semantic_hints.append(str(outage_reason))
+        if semantic_hints:
+            for semantic_hint in semantic_hints:
+                text_filter_facts.append(f"Semantic hint: {semantic_hint}")
             logger.info(
-                "smart_update.skip reason=%s source_type=%s source_url=%s title=%s",
-                outage_reason,
+                "smart_update.semantic_hints hints=%s source_type=%s source_url=%s title=%s",
+                semantic_hints,
                 candidate.source_type,
                 candidate.source_url,
                 _clip_title(clean_title),
             )
-            return SmartUpdateResult(status="skipped_non_event", reason=outage_reason)
-        if _looks_like_too_soon_notice(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=too_soon source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="too_soon")
-        if _looks_like_event_logistics_notice_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=event_logistics_notice source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(
-                status="skipped_non_event",
-                reason="event_logistics_notice",
-            )
-        # Project policy: auto-ingestion should not create online-only events.
-        if _looks_like_online_event(clean_title, combined_text) and not _candidate_has_physical_event_anchors(candidate):
-            logger.info(
-                "smart_update.skip reason=online_event source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="online_event")
-        if _looks_like_book_review_not_event(clean_title, combined_text):
-            logger.info(
-                "smart_update.skip reason=book_review source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="book_review")
-        if _looks_like_photo_day_not_event(clean_title, combined_text, candidate=candidate):
-            logger.info(
-                "smart_update.skip reason=photo_day source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="photo_day")
-        if _looks_like_retrospective_future_teaser_not_event(clean_title, combined_text, candidate=candidate):
-            logger.info(
-                "smart_update.skip reason=retrospective_future_teaser source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="retrospective_future_teaser")
-        if _looks_like_completed_event_report_not_event(clean_title, combined_text, candidate=candidate):
-            logger.info(
-                "smart_update.skip reason=completed_event_report source_type=%s source_url=%s title=%s",
-                candidate.source_type,
-                candidate.source_url,
-                _clip_title(clean_title),
-            )
-            return SmartUpdateResult(status="skipped_non_event", reason="completed_event_report")
-        if not early_eventness_reviewed and _candidate_needs_llm_eventness_review(candidate, combined_text):
+        if (
+            not upstream_positive_child
+            and not early_eventness_reviewed
+            and _candidate_needs_llm_eventness_review(candidate, combined_text)
+        ):
             decision, confidence, reason = await _llm_review_candidate_eventness(
                 candidate,
                 clean_title=clean_title,
@@ -16896,12 +17393,16 @@ async def _smart_event_update_impl(
                 _clip_title(clean_title),
             )
             if decision != "event" or confidence < 0.55:
-                skip_reason = (
+                retry_reason = (
                     "weak_eventness_review_non_event"
                     if decision == "non_event"
                     else "weak_eventness_review_uncertain"
                 )
-                return SmartUpdateResult(status="skipped_non_event", reason=skip_reason)
+                return SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                    reason=retry_reason,
+                    retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
+                )
             text_filter_facts.append(f"LLM eventness review: event ({reason or 'weak candidate accepted'})")
 
     # Ticket price grounding: prevent hallucinated min/max prices for VK/TG sources.
@@ -16926,13 +17427,11 @@ async def _smart_event_update_impl(
         if not _has_price_evidence(price_probe, candidate.ticket_price_min, candidate.ticket_price_max):
             before_min = candidate.ticket_price_min
             before_max = candidate.ticket_price_max
-            candidate.ticket_price_min = None
-            candidate.ticket_price_max = None
-            note = "Цена отброшена: не найдена в источнике"
+            note = "Semantic hint: extracted price lacks deterministic source match"
             if note not in text_filter_facts:
                 text_filter_facts.append(note)
             logger.info(
-                "smart_update.price_dropped source_type=%s source_url=%s title=%s before=%s..%s",
+                "smart_update.semantic_hint reason=price_evidence_conflict source_type=%s source_url=%s title=%s value=%s..%s",
                 candidate.source_type,
                 candidate.source_url,
                 _clip_title(clean_title),
@@ -16948,12 +17447,11 @@ async def _smart_event_update_impl(
         ]
     ).strip()
     if candidate.is_free is True and _free_claim_contradicted_by_source(candidate, free_probe_text):
-        candidate.is_free = False
-        note = "Бесплатность снята: источник противоречит free-attendance"
+        note = "Semantic hint: source may contradict extracted free-attendance"
         if note not in text_filter_facts:
             text_filter_facts.append(note)
         logger.info(
-            "smart_update.free_dropped source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=source_contradicts_free source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
@@ -16972,8 +17470,7 @@ async def _smart_event_update_impl(
             [clean_title, clean_source_text or "", clean_raw_excerpt or ""]
         ).strip()
         if _looks_like_blood_donation_event(clean_title, free_probe):
-            candidate.is_free = True
-            note = "Помечено как бесплатное: донорская акция"
+            note = "Semantic hint: blood-donation event may be free"
             if note not in text_filter_facts:
                 text_filter_facts.append(note)
 
@@ -17099,21 +17596,17 @@ async def _smart_event_update_impl(
     except Exception:
         logger.warning("smart_update: festival_queue detection failed", exc_info=True)
 
-    # If the source is detected as a festival/program post, it must not create/update events.
-    # Some upstream extractors (notably Telegram Monitoring) may not populate `festival_context`,
-    # so we backfill it via deterministic detection above and enforce the policy here.
+    # Festival/program detection is routing metadata only.  It may enqueue the
+    # source for programme expansion, but it cannot erase an already-positive
+    # event child.
     if _should_skip_festival_post_candidate(candidate):
         logger.info(
-            "smart_update.skip reason=festival_post_detected source_type=%s source_url=%s festival=%s",
+            "smart_update.semantic_hint reason=festival_post_detected source_type=%s source_url=%s festival=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(candidate.festival or candidate.festival_series, 80),
         )
-        return SmartUpdateResult(
-            status="skipped_festival_post",
-            reason="festival_post",
-            queue_notes=list(queue_notes or []),
-        )
+        text_filter_facts.append("Semantic hint: festival/program carrier")
 
     # Multi-event digests should not be imported as a single event.
     if (candidate.source_type in {"vk", "tg", "telegram"}) and _looks_like_schedule_digest(
@@ -17122,12 +17615,12 @@ async def _smart_event_update_impl(
         end_date=candidate.end_date,
     ):
         logger.info(
-            "smart_update.reject reason=schedule_digest source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=schedule_digest source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
         )
-        return SmartUpdateResult(status="rejected_schedule_digest", reason="schedule_digest")
+        text_filter_facts.append("Semantic hint: possible multi-event schedule")
 
     # "Акции" must not become events. If after promo/giveaway stripping there's no real event anchor,
     # treat it as non-event content.
@@ -17137,17 +17630,16 @@ async def _smart_event_update_impl(
         and len((clean_raw_excerpt or clean_source_text or "").strip()) < 140
     ):
         logger.info(
-            "smart_update.skip reason=promo_only source_type=%s source_url=%s title=%s",
+            "smart_update.semantic_hint reason=promo_only source_type=%s source_url=%s title=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(clean_title),
         )
-        return SmartUpdateResult(status="skipped_promo", reason="promo_only")
+        text_filter_facts.append("Semantic hint: promo-only detector matched")
 
     # Posters policy:
     # Keep all posters (dedupe/order happens later). OCR is used for prioritization only.
     # This avoids events ending up without images due to overly strict filtering.
-    force_silent_due_to_date_risk = False
     poster_filter_facts: list[str] = []
     if candidate.posters:
         # Best-effort: backfill missing OCR from local cache (cheap, no network).
@@ -17184,7 +17676,9 @@ async def _smart_event_update_impl(
             months_threshold=SMART_UPDATE_FAR_FUTURE_REVIEW_MONTHS,
         )
         if note:
-            force_silent_due_to_date_risk = True
+            # The source-level contradiction verifier already owns semantic
+            # date resolution.  Smart Update records the mismatch as evidence;
+            # it must not silently suppress an accepted positive child.
             poster_filter_facts.append(note)
 
     # Raw-URL existence is deliberately not an idempotency verdict. Exact
@@ -17195,7 +17689,19 @@ async def _smart_event_update_impl(
 
     cand_start, cand_end = _candidate_date_range(candidate)
     if not cand_start or not cand_end:
-        return SmartUpdateResult(status="invalid", reason="invalid_date")
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="invalid_date",
+            retry_reason=RetryReason.SOURCE_DECISION_INVALID,
+        )
+
+    candidate.explicit_occurrence_conflict_event_ids = (
+        await _explicit_occurrence_conflict_ids(db, candidate)
+    )
+    if candidate.explicit_occurrence_conflict_event_ids:
+        candidate.force_create_distinct_reason = (
+            IdentityDistinctReason.EXPLICIT_OCCURRENCE_ID_CONFLICT
+        )
 
     # A classified identity-bearing binding outranks legacy Event source fields.
     # This prevents a shared/context URL from being rebound by fuzzy anchors.
@@ -17206,6 +17712,8 @@ async def _smart_event_update_impl(
         anchor_match = None
     if anchor_match is None:
         anchor_match = await _match_existing_event_by_source_anchor(db, candidate)
+    if _event_blocked_by_explicit_occurrence(candidate, anchor_match):
+        anchor_match = None
     if anchor_match is not None:
         shortlist = [anchor_match]
         anchor_forced = True
@@ -17226,7 +17734,11 @@ async def _smart_event_update_impl(
             )
             stmt = _apply_soft_city_filter(stmt, candidate.city)
             res = await session.execute(stmt)
-            shortlist = list(res.scalars().all())
+            shortlist = [
+                event
+                for event in res.scalars().all()
+                if not _event_blocked_by_explicit_occurrence(candidate, event)
+            ]
 
     is_canonical_site = str(candidate.source_type or "").startswith("parser:")
     city_noise_rescued = False
@@ -17239,7 +17751,9 @@ async def _smart_event_update_impl(
             candidate,
             is_canonical_site=is_canonical_site,
         )
-        if city_noise_match is not None:
+        if city_noise_match is not None and not _event_blocked_by_explicit_occurrence(
+            candidate, city_noise_match
+        ):
             shortlist = [city_noise_match]
             city_noise_rescued = True
             logger.info(
@@ -17342,6 +17856,7 @@ async def _smart_event_update_impl(
         )
         if (
             city_noise_match is not None
+            and not _event_blocked_by_explicit_occurrence(candidate, city_noise_match)
             and int(getattr(city_noise_match, "id", 0) or 0)
             not in excluded_occurrence_ids
         ):
@@ -17356,6 +17871,12 @@ async def _smart_event_update_impl(
             )
 
     posters_map: dict[int, list[EventPoster]] = {}
+    if candidate.force_create_distinct and shortlist:
+        logger.info(
+            "smart_update.identity create_distinct candidate_key=%s previous_retry_exhausted=1",
+            candidate.candidate_key,
+        )
+        shortlist = []
     if shortlist:
         event_ids = [ev.id for ev in shortlist if ev.id]
         posters_map = await _fetch_event_posters_map(db, event_ids)
@@ -17836,7 +18357,146 @@ async def _smart_event_update_impl(
                 _clip_title(getattr(match_event, "title", None)),
             )
 
+    if candidate.force_match_event_id:
+        async with db.get_session() as session:
+            retry_match = await session.get(Event, int(candidate.force_match_event_id))
+        if retry_match is None:
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=candidate.force_match_event_id,
+                reason="identity_gate_match_disappeared", retry_reason=RetryReason.IDENTITY_MATCH_DISAPPEARED,
+            )
+        match_event = retry_match
+        match_reason = "identity_gate_adjudicated_same_event"
+
     identity_gate_candidates: list[Event] = []
+    identity_gate_match: Event | None = None
+    identity_gate_reason: str | None = None
+    identity_gate_adjudicated = False
+
+    # Evaluate the create gate before the existing widened dedup stage. If the
+    # gate finds a concrete Event, that Event is folded into the *same* dedup
+    # adjudicator call below. This closes VETO_CREATE without adding a second
+    # provider call or a second identity stage.
+    if (
+        match_event is None
+        and SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF
+        and not candidate.force_create_distinct
+    ):
+        vector_evidence: IdentityVectorEvidence | None = None
+        try:
+            vector_evidence = await _smart_update_identity_vector_evidence(candidate)
+            if vector_evidence is not None and vector_evidence.error:
+                raise RuntimeError(
+                    "identity_vector_unavailable:"
+                    + str(vector_evidence.reason or vector_evidence.error)
+                )
+            gate_existing_events = list(shortlist)
+            if vector_evidence and vector_evidence.nearest_event_id is not None:
+                known_ids = {getattr(ev, "id", None) for ev in gate_existing_events}
+                if vector_evidence.nearest_event_id not in known_ids:
+                    async with db.get_session() as session:
+                        vector_event = await session.get(
+                            Event,
+                            vector_evidence.nearest_event_id,
+                        )
+                    if vector_event is not None:
+                        gate_existing_events.append(vector_event)
+            identity_gate_candidates = gate_existing_events
+            identity_verdict = build_identity_gate_verdict(
+                candidate,
+                gate_existing_events,
+                mode=SMART_UPDATE_IDENTITY_GATE_MODE,
+                vector_evidence=vector_evidence,
+            )
+            logger.info(
+                "smart_update.identity_gate mode=%s action=%s reason=%s matched_event_id=%s confidence=%.2f deterministic=%s fail_safe=%s source_kind=%s source_type=%s",
+                identity_verdict.mode.value,
+                identity_verdict.action.value,
+                identity_verdict.reason_code,
+                identity_verdict.matched_event_id,
+                identity_verdict.confidence,
+                identity_verdict.deterministic,
+                identity_verdict.fail_safe,
+                identity_verdict.candidate.source_flags.source_kind
+                if identity_verdict.candidate is not None
+                else None,
+                identity_verdict.candidate.source_flags.source_type
+                if identity_verdict.candidate is not None
+                else None,
+            )
+            await _record_identity_gate_decision(
+                db,
+                candidate,
+                decision=identity_verdict.action.value,
+                reason=identity_verdict.reason_code,
+                confidence=identity_verdict.confidence,
+                event_id=identity_verdict.matched_event_id,
+                payload={
+                    "mode": identity_verdict.mode.value,
+                    "reasons": list(identity_verdict.reasons),
+                    "deterministic": identity_verdict.deterministic,
+                    "fail_safe": identity_verdict.fail_safe,
+                    "vector": {
+                        "available": vector_evidence.available,
+                        "nearest_event_id": vector_evidence.nearest_event_id,
+                        "score": vector_evidence.score,
+                        "reason": vector_evidence.reason,
+                        "error": vector_evidence.error,
+                    }
+                    if vector_evidence is not None
+                    else None,
+                },
+            )
+            if identity_verdict.should_veto_create:
+                identity_gate_reason = identity_verdict.reason_code
+                matched_id = identity_verdict.matched_event_id
+                if matched_id is not None:
+                    async with db.get_session() as session:
+                        identity_gate_match = await session.get(Event, int(matched_id))
+                if identity_gate_match is None:
+                    return SmartUpdateResult(
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        diagnostic_event_id=matched_id,
+                        reason=f"identity_gate_uncertain:{identity_verdict.reason_code}",
+                        retry_reason=RetryReason.IDENTITY_TECHNICAL_FAILURE,
+                    )
+        except Exception as exc:
+            logger.warning("smart_update: identity gate failed", exc_info=True)
+            identity_verdict = identity_gate_fail_safe_verdict(
+                mode=SMART_UPDATE_IDENTITY_GATE_MODE,
+                candidate=candidate,
+                reason=str(exc) or "identity gate error",
+            )
+            await _record_identity_gate_decision(
+                db,
+                candidate,
+                decision=identity_verdict.action.value,
+                reason=identity_verdict.reason_code,
+                confidence=identity_verdict.confidence,
+                event_id=identity_verdict.matched_event_id,
+                payload={
+                    "mode": identity_verdict.mode.value,
+                    "reasons": list(identity_verdict.reasons),
+                    "deterministic": identity_verdict.deterministic,
+                    "fail_safe": identity_verdict.fail_safe,
+                    "vector": {
+                        "available": vector_evidence.available,
+                        "nearest_event_id": vector_evidence.nearest_event_id,
+                        "score": vector_evidence.score,
+                        "reason": vector_evidence.reason,
+                        "error": vector_evidence.error,
+                    }
+                    if vector_evidence is not None
+                    else None,
+                },
+            )
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=identity_verdict.matched_event_id,
+                reason=f"identity_gate_uncertain:{identity_verdict.reason_code}",
+                retry_reason=RetryReason.IDENTITY_TECHNICAL_FAILURE,
+            )
 
     # LLM dedup adjudicator over WIDENED recall (INC-2026-05-30 opt 1).
     # Last-line, create-path only: even after every deterministic matcher + the
@@ -17848,10 +18508,14 @@ async def _smart_event_update_impl(
     if (
         SMART_UPDATE_DEDUP_ADJUDICATOR
         and match_event is None
+        and not candidate.force_create_distinct
         and not anchor_forced
         and not is_canonical_site
         and not SMART_UPDATE_LLM_DISABLED
-        and _title_has_meaningful_tokens(candidate.title)
+        and (
+            _title_has_meaningful_tokens(candidate.title)
+            or identity_gate_match is not None
+        )
     ):
         try:
             from datetime import timedelta
@@ -17876,12 +18540,42 @@ async def _smart_event_update_impl(
                 db, [ev.id for ev in wide_pool if ev.id]
             )
             blocked = _dedup_adjudicator_block_candidates(candidate, wide_pool, wide_posters)
+            if identity_gate_match is not None and all(
+                getattr(ev, "id", None) != getattr(identity_gate_match, "id", None)
+                for ev in blocked
+            ):
+                blocked.append(identity_gate_match)
+                if identity_gate_match.id not in wide_posters:
+                    wide_posters.update(
+                        await _fetch_event_posters_map(
+                            db,
+                            [int(identity_gate_match.id)],
+                        )
+                    )
             identity_gate_candidates = blocked or wide_pool[:10]
             if blocked:
                 decision = await _llm_dedup_adjudicator(
                     candidate, blocked, posters_map=wide_posters
                 )
+                if decision is None:
+                    # The widened stage ran because deterministic evidence found
+                    # plausible identity neighbours.  Provider/schema abstention
+                    # cannot silently authorize CREATE: keep the candidate in the
+                    # durable bounded retry path and create distinct only after
+                    # identity uncertainty exhausts its configured attempts.
+                    return SmartUpdateResult(
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        diagnostic_event_id=(
+                            int(identity_gate_match.id)
+                            if identity_gate_match is not None
+                            and identity_gate_match.id
+                            else None
+                        ),
+                        reason="dedup_adjudicator_unavailable", retry_reason=RetryReason.DEDUP_ADJUDICATOR_TECHNICAL_FAILURE,
+                    )
                 if decision:
+                    if identity_gate_match is not None:
+                        identity_gate_adjudicated = True
                     adj_id = decision.get("match_event_id")
                     adj_event = (
                         next((ev for ev in blocked if ev.id == adj_id), None) if adj_id else None
@@ -17921,8 +18615,30 @@ async def _smart_event_update_impl(
                         )
         except Exception:
             logger.warning(
-                "smart_update: dedup adjudicator failed (fallback to create)", exc_info=True
+                "smart_update: dedup adjudicator failed; scheduling retry", exc_info=True
             )
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=(
+                    int(identity_gate_match.id)
+                    if identity_gate_match is not None and identity_gate_match.id
+                    else None
+                ),
+                reason="dedup_adjudicator_unavailable", retry_reason=RetryReason.DEDUP_ADJUDICATOR_TECHNICAL_FAILURE,
+            )
+
+    if (
+        identity_gate_match is not None
+        and match_event is None
+        and not identity_gate_adjudicated
+    ):
+        # The gate found a concrete owner, but the existing adjudicator could
+        # not produce a typed same/distinct decision in this attempt.
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            diagnostic_event_id=int(identity_gate_match.id),
+            reason=f"identity_gate_adjudicator_unavailable:{identity_gate_reason or 'veto'}",
+        )
 
     # The compact semantics stage is explicitly candidate-routed, but it runs
     # for both create and ordinary merge paths. Provider/schema failure is an
@@ -17950,7 +18666,7 @@ async def _smart_event_update_impl(
                     exc_info=True,
                 )
 
-    if match_event is None:
+    async def _create_from_prepared_candidate() -> SmartUpdateResult:
         if candidate_location_unsupported_prose:
             logger.warning(
                 "smart_update.invalid reason=prose_location source_type=%s source_url=%s title=%s location=%s",
@@ -17959,127 +18675,11 @@ async def _smart_event_update_impl(
                 _clip_title(candidate.title),
                 _clip_title(candidate.location_name, 120),
             )
-            return SmartUpdateResult(status="invalid", reason="prose_location")
-
-        if SMART_UPDATE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
-            try:
-                vector_evidence = await _smart_update_identity_vector_evidence(candidate)
-                suppressed_vector_error: dict[str, Any] | None = None
-                if (
-                    vector_evidence is not None
-                    and vector_evidence.error
-                    and not str(candidate.source_type or "").startswith("parser:")
-                    and not _candidate_date_is_inferred(candidate, is_canonical_site=is_canonical_site)
-                ):
-                    # Failure policy: no auto-merge on infra failure, but low-risk
-                    # source-grounded non-parser candidates may continue through the
-                    # existing Smart Update create path. Parser/weak-date candidates
-                    # keep the error evidence so enforce mode can fail safe.
-                    logger.info(
-                        "smart_update.identity_gate vector_error_low_risk_fallback error=%s source_type=%s title=%s",
-                        vector_evidence.error,
-                        candidate.source_type,
-                        _clip_title(candidate.title),
-                    )
-                    suppressed_vector_error = {
-                        "error": vector_evidence.error,
-                        "reason": vector_evidence.reason,
-                        "available": vector_evidence.available,
-                        "nearest_event_id": vector_evidence.nearest_event_id,
-                        "score": vector_evidence.score,
-                        "policy": "low_risk_source_grounded_fallback",
-                    }
-                    vector_evidence = None
-                gate_existing_events = list(identity_gate_candidates or shortlist)
-                if vector_evidence and vector_evidence.nearest_event_id is not None:
-                    known_ids = {getattr(ev, "id", None) for ev in gate_existing_events}
-                    if vector_evidence.nearest_event_id not in known_ids:
-                        async with db.get_session() as session:
-                            vector_event = await session.get(Event, vector_evidence.nearest_event_id)
-                        if vector_event is not None:
-                            gate_existing_events.append(vector_event)
-                identity_verdict = build_identity_gate_verdict(
-                    candidate,
-                    gate_existing_events,
-                    mode=SMART_UPDATE_IDENTITY_GATE_MODE,
-                    vector_evidence=vector_evidence,
-                )
-                logger.info(
-                    "smart_update.identity_gate mode=%s action=%s reason=%s matched_event_id=%s confidence=%.2f deterministic=%s fail_safe=%s source_kind=%s source_type=%s",
-                    identity_verdict.mode.value,
-                    identity_verdict.action.value,
-                    identity_verdict.reason_code,
-                    identity_verdict.matched_event_id,
-                    identity_verdict.confidence,
-                    identity_verdict.deterministic,
-                    identity_verdict.fail_safe,
-                    identity_verdict.candidate.source_flags.source_kind
-                    if identity_verdict.candidate is not None
-                    else None,
-                    identity_verdict.candidate.source_flags.source_type
-                    if identity_verdict.candidate is not None
-                    else None,
-                )
-                await _record_identity_gate_decision(
-                    db,
-                    candidate,
-                    decision=identity_verdict.action.value,
-                    reason=identity_verdict.reason_code,
-                    confidence=identity_verdict.confidence,
-                    event_id=identity_verdict.matched_event_id,
-                    payload={
-                        "mode": identity_verdict.mode.value,
-                        "reasons": list(identity_verdict.reasons),
-                        "deterministic": identity_verdict.deterministic,
-                        "fail_safe": identity_verdict.fail_safe,
-                        "vector": {
-                            "available": identity_verdict.vector.available,
-                            "nearest_event_id": identity_verdict.vector.nearest_event_id,
-                            "score": identity_verdict.vector.score,
-                            "reason": identity_verdict.vector.reason,
-                            "error": identity_verdict.vector.error,
-                        } if identity_verdict.vector is not None else None,
-                        "suppressed_vector_error": suppressed_vector_error,
-                    },
-                )
-                if identity_verdict.should_veto_create:
-                    return SmartUpdateResult(
-                        status="skipped_identity_gate",
-                        reason=identity_verdict.reason_code,
-                    )
-            except Exception as exc:
-                logger.warning("smart_update: identity gate failed", exc_info=True)
-                identity_verdict = identity_gate_fail_safe_verdict(
-                    mode=SMART_UPDATE_IDENTITY_GATE_MODE,
-                    candidate=candidate,
-                    reason=str(exc) or "identity gate error",
-                )
-                await _record_identity_gate_decision(
-                    db,
-                    candidate,
-                    decision=identity_verdict.action.value,
-                    reason=identity_verdict.reason_code,
-                    confidence=identity_verdict.confidence,
-                    event_id=identity_verdict.matched_event_id,
-                    payload={
-                        "mode": identity_verdict.mode.value,
-                        "reasons": list(identity_verdict.reasons),
-                        "deterministic": identity_verdict.deterministic,
-                        "fail_safe": identity_verdict.fail_safe,
-                        "vector": {
-                            "available": identity_verdict.vector.available,
-                            "nearest_event_id": identity_verdict.vector.nearest_event_id,
-                            "score": identity_verdict.vector.score,
-                            "reason": identity_verdict.vector.reason,
-                            "error": identity_verdict.vector.error,
-                        } if identity_verdict.vector is not None else None,
-                    },
-                )
-                if identity_verdict.should_veto_create:
-                    return SmartUpdateResult(
-                        status="skipped_identity_gate",
-                        reason=identity_verdict.reason_code,
-                    )
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                reason="prose_location",
+                retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
+            )
 
         normalized_event_type = _normalize_event_type_value(
             candidate.title, candidate.raw_excerpt or candidate.source_text, candidate.event_type
@@ -18157,8 +18757,9 @@ async def _smart_event_update_impl(
                     )
                 else:
                     return SmartUpdateResult(
-                        status="invalid",
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                         reason=f"create_bundle_grounding:{bundle_grounding_result}",
+                        retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
                     )
         if isinstance(bundled, dict):
             bundled_age_payload = bundled.get("age_decision")
@@ -18229,8 +18830,9 @@ async def _smart_event_update_impl(
                     f"Заголовок отклонён: {clean_title} -> {bundled_title} (причина: ungrounded_title)"
                 )
                 return SmartUpdateResult(
-                    status="invalid",
+                    outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                     reason="ungrounded_create_bundle_title",
+                    retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
                 )
             elif (
                 _title_has_meaningful_tokens(clean_title)
@@ -18746,7 +19348,7 @@ async def _smart_event_update_impl(
             end_date_confidence=_date_provenance_confidence(_candidate_end_date_provenance_level(candidate, is_canonical_site=is_canonical_site)),
             is_free=is_free_value,
             pushkin_card=bool(candidate.pushkin_card),
-            silent=bool(force_silent_due_to_date_risk),
+            silent=False,
             source_text=clean_source_text or "",
             source_texts=[clean_source_text] if clean_source_text else [],
             organizer_names=_bounded_organizer_names(candidate.organizer_names),
@@ -18783,12 +19385,13 @@ async def _smart_event_update_impl(
                     event_id=-1,
                     canonical_source_url=canonical_binding_url,
                     source_role=_candidate_source_role(candidate),
+                    occurrence_key=candidate.occurrence_key,
                 )
                 if conflicting_binding is not None:
                     return SmartUpdateResult(
-                        status="review_required",
-                        event_id=conflicting_binding,
-                        reason="source_binding_conflict",
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        diagnostic_event_id=conflicting_binding,
+                        reason="source_binding_conflict", retry_reason=RetryReason.SOURCE_BINDING_CONFLICT,
                     )
             final_lo, final_hi = _candidate_date_range(candidate)
             if final_lo is not None and final_hi is not None:
@@ -18805,20 +19408,41 @@ async def _smart_event_update_impl(
                 final_stmt = _apply_soft_city_filter(final_stmt, candidate.city)
                 final_res = await session.execute(final_stmt)
                 final_duplicate = _pre_create_duplicate_probe(candidate, list(final_res.scalars().all()))
-                if final_duplicate is not None:
-                    await _record_identity_gate_decision(
+                if final_duplicate is not None and not candidate.force_create_distinct:
+                    result = await _accept_final_probe_match(
                         db,
-                        candidate,
-                        decision="veto_create",
-                        reason="final_transaction_duplicate_probe",
-                        confidence=0.98,
-                        event_id=getattr(final_duplicate, "id", None),
-                        payload={"stage": "final_pre_insert_probe"},
+                        session,
+                        event=final_duplicate,
+                        candidate=candidate,
+                        schedule_tasks=schedule_tasks,
+                        schedule_kwargs=schedule_kwargs,
+                        enqueue_ticket_sites=_enqueue_ticket_sites_queue,
                     )
-                    return SmartUpdateResult(
-                        status="skipped_identity_gate",
-                        reason="final_transaction_duplicate_probe",
-                    )
+                    if result is None:
+                        final_duplicate = None
+                    elif result.outcome is SmartUpdateTerminalOutcome.MERGED:
+                        try:
+                            await _record_identity_gate_decision(
+                                db,
+                                candidate,
+                                decision="allow_merge",
+                                reason="final_transaction_duplicate_probe",
+                                confidence=0.98,
+                                event_id=result.event_id,
+                                payload={"stage": "final_pre_insert_probe"},
+                            )
+                        except Exception:
+                            # The canonical merge already committed. An
+                            # observer failure cannot regress its accepted
+                            # terminal into a retry/failed queue state.
+                            logger.warning(
+                                "smart_update: final probe audit log failed event_id=%s",
+                                result.event_id,
+                                exc_info=True,
+                            )
+                        return result
+                    else:
+                        return result
             session.add(new_event)
             # Keep create, accepted source attachment and collection decision
             # materialization in one transaction. flush supplies the event id.
@@ -18954,7 +19578,7 @@ async def _smart_event_update_impl(
             new_event.id,
             added_posters,
             int(bool(added_sources)),
-            match_reason if "match_reason" in locals() else None,
+            match_reason,
         )
         return SmartUpdateResult(
             status="created",
@@ -18963,9 +19587,15 @@ async def _smart_event_update_impl(
             merged=False,
             added_posters=added_posters,
             added_sources=added_sources,
-            reason=match_reason if "match_reason" in locals() else None,
+            reason=match_reason,
             queue_notes=list(queue_notes or []),
         )
+
+    if match_event is None:
+        result = await _create_from_prepared_candidate()
+        if result.is_accepted and candidate.force_create_distinct_reason is not None:
+            result.identity_distinct_reason = candidate.force_create_distinct_reason
+        return result
 
     # Merge path
     existing = match_event
@@ -19102,12 +19732,41 @@ async def _smart_event_update_impl(
             },
         )
         if merge_identity_verdict.should_skip_side_effects:
+            distinct_reason = merge_identity_verdict.identity_distinct_reason
+            if not merge_identity_verdict.fail_safe and distinct_reason is not None:
+                # A known non-identity is a positive decision, not uncertainty.
+                # Reuse the already-prepared create path inside this same
+                # durable attempt with final-probe matching disabled. Early
+                # eventness, occurrence, matching and gate calls are not
+                # repeated; no new identity/provider stage or retry-worker
+                # delay is introduced.
+                candidate.force_create_distinct = True
+                diagnostic_reason = (
+                    f"create_distinct:{merge_identity_verdict.relation.value}:"
+                    f"{merge_identity_verdict.reason_code}"
+                )
+                result = await _create_from_prepared_candidate()
+                if result.is_accepted:
+                    result.reason = diagnostic_reason
+                    result.identity_distinct_reason = distinct_reason
+                    result.diagnostic_event_id = int(existing.id or 0) or None
+                return result
+            semantic_unknown = bool(
+                merge_identity_verdict.llm_contract_valid
+                and merge_identity_verdict.relation is MergeIdentityRelation.UNKNOWN
+                and not merge_identity_verdict.fail_safe
+            )
             return SmartUpdateResult(
-                status="skipped_identity_gate",
-                event_id=existing.id,
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=existing.id,
                 created=False,
                 merged=False,
                 reason=merge_identity_verdict.reason_code,
+                retry_reason=(
+                    RetryReason.IDENTITY_SEMANTIC_UNKNOWN
+                    if semantic_unknown
+                    else RetryReason.IDENTITY_TECHNICAL_FAILURE
+                ),
                 queue_notes=list(queue_notes or []),
             )
 
@@ -19124,7 +19783,11 @@ async def _smart_event_update_impl(
     async with db.get_session() as session:
         event_db = await session.get(Event, existing.id)
         if not event_db:
-            return SmartUpdateResult(status="error", reason="event_missing")
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                diagnostic_event_id=int(existing.id or 0) or None,
+                reason="event_missing", retry_reason=RetryReason.EVENT_MISSING,
+            )
         canonical_binding_url = canonicalize_identity_url(candidate.source_url)
         if canonical_binding_url:
             conflicting_binding = await _source_identity_binding_conflict(
@@ -19132,12 +19795,13 @@ async def _smart_event_update_impl(
                 event_id=int(event_db.id or 0),
                 canonical_source_url=canonical_binding_url,
                 source_role=_candidate_source_role(candidate),
+                occurrence_key=candidate.occurrence_key,
             )
             if conflicting_binding is not None:
                 return SmartUpdateResult(
-                    status="review_required",
-                    event_id=conflicting_binding,
-                    reason="source_binding_conflict",
+                    outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                    diagnostic_event_id=conflicting_binding,
+                    reason="source_binding_conflict", retry_reason=RetryReason.SOURCE_BINDING_CONFLICT,
                 )
         before_description = event_db.description or ""
         structured_age_decision = _candidate_age_decision(candidate)
@@ -19549,10 +20213,20 @@ async def _smart_event_update_impl(
                                         _clip_title(candidate.title),
                                         _clip_title(clean_title),
                                     )
-                                    return SmartUpdateResult(
-                                        status="rejected_incoherent_merge",
-                                        reason="incoherent_merge_title",
+                                    candidate.force_create_distinct = True
+                                    candidate.force_create_distinct_reason = (
+                                        IdentityDistinctReason.INCOHERENT_MERGE
                                     )
+                                    result = await _create_from_prepared_candidate()
+                                    if result.is_accepted:
+                                        result.reason = "create_distinct:incoherent_merge_title"
+                                        result.identity_distinct_reason = (
+                                            IdentityDistinctReason.INCOHERENT_MERGE
+                                        )
+                                        result.diagnostic_event_id = (
+                                            int(event_id or 0) or None
+                                        )
+                                    return result
                                 skipped_conflicts.append(
                                     f"Заголовок отклонён: {event_db.title} -> {clean_title} "
                                     "(причина: semantic_title_mismatch)"
@@ -20516,11 +21190,10 @@ async def _smart_event_update_impl(
                 exc_info=True,
             )
 
-    status = (
-        "merged"
-        if (updated_fields or added_posters or (added_sources and not same_source) or holiday_changed)
-        else "skipped_nochange"
-    )
+    # Once identity has been affirmatively classified as SAME_EVENT or
+    # SOURCE_UPDATE, the accepted terminal is MERGED. NOOP is reserved solely
+    # for the exact packet replay fast-path above.
+    status = "merged"
     logger.info(
         "smart_update.merge event_id=%s status=%s updated=%s added_posters=%d added_sources=%s updated_keys=%s added_facts=%d skipped_conflicts=%d reason=%s",
         existing.id,
@@ -21014,6 +21687,7 @@ async def _ensure_event_source(
         event_id=int(event_id),
         canonical_source_url=canonical_source_url,
         source_role=source_role,
+        occurrence_key=candidate.occurrence_key,
     )
     if conflicting_event_id is not None:
         raise SourceBindingConflict(conflicting_event_id)
@@ -21024,7 +21698,20 @@ async def _ensure_event_source(
             select(EventSource).where(
                 EventSource.event_id == event_id,
                 or_(
-                    EventSource.canonical_source_url == canonical_source_url,
+                    and_(
+                        EventSource.canonical_source_url == canonical_source_url,
+                        EventSource.occurrence_key == candidate.occurrence_key,
+                    ),
+                    # An evidence-backed replay may be the first touch that can
+                    # safely key a legacy binding on this same Event. Reuse and
+                    # upgrade that row rather than violating the older raw
+                    # ``(event_id, source_url)`` uniqueness constraint.
+                    and_(
+                        EventSource.canonical_source_url == canonical_source_url,
+                        EventSource.occurrence_key.is_(None),
+                        EventSource.candidate_key.is_(None),
+                    ),
+                    EventSource.candidate_key == candidate.candidate_key,
                     and_(
                         EventSource.canonical_source_url.is_(None),
                         EventSource.source_url == candidate.source_url,
@@ -21057,6 +21744,15 @@ async def _ensure_event_source(
             existing.source_fingerprint = candidate.source_fingerprint
             existing.imported_at = datetime.now(timezone.utc)
             updated = True
+        if existing.candidate_key != candidate.candidate_key:
+            existing.candidate_key = candidate.candidate_key
+            updated = True
+        if existing.occurrence_key != candidate.occurrence_key:
+            existing.occurrence_key = candidate.occurrence_key
+            updated = True
+        if existing.smart_update_candidate_id != candidate.smart_update_candidate_id:
+            existing.smart_update_candidate_id = candidate.smart_update_candidate_id
+            updated = True
         if updated:
             session.add(existing)
         return False, True
@@ -21068,6 +21764,9 @@ async def _ensure_event_source(
             canonical_source_url=canonical_source_url,
             source_role=source_role,
             source_fingerprint=candidate.source_fingerprint,
+            candidate_key=candidate.candidate_key,
+            occurrence_key=candidate.occurrence_key,
+            smart_update_candidate_id=candidate.smart_update_candidate_id,
             source_chat_username=candidate.source_chat_username,
             source_chat_id=candidate.source_chat_id,
             source_message_id=candidate.source_message_id,
@@ -21097,6 +21796,7 @@ async def _source_identity_binding_conflict(
     event_id: int,
     canonical_source_url: str,
     source_role: str,
+    occurrence_key: str | None = None,
 ) -> int | None:
     if source_role != "identity_bearing":
         return None
@@ -21107,6 +21807,7 @@ async def _source_identity_binding_conflict(
             .where(
                 EventSource.canonical_source_url == canonical_source_url,
                 EventSource.source_role == "identity_bearing",
+                EventSource.occurrence_key == occurrence_key,
                 EventSource.event_id != int(event_id),
             )
             .limit(1)
@@ -21114,6 +21815,14 @@ async def _source_identity_binding_conflict(
     ).scalar_one_or_none()
     if row is not None:
         return int(row)
+
+    # Every new Smart Update packet has a stable occurrence key. A legacy row
+    # without one cannot claim the whole carrier URL: official pages and social
+    # posts legitimately contain several event occurrences. Exact/same-event
+    # legacy bindings are still upgraded by ``_ensure_event_source`` after the
+    # normal match path accepts them.
+    if str(occurrence_key or "").strip():
+        return None
 
     # Legacy rows are deliberately not mass-classified. An unknown owner on a
     # different Event is evidence of ambiguity, so fail closed instead of
