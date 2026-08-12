@@ -1413,6 +1413,94 @@ async def test_fetch_vk_post_text_and_photos_includes_repost_text(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_fetch_vk_post_retains_link_doc_video_semantics_but_counts_only_visual_candidates(
+    monkeypatch,
+):
+    async def fake_vk_api(_method, **_params):
+        return {
+            "items": [
+                {
+                    "id": 22,
+                    "text": "",
+                    "date": 1760000000,
+                    "attachments": [
+                        {
+                            "type": "link",
+                            "link": {
+                                "title": "Tickets",
+                                "description": "12 August 19:00",
+                                "url": "https://tickets.test/22",
+                                "photo": {"sizes": [{"width": 1, "height": 1, "url": "https://img/link"}]},
+                            },
+                        },
+                        {
+                            "type": "doc",
+                            "doc": {
+                                "owner_id": -1,
+                                "id": 2,
+                                "title": "Program",
+                                "preview": {"photo": {"sizes": [{"width": 1, "height": 1, "url": "https://img/doc"}]}},
+                            },
+                        },
+                        {
+                            "type": "video",
+                            "video": {
+                                "owner_id": -1,
+                                "id": 3,
+                                "title": "Announcement",
+                                "image": [{"width": 1, "height": 1, "url": "https://img/video"}],
+                            },
+                        },
+                        {"type": "poll", "poll": {"id": 4, "question": "Will you attend?"}},
+                    ],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    text, photos, _published_at, _metrics, status = (
+        await vk_auto_queue.fetch_vk_post_text_and_photos(1, 22)
+    )
+    assert "Tickets" in text and "Program" in text and "Announcement" in text
+    assert "Will you attend?" in text
+    assert photos == ["https://img/link", "https://img/doc", "https://img/video"]
+    assert status.attachment_count == 3
+    assert status.unavailable_attachment_count == 0
+    assert len((status.source_envelope or {})["attachment_inventory"]) == 4
+
+
+@pytest.mark.asyncio
+async def test_prefetch_threads_user_owner_type_to_fresh_fetch(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    db = Database(str(tmp_path / "user.sqlite"))
+    await db.init()
+    seen = {}
+
+    async def fake_fetch(group_id, post_id, **kwargs):
+        seen.update(group_id=group_id, post_id=post_id, kwargs=kwargs)
+        return "personal event", [], None, None, vk_auto_queue.VkFetchStatus(True, "ok")
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    result = await vk_auto_queue._prefetch_vk_inbox_row(
+        db,
+        bot=None,
+        post=SimpleNamespace(
+            group_id=42,
+            post_id=7,
+            owner_type="user",
+            text="old",
+            date=100,
+        ),
+        source_url="https://vk.com/wall42_7",
+        festival_names=None,
+        festival_alias_pairs=None,
+    )
+    assert seen["kwargs"]["owner_type"] == "user"
+    assert result.text == "personal event"
+
+
+@pytest.mark.asyncio
 async def test_vk_auto_queue_retries_deleted_post_as_missing_evidence(tmp_path, monkeypatch):
     from types import SimpleNamespace
 

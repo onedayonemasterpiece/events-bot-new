@@ -242,4 +242,6 @@ async def test_dedup_and_limit(monkeypatch):
     photos = await main._vkrev_fetch_photos(1, post_id, None, None)
     assert len(photos) == 10
     assert len(set(photos)) == 10
-    assert photos[:6] == urls[:6]
+    # Shared envelope order is outer/direct evidence first, then recursive
+    # copy_history evidence; duplicate URLs retain the first occurrence.
+    assert photos == [*urls[5:], *urls[:3]]

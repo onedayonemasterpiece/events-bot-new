@@ -2727,6 +2727,9 @@ class Database:
                     raw_text TEXT NOT NULL,
                     raw_payload_json TEXT NOT NULL,
                     attachment_metadata_json TEXT NOT NULL DEFAULT '[]',
+                    envelope_version INTEGER,
+                    capture_complete INTEGER NOT NULL DEFAULT 0,
+                    evidence_replayability TEXT NOT NULL DEFAULT 'replayable_legacy_incomplete',
                     payload_hash TEXT NOT NULL,
                     source_revision_hash TEXT NOT NULL,
                     discovery_keyword_hints_json TEXT NOT NULL DEFAULT '[]',
@@ -2761,6 +2764,15 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS ix_vk_source_packet_post ON vk_source_packet(source_type,owner_id,post_id,revision)"
             )
             await _add_column(conn, "vk_source_packet", "provider_retry_after INTEGER")
+            await _add_column(conn, "vk_source_packet", "envelope_version INTEGER")
+            await _add_column(
+                conn, "vk_source_packet", "capture_complete INTEGER NOT NULL DEFAULT 0"
+            )
+            await _add_column(
+                conn,
+                "vk_source_packet",
+                "evidence_replayability TEXT NOT NULL DEFAULT 'replayable_legacy_incomplete'",
+            )
 
             await conn.execute(
                 """

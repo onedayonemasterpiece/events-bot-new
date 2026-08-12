@@ -4377,6 +4377,10 @@ def _vk_packet_json(value: Any) -> str:
 def _vk_source_revision_payload(post: dict[str, Any]) -> dict[str, Any]:
     """Return semantic source bytes excluding volatile popularity counters."""
 
+    from vk_source_envelope import is_vk_source_envelope, vk_source_semantic_projection
+
+    if is_vk_source_envelope(post):
+        return vk_source_semantic_projection(post)
     return {
         "text": str(post.get("text") or ""),
         "photos": list(post.get("photos") or ()),
@@ -4403,17 +4407,45 @@ async def _persist_vk_source_packet(
     packet; changed revisions append a new row and re-open the inbox.
     """
 
+    from vk_source_envelope import (
+        VK_SOURCE_ENVELOPE_VERSION,
+        is_vk_source_envelope,
+        sanitize_vk_source_value,
+        vk_source_envelope_attachment_metadata,
+        vk_source_envelope_replayability,
+        vk_source_packet_hashes,
+    )
+
+    if is_vk_source_envelope(post):
+        sanitized_post = sanitize_vk_source_value(post)
+        if isinstance(sanitized_post, dict):
+            post = sanitized_post
     raw_payload_json = _vk_packet_json(post)
     revision_payload_json = _vk_packet_json(_vk_source_revision_payload(post))
-    payload_hash = hashlib.sha256(raw_payload_json.encode("utf-8")).hexdigest()
-    revision_hash = hashlib.sha256(revision_payload_json.encode("utf-8")).hexdigest()
+    if is_vk_source_envelope(post):
+        payload_hash, revision_hash = vk_source_packet_hashes(post)
+    else:
+        payload_hash = hashlib.sha256(raw_payload_json.encode("utf-8")).hexdigest()
+        revision_hash = hashlib.sha256(
+            revision_payload_json.encode("utf-8")
+        ).hexdigest()
     post_id = int(post["post_id"])
     published_at = int(post["date"])
     raw_text = str(post.get("text") or "")
-    attachment_metadata = {
-        "photos": list(post.get("photos") or ()),
-        "attachments": post.get("attachments") or (),
-    }
+    envelope_version: int | None = None
+    capture_complete = False
+    replayability = "replayable_legacy_incomplete"
+    if is_vk_source_envelope(post):
+        envelope_version = VK_SOURCE_ENVELOPE_VERSION
+        replayability = vk_source_envelope_replayability(post)
+        capture_complete = replayability == "replayable_lossless"
+        attachment_metadata = vk_source_envelope_attachment_metadata(post)
+    else:
+        attachment_metadata = {
+            "photos": list(post.get("photos") or ()),
+            "attachments": post.get("attachments") or (),
+            "copy_history": post.get("copy_history") or (),
+        }
     keyword_json = _vk_packet_json(list(keyword_hints))
     date_json = _vk_packet_json(list(date_hints))
     if OCR_PENDING_SENTINEL in keyword_hints:
@@ -4451,15 +4483,18 @@ async def _persist_vk_source_packet(
                 INSERT INTO vk_source_packet(
                     source_type, owner_id, owner_type, post_id, revision,
                     source_url, published_at, raw_text, raw_payload_json,
-                    attachment_metadata_json, payload_hash, source_revision_hash,
+                    attachment_metadata_json, envelope_version, capture_complete,
+                    evidence_replayability, payload_hash, source_revision_hash,
                     discovery_keyword_hints_json, discovered_date_hints_json,
                     event_ts_hint, ocr_status, llm_status, status
-                ) VALUES('vk',?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending','pending','pending')
+                ) VALUES('vk',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending','pending','pending')
                 """,
                 (
                     int(group_id), owner_type, post_id, revision, source_url,
                     published_at, raw_text, raw_payload_json,
-                    _vk_packet_json(attachment_metadata), payload_hash, revision_hash,
+                    _vk_packet_json(attachment_metadata), envelope_version,
+                    1 if capture_complete else 0, replayability,
+                    payload_hash, revision_hash,
                     keyword_json, date_json, event_ts_hint,
                 ),
             )

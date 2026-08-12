@@ -24,6 +24,7 @@ import vk_auto_queue
 import vk_intake
 import vk_review
 from poster_media import PosterMedia
+from vk_source_envelope import build_vk_source_envelope
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -132,6 +133,82 @@ async def test_changed_revision_appends_and_exact_revision_reuses(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_envelope_revision_matrix_reopens_on_recursive_semantic_edits_only(tmp_path):
+    db = await _db(tmp_path)
+    raw = {
+        "id": 70,
+        "date": 100,
+        "edited": 101,
+        "text": "outer",
+        "views": {"count": 1},
+        "attachments": [
+            {"type": "link", "link": {"url": "https://a", "title": "A"}}
+        ],
+        "copy_history": [
+            {"id": 2, "text": "copy one", "attachments": []},
+            {
+                "id": 3,
+                "text": "copy two",
+                "attachments": [
+                    {"type": "video", "video": {"owner_id": -1, "id": 4, "title": "V"}},
+                    {"type": "doc", "doc": {"owner_id": -1, "id": 5, "title": "D"}},
+                ],
+            },
+        ],
+    }
+
+    async def persist(item):
+        return await vk_intake._persist_vk_source_packet(
+            db,
+            group_id=1,
+            owner_type="group",
+            post=build_vk_source_envelope(item, owner_id=1),
+            source_url="https://vk.com/wall-1_70",
+            keyword_hints=[],
+            date_hints=[],
+            event_ts_hint=None,
+        )
+
+    first, first_new = await persist(raw)
+    counter = json.loads(json.dumps(raw))
+    counter["views"]["count"] = 999
+    same, same_new = await persist(counter)
+    reordered = {key: raw[key] for key in reversed(list(raw))}
+    reordered_id, reordered_new = await persist(reordered)
+    assert first_new is True
+    assert (same, same_new) == (first, False)
+    assert (reordered_id, reordered_new) == (first, False)
+
+    mutations = []
+    for mutate in (
+        lambda item: item.__setitem__("text", "outer changed"),
+        lambda item: item["copy_history"][1].__setitem__("text", "copy two changed"),
+        lambda item: item["attachments"][0]["link"].__setitem__("title", "B"),
+        lambda item: item["copy_history"][1]["attachments"][0]["video"].__setitem__("id", 40),
+        lambda item: item["copy_history"][1]["attachments"][1]["doc"].__setitem__("id", 50),
+        lambda item: item.__setitem__("edited", 102),
+    ):
+        changed = json.loads(json.dumps(raw))
+        mutate(changed)
+        mutations.append(await persist(changed))
+    assert all(is_new for _packet_id, is_new in mutations)
+    assert len({packet_id for packet_id, _ in mutations}) == len(mutations)
+    async with db.raw_conn() as conn:
+        rows = await (await conn.execute(
+            "SELECT envelope_version,capture_complete,evidence_replayability "
+            "FROM vk_source_packet ORDER BY revision"
+        )).fetchall()
+        inbox = await (await conn.execute(
+            "SELECT source_packet_id,status,text FROM vk_inbox WHERE post_id=70"
+        )).fetchone()
+    assert rows == [(1, 1, "replayable_lossless")] * 7
+    assert inbox[0] == mutations[-1][0] and inbox[1] == "pending"
+    assert "outer" in inbox[2]
+    assert "copy two" in inbox[2]
+    assert "https://a" in inbox[2]
+
+
+@pytest.mark.asyncio
 async def test_cursor_does_not_advance_when_packet_persist_fails(tmp_path, monkeypatch):
     db = await _db(tmp_path)
     async with db.raw_conn() as conn:
@@ -236,7 +313,9 @@ async def test_parse_receipt_is_replayable_without_second_provider_call(tmp_path
     db = await _db(tmp_path)
     packet_id, _ = await vk_intake._persist_vk_source_packet(
         db, group_id=1, owner_type="group",
-        post={"date": 1, "post_id": 1, "text": "x", "photos": []},
+        post=build_vk_source_envelope(
+            {"id": 1, "date": 1, "text": "x", "attachments": []}, owner_id=1
+        ),
         source_url="https://vk.com/wall-1_1", keyword_hints=[], date_hints=[], event_ts_hint=None,
     )
     receipt = {
@@ -390,6 +469,250 @@ async def test_typed_provider_receipt_releases_lease_and_persists_quota_metadata
         "RATE_LIMITED", 700, 1400, 3600,
         SourceParseRetryReason.TECHNICAL_ERROR.value,
     )
+
+
+@pytest.mark.asyncio
+async def test_deleted_source_replays_complete_envelope_into_typed_parser(tmp_path, monkeypatch):
+    db = await _db(tmp_path)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','source')"
+        )
+        await conn.commit()
+    now = int(time.time())
+    envelope = build_vk_source_envelope(
+        {
+            "id": 91,
+            "date": now,
+            "text": "outer event 12 August",
+            "attachments": [],
+            "copy_history": [
+                {
+                    "id": 92,
+                    "text": "generic repost",
+                    "attachments": [
+                        {
+                            "type": "link",
+                            "link": {
+                                "title": "Doors 19:00",
+                                "url": "https://tickets.test/91",
+                                "photo": {"sizes": [{"width": 1, "height": 1, "url": "https://img/91"}]},
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+        owner_id=1,
+    )
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post=envelope,
+        source_url="https://vk.com/wall-1_91",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    post = await vk_review.pick_next(db, 7, "batch", resume_locked=False)
+    assert post is not None and post.source_packet_id == packet_id
+
+    async def unavailable(*_args, **_kwargs):
+        return "", [], None, None, vk_auto_queue.VkFetchStatus(
+            False, "not_found", error_code=100, error="Post was deleted"
+        )
+
+    captured = {}
+
+    async def typed_parse(text, *, photos, attachment_count_hint, **_kwargs):
+        captured.update(
+            text=text,
+            photos=list(photos),
+            attachment_count=attachment_count_hint,
+        )
+        decision = SourceParseDecision.retry(
+            SourceParseRetryReason.TECHNICAL_ERROR,
+            evidence_manifest=EvidenceManifest.complete_source(
+                text, attachment_count=attachment_count_hint
+            ),
+        )
+        return vk_intake.DraftParseResult([], decision=decision), None
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", unavailable)
+    monkeypatch.setattr(vk_auto_queue.vk_intake, "build_event_drafts", typed_parse)
+    report = vk_auto_queue.VkAutoImportReport(batch_id="batch")
+    await vk_auto_queue._process_vk_inbox_row(
+        db,
+        _Bot(),
+        chat_id=1,
+        operator_id=7,
+        batch_id="batch",
+        post=post,
+        source_url="https://vk.com/wall-1_91",
+        report=report,
+        festival_names=None,
+        festival_alias_pairs=None,
+        progress_message_id=None,
+        progress_current_no=1,
+        progress_total_txt="1",
+    )
+    assert "outer event" in captured["text"]
+    assert "generic repost" in captured["text"]
+    assert "Doors 19:00" in captured["text"]
+    assert captured["photos"] == ["https://img/91"]
+    assert captured["attachment_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_deleted_legacy_packet_retries_as_incomplete_without_parser(tmp_path, monkeypatch):
+    db = await _db(tmp_path)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','source')"
+        )
+        await conn.commit()
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post={"date": int(time.time()), "post_id": 92, "text": "legacy", "photos": []},
+        source_url="https://vk.com/wall-1_92",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    post = await vk_review.pick_next(db, 7, "batch", resume_locked=False)
+    assert post is not None and post.source_packet_id == packet_id
+
+    async def unavailable(*_args, **_kwargs):
+        return "", [], None, None, vk_auto_queue.VkFetchStatus(False, "access_denied", error_code=15)
+
+    async def must_not_parse(*_args, **_kwargs):
+        raise AssertionError("legacy incomplete packet must not produce a semantic terminal")
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", unavailable)
+    monkeypatch.setattr(vk_auto_queue.vk_intake, "build_event_drafts", must_not_parse)
+    report = vk_auto_queue.VkAutoImportReport(batch_id="batch")
+    await vk_auto_queue._process_vk_inbox_row(
+        db,
+        _Bot(),
+        chat_id=1,
+        operator_id=7,
+        batch_id="batch",
+        post=post,
+        source_url="https://vk.com/wall-1_92",
+        report=report,
+        festival_names=None,
+        festival_alias_pairs=None,
+        progress_message_id=None,
+        progress_current_no=1,
+        progress_total_txt="1",
+    )
+    async with db.raw_conn() as conn:
+        row = await (await conn.execute(
+            "SELECT status,last_typed_reason FROM vk_inbox WHERE id=?", (post.id,)
+        )).fetchone()
+    assert report.inbox_deferred == 1
+    assert row == ("deferred", "EVIDENCE_INCOMPLETE")
+
+
+@pytest.mark.asyncio
+async def test_fresh_fetch_persists_recursive_revision_before_typed_parser(tmp_path, monkeypatch):
+    db = await _db(tmp_path)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','source')"
+        )
+        await conn.commit()
+    now = int(time.time())
+    initial = build_vk_source_envelope(
+        {"id": 93, "date": now, "text": "outer", "attachments": [], "copy_history": []},
+        owner_id=1,
+    )
+    old_packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post=initial,
+        source_url="https://vk.com/wall-1_93",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    post = await vk_review.pick_next(db, 7, "batch", resume_locked=False)
+    assert post is not None
+    edited = build_vk_source_envelope(
+        {
+            "id": 93,
+            "date": now,
+            "edited": now + 1,
+            "text": "outer",
+            "attachments": [],
+            "copy_history": [
+                {
+                    "id": 94,
+                    "text": "new nested event details",
+                    "attachments": [
+                        {"type": "doc", "doc": {"owner_id": -1, "id": 10, "title": "Program"}}
+                    ],
+                }
+            ],
+        },
+        owner_id=1,
+    )
+
+    async def fetched(*_args, **_kwargs):
+        return (
+            edited["text"],
+            edited["photos"],
+            datetime.fromtimestamp(now, timezone.utc),
+            None,
+            vk_auto_queue.VkFetchStatus(True, "ok", source_envelope=edited),
+        )
+
+    observed = {}
+
+    async def typed_parse(text, **_kwargs):
+        async with db.raw_conn() as conn:
+            row = await (await conn.execute(
+                "SELECT source_packet_id FROM vk_inbox WHERE id=?", (post.id,)
+            )).fetchone()
+            observed["packet_id_during_parse"] = row[0]
+        observed["text"] = text
+        decision = SourceParseDecision.retry(
+            SourceParseRetryReason.TECHNICAL_ERROR,
+            evidence_manifest=EvidenceManifest.complete_source(text),
+        )
+        return vk_intake.DraftParseResult([], decision=decision), None
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fetched)
+    monkeypatch.setattr(vk_auto_queue.vk_intake, "build_event_drafts", typed_parse)
+    report = vk_auto_queue.VkAutoImportReport(batch_id="batch")
+    await vk_auto_queue._process_vk_inbox_row(
+        db,
+        _Bot(),
+        chat_id=1,
+        operator_id=7,
+        batch_id="batch",
+        post=post,
+        source_url="https://vk.com/wall-1_93",
+        report=report,
+        festival_names=None,
+        festival_alias_pairs=None,
+        progress_message_id=None,
+        progress_current_no=1,
+        progress_total_txt="1",
+    )
+    async with db.raw_conn() as conn:
+        rows = await (await conn.execute(
+            "SELECT id,revision,raw_text FROM vk_source_packet WHERE post_id=93 ORDER BY revision"
+        )).fetchall()
+    assert len(rows) == 2
+    assert rows[0][0] == old_packet_id
+    assert observed["packet_id_during_parse"] == rows[1][0]
+    assert "new nested event details" in observed["text"]
+    assert "Program" in observed["text"]
 
 
 @pytest.mark.asyncio

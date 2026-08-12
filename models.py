@@ -2378,6 +2378,9 @@ class VKSourcePacket(SQLModel, table=True):
     raw_text: str
     raw_payload_json: str
     attachment_metadata_json: str = "[]"
+    envelope_version: Optional[int] = None
+    capture_complete: bool = False
+    evidence_replayability: str = "replayable_legacy_incomplete"
     payload_hash: str
     source_revision_hash: str
     discovery_keyword_hints_json: str = "[]"

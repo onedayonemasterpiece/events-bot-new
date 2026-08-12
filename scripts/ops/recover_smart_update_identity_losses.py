@@ -933,15 +933,28 @@ def run(
                     continue
                 replay_inventory.append(item)
             replay_inventory = replay_inventory[:normalized_batch]
+        # This tool performs queue/state transitions only. Packet loading, OCR,
+        # typed parsing, and Smart Update remain owned by the normal processor;
+        # in particular a legacy projection must never be advertised as having
+        # restorable attachment evidence.
         pipeline = (
-            "RESTORE_RAW_PAYLOAD", "RESTORE_ATTACHMENTS_AND_OCR",
-            "TYPED_LLM_SOURCE_DECISION", "SMART_UPDATE_PLAN",
+            "VALIDATE_PACKET_REPLAYABILITY",
+            "REQUEUE_NORMAL_PROCESSOR",
         )
         stable_plan = {
             "sources": list(source_filters), "loss_classes": list(class_filters),
             "include_discovery_misses": bool(include_discovery_misses),
             "pipeline": pipeline,
             "carrier_revision_keys": [item["carrier_revision_key"] for item in replay_inventory],
+            "evidence_replayability": [
+                {
+                    "carrier_revision_key": item["carrier_revision_key"],
+                    "state": str(
+                        item.get("evidence_replayability") or "unavailable"
+                    ),
+                }
+                for item in replay_inventory
+            ],
             "direct_event_insert": False,
         }
         plan_hash = hashlib.sha256(
@@ -991,10 +1004,27 @@ def run(
                     int(item.get("lifecycle_actions") or 0) for item in replay_inventory
                 ),
                 "unavailable_evidence_count": sum(
-                    not bool(item.get("payload_available")) for item in replay_inventory
+                    str(item.get("evidence_replayability") or "unavailable") == "unavailable"
+                    for item in replay_inventory
+                ),
+                "replayability_counts": {
+                    state: sum(
+                        str(item.get("evidence_replayability") or "unavailable") == state
+                        for item in replay_inventory
+                    )
+                    for state in (
+                        "replayable_lossless",
+                        "replayable_legacy_incomplete",
+                        "unavailable",
+                    )
+                },
+                "attachment_restore_eligible_count": sum(
+                    str(item.get("evidence_replayability") or "unavailable")
+                    == "replayable_lossless"
+                    for item in replay_inventory
                 ),
                 "stages": list(pipeline),
-                "execution": "plan_only_requires_deployed_llm_first_pipeline",
+                "execution": "plan_only_requeues_normal_processor",
                 "direct_event_insert": False,
                 "production_writes": False if dry_run else bool(changed),
                 "inventory_hash": census.get("inventory_hash") if census else None,

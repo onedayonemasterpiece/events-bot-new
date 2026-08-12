@@ -418,9 +418,12 @@ def test_expanded_read_only_plan_includes_prefilters_discovery_and_partial_child
     assert {"A", "G", "O"}.issubset(inventory_classes)
     assert first["replay_plan"]["event_occurrence_count"] >= 3
     assert first["replay_plan"]["stages"] == [
-        "RESTORE_RAW_PAYLOAD", "RESTORE_ATTACHMENTS_AND_OCR",
-        "TYPED_LLM_SOURCE_DECISION", "SMART_UPDATE_PLAN",
+        "VALIDATE_PACKET_REPLAYABILITY", "REQUEUE_NORMAL_PROCESSOR",
     ]
+    assert first["replay_plan"]["execution"] == "plan_only_requeues_normal_processor"
+    assert first["replay_plan"]["replayability_counts"]["replayable_lossless"] == 0
+    assert first["replay_plan"]["replayability_counts"]["replayable_legacy_incomplete"] >= 3
+    assert first["replay_plan"]["attachment_restore_eligible_count"] == 0
     assert first["replay_plan"]["direct_event_insert"] is False
     assert first["replay_plan"]["production_writes"] is False
     assert first["replay_plan"]["inventory_hash"] == second["replay_plan"]["inventory_hash"]

@@ -269,6 +269,14 @@ def build_census(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             "extracted_event_occurrences": _int(row, "extracted_event_occurrences"),
             "lifecycle_actions": _int(row, "lifecycle_actions"),
             "payload_available": _truth(row, "raw_payload_available"),
+            "evidence_replayability": str(
+                row.get("evidence_replayability")
+                or (
+                    "replayable_legacy_incomplete"
+                    if _truth(row, "raw_payload_available")
+                    else "unavailable"
+                )
+            ),
         }
         for row in carriers
     ]
@@ -281,6 +289,17 @@ def build_census(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             smart_outcomes[str(outcome)] += max(0, int(count or 0))
     metrics = {
         "vk_source_packets_total": len(raw_packets),
+        "vk_packet_replayability": {
+            state: sum(
+                str(row.get("evidence_replayability") or "unavailable") == state
+                for row in raw_packets
+            )
+            for state in (
+                "replayable_lossless",
+                "replayable_legacy_incomplete",
+                "unavailable",
+            )
+        },
         "vk_llm_carriers_total": sum(
             int(_truth(row, "llm_started")) for row in raw_packets
         ),
@@ -408,6 +427,35 @@ def _json_mapping(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _vk_packet_replayability(data: Mapping[str, Any]) -> str:
+    """Classify retained VK evidence without trusting rollout-era flags."""
+
+    payload = _json_mapping(data.get("raw_payload_json"))
+    completeness = payload.get("completeness") if isinstance(payload, Mapping) else None
+    try:
+        schema_version = int(payload.get("schema_version") or 0)
+        post_id = int(payload.get("post_id") or 0)
+    except (TypeError, ValueError):
+        schema_version = post_id = 0
+    if (
+        payload.get("schema") == "vk_source_envelope"
+        and schema_version == 1
+        and post_id != 0
+        and isinstance(payload.get("raw_item"), Mapping)
+        and isinstance(payload.get("text_segments"), list)
+        and isinstance(payload.get("attachment_inventory"), list)
+        and isinstance(payload.get("all_media_candidates"), list)
+        and isinstance(completeness, Mapping)
+        and bool(completeness.get("capture_complete"))
+    ):
+        return "replayable_lossless"
+    legacy_available = any(
+        str(data.get(name) or "").strip() not in {"", "[]", "{}"}
+        for name in ("raw_text", "raw_payload_json", "attachment_metadata_json")
+    )
+    return "replayable_legacy_incomplete" if legacy_available else "unavailable"
+
+
 def _raw_packet_rows(
     con: sqlite3.Connection, since: datetime, until: datetime
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -442,10 +490,8 @@ def _raw_packet_rows(
                 data.get("owner_id") or data.get("group_id") or data.get("source_url") or "unknown"
             )
             native_id = data.get("native_post_id") or data.get("post_id") or data["id"]
-            raw_packet_available = any(
-                str(data.get(name) or "").strip() not in {"", "[]", "{}"}
-                for name in ("raw_text", "raw_payload_json", "attachment_metadata_json")
-            )
+            packet_replayability = _vk_packet_replayability(data)
+            raw_packet_available = packet_replayability != "unavailable"
             evidence: dict[str, Any] = {
                 "source_type": data.get("source_type") or "vk",
                 "carrier_id": f"{source_identity}:{native_id}",
@@ -454,6 +500,8 @@ def _raw_packet_rows(
                 "observed_at": data.get(time_col),
                 "payload_unavailable": not raw_packet_available,
                 "durable_source_packet": True,
+                "evidence_replayability": packet_replayability,
+                "capture_complete": packet_replayability == "replayable_lossless",
                 "evidence_complete": None,
             }
             for name in ("discovery_hints_json", "evidence_manifest_json", "parse_result_json"):
@@ -592,6 +640,16 @@ def _raw_packet_rows(
         features["vk_source_packet"] = {
             "available": True, "rows": len(selected), "attempt_ledger": bool(packet_fk),
             "revision_evidence": "durable",
+            "replayability_counts": {
+                state: sum(
+                    _vk_packet_replayability(dict(item)) == state for item in selected
+                )
+                for state in (
+                    "replayable_lossless",
+                    "replayable_legacy_incomplete",
+                    "unavailable",
+                )
+            },
         }
     continuation_columns = _table_columns(con, "vk_crawl_continuation")
     features["vk_crawl_continuation"] = {

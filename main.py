@@ -3709,24 +3709,6 @@ async def vk_resolve_group(
         raise
 
 
-def _pick_biggest_photo(photo: dict) -> str | None:
-    sizes = photo.get("sizes") or []
-    if not sizes:
-        return None
-    best = max(sizes, key=lambda s: s.get("width", 0))
-    return best.get("url")
-
-
-def _extract_post_photos(post: dict) -> list[str]:
-    photos: list[str] = []
-    for att in post.get("attachments", []):
-        if att.get("type") == "photo":
-            url = _pick_biggest_photo(att["photo"])
-            if url:
-                photos.append(url)
-    return photos
-
-
 async def vk_wall_since(
     group_id: int,
     since_ts: int,
@@ -3749,6 +3731,7 @@ async def vk_wall_since(
     pagination.
     """
     from vk_owner import normalize_owner_type, signed_owner_id, vk_wall_url
+    from vk_source_envelope import build_vk_source_envelope
 
     owner_type_norm = normalize_owner_type(owner_type)
     owner_id = signed_owner_id(group_id, owner_type_norm)
@@ -3764,35 +3747,19 @@ async def vk_wall_since(
     for item in items:
         if item.get("date", 0) < since_ts:
             continue
-        src = item.get("copy_history", [item])[0]
-        photos = _extract_post_photos(src)
-        views = None
-        likes = None
-        try:
-            v = (item.get("views") or {}).get("count")
-            if isinstance(v, int):
-                views = v
-        except Exception:
-            views = None
-        try:
-            l = (item.get("likes") or {}).get("count")
-            if isinstance(l, int):
-                likes = l
-        except Exception:
-            likes = None
-        posts.append(
-            {
-                "group_id": group_id,
-                "owner_type": owner_type_norm,
-                "post_id": item["id"],
-                "date": item["date"],
-                "text": src.get("text", ""),
-                "photos": photos,
-                "url": vk_wall_url(group_id, item["id"], owner_type_norm),
-                "views": views,
-                "likes": likes,
-            }
+        source_url = vk_wall_url(group_id, item["id"], owner_type_norm)
+        envelope = build_vk_source_envelope(
+            item,
+            owner_id=group_id,
+            owner_type=owner_type_norm,
+            source_url=source_url,
+            # VK wall pages are already provider-bounded. Preserve every media
+            # candidate in the durable crawl packet; OCR selection is a later
+            # concern and must not alter the captured revision.
+            media_limit=None,
         )
+        envelope["group_id"] = group_id
+        posts.append(envelope)
     posts.sort(key=lambda p: (p["date"], p["post_id"]), reverse=True)
     return posts
 

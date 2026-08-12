@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import os
@@ -27,6 +28,11 @@ from source_parse_contract import (
     SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
+)
+from vk_source_envelope import (
+    build_vk_source_envelope,
+    is_vk_source_envelope,
+    vk_source_envelope_replayability,
 )
 
 logger = logging.getLogger(__name__)
@@ -504,60 +510,19 @@ def _vk_wall_url(group_id: int, post_id: int, owner_type: str | None = "group") 
     return _vk_wall_url_helper(group_id, post_id, owner_type)
 
 
-def _best_url(sizes: Sequence[Mapping[str, Any]]) -> str:
-    if not sizes:
-        return ""
-    best = max(
-        sizes,
-        key=lambda s: (s.get("width", 0) or 0) * (s.get("height", 0) or 0),
-    )
-    return str(best.get("url") or best.get("src") or "")
-
-
 def _extract_media_urls(item: Mapping[str, Any], *, limit: int = 12) -> list[str]:
-    """Extract image URLs from a VK wall item (photos + some common thumbnails)."""
-    urls: list[str] = []
-    seen: set[str] = set()
+    """Compatibility facade over the shared recursive envelope builder."""
 
-    def _add(url: str) -> None:
-        u = (url or "").strip()
-        if not u or u in seen:
-            return
-        seen.add(u)
-        urls.append(u)
-
-    def _process_atts(atts: Sequence[Mapping[str, Any]] | None) -> None:
-        for att in atts or []:
-            if len(urls) >= limit:
-                return
-            url = ""
-            if att.get("type") == "photo":
-                photo = att.get("photo") or {}
-                url = _best_url(photo.get("sizes") or [])
-            elif att.get("type") == "link":
-                link = att.get("link") or {}
-                url = _best_url(((link.get("photo") or {}).get("sizes") or []))
-            elif att.get("type") == "video":
-                video = att.get("video") or {}
-                url = _best_url(video.get("first_frame") or video.get("image") or [])
-            elif att.get("type") == "doc":
-                sizes = (
-                    ((att.get("doc") or {}).get("preview") or {})
-                    .get("photo", {})
-                    .get("sizes", [])
-                )
-                url = _best_url(sizes or [])
-            if url:
-                _add(url)
-
-    _process_atts(item.get("attachments") or [])
-    copy_history = item.get("copy_history") or []
-    if copy_history and isinstance(copy_history, list):
-        first = copy_history[0] if copy_history else None
-        if isinstance(first, Mapping):
-            _process_atts(first.get("attachments") or [])
-
-    return urls
+    owner_signed = int(item.get("owner_id") or 0)
+    return list(
+        build_vk_source_envelope(
+            item,
+            owner_id=abs(owner_signed),
+            owner_type="user" if owner_signed > 0 else "group",
+            media_limit=limit,
+        ).get("photos")
+        or ()
+    )
 
 
 @dataclass(frozen=True)
@@ -568,6 +533,9 @@ class VkFetchStatus:
     error: str | None = None
     attachment_count: int = 0
     unavailable_attachment_count: int = 0
+    source_envelope: dict[str, Any] | None = None
+    source_replayed: bool = False
+    source_unavailable: bool = False
 
 
 def _vk_auto_allow_stale_inbox_text() -> bool:
@@ -584,6 +552,7 @@ async def fetch_vk_post_text_and_photos(
     db: Database | None = None,
     bot: Any | None = None,
     limit: int = 12,
+    owner_type: str = "group",
 ) -> tuple[str, list[str], datetime | None, dict[str, Any] | None, VkFetchStatus]:
     """Fetch VK wall post (text + image URLs) via VK API.
 
@@ -591,14 +560,22 @@ async def fetch_vk_post_text_and_photos(
     """
     import main as main_mod
 
+    from vk_owner import normalize_owner_type, signed_owner_id
+
+    normalized_owner_type = normalize_owner_type(owner_type)
+    owner_signed = signed_owner_id(group_id, normalized_owner_type)
     try:
-        resp = await main_mod.vk_api("wall.getById", posts=f"-{int(group_id)}_{int(post_id)}")
+        resp = await main_mod.vk_api(
+            "wall.getById", posts=f"{owner_signed}_{int(post_id)}"
+        )
     except Exception as exc:
         # NOTE: VKAPIError is defined in main.py. We inspect it dynamically to avoid
         # a hard import cycle and still keep error codes for decision-making.
         code = None
         msg = str(exc or "").strip()
-        kind: VkFetchStatus["kind"] = "network_error"
+        kind: Literal[
+            "ok", "not_found", "access_denied", "vk_api_error", "network_error"
+        ] = "network_error"
         try:
             VKAPIError = getattr(main_mod, "VKAPIError", None)
             if VKAPIError is not None and isinstance(exc, VKAPIError):
@@ -616,8 +593,8 @@ async def fetch_vk_post_text_and_photos(
         except Exception:
             kind = "network_error"
         logger.warning(
-            "vk_auto: wall.getById failed -%s_%s kind=%s code=%s err=%s",
-            group_id,
+            "vk_auto: wall.getById failed owner=%s post=%s kind=%s code=%s err=%s",
+            owner_signed,
             post_id,
             kind,
             code,
@@ -640,94 +617,135 @@ async def fetch_vk_post_text_and_photos(
     elif isinstance(raw, list):
         items = [it for it in raw if isinstance(it, Mapping)]
 
-    text = ""
-    published_at: datetime | None = None
-    photos: list[str] = []
-    metrics: dict[str, Any] | None = None
-    attachment_count = 0
-    for it in items:
-        direct_attachments = it.get("attachments") or ()
-        if isinstance(direct_attachments, list):
-            attachment_count += len(direct_attachments)
-        copy_history_for_count = it.get("copy_history") or ()
-        if isinstance(copy_history_for_count, list):
-            for copied in copy_history_for_count:
-                if isinstance(copied, Mapping) and isinstance(copied.get("attachments"), list):
-                    attachment_count += len(copied.get("attachments") or ())
-        candidate_text = it.get("text") if isinstance(it.get("text"), str) else ""
-        repost_text = ""
-        copy_history = it.get("copy_history")
-        if isinstance(copy_history, list) and copy_history:
-            first = copy_history[0]
-            if isinstance(first, Mapping):
-                rt = first.get("text")
-                if isinstance(rt, str) and rt.strip():
-                    repost_text = rt.strip()
-        base = candidate_text.strip() if isinstance(candidate_text, str) else ""
-        combined = base
-        if repost_text:
-            if not combined:
-                combined = repost_text
-            elif repost_text not in combined:
-                combined = f"{combined}\n\n[Репост]\n{repost_text}".strip()
-        if combined:
-            text = combined
-        ts = it.get("date")
-        if isinstance(ts, (int, float)):
-            try:
-                published_at = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-            except Exception:
-                published_at = None
-        if metrics is None:
-            m: dict[str, Any] = {}
-            try:
-                v = (it.get("views") or {}).get("count")
-                if isinstance(v, int) and v >= 0:
-                    m["views"] = v
-            except Exception:
-                pass
-            try:
-                l = (it.get("likes") or {}).get("count")
-                if isinstance(l, int) and l >= 0:
-                    m["likes"] = l
-            except Exception:
-                pass
-            try:
-                c = (it.get("comments") or {}).get("count")
-                if isinstance(c, int) and c >= 0:
-                    m["comments"] = c
-            except Exception:
-                pass
-            try:
-                r = (it.get("reposts") or {}).get("count")
-                if isinstance(r, int) and r >= 0:
-                    m["reposts"] = r
-            except Exception:
-                pass
-            metrics = m or None
-        photos.extend(_extract_media_urls(it, limit=limit))
-        if text:
-            break
-
     if not items:
         return "", [], None, None, VkFetchStatus(False, "not_found", error="empty_response")
 
-    # Deduplicate photos while preserving order.
-    out_photos: list[str] = []
-    seen: set[str] = set()
-    for u in photos:
-        if u and u not in seen:
-            seen.add(u)
-            out_photos.append(u)
-        if len(out_photos) >= limit:
-            break
+    # wall.getById is a one-post method. If a compatibility response contains
+    # several items, prefer the requested id and otherwise use the first.
+    item = next(
+        (
+            candidate
+            for candidate in items
+            if int(candidate.get("id") or 0) == int(post_id)
+        ),
+        items[0],
+    )
+    envelope = build_vk_source_envelope(
+        item,
+        owner_id=int(group_id),
+        owner_type=normalized_owner_type,
+        post_id=int(post_id),
+        source_url=_vk_wall_url(group_id, post_id, normalized_owner_type),
+        media_limit=limit,
+    )
+    published_at: datetime | None = None
+    try:
+        published_at = datetime.fromtimestamp(
+            float(envelope.get("published_at") or 0), tz=timezone.utc
+        )
+    except (OSError, TypeError, ValueError, OverflowError):
+        published_at = None
+    counts = envelope.get("counts") if isinstance(envelope.get("counts"), Mapping) else {}
+    visual_count = int(counts.get("visual_candidate_count") or 0)
+    unavailable_visual = int(counts.get("unavailable_visual_count") or 0)
+    omitted_media = int(counts.get("omitted_media_count") or 0)
+    return (
+        str(envelope.get("text") or ""),
+        [str(value) for value in (envelope.get("photos") or ())],
+        published_at,
+        dict(envelope.get("metrics") or {}) or None,
+        VkFetchStatus(
+            True,
+            "ok",
+            # EvidenceManifest counts visual/OCR candidates, not every
+            # semantic nonvisual attachment retained in the inventory.
+            attachment_count=visual_count + unavailable_visual,
+            unavailable_attachment_count=unavailable_visual + omitted_media,
+            source_envelope=envelope,
+        ),
+    )
 
-    return text, out_photos, published_at, metrics, VkFetchStatus(
+
+async def _load_vk_durable_packet_evidence(
+    db: Database,
+    *,
+    group_id: int,
+    post_id: int,
+    source_packet_id: int | None,
+    media_limit: int,
+) -> dict[str, Any]:
+    """Load the immutable packet for source-unavailable processing.
+
+    A legacy text/photos projection is detectable but not lossless enough to
+    support a terminal negative decision.  Only a complete v1 envelope is
+    returned as parseable evidence.
+    """
+
+    async with db.raw_conn() as conn:
+        row = None
+        if source_packet_id is not None:
+            row = await (await conn.execute(
+                """
+                SELECT id,raw_text,raw_payload_json,attachment_metadata_json,published_at
+                FROM vk_source_packet WHERE id=?
+                """,
+                (int(source_packet_id),),
+            )).fetchone()
+        if row is None:
+            row = await (await conn.execute(
+                """
+                SELECT id,raw_text,raw_payload_json,attachment_metadata_json,published_at
+                FROM vk_source_packet
+                WHERE source_type='vk' AND owner_id=? AND post_id=?
+                ORDER BY revision DESC LIMIT 1
+                """,
+                (int(group_id), int(post_id)),
+            )).fetchone()
+    if row is None:
+        return {"replayability": "unavailable"}
+    try:
+        raw_payload = json.loads(row[2] or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raw_payload = {}
+    replayability = vk_source_envelope_replayability(raw_payload)
+    if replayability != "replayable_lossless" or not is_vk_source_envelope(raw_payload):
+        return {
+            "packet_id": int(row[0]),
+            "replayability": "replayable_legacy_incomplete",
+        }
+
+    candidates = [
+        item
+        for item in (raw_payload.get("all_media_candidates") or ())
+        if isinstance(item, Mapping) and str(item.get("url") or "").strip()
+    ]
+    selected = candidates[: max(0, int(media_limit))]
+    counts = raw_payload.get("counts") if isinstance(raw_payload.get("counts"), Mapping) else {}
+    unavailable_visual = int(counts.get("unavailable_visual_count") or 0)
+    omitted = max(0, len(candidates) - len(selected))
+    published_at: datetime | None = None
+    try:
+        published_at = datetime.fromtimestamp(float(row[4] or 0), tz=timezone.utc)
+    except (OSError, TypeError, ValueError, OverflowError):
+        published_at = None
+    status = VkFetchStatus(
         True,
         "ok",
-        attachment_count=attachment_count,
-        unavailable_attachment_count=max(0, attachment_count - len(out_photos)),
+        attachment_count=len(candidates) + unavailable_visual,
+        unavailable_attachment_count=omitted + unavailable_visual,
+        source_envelope=dict(raw_payload),
+        source_replayed=True,
+        source_unavailable=True,
     )
+    return {
+        "packet_id": int(row[0]),
+        "replayability": replayability,
+        "text": str(raw_payload.get("text") or row[1] or ""),
+        "photos": [str(item.get("url")) for item in selected],
+        "published_at": published_at,
+        "metrics": dict(raw_payload.get("metrics") or {}) or None,
+        "status": status,
+    }
 
 
 async def _load_festival_hints(db: Database) -> tuple[list[str], list[tuple[str, int]]]:
@@ -1262,19 +1280,25 @@ async def _prefetch_vk_inbox_row(
 
     # Refresh text/photos from VK (best effort) to include attachments.
     t0 = time.monotonic()
+    fetch_kwargs: dict[str, Any] = {
+        "db": db,
+        "bot": bot,
+        "limit": _vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+    }
+    post_owner_type = str(getattr(post, "owner_type", None) or "group")
+    # Keep the default group call shape compatible with rolling workers/tests;
+    # personal pages must explicitly carry their positive signed owner id.
+    if post_owner_type == "user":
+        fetch_kwargs["owner_type"] = "user"
     fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
-        post.group_id,
-        post.post_id,
-        db=db,
-        bot=bot,
-        limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+        post.group_id, post.post_id, **fetch_kwargs
     )
     stage["vk_fetch_post"] = float(time.monotonic() - t0)
     allow_stale = _vk_auto_allow_stale_inbox_text()
     text = ""
     if vk_fetch.ok:
-        text = (fetched_text or post.text or "").strip()
-    elif allow_stale and vk_fetch.kind != "not_found":
+        text = (fetched_text or "").strip()
+    elif allow_stale and vk_fetch.kind not in {"not_found", "access_denied"}:
         text = (post.text or "").strip()
     publish_ts: datetime | int | float | None = getattr(post, "date", None)
     if published_at is not None:
@@ -2019,18 +2043,22 @@ async def _process_vk_inbox_row(
 
         # Refresh text/photos from VK (best effort) to include attachments.
         t0 = time.monotonic()
+        fetch_kwargs: dict[str, Any] = {
+            "db": db,
+            "bot": bot,
+            "limit": _vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+        }
+        post_owner_type = str(getattr(post, "owner_type", None) or "group")
+        if post_owner_type == "user":
+            fetch_kwargs["owner_type"] = "user"
         fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
-            post.group_id,
-            post.post_id,
-            db=db,
-            bot=bot,
-            limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+            post.group_id, post.post_id, **fetch_kwargs
         )
         _tmark("vk_fetch_post", time.monotonic() - t0)
         allow_stale = _vk_auto_allow_stale_inbox_text()
         if vk_fetch.ok:
-            text = (fetched_text or post.text or "").strip()
-        elif allow_stale and vk_fetch.kind != "not_found":
+            text = (fetched_text or "").strip()
+        elif allow_stale and vk_fetch.kind not in {"not_found", "access_denied"}:
             text = (post.text or "").strip()
         else:
             text = ""
@@ -2060,6 +2088,56 @@ async def _process_vk_inbox_row(
                         location_hint_val = getattr(venue, "canonical_line", None) or location_hint_val
             except Exception:
                 logger.warning("vk_auto: failed to canonicalize location_hint", exc_info=True)
+
+    if (
+        vk_fetch is not None
+        and not vk_fetch.ok
+        and vk_fetch.kind in {"not_found", "access_denied"}
+    ):
+        durable = await _load_vk_durable_packet_evidence(
+            db,
+            group_id=int(post.group_id),
+            post_id=int(post.post_id),
+            source_packet_id=getattr(post, "source_packet_id", None),
+            media_limit=_vk_auto_import_photo_limit_for_text(getattr(post, "text", None)),
+        )
+        replayability = str(durable.get("replayability") or "unavailable")
+        if replayability == "replayable_lossless":
+            post.source_packet_id = int(durable["packet_id"])
+            text = str(durable.get("text") or "")
+            photos = list(durable.get("photos") or ())
+            published_at = durable.get("published_at")
+            metrics = durable.get("metrics")
+            if published_at is not None:
+                publish_ts = int(published_at.timestamp())
+            vk_fetch = durable["status"]
+            logger.info(
+                "vk_auto: source unavailable; replaying complete durable packet gid=%s post=%s packet=%s",
+                post.group_id,
+                post.post_id,
+                post.source_packet_id,
+            )
+        elif replayability == "replayable_legacy_incomplete":
+            # Legacy projections prove that some material once existed but do
+            # not prove complete outer/copy/attachment coverage. Never turn
+            # that incomplete capture into a terminal semantic negative.
+            report.inbox_deferred += 1
+            await vk_review.schedule_retry(
+                db,
+                int(post.id),
+                typed_reason="EVIDENCE_INCOMPLETE",
+                batch_id=batch_id,
+                retry_after_sec=86400,
+            )
+            await _emit_progress(
+                "🧩",
+                [
+                    "Результат: сохранённый пакет неполон, повтор запланирован",
+                    "Причина: legacy packet lacks complete VK attachment/copy evidence",
+                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
+                ],
+            )
+            return
 
     if vk_fetch is not None and not vk_fetch.ok:
         allow_stale = _vk_auto_allow_stale_inbox_text()
@@ -2161,58 +2239,44 @@ async def _process_vk_inbox_row(
     # row. Never attach a new provider call (or an old successful receipt) to
     # that stale revision: append the fetched revision first, repoint the
     # carrier, and retain the current lease while this worker processes it.
-    packet_id = getattr(post, "source_packet_id", None)
-    if packet_id is not None and (vk_fetch is None or vk_fetch.ok):
+    fetched_envelope = getattr(vk_fetch, "source_envelope", None)
+    if (
+        vk_fetch is not None
+        and vk_fetch.ok
+        and not vk_fetch.source_replayed
+        and is_vk_source_envelope(fetched_envelope)
+    ):
+        # Persist every successful provider fetch before any LLM call. The
+        # semantic revision hash makes this idempotent for exact/counter-only
+        # replay and appends on edits anywhere in the recursive source packet.
+        current_packet_id, _is_new = await vk_intake._persist_vk_source_packet(
+            db,
+            group_id=int(post.group_id),
+            owner_type=str(getattr(post, "owner_type", None) or "group"),
+            post=dict(fetched_envelope),
+            source_url=source_url,
+            keyword_hints=("hint:queue_refetch_revision",),
+            date_hints=(),
+            event_ts_hint=getattr(post, "event_ts_hint", None),
+        )
+        post.source_packet_id = int(current_packet_id)
         async with db.raw_conn() as conn:
-            packet_row = await (await conn.execute(
-                "SELECT raw_text,attachment_metadata_json,published_at FROM vk_source_packet WHERE id=?",
-                (int(packet_id),),
-            )).fetchone()
-        packet_photos: list[str] = []
-        if packet_row:
-            try:
-                packet_attachments = json.loads(packet_row[1] or "{}")
-                packet_photos = [str(value) for value in (packet_attachments.get("photos") or ())]
-            except Exception:
-                packet_photos = []
-        fetched_photos = [str(value) for value in photos]
-        if packet_row and (
-            str(packet_row[0] or "").strip() != str(text or "").strip()
-            or packet_photos != fetched_photos
-        ):
-            current_packet_id, _is_new = await vk_intake._persist_vk_source_packet(
-                db,
-                group_id=int(post.group_id),
-                owner_type=str(getattr(post, "owner_type", None) or "group"),
-                post={
-                    "date": int(publish_ts or packet_row[2] or getattr(post, "date", 0) or 0),
-                    "post_id": int(post.post_id),
-                    "text": str(text or ""),
-                    "photos": fetched_photos,
-                },
-                source_url=source_url,
-                keyword_hints=("hint:queue_refetch_revision",),
-                date_hints=(),
-                event_ts_hint=getattr(post, "event_ts_hint", None),
+            await conn.execute(
+                """
+                UPDATE vk_inbox SET status='locked',locked_by=?,locked_at=CURRENT_TIMESTAMP,
+                    review_batch=? WHERE id=?
+                """,
+                (operator_id, batch_id, int(post.id)),
             )
-            post.source_packet_id = int(current_packet_id)
-            async with db.raw_conn() as conn:
-                await conn.execute(
-                    """
-                    UPDATE vk_inbox SET status='locked',locked_by=?,locked_at=CURRENT_TIMESTAMP,
-                        review_batch=? WHERE id=?
-                    """,
-                    (operator_id, batch_id, int(post.id)),
-                )
-                await conn.execute(
-                    """
-                    UPDATE vk_source_packet SET status='processing',lease_owner=?,
-                        lease_expires_at=datetime('now','+15 minutes'),updated_at=CURRENT_TIMESTAMP
-                    WHERE id=?
-                    """,
-                    (str(operator_id), int(current_packet_id)),
-                )
-                await conn.commit()
+            await conn.execute(
+                """
+                UPDATE vk_source_packet SET status='processing',lease_owner=?,
+                    lease_expires_at=datetime('now','+15 minutes'),updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (str(operator_id), int(current_packet_id)),
+            )
+            await conn.commit()
 
     model_name = _vk_auto_parse_gemma_model()
     receipt = await vk_review.load_successful_parse_receipt(

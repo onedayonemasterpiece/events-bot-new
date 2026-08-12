@@ -15694,78 +15694,26 @@ async def _vk_wall_get_items(
 def _vk_extract_photo_urls(
     items: Sequence[Mapping[str, Any]], limit: int = 10
 ) -> list[str]:
-    def best_url(sizes: Sequence[Mapping[str, Any]]) -> str:
-        if not sizes:
-            return ""
-        best = max(
-            sizes,
-            key=lambda s: (s.get("width", 0) or 0) * (s.get("height", 0) or 0),
-        )
-        return str(best.get("url") or best.get("src") or "")
+    from vk_source_envelope import build_vk_source_envelope
 
     photos: list[str] = []
     seen: set[str] = set()
-
-    def process_atts(atts: Sequence[Mapping[str, Any]], source: str) -> bool:
-        counts = {"photo": 0, "link": 0, "video_thumbs": 0, "doc": 0}
-        for att in atts or []:
-            url = ""
-            if att.get("type") == "photo":
-                photo = att.get("photo") or {}
-                sizes = photo.get("sizes") or []
-                url = best_url(sizes)
-                if url:
-                    counts["photo"] += 1
-            elif att.get("type") == "link":
-                link = att.get("link") or {}
-                sizes = (link.get("photo") or {}).get("sizes", [])
-                url = best_url(sizes)
-                if url:
-                    counts["link"] += 1
-            elif att.get("type") == "video":
-                video = att.get("video") or {}
-                images = video.get("first_frame") or video.get("image", [])
-                url = best_url(images)
-                if url:
-                    counts["video_thumbs"] += 1
-            elif att.get("type") == "doc":
-                sizes = (
-                    ((att.get("doc") or {}).get("preview") or {})
-                    .get("photo", {})
-                    .get("sizes", [])
-                )
-                url = best_url(sizes)
-                if url:
-                    counts["doc"] += 1
+    for item in items:
+        owner_signed = int(item.get("owner_id") or 0)
+        remaining = max(0, int(limit) - len(photos))
+        envelope = build_vk_source_envelope(
+            item,
+            owner_id=abs(owner_signed),
+            owner_type="user" if owner_signed > 0 else "group",
+            media_limit=remaining,
+        )
+        for value in envelope.get("photos") or ():
+            url = str(value or "").strip()
             if url and url not in seen:
                 seen.add(url)
                 photos.append(url)
                 if len(photos) >= limit:
-                    break
-        total = sum(counts.values())
-        logging.info(
-            "found_photos=%s (photo=%s, link=%s, video_thumbs=%s, doc=%s) source=%s",
-            total,
-            counts["photo"],
-            counts["link"],
-            counts["video_thumbs"],
-            counts["doc"],
-            source,
-        )
-        return len(photos) >= limit
-
-    for item in items:
-        copy_history = item.get("copy_history") or []
-        first_copy = copy_history[0] if copy_history and isinstance(copy_history[0], Mapping) else None
-        copy_atts = first_copy.get("attachments") if isinstance(first_copy, Mapping) else None
-        if copy_atts and process_atts(copy_atts, "copy_history"):
-            break
-        if len(photos) >= limit:
-            break
-        atts = item.get("attachments") or []
-        if process_atts(atts, "attachments"):
-            break
-
+                    return photos
     return photos
 
 
@@ -15794,65 +15742,34 @@ async def _vkrev_fetch_photos(
 
 
 async def fetch_vk_post_preview(
-    group_id: int, post_id: int, db: Database, bot: Bot
+    group_id: int,
+    post_id: int,
+    db: Database,
+    bot: Bot,
+    *,
+    owner_type: str = "group",
 ) -> tuple[str, list[str], datetime | None]:
-    items = await _vk_wall_get_items(group_id, post_id, db, bot)
+    if owner_type == "user":
+        items = await _vk_wall_get_items(
+            group_id, post_id, db, bot, owner_type="user"
+        )
+    else:
+        items = await _vk_wall_get_items(group_id, post_id, db, bot)
     if not items:
         return "", [], None
-    text = ""
+    from vk_source_envelope import build_vk_source_envelope
+
+    envelope = build_vk_source_envelope(
+        items[0], owner_id=group_id, owner_type=owner_type, media_limit=10
+    )
+    text = str(envelope.get("text") or "")
     published_at: datetime | None = None
-
-    def parse_date(source: Mapping[str, object] | None) -> datetime | None:
-        if not source:
-            return None
-        raw = source.get("date")
-        if isinstance(raw, datetime):
-            if raw.tzinfo is not None:
-                return raw
-            return raw.replace(tzinfo=timezone.utc)
-        timestamp: int | float | None
-        if isinstance(raw, (int, float)):
-            timestamp = raw
-        elif isinstance(raw, str):
-            try:
-                timestamp = int(raw)
-            except ValueError:
-                return None
-        else:
-            return None
-        try:
-            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
-        except (OSError, ValueError, OverflowError):
-            return None
-
-    for item in items:
-        item_mapping = item if isinstance(item, Mapping) else None
-        item_date = parse_date(item_mapping)
-        if published_at is None and item_date is not None:
-            published_at = item_date
-        candidate = item.get("text")
-        if candidate:
-            text = str(candidate)
-            if item_date is not None:
-                published_at = item_date
-            break
-        copy_history = item.get("copy_history") or []
-        for copy in copy_history:
-            if not isinstance(copy, Mapping):
-                continue
-            copy_date = parse_date(copy)
-            if published_at is None and copy_date is not None:
-                published_at = copy_date
-            candidate = copy.get("text")
-            if candidate:
-                text = str(candidate)
-                if copy_date is not None:
-                    published_at = copy_date
-                elif item_date is not None:
-                    published_at = item_date
-                break
-        if text:
-            break
+    try:
+        published_at = datetime.fromtimestamp(
+            float(envelope.get("published_at") or 0), tz=timezone.utc
+        )
+    except (OSError, TypeError, ValueError, OverflowError):
+        published_at = None
     photos = _vk_extract_photo_urls(items)
     if not photos:
         logging.info("no media found for -%s_%s", group_id, post_id)

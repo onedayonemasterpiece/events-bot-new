@@ -155,6 +155,36 @@ def test_planned_raw_packet_schema_is_feature_detected(tmp_path: Path) -> None:
     assert report["inventory"][0]["payload_available"] is True
     assert report["metrics"]["vk_source_packets_total"] == 1
     assert report["metrics"]["vk_llm_parse_total"] == 1
+    assert report["features"]["vk_source_packet"]["replayability_counts"] == {
+        "replayable_lossless": 0,
+        "replayable_legacy_incomplete": 1,
+        "unavailable": 0,
+    }
+    assert report["inventory"][0]["evidence_replayability"] == "replayable_legacy_incomplete"
+
+
+def test_packet_replayability_requires_valid_complete_v1_envelope() -> None:
+    complete = {
+        "raw_payload_json": json.dumps(
+            {
+                "schema": "vk_source_envelope",
+                "schema_version": 1,
+                "post_id": 1,
+                "raw_item": {"id": 1},
+                "text_segments": [],
+                "attachment_inventory": [],
+                "all_media_candidates": [],
+                "completeness": {"capture_complete": True},
+            }
+        )
+    }
+    incomplete = {
+        "raw_text": "legacy",
+        "raw_payload_json": json.dumps({"text": "legacy", "photos": []}),
+    }
+    assert census._vk_packet_replayability(complete) == "replayable_lossless"
+    assert census._vk_packet_replayability(incomplete) == "replayable_legacy_incomplete"
+    assert census._vk_packet_replayability({}) == "unavailable"
 
 
 def test_no_event_requires_completed_valid_complete_evidence() -> None:

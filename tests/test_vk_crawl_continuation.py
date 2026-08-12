@@ -11,6 +11,7 @@ import pytest_asyncio
 import main
 from db import Database
 import vk_intake
+from vk_source_envelope import build_vk_source_envelope
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -87,6 +88,47 @@ async def _persist_posts(db: Database, posts) -> None:
             date_hints=(),
             event_ts_hint=None,
         )
+
+
+@pytest.mark.asyncio
+async def test_continuation_persists_same_v1_envelope_contract_as_primary_crawl(
+    tmp_path, monkeypatch
+):
+    db = await _db(tmp_path / "envelope.sqlite")
+    await _schedule(db, page_size=1)
+    envelope = build_vk_source_envelope(
+        {
+            "id": 77,
+            "date": int(time.time()),
+            "text": "outer event",
+            "attachments": [],
+            "copy_history": [
+                {"id": 78, "text": "nested details", "attachments": []}
+            ],
+        },
+        owner_id=1,
+        media_limit=None,
+    )
+    calls = 0
+
+    async def wall(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return [envelope]
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    result = await vk_intake.process_vk_crawl_continuations(
+        db, max_jobs=1, max_pages_per_job=1, worker_id="envelope", run_id="r"
+    )
+    async with db.raw_conn() as conn:
+        row = await (await conn.execute(
+            "SELECT raw_payload_json,envelope_version,capture_complete,evidence_replayability "
+            "FROM vk_source_packet WHERE post_id=77"
+        )).fetchone()
+    assert calls == 1
+    assert result["added"] == 1
+    assert '"schema":"vk_source_envelope"' in row[0]
+    assert row[1:] == (1, 1, "replayable_lossless")
 
 
 @pytest.mark.asyncio
