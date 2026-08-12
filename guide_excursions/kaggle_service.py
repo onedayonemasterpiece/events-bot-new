@@ -21,7 +21,12 @@ from typing import Any, Awaitable, Callable
 import aiosqlite
 
 from db import Database
-from kaggle_registry import register_job, update_job_meta
+from kaggle_registry import (
+    register_job,
+    register_launch_intent,
+    remove_launch_intent,
+    update_job_meta,
+)
 from kaggle_status import (
     create_kaggle_run_config,
     format_kaggle_status_label,
@@ -1229,30 +1234,51 @@ async def run_guide_monitor_kaggle(
         dataset_slugs = [slug_cipher, slug_key]
         if DATASET_PROPAGATION_WAIT_SECONDS > 0:
             await asyncio.sleep(DATASET_PROPAGATION_WAIT_SECONDS)
-        kernel_ref, expected_kernel_meta = await _push_kernel(client, dataset_sources=dataset_slugs)
+        await register_launch_intent(
+            "guide_monitoring",
+            run_id,
+            meta={
+                "mode": mode,
+                "kernel_ref_hint": kernel_ref,
+                "dataset_slugs": list(dataset_slugs),
+                "remote_telegram_auth_scope": auth_scope,
+            },
+        )
+        try:
+            kernel_ref, expected_kernel_meta = await _push_kernel(
+                client, dataset_sources=dataset_slugs
+            )
+        except Exception:
+            try:
+                await remove_launch_intent("guide_monitoring", run_id)
+            except Exception:
+                logger.critical(
+                    "guide_monitor.launch_intent_release_failed run_id=%s",
+                    run_id,
+                    exc_info=True,
+                )
+            raise
         remote_kernel_meta = await _wait_for_remote_kernel_shape(
             client,
             kernel_ref,
             expected_meta=expected_kernel_meta,
             status_callback=status_callback,
         )
-        try:
-            await register_job(
-                "guide_monitoring",
-                kernel_ref,
-                meta={
-                    "run_id": run_id,
-                    "mode": mode,
-                    "chat_id": chat_id,
-                    "pid": os.getpid(),
-                    "remote_telegram_auth_scope": auth_scope,
-                    "dataset_slugs": list(dataset_slugs),
-                    **dict(recovery_meta or {}),
-                },
-            )
-            registered_recovery = True
-        except Exception:
-            logger.warning("guide_monitor.register_job_failed kernel=%s", kernel_ref, exc_info=True)
+        await register_job(
+            "guide_monitoring",
+            kernel_ref,
+            meta={
+                "run_id": run_id,
+                "mode": mode,
+                "chat_id": chat_id,
+                "pid": os.getpid(),
+                "remote_telegram_auth_scope": auth_scope,
+                "dataset_slugs": list(dataset_slugs),
+                **dict(recovery_meta or {}),
+            },
+        )
+        registered_recovery = True
+        await remove_launch_intent("guide_monitoring", run_id)
         if status_callback:
             await status_callback("pushed", kernel_ref, None)
         if KAGGLE_STARTUP_WAIT_SECONDS > 0:

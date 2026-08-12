@@ -374,15 +374,17 @@ async def pick_next(
     strict_chronological: bool = False,
     resume_locked: bool = True,
 ) -> Optional[InboxPost]:
-    """Atomically claim the oldest due carrier without semantic eligibility gates.
+    """Atomically claim a due carrier without semantic eligibility gates.
 
-    ``event_ts_hint`` is a priority hint only. Publication age is the primary
-    order so unknown-date and far-hint carriers cannot starve. Legacy selection
-    switches remain accepted for caller compatibility but never exclude a row.
+    ``event_ts_hint`` is a priority hint only. Scheduled auto-import asks for
+    oldest-first ordering only when the due backlog is already current-sized;
+    after a historical replay wave it gives fresh publications priority so
+    current events cannot wait behind years of durable history. No row is
+    excluded and manual review keeps the legacy oldest-first behavior.
     """
 
     del strict_chronological
-    date_order = "ASC" if prefer_oldest else "ASC"
+    date_order = "ASC"
     columns = (
         "id, group_id, post_id, date, text, matched_kw, has_date, status, "
         "review_batch, imported_event_id, event_ts_hint, "
@@ -432,6 +434,28 @@ async def pick_next(
                 WHERE status='skipped'
                 """
             )
+
+        if prefer_oldest:
+            backlog_threshold = max(
+                1,
+                _int_from_env("VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD", 150),
+            )
+            cur = await conn.execute(
+                """
+                SELECT COUNT(1) FROM vk_inbox
+                WHERE status='pending'
+                  AND (next_attempt_at IS NULL OR next_attempt_at<=CURRENT_TIMESTAMP)
+                """
+            )
+            due_count_row = await cur.fetchone()
+            due_count = int((due_count_row[0] if due_count_row else 0) or 0)
+            if due_count > backlog_threshold:
+                date_order = "DESC"
+                logging.warning(
+                    "vk_review fresh_first_backlog due=%s threshold=%s",
+                    due_count,
+                    backlog_threshold,
+                )
 
         cursor = await conn.execute(
             f"""

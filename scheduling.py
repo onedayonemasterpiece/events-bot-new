@@ -976,6 +976,15 @@ def _tg_monitoring_remote_busy_retry_seconds() -> int:
     return max(300, value)
 
 
+def _tg_monitoring_terminal_retry_seconds() -> int:
+    raw = (os.getenv("TG_MONITORING_TERMINAL_RETRY_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 3600
+    except ValueError:
+        value = 3600
+    return max(300, value)
+
+
 _critical_catchup_inflight: set[str] = set()
 _critical_catchup_completed: set[str] = set()
 _critical_catchup_deferred_until: dict[str, datetime] = {}
@@ -1346,15 +1355,77 @@ async def _latest_tg_monitoring_remote_busy_skip_started_at(
     return _parse_ops_run_datetime(started_at_raw)
 
 
+async def _latest_tg_monitoring_retry_hold_started_at(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+) -> datetime | None:
+    if db is None or not hasattr(db, "raw_conn"):
+        return None
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, details_json, started_at
+            FROM ops_run
+            WHERE kind = 'tg_monitoring'
+              AND trigger = 'scheduled'
+              AND started_at >= ?
+              AND started_at < ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    status, details_raw, started_at_raw = row
+    normalized_status = str(status or "").strip()
+    if normalized_status in {"running", "success", "partial", "empty"}:
+        return None
+    details: dict[str, Any] = {}
+    if isinstance(details_raw, str) and details_raw.strip():
+        try:
+            parsed = json.loads(details_raw)
+        except Exception:
+            parsed = {}
+        if isinstance(parsed, dict):
+            details = parsed
+    elif isinstance(details_raw, dict):
+        details = details_raw
+    if normalized_status == "skipped" and not _details_have_remote_telegram_busy(details):
+        return None
+    if normalized_status in {"error", "crashed", "skipped"}:
+        return _parse_ops_run_datetime(started_at_raw)
+    return None
+
+
+async def _kaggle_launch_intent_exists(job_type: str) -> bool:
+    try:
+        from kaggle_registry import list_launch_intents
+
+        intents = await list_launch_intents(job_type)
+    except Exception:
+        logging.warning(
+            "SCHED critical watchdog could not inspect %s launch intents",
+            job_type,
+            exc_info=True,
+        )
+        return True
+    return bool(intents)
+
+
 async def _tg_monitoring_recovery_job_exists() -> bool:
     try:
-        from kaggle_registry import list_jobs
+        from kaggle_registry import list_jobs, list_launch_intents
 
         jobs = await list_jobs("tg_monitoring")
+        intents = await list_launch_intents("tg_monitoring")
     except Exception:
         logging.warning("SCHED critical watchdog could not inspect tg_monitoring registry", exc_info=True)
         return True
-    return bool(jobs)
+    return bool(jobs or intents)
 
 
 
@@ -2242,6 +2313,15 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
                 retry_seconds,
             )
             return 0
+    if await _kaggle_launch_intent_exists("guide_monitoring"):
+        _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(
+            seconds=retry_seconds
+        )
+        logging.warning(
+            "SCHED critical watchdog deferring guide_excursions_full while a "
+            "durable pre-push launch intent exists"
+        )
+        return 0
 
     _critical_catchup_inflight.add(catchup_key)
     try:
@@ -2359,6 +2439,26 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
         if now_utc < db_deferred_until:
             _critical_catchup_deferred_until[catchup_key] = db_deferred_until
             return 0
+    latest_retry_hold_started = await _latest_tg_monitoring_retry_hold_started_at(
+        db,
+        day_start_utc=window_start,
+        day_end_utc=now_utc + timedelta(seconds=1),
+    )
+    terminal_retry_seconds = _tg_monitoring_terminal_retry_seconds()
+    if latest_retry_hold_started is not None:
+        db_deferred_until = latest_retry_hold_started + timedelta(
+            seconds=terminal_retry_seconds
+        )
+        if now_utc < db_deferred_until:
+            _critical_catchup_deferred_until[catchup_key] = db_deferred_until
+            logging.warning(
+                "SCHED critical watchdog deferring tg_monitoring catch-up after "
+                "recent terminal run scheduled_local=%s now_local=%s retry_seconds=%s",
+                scheduled_local.isoformat(),
+                now_local.isoformat(),
+                terminal_retry_seconds,
+            )
+            return 0
     if await _tg_monitoring_recovery_job_exists():
         _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(seconds=retry_seconds)
         logging.warning(
@@ -2416,6 +2516,28 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
                     now_local.isoformat(),
                     retry_seconds,
                 )
+            else:
+                latest_retry_hold_started = (
+                    await _latest_tg_monitoring_retry_hold_started_at(
+                        db,
+                        day_start_utc=window_start,
+                        day_end_utc=datetime.now(timezone.utc)
+                        + timedelta(seconds=1),
+                    )
+                )
+                if latest_retry_hold_started is not None:
+                    _critical_catchup_deferred_until[catchup_key] = (
+                        latest_retry_hold_started
+                        + timedelta(seconds=terminal_retry_seconds)
+                    )
+                    logging.warning(
+                        "SCHED critical watchdog deferring tg_monitoring catch-up "
+                        "after terminal run scheduled_local=%s now_local=%s "
+                        "retry_seconds=%s",
+                        scheduled_local.isoformat(),
+                        now_local.isoformat(),
+                        terminal_retry_seconds,
+                    )
         return 1
     finally:
         _critical_catchup_inflight.discard(catchup_key)

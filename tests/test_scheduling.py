@@ -1631,6 +1631,7 @@ async def test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash(
     monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
     monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
     monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("TG_MONITORING_TERMINAL_RETRY_SECONDS", "300")
     monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
     monkeypatch.setenv("DEV_MODE", "1")
     monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
@@ -1748,6 +1749,60 @@ async def test_critical_scheduler_watchdog_defers_tg_monitoring_when_recovery_jo
     assert dispatched == 0
     assert calls == []
     assert scheduling._critical_catchup_deferred_until
+
+
+@pytest.mark.asyncio
+async def test_critical_scheduler_watchdog_defers_tg_after_recent_terminal_error(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_TG_MONITORING", "1")
+    monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
+    monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("TG_MONITORING_TERMINAL_RETRY_SECONDS", "3600")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 6, 12, 22, 10, tzinfo=timezone.utc),
+        details={"errors": ["Kaggle kernel failed"]},
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="error",
+        finished_at=datetime(2026, 6, 12, 22, 12, tzinfo=timezone.utc),
+        details={"errors": ["Kaggle kernel failed"]},
+    )
+    calls = []
+
+    async def fake_scheduler(*_args, **_kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "source_parsing.telegram.service",
+        SimpleNamespace(telegram_monitor_scheduler=fake_scheduler),
+    )
+    monkeypatch.setattr(
+        scheduling, "_tg_monitoring_recovery_job_exists", AsyncMock(return_value=False)
+    )
+
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched == 0
+    assert calls == []
 
 
 @pytest.mark.asyncio

@@ -124,6 +124,9 @@ async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
     async def fake_register(*_args, **_kwargs):
         return None
 
+    async def fake_launch_intent(*_args, **_kwargs):
+        return None
+
     async def fake_poll(*_args, **_kwargs):
         return kernel_status, {"status": kernel_status.upper()}, 12.0
 
@@ -141,6 +144,8 @@ async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
     monkeypatch.setattr(kaggle_service, "_push_kernel", fake_push)
     monkeypatch.setattr(kaggle_service, "_wait_for_remote_kernel_shape", fake_shape)
     monkeypatch.setattr(kaggle_service, "register_job", fake_register)
+    monkeypatch.setattr(kaggle_service, "register_launch_intent", fake_launch_intent)
+    monkeypatch.setattr(kaggle_service, "remove_launch_intent", fake_launch_intent)
     monkeypatch.setattr(kaggle_service, "_poll_kaggle_kernel", fake_poll)
     monkeypatch.setattr(kaggle_service, "reconcile_kaggle_run_failure_from_host", fake_reconcile)
     monkeypatch.setattr(kaggle_service, "_cleanup_datasets", fake_cleanup)

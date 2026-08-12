@@ -23,7 +23,14 @@ from sqlalchemy.exc import OperationalError
 
 from admin_chat import resolve_superadmin_chat_id
 from db import Database
-from kaggle_registry import list_jobs, register_job, remove_job, update_job_meta
+from kaggle_registry import (
+    list_jobs,
+    register_job,
+    register_launch_intent,
+    remove_job,
+    remove_launch_intent,
+    update_job_meta,
+)
 from kaggle_status import (
     create_kaggle_run_config,
     enrich_kaggle_status_from_ledger,
@@ -3392,7 +3399,28 @@ async def _run_telegram_monitor_locked(
             )
             await asyncio.sleep(DATASET_PROPAGATION_WAIT_SECONDS)
 
-        kernel_ref = await _push_kernel(client, [dataset_cipher, dataset_key])
+        await register_launch_intent(
+            "tg_monitoring",
+            run_id,
+            meta={
+                "kernel_ref_hint": _kernel_ref_from_meta(KERNEL_PATH),
+                "dataset_slugs": [dataset_cipher, dataset_key],
+                "remote_telegram_auth_scope": auth_scope,
+                "source_usernames": sorted(set(source_usernames or [])),
+            },
+        )
+        try:
+            kernel_ref = await _push_kernel(client, [dataset_cipher, dataset_key])
+        except Exception:
+            try:
+                await remove_launch_intent("tg_monitoring", run_id)
+            except Exception:
+                logger.critical(
+                    "tg_monitor.launch_intent_release_failed run_id=%s",
+                    run_id,
+                    exc_info=True,
+                )
+            raise
         await _update_kaggle_status("pushed", kernel_ref, None)
         await _notify(f"🛰️ Kaggle kernel запущен: {kernel_ref}")
         logger.info(
@@ -3401,22 +3429,20 @@ async def _run_telegram_monitor_locked(
             kernel_ref,
             [dataset_cipher, dataset_key],
         )
-        try:
-            await register_job(
-                "tg_monitoring",
-                kernel_ref,
-                meta={
-                    "run_id": run_id,
-                    "chat_id": chat_id,
-                    "pid": os.getpid(),
-                    "remote_telegram_auth_scope": auth_scope,
-                    "dataset_slugs": [dataset_cipher, dataset_key],
-                    "source_usernames": sorted(set(source_usernames or [])),
-                },
-            )
-            registered_recovery = True
-        except Exception:
-            logger.warning("tg_monitor: failed to register recovery job", exc_info=True)
+        await register_job(
+            "tg_monitoring",
+            kernel_ref,
+            meta={
+                "run_id": run_id,
+                "chat_id": chat_id,
+                "pid": os.getpid(),
+                "remote_telegram_auth_scope": auth_scope,
+                "dataset_slugs": [dataset_cipher, dataset_key],
+                "source_usernames": sorted(set(source_usernames or [])),
+            },
+        )
+        registered_recovery = True
+        await remove_launch_intent("tg_monitoring", run_id)
         await asyncio.sleep(KAGGLE_STARTUP_WAIT_SECONDS)
 
         status, status_data, duration = await _poll_kaggle_kernel(
