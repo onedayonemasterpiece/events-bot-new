@@ -4,6 +4,9 @@
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit
   controlled release operation.
+- **VK startup recovery:** aligned bootstrap logging with the durable retry-only
+  lock recovery result, removing a stale terminal-failure counter access that
+  raised during every startup cleanup.
 - **Private Events MCP / Telegram documents (default off):** added one-file
   Telegram `send_message` delivery from actual ChatGPT `fileParams` through the
   existing immutable asset stage/prepare/commit boundary. The closed policy

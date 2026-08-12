@@ -208,6 +208,8 @@ orphaned lease освобождают claim и записывают due retry. �
 terminal `failed`/`rejected`. Provider `retry_after` и `quota_scope` переносятся
 из typed parse boundary в packet/inbox и append-only attempt. После быстрых
 повторов применяется capped backoff, но row остаётся в automatic selection.
+Startup recovery сообщает только число возвращённых в очередь orphaned locks;
+у него нет terminal-failed исхода или отдельного `failed` счётчика.
 Worker не спит десятки минут на carrier и может взять другой due row/scope.
 
 Prefetch загружает только transport evidence и не запускает второй LLM parse.
