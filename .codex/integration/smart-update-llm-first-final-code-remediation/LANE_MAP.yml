@@ -28,7 +28,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: exact implementation/test map
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: MAP-VERIFY-NOEVENT
     role: planner
     effort: high
@@ -42,7 +42,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: seven-reason producer map and fail-closed adapter map
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: MAP-RAW-PACKET
     role: planner
     effort: high
@@ -56,7 +56,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: exact loss boundary and minimal lossless-enough schema
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: MAP-CLOSURE
     role: planner
     effort: medium
@@ -70,7 +70,7 @@ lanes:
     forbidden_files: ['*']
     expected_output: final evidence checklist
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: IMPL-CONTINUATION
     role: worker
     effort: high
@@ -84,7 +84,7 @@ lanes:
     forbidden_files: [source_parse_contract.py, main.py, docs/**, CHANGELOG.md]
     expected_output: committed implementation and test receipt
     verification_scope: targeted
-    status: planned
+    status: spawned
   - id: IMPL-VERIFY-NOEVENT
     role: worker
     effort: high
@@ -94,7 +94,7 @@ lanes:
     execution_mode: serial_after_dependency
     branch: agent/smart-update-final-code/verification-noevent
     worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-verification-noevent
-    writable_files: [source_parse_contract.py, main.py, vk_intake.py, vk_auto_queue.py, vk_review.py, source_parsing/telegram/handlers.py, kaggle/TelegramMonitor/telegram_monitor.py, docs/llm/prompts.md, scripts/inspect/audit_source_parse_prompt_contract.py, tests/test_source_parse_contract.py, tests/test_event_parse_llm_first_contract.py, tests/test_vk_raw_first_llm_contract.py, tests/test_telegram_monitor_llm_first_producer_contract.py, tests/test_ingestion_caller_retry_contract.py, tests/test_source_parse_prompt_contract.py, .codex/lanes/VERIFICATION-NOEVENT/RESULTS.md]
+    writable_files: [source_contradiction_facts.py, source_parse_contract.py, main.py, main_part2.py, festival_queue.py, vk_intake.py, vk_auto_queue.py, vk_review.py, db.py, models.py, source_parsing/telegram/handlers.py, source_parsing/telegram/service.py, kaggle/TelegramMonitor/telegram_monitor.py, docs/llm/prompts.md, scripts/inspect/audit_source_parse_prompt_contract.py, tests/test_source_parse_contract.py, tests/test_event_parse_llm_first_contract.py, tests/test_vk_raw_first_llm_contract.py, tests/test_vk_auto_queue_import.py, tests/test_telegram_monitor_llm_first_producer_contract.py, tests/test_telegram_monitor_service.py, tests/test_tg_monitor_reprocess_incomplete_scan.py, tests/test_ingestion_caller_retry_contract.py, tests/test_add_events_from_text_source_decision.py, tests/test_source_parse_prompt_contract.py, .codex/lanes/VERIFICATION-NOEVENT/RESULTS.md]
     forbidden_files: [smart_event_update.py, smart_update_state.py, scripts/ops/recover_smart_update_identity_losses.py]
     expected_output: committed collector/facades/schema/static gate and E2E tests
     verification_scope: targeted
@@ -108,7 +108,7 @@ lanes:
     execution_mode: serial_after_dependency
     branch: agent/smart-update-final-code/raw-packet
     worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-raw-packet
-    writable_files: [main.py, vk_intake.py, vk_auto_queue.py, db.py, models.py, tests/test_vk_raw_first_llm_contract.py, tests/test_vk_auto_queue_import.py, .codex/lanes/RAW-PACKET/RESULTS.md]
+    writable_files: [vk_source_envelope.py, main.py, main_part2.py, vk_intake.py, vk_auto_queue.py, db.py, models.py, scripts/ops/smart_update_loss_census.py, scripts/ops/recover_smart_update_identity_losses.py, tests/test_vk_source_envelope.py, tests/test_vk_raw_first_llm_contract.py, tests/test_vk_crawl_continuation.py, tests/test_vk_auto_queue_import.py, tests/test_vkrev_fetch_photos.py, tests/test_smart_update_loss_census.py, tests/test_recover_smart_update_identity_losses.py, .codex/lanes/RAW-PACKET/RESULTS.md]
     forbidden_files: [source_parse_contract.py, smart_event_update.py, docs/**, CHANGELOG.md]
     expected_output: committed packet schema/builder/fallback and regressions A-G
     verification_scope: targeted
