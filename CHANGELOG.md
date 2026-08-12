@@ -114,6 +114,10 @@
   negatives, detects concept duplicates, preserves exact precision@20 and
   expected-family metrics, and remains honestly blocked without an independent
   acceptance holdout instead of publishing an unproved or empty healthy feed.
+- Fixed StaticSiteBuilder recovery after an exact-main deploy: an incompatible
+  old handoff may be retired only after its exact ledger is terminal and its
+  exact-owner resources/claim are released; a live or unknown run remains
+  single-flight deferred instead of being replaced or wedging all later builds.
 
 - Completed Current UI Behavioral Decoder v1.1 evidence closure on Actions run
   `31327863197`: all 293 breakpoint/container probes now have terminal runtime

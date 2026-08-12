@@ -292,6 +292,26 @@ acceptance of the immutable review candidate; an ordinary debounced Smart
 Update follow-up may publish a newer candidate later but cannot mutate this
 review URL.
 
+## R15 cross-deploy terminal recovery regression — 2026-08-09
+
+The first merged Unusual production-health run exposed a narrower recurrence.
+A StaticSiteBuilder kernel had already reached terminal `done`, but its Fly
+wrapper had not adopted the result before a new exact-main image was deployed.
+The replacement image correctly rejected the old repo SHA; however, that
+permanent error left `static_site_build_state.active_job_id=50189` and the
+recoverable handoff intact. Subsequent operator requests therefore rearmed the
+same incompatible owner instead of reaching a current-image build.
+
+The recovery contract now distinguishes terminal from live cross-deploy
+handoffs. A live or terminal-unknown old run remains deferred and cannot be
+replaced. For an exact-owner run whose ledger has both a terminal status and
+`terminal_at`, the host first reconciles/releases resources for that run only,
+records the claim as failed with `cross_deploy_recovery_rejected`, redacts the
+handoff, removes its immutable snapshot/output, and only then continues to a
+fresh build. Focused regression covers both the terminal replacement path and
+the live fail-closed path. Production warm/cold run IDs and final lease/browser
+evidence remain pending until the hotfix reaches exact `origin/main`.
+
 
 ## Static collections data-prep regression — 2026-08-01
 
