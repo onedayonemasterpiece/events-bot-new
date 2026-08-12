@@ -140,7 +140,8 @@ lanes:
     forbidden_files: []
     expected_output: immutable local/prod-read-only receipts and exact closure report
     verification_scope: full_local
-    status: spawned
+    status: completed
+    result: committed report/incident closure evidence plus deterministic strict read-only receipts; incident remains open
   - id: FINAL-REVIEW
     role: merge_reviewer
     effort: high
@@ -154,4 +155,5 @@ lanes:
     forbidden_files: ['*']
     expected_output: Done/Partial/Missing/Blocked matrix
     verification_scope: full_local
-    status: planned
+    status: completed
+    result: four reviewed code blockers Done; T68 Partial and four external release gates Blocked; no merge/deploy/apply

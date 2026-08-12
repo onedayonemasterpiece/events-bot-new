@@ -369,3 +369,95 @@ results, release remains blocked until all four separately requested proofs
 exist: real provider quota/tier, an atomic production DB snapshot rehearsal,
 approved disposition of the 195 known FK-orphan references, and model-derived
 recovery replay through the deployed typed pipeline.
+
+## 2026-08-12 — final-code review corrections on reviewed HEAD `5291c4289`
+
+The prior focused remediation was reviewed at exact Draft PR head
+`5291c42897db8a157f0f9699bc678be42f96a331`. Local and remote heads matched at
+intake. That review accepted the earlier continuation consumer, fail-closed
+legacy adapter, OCR/attachment cardinality and typed-prompt work, but identified
+four further recall holes. The following corrections are implemented in the
+same Draft PR; no new PR/issue was created:
+
+1. A repeated full VK page is no longer a terminal boundary. Full repeated or
+   non-deeper pages persist their packets, then move to typed
+   `OFFSET_DRIFT|NO_PROGRESS` retry with deterministic offset rebase and capped
+   backoff. `done` now requires empty/short page, backfill horizon, or the frozen
+   original cursor. Historical `done/EXACT_PAGE_REPLAY` rows reopen
+   idempotently in `Database.init()` and defensively in scheduling.
+2. The common pure `source_contradiction_facts.py` collector now produces all
+   seven closed `VerificationReason` values from source text, every OCR block,
+   stable source metadata, the primary typed decision and the manifest. Main
+   VK/direct/parser paths and staged Telegram use the same implementation.
+   Facts request at most one conditional verifier; they never decide product
+   semantics. Technical/uncertain verification leaves positive children in a
+   durable retry.
+3. `CONFIRMED_NO_EVENT` now requires a valid complete manifest and one of the
+   seven closed `SourceNoEventReason` values. Reasonless, unknown or misplaced
+   reasons fail closed to `RETRY_REQUIRED/SCHEMA_MISMATCH` through provider
+   normalization, compatibility adapters, receipts/replay, VK, TG
+   album/consumer and direct facades. The reason is durable and observable.
+4. VK raw-first capture now uses a shared sanitized recursive v1 envelope for
+   crawl, continuation, fresh fetch and legacy review. It preserves outer text,
+   all ordered nested/sibling copy text, raw attachment inventory and semantic
+   photo/link/video/doc/nonvisual metadata before LLM. Revision hashes are
+   semantic-edit-sensitive and counter-insensitive. Every failed fresh fetch
+   can use only a complete durable v1 packet; legacy/incomplete and missing
+   packets remain typed retry rails. User-wall owner signing is preserved.
+
+The canonical implementation/blocker/test matrices and synthetic packet example
+are in
+`.codex/integration/smart-update-llm-first-final-code-remediation/INTEGRATION_REPORT.md`.
+The earlier `smart-update-llm-first-final-remediation` report is explicitly
+marked historical/superseded for release decisions.
+
+### Final-code local regression receipt
+
+On implementation/docs freeze
+`fbcd782a885fb77f6020e5705ec5999655f7706e`, the exact final focused inventory
+passed **583 tests with 17 warnings in 84.56s**. The source-prompt audit passed
+with four live surfaces, exact enum parity and the legacy TG extractor
+unreachable. The Google provider-path audit passed 1,141 files with zero
+unapproved/unreadable paths and zero allowlisted debt. Production-module
+`py_compile` and `git diff --check` passed. Retained log SHA-256:
+`898059019e5c2cb8e5af5bbaec1619cd8b8c71cdd591fdfa339ee409deb14f65`.
+
+### Final-source strict read-only production repeat
+
+Current census/recovery sources were executed in memory on Fly; no remote script
+or data file was written. Both ran twice for the half-open window
+`[2026-08-04T00:00:00Z, 2026-08-12T00:00:00Z)`.
+
+- SQLite: `mode=ro`, `query_only=1`, `quick_check=ok`, write probe rejected,
+  `total_changes=0`; inode/size/mtime unchanged.
+- DB SHA-256 before and after:
+  `e6811b14d0634c6cc1391d3575eb3985753fd65b49c15030c8e0fe907fdbd6b3`.
+- A–T census: two equal report hashes
+  `906279dc8e643a3de75cfb8efcee107d5d6466f5ae7a607a923653337a3b13ba`;
+  inventory hash
+  `5f3e6f262a7b200613a9f24148c1057491b4194f5720c9bf1dc08aa215c47220`;
+  676 `carrier_revision` rows, with 256 extracted occurrences reported
+  separately, nine incomplete and 240 unavailable.
+- Recovery plan: two equal report hashes
+  `2624dceb002c51903f9e7c3bea70cf43f13220e31ea1311d3f79d3f5d4d1cdd2`;
+  selected/would-change/changed carriers `125 / 125 / 0`; plan hash
+  `de092562c4892a74b73dc01d70f18945c2b83a95e7c5ccffecc963ff0e92fc5e`.
+- Replayability: zero lossless packets because the schema is not deployed, 436
+  legacy-incomplete and 240 unavailable; attachment-restore eligible is zero.
+  No model-derived event/action/no-event totals are inferred.
+
+The retained strict receipt SHA-256 is
+`a311b818254480f7421f8344298b01b3d24488aed5db1572b872b3b8c5844fb3`;
+its redaction scan passed. No production write, refetch, model call, recovery
+apply, deploy or merge occurred.
+
+### Status after final-code remediation
+
+The four code blockers are corrected, but the incident remains **open P0 /
+SEV-1**, and Draft PR #494 remains **not deploy-ready**. T68 is still Partial:
+historical/model-derived recovery cannot be proven from unavailable raw
+payloads. Exact-head GitHub Actions must be green before any merge decision.
+Four external gates also remain open: real provider quota/tier entitlement, a
+guaranteed atomic production snapshot rehearsal, approved disposition of the
+195 known FK-orphan references, and model-derived recovery through the deployed
+typed pipeline. Merge, deploy and recovery apply remain outside this task.

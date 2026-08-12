@@ -1,3 +1,14 @@
+# Historical P0 final review remediation — superseded
+
+> **Superseded for release decisions.** The review of exact HEAD
+> `5291c42897db8a157f0f9699bc678be42f96a331` found four additional recall
+> blockers: mutable-offset replay termination, incomplete seven-reason
+> production wiring, reasonless terminal no-event, and lossy VK raw packets.
+> Their corrective implementation and current evidence are canonical in
+> `.codex/integration/smart-update-llm-first-final-code-remediation/INTEGRATION_REPORT.md`.
+> This file is retained only as historical evidence and must not be read as a
+> deploy-readiness claim.
+
 # P0 final review remediation — integration report
 
 Date: 2026-08-11 UTC
