@@ -84,7 +84,7 @@ lanes:
     forbidden_files: [source_parse_contract.py, main.py, docs/**, CHANGELOG.md]
     expected_output: committed implementation and test receipt
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: IMPL-VERIFY-NOEVENT
     role: worker
     effort: high
