@@ -60,7 +60,7 @@ lanes:
   - id: MAP-CLOSURE
     role: planner
     effort: medium
-    requirement_ids: [E1-E14]
+    requirement_ids: [E2-E10, E13-E14]
     target: map docs/static/incident/RO evidence deltas and acceptance gaps
     depends_on: []
     execution_mode: parallel_read_only
@@ -116,15 +116,29 @@ lanes:
   - id: DOCS-EVIDENCE
     role: worker
     effort: high
-    requirement_ids: [E1-E14]
+    requirement_ids: [E1, E11-E12]
     target: canonical docs/changelog/incident/integration report/strict RO evidence
     depends_on: [IMPL-RAW-PACKET, MAP-CLOSURE]
     execution_mode: serial_after_dependency
-    branch: integration/smart-update-identity-state-machine
-    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
-    writable_files: [README.md, CHANGELOG.md, docs/**, .codex/integration/smart-update-llm-first-final-code-remediation/**, artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/**]
+    branch: agent/smart-update-final-code/docs-ci
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-final-docs-ci
+    writable_files: [.github/workflows/ci.yaml, README.md, CHANGELOG.md, docs/features/source-parsing/README.md, docs/features/vk-auto-queue/README.md, docs/features/telegram-monitoring/README.md, docs/architecture/overview.md, docs/operations/cron.md, docs/operations/smart-update-prod-audit.md, docs/operations/release-smoke-smart-update.md, .codex/lanes/DOCS-CI/RESULTS.md]
     forbidden_files: []
     expected_output: exact-SHA report, incident and production RO receipts
+    verification_scope: full_local
+    status: spawned
+  - id: FINAL-EVIDENCE
+    role: merge_reviewer
+    effort: high
+    requirement_ids: [E1-E14]
+    target: exact-SHA integration report, incident update, strict read-only production receipts and PR evidence
+    depends_on: [DOCS-EVIDENCE]
+    execution_mode: serial_after_dependency
+    branch: integration/smart-update-identity-state-machine
+    worktree: /home/dev/.codex/worktrees/events-bot-new/smart-update-identity-state-machine
+    writable_files: [docs/reports/incidents/INC-2026-08-10-smart-update-identity-terminal-loss.md, .codex/integration/smart-update-llm-first-final-code-remediation/**, artifacts/codex/INC-2026-08-10-smart-update-identity-terminal-loss/**]
+    forbidden_files: []
+    expected_output: immutable local/prod-read-only receipts and exact closure report
     verification_scope: full_local
     status: planned
   - id: FINAL-REVIEW
@@ -132,7 +146,7 @@ lanes:
     effort: high
     requirement_ids: [G1-G8]
     target: requirement closure/no-scope-expansion/exact-PR audit
-    depends_on: [DOCS-EVIDENCE]
+    depends_on: [FINAL-EVIDENCE]
     execution_mode: serial_after_dependency
     branch: null
     worktree: read-only final integration worktree
