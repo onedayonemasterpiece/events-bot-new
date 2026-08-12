@@ -98,7 +98,7 @@ lanes:
     forbidden_files: [smart_event_update.py, smart_update_state.py, scripts/ops/recover_smart_update_identity_losses.py]
     expected_output: committed collector/facades/schema/static gate and E2E tests
     verification_scope: targeted
-    status: spawned
+    status: merged
   - id: IMPL-RAW-PACKET
     role: worker
     effort: high
