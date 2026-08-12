@@ -2847,6 +2847,8 @@ class Database:
                     locked_at TIMESTAMP,
                     run_id TEXT,
                     last_page_fingerprint TEXT,
+                    deepest_page_ts INTEGER,
+                    deepest_page_post_id INTEGER,
                     last_typed_reason TEXT,
                     completed_at TIMESTAMP,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2885,6 +2887,10 @@ class Database:
             await _add_column(
                 conn, "vk_crawl_continuation", "last_page_fingerprint TEXT"
             )
+            await _add_column(conn, "vk_crawl_continuation", "deepest_page_ts INTEGER")
+            await _add_column(
+                conn, "vk_crawl_continuation", "deepest_page_post_id INTEGER"
+            )
             await _add_column(conn, "vk_crawl_continuation", "completed_at TIMESTAMP")
             # Rows may have been queued by an older producer before the
             # continuation consumer existed. Recover the immutable boundary
@@ -2917,6 +2923,23 @@ class Database:
                         0
                     )
                 WHERE original_cursor_ts=0 AND scan_mode='incremental'
+                """
+            )
+            # The first continuation implementation incorrectly treated a
+            # repeated full page as proof of completion. Head insertions can
+            # shift an absolute VK offset by exactly one page and produce that
+            # shape while an older tail still exists. Reopen only that poisoned
+            # terminal state; real empty/short/horizon/cursor terminals remain
+            # immutable. This update is intentionally idempotent across init×2.
+            await conn.execute(
+                """
+                UPDATE vk_crawl_continuation
+                SET status='retry', next_attempt_at=CURRENT_TIMESTAMP,
+                    lease_owner=NULL, locked_by=NULL, lease_expires_at=NULL,
+                    locked_at=NULL, run_id=NULL, completed_at=NULL,
+                    last_typed_reason='LEGACY_EXACT_PAGE_REPLAY_REOPENED',
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
                 """
             )
 

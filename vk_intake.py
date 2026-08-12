@@ -4506,6 +4506,8 @@ async def _schedule_vk_crawl_continuation(
     original_cursor_post_id: int,
     reason: str,
     last_page_fingerprint: str | None = None,
+    deepest_page_ts: int | None = None,
+    deepest_page_post_id: int | None = None,
 ) -> None:
     continuation_key = hashlib.sha256(
         _vk_packet_json(
@@ -4526,7 +4528,7 @@ async def _schedule_vk_crawl_continuation(
         # same immutable crawl boundary after its mutable offset has advanced.
         existing = await conn.execute(
             """
-            SELECT id FROM vk_crawl_continuation
+            SELECT id,status,last_typed_reason FROM vk_crawl_continuation
             WHERE source_type='vk' AND owner_id=? AND COALESCE(owner_type,'group')=?
               AND COALESCE(scan_mode,'incremental')=? AND since_ts=? AND horizon_ts=?
               AND COALESCE(original_cursor_ts,0)=?
@@ -4541,9 +4543,52 @@ async def _schedule_vk_crawl_continuation(
         existing_row = await existing.fetchone()
         if existing_row is not None:
             await conn.execute(
-                "UPDATE vk_crawl_continuation SET continuation_key=COALESCE(continuation_key,?) "
-                "WHERE id=?",
-                (continuation_key, int(existing_row[0])),
+                """
+                UPDATE vk_crawl_continuation
+                SET continuation_key=COALESCE(continuation_key,?),
+                    deepest_page_ts=COALESCE(deepest_page_ts,?),
+                    deepest_page_post_id=COALESCE(deepest_page_post_id,?),
+                    status=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN 'retry' ELSE status END,
+                    next_attempt_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN CURRENT_TIMESTAMP ELSE next_attempt_at END,
+                    completed_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE completed_at END,
+                    lease_owner=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE lease_owner END,
+                    locked_by=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE locked_by END,
+                    lease_expires_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE lease_expires_at END,
+                    locked_at=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE locked_at END,
+                    run_id=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN NULL ELSE run_id END,
+                    last_typed_reason=CASE
+                        WHEN status='done' AND last_typed_reason='EXACT_PAGE_REPLAY'
+                        THEN 'LEGACY_EXACT_PAGE_REPLAY_REOPENED'
+                        ELSE last_typed_reason END,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    continuation_key,
+                    int(deepest_page_ts) if deepest_page_ts is not None else None,
+                    (
+                        int(deepest_page_post_id)
+                        if deepest_page_post_id is not None
+                        else None
+                    ),
+                    int(existing_row[0]),
+                ),
             )
             await conn.commit()
             return
@@ -4552,14 +4597,20 @@ async def _schedule_vk_crawl_continuation(
             INSERT OR IGNORE INTO vk_crawl_continuation(
                 source_type,owner_id,owner_type,continuation_key,scan_mode,page_size,since_ts,offset,
                 horizon_ts,original_cursor_ts,original_cursor_post_id,reason,status,
-                last_page_fingerprint
-            ) VALUES('vk',?,?,?,?,?,?,?,?,?,?,?,'pending',?)
+                last_page_fingerprint,deepest_page_ts,deepest_page_post_id
+            ) VALUES('vk',?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?)
             """,
             (
                 int(group_id), owner_type, continuation_key, scan_mode, max(1, int(page_size)),
                 int(since_ts), int(offset), int(horizon_ts),
                 int(original_cursor_ts), int(original_cursor_post_id), reason,
                 last_page_fingerprint,
+                int(deepest_page_ts) if deepest_page_ts is not None else None,
+                (
+                    int(deepest_page_post_id)
+                    if deepest_page_post_id is not None
+                    else None
+                ),
             ),
         )
         await conn.commit()
@@ -4581,6 +4632,8 @@ class VKCrawlContinuationClaim:
     lease_owner: str
     run_id: str
     last_page_fingerprint: str | None
+    deepest_page_ts: int | None
+    deepest_page_post_id: int | None
     stale_recovered: bool = False
 
 
@@ -4632,7 +4685,7 @@ async def _claim_vk_crawl_continuation(
                    COALESCE(scan_mode,'incremental'),COALESCE(page_size,30),
                    since_ts,offset,horizon_ts,COALESCE(original_cursor_ts,0),
                    COALESCE(original_cursor_post_id,0),attempts,
-                   last_page_fingerprint,status
+                   last_page_fingerprint,status,deepest_page_ts,deepest_page_post_id
             FROM vk_crawl_continuation
             WHERE (
                     (status IN ('pending','retry')
@@ -4681,6 +4734,8 @@ async def _claim_vk_crawl_continuation(
             original_cursor_ts=int(row[8]), original_cursor_post_id=int(row[9]),
             attempts=int(row[10]) + 1, lease_owner=owner, run_id=run,
             last_page_fingerprint=(str(row[11]) if row[11] else None),
+            deepest_page_ts=(int(row[13]) if row[13] is not None else None),
+            deepest_page_post_id=(int(row[14]) if row[14] is not None else None),
             stale_recovered=stale_recovered,
         )
     except Exception:
@@ -4732,6 +4787,16 @@ def _vk_continuation_page_fingerprint(page: Sequence[dict[str, Any]]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _vk_continuation_deepest_boundary(
+    page: Sequence[dict[str, Any]],
+) -> tuple[int, int] | None:
+    """Return the oldest durable page key under VK's reverse wall ordering."""
+
+    if not page:
+        return None
+    return min((int(post["date"]), int(post["post_id"])) for post in page)
+
+
 def _vk_continuation_retry_reason(exc: BaseException, *, stage: str) -> str:
     status = getattr(exc, "status", None)
     if status == 429:
@@ -4781,6 +4846,58 @@ async def _retry_vk_crawl_continuation(
         "last_typed_reason=?",
         (f"+{delay} seconds", reason),
     )
+    return delay
+
+
+async def _defer_vk_crawl_offset_drift(
+    db: Database,
+    claim: VKCrawlContinuationClaim,
+    *,
+    next_offset: int,
+    fingerprint: str,
+    deepest_boundary: tuple[int, int] | None,
+    reason: str,
+) -> int:
+    """Durably rebase a mutable VK offset without claiming false completion."""
+
+    base = max(1, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_BASE_SECONDS", 30))
+    cap = max(base, _read_int_env("VK_CRAWL_CONTINUATION_BACKOFF_MAX_SECONDS", 3600))
+    delay = min(cap, base * (2 ** min(max(0, claim.attempts - 1), 16)))
+    deepest_ts = deepest_boundary[0] if deepest_boundary is not None else None
+    deepest_post_id = deepest_boundary[1] if deepest_boundary is not None else None
+    try:
+        await _continuation_cas_update(
+            db,
+            claim,
+            "status='retry',offset=?,next_attempt_at=datetime(CURRENT_TIMESTAMP,?),"
+            "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+            "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+            "last_typed_reason=?",
+            (
+                max(0, int(next_offset)),
+                f"+{delay} seconds",
+                fingerprint,
+                deepest_ts,
+                deepest_post_id,
+                reason,
+            ),
+        )
+    except aiosqlite.IntegrityError:
+        # New producers have one stable continuation_key, so supported rows
+        # cannot collide while their mutable offset advances. A pre-key legacy
+        # duplicate may still occupy the target offset under the historical
+        # UNIQUE(source,owner,since,offset,horizon). Fail durable/observable at
+        # the current offset rather than losing the lease into stale-running or
+        # declaring completion; the duplicate row remains independently due.
+        await _continuation_cas_update(
+            db,
+            claim,
+            "status='retry',next_attempt_at=datetime(CURRENT_TIMESTAMP,?),"
+            "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
+            "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+            "last_typed_reason='OFFSET_DRIFT_COLLISION'",
+            (f"+{delay} seconds", fingerprint, deepest_ts, deepest_post_id),
+        )
     return delay
 
 
@@ -4845,7 +4962,7 @@ async def process_vk_crawl_continuations(
     result = {
         "claimed": 0, "pages": 0, "posts": 0, "added": 0,
         "duplicates": 0, "completed": 0, "retried": 0,
-        "stale_recovered": 0, "lease_lost": 0,
+        "stale_recovered": 0, "lease_lost": 0, "rebased": 0,
     }
     processed_ids: list[int] = []
     vk_wall_since = require_main_attr("vk_wall_since")
@@ -4866,6 +4983,12 @@ async def process_vk_crawl_continuations(
             result["stale_recovered"] += 1
         current_offset = claim.offset
         previous_fingerprint = claim.last_page_fingerprint
+        deepest_boundary = (
+            (claim.deepest_page_ts, claim.deepest_page_post_id)
+            if claim.deepest_page_ts is not None
+            and claim.deepest_page_post_id is not None
+            else None
+        )
 
         for page_index in range(max_pages_per_job):
             try:
@@ -4915,6 +5038,19 @@ async def process_vk_crawl_continuations(
             result["duplicates"] += duplicates
 
             dates = [int(post["date"]) for post in page]
+            page_deepest = _vk_continuation_deepest_boundary(page)
+            made_deeper_progress = bool(
+                page_deepest is not None
+                and (
+                    deepest_boundary is None
+                    or page_deepest < deepest_boundary
+                )
+            )
+            effective_deepest = deepest_boundary
+            if page_deepest is not None and (
+                effective_deepest is None or page_deepest < effective_deepest
+            ):
+                effective_deepest = page_deepest
             cursor_overlap = claim.scan_mode == "incremental" and any(
                 int(post["date"]) < claim.original_cursor_ts
                 or (
@@ -4931,8 +5067,6 @@ async def process_vk_crawl_continuations(
             terminal_reason: str | None = None
             if not page:
                 terminal_reason = "EMPTY_PAGE"
-            elif previous_fingerprint and fingerprint == previous_fingerprint:
-                terminal_reason = "EXACT_PAGE_REPLAY"
             elif len(page) < claim.page_size:
                 terminal_reason = "SHORT_PAGE"
             elif horizon_reached:
@@ -4946,31 +5080,80 @@ async def process_vk_crawl_continuations(
                     claim,
                     "status='done',lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,"
                     "locked_at=NULL,run_id=NULL,completed_at=CURRENT_TIMESTAMP,"
-                    "last_page_fingerprint=?,last_typed_reason=?",
-                    (fingerprint, terminal_reason),
+                    "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+                    "last_typed_reason=?",
+                    (
+                        fingerprint,
+                        effective_deepest[0] if effective_deepest else None,
+                        effective_deepest[1] if effective_deepest else None,
+                        terminal_reason,
+                    ),
                 )
                 result["completed"] += 1
                 break
 
-            current_offset += claim.page_size
+            next_offset = current_offset + claim.page_size
+            same_full_page = bool(
+                previous_fingerprint and fingerprint == previous_fingerprint
+            )
+            duplicate_full_page = bool(page) and duplicates == len(page)
+            boundary_not_deeper = bool(
+                page_deepest is not None
+                and deepest_boundary is not None
+                and not made_deeper_progress
+            )
+            if same_full_page or duplicate_full_page or boundary_not_deeper:
+                # VK wall offsets are relative to a mutable head. A full page
+                # already at/above the deepest durable boundary means head
+                # insertions displaced our absolute offset; moving it by one
+                # full page deterministically consumes that drift. It is never
+                # evidence that the older tail ended.
+                reason = "OFFSET_DRIFT" if (
+                    same_full_page or boundary_not_deeper
+                ) else "NO_PROGRESS"
+                await _defer_vk_crawl_offset_drift(
+                    db,
+                    claim,
+                    next_offset=next_offset,
+                    fingerprint=fingerprint,
+                    deepest_boundary=effective_deepest,
+                    reason=reason,
+                )
+                result["retried"] += 1
+                result["rebased"] += 1
+                break
+
+            current_offset = next_offset
             previous_fingerprint = fingerprint
+            deepest_boundary = effective_deepest
             if page_index + 1 >= max_pages_per_job:
                 await _continuation_cas_update(
                     db,
                     claim,
                     "status='pending',offset=?,next_attempt_at=CURRENT_TIMESTAMP,"
                     "lease_owner=NULL,locked_by=NULL,lease_expires_at=NULL,locked_at=NULL,run_id=NULL,"
-                    "last_page_fingerprint=?,last_typed_reason='BOUNDED_YIELD'",
-                    (current_offset, fingerprint),
+                    "last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
+                    "last_typed_reason='BOUNDED_YIELD'",
+                    (
+                        current_offset,
+                        fingerprint,
+                        deepest_boundary[0] if deepest_boundary else None,
+                        deepest_boundary[1] if deepest_boundary else None,
+                    ),
                 )
                 break
             await _continuation_cas_update(
                 db,
                 claim,
-                f"offset=?,last_page_fingerprint=?,"
+                f"offset=?,last_page_fingerprint=?,deepest_page_ts=?,deepest_page_post_id=?,"
                 f"lease_expires_at=datetime(CURRENT_TIMESTAMP,'+{lease_seconds} seconds'),"
                 "last_typed_reason='PAGE_ADVANCED'",
-                (current_offset, fingerprint),
+                (
+                    current_offset,
+                    fingerprint,
+                    deepest_boundary[0] if deepest_boundary else None,
+                    deepest_boundary[1] if deepest_boundary else None,
+                ),
             )
 
     return result
@@ -5434,6 +5617,16 @@ async def crawl_once(
                     reason=("hard_cap" if hard_cap_triggered else "page_safety_cap"),
                     last_page_fingerprint=(
                         _vk_continuation_page_fingerprint(last_fetched_page)
+                        if last_fetched_page
+                        else None
+                    ),
+                    deepest_page_ts=(
+                        _vk_continuation_deepest_boundary(last_fetched_page)[0]
+                        if last_fetched_page
+                        else None
+                    ),
+                    deepest_page_post_id=(
+                        _vk_continuation_deepest_boundary(last_fetched_page)[1]
                         if last_fetched_page
                         else None
                     ),

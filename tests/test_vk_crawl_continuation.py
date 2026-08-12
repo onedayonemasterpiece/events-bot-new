@@ -75,6 +75,20 @@ def _posts(count: int, *, first_id: int = 1, newest_ts: int | None = None):
     ]
 
 
+async def _persist_posts(db: Database, posts) -> None:
+    for post in posts:
+        await vk_intake._persist_vk_source_packet(
+            db,
+            group_id=1,
+            owner_type="group",
+            post=post,
+            source_url=f"https://vk.com/wall-1_{post['post_id']}",
+            keyword_hints=(),
+            date_hints=(),
+            event_ts_hint=None,
+        )
+
+
 @pytest.mark.asyncio
 async def test_continuation_schema_migrates_legacy_table_and_init_is_repeatable(tmp_path):
     path = tmp_path / "legacy.sqlite"
@@ -116,7 +130,8 @@ async def test_continuation_schema_migrates_legacy_table_and_init_is_repeatable(
     assert {
         "continuation_key", "scan_mode", "page_size", "original_cursor_ts",
         "original_cursor_post_id", "locked_at", "locked_by", "run_id",
-        "last_page_fingerprint", "completed_at",
+        "last_page_fingerprint", "deepest_page_ts", "deepest_page_post_id",
+        "completed_at",
     } <= columns
     assert row[0] == "incremental" and row[1] == 30
 
@@ -401,42 +416,22 @@ async def test_completed_continuation_repeat_is_idempotent(tmp_path, monkeypatch
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("terminal", ["cursor", "replay"])
-async def test_full_page_terminates_only_on_proven_boundary(tmp_path, monkeypatch, terminal):
-    db = await _db(tmp_path / f"terminal-{terminal}.sqlite")
-    if terminal == "cursor":
-        page = [
-            {"post_id": 6, "date": 101, "text": "new", "photos": []},
-            {"post_id": 5, "date": 100, "text": "boundary", "photos": []},
-        ]
-        await _schedule(
-            db, page_size=2, cursor_ts=100, cursor_post_id=5, since_ts=1
-        )
-        expected = "ORIGINAL_CURSOR_OVERLAP"
-    else:
-        page = _posts(2, newest_ts=200)
-        await vk_intake._schedule_vk_crawl_continuation(
-            db,
-            group_id=1,
-            owner_type="group",
-            scan_mode="incremental",
-            page_size=2,
-            since_ts=1,
-            offset=2,
-            horizon_ts=1,
-            original_cursor_ts=1,
-            original_cursor_post_id=0,
-            reason="test_replay",
-            last_page_fingerprint=vk_intake._vk_continuation_page_fingerprint(page),
-        )
-        expected = "EXACT_PAGE_REPLAY"
+async def test_full_page_original_cursor_is_a_proven_terminal(tmp_path, monkeypatch):
+    db = await _db(tmp_path / "terminal-cursor.sqlite")
+    page = [
+        {"post_id": 6, "date": 101, "text": "new", "photos": []},
+        {"post_id": 5, "date": 100, "text": "boundary", "photos": []},
+    ]
+    await _schedule(
+        db, page_size=2, cursor_ts=100, cursor_post_id=5, since_ts=1
+    )
 
     async def wall(*_args, **_kwargs):
         return page
 
     monkeypatch.setattr(main, "vk_wall_since", wall)
     outcome = await vk_intake.process_vk_crawl_continuations(
-        db, max_jobs=1, max_pages_per_job=3, worker_id=terminal, run_id=terminal
+        db, max_jobs=1, max_pages_per_job=3, worker_id="cursor", run_id="cursor"
     )
     async with db.raw_conn() as conn:
         row = await (
@@ -448,8 +443,400 @@ async def test_full_page_terminates_only_on_proven_boundary(tmp_path, monkeypatc
             await conn.execute("SELECT COUNT(*) FROM vk_source_packet")
         ).fetchone()
     assert outcome["completed"] == 1
-    assert row == ("done", expected)
+    assert row == ("done", "ORIGINAL_CURSOR_OVERLAP")
     assert count[0] == 2
+
+
+@pytest.mark.asyncio
+async def test_exact_full_page_rebases_with_retry_and_never_completes(tmp_path, monkeypatch):
+    db = await _db(tmp_path / "exact-rebase.sqlite")
+    page = _posts(2, newest_ts=200)
+    await _persist_posts(db, page)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_crawl_cursor(group_id,last_seen_ts,last_post_id,updated_at) "
+            "VALUES(1,123,45,CURRENT_TIMESTAMP)"
+        )
+        await conn.commit()
+    deepest = vk_intake._vk_continuation_deepest_boundary(page)
+    await vk_intake._schedule_vk_crawl_continuation(
+        db,
+        group_id=1,
+        owner_type="group",
+        scan_mode="incremental",
+        page_size=2,
+        since_ts=1,
+        offset=2,
+        horizon_ts=1,
+        original_cursor_ts=1,
+        original_cursor_post_id=0,
+        reason="test_replay",
+        last_page_fingerprint=vk_intake._vk_continuation_page_fingerprint(page),
+        deepest_page_ts=deepest[0],
+        deepest_page_post_id=deepest[1],
+    )
+
+    async def wall(*_args, **_kwargs):
+        return page
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    outcome = await vk_intake.process_vk_crawl_continuations(
+        db, max_jobs=1, max_pages_per_job=3, worker_id="replay", run_id="replay"
+    )
+    await vk_intake._schedule_vk_crawl_continuation(
+        db,
+        group_id=1,
+        owner_type="group",
+        scan_mode="incremental",
+        page_size=2,
+        since_ts=1,
+        offset=2,
+        horizon_ts=1,
+        original_cursor_ts=1,
+        original_cursor_post_id=0,
+        reason="repeat_producer",
+        deepest_page_ts=deepest[0],
+        deepest_page_post_id=deepest[1],
+    )
+    async with db.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT status,offset,last_typed_reason,completed_at,deepest_page_ts,"
+                "deepest_page_post_id,(SELECT COUNT(*) FROM vk_crawl_continuation),"
+                "CAST((julianday(next_attempt_at)-julianday(CURRENT_TIMESTAMP))*86400 "
+                "AS INTEGER) "
+                "FROM vk_crawl_continuation"
+            )
+        ).fetchone()
+        cursor = await (
+            await conn.execute(
+                "SELECT last_seen_ts,last_post_id FROM vk_crawl_cursor WHERE group_id=1"
+            )
+        ).fetchone()
+    assert outcome["completed"] == 0
+    assert outcome["rebased"] == outcome["retried"] == 1
+    assert row[:7] == ("retry", 4, "OFFSET_DRIFT", None, deepest[0], deepest[1], 1)
+    assert 28 <= row[7] <= 30
+    assert cursor == (123, 45)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("inserted_count", [1, 2, 5])
+async def test_head_insert_drift_less_equal_and_greater_than_page_drains_tail(
+    tmp_path, monkeypatch, inserted_count
+):
+    page_size = 2
+    db = await _db(tmp_path / f"insert-{inserted_count}.sqlite")
+    old_wall = _posts(13, newest_ts=1000)
+    primary_prefix = old_wall[:page_size]
+    inserted = _posts(inserted_count, first_id=100, newest_ts=2000)
+
+    # The ordinary primary crawl owns the mutable head; the continuation owns
+    # the older frozen tail. Seed both raw-first sides before resuming the row.
+    await _persist_posts(db, primary_prefix)
+    await _persist_posts(db, inserted)
+    deepest = vk_intake._vk_continuation_deepest_boundary(primary_prefix)
+    await vk_intake._schedule_vk_crawl_continuation(
+        db,
+        group_id=1,
+        owner_type="group",
+        scan_mode="incremental",
+        page_size=page_size,
+        since_ts=1,
+        offset=page_size,
+        horizon_ts=1,
+        original_cursor_ts=1,
+        original_cursor_post_id=0,
+        reason="head_insert_drift",
+        last_page_fingerprint=vk_intake._vk_continuation_page_fingerprint(
+            primary_prefix
+        ),
+        deepest_page_ts=deepest[0],
+        deepest_page_post_id=deepest[1],
+    )
+    mutable_wall = inserted + old_wall
+
+    async def wall(_gid, _since, *, count, offset, **_kwargs):
+        return mutable_wall[offset : offset + count]
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    saw_rebase = False
+    for index in range(30):
+        outcome = await vk_intake.process_vk_crawl_continuations(
+            db,
+            max_jobs=1,
+            max_pages_per_job=1,
+            worker_id=f"insert-{inserted_count}-{index}",
+            run_id=f"insert-{inserted_count}-{index}",
+        )
+        saw_rebase = saw_rebase or bool(outcome["rebased"])
+        async with db.raw_conn() as conn:
+            state = await (
+                await conn.execute(
+                    "SELECT status,last_typed_reason FROM vk_crawl_continuation"
+                )
+            ).fetchone()
+            if state[0] == "done":
+                assert state[1] in {"EMPTY_PAGE", "SHORT_PAGE"}
+                break
+            if state[0] == "retry":
+                await conn.execute(
+                    "UPDATE vk_crawl_continuation SET next_attempt_at=CURRENT_TIMESTAMP"
+                )
+                await conn.commit()
+    else:
+        pytest.fail("continuation did not reach a real wall boundary")
+
+    async with db.raw_conn() as conn:
+        ids = {
+            row[0]
+            for row in await (
+                await conn.execute("SELECT post_id FROM vk_source_packet")
+            ).fetchall()
+        }
+        row = await (
+            await conn.execute(
+                "SELECT status,last_typed_reason,deepest_page_ts,deepest_page_post_id "
+                "FROM vk_crawl_continuation"
+            )
+        ).fetchone()
+    assert ids == {post["post_id"] for post in mutable_wall}
+    assert row[0] == "done" and row[1] in {"EMPTY_PAGE", "SHORT_PAGE"}
+    assert (row[2], row[3]) == vk_intake._vk_continuation_deepest_boundary(old_wall)
+    assert saw_rebase is (inserted_count >= page_size)
+
+
+@pytest.mark.asyncio
+async def test_provider_ignoring_offset_is_bounded_retry_not_done(tmp_path, monkeypatch):
+    db = await _db(tmp_path / "ignored-offset.sqlite")
+    page = _posts(2, newest_ts=300)
+    await _persist_posts(db, page)
+    deepest = vk_intake._vk_continuation_deepest_boundary(page)
+    await vk_intake._schedule_vk_crawl_continuation(
+        db,
+        group_id=1,
+        owner_type="group",
+        scan_mode="incremental",
+        page_size=2,
+        since_ts=1,
+        offset=2,
+        horizon_ts=1,
+        original_cursor_ts=1,
+        original_cursor_post_id=0,
+        reason="ignored_offset",
+        last_page_fingerprint=vk_intake._vk_continuation_page_fingerprint(page),
+        deepest_page_ts=deepest[0],
+        deepest_page_post_id=deepest[1],
+    )
+    calls = 0
+
+    async def wall(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return page
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    for index in range(2):
+        outcome = await vk_intake.process_vk_crawl_continuations(
+            db,
+            max_jobs=5,
+            max_pages_per_job=5,
+            worker_id=f"ignored-{index}",
+            run_id=f"ignored-{index}",
+        )
+        assert outcome["claimed"] == outcome["rebased"] == 1
+        async with db.raw_conn() as conn:
+            row = await (
+                await conn.execute(
+                    "SELECT status,offset,completed_at FROM vk_crawl_continuation"
+                )
+            ).fetchone()
+            assert row == ("retry", 4 + index * 2, None)
+            await conn.execute(
+                "UPDATE vk_crawl_continuation SET next_attempt_at=CURRENT_TIMESTAMP"
+            )
+            await conn.commit()
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_rebased_offset_survives_restart_and_drains_tail(tmp_path, monkeypatch):
+    path = tmp_path / "restart.sqlite"
+    db = await _db(path)
+    page_size = 2
+    old_wall = _posts(6, newest_ts=600)
+    inserted = _posts(2, first_id=100, newest_ts=900)
+    await _persist_posts(db, old_wall[:page_size])
+    await _persist_posts(db, inserted)
+    deepest = vk_intake._vk_continuation_deepest_boundary(old_wall[:page_size])
+    await vk_intake._schedule_vk_crawl_continuation(
+        db,
+        group_id=1,
+        owner_type="group",
+        scan_mode="incremental",
+        page_size=page_size,
+        since_ts=1,
+        offset=page_size,
+        horizon_ts=1,
+        original_cursor_ts=1,
+        original_cursor_post_id=0,
+        reason="restart",
+        last_page_fingerprint=vk_intake._vk_continuation_page_fingerprint(
+            old_wall[:page_size]
+        ),
+        deepest_page_ts=deepest[0],
+        deepest_page_post_id=deepest[1],
+    )
+    mutable_wall = inserted + old_wall
+
+    async def wall(_gid, _since, *, count, offset, **_kwargs):
+        return mutable_wall[offset : offset + count]
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    first = await vk_intake.process_vk_crawl_continuations(
+        db, max_jobs=1, max_pages_per_job=1, worker_id="before", run_id="before"
+    )
+    assert first["rebased"] == 1
+    await db.close()
+
+    restarted = Database(str(path))
+    await restarted.init()
+    async with restarted.raw_conn() as conn:
+        await conn.execute(
+            "UPDATE vk_crawl_continuation SET next_attempt_at=CURRENT_TIMESTAMP"
+        )
+        await conn.commit()
+    for index in range(10):
+        await vk_intake.process_vk_crawl_continuations(
+            restarted,
+            max_jobs=1,
+            max_pages_per_job=1,
+            worker_id=f"after-{index}",
+            run_id=f"after-{index}",
+        )
+        async with restarted.raw_conn() as conn:
+            state = await (
+                await conn.execute(
+                    "SELECT status FROM vk_crawl_continuation"
+                )
+            ).fetchone()
+            if state[0] == "done":
+                break
+            await conn.execute(
+                "UPDATE vk_crawl_continuation SET next_attempt_at=CURRENT_TIMESTAMP"
+            )
+            await conn.commit()
+    async with restarted.raw_conn() as conn:
+        state = await (
+            await conn.execute(
+                "SELECT status,last_typed_reason FROM vk_crawl_continuation"
+            )
+        ).fetchone()
+        ids = {
+            row[0]
+            for row in await (
+                await conn.execute("SELECT post_id FROM vk_source_packet")
+            ).fetchall()
+        }
+    assert state[0] == "done" and state[1] in {"EMPTY_PAGE", "SHORT_PAGE"}
+    assert ids == {post["post_id"] for post in mutable_wall}
+
+
+@pytest.mark.asyncio
+async def test_legacy_exact_done_reopens_on_initx2_and_schedule(tmp_path):
+    path = tmp_path / "legacy-exact.sqlite"
+    db = await _db(path)
+    await _schedule(db, page_size=2)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "UPDATE vk_crawl_continuation SET status='done',"
+            "last_typed_reason='EXACT_PAGE_REPLAY',completed_at=CURRENT_TIMESTAMP"
+        )
+        await conn.commit()
+    await db.close()
+
+    reopened = Database(str(path))
+    await reopened.init()
+    await reopened.init()
+    async with reopened.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT status,last_typed_reason,completed_at,COUNT(*) "
+                "FROM vk_crawl_continuation"
+            )
+        ).fetchone()
+    assert row == ("retry", "LEGACY_EXACT_PAGE_REPLAY_REOPENED", None, 1)
+
+    # Defensive producer adoption repairs a poisoned row even without restart.
+    async with reopened.raw_conn() as conn:
+        await conn.execute(
+            "UPDATE vk_crawl_continuation SET status='done',"
+            "last_typed_reason='EXACT_PAGE_REPLAY',completed_at=CURRENT_TIMESTAMP"
+        )
+        await conn.commit()
+    await _schedule(reopened, page_size=2)
+    async with reopened.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT status,last_typed_reason,completed_at,COUNT(*) "
+                "FROM vk_crawl_continuation"
+            )
+        ).fetchone()
+    assert row == ("retry", "LEGACY_EXACT_PAGE_REPLAY_REOPENED", None, 1)
+
+
+@pytest.mark.asyncio
+async def test_legacy_target_offset_collision_stays_retry_not_stale_or_done(
+    tmp_path, monkeypatch
+):
+    db = await _db(tmp_path / "offset-collision.sqlite")
+    page = _posts(2, newest_ts=400)
+    await _persist_posts(db, page)
+    deepest = vk_intake._vk_continuation_deepest_boundary(page)
+    await vk_intake._schedule_vk_crawl_continuation(
+        db,
+        group_id=1,
+        owner_type="group",
+        scan_mode="incremental",
+        page_size=2,
+        since_ts=1,
+        offset=2,
+        horizon_ts=1,
+        original_cursor_ts=1,
+        original_cursor_post_id=0,
+        reason="collision_source",
+        last_page_fingerprint=vk_intake._vk_continuation_page_fingerprint(page),
+        deepest_page_ts=deepest[0],
+        deepest_page_post_id=deepest[1],
+    )
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO vk_crawl_continuation(
+                source_type,owner_id,owner_type,scan_mode,page_size,since_ts,offset,
+                horizon_ts,original_cursor_ts,original_cursor_post_id,reason,status
+            ) VALUES('vk',1,'group','incremental',2,1,4,1,1,0,'legacy_duplicate','pending')
+            """
+        )
+        await conn.commit()
+
+    async def wall(*_args, **_kwargs):
+        return page
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    outcome = await vk_intake.process_vk_crawl_continuations(
+        db, max_jobs=1, worker_id="collision", run_id="collision"
+    )
+    async with db.raw_conn() as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT offset,status,last_typed_reason FROM vk_crawl_continuation "
+                "ORDER BY id"
+            )
+        ).fetchall()
+    assert outcome["completed"] == 0
+    assert rows[0] == (2, "retry", "OFFSET_DRIFT_COLLISION")
+    assert rows[1][:2] == (4, "pending")
 
 
 @pytest.mark.asyncio

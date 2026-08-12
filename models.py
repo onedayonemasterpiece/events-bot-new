@@ -2477,6 +2477,8 @@ class VKCrawlContinuation(SQLModel, table=True):
     locked_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     run_id: Optional[str] = None
     last_page_fingerprint: Optional[str] = None
+    deepest_page_ts: Optional[int] = None
+    deepest_page_post_id: Optional[int] = None
     last_typed_reason: Optional[str] = None
     completed_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True)))
     created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True)))
