@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- **Release control:** disabled the workflow that automatically promoted Draft
+  PRs and enabled auto-merge; readiness and merge now require an explicit
+  controlled release operation.
 - **Private Events MCP / Telegram documents (default off):** added one-file
   Telegram `send_message` delivery from actual ChatGPT `fileParams` through the
   existing immutable asset stage/prepare/commit boundary. The closed policy
