@@ -225,6 +225,10 @@ KERNEL_REF = os.getenv("TG_MONITORING_KERNEL_REF", "artkoder/telegram-monitor-bo
 KERNEL_PATH = Path(os.getenv("TG_MONITORING_KERNEL_PATH", "kaggle/TelegramMonitor"))
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 GOOGLE_AI_PACKAGE_PATH = PROJECT_ROOT / "google_ai"
+SOURCE_PARSE_SHARED_PATHS = (
+    PROJECT_ROOT / "source_parse_contract.py",
+    PROJECT_ROOT / "source_contradiction_facts.py",
+)
 
 DATASET_PROPAGATION_WAIT_SECONDS = int(os.getenv("TG_MONITORING_DATASET_WAIT", "30"))
 POLL_INTERVAL_SECONDS = int(os.getenv("TG_MONITORING_POLL_INTERVAL", "30"))
@@ -825,6 +829,13 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
     )
     script_lines = script_source.splitlines(keepends=True)
     embedded_google_ai = json.dumps(_embedded_google_ai_sources(), ensure_ascii=False)
+    embedded_source_parse = json.dumps(
+        {
+            path.name: path.read_text(encoding="utf-8")
+            for path in SOURCE_PARSE_SHARED_PATHS
+        },
+        ensure_ascii=False,
+    )
     future_import_lines: list[str] = []
     while script_lines and script_lines[0].startswith("from __future__ import "):
         future_import_lines.append(script_lines.pop(0))
@@ -836,6 +847,7 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
             "from pathlib import Path as _TgNotebookPath\n",
             "import sys as _TgNotebookSys\n",
             "_TG_EMBEDDED_GOOGLE_AI = " + embedded_google_ai + "\n",
+            "_TG_EMBEDDED_SOURCE_PARSE = " + embedded_source_parse + "\n",
             "_TG_EMBEDDED_ROOT = (_TgNotebookPath.cwd() / 'embedded_repo_bundle').resolve()\n",
             "_TG_EMBEDDED_PACKAGE = _TG_EMBEDDED_ROOT / 'google_ai'\n",
             "_TG_EMBEDDED_PACKAGE.mkdir(parents=True, exist_ok=True)\n",
@@ -843,6 +855,8 @@ def _build_notebook_payload_from_script(script_path: Path) -> dict[str, Any]:
             "    _tg_target = _TG_EMBEDDED_PACKAGE / _tg_name\n",
             "    _tg_target.parent.mkdir(parents=True, exist_ok=True)\n",
             "    _tg_target.write_text(_tg_body, encoding='utf-8')\n",
+            "for _tg_name, _tg_body in _TG_EMBEDDED_SOURCE_PARSE.items():\n",
+            "    (_TG_EMBEDDED_ROOT / _tg_name).write_text(_tg_body, encoding='utf-8')\n",
             "if str(_TG_EMBEDDED_ROOT) not in _TgNotebookSys.path:\n",
             "    _TgNotebookSys.path.insert(0, str(_TG_EMBEDDED_ROOT))\n",
             "_TG_NOTEBOOK_ROOT = _TgNotebookPath.cwd().resolve()\n",

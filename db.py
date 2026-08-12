@@ -2790,6 +2790,7 @@ class Database:
                     thought_tokens INTEGER,
                     reserved_tokens INTEGER,
                     primary_disposition TEXT,
+                    no_event_reason TEXT,
                     verification_triggered INTEGER NOT NULL DEFAULT 0,
                     verification_reason TEXT,
                     verification_disposition TEXT,
@@ -2812,6 +2813,7 @@ class Database:
             await _add_column(conn, "vk_source_packet_attempt", "response_id TEXT")
             await _add_column(conn, "vk_source_packet_attempt", "finish_reason TEXT")
             await _add_column(conn, "vk_source_packet_attempt", "provider_retry_after INTEGER")
+            await _add_column(conn, "vk_source_packet_attempt", "no_event_reason TEXT")
             await conn.execute(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS ux_vk_packet_success_parse

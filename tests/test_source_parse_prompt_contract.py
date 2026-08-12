@@ -16,6 +16,8 @@ def _prompt_fixture(tmp_path: Path) -> Path:
         "docs/llm/prompts.md",
         "vk_intake.py",
         "kaggle/TelegramMonitor/telegram_monitor.py",
+        "source_parse_contract.py",
+        "main.py",
     ):
         destination = tmp_path / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -79,3 +81,24 @@ def test_gate_fails_if_legacy_tg_extractor_becomes_reachable(tmp_path: Path) -> 
     path.write_text(source, encoding="utf-8")
     violations = find_violations(root)
     assert any("became reachable" in item for item in violations)
+
+
+def test_n9_gate_fails_if_mandatory_no_event_reason_instruction_is_removed(tmp_path: Path) -> None:
+    root = _prompt_fixture(tmp_path)
+    path = root / "docs/llm/prompts.md"
+    source = path.read_text(encoding="utf-8")
+    source = source.replace("`no_event_reason` is mandatory", "`no_event_reason` is optional", 1)
+    path.write_text(source, encoding="utf-8")
+    assert any("not explicitly mandatory" in item for item in find_violations(root))
+
+
+def test_n9_gate_fails_on_shared_no_event_enum_drift(tmp_path: Path) -> None:
+    root = _prompt_fixture(tmp_path)
+    path = root / "source_parse_contract.py"
+    source = path.read_text(encoding="utf-8").replace(
+        'OUT_OF_SCOPE = "OUT_OF_SCOPE"',
+        'OUT_OF_SCOPE = "OUT_OF_SCOPE"\n    UNKNOWN = "UNKNOWN"',
+        1,
+    )
+    path.write_text(source, encoding="utf-8")
+    assert any("enum drift" in item for item in find_violations(root))

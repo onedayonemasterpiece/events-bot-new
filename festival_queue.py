@@ -959,6 +959,9 @@ async def _process_vk_item(
         festival_names=festival_names,
         festival_alias_pairs=alias_pairs or None,
     )
+    if getattr(parsed, "is_retry", False):
+        reason = getattr(getattr(parsed, "retry_reason", None), "value", None)
+        raise RuntimeError(f"source parse retry required: {reason or 'SCHEMA_MISMATCH'}")
     parsed_events = [ev for ev in list(parsed or []) if isinstance(ev, dict)]
     payload = getattr(parsed, "festival", None)
     decision = detect_festival_context(

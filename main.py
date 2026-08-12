@@ -173,6 +173,7 @@ from source_parse_contract import (
     EvidenceManifest,
     ParsedEvents,
     SourceParseDecision,
+    SourceNoEventReason,
     SourceParseRetryReason,
     VerificationReason,
     build_verification_request,
@@ -181,6 +182,7 @@ from source_parse_contract import (
     provider_attempt_metadata,
     provider_response_is_truncated,
 )
+from source_contradiction_facts import derive_source_contradiction_facts
 from telegram_business import (
     WEBHOOK_ALLOWED_UPDATES,
     cache_business_connection,
@@ -10146,10 +10148,11 @@ async def _parse_event_via_gemma(
         user_msg += text
 
     output_contract = (
-        "Return ONLY one typed JSON object with keys: disposition, events, lifecycle_actions, evidence_complete, parse_version.\n"
+        "Return ONLY one typed JSON object with keys: disposition, events, lifecycle_actions, evidence_complete, parse_version, no_event_reason.\n"
         "disposition is exactly one of EVENTS_FOUND, CONFIRMED_NO_EVENT, LIFECYCLE_ONLY, MIXED, RETRY_REQUIRED.\n"
         "Return every event/session in events and every cancellation/postponement/reschedule/update in lifecycle_actions.\n"
-        "CONFIRMED_NO_EVENT is allowed only after all supplied source text and OCR were examined and evidence_complete is true.\n"
+        "CONFIRMED_NO_EVENT is allowed only after all supplied source text and OCR were examined, evidence_complete is true, and no_event_reason is exactly one of NO_ATTENDABLE_EVENT, GIVEAWAY_ONLY, VAGUE_TEASER, REFERRAL_ONLY, SERVICE_OR_RENTAL, RECAP_ONLY, OUT_OF_SCOPE.\n"
+        "no_event_reason is mandatory only for CONFIRMED_NO_EVENT and forbidden for every other disposition.\n"
         "CRITICAL: No comments. No markdown. No trailing commas. No text outside JSON."
     )
 
@@ -10491,6 +10494,7 @@ async def parse_event_via_llm(
     backend_raw = os.getenv("EVENT_PARSE_LLM")
     backend = (backend_raw or "").strip().lower()
     use_4o = backend in {"4o", "openai", "gpt-4o", "chatgpt"}
+    semantic_source_text = str(extra.get("semantic_source_text") or text or "")
     # Hard wall-clock cap on the Gemma event_parse stage.
     #
     # Without this, a Gemma 4 ``500 INTERNAL`` storm can keep the rate-limit
@@ -10579,7 +10583,9 @@ async def parse_event_via_llm(
         )
         return SourceParseDecision.retry(
             SourceParseRetryReason.TECHNICAL_ERROR,
-            evidence_manifest=_event_parse_evidence_manifest(text, poster_texts, extra),
+            evidence_manifest=_event_parse_evidence_manifest(
+                semantic_source_text, poster_texts, extra
+            ),
             provider_attempts=[
                 provider_attempt_metadata(
                     {"error_type": "wall_clock_timeout"}, attempt_kind="primary"
@@ -10593,14 +10599,43 @@ async def parse_event_via_llm(
         )
         return SourceParseDecision.retry(
             SourceParseRetryReason.TECHNICAL_ERROR,
-            evidence_manifest=_event_parse_evidence_manifest(text, poster_texts, extra),
+            evidence_manifest=_event_parse_evidence_manifest(
+                semantic_source_text, poster_texts, extra
+            ),
             provider_attempts=[provider_attempt_metadata(exc, attempt_kind="primary")],
         )
+
+    # A typed primary retry is already a terminal technical outcome for this
+    # attempt.  Do not recursively "verify" schema/provider uncertainty.
+    if result.is_retry:
+        return result
 
     # The verifier is not an always-on stage.  Deterministic checks can only
     # supply one of the seven closed contradiction facts; they never delete a
     # draft or decide that a source is a no-event by themselves.
+    evidence_manifest = result.evidence_manifest or _event_parse_evidence_manifest(
+        semantic_source_text, poster_texts, extra
+    )
+    source_context = (
+        dict(extra.get("source_context"))
+        if isinstance(extra.get("source_context"), Mapping)
+        else {}
+    )
     supplied_facts = list(extra.get("contradiction_facts") or ())
+    supplied_facts.extend(
+        derive_source_contradiction_facts(
+            semantic_source_text,
+            poster_texts,
+            {
+                **source_context,
+                "today": datetime.now(LOCAL_TZ).date().isoformat(),
+                "published_at": extra.get("published_at"),
+                "source_channel": source_channel,
+            },
+            result,
+            evidence_manifest,
+        )
+    )
     defender_reasons = _event_parse_defender_check(result)
     if defender_reasons:
         supplied_facts.append(
@@ -10610,15 +10645,11 @@ async def parse_event_via_llm(
             )
         )
 
-    evidence_manifest = result.evidence_manifest or _event_parse_evidence_manifest(
-        text, poster_texts, extra
-    )
-
     async def _invoke_verifier(
         facts: tuple[ContradictionFact, ...],
     ) -> SourceParseDecision:
         verification_request = build_verification_request(
-            source_text=text,
+            source_text=semantic_source_text,
             ocr_blocks=poster_texts,
             evidence_manifest=evidence_manifest,
             primary_decision=result,
@@ -10631,11 +10662,7 @@ async def parse_event_via_llm(
             ),
             source_context={
                 "channel": source_channel,
-                **(
-                    dict(extra.get("source_context"))
-                    if isinstance(extra.get("source_context"), Mapping)
-                    else {}
-                ),
+                **source_context,
             },
         )
         verify_extra = dict(extra)
@@ -17393,6 +17420,7 @@ async def add_events_from_text(
         if (
             parsed.disposition.value == "CONFIRMED_NO_EVENT"
             and parsed.evidence_complete
+            and isinstance(parsed.no_event_reason, SourceNoEventReason)
             and not parsed_events
             and not parsed.lifecycle_actions
         ):

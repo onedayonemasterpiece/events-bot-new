@@ -34,6 +34,7 @@ def test_zero_extraction_requires_complete_typed_no_event() -> None:
         "events": [],
         "source_parse_decision": {
             "disposition": "CONFIRMED_NO_EVENT",
+            "no_event_reason": "NO_ATTENDABLE_EVENT",
             "events": [],
             "lifecycle_actions": [],
             "evidence_manifest": EvidenceManifest.complete_source(
@@ -75,6 +76,7 @@ def test_unknown_decision_and_event_mismatch_are_typed_schema_retries() -> None:
         "events": [{"title": "Outer"}],
         "source_parse_decision": {
             "disposition": "CONFIRMED_NO_EVENT",
+            "no_event_reason": "NO_ATTENDABLE_EVENT",
             "events": [],
             "lifecycle_actions": [],
             "evidence_manifest": manifest,
@@ -97,6 +99,7 @@ def test_manifest_hash_or_attachment_cardinality_mismatch_is_retryable() -> None
         "events": [],
         "source_parse_decision": {
             "disposition": "CONFIRMED_NO_EVENT",
+            "no_event_reason": "NO_ATTENDABLE_EVENT",
             "events": [],
             "lifecycle_actions": [],
             "evidence_manifest": manifest,
@@ -124,6 +127,7 @@ def test_missing_ocr_or_truncation_keeps_carrier_unresolved() -> None:
     truncated = {
         "source_parse_decision": {
             "disposition": "CONFIRMED_NO_EVENT",
+            "no_event_reason": "NO_ATTENDABLE_EVENT",
             "evidence_complete": True,
             "evidence_manifest": {"truncation_flag": True},
         }
@@ -230,6 +234,7 @@ async def test_complete_typed_no_event_advances_telegram_cursor(tmp_path) -> Non
                             "events": [],
                             "source_parse_decision": {
                                 "disposition": "CONFIRMED_NO_EVENT",
+                                "no_event_reason": "VAGUE_TEASER",
                                 "events": [],
                                 "lifecycle_actions": [],
                                 "evidence_manifest": EvidenceManifest.complete_source(
@@ -363,6 +368,7 @@ def test_telegram_semantic_detectors_are_hints_not_terminal_continues() -> None:
 
 def test_forwarded_empty_result_requires_typed_no_event_or_retry_message() -> None:
     source = (ROOT / "main_part2.py").read_text(encoding="utf-8")
-    assert 'disposition == "CONFIRMED_NO_EVENT" and evidence_complete is True' in source
+    assert 'disposition == "CONFIRMED_NO_EVENT"' in source
+    assert "no_event_reason in {item.value for item in SourceNoEventReason}" in source
     assert "это не означает, что событий нет" in source
     assert "TelegramSourceForceMessage" in source

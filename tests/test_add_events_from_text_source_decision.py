@@ -11,6 +11,7 @@ from poster_media import PosterMedia
 from source_parse_contract import (
     EvidenceManifest,
     SourceDisposition,
+    SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
 )
@@ -35,6 +36,7 @@ async def test_typed_empty_source_decision_never_enters_smart_update(
         decision = SourceParseDecision(
             [],
             disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
             evidence_manifest=manifest,
             evidence_complete=True,
         )
@@ -86,6 +88,7 @@ async def test_direct_poster_media_passes_truthful_attachment_cardinality(
         return SourceParseDecision(
             [],
             disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
             evidence_manifest=manifest,
             evidence_complete=True,
         )

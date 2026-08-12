@@ -34,6 +34,7 @@ from markup import (
     tel_href_for_phone_value,
 )
 from llm_source_grounding import claim_is_grounded
+from source_parse_contract import SourceNoEventReason
 
 from models import Event, EventSource, EventSourceFact, Festival, WeekPage, WeekendPage, MonthPage, MonthPagePart, VkMissRecord, VkMissReviewSession, User, TelegramSource, TelegramSourceForceMessage
 from source_parsing.telegram.commands import tg_monitor_router
@@ -17303,7 +17304,9 @@ async def _vkrev_import_flow(
             )
             return
         if product_rejection_reasons and not festival_obj:
-            await vk_review.mark_rejected(db, inbox_id)
+            await vk_review.mark_rejected(
+                db, inbox_id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+            )
             await bot.send_message(
                 chat_id,
                 "⛔ События отклонены продуктовой политикой: "
@@ -17997,7 +18000,9 @@ async def handle_vk_review_cb(callback: types.CallbackQuery, db: Database, bot: 
                 "Отправьте доп. информацию одним сообщением",
             )
         elif action == "reject":
-            await vk_review.mark_rejected(db, inbox_id)
+            await vk_review.mark_rejected(
+                db, inbox_id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+            )
             vk_review_actions_total["rejected"] += 1
             post_url: str | None = None
             try:
@@ -19534,7 +19539,17 @@ async def _process_forwarded(
             getattr(disposition_raw, "value", disposition_raw) or ""
         ).strip().upper()
         evidence_complete = getattr(results, "evidence_complete", None)
-        if disposition == "CONFIRMED_NO_EVENT" and evidence_complete is True:
+        no_event_reason_raw = getattr(
+            getattr(results, "source_decision", None), "no_event_reason", None
+        )
+        no_event_reason = str(
+            getattr(no_event_reason_raw, "value", no_event_reason_raw) or ""
+        ).strip().upper()
+        if (
+            disposition == "CONFIRMED_NO_EVENT"
+            and evidence_complete is True
+            and no_event_reason in {item.value for item in SourceNoEventReason}
+        ):
             logging.info("forwarded source confirmed no-event by typed LLM decision")
             await bot.send_message(
                 message.chat.id,

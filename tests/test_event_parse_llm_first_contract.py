@@ -8,6 +8,7 @@ from google_ai.exceptions import RateLimitError
 from source_parse_contract import (
     EvidenceManifest,
     SourceDisposition,
+    SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
     VerificationReason,
@@ -18,6 +19,11 @@ def _decision(events=None, disposition=None):
     return SourceParseDecision(
         events or [],
         disposition=disposition,
+        no_event_reason=(
+            SourceNoEventReason.NO_ATTENDABLE_EVENT
+            if disposition is SourceDisposition.CONFIRMED_NO_EVENT
+            else None
+        ),
         evidence_manifest=EvidenceManifest.complete_source("source", ["ocr"]),
     )
 
@@ -81,6 +87,115 @@ async def test_t38_normal_carrier_has_exactly_one_primary_call(monkeypatch):
     result = await main.parse_event_via_llm("source", poster_texts=["ocr"])
     assert len(calls) == 1
     assert result.disposition is SourceDisposition.EVENTS_FOUND
+
+
+@pytest.mark.parametrize(
+    ("source_text", "ocr", "primary", "expected_reason"),
+    [
+        (
+            "Приглашаем на концерт 15.09 в 18:00, билеты доступны по ссылке",
+            [],
+            _decision([], SourceDisposition.CONFIRMED_NO_EVENT),
+            VerificationReason.NO_EVENT_WITH_STRONG_SIGNALS,
+        ),
+        (
+            "Подробности на афише",
+            ["Лекция 12.09.2026 в 18:00"],
+            _decision([{"title": "Лекция", "date": "2026-09-13"}]),
+            VerificationReason.EVENT_DATE_CONFLICT,
+        ),
+        (
+            "Сеансы 12.09: начала в 12:00, 15:00 и 18:00",
+            [],
+            _decision([{"title": "Один сеанс", "date": "2026-09-12", "time": "12:00"}]),
+            VerificationReason.MULTIPLE_OCCURRENCES_COLLAPSED,
+        ),
+        (
+            "Лекция 31.02.2026 в 28:90",
+            [],
+            _decision([{"title": "Лекция", "date": "2026-02-31", "time": "28:90"}]),
+            VerificationReason.IMPOSSIBLE_SCHEMA_VALUE,
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_v1_v2_v3_v6_production_collector_automatically_invokes_one_verifier(
+    monkeypatch, source_text, ocr, primary, expected_reason
+):
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    calls = []
+
+    async def fake_gemma(*args, **kwargs):
+        calls.append(kwargs)
+        if kwargs.get("verification_request"):
+            reasons = {
+                item["reason"] for item in kwargs["verification_request"]["contradiction_facts"]
+            }
+            assert expected_reason.value in reasons
+            return _decision([{"title": "Исправленное событие", "date": "2026-09-12"}])
+        return primary
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    result = await main.parse_event_via_llm(
+        source_text,
+        poster_texts=ocr,
+        published_at="2026-08-12T10:00:00+02:00",
+    )
+    assert len(calls) == 2
+    assert result.disposition is SourceDisposition.EVENTS_FOUND
+
+
+@pytest.mark.asyncio
+async def test_v5_lifecycle_plus_new_event_automatically_invokes_verifier(monkeypatch):
+    from source_parse_contract import LifecycleAction, LifecycleActionType
+
+    primary = SourceParseDecision(
+        [],
+        disposition=SourceDisposition.LIFECYCLE_ONLY,
+        lifecycle_actions=[
+            LifecycleAction(LifecycleActionType.CANCEL, target_title="Старый концерт")
+        ],
+        evidence_manifest=EvidenceManifest.complete_source("source"),
+    )
+    calls = []
+
+    async def fake_gemma(*args, **kwargs):
+        calls.append(kwargs)
+        if kwargs.get("verification_request"):
+            reasons = {
+                item["reason"] for item in kwargs["verification_request"]["contradiction_facts"]
+            }
+            assert VerificationReason.LIFECYCLE_MIXED_CONTENT_CONFLICT.value in reasons
+            return _decision([{"title": "Новый концерт", "date": "2026-09-20"}])
+        return primary
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    result = await main.parse_event_via_llm(
+        "Старый концерт отменён. Приглашаем на концерт 20.09 в 19:00, билеты доступны."
+    )
+    assert len(calls) == 2
+    assert result[0]["title"] == "Новый концерт"
+
+
+@pytest.mark.asyncio
+async def test_v10_auto_verifier_timeout_preserves_positive_sibling(monkeypatch):
+    primary = _decision([{"title": "Лекция", "date": "2026-09-13"}])
+    calls = 0
+
+    async def fake_gemma(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if kwargs.get("verification_request"):
+            raise TimeoutError("verification timed out")
+        return primary
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    result = await main.parse_event_via_llm("Лекция 12.09.2026 в 18:00")
+    assert calls == 2
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR
+    assert list(result) == [{"title": "Лекция", "date": "2026-09-13"}]
 
 
 @pytest.mark.asyncio

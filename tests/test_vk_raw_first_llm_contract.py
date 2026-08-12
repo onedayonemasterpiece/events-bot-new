@@ -410,7 +410,9 @@ async def test_unknown_and_bad_hints_are_due_with_age_fairness(tmp_path):
         post = await vk_review.pick_next(db, 10, "b", resume_locked=False)
         assert post is not None
         picked.append(post.post_id)
-        await vk_review.mark_rejected(db, post.id)
+        await vk_review.mark_rejected(
+            db, post.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+        )
     assert picked == [1, 2, 3]
 
 
@@ -549,9 +551,13 @@ def test_static_vk_ingestion_bans_semantic_shortcuts():
             SourceDisposition.CONFIRMED_NO_EVENT,
             {"default_ticket_link": "https://tickets.example/event"},
         ),
+        ("J", "Только ссылка на другой канал с подробностями", False, [], [], SourceDisposition.CONFIRMED_NO_EVENT, {}),
+        ("K", "Сдаётся зал в аренду для ваших мероприятий", False, [], [], SourceDisposition.CONFIRMED_NO_EVENT, {}),
+        ("L", "Фотоотчёт о прошедшем концерте", False, [], [], SourceDisposition.CONFIRMED_NO_EVENT, {}),
+        ("M", "Вакансия администратора без мероприятия", False, [], [], SourceDisposition.CONFIRMED_NO_EVENT, {}),
     ],
 )
-async def test_vk_live_prompt_a_i_typed_provider_contract(
+async def test_n9_vk_live_prompt_a_m_typed_provider_contract(
     monkeypatch,
     case_id,
     source_text,
@@ -591,12 +597,25 @@ async def test_vk_live_prompt_a_i_typed_provider_contract(
             }
             emitted_payloads.append(payload)
             return payload
+        reason = {
+            "F": SourceNoEventReason.VAGUE_TEASER,
+            "J": SourceNoEventReason.REFERRAL_ONLY,
+            "K": SourceNoEventReason.SERVICE_OR_RENTAL,
+            "L": SourceNoEventReason.RECAP_ONLY,
+            "M": SourceNoEventReason.OUT_OF_SCOPE,
+        }.get(
+            case_id,
+            SourceNoEventReason.NO_ATTENDABLE_EVENT
+            if disposition is SourceDisposition.CONFIRMED_NO_EVENT
+            else None,
+        )
         return SourceParseDecision(
             events,
             disposition=disposition,
             lifecycle_actions=actions,
             evidence_manifest=manifest,
             evidence_complete=manifest.evidence_complete,
+            no_event_reason=reason,
         )
 
     monkeypatch.setattr(main, "parse_event_via_llm", typed_provider)
@@ -632,9 +651,57 @@ async def test_vk_live_prompt_a_i_typed_provider_contract(
             drafts.to_receipt_payload()["decision"]["no_event_reason"]
             == "GIVEAWAY_ONLY"
         )
+    if case_id in {"A", "H", "I"}:
+        assert drafts.decision.no_event_reason is SourceNoEventReason.NO_ATTENDABLE_EVENT
+    if case_id == "F":
+        assert drafts.decision.no_event_reason is SourceNoEventReason.VAGUE_TEASER
+    if case_id in {"J", "K", "L", "M"}:
+        expected_reason = {
+            "J": SourceNoEventReason.REFERRAL_ONLY,
+            "K": SourceNoEventReason.SERVICE_OR_RENTAL,
+            "L": SourceNoEventReason.RECAP_ONLY,
+            "M": SourceNoEventReason.OUT_OF_SCOPE,
+        }[case_id]
+        assert drafts.decision.no_event_reason is expected_reason
     if incomplete and events:
         assert drafts.enrichment_required is True
         assert len(drafts) == len(events)
+
+
+@pytest.mark.asyncio
+async def test_v1_vk_production_wiring_auto_verifies_strong_no_event_contradiction(monkeypatch):
+    source = "Приглашаем на концерт 15.09 в 18:00, билеты доступны по ссылке"
+    manifest = EvidenceManifest.complete_source(source)
+    calls = []
+
+    async def fake_gemma(text, source_channel=None, **kwargs):
+        calls.append(kwargs)
+        if kwargs.get("verification_request"):
+            request = kwargs["verification_request"]
+            assert request["source_text"] == source
+            assert "NO_EVENT_WITH_STRONG_SIGNALS" in {
+                fact["reason"] for fact in request["contradiction_facts"]
+            }
+            return SourceParseDecision(
+                [{"title": "Концерт группы Север", "date": "2026-09-15", "time": "18:00"}],
+                evidence_manifest=manifest,
+            )
+        return SourceParseDecision(
+            [],
+            disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
+            evidence_manifest=manifest,
+        )
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    drafts, _ = await vk_intake.build_event_drafts_from_vk(
+        source,
+        evidence_manifest=manifest,
+    )
+    assert len(calls) == 2
+    assert drafts.disposition is SourceDisposition.EVENTS_FOUND
+    assert [draft.title for draft in drafts] == ["Концерт группы Север"]
 
 
 @pytest.mark.asyncio
@@ -787,6 +854,7 @@ async def test_vk_build_without_photos_has_explicit_ocr_state(tmp_path, monkeypa
             "lifecycle_actions": [],
             "evidence_complete": True,
             "parse_version": "source-parse-v1",
+            "no_event_reason": "NO_ATTENDABLE_EVENT",
         }
 
     monkeypatch.setattr(vk_intake.poster_ocr, "recognize_posters", recognize)
@@ -845,5 +913,125 @@ async def test_load_successful_receipt_invalidates_old_untyped_terminal(tmp_path
             db, source_packet_id=packet_id, prompt_version="p", model="m"
         )
     assert loaded is None
-    assert "invalidate_and_reparse" in caplog.text
+    assert "source_parse_schema_alert" in caplog.text
+    async with db.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT structured_response_valid,no_event_reason FROM vk_source_packet_attempt WHERE source_packet_id=?",
+                (packet_id,),
+            )
+        ).fetchone()
+    assert tuple(row) == (0, None)
+
+
+@pytest.mark.asyncio
+async def test_n7_vk_terminal_rejection_requires_closed_reason_and_persists_typed_value(tmp_path):
+    db = await _db(tmp_path)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_inbox(group_id,post_id,date,text,has_date,status) VALUES(1,1,1,'x',0,'pending')"
+        )
+        await conn.commit()
+        inbox_id = int((await (await conn.execute("SELECT id FROM vk_inbox")).fetchone())[0])
+
+    with pytest.raises(ValueError, match="closed no_event_reason"):
+        await vk_review.mark_rejected(db, inbox_id, no_event_reason="UNKNOWN")
+
+    await vk_review.mark_rejected(
+        db,
+        inbox_id,
+        no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
+    )
+    async with db.raw_conn() as conn:
+        value = (await (await conn.execute(
+            "SELECT last_typed_reason FROM vk_inbox WHERE id=?", (inbox_id,)
+        )).fetchone())[0]
+    assert value == "CONFIRMED_NO_EVENT:NO_ATTENDABLE_EVENT"
+
+
+@pytest.mark.asyncio
+async def test_n7_valid_no_event_reason_is_durable_on_parse_attempt(tmp_path):
+    db = await _db(tmp_path)
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post={"date": 1, "post_id": 88, "text": "recap", "photos": []},
+        source_url="https://vk.com/wall-1_88",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    manifest = EvidenceManifest.complete_source("recap")
+    decision = SourceParseDecision(
+        [],
+        disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+        no_event_reason=SourceNoEventReason.RECAP_ONLY,
+        evidence_manifest=manifest,
+    )
+    receipt = vk_intake.DraftParseResult([], decision=decision).to_receipt_payload()
+    await vk_review.record_source_parse_attempt(
+        db,
+        source_packet_id=packet_id,
+        prompt_version="p",
+        model="m",
+        evidence_manifest=manifest.to_payload(),
+        parse_result=receipt,
+        disposition="CONFIRMED_NO_EVENT",
+        retry_reason=None,
+        no_event_reason="RECAP_ONLY",
+        event_child_count=0,
+        lifecycle_action_count=0,
+    )
+    async with db.raw_conn() as conn:
+        row = await (await conn.execute(
+            "SELECT structured_response_valid,no_event_reason FROM vk_source_packet_attempt WHERE source_packet_id=?",
+            (packet_id,),
+        )).fetchone()
+    assert tuple(row) == (1, "RECAP_ONLY")
+
+
+@pytest.mark.asyncio
+async def test_v10_verifier_timeout_is_recorded_as_durable_retry(tmp_path):
+    db = await _db(tmp_path)
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post={"date": 1, "post_id": 89, "text": "source", "photos": []},
+        source_url="https://vk.com/wall-1_89",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    await vk_review.record_source_parse_attempt(
+        db,
+        source_packet_id=packet_id,
+        prompt_version="p",
+        model="m",
+        evidence_manifest=EvidenceManifest.complete_source("source").to_payload(),
+        parse_result=None,
+        disposition="RETRY_REQUIRED",
+        retry_reason="VERIFICATION_TECHNICAL_ERROR",
+        event_child_count=1,
+        lifecycle_action_count=0,
+        attempt_kind="verification",
+        verification_triggered=True,
+        verification_reason="EVENT_DATE_CONFLICT",
+        verification_disposition="RETRY_REQUIRED",
+    )
+    async with db.raw_conn() as conn:
+        attempt = await (await conn.execute(
+            "SELECT attempt_kind,structured_response_valid,typed_error_reason,verification_reason "
+            "FROM vk_source_packet_attempt WHERE source_packet_id=?",
+            (packet_id,),
+        )).fetchone()
+        packet = await (await conn.execute(
+            "SELECT llm_status,last_typed_reason FROM vk_source_packet WHERE id=?",
+            (packet_id,),
+        )).fetchone()
+    assert tuple(attempt) == (
+        "verification", 0, "VERIFICATION_TECHNICAL_ERROR", "EVENT_DATE_CONFLICT"
+    )
+    assert tuple(packet) == ("retry_scheduled", "VERIFICATION_TECHNICAL_ERROR")
     await db.close()

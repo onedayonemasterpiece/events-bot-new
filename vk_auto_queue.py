@@ -24,6 +24,7 @@ from source_parse_contract import (
     EvidenceManifest,
     PARSE_VERSION,
     SourceDisposition,
+    SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
 )
@@ -2329,6 +2330,11 @@ async def _process_vk_inbox_row(
                         if is_final_attempt
                         else 0
                     ),
+                    no_event_reason=(
+                        str(getattr(decision.no_event_reason, "value", decision.no_event_reason))
+                        if is_final_attempt and decision.no_event_reason is not None
+                        else None
+                    ),
                     quota_scope=provider_attempt.get("quota_scope"),
                     request_id=provider_attempt.get("request_id"),
                     response_id=provider_attempt.get("response_id"),
@@ -2515,14 +2521,21 @@ async def _process_vk_inbox_row(
         if (
             decision.disposition is SourceDisposition.CONFIRMED_NO_EVENT
             and bool(getattr(decision, "evidence_complete", False))
+            and isinstance(getattr(decision, "no_event_reason", None), SourceNoEventReason)
         ):
             report.inbox_rejected += 1
-            await vk_review.mark_rejected(db, int(post.id))
+            no_event_reason = decision.no_event_reason.value
+            await vk_review.mark_rejected(
+                db,
+                int(post.id),
+                no_event_reason=no_event_reason,
+            )
             await vk_review.record_carrier_resolution(
                 db,
                 source_packet_id=getattr(post, "source_packet_id", None),
                 child_outcomes=[],
                 terminal_carrier_outcome="CONFIRMED_NO_EVENT",
+                typed_error_reason=f"CONFIRMED_NO_EVENT:{no_event_reason}",
             )
             await _emit_progress(
                 "⏭️",

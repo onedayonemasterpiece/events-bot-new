@@ -30,6 +30,17 @@ SCRIPT_DIR = Path(globals().get('__file__', Path.cwd() / 'telegram_monitor.py'))
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from source_parse_contract import (
+    EvidenceManifest,
+    SourceDisposition,
+    SourceNoEventReason,
+    SourceParseDecision,
+    SourceParseRetryReason,
+    VerificationReason,
+    decision_from_provider_payload,
+)
+from source_contradiction_facts import derive_source_contradiction_facts
+
 def _load_status_loader():
     try:
         from kaggle_status_client import load_status_client as loader
@@ -1707,33 +1718,20 @@ EVENT_ARRAY_SCHEMA = {
 }
 
 # Source-level semantic result shared with source_parsing/telegram/handlers.py.
-# Keep this dependency-light because the Kaggle runner is staged as one file.
+# Keep this dependency-light because the Kaggle runner embeds this module and
+# the two shared source-parse modules as its complete import closure.
 # The producer, rather than the model, supplies the evidence manifest below.
 SOURCE_PARSE_DISPOSITIONS = {
-    'EVENTS_FOUND',
-    'CONFIRMED_NO_EVENT',
-    'LIFECYCLE_ONLY',
-    'MIXED',
-    'RETRY_REQUIRED',
+    'EVENTS_FOUND', 'CONFIRMED_NO_EVENT', 'LIFECYCLE_ONLY', 'MIXED', 'RETRY_REQUIRED'
 }
 SOURCE_PARSE_RETRY_REASONS = {
-    'EMPTY_PROVIDER_RESPONSE',
-    'MALFORMED_JSON',
-    'SCHEMA_MISMATCH',
-    'OUTPUT_TRUNCATED',
-    'TECHNICAL_ERROR',
-    'EVIDENCE_INCOMPLETE',
-    'VERIFICATION_TECHNICAL_ERROR',
-    'VERIFICATION_UNCERTAIN',
+    'EMPTY_PROVIDER_RESPONSE', 'MALFORMED_JSON', 'SCHEMA_MISMATCH',
+    'OUTPUT_TRUNCATED', 'TECHNICAL_ERROR', 'EVIDENCE_INCOMPLETE',
+    'VERIFICATION_TECHNICAL_ERROR', 'VERIFICATION_UNCERTAIN',
 }
 SOURCE_PARSE_NO_EVENT_REASONS = {
-    'NO_ATTENDABLE_EVENT',
-    'GIVEAWAY_ONLY',
-    'VAGUE_TEASER',
-    'REFERRAL_ONLY',
-    'SERVICE_OR_RENTAL',
-    'RECAP_ONLY',
-    'OUT_OF_SCOPE',
+    'NO_ATTENDABLE_EVENT', 'GIVEAWAY_ONLY', 'VAGUE_TEASER', 'REFERRAL_ONLY',
+    'SERVICE_OR_RENTAL', 'RECAP_ONLY', 'OUT_OF_SCOPE',
 }
 SOURCE_PARSE_LIFECYCLE_ACTIONS = {
     'CANCEL',
@@ -1743,14 +1741,15 @@ SOURCE_PARSE_LIFECYCLE_ACTIONS = {
     'UPDATE_DETAILS',
 }
 SOURCE_PARSE_VERIFICATION_REASONS = {
-    'NO_EVENT_WITH_STRONG_SIGNALS',
-    'EVENT_DATE_CONFLICT',
-    'MULTIPLE_OCCURRENCES_COLLAPSED',
-    'GENERIC_UNGROUNDED_TITLE',
-    'LIFECYCLE_MIXED_CONTENT_CONFLICT',
-    'IMPOSSIBLE_SCHEMA_VALUE',
+    'NO_EVENT_WITH_STRONG_SIGNALS', 'EVENT_DATE_CONFLICT',
+    'MULTIPLE_OCCURRENCES_COLLAPSED', 'GENERIC_UNGROUNDED_TITLE',
+    'LIFECYCLE_MIXED_CONTENT_CONFLICT', 'IMPOSSIBLE_SCHEMA_VALUE',
     'INCOMPLETE_EVIDENCE',
 }
+assert SOURCE_PARSE_DISPOSITIONS == {item.value for item in SourceDisposition}
+assert SOURCE_PARSE_RETRY_REASONS == {item.value for item in SourceParseRetryReason}
+assert SOURCE_PARSE_NO_EVENT_REASONS == {item.value for item in SourceNoEventReason}
+assert SOURCE_PARSE_VERIFICATION_REASONS == {item.value for item in VerificationReason}
 SOURCE_PARSE_VERSION = 'source-parse-v1'
 
 _LIFECYCLE_ACTION_SCHEMA = {
@@ -1789,6 +1788,7 @@ SOURCE_PARSE_DECISION_SCHEMA = {
         'no_event_reason': {
             'type': 'string',
             'enum': sorted(SOURCE_PARSE_NO_EVENT_REASONS),
+            'nullable': True,
         },
     },
     'required': [
@@ -1797,6 +1797,7 @@ SOURCE_PARSE_DECISION_SCHEMA = {
         'lifecycle_actions',
         'evidence_complete',
         'parse_version',
+        'no_event_reason',
     ],
 }
 
@@ -2269,13 +2270,21 @@ def _parse_source_decision_response(
         or not all(isinstance(item, dict) for item in lifecycle_actions)
         or not isinstance(declared_complete, bool)
         or (
+            disposition == 'CONFIRMED_NO_EVENT'
+            and no_event_reason not in SOURCE_PARSE_NO_EVENT_REASONS
+        )
+        or (
             no_event_reason is not None
-            and (
-                no_event_reason not in SOURCE_PARSE_NO_EVENT_REASONS
-                or disposition != 'CONFIRMED_NO_EVENT'
-            )
+            and disposition != 'CONFIRMED_NO_EVENT'
         )
     ):
+        active_logger = globals().get('logger')
+        if active_logger is not None:
+            active_logger.warning(
+                'source_parse.schema_alert invalid_or_missing_no_event_reason disposition=%s reason=%r',
+                disposition,
+                supplied_no_event_reason,
+            )
         return _source_parse_retry('SCHEMA_MISMATCH', evidence_manifest)
 
     for action in lifecycle_actions:
@@ -2330,68 +2339,23 @@ def _source_parse_contradictions(
     *,
     source_text: str,
     ocr_blocks=None,
+    source_metadata=None,
 ) -> list[dict]:
-    """Return only closed verification triggers; never a terminal verdict."""
+    """Adapt the local receipt to the one shared pure fact implementation."""
 
-    text = '\n'.join(
-        [str(source_text or ''), *[str(block or '') for block in (ocr_blocks or [])]]
-    ).strip()
-    events = decision.get('events') if isinstance(decision.get('events'), list) else []
-    actions = (
-        decision.get('lifecycle_actions')
-        if isinstance(decision.get('lifecycle_actions'), list)
-        else []
-    )
-    disposition = str(decision.get('disposition') or '').strip().upper()
-    facts: list[dict] = []
-
-    if disposition == 'CONFIRMED_NO_EVENT' and _has_strong_event_invitation_signal(text):
-        facts.append({
-            'reason': 'NO_EVENT_WITH_STRONG_SIGNALS',
-            'details': 'Primary no-event verdict contradicts invitation/date/time/venue hints.',
-        })
-    if disposition == 'LIFECYCLE_ONLY' and _has_strong_event_invitation_signal(text):
-        facts.append({
-            'reason': 'LIFECYCLE_MIXED_CONTENT_CONFLICT',
-            'details': 'Lifecycle-only verdict coexists with attendee-facing event hints.',
-        })
-
-    date_spans = {
-        match.group(0).casefold()
-        for match in re.finditer(
-            r'\b\d{1,2}[./]\d{1,2}(?:[./](?:19|20)\d{2})?\b'
-            r'|\b\d{1,2}\s+(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\b',
-            text,
-            re.IGNORECASE,
+    raw_manifest = decision.get('evidence_manifest')
+    manifest = EvidenceManifest.from_mapping(raw_manifest) if isinstance(raw_manifest, dict) else None
+    typed = decision_from_provider_payload(decision, evidence_manifest=manifest)
+    return [
+        fact.to_payload()
+        for fact in derive_source_contradiction_facts(
+            source_text,
+            ocr_blocks,
+            source_metadata or {},
+            typed,
+            manifest,
         )
-    }
-    if len(date_spans) > 1 and len(events) <= 1 and disposition in {
-        'EVENTS_FOUND', 'MIXED', 'CONFIRMED_NO_EVENT'
-    }:
-        facts.append({
-            'reason': 'MULTIPLE_OCCURRENCES_COLLAPSED',
-            'details': 'Multiple source date spans produced fewer than two event children.',
-            'evidence': sorted(date_spans),
-        })
-
-    if events and any(
-        str(event.get('title') or '').strip().casefold()
-        in {'', 'событие', 'мероприятие', 'афиша', 'анонс'}
-        for event in events
-        if isinstance(event, dict)
-    ):
-        facts.append({
-            'reason': 'GENERIC_UNGROUNDED_TITLE',
-            'details': 'At least one positive child has an empty or generic title.',
-        })
-
-    # Preserve the closed order while removing duplicate reasons.
-    unique = {}
-    for fact in facts:
-        reason = str(fact.get('reason') or '')
-        if reason in SOURCE_PARSE_VERIFICATION_REASONS:
-            unique.setdefault(reason, fact)
-    return list(unique.values())
+    ]
 
 
 def _source_parse_prompt(
@@ -2414,7 +2378,8 @@ def _source_parse_prompt(
             'Regex, keyword, date, past/history, recap, admin, promo, and confidence signals are hints only; the LLM owns the semantic verdict.',
             'Extract every event and every distinct occurrence/session; never cap or silently discard children.',
             'Cancellation, postponement, reschedule, and detail changes are typed lifecycle_actions; use MIXED when new events and lifecycle actions coexist.',
-            'CONFIRMED_NO_EVENT is allowed only after considering the complete raw text and every OCR block.',
+            'CONFIRMED_NO_EVENT is allowed only after considering the complete raw text and every OCR block; no_event_reason is mandatory and must be one of allowed_no_event_reasons.',
+            'no_event_reason is forbidden for every other disposition.',
             'Giveaway-only content requires CONFIRMED_NO_EVENT with no_event_reason=GIVEAWAY_ONLY; a giveaway plus a real event preserves the event.',
             'A recap, giveaway, historical/admin wrapper, or past date may coexist with a future event; preserve the future event.',
             'Weak title, missing regex-visible date, suspicious venue, or low confidence never authorizes deletion of a positive child.',
@@ -2501,6 +2466,11 @@ async def extract_source_parse_decision(
         primary,
         source_text=source_text,
         ocr_blocks=blocks,
+        source_metadata={
+            'today': date.today().isoformat(),
+            'published_at': message_date,
+            'source_username': source_username,
+        },
     )
     if not facts:
         return primary
@@ -6466,7 +6436,7 @@ def _combine_source_parse_decisions(
     disposition = _expected_source_disposition(events, actions)
     if disposition == 'CONFIRMED_NO_EVENT' and not manifest.get('evidence_complete'):
         return _source_parse_retry('EVIDENCE_INCOMPLETE', manifest)
-    return {
+    combined = {
         'disposition': disposition,
         'events': events,
         'lifecycle_actions': actions,
@@ -6475,6 +6445,21 @@ def _combine_source_parse_decisions(
         'parse_version': SOURCE_PARSE_VERSION,
         'enrichment_required': bool(events and not manifest.get('evidence_complete')),
     }
+    if disposition == 'CONFIRMED_NO_EVENT':
+        reasons = {
+            str(item.get('no_event_reason') or '').strip().upper()
+            for item in typed
+        }
+        if not reasons or '' in reasons or not reasons.issubset(SOURCE_PARSE_NO_EVENT_REASONS):
+            logger.warning(
+                'source_parse.album schema_alert missing_or_invalid_no_event_reason reasons=%s',
+                sorted(reasons),
+            )
+            return _source_parse_retry('SCHEMA_MISMATCH', manifest)
+        combined['no_event_reason'] = (
+            next(iter(reasons)) if len(reasons) == 1 else 'NO_ATTENDABLE_EVENT'
+        )
+    return combined
 
 
 def _merge_media_groups(messages: list[dict]) -> list[dict]:

@@ -16,7 +16,11 @@ import time as _time
 
 from db import Database
 from runtime import require_main_attr
-from source_parse_contract import SourceDisposition
+from source_parse_contract import (
+    SourceDisposition,
+    SourceNoEventReason,
+    SourceParseRetryReason,
+)
 from vk_intake import DraftParseResult, OCR_PENDING_SENTINEL, extract_event_ts_hint
 
 
@@ -637,6 +641,7 @@ async def record_source_parse_attempt(
     retry_reason: str | None,
     event_child_count: int,
     lifecycle_action_count: int,
+    no_event_reason: str | None = None,
     quota_scope: str | None = None,
     request_id: str | None = None,
     response_id: str | None = None,
@@ -695,6 +700,44 @@ async def record_source_parse_attempt(
             if structured_response_valid is None
             else bool(structured_response_valid)
         )
+        try:
+            closed_no_event_reason = (
+                SourceNoEventReason(
+                    getattr(no_event_reason, "value", no_event_reason)
+                ).value
+                if no_event_reason is not None
+                else None
+            )
+        except ValueError:
+            closed_no_event_reason = None
+        no_event_contract_valid = (
+            (
+                str(disposition) == SourceDisposition.CONFIRMED_NO_EVENT.value
+                and closed_no_event_reason is not None
+            )
+            or (
+                str(disposition) != SourceDisposition.CONFIRMED_NO_EVENT.value
+                and no_event_reason is None
+            )
+        )
+        if not no_event_contract_valid:
+            logging.warning(
+                "vk_review source_parse_schema_alert disposition=%s no_event_reason=%r",
+                disposition,
+                no_event_reason,
+            )
+            valid = False
+            retry_reason = SourceParseRetryReason.SCHEMA_MISMATCH.value
+        if valid and parse_result is not None:
+            try:
+                DraftParseResult.from_receipt_payload(parse_result)
+            except (TypeError, ValueError) as exc:
+                logging.warning(
+                    "vk_review source_parse_schema_alert invalid_attempt_receipt error=%s",
+                    exc,
+                )
+                valid = False
+                retry_reason = SourceParseRetryReason.SCHEMA_MISMATCH.value
         hints_json = json.dumps(
             {"keywords": json.loads(keyword_json or "[]"), "dates": json.loads(date_json or "[]")},
             ensure_ascii=False,
@@ -708,7 +751,7 @@ async def record_source_parse_attempt(
                 evidence_manifest_json,llm_started,llm_completed,
                 structured_response_valid,model,quota_scope,request_id,response_id,
                 finish_reason,provider_retry_after,input_tokens,output_tokens,
-                thought_tokens,reserved_tokens,primary_disposition,
+                thought_tokens,reserved_tokens,primary_disposition,no_event_reason,
                 verification_triggered,verification_reason,verification_disposition,
                 event_child_count,lifecycle_action_count,typed_error_reason,completed_at
             ) VALUES(
@@ -717,7 +760,7 @@ async def record_source_parse_attempt(
                 :evidence_manifest_json,:llm_started,:llm_completed,
                 :structured_response_valid,:model,:quota_scope,:request_id,:response_id,
                 :finish_reason,:provider_retry_after,:input_tokens,:output_tokens,
-                :thought_tokens,:reserved_tokens,:primary_disposition,
+                :thought_tokens,:reserved_tokens,:primary_disposition,:no_event_reason,
                 :verification_triggered,:verification_reason,:verification_disposition,
                 :event_child_count,:lifecycle_action_count,:typed_error_reason,
                 CURRENT_TIMESTAMP
@@ -747,6 +790,7 @@ async def record_source_parse_attempt(
                 "thought_tokens": thought_tokens,
                 "reserved_tokens": reserved_tokens,
                 "primary_disposition": str(disposition),
+                "no_event_reason": closed_no_event_reason,
                 "verification_triggered": 1 if verification_triggered else 0,
                 "verification_reason": verification_reason,
                 "verification_disposition": verification_disposition,
@@ -871,8 +915,21 @@ async def record_carrier_resolution(
         await conn.commit()
 
 
-async def mark_rejected(db: Database, inbox_id: int) -> None:
+async def mark_rejected(
+    db: Database,
+    inbox_id: int,
+    *,
+    no_event_reason: SourceNoEventReason | str,
+) -> None:
     """Record a validated, complete-evidence LLM no-event outcome only."""
+
+    try:
+        closed_reason = SourceNoEventReason(no_event_reason).value
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "closed no_event_reason is required to terminalize a VK carrier"
+        ) from exc
+    typed_terminal_reason = f"CONFIRMED_NO_EVENT:{closed_reason}"
 
     async with db.raw_conn() as conn:
         async def _update() -> None:
@@ -882,10 +939,10 @@ async def mark_rejected(db: Database, inbox_id: int) -> None:
                 """
                 UPDATE vk_inbox SET status='confirmed_no_event', locked_by=NULL,
                     locked_at=NULL, next_attempt_at=NULL,
-                    last_typed_reason='CONFIRMED_NO_EVENT'
+                    last_typed_reason=?
                 WHERE id=?
                 """,
-                (inbox_id,),
+                (typed_terminal_reason, inbox_id),
             )
             if row and row[0] is not None:
                 await conn.execute(
@@ -894,10 +951,10 @@ async def mark_rejected(db: Database, inbox_id: int) -> None:
                     SET status='confirmed_no_event', llm_status='completed',
                         terminal_carrier_outcome='CONFIRMED_NO_EVENT',
                         lease_owner=NULL, lease_expires_at=NULL,
-                        last_typed_reason='CONFIRMED_NO_EVENT', updated_at=CURRENT_TIMESTAMP
+                        last_typed_reason=?, updated_at=CURRENT_TIMESTAMP
                     WHERE id=?
                     """,
-                    (int(row[0]),),
+                    (typed_terminal_reason, int(row[0])),
                 )
         await _run_locked_write(conn, _update, description=f"mark_confirmed_no_event inbox_id={inbox_id}")
 

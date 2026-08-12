@@ -513,6 +513,7 @@ async def test_no_manifest_zero_event_tail_remains_retryable(tmp_path, monkeypat
                 "events": [],
                 "source_parse_decision": {
                     "disposition": "CONFIRMED_NO_EVENT",
+                    "no_event_reason": "VAGUE_TEASER",
                     "events": [],
                     "lifecycle_actions": [],
                     "evidence_complete": True,
@@ -528,6 +529,7 @@ async def test_no_manifest_zero_event_tail_remains_retryable(tmp_path, monkeypat
                 "events": [],
                 "source_parse_decision": {
                     "disposition": "CONFIRMED_NO_EVENT",
+                    "no_event_reason": "NO_ATTENDABLE_EVENT",
                     "events": [],
                     "lifecycle_actions": [],
                     "evidence_complete": True,

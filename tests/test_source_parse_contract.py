@@ -15,6 +15,7 @@ from source_parse_contract import (
     conditionally_verify_source_decision,
     decision_from_provider_payload,
 )
+from source_contradiction_facts import derive_source_contradiction_facts
 
 
 def _manifest(**overrides):
@@ -24,23 +25,31 @@ def _manifest(**overrides):
     return EvidenceManifest.from_mapping(payload)
 
 
-def _typed(disposition="EVENTS_FOUND", events=None, actions=None, complete=True):
-    return {
+def _typed(
+    disposition="EVENTS_FOUND",
+    events=None,
+    actions=None,
+    complete=True,
+    no_event_reason=None,
+):
+    payload = {
         "disposition": disposition,
         "events": events or [],
         "lifecycle_actions": actions or [],
         "evidence_complete": complete,
         "parse_version": "test-v1",
     }
+    if no_event_reason is not None:
+        payload["no_event_reason"] = no_event_reason
+    return payload
 
 
-def test_t21_valid_confirmed_no_event_is_typed_product_outcome():
+def test_n1_reasonless_confirmed_no_event_is_schema_retry():
     result = decision_from_provider_payload(
         _typed("CONFIRMED_NO_EVENT"), evidence_manifest=_manifest()
     )
-    assert result.disposition is SourceDisposition.CONFIRMED_NO_EVENT
-    assert result.evidence_complete is True
-    assert list(result) == []
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
 
 
 def test_confirmed_giveaway_only_reason_is_closed_and_preserved():
@@ -56,6 +65,17 @@ def test_confirmed_giveaway_only_reason_is_closed_and_preserved():
     assert result.to_payload()["no_event_reason"] == "GIVEAWAY_ONLY"
 
 
+@pytest.mark.parametrize("reason", list(SourceNoEventReason))
+def test_n2_all_closed_no_event_reasons_round_trip(reason):
+    result = decision_from_provider_payload(
+        _typed("CONFIRMED_NO_EVENT", no_event_reason=reason.value),
+        evidence_manifest=_manifest(),
+    )
+    assert result.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+    assert result.no_event_reason is reason
+    assert result.to_payload()["no_event_reason"] == reason.value
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -64,12 +84,42 @@ def test_confirmed_giveaway_only_reason_is_closed_and_preserved():
             **_typed(events=[{"title": "Event"}]),
             "no_event_reason": "GIVEAWAY_ONLY",
         },
+        {
+            **_typed(
+                "LIFECYCLE_ONLY",
+                actions=[{"action": "CANCEL", "target_title": "Event"}],
+            ),
+            "no_event_reason": "RECAP_ONLY",
+        },
+        {
+            **_typed(
+                "MIXED",
+                events=[{"title": "New event"}],
+                actions=[{"action": "CANCEL", "target_title": "Old event"}],
+            ),
+            "no_event_reason": "RECAP_ONLY",
+        },
+        {
+            **_typed("RETRY_REQUIRED", complete=False),
+            "retry_reason": "TECHNICAL_ERROR",
+            "no_event_reason": "RECAP_ONLY",
+        },
     ],
 )
 def test_unknown_or_misplaced_no_event_reason_is_schema_retry(payload):
     result = decision_from_provider_payload(payload, evidence_manifest=_manifest())
     assert result.disposition is SourceDisposition.RETRY_REQUIRED
     assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+
+
+def test_n3_unknown_no_event_reason_emits_schema_alert(caplog):
+    with caplog.at_level("WARNING"):
+        result = decision_from_provider_payload(
+            _typed("CONFIRMED_NO_EVENT", no_event_reason="UNKNOWN"),
+            evidence_manifest=_manifest(),
+        )
+    assert result.retry_reason is SourceParseRetryReason.SCHEMA_MISMATCH
+    assert "source_parse_schema_alert" in caplog.text
 
 
 def test_t22_empty_provider_body_is_retry_not_no_event_contract():
@@ -268,7 +318,7 @@ def test_t31_mixed_lifecycle_and_new_event_are_both_preserved():
 
 def test_incomplete_evidence_forbids_confirmed_no_event():
     result = decision_from_provider_payload(
-        _typed("CONFIRMED_NO_EVENT"),
+        _typed("CONFIRMED_NO_EVENT", no_event_reason="NO_ATTENDABLE_EVENT"),
         evidence_manifest=_manifest(ocr_blocks_included=1, omitted_blocks=["poster:2"]),
     )
     assert result.disposition is SourceDisposition.RETRY_REQUIRED
@@ -333,7 +383,8 @@ def test_evidence_e_incomplete_positive_survives_but_no_event_retries():
         evidence_manifest=manifest,
     )
     no_event = decision_from_provider_payload(
-        _typed("CONFIRMED_NO_EVENT"), evidence_manifest=manifest
+        _typed("CONFIRMED_NO_EVENT", no_event_reason="NO_ATTENDABLE_EVENT"),
+        evidence_manifest=manifest,
     )
     assert positive.disposition is SourceDisposition.EVENTS_FOUND
     assert positive.enrichment_required is True
@@ -393,3 +444,124 @@ def test_festival_metadata_legacy_adapter_is_preserved():
         evidence_manifest=_manifest(),
     )
     assert result.festival == {"name": "Фестиваль"}
+
+
+def _fact_reasons(text, ocr, decision, manifest=None, metadata=None):
+    evidence = manifest or decision.evidence_manifest
+    return {
+        fact.reason
+        for fact in derive_source_contradiction_facts(
+            text,
+            ocr,
+            {"today": "2026-08-12", **(metadata or {})},
+            decision,
+            evidence,
+        )
+    }
+
+
+def test_v1_strong_no_event_uses_multiple_independent_signal_classes():
+    decision = SourceParseDecision(
+        [],
+        disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+        no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
+        evidence_manifest=EvidenceManifest.complete_source("source"),
+    )
+    reasons = _fact_reasons(
+        "Приглашаем на концерт 15.09 в 18:00, билеты доступны по ссылке",
+        [],
+        decision,
+    )
+    assert VerificationReason.NO_EVENT_WITH_STRONG_SIGNALS in reasons
+    assert VerificationReason.NO_EVENT_WITH_STRONG_SIGNALS not in _fact_reasons(
+        "Билеты когда-нибудь появятся", [], decision
+    )
+
+
+def test_v2_ocr_date_conflict_is_derived_from_unambiguous_dates():
+    decision = SourceParseDecision(
+        [{"title": "Лекция", "date": "2026-09-13"}],
+        evidence_manifest=EvidenceManifest.complete_source("caption", ["12.09.2026 18:00"]),
+    )
+    assert VerificationReason.EVENT_DATE_CONFLICT in _fact_reasons(
+        "caption", ["12.09.2026 в 18:00"], decision
+    )
+
+
+def test_v3_three_same_slot_ocr_cards_are_distinct_occurrence_anchors():
+    cards = [
+        "Концерт группы А 15 сентября 18:00",
+        "Концерт группы Б 15 сентября 18:00",
+        "Концерт группы В 15 сентября 18:00",
+    ]
+    decision = SourceParseDecision(
+        [{"title": "Концерт группы А", "date": "2026-09-15", "time": "18:00"}],
+        evidence_manifest=EvidenceManifest.complete_source("Программа", cards),
+    )
+    assert VerificationReason.MULTIPLE_OCCURRENCES_COLLAPSED in _fact_reasons(
+        "Программа", cards, decision
+    )
+
+
+def test_v4_generic_title_fact_does_not_delete_child():
+    decision = SourceParseDecision(
+        [{"title": "Концерт — Дом культуры"}],
+        evidence_manifest=EvidenceManifest.complete_source("Концерт группы Север"),
+    )
+    assert VerificationReason.GENERIC_UNGROUNDED_TITLE in _fact_reasons(
+        "Концерт группы Север", [], decision
+    )
+    assert list(decision) == [{"title": "Концерт — Дом культуры"}]
+
+
+def test_v5_lifecycle_only_plus_new_invitation_is_a_verifier_fact():
+    decision = decision_from_provider_payload(
+        _typed(
+            "LIFECYCLE_ONLY",
+            actions=[{"action": "CANCEL", "target_title": "Старый концерт"}],
+        ),
+        evidence_manifest=EvidenceManifest.complete_source("source"),
+    )
+    reasons = _fact_reasons(
+        "Старый концерт отменён. Приглашаем на концерт 20.09 в 19:00, билеты доступны.",
+        [],
+        decision,
+    )
+    assert VerificationReason.LIFECYCLE_MIXED_CONTENT_CONFLICT in reasons
+
+
+def test_v6_impossible_date_and_time_are_objective_schema_facts():
+    decision = SourceParseDecision(
+        [{"title": "Лекция", "date": "2026-02-31", "time": "28:90"}],
+        evidence_manifest=EvidenceManifest.complete_source("31.02.2026 в 28:90"),
+    )
+    assert VerificationReason.IMPOSSIBLE_SCHEMA_VALUE in _fact_reasons(
+        "Лекция 31.02.2026 в 28:90", [], decision
+    )
+
+
+def test_v7_incomplete_manifest_is_a_fact_and_positive_survives():
+    manifest = EvidenceManifest.complete_source("caption", [], attachment_count=1)
+    decision = SourceParseDecision([{"title": "Лекция"}], evidence_manifest=manifest)
+    assert VerificationReason.INCOMPLETE_EVIDENCE in _fact_reasons(
+        "caption", [], decision, manifest
+    )
+    assert list(decision) == [{"title": "Лекция"}]
+
+
+def test_v9_collector_deduplicates_in_closed_enum_order():
+    manifest = EvidenceManifest.complete_source("caption", [], attachment_count=1)
+    decision = SourceParseDecision(
+        [{"title": "Анонс", "date": "2026-02-31", "time": "28:90"}],
+        evidence_manifest=manifest,
+    )
+    facts = derive_source_contradiction_facts(
+        "Анонс 31.02.2026 в 28:90",
+        [],
+        {"today": "2026-08-12"},
+        decision,
+        manifest,
+    )
+    reasons = [fact.reason for fact in facts]
+    assert reasons == sorted(reasons, key=list(VerificationReason).index)
+    assert len(reasons) == len(set(reasons))

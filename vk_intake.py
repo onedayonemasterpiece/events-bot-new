@@ -1373,6 +1373,7 @@ class DraftParseResult(list[EventDraft]):
         self.evidence_complete = self.decision.evidence_complete
         self.parse_version = self.decision.parse_version
         self.retry_reason = self.decision.retry_reason
+        self.no_event_reason = self.decision.no_event_reason
         self.enrichment_required = self.decision.enrichment_required
 
     def to_receipt_payload(self) -> dict[str, Any]:
@@ -1426,6 +1427,11 @@ class DraftParseResult(list[EventDraft]):
                     f"unknown retry_reason in typed decision receipt: {retry_reason!r}"
                 ) from exc
         no_event_reason = decision_payload.get("no_event_reason")
+        if (
+            typed_disposition is SourceDisposition.CONFIRMED_NO_EVENT
+            and no_event_reason is None
+        ):
+            raise ValueError("missing no_event_reason in confirmed no-event receipt")
         if no_event_reason is not None:
             try:
                 SourceNoEventReason(str(no_event_reason))
@@ -2194,6 +2200,11 @@ async def vk_intake_parse_llm(
         parse_kwargs["gemma_model"] = str(parse_gemma_model).strip()
     if evidence_manifest is not None:
         parse_kwargs["evidence_manifest"] = evidence_manifest.to_payload()
+    if source_text is not None:
+        # The primary prompt contains VK policy overlays.  Contradiction facts
+        # and the verifier must receive the untouched carrier, not those
+        # instructions as if they were source evidence.
+        parse_kwargs["semantic_source_text"] = source_text
 
     return await parse_event_via_llm(
         prompt_text,
@@ -2265,9 +2276,11 @@ async def build_event_drafts_from_vk(
     # deterministic renames after parsing).
     llm_text += (
         "\nОбязательный source-level verdict: верни один типизированный объект "
-        "SourceParseDecision с disposition, events, lifecycle_actions, evidence_complete и parse_version. "
+        "SourceParseDecision с disposition, events, lifecycle_actions, evidence_complete, parse_version и no_event_reason. "
         "Допустимы только EVENTS_FOUND, CONFIRMED_NO_EVENT, LIFECYCLE_ONLY, MIXED и RETRY_REQUIRED. "
-        "CONFIRMED_NO_EVENT допустим только для доказанного полного non-event при полном тексте и всех OCR-карточках. "
+        "CONFIRMED_NO_EVENT допустим только для доказанного полного non-event при полном тексте и всех OCR-карточках; "
+        "no_event_reason обязателен только для этого disposition и должен быть одним из NO_ATTENDABLE_EVENT, "
+        "GIVEAWAY_ONLY, VAGUE_TEASER, REFERRAL_ONLY, SERVICE_OR_RENTAL, RECAP_ONLY, OUT_OF_SCOPE. "
         "Если карточки/вложения доступны не полностью, используй RETRY_REQUIRED с retry_reason=EVIDENCE_INCOMPLETE. "
         "Если при неполных доказательствах найдены положительные события, сохрани их с EVENTS_FOUND либо MIXED "
         "и evidence_complete=false: они требуют дальнейшего enrichment, но не должны исчезнуть. "
@@ -2275,7 +2288,8 @@ async def build_event_drafts_from_vk(
         "Розыгрыш без самостоятельного описания посещаемого события — доказанный non-event и получает "
         "CONFIRMED_NO_EVENT с no_event_reason=GIVEAWAY_ONLY только при полном evidence; "
         "розыгрыш вместе с реальным событием сохраняет событие. "
-        "Расплывчатый тизер без конкретного посещаемого слота получает CONFIRMED_NO_EVENT при полном evidence, "
+        "Расплывчатый тизер без конкретного посещаемого слота получает CONFIRMED_NO_EVENT "
+        "с no_event_reason=VAGUE_TEASER при полном evidence, "
         "а при неполных карточках — RETRY_REQUIRED/EVIDENCE_INCOMPLETE. "
         "\nПравила извлечения локации: если пост содержит несколько дат/блоков/репостов, "
         "для каждого события бери площадку, адрес и город из ближайшего к нему блока даты/названия. "
@@ -2299,7 +2313,8 @@ async def build_event_drafts_from_vk(
         "retry_reason=EVIDENCE_INCOMPLETE вместо свёртки подборки. "
         "Если пост про выставку/ярмарку только тизерит будущий анонс без точного дня, периода или даты окончания "
         "(например «готовим выставку», «анонс через пару дней», «точную дату анонсируем позже», «в мае откроем»), "
-        "используй CONFIRMED_NO_EVENT при полном evidence или RETRY_REQUIRED/EVIDENCE_INCOMPLETE "
+        "используй CONFIRMED_NO_EVENT с no_event_reason=VAGUE_TEASER при полном evidence "
+        "или RETRY_REQUIRED/EVIDENCE_INCOMPLETE "
         "при неполных карточках: не ставь дату публикации и не подставляй первое число месяца. "
         "Если текст поста даёт относительный или разговорный якорь даты вроде «в этот четверг», "
         "а OCR афиши даёт точные `DD месяц HH:MM` и площадку/адрес, считай OCR афиши более точным "
@@ -2363,7 +2378,7 @@ async def build_event_drafts_from_vk(
                 "Хинт по локации (используй ТОЛЬКО если пост действительно описывает посещаемое событие, "
                 f"но место не указано явно): {hint_clean}. "
                 "Не создавай событие только из-за этого хинта. Доказанный полный non-event обозначай "
-                "только disposition=CONFIRMED_NO_EVENT."
+                "disposition=CONFIRMED_NO_EVENT с no_event_reason=NO_ATTENDABLE_EVENT."
             )
     if fallback_ticket_link:
         llm_text = (
@@ -2371,7 +2386,7 @@ async def build_event_drafts_from_vk(
             "Хинт по ссылке: если и только если это событие и в посте нет ссылки на билеты/регистрацию, "
             f"используй {fallback_ticket_link} как ссылку по умолчанию. "
             "Не заменяй ссылки, которые уже указаны. Доказанный полный non-event обозначай "
-            "только disposition=CONFIRMED_NO_EVENT."
+            "disposition=CONFIRMED_NO_EVENT с no_event_reason=NO_ATTENDABLE_EVENT."
         )
     if festival_hint:
         llm_text = (

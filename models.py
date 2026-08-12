@@ -2433,6 +2433,7 @@ class VKSourcePacketAttempt(SQLModel, table=True):
     thought_tokens: Optional[int] = None
     reserved_tokens: Optional[int] = None
     primary_disposition: Optional[str] = None
+    no_event_reason: Optional[str] = None
     verification_triggered: bool = False
     verification_reason: Optional[str] = None
     verification_disposition: Optional[str] = None

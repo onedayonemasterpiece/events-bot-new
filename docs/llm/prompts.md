@@ -14,16 +14,17 @@ The other sections in this file document separate prompts/workflows and must not
 MASTER-PROMPT for Codex ― Telegram Event Bot
 You receive long multi-line text describing one **or several** events.
 Extract structured information and respond **only** with one typed JSON object:
-`{"disposition":"EVENTS_FOUND|CONFIRMED_NO_EVENT|LIFECYCLE_ONLY|MIXED|RETRY_REQUIRED","events":[],"lifecycle_actions":[],"evidence_complete":true,"parse_version":"source-parse-v1"}`.
+`{"disposition":"EVENTS_FOUND|CONFIRMED_NO_EVENT|LIFECYCLE_ONLY|MIXED|RETRY_REQUIRED","events":[],"lifecycle_actions":[],"evidence_complete":true,"parse_version":"source-parse-v1","no_event_reason":"NO_ATTENDABLE_EVENT|GIVEAWAY_ONLY|VAGUE_TEASER|REFERRAL_ONLY|SERVICE_OR_RENTAL|RECAP_ONLY|OUT_OF_SCOPE"}`.
 Never use an empty HTTP/body response, malformed/partial JSON, a schema mismatch, a provider error, or a finish/truncation signal to express no-event; those cases require `RETRY_REQUIRED`.
 `CONFIRMED_NO_EVENT` is valid only after examining the complete source text and every supplied OCR block and finding neither an attendable event nor a lifecycle action.
 Typed carrier policy is mandatory:
-- optional `no_event_reason` is allowed only with `CONFIRMED_NO_EVENT` and must be one of `NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`, `REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY`, `OUT_OF_SCOPE`;
-- a proven complete non-event uses `CONFIRMED_NO_EVENT`;
+- `no_event_reason` is mandatory with `CONFIRMED_NO_EVENT`, forbidden with every other disposition, and must be one of `NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`, `REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY`, `OUT_OF_SCOPE`;
+- a proven complete non-event uses `CONFIRMED_NO_EVENT` with the applicable closed `no_event_reason`; a complete generic non-event, location hint alone, or ticket-link hint alone uses `NO_ATTENDABLE_EVENT`;
 - missing/omitted cards or OCR use `RETRY_REQUIRED` with `retry_reason=EVIDENCE_INCOMPLETE`;
 - positive children found from incomplete evidence survive as `EVENTS_FOUND` or `MIXED` with `evidence_complete=false` so downstream enrichment/retry can continue;
 - giveaway-only content is `CONFIRMED_NO_EVENT` with `no_event_reason=GIVEAWAY_ONLY` only with complete evidence, while giveaway plus a real event preserves the event;
-- a vague teaser with no concrete attendable slot is `CONFIRMED_NO_EVENT` when evidence is complete and `RETRY_REQUIRED/EVIDENCE_INCOMPLETE` otherwise;
+- a vague teaser with no concrete attendable slot is `CONFIRMED_NO_EVENT` with `no_event_reason=VAGUE_TEASER` when evidence is complete and `RETRY_REQUIRED/EVIDENCE_INCOMPLETE` otherwise;
+- referral-only, service/rental-only, recap-only, and out-of-scope complete carriers respectively use `REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY`, and `OUT_OF_SCOPE`;
 - a carrier containing only cancellation/postponement/reschedule/update facts uses `LIFECYCLE_ONLY` and populated `lifecycle_actions`.
 
 **Maximum-recall source rules (highest priority):**

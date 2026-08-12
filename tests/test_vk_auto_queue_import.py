@@ -27,6 +27,7 @@ from source_parse_contract import (
     LifecycleAction,
     LifecycleActionType,
     SourceDisposition,
+    SourceNoEventReason,
     SourceParseDecision,
 )
 
@@ -858,6 +859,7 @@ async def test_vk_auto_import_uses_llm_decision_without_prefilter_argument(tmp_p
         decision = SourceParseDecision(
             [],
             disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            no_event_reason=SourceNoEventReason.RECAP_ONLY,
             evidence_manifest=EvidenceManifest.complete_source(
                 "Исторический очерк о послевоенном театре кукол."
             ),
@@ -915,6 +917,7 @@ async def test_vk_auto_import_skips_festival_helper_for_regular_sources(tmp_path
         decision = SourceParseDecision(
             [],
             disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
             evidence_manifest=EvidenceManifest.complete_source("text"),
         )
         return vk_intake.DraftParseResult([], decision=decision), None
@@ -968,6 +971,7 @@ async def test_vk_auto_import_keeps_festival_helper_for_festival_sources(tmp_pat
         decision = SourceParseDecision(
             [],
             disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+            no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
             evidence_manifest=EvidenceManifest.complete_source("text"),
         )
         return vk_intake.DraftParseResult([], decision=decision), None

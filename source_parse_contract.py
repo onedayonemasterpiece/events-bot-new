@@ -11,10 +11,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 import hashlib
+import logging
 from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
 
 
 PARSE_VERSION = "source-parse-v1"
+logger = logging.getLogger(__name__)
 
 
 class SourceDisposition(str, Enum):
@@ -340,9 +342,20 @@ class SourceParseDecision(list[dict[str, Any]]):
         self.retry_reason = (
             SourceParseRetryReason(retry_reason) if retry_reason is not None else None
         )
-        self.no_event_reason = (
-            SourceNoEventReason(no_event_reason) if no_event_reason is not None else None
-        )
+        invalid_no_event_reason = False
+        if no_event_reason is None:
+            self.no_event_reason = None
+        else:
+            try:
+                self.no_event_reason = SourceNoEventReason(no_event_reason)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "source_parse_schema_alert invalid_no_event_reason=%r disposition=%s",
+                    no_event_reason,
+                    self.disposition.value,
+                )
+                self.no_event_reason = None
+                invalid_no_event_reason = True
         if inferred_empty_retry and self.retry_reason is None:
             self.retry_reason = SourceParseRetryReason.SCHEMA_MISMATCH
         self.verification_reasons = tuple(verification_reasons or ())
@@ -369,7 +382,12 @@ class SourceParseDecision(list[dict[str, Any]]):
         )
         if self.disposition is not SourceDisposition.RETRY_REQUIRED and (
             invalid_events
+            or invalid_no_event_reason
             or self.disposition is not expected_disposition
+            or (
+                self.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+                and self.no_event_reason is None
+            )
             or (
                 self.no_event_reason is not None
                 and self.disposition is not SourceDisposition.CONFIRMED_NO_EVENT
@@ -633,6 +651,10 @@ def decision_from_provider_payload(
     try:
         disposition = SourceDisposition(str(payload.get("disposition") or ""))
     except ValueError:
+        logger.warning(
+            "source_parse_schema_alert invalid_disposition=%r",
+            payload.get("disposition"),
+        )
         return SourceParseDecision.retry(
             SourceParseRetryReason.SCHEMA_MISMATCH,
             evidence_manifest=evidence_manifest,
@@ -644,17 +666,37 @@ def decision_from_provider_payload(
         try:
             no_event_reason = SourceNoEventReason(str(raw_no_event_reason))
         except (TypeError, ValueError):
+            logger.warning(
+                "source_parse_schema_alert invalid_no_event_reason=%r disposition=%s",
+                raw_no_event_reason,
+                disposition.value,
+            )
             return SourceParseDecision.retry(
                 SourceParseRetryReason.SCHEMA_MISMATCH,
                 evidence_manifest=evidence_manifest,
                 festival=festival,
             )
         if disposition is not SourceDisposition.CONFIRMED_NO_EVENT:
+            logger.warning(
+                "source_parse_schema_alert misplaced_no_event_reason=%s disposition=%s",
+                no_event_reason.value,
+                disposition.value,
+            )
             return SourceParseDecision.retry(
                 SourceParseRetryReason.SCHEMA_MISMATCH,
                 evidence_manifest=evidence_manifest,
                 festival=festival,
             )
+    if disposition is SourceDisposition.CONFIRMED_NO_EVENT and no_event_reason is None:
+        logger.warning(
+            "source_parse_schema_alert missing_no_event_reason disposition=%s",
+            disposition.value,
+        )
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.SCHEMA_MISMATCH,
+            evidence_manifest=evidence_manifest,
+            festival=festival,
+        )
     events = payload.get("events")
     actions_raw = payload.get("lifecycle_actions")
     if not isinstance(events, list) or not all(_event_mapping_is_valid(item) for item in events):
@@ -683,6 +725,10 @@ def decision_from_provider_payload(
         try:
             reason = SourceParseRetryReason(str(raw_reason))
         except (TypeError, ValueError):
+            logger.warning(
+                "source_parse_schema_alert invalid_retry_reason=%r",
+                raw_reason,
+            )
             reason = SourceParseRetryReason.SCHEMA_MISMATCH
         return SourceParseDecision.retry(
             reason,

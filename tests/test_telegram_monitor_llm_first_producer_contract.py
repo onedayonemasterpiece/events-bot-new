@@ -10,6 +10,17 @@ from types import SimpleNamespace
 
 import pytest
 
+from source_contradiction_facts import derive_source_contradiction_facts
+from source_parse_contract import (
+    EvidenceManifest,
+    SourceDisposition,
+    SourceNoEventReason,
+    SourceParseDecision,
+    SourceParseRetryReason,
+    VerificationReason,
+    decision_from_provider_payload,
+)
+
 
 PRODUCER = Path("kaggle/TelegramMonitor/telegram_monitor.py")
 
@@ -47,6 +58,15 @@ def _producer_contract_namespace() -> dict:
         "json": json,
         "re": re,
         "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
+        "EvidenceManifest": EvidenceManifest,
+        "SourceDisposition": SourceDisposition,
+        "SourceNoEventReason": SourceNoEventReason,
+        "SourceParseDecision": SourceParseDecision,
+        "SourceParseRetryReason": SourceParseRetryReason,
+        "VerificationReason": VerificationReason,
+        "decision_from_provider_payload": decision_from_provider_payload,
+        "derive_source_contradiction_facts": derive_source_contradiction_facts,
+        "date": __import__("datetime").date,
     }
     exec(compile(source[start:end], "<tg-producer-contract>", "exec"), namespace)
     tree = ast.parse(source)
@@ -69,17 +89,18 @@ def _provider_payload(
     events: list[dict] | None = None,
     lifecycle_actions: list[dict] | None = None,
     evidence_complete: bool = True,
+    no_event_reason: str | None = None,
 ) -> str:
-    return json.dumps(
-        {
+    payload = {
             "disposition": disposition,
             "events": list(events or []),
             "lifecycle_actions": list(lifecycle_actions or []),
             "evidence_complete": evidence_complete,
             "parse_version": "source-parse-v1",
-        },
-        ensure_ascii=False,
-    )
+        }
+    if disposition == "CONFIRMED_NO_EVENT":
+        payload["no_event_reason"] = no_event_reason or "NO_ATTENDABLE_EVENT"
+    return json.dumps(payload, ensure_ascii=False)
 
 
 @pytest.mark.parametrize(
@@ -294,7 +315,7 @@ def test_telegram_producer_verifies_only_explicit_contradictions() -> None:
 
     result = asyncio.run(
         ns["extract_source_parse_decision"](
-            "Ждём вас 15.08 в 18:00, билеты доступны по ссылке",
+            "Ждём вас на концерт 15.08 в 18:00, билеты доступны по ссылке",
             [],
             _model_call=model_call,
         )
@@ -307,6 +328,146 @@ def test_telegram_producer_verifies_only_explicit_contradictions() -> None:
     assert prompts[1]["contradiction_facts"][0]["reason"] == "NO_EVENT_WITH_STRONG_SIGNALS"
     assert result["disposition"] == "EVENTS_FOUND"
     assert result["verification"]["performed"] is True
+
+
+@pytest.mark.parametrize(
+    ("source_text", "ocr_blocks", "primary", "expected_reason"),
+    [
+        (
+            "Подробности на афише",
+            ["Лекция 12.09.2026 в 18:00"],
+            _provider_payload(
+                "EVENTS_FOUND",
+                events=[{"title": "Лекция", "date": "2026-09-13"}],
+            ),
+            "EVENT_DATE_CONFLICT",
+        ),
+        (
+            "Программа на карточках",
+            [
+                "Концерт группы А 15 сентября 18:00",
+                "Концерт группы Б 15 сентября 18:00",
+                "Концерт группы В 15 сентября 18:00",
+            ],
+            _provider_payload(
+                "EVENTS_FOUND",
+                events=[{"title": "Концерт группы А", "date": "2026-09-15"}],
+            ),
+            "MULTIPLE_OCCURRENCES_COLLAPSED",
+        ),
+        (
+            "Лекция 31.02.2026 в 28:90",
+            [],
+            _provider_payload(
+                "EVENTS_FOUND",
+                events=[{"title": "Лекция", "date": "2026-02-31", "time": "28:90"}],
+            ),
+            "IMPOSSIBLE_SCHEMA_VALUE",
+        ),
+        (
+            "Старый концерт отменён. Приглашаем на концерт 20.09 в 19:00, билеты доступны.",
+            [],
+            _provider_payload(
+                "LIFECYCLE_ONLY",
+                lifecycle_actions=[{"action": "CANCEL", "target_title": "Старый концерт"}],
+            ),
+            "LIFECYCLE_MIXED_CONTENT_CONFLICT",
+        ),
+    ],
+)
+def test_v2_v3_v5_v6_telegram_uses_shared_production_collector(
+    source_text, ocr_blocks, primary, expected_reason
+) -> None:
+    ns = _producer_contract_namespace()
+    prompts = []
+    responses = iter(
+        [
+            primary,
+            _provider_payload(
+                "EVENTS_FOUND",
+                events=[{"title": "Исправленное событие", "date": "2026-09-20"}],
+            ),
+        ]
+    )
+
+    async def model_call(kind, prompt, **kwargs):
+        prompts.append(json.loads(prompt))
+        return next(responses)
+
+    result = asyncio.run(
+        ns["extract_source_parse_decision"](
+            source_text,
+            ocr_blocks,
+            message_date="2026-08-12T10:00:00+00:00",
+            attachment_count=len(ocr_blocks),
+            _model_call=model_call,
+        )
+    )
+    assert len(prompts) == 2
+    assert expected_reason in {
+        item["reason"] for item in prompts[1]["contradiction_facts"]
+    }
+    assert result["disposition"] == "EVENTS_FOUND"
+
+
+def test_v10_telegram_verifier_timeout_preserves_positive_sibling() -> None:
+    ns = _producer_contract_namespace()
+    calls = 0
+
+    async def model_call(kind, prompt, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _provider_payload(
+                "EVENTS_FOUND",
+                events=[{"title": "Лекция", "date": "2026-09-13"}],
+            )
+        raise TimeoutError("verification timeout")
+
+    result = asyncio.run(
+        ns["extract_source_parse_decision"](
+            "Лекция 12.09.2026 в 18:00",
+            [],
+            message_date="2026-08-12T10:00:00+00:00",
+            _model_call=model_call,
+        )
+    )
+    assert calls == 2
+    assert result["disposition"] == "RETRY_REQUIRED"
+    assert result["retry_reason"] == "VERIFICATION_TECHNICAL_ERROR"
+    assert result["events"] == [{"title": "Лекция", "date": "2026-09-13"}]
+
+
+def test_n1_n3_telegram_reasonless_or_unknown_no_event_is_schema_retry() -> None:
+    ns = _producer_contract_namespace()
+    manifest = ns["_source_evidence_manifest"]("complete", [])
+    for reason in (None, "UNKNOWN"):
+        payload = {
+            "disposition": "CONFIRMED_NO_EVENT",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_complete": True,
+            "parse_version": "source-parse-v1",
+        }
+        if reason is not None:
+            payload["no_event_reason"] = reason
+        result = ns["_parse_source_decision_response"](
+            json.dumps(payload), manifest
+        )
+        assert result["disposition"] == "RETRY_REQUIRED"
+        assert result["retry_reason"] == "SCHEMA_MISMATCH"
+
+
+@pytest.mark.parametrize("reason", sorted(item.value for item in SourceNoEventReason))
+def test_n2_telegram_preserves_every_closed_no_event_reason(reason) -> None:
+    ns = _producer_contract_namespace()
+    manifest = ns["_source_evidence_manifest"]("complete", [])
+    result = ns["_parse_source_decision_response"](
+        _provider_payload("CONFIRMED_NO_EVENT", no_event_reason=reason),
+        manifest,
+    )
+    assert result["disposition"] == "CONFIRMED_NO_EVENT"
+    assert result["no_event_reason"] == reason
 
 
 def test_telegram_album_combiner_balances_all_children_and_ocr_evidence() -> None:
@@ -361,6 +522,30 @@ def test_telegram_album_combiner_missing_manifest_cannot_terminally_confirm_no_e
     assert combined["evidence_complete"] is False
 
 
+def test_n8_album_preserves_unanimous_reason_and_uses_umbrella_for_mixed_reasons() -> None:
+    ns = _producer_contract_namespace()
+    manifest = ns["_source_evidence_manifest"]("complete", [])
+
+    def decision(reason):
+        return ns["_parse_source_decision_response"](
+            _provider_payload("CONFIRMED_NO_EVENT", no_event_reason=reason),
+            manifest,
+        )
+
+    unanimous = ns["_combine_source_parse_decisions"](
+        [decision("GIVEAWAY_ONLY"), decision("GIVEAWAY_ONLY")],
+        raw_text_blocks=["complete"],
+        ocr_blocks=[],
+    )
+    mixed = ns["_combine_source_parse_decisions"](
+        [decision("GIVEAWAY_ONLY"), decision("RECAP_ONLY")],
+        raw_text_blocks=["complete"],
+        ocr_blocks=[],
+    )
+    assert unanimous["no_event_reason"] == "GIVEAWAY_ONLY"
+    assert mixed["no_event_reason"] == "NO_ATTENDABLE_EVENT"
+
+
 def test_telegram_primary_call_receives_every_multicard_ocr_block_once() -> None:
     ns = _producer_contract_namespace()
     prompts: list[dict] = []
@@ -370,8 +555,8 @@ def test_telegram_primary_call_receives_every_multicard_ocr_block_once() -> None
         return _provider_payload(
             "EVENTS_FOUND",
             events=[
-                {"title": "Лекция", "date": "2026-08-20"},
-                {"title": "Экскурсия", "date": "2026-08-21"},
+                    {"title": "Лекция о городе", "date": "2026-08-20"},
+                    {"title": "Экскурсия по району", "date": "2026-08-21"},
             ],
         )
 

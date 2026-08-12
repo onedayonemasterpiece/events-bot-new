@@ -62,6 +62,7 @@ from source_parsing.post_metrics import (
 )
 from source_parse_contract import (
     EvidenceManifest,
+    SourceNoEventReason,
     SourceParseDecision,
     SourceParseRetryReason,
     decision_from_provider_payload,
@@ -4305,10 +4306,15 @@ def _source_zero_event_is_confirmed(
     verification_disposition = (
         _source_parse_disposition(verification) if verification is not None else None
     )
+    no_event_reason_raw = (
+        _decision_value(decision, "no_event_reason") if decision is not None else None
+    )
+    no_event_reason = getattr(no_event_reason_raw, "value", no_event_reason_raw)
     return bool(
         decision is not None
         and _source_parse_disposition(decision) == "CONFIRMED_NO_EVENT"
         and _decision_value(decision, "evidence_complete") is True
+        and no_event_reason in {item.value for item in SourceNoEventReason}
         and verification_disposition in {None, "CONFIRMED_NO_EVENT"}
         and _source_evidence_incomplete_reason(message, decision) is None
     )

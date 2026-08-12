@@ -14,6 +14,31 @@ import main
 import vk_review
 import vk_intake
 from db import Database
+from source_parse_contract import SourceNoEventReason
+
+
+@pytest.mark.asyncio
+async def test_mark_rejected_requires_closed_no_event_reason(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_inbox(group_id,post_id,date,text,has_date,status) "
+            "VALUES(1,1,1,'x',0,'pending')"
+        )
+        await conn.commit()
+        row = await (await conn.execute("SELECT id FROM vk_inbox")).fetchone()
+        inbox_id = int(row[0])
+
+    with pytest.raises(ValueError, match="closed no_event_reason"):
+        await vk_review.mark_rejected(db, inbox_id, no_event_reason="UNKNOWN")
+
+    async with db.raw_conn() as conn:
+        status = (await (await conn.execute(
+            "SELECT status FROM vk_inbox WHERE id=?", (inbox_id,)
+        )).fetchone())[0]
+    assert status == "pending"
+    await db.close()
 
 
 @pytest.mark.asyncio
@@ -41,7 +66,9 @@ async def test_pick_next_and_skip(tmp_path):
     assert post2 and post2.post_id == 2
 
     # After resolving remaining pending posts the skipped one should reappear
-    await vk_review.mark_rejected(db, post2.id)
+    await vk_review.mark_rejected(
+        db, post2.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+    )
     post3 = await vk_review.pick_next(db, 10, "batch1")
     assert post3 and post3.post_id == 1
 
@@ -72,10 +99,14 @@ async def test_pick_next_never_rejects_from_timestamp_hints(tmp_path):
         cur = await conn.execute("SELECT status FROM vk_inbox WHERE post_id=1")
         assert (await cur.fetchone())[0] == "locked"
 
-    await vk_review.mark_rejected(db, post.id)
+    await vk_review.mark_rejected(
+        db, post.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+    )
     post2 = await vk_review.pick_next(db, 10, "batch1")
     assert post2 is not None and post2.post_id == 2
-    await vk_review.mark_rejected(db, post2.id)
+    await vk_review.mark_rejected(
+        db, post2.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+    )
     post3 = await vk_review.pick_next(db, 10, "batch1")
     assert post3 is not None and post3.post_id == 3
     async with db.raw_conn() as conn:
@@ -429,12 +460,16 @@ async def test_far_gap_override_triggers_after_k_non_far(tmp_path, monkeypatch):
         post = await vk_review.pick_next(db, operator_id, batch_id)
         assert post is not None
         assert post.post_id != 100
-        await vk_review.mark_rejected(db, post.id)
+        await vk_review.mark_rejected(
+            db, post.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+        )
 
     post = await vk_review.pick_next(db, operator_id, batch_id)
     assert post is not None
     assert post.post_id == 100
-    await vk_review.mark_rejected(db, post.id)
+    await vk_review.mark_rejected(
+        db, post.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+    )
     assert vk_review._FAR_BUCKET_HISTORY.get(operator_id) is None
 
 
@@ -478,7 +513,9 @@ async def test_bucket_boundaries_use_weighted_selection(tmp_path, monkeypatch):
     assert post.post_id == 101
     assert vk_review._FAR_BUCKET_HISTORY.get(operator_id) is None
 
-    await vk_review.mark_rejected(db, post.id)
+    await vk_review.mark_rejected(
+        db, post.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+    )
 
     post2 = await vk_review.pick_next(db, operator_id, batch_id)
     assert post2 is not None
