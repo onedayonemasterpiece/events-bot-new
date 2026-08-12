@@ -126,7 +126,7 @@ lanes:
     forbidden_files: []
     expected_output: exact-SHA report, incident and production RO receipts
     verification_scope: full_local
-    status: spawned
+    status: merged
   - id: FINAL-EVIDENCE
     role: merge_reviewer
     effort: high
@@ -140,7 +140,7 @@ lanes:
     forbidden_files: []
     expected_output: immutable local/prod-read-only receipts and exact closure report
     verification_scope: full_local
-    status: planned
+    status: spawned
   - id: FINAL-REVIEW
     role: merge_reviewer
     effort: high
