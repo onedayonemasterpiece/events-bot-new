@@ -36,6 +36,38 @@ response при complete evidence; empty/malformed/truncated/provider failure и
 удаляются downstream guardrail-ами; field conflict очищает только неподтверждённое
 поле либо вызывает verification/retry.
 
+`SourceNoEventReason` обязателен **тогда и только тогда**, когда disposition —
+`CONFIRMED_NO_EVENT`. Закрытая матрица содержит семь значений:
+`NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`, `REFERRAL_ONLY`,
+`SERVICE_OR_RENTAL`, `RECAP_ONLY`, `OUT_OF_SCOPE`. Missing, неизвестный или
+помещённый в positive/lifecycle/retry verdict reason означает
+`RETRY_REQUIRED/SCHEMA_MISMATCH`; terminal receipt, terminal metric и cursor
+advance запрещены.
+
+Один dependency-light collector `source_contradiction_facts` используется
+shared main parse boundary, VK, direct/manual add-events и official parser
+adapters. Telegram producer получает **тот же файл** через staging service.
+Collector возвращает только факты и не исправляет решение:
+
+| `VerificationReason` | Объективный trigger |
+|---|---|
+| `NO_EVENT_WITH_STRONG_SIGNALS` | complete no-event против нескольких независимых invitation/event/attendance/date-time signals |
+| `EVENT_DATE_CONFLICT` | единственная source/OCR дата противоречит единственной parsed дате |
+| `MULTIPLE_OCCURRENCES_COLLAPSED` | независимых occurrence anchors больше, чем positive children |
+| `GENERIC_UNGROUNDED_TITLE` | positive child имеет пустой/placeholder/bare generic title |
+| `LIFECYCLE_MIXED_CONTENT_CONFLICT` | lifecycle-only соседствует с отдельным future invitation |
+| `IMPOSSIBLE_SCHEMA_VALUE` | объективно невозможные date/time/range/typed values |
+| `INCOMPLETE_EVIDENCE` | manifest отсутствует, неполон, truncated или имеет OCR cardinality gap |
+
+Эта матрица разрешает максимум один conditional verifier на carrier. Она не
+удаляет positive children и не является вторым semantic classifier. Verifier
+может дополнить/исправить typed decision, но uncertainty/technical failure
+остаётся retry; incomplete evidence с positive children требует enrichment.
+Тексты live prompts и provider examples не дублируются здесь — каноника:
+[`../../llm/prompts.md`](../../llm/prompts.md). Static prompt audit проверяет
+обязательный reason, enum parity, live-surface coverage и недоступность legacy
+Telegram extractor.
+
 Все доступные source text/OCR blocks представлены в semantic parse и отражены в
 `EvidenceManifest`. Multi-event/multi-session source сохраняет все children, а
 mixed lifecycle + new events обрабатывается независимо. Telegram, VK, parser,

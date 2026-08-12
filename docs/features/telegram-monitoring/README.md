@@ -28,6 +28,20 @@ technical failure или incomplete evidence. Только complete typed no-eve
 существует только для fail-closed диагностики/replay старых артефактов; он не
 является producer contract или нормальным terminal workflow.
 
+`CONFIRMED_NO_EVENT` обязан содержать ровно один `no_event_reason` из общего
+семизначного `SourceNoEventReason`; у всех остальных dispositions поле должно
+быть `null`. Missing/unknown/misplaced reason превращает response в
+`RETRY_REQUIRED/SCHEMA_MISMATCH` до cursor, receipt, metric или terminal update.
+
+Telegram не имеет отдельной копии contradiction-логики: service staging
+доставляет в Kaggle точные `source_parse_contract.py` и
+`source_contradiction_facts.py`, а producer импортирует общий pure collector.
+Семь типов фактов совпадают с Fly/VK/direct/parser callers, collector не меняет
+вердикт, и на один carrier допускается максимум один conditional verifier.
+Positive children сохраняются, а uncertain/technical verification даёт retry.
+Канонический prompt contract и закрытые reason definitions:
+[`../../llm/prompts.md`](../../llm/prompts.md).
+
 
 Ежедневный мониторинг публичных Telegram‑каналов/групп с автоматическим импортом событий в БД бота через Smart Event Update.
 

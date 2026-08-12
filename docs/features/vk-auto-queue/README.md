@@ -5,6 +5,9 @@
 raw-first durability и строгая LLM-first семантика. Очередь не требует
 операторского review и не имеет terminal technical failure.
 
+**Release status:** incident остаётся open; этот final-code candidate не
+deployed и не deploy-ready. Green focused CI не заменяет внешние gates ниже.
+
 ## Граница покрытия
 
 В обработку попадает каждый пост, который crawler фактически получил из
@@ -39,7 +42,8 @@ state machine без зависимости от ручного UI:
 ```text
 pending/retry due -> leased/running
   -> fetch one bounded page -> persist every raw packet/revision from that page
-  -> advance the persisted continuation offset or mark that continuation done
+  -> advance the persisted continuation offset
+  -> mark done only on empty/short/horizon/original-cursor proof
 ```
 
 Continuation workers deliberately do not rewrite the canonical
@@ -53,6 +57,22 @@ Typed transport/provider/backpressure failure освобождает continuatio
 сохранённой странице; exact replay должен быть idempotent. Имена внутренних
 helper-функций не являются частью контракта — обязательны durable transitions и
 read-back state.
+
+Full page сам по себе **никогда** не доказывает окончание tail. Worker хранит
+самую глубокую durable границу `(date, post_id)` и сравнивает её после каждого
+полностью сохранённого page. Повторный fingerprint, page из одних уже durable
+rows или full page без более глубокой границы получает `OFFSET_DRIFT` либо
+`NO_PROGRESS`, увеличивает/rebases offset и остаётся `retry`. Это корректирует
+VK offset относительно изменяемой головы. Terminal `done` разрешён только для:
+
+- `EMPTY_PAGE`;
+- `SHORT_PAGE`;
+- `HORIZON_REACHED` в backfill;
+- `ORIGINAL_CURSOR_OVERLAP` в incremental scan.
+
+Legacy exact-full-page rows, ошибочно отмеченные `done`, reopen при schema init и
+перед scheduling. Collision со старым offset-unique row остаётся наблюдаемым
+`OFFSET_DRIFT_COLLISION` retry, а не `done`/stale-running.
 
 ## Durable schema
 
@@ -73,6 +93,56 @@ read-back state.
 `event_ts_hint` влияет только на приоритет. `NULL`, ошибочно прошлое или далёкое
 значение не исключает carrier. Age-based ordering не даёт unknown-date rows
 голодать.
+
+## Raw source envelope v1
+
+Каждый initial crawl, continuation page и успешный fresh `wall.getById` refresh
+использует один `vk_source_envelope` schema version `1`. Durable packet хранит:
+
+- canonical owner type/id, post id, publish/edit timestamps и canonical wall URL;
+- sanitized `raw_item` целиком, outer text и рекурсивное `copy_history` tree;
+- ordered `text_segments`/`revision_metadata` с JSON-like path и role;
+- **все** attachment records, включая неизвестные/nonvisual types;
+- link/doc/video/photo semantics и доступные link/doc/video preview candidates;
+- all/selected/omitted/unavailable media inventories, counts и completeness;
+- full payload hash и отдельный semantic revision hash, чувствительный к text,
+  copy tree, edit metadata и attachment semantics, но не к volatile counters.
+
+Упрощённый shape (поля внутри inventory показаны сокращённо):
+
+```json
+{
+  "schema": "vk_source_envelope",
+  "schema_version": 1,
+  "source_type": "vk",
+  "owner_id": 123,
+  "owner_type": "group",
+  "post_id": 456,
+  "raw_item": {"text": "...", "attachments": [], "copy_history": []},
+  "text_segments": [{"path": "$", "role": "outer", "text": "..."}],
+  "revision_metadata": [{"path": "$", "id": 456, "date": 1780000000}],
+  "attachment_inventory": [],
+  "all_media_candidates": [],
+  "media_candidates": [],
+  "omitted_media_candidates": [],
+  "unavailable_visual_attachments": [],
+  "counts": {"attachment_inventory_count": 0},
+  "completeness": {"capture_complete": true}
+}
+```
+
+Recursive secret denylist removes request/auth/error material (`access_token`,
+authorization, API/client secrets, generic token, captcha and provider error
+payloads) and secret-like URL query parameters before persistence. Attachment
+`access_key` is replay capability evidence inside the protected raw packet; it
+must not enter logs, prompts or LLM receipts.
+
+Replay matrix: a deleted/unavailable post may be parsed from its complete v1
+envelope; a successful fresh refresh first persists its new immutable revision
+and only then parses it; a legacy text/photos projection is explicitly
+`replayable_legacy_incomplete` and schedules `EVIDENCE_INCOMPLETE`, never a
+semantic terminal. Media selection limits OCR candidates, not the attachment
+inventory or capture-complete claim.
 
 ## Evidence и source verdict
 
@@ -96,11 +166,26 @@ children из incomplete evidence можно провести через Smart U
 остаётся `RETRY_SCHEDULED` для enrichment. `CONFIRMED_NO_EVENT` принимается
 только при `llm_completed && structured_response_valid && evidence_complete`.
 
+Кроме того, `CONFIRMED_NO_EVENT` обязан иметь ровно один
+`SourceNoEventReason`: `NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`,
+`REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY` или `OUT_OF_SCOPE`. У всех
+остальных dispositions reason отсутствует. Missing/unknown/misplaced reason —
+`SCHEMA_MISMATCH` retry; terminal carrier state, successful receipt и terminal
+metrics до исправления запрещены.
+
 Обычный carrier выполняет один primary semantic parse. Второй вызов допустим
 только как conditional verifier для закрытого набора противоречий: сильные
 signals против no-event, date/OCR conflict, collapsed occurrences, generic
 ungrounded title, mixed lifecycle conflict, impossible schema или incomplete
 coverage. Технически недоступная/неоднозначная verification означает retry.
+
+Все эти trigger-факты вычисляет общий pure `source_contradiction_facts` collector
+для shared main/VK/direct/parser callers; Telegram stages ровно тот же module.
+Collector не выдаёт product verdict и не удаляет positive children. На carrier
+разрешён максимум один verifier, а uncertain result остаётся retry. Тексты
+prompts и provider examples не копируются сюда: см.
+[`../../llm/prompts.md`](../../llm/prompts.md). Static audit проверяет mandatory
+reason, закрытые enums/parity и terminal prompt gates.
 
 ## Lifecycle и Smart Update
 
@@ -177,12 +262,16 @@ python scripts/ops/smart_update_loss_census.py \
 
 python scripts/ops/recover_smart_update_identity_losses.py \
   --db <snapshot.sqlite> --since 2026-08-04 --until 2026-08-12 \
-  --read-only --dry-run --include-discovery-misses --output -
+  --read-only --include-discovery-misses --output -
 ```
 
 В production snapshot новый schema может ещё отсутствовать; тогда отчёт обязан
 показать `unavailable`, а не подменять отсутствие evidence нулём. Recovery не
-делает прямых Event INSERT и в рамках incident разрешён только read-only dry-run.
+делает прямых Event INSERT и в рамках incident разрешён только `--read-only`.
+`--read-only`, `--dry-run` и `--apply` — mutually exclusive CLI modes; не
+указывайте первые два вместе. Window всегда half-open `[since, until)`. Census и
+recovery отдельно считают carrier revisions, event occurrences и lifecycle
+actions; carrier count нельзя выдавать за число model-derived occurrences.
 
 Zero-инварианты: semantic terminal before LLM, deterministic post-LLM veto,
 incomplete-evidence no-event, terminal technical failed и carrier/child balance
@@ -205,11 +294,15 @@ blockers остаются все четыре независимых доказ�
 
 - `vk_intake.py` — raw-first crawl, evidence/OCR и source adapter;
 - `vk_auto_queue.py` — claim, typed processing и downstream boundary;
+- `vk_source_envelope.py` — exact raw envelope v1, hashes и replayability;
+- `source_contradiction_facts.py` — общий pure seven-reason collector;
 - `vk_review.py` — durable state/attempt/retry receipts;
 - `source_parse_contract.py` — typed source/lifecycle/evidence contract;
 - `smart_event_update.py`, `smart_update_state.py` — child resolution;
 - `tests/test_source_parse_contract.py`;
 - `tests/test_vk_raw_first_llm_contract.py`;
+- `tests/test_vk_source_envelope.py`;
+- `tests/test_vk_crawl_continuation.py`;
 - `tests/test_vk_auto_queue_import.py`;
 - `tests/test_vk_auto_queue_rate_limit.py`;
 - `tests/test_vk_intake_future.py`;

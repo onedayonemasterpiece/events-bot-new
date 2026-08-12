@@ -15,9 +15,13 @@ python3 scripts/ops/smart_update_loss_census.py \
 python3 scripts/ops/recover_smart_update_identity_losses.py \
   --db artifacts/<incident>/prod.sqlite \
   --since 2026-08-04 --until 2026-08-12 \
-  --read-only --dry-run --include-discovery-misses \
+  --read-only --include-discovery-misses \
   --output artifacts/<incident>/recovery-plan.json
 ```
+
+`--read-only`, `--dry-run` and `--apply` are mutually exclusive recovery modes;
+the strict incident command uses `--read-only` alone. Both commands resolve the
+half-open UTC window `[since, until)`: include `since`, exclude `until`.
 
 Both tools must report `mode=read-only`, `quick_check=ok`, equal before/after
 main DB hashes and `changed=false/changed_rows=0`. Missing raw/schema/history is
@@ -26,6 +30,17 @@ misses. `--until` is exclusive. Run twice from the same immutable inputs and
 require the same semantic inventory/plan hash. The recovery command is a plan,
 not a live LLM replay, unless a disposable clone and recorded/provider responses
 are explicitly wired; never label queue/source counts as model-derived events.
+
+Reports must label carrier revisions, event occurrences and lifecycle actions
+as different units. A carrier may yield zero, one or many occurrences; carrier
+or queue counts cannot substitute for model-derived occurrence recovery totals.
+
+Additional fail-closed semantic gates are mandatory: every terminal
+`CONFIRMED_NO_EVENT` receipt/metric/row has one known `SourceNoEventReason`, and
+no other disposition has one. Missing/unknown/misplaced values are schema retry.
+The closed seven-value reason parity and seven-reason pure contradiction
+collector are enforced by the repository prompt/static audit; audit evidence
+must include that CI receipt rather than reimplement prompt inspection here.
 
 The protected production observer below intentionally forbids DB download. A
 production-snapshot migration rehearsal is a separate, explicit incident

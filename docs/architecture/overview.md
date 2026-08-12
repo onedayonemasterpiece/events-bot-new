@@ -72,9 +72,28 @@ Downstream publication/page jobs run only for accepted outcomes. Provider,
 schema, persistence, quota, timeout, or unresolved-action failures retain typed
 retry metadata and remain due; there is no terminal technical-failure state.
 
+`SourceNoEventReason` is mandatory if and only if the disposition is
+`CONFIRMED_NO_EVENT`. Its closed seven values are `NO_ATTENDABLE_EVENT`,
+`GIVEAWAY_ONLY`, `VAGUE_TEASER`, `REFERRAL_ONLY`, `SERVICE_OR_RENTAL`,
+`RECAP_ONLY`, and `OUT_OF_SCOPE`; missing, unknown, or misplaced values become
+`SCHEMA_MISMATCH` retry before a terminal receipt or metric can be written.
+
+All application callers use the pure `source_contradiction_facts` collector;
+Telegram stages that exact module together with `source_parse_contract` into its
+remote producer. The collector emits only the closed seven
+`VerificationReason` facts, makes no product verdict, preserves every positive
+child, and permits at most one conditional verifier. Verifier uncertainty or a
+technical failure is retryable. Prompt language and provider response examples
+remain canonical in [`../llm/prompts.md`](../llm/prompts.md).
+
 Durable crawl continuations are consumed automatically. Their lifecycle is
 `pending/retry due -> leased/running -> persist every raw packet in the page ->
-advance or done`. A crash, expired lease, or typed provider/backpressure failure
+advance or done`. The deepest durable `(date, post_id)` boundary survives retry
+and restart. Repeated fingerprints, full duplicate pages, and non-deeper full
+pages are mutable-head drift: they rebase as `OFFSET_DRIFT`/`NO_PROGRESS` retry
+and never close the tail. Only empty/short pages, the backfill horizon, or the
+original incremental cursor overlap prove `done`; legacy exact-page terminal
+rows reopen. A crash, expired lease, or typed provider/backpressure failure
 returns the continuation to a bounded due retry. Source cursors advance only
 after every fetched in-horizon packet is durable. Manual review and legacy inbox
 screens are diagnostic/admin surfaces, not required transitions in this state

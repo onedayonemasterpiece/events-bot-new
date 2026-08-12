@@ -42,6 +42,12 @@ or source cursor after a partially persisted page. Manual queue review is a
 diagnostic/admin surface only. Canonical semantics and acceptance tests are in
 `docs/features/vk-auto-queue/README.md`.
 
+For mutable VK offsets, `done` means only empty page, short page, backfill
+horizon, or original incremental cursor overlap. The worker durably preserves
+the deepest `(date, post_id)` boundary. Repeated fingerprint, all-duplicate full
+page, or no deeper full-page progress is `OFFSET_DRIFT`/`NO_PROGRESS` retry with
+offset rebase, never completion; old exact-full-page terminal rows are reopened.
+
 Region Talk autonomous discovery is opt-in via
 `ENABLE_REGION_TALK_SCHEDULED=1`. It is currently forced off after
 `INC-2026-08-03-ydb-request-unit-billing` while the new serverless database is

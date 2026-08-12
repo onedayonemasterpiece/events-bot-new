@@ -18,11 +18,14 @@ therefore only phase A may run now.
    read-only production bundle. Require quick-check before/after, zero new FK/
    identity/occurrence conflict, allowlisted count changes only, original bundle
    byte unchanged and an explicit plan for any pre-existing conflict.
-4. Run the acute A–T census and recovery command twice with `--read-only
-   --dry-run --include-discovery-misses`, a half-open window and bounded batch.
+4. Run the acute A–T census and recovery command twice with strict
+   `--read-only --include-discovery-misses`, a half-open `[since, until)` window
+   and bounded batch (`--read-only`, `--dry-run`, `--apply` are mutually
+   exclusive).
    Require identical semantic hashes and zero changes. Exact model-derived
-   recovery counts may remain unavailable when raw evidence is missing; do not
-   substitute carrier/source counts.
+   occurrence recovery counts may remain unavailable when raw evidence is
+   missing; report carriers, occurrences and lifecycle actions separately and
+   do not substitute carrier/source counts.
 5. Keep PR draft/unmerged and incident open. Update the PR summary with exact
    receipts and every Partial/Blocked gate. Green CI alone is not readiness.
 
@@ -36,11 +39,19 @@ therefore only phase A may run now.
    on any mismatch; do not apply recovery.
 3. Run one bounded configured-source canary. Prove raw packet before semantic
    selection; one primary parse or exact replay; complete manifest for no-event;
-   accepted-only downstream; no technical terminal; balanced carrier/children.
-4. Observe backlog/oldest due, rate limits, reservation/actual ratio and created
+   mandatory closed `SourceNoEventReason` only for confirmed no-event; at most
+   one fact-only verifier that preserves positives; accepted-only downstream;
+   no technical terminal; balanced carrier/children. Prove VK raw envelope v1
+   outer/copy/attachment completeness and deleted replay; legacy-incomplete
+   evidence must retry.
+4. Force continuation pages that repeat their fingerprint, consist only of
+   duplicates, and make no deeper `(date, post_id)` progress. Require typed
+   `OFFSET_DRIFT`/`NO_PROGRESS` retry/rebase, never `done`; then prove only
+   empty/short/horizon/original-cursor terminal states and legacy-row reopening.
+5. Observe backlog/oldest due, rate limits, reservation/actual ratio and created
    events against comparable baseline. Capacity shortage increases backlog/
    quota request; it never re-enables a semantic prefilter.
-5. Because daily slots were lost, execute a bounded current-day compensating
+6. Because daily slots were lost, execute a bounded current-day compensating
    crawl/Telegram/parser/ticket/festival catch-up and verify canonical events and
    public fanout before declaring deploy complete.
 

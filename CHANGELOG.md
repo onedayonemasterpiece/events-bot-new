@@ -63,6 +63,22 @@
 - **Release gate — not deploy-ready:** real provider quota/tier proof, an atomic
   fresh-production-snapshot rehearsal, explicit FK-orphan disposition, and
   model-derived recovery replay through typed Smart Update remain required.
+- **Fixed — mutable VK continuation drift:** repeated/full-duplicate/non-deeper
+  pages now retain the deepest durable `(date, post_id)` and become typed
+  `OFFSET_DRIFT`/`NO_PROGRESS` retry/rebase; only empty, short, horizon, or
+  original-cursor pages complete, and legacy false-terminal exact rows reopen.
+- **Fixed — one pure contradiction matrix:** shared main/VK/direct/parser and
+  exact staged Telegram use the same dependency-light seven-reason fact
+  collector, at most one verifier, positive-child preservation, and retry on
+  verifier uncertainty.
+- **Fixed — mandatory typed no-event reason:** `CONFIRMED_NO_EVENT` now requires
+  exactly one closed seven-value `SourceNoEventReason`; missing, unknown, or
+  misplaced reasons fail schema, receipts, metrics, and terminal gates closed.
+- **Fixed — lossless VK raw envelope and recovery contract:** v1 persists outer
+  and copy text trees, all attachments and link/doc/video previews with semantic
+  hashes and a recursive secret denylist; deleted complete packets replay while
+  legacy-incomplete evidence retries. Audit docs now use mutually exclusive
+  `--read-only` correctly and distinguish half-open carrier/occurrence counts.
 
 
 - **my-data-hub daily statistics producer (default off)**: added a non-sensitive

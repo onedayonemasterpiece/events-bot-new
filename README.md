@@ -47,6 +47,22 @@ failures stay non-terminal and due for bounded automatic retry. Only typed
 accepted Smart Update outcomes schedule downstream Telegraph, ICS, publication,
 and page rebuild work; diagnostic IDs do not count as accepted events.
 
+`CONFIRMED_NO_EVENT` additionally requires exactly one closed
+`SourceNoEventReason`: `NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`,
+`REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY`, or `OUT_OF_SCOPE`. Missing,
+unknown, or reason-on-a-positive disposition is a schema retry, never a terminal
+negative. One shared pure contradiction collector may request at most one
+fact-only verifier; verification preserves positive children and uncertainty
+remains retryable. The prompt wording is canonical in
+[`docs/llm/prompts.md`](docs/llm/prompts.md), not duplicated here.
+
+VK crawl continuations remember the deepest durable `(date, post_id)` boundary.
+A repeated fingerprint, full duplicate page, or boundary with no deeper
+progress becomes typed `OFFSET_DRIFT`/`NO_PROGRESS` retry with an offset rebase;
+it is never proof of completion. Only an empty page, short page, backfill
+horizon, or original incremental cursor overlap closes a continuation. Legacy
+rows that were incorrectly closed on an exact full page are reopened.
+
 The production VK auto-import scheduler is enabled in `fly.toml` and drains the
 queue automatically at configured local slots. Manual review, miss samples,
 short-post/story tools, and legacy queue buckets remain available for diagnosis
@@ -386,7 +402,8 @@ A VK service (server) token helps keep read-only API traffic away from the user 
 - `docs/operations/commands.md` – full list of bot commands.
 - `docs/USER_STORIES.md` – user stories.
 - `docs/ARCHITECTURE.md` – system architecture.
-- `docs/PROMPTS.md` – base prompt for model 4o (edit this for parsing rules).
+- `docs/llm/prompts.md` – canonical typed source-parse prompt contract and
+  provider-facing examples.
 - `docs/FOUR_O_REQUEST.md` – how requests to 4o are formed.
 - `docs/LOCATIONS.md` – list of standard venues used when parsing events.
 - `docs/RECURRING_EVENTS.md` – design notes for repeating events.
