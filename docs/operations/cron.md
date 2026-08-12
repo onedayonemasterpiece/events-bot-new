@@ -113,7 +113,21 @@ Scheduled guide slots now also participate in the shared heavy-job guard at the 
 `tg_monitoring`, scheduled `guide_excursions_full`, and `vk_auto_import` are additionally protected by a critical-run catch-up path: their APScheduler misfire grace is longer than the generic 30s default, and a live `critical_scheduler_watchdog` interval job re-checks `ops_run` after the last local slot inside the configured lookback window. If APScheduler emits `JOB_SUBMITTED`/`JOB_MISSED` but the entrypoint never writes a materialized successful run, or the process is killed and startup cleanup marks the materialized run `crashed`, the watchdog dispatches the same scheduled entrypoint with a catch-up `run_id` instead of waiting for the next day/slot. The watchdog resolves the last local slot, not just "today", so a 23:40 slot remains recoverable after local midnight.
 For `guide_excursions_full`, the watchdog only treats a materialized `ops_run(kind='guide_monitoring', details.mode='full')` as delivery; a same-day `light` scan must not suppress recovery of the missed `full` auto-publish slot.
 If a catch-up dispatch only materializes another resource-busy `guide_monitoring` skip (for example `remote_telegram_session_busy` while another Kaggle run still owns the shared Telegram session or Kaggle status lookup is temporarily `UNKNOWN`), the slot stays pending in the watchdog memory and is deferred by `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` instead of being marked "completed" for the day or retried every watchdog tick.
-For `tg_monitoring`, the watchdog also checks the persistent Kaggle recovery registry before dispatching a catch-up. If a `tg_monitoring` kernel is already registered, the watchdog defers for `TG_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `300`) and lets `kaggle_recovery` poll/import that kernel, avoiding a second `TELEGRAM_AUTH_BUNDLE_S22` push while the remote Telethon session may still be active. A materialized `remote_telegram_session_busy` skip gets the same short retry hold.
+For `tg_monitoring`, the watchdog checks both the persistent Kaggle recovery
+registry and the fsync/read-back pre-push launch intent before dispatching a
+catch-up. If either exists, it defers for
+`TG_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `300`) and lets the exact
+handoff be reconciled, avoiding a second `TELEGRAM_AUTH_BUNDLE_S22` push. A
+materialized `remote_telegram_session_busy` skip gets the same short hold. A
+terminal `error`/`crashed` attempt gets a separate persisted
+`TG_MONITORING_TERMINAL_RETRY_SECONDS` hold (default `3600`), so removal of a
+terminal registry row cannot turn the 60-second watchdog into a relaunch loop.
+
+Guide and Telegram launchers persist and read back a unique launch intent
+*before* the remote push. A full job registration replaces that transitional
+state only after push. Registry parse/I/O errors fail closed rather than
+appearing as an empty registry. Thus `push succeeded -> registry write failed`
+is observable as an untracked handoff barrier, not permission to push again.
 `tg_monitoring` and `vk_auto_import` use `wait` as their default heavy-job guard mode so a nearby critical run queues behind an existing heavy operation instead of silently skipping, unless `SCHED_HEAVY_GUARD_MODE` explicitly overrides it. `guide_excursions_full` still records the initial `heavy_busy` skip, but its catch-up dispatch uses the same `wait` semantics so the missed daily digest runs as soon as the blocking heavy job releases the gate.
 
 For admin-facing scheduled reports, the bot now resolves the target chat from the superadmin row in SQLite first; `ADMIN_CHAT_ID` is only a bootstrap/legacy fallback.

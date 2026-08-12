@@ -69,6 +69,19 @@ Production file mirror **включён постоянно** и пишет root 
 
 ## Disk Hygiene Runbook
 
+Before cleanup, compare durable DB growth by table as well as top-level paths.
+For raw-first VK, compare `dbstat` bytes for `vk_source_packet` with the
+predeploy DB snapshot and count packets per crawl hour. Full JSON and attachment
+envelopes can grow the main DB much faster than the bounded runtime mirror;
+deleting logs or truncating WAL must not be reported as the durable root cause
+without that table-level comparison.
+
+`VK_CRAWL_MIN_FREE_MB` is a writer admission floor (default `512` MiB) and must
+remain above the `/healthz` warning/critical floors. It blocks before VK fetch
+and packet persistence. Do not lower it to make a crawl run while `/data` is in
+warning; first reconcile exact terminal artifacts or another owner-governed
+retention action and repeat `df`/`quick_check`.
+
 До удаления:
 
 - `PRAGMA quick_check` для `/data/db.sqlite`;

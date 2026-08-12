@@ -36,6 +36,14 @@ payload/revision hash использует exact successful receipt без provi
 изменившийся пост получает новый immutable revision и снова становится due.
 Blank/photo-only packets также сохраняются и идут через OCR и LLM.
 
+Idle backfill определяется по `vk_crawl_cursor.checked_at` — времени последнего
+успешного scan, а не по `updated_at` последнего найденного поста. Иначе тихий,
+но регулярно проверяемый источник каждые 24 часа повторно материализует полную
+историю. Production crawl до provider fetch проверяет свободное место на
+runtime volume и при остатке ниже `VK_CRAWL_MIN_FREE_MB` (default `512`) падает
+в retry с `vk_crawl_storage_admission_blocked`; health critical floor не
+является write admission сам по себе.
+
 Continuation consumer запускается автоматически и следует ожидаемой durable
 state machine без зависимости от ручного UI:
 
@@ -93,6 +101,13 @@ Legacy exact-full-page rows, ошибочно отмеченные `done`, reope
 `event_ts_hint` влияет только на приоритет. `NULL`, ошибочно прошлое или далёкое
 значение не исключает carrier. Age-based ordering не даёт unknown-date rows
 голодать.
+
+Обычный scheduled drain остаётся oldest-first при bounded due queue. Если due
+backlog превышает `VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD` (default
+`150`), он временно сортирует publication date по убыванию, чтобы свежий
+текущий intake не ждал за многолетним replay. Исторические rows не удаляются,
+не исключаются и не получают deterministic no-event verdict; после снижения
+backlog снова действует oldest-first fairness.
 
 ## Raw source envelope v1
 
@@ -241,6 +256,10 @@ Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
 - `VK_AUTO_IMPORT_PREFETCH=0` по умолчанию; даже при включении semantic parse
   принадлежит main worker;
 - `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` — timeout становится typed retry;
+- `VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD` — размер due backlog, после
+  которого scheduled importer временно даёт приоритет свежим carriers;
+- `VK_CRAWL_MIN_FREE_MB` — production-volume admission floor перед VK fetch и
+  packet persistence (default `512` MiB);
 - `VK_AUTO_IMPORT_INLINE_JOBS` / `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` управляют
   только ожиданием downstream receipts после accepted result.
 
