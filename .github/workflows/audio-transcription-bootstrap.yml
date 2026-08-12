@@ -42,7 +42,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: >-
-          python -m pytest -q
+          python -m pytest -q --noconftest
           tests/test_audio_transcription_*.py
           tests/test_remote_telegram_session.py
       - name: Run real ffmpeg smoke
