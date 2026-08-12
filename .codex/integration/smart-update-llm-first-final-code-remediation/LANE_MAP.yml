@@ -112,7 +112,7 @@ lanes:
     forbidden_files: [source_parse_contract.py, smart_event_update.py, docs/**, CHANGELOG.md]
     expected_output: committed packet schema/builder/fallback and regressions A-G
     verification_scope: targeted
-    status: planned
+    status: spawned
   - id: DOCS-EVIDENCE
     role: worker
     effort: high
