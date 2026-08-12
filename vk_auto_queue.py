@@ -2089,11 +2089,7 @@ async def _process_vk_inbox_row(
             except Exception:
                 logger.warning("vk_auto: failed to canonicalize location_hint", exc_info=True)
 
-    if (
-        vk_fetch is not None
-        and not vk_fetch.ok
-        and vk_fetch.kind in {"not_found", "access_denied"}
-    ):
+    if vk_fetch is not None and not vk_fetch.ok:
         durable = await _load_vk_durable_packet_evidence(
             db,
             group_id=int(post.group_id),
@@ -2138,6 +2134,13 @@ async def _process_vk_inbox_row(
                 ],
             )
             return
+        else:
+            # An inbox text projection is not a captured revision. With no
+            # durable packet, retain the original typed fetch failure path
+            # below instead of permitting the optional stale-text switch to
+            # create an unrefreshed semantic negative.
+            text = ""
+            photos = []
 
     if vk_fetch is not None and not vk_fetch.ok:
         allow_stale = _vk_auto_allow_stale_inbox_text()

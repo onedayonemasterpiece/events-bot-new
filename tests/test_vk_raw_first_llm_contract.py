@@ -472,7 +472,18 @@ async def test_typed_provider_receipt_releases_lease_and_persists_quota_metadata
 
 
 @pytest.mark.asyncio
-async def test_deleted_source_replays_complete_envelope_into_typed_parser(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("failure_kind", "error_code", "error"),
+    [
+        pytest.param("not_found", 100, "Post was deleted", id="deleted"),
+        pytest.param("access_denied", 15, "Access denied", id="access-denied"),
+        pytest.param("network_error", None, "connection reset", id="network-error"),
+        pytest.param("vk_api_error", 6, "Too many requests", id="vk-api-error"),
+    ],
+)
+async def test_any_fetch_failure_replays_complete_envelope_into_typed_parser(
+    tmp_path, monkeypatch, failure_kind, error_code, error
+):
     db = await _db(tmp_path)
     async with db.raw_conn() as conn:
         await conn.execute(
@@ -520,7 +531,7 @@ async def test_deleted_source_replays_complete_envelope_into_typed_parser(tmp_pa
 
     async def unavailable(*_args, **_kwargs):
         return "", [], None, None, vk_auto_queue.VkFetchStatus(
-            False, "not_found", error_code=100, error="Post was deleted"
+            False, failure_kind, error_code=error_code, error=error
         )
 
     captured = {}
@@ -565,7 +576,18 @@ async def test_deleted_source_replays_complete_envelope_into_typed_parser(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_deleted_legacy_packet_retries_as_incomplete_without_parser(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("failure_kind", "error_code"),
+    [
+        pytest.param("not_found", 100, id="deleted"),
+        pytest.param("access_denied", 15, id="access-denied"),
+        pytest.param("network_error", None, id="network-error"),
+        pytest.param("vk_api_error", 6, id="vk-api-error"),
+    ],
+)
+async def test_any_fetch_failure_keeps_legacy_packet_incomplete_without_parser(
+    tmp_path, monkeypatch, failure_kind, error_code
+):
     db = await _db(tmp_path)
     async with db.raw_conn() as conn:
         await conn.execute(
@@ -586,7 +608,9 @@ async def test_deleted_legacy_packet_retries_as_incomplete_without_parser(tmp_pa
     assert post is not None and post.source_packet_id == packet_id
 
     async def unavailable(*_args, **_kwargs):
-        return "", [], None, None, vk_auto_queue.VkFetchStatus(False, "access_denied", error_code=15)
+        return "", [], None, None, vk_auto_queue.VkFetchStatus(
+            False, failure_kind, error_code=error_code
+        )
 
     async def must_not_parse(*_args, **_kwargs):
         raise AssertionError("legacy incomplete packet must not produce a semantic terminal")
@@ -615,6 +639,63 @@ async def test_deleted_legacy_packet_retries_as_incomplete_without_parser(tmp_pa
         )).fetchone()
     assert report.inbox_deferred == 1
     assert row == ("deferred", "EVIDENCE_INCOMPLETE")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_kind", ["network_error", "vk_api_error"])
+async def test_fetch_failure_without_packet_uses_typed_technical_retry_not_stale_text(
+    tmp_path, monkeypatch, failure_kind
+):
+    db = await _db(tmp_path)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','source')"
+        )
+        await conn.execute(
+            """
+            INSERT INTO vk_inbox(
+                id,group_id,post_id,date,text,has_date,status,owner_type
+            ) VALUES(1,1,99,1,'cached text must not be parsed',0,'pending','group')
+            """
+        )
+        await conn.commit()
+    post = await vk_review.pick_next(db, 7, "batch", resume_locked=False)
+    assert post is not None and post.source_packet_id is None
+
+    async def unavailable(*_args, **_kwargs):
+        return "", [], None, None, vk_auto_queue.VkFetchStatus(
+            False, failure_kind, error_code=6, error="provider unavailable"
+        )
+
+    async def must_not_parse(*_args, **_kwargs):
+        raise AssertionError("missing durable packet must not parse stale inbox text")
+
+    # Even the legacy opt-in cannot replace a missing immutable revision.
+    monkeypatch.setenv("VK_AUTO_IMPORT_ALLOW_STALE_INBOX_TEXT_ON_FETCH_FAIL", "1")
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", unavailable)
+    monkeypatch.setattr(vk_auto_queue.vk_intake, "build_event_drafts", must_not_parse)
+    report = vk_auto_queue.VkAutoImportReport(batch_id="batch")
+    await vk_auto_queue._process_vk_inbox_row(
+        db,
+        _Bot(),
+        chat_id=1,
+        operator_id=7,
+        batch_id="batch",
+        post=post,
+        source_url="https://vk.com/wall-1_99",
+        report=report,
+        festival_names=None,
+        festival_alias_pairs=None,
+        progress_message_id=None,
+        progress_current_no=1,
+        progress_total_txt="1",
+    )
+    async with db.raw_conn() as conn:
+        row = await (await conn.execute(
+            "SELECT status,last_typed_reason FROM vk_inbox WHERE id=1"
+        )).fetchone()
+    assert report.inbox_failed == 1
+    assert row == ("deferred", "SOURCE_FETCH_ERROR")
 
 
 @pytest.mark.asyncio
