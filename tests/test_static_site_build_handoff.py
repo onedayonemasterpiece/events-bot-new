@@ -388,6 +388,37 @@ def test_static_site_preflight_rejects_critical_root_scratch(monkeypatch) -> Non
         main._static_site_storage_preflight()
 
 
+def test_static_site_preflight_reserves_snapshot_bytes_before_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import main
+
+    database = tmp_path / "db.sqlite"
+    database.write_bytes(b"x" * (3 * 1024 * 1024))
+    monkeypatch.setenv("STATIC_SITE_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
+    monkeypatch.setattr(
+        main,
+        "runtime_scratch_health",
+        lambda: {"status": "ok", "tempfile_status": "ok"},
+    )
+    monkeypatch.setattr(
+        main,
+        "writable_disk_health",
+        lambda *_args, **_kwargs: {
+            "status": "warning",
+            "tempfile_status": "ok",
+            "free_mb": 5,
+            "critical_free_mb": 4,
+        },
+    )
+
+    with pytest.raises(
+        main.StaticSiteRetryableError,
+        match="static_site_snapshot_reserve_preflight_failed",
+    ):
+        main._static_site_storage_preflight(snapshot_source_path=database)
+
+
 @pytest.mark.asyncio
 async def test_static_site_receipt_payload_retries_sqlite_writer_collision(
     tmp_path: Path,
@@ -1045,7 +1076,7 @@ def test_static_site_remote_recovery_precedes_new_build_capacity_gate() -> None:
     source = Path(main.__file__).read_text(encoding="utf-8")
     recovery = source.index("recovered, recovered_result = await _recover_previous_static_site_attempt(")
     recovered_return = source.index("return recovered_result if recovered_result is not None else True", recovery)
-    capacity = source.index("await asyncio.to_thread(_static_site_storage_preflight)", recovery)
+    capacity = source.index("_static_site_storage_preflight,", recovery)
 
     assert recovery < recovered_return < capacity
 

@@ -435,6 +435,13 @@ locked run is evidence of process death. Unknown paths and symlinks are never
 followed or removed. This ordering ensures that a regenerable staged SQLite
 copy cannot itself cause the next storage preflight to fail.
 
+The host gate also reserves the current SQLite main-file size before creating
+the immutable online-backup snapshot. Available bytes must cover that copy
+*and* leave `STATIC_SITE_STORAGE_CRITICAL_FREE_MB` afterward. The runner's
+post-snapshot probe remains a second boundary check, but it is not the first
+place an oversized copy is discovered; an impossible build defers without a
+temporary full-DB allocation and retry loop.
+
 Production health reports persistent and scratch disk separately. A critical
 or unwritable `/tmp` keeps `/healthz` not ready and blocks the static preflight
 even during startup grace. The coalesced request is deferred without incrementing
