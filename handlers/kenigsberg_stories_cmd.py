@@ -1205,6 +1205,7 @@ async def _launch_kaggle_generation(
                 KENIGSBERG_PROFILE_KEY,
                 kernel_ref,
                 meta={
+                    "run_id": f"kenigsberg:{obj.id}",
                     "session_id": obj.id,
                     "issue_number": issue_number,
                     "trigger": trigger,

@@ -25,10 +25,10 @@ from admin_chat import resolve_superadmin_chat_id
 from db import Database
 from kaggle_registry import (
     list_jobs,
-    register_job,
+    mark_launch_intent_indeterminate,
+    promote_launch_intent,
     register_launch_intent,
     remove_job,
-    remove_launch_intent,
     update_job_meta,
 )
 from kaggle_status import (
@@ -991,18 +991,19 @@ def _prepared_kernel_path(kernel_path: Path) -> Path:
 async def _push_kernel(
     client: KaggleClient,
     dataset_sources: list[str],
-) -> str:
+) -> tuple[str, dict[str, Any]]:
     if _kernel_has_code(KERNEL_PATH):
         with _prepared_kernel_path(KERNEL_PATH) as prepared_path:
             kernel_ref = _kernel_ref_from_meta(prepared_path)
             logger.info("tg_monitor: pushing local kernel %s", prepared_path)
-            client.push_kernel(kernel_path=prepared_path, dataset_sources=dataset_sources)
-            return kernel_ref
+            push_receipt = client.push_kernel(
+                kernel_path=prepared_path, dataset_sources=dataset_sources
+            )
+            return kernel_ref, dict(push_receipt or {})
     logger.info("tg_monitor: local kernel code missing, deploying remote kernel")
     kernel_ref = _kernel_ref_from_meta(KERNEL_PATH)
-    for slug in dataset_sources:
-        kernel_ref = client.deploy_kernel_update(kernel_ref, slug)
-    return kernel_ref
+    kernel_ref = client.deploy_kernel_update(kernel_ref, dataset_sources)
+    return kernel_ref, {}
 
 
 def _compute_kaggle_poll_timeout_minutes(*, sources_count: int) -> int:
@@ -3377,6 +3378,7 @@ async def _run_telegram_monitor_locked(
     dataset_key = ""
     kernel_ref = ""
     registered_recovery = False
+    launch_intent_pending = False
     try:
         dataset_cipher, dataset_key = await _prepare_kaggle_datasets(
             db=db,
@@ -3409,14 +3411,19 @@ async def _run_telegram_monitor_locked(
                 "source_usernames": sorted(set(source_usernames or [])),
             },
         )
+        launch_intent_pending = True
         try:
-            kernel_ref = await _push_kernel(client, [dataset_cipher, dataset_key])
-        except Exception:
+            kernel_ref, push_receipt = await _push_kernel(
+                client, [dataset_cipher, dataset_key]
+            )
+        except Exception as exc:
             try:
-                await remove_launch_intent("tg_monitoring", run_id)
+                await mark_launch_intent_indeterminate(
+                    "tg_monitoring", run_id, error=exc
+                )
             except Exception:
                 logger.critical(
-                    "tg_monitor.launch_intent_release_failed run_id=%s",
+                    "tg_monitor.launch_intent_mark_failed run_id=%s",
                     run_id,
                     exc_info=True,
                 )
@@ -3429,20 +3436,21 @@ async def _run_telegram_monitor_locked(
             kernel_ref,
             [dataset_cipher, dataset_key],
         )
-        await register_job(
+        await promote_launch_intent(
             "tg_monitoring",
+            run_id,
             kernel_ref,
             meta={
-                "run_id": run_id,
                 "chat_id": chat_id,
                 "pid": os.getpid(),
                 "remote_telegram_auth_scope": auth_scope,
                 "dataset_slugs": [dataset_cipher, dataset_key],
                 "source_usernames": sorted(set(source_usernames or [])),
+                "push_receipt": dict(push_receipt or {}),
             },
         )
         registered_recovery = True
-        await remove_launch_intent("tg_monitoring", run_id)
+        launch_intent_pending = False
         await asyncio.sleep(KAGGLE_STARTUP_WAIT_SECONDS)
 
         status, status_data, duration = await _poll_kaggle_kernel(
@@ -3561,7 +3569,7 @@ async def _run_telegram_monitor_locked(
 
         return report
     finally:
-        if dataset_cipher or dataset_key:
+        if (dataset_cipher or dataset_key) and not launch_intent_pending:
             await _cleanup_datasets([dataset_cipher, dataset_key])
 
 

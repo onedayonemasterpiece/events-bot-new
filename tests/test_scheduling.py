@@ -22,6 +22,76 @@ from models import User
 from ops_run import finish_ops_run, start_ops_run
 
 
+@pytest.mark.asyncio
+async def test_tg_terminal_retry_hold_anchors_to_finished_at(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    started = datetime(2026, 8, 12, 18, 0, tzinfo=timezone.utc)
+    finished = datetime(2026, 8, 12, 20, 15, tzinfo=timezone.utc)
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=started,
+        details={"run_id": "long-failure"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="error",
+        finished_at=finished,
+        details={"run_id": "long-failure", "fatal_error": "remote failed"},
+    )
+
+    held_from = await scheduling._latest_tg_monitoring_retry_hold_started_at(
+        db,
+        day_start_utc=started.replace(hour=0),
+        day_end_utc=finished.replace(hour=23, minute=59),
+    )
+
+    assert held_from == finished
+
+
+@pytest.mark.asyncio
+async def test_guide_watchdog_consumes_reconciled_intent_job(monkeypatch):
+    import kaggle_registry
+    from guide_excursions import service as guide_service
+
+    jobs = [
+        {
+            "meta": {
+                "run_id": "run-1",
+                "intent_reconciliation": "exact_dataset_sources",
+            }
+        }
+    ]
+
+    async def reconcile(_job_type):
+        return [{"run_id": "run-1", "status": "promoted"}]
+
+    async def list_jobs(_job_type=None):
+        return list(jobs)
+
+    async def list_intents(_job_type=None):
+        return []
+
+    async def resume(_db, _bot):
+        jobs.clear()
+        return 1
+
+    monkeypatch.setattr(kaggle_registry, "reconcile_launch_intents", reconcile)
+    monkeypatch.setattr(kaggle_registry, "list_jobs", list_jobs)
+    monkeypatch.setattr(kaggle_registry, "list_launch_intents", list_intents)
+    monkeypatch.setattr(guide_service, "resume_guide_monitor_jobs", resume)
+
+    blocked = await scheduling._kaggle_launch_intent_exists(
+        "guide_monitoring", db=object(), bot=object()
+    )
+
+    assert blocked is False
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def _dispose_test_databases(monkeypatch):
     """Dispose per-test SQLite engines so the focused CI process can exit."""

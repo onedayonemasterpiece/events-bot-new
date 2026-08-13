@@ -6,6 +6,7 @@ import pytest
 
 import main
 import vk_intake
+from db import Database
 
 
 def test_vk_crawl_storage_guard_blocks_before_volume_is_critical(monkeypatch):
@@ -32,6 +33,47 @@ def test_vk_crawl_storage_guard_does_not_apply_to_local_test_db(monkeypatch):
     vk_intake._require_vk_crawl_storage_headroom(
         SimpleNamespace(path="/tmp/test-db.sqlite")
     )
+
+
+@pytest.mark.asyncio
+async def test_vk_crawl_rechecks_capacity_between_sources(tmp_path, monkeypatch):
+    monkeypatch.setenv("RUNTIME_DISK_PATH", str(tmp_path))
+    monkeypatch.setenv("VK_CRAWL_MIN_FREE_MB", "512")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO vk_source(group_id,screen_name,name,location,default_time,default_ticket_link)
+            VALUES(?,?,?,?,?,?)
+            """,
+            [(1, "one", "One", "", None, None), (2, "two", "Two", "", None, None)],
+        )
+        await conn.commit()
+
+    probes = 0
+
+    def shrinking_usage(_path):
+        nonlocal probes
+        probes += 1
+        free_mb = 900 if probes <= 3 else 500
+        return _ntuple_diskusage(3 * 1024**3, 3 * 1024**3 - free_mb * 1024**2, free_mb * 1024**2)
+
+    seen_groups = []
+
+    async def fake_wall(group_id, since, count, offset=0, owner_type="group"):
+        seen_groups.append(group_id)
+        return []
+
+    monkeypatch.setattr(vk_intake.shutil, "disk_usage", shrinking_usage)
+    monkeypatch.setattr(main, "vk_wall_since", fake_wall)
+
+    with pytest.raises(RuntimeError, match="vk_crawl_storage_admission_blocked"):
+        await vk_intake.crawl_once(db)
+
+    assert len(seen_groups) == 1
+    assert probes >= 4
+    await db.close()
 
 
 def test_vk_llm_text_field_cleaner_drops_location_placeholders():

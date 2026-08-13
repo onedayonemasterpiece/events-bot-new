@@ -1133,7 +1133,7 @@ class KaggleClient:
         dataset_sources: list[str] | None = None,
         kernel_path: str | Path | None = None,
         timeout: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any]:
         base_path = Path(kernel_path) if kernel_path else DEFAULT_KERNEL_PATH
         if not base_path.exists():
             raise FileNotFoundError(f"Kernel path not found: {base_path}")
@@ -1186,6 +1186,7 @@ class KaggleClient:
                     "kaggle: kernels_push completed without explicit ref for kernel=%s",
                     meta_data.get("id") or meta_data.get("slug"),
                 )
+            return dict(response_info)
 
     def kernels_list(self, user: str, page_size: int = 20) -> list[dict]:
         api = self._get_api()

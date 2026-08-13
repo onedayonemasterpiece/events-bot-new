@@ -1366,7 +1366,7 @@ async def _latest_tg_monitoring_retry_hold_started_at(
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT status, details_json, started_at
+            SELECT status, details_json, started_at, finished_at
             FROM ops_run
             WHERE kind = 'tg_monitoring'
               AND trigger = 'scheduled'
@@ -1380,7 +1380,7 @@ async def _latest_tg_monitoring_retry_hold_started_at(
         row = await cur.fetchone()
     if row is None:
         return None
-    status, details_raw, started_at_raw = row
+    status, details_raw, started_at_raw, finished_at_raw = row
     normalized_status = str(status or "").strip()
     if normalized_status in {"running", "success", "partial", "empty"}:
         return None
@@ -1397,15 +1397,39 @@ async def _latest_tg_monitoring_retry_hold_started_at(
     if normalized_status == "skipped" and not _details_have_remote_telegram_busy(details):
         return None
     if normalized_status in {"error", "crashed", "skipped"}:
-        return _parse_ops_run_datetime(started_at_raw)
+        return _parse_ops_run_datetime(finished_at_raw or started_at_raw)
     return None
 
 
-async def _kaggle_launch_intent_exists(job_type: str) -> bool:
+async def _kaggle_launch_intent_exists(
+    job_type: str,
+    *,
+    db: Any | None = None,
+    bot: Any | None = None,
+) -> bool:
     try:
-        from kaggle_registry import list_launch_intents
+        from kaggle_registry import list_jobs, list_launch_intents, reconcile_launch_intents
 
+        await reconcile_launch_intents(job_type)
+        jobs = await list_jobs(job_type)
         intents = await list_launch_intents(job_type)
+        reconciled_jobs = [
+            job
+            for job in jobs
+            if isinstance(job.get("meta"), dict)
+            and job["meta"].get("intent_reconciliation")
+        ]
+        if reconciled_jobs and db is not None and job_type == "guide_monitoring":
+            from guide_excursions.service import resume_guide_monitor_jobs
+
+            await resume_guide_monitor_jobs(db, bot)
+            jobs = await list_jobs(job_type)
+            reconciled_jobs = [
+                job
+                for job in jobs
+                if isinstance(job.get("meta"), dict)
+                and job["meta"].get("intent_reconciliation")
+            ]
     except Exception:
         logging.warning(
             "SCHED critical watchdog could not inspect %s launch intents",
@@ -1413,15 +1437,25 @@ async def _kaggle_launch_intent_exists(job_type: str) -> bool:
             exc_info=True,
         )
         return True
-    return bool(intents)
+    return bool(intents or reconciled_jobs)
 
 
-async def _tg_monitoring_recovery_job_exists() -> bool:
+async def _tg_monitoring_recovery_job_exists(
+    *,
+    db: Any | None = None,
+    bot: Any | None = None,
+) -> bool:
     try:
-        from kaggle_registry import list_jobs, list_launch_intents
+        from kaggle_registry import list_jobs, list_launch_intents, reconcile_launch_intents
 
+        await reconcile_launch_intents("tg_monitoring")
         jobs = await list_jobs("tg_monitoring")
         intents = await list_launch_intents("tg_monitoring")
+        if jobs and db is not None:
+            from source_parsing.telegram.service import resume_telegram_monitor_jobs
+
+            await resume_telegram_monitor_jobs(db, bot)
+            jobs = await list_jobs("tg_monitoring")
     except Exception:
         logging.warning("SCHED critical watchdog could not inspect tg_monitoring registry", exc_info=True)
         return True
@@ -2313,7 +2347,9 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
                 retry_seconds,
             )
             return 0
-    if await _kaggle_launch_intent_exists("guide_monitoring"):
+    if await _kaggle_launch_intent_exists(
+        "guide_monitoring", db=db, bot=bot
+    ):
         _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(
             seconds=retry_seconds
         )
@@ -2459,7 +2495,7 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
                 terminal_retry_seconds,
             )
             return 0
-    if await _tg_monitoring_recovery_job_exists():
+    if await _tg_monitoring_recovery_job_exists(db=db, bot=bot):
         _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(seconds=retry_seconds)
         logging.warning(
             "SCHED critical watchdog deferring tg_monitoring catch-up while recovery registry exists "

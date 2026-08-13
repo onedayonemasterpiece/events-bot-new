@@ -4,12 +4,13 @@
 - **SEV-1 `/data` / ingestion remediation:** recorded
   `INC-2026-08-12-data-volume-ingestion`; stopped quiet VK sources from
   repeatedly replaying history, added a 512 MiB pre-fetch volume admission
-  guard and bounded fresh-first queue relief, added fsync/read-back pre-push
-  Guide/TG Kaggle intents with fail-closed registry reads, and gave Telegram
-  terminal catch-ups a one-hour hold. Also reconciled the existing exact
-  terminal StaticSiteBuilder cross-deploy fix so only its owned snapshot/output
-  are reclaimed and vector sync can resume. Production deploy and controlled
-  catch-up remain required before closure.
+  guard with per-source/page/packet rechecks and starvation-free bounded queue
+  interleave, added atomic/exact-reconciled Guide/TG Kaggle launch intents with
+  fail-closed registry schema reads, and anchored Telegram terminal catch-up's
+  one-hour hold to completion time. StaticSiteBuilder now confines and
+  hash-validates the exact terminal snapshot, keeps its active cleanup barrier
+  until strict snapshot/output receipts succeed, then releases vector sync.
+  Production deploy and controlled catch-up remain required before closure.
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit
   controlled release operation.

@@ -116,7 +116,11 @@ async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
         return "cipher", "key"
 
     async def fake_push(*_args, **_kwargs):
-        return "zigomaro/guide-excursions-monitor", {"dataset_sources": ["cipher", "key"]}
+        return (
+            "zigomaro/guide-excursions-monitor",
+            {"dataset_sources": ["cipher", "key"]},
+            {"ref": "zigomaro/guide-excursions-monitor", "version_number": 7},
+        )
 
     async def fake_shape(*_args, **_kwargs):
         return {"dataset_sources": ["cipher", "key"]}
@@ -143,9 +147,9 @@ async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
     monkeypatch.setattr(kaggle_service, "_prepare_kaggle_datasets", fake_prepare)
     monkeypatch.setattr(kaggle_service, "_push_kernel", fake_push)
     monkeypatch.setattr(kaggle_service, "_wait_for_remote_kernel_shape", fake_shape)
-    monkeypatch.setattr(kaggle_service, "register_job", fake_register)
+    monkeypatch.setattr(kaggle_service, "promote_launch_intent", fake_register)
     monkeypatch.setattr(kaggle_service, "register_launch_intent", fake_launch_intent)
-    monkeypatch.setattr(kaggle_service, "remove_launch_intent", fake_launch_intent)
+    monkeypatch.setattr(kaggle_service, "mark_launch_intent_indeterminate", fake_launch_intent)
     monkeypatch.setattr(kaggle_service, "_poll_kaggle_kernel", fake_poll)
     monkeypatch.setattr(kaggle_service, "reconcile_kaggle_run_failure_from_host", fake_reconcile)
     monkeypatch.setattr(kaggle_service, "_cleanup_datasets", fake_cleanup)
@@ -170,6 +174,49 @@ async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
             }
         ]
     assert reconciled == expected
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_push_keeps_intent_and_unique_datasets(monkeypatch) -> None:
+    calls: list[tuple] = []
+
+    class DummyKaggleClient:
+        pass
+
+    async def fake_build_config(*_args, **_kwargs):
+        return {"sources": []}
+
+    async def fake_prepare(**_kwargs):
+        return "owner/cipher-run", "owner/key-run"
+
+    async def fake_intent(*args, **kwargs):
+        calls.append(("intent", args, kwargs))
+
+    async def fake_push(*_args, **_kwargs):
+        raise TimeoutError("response lost after submit")
+
+    async def fake_mark(*args, **kwargs):
+        calls.append(("indeterminate", args, kwargs))
+
+    async def fake_cleanup(slugs):
+        calls.append(("cleanup", tuple(slugs)))
+
+    monkeypatch.setattr(kaggle_service, "KaggleClient", DummyKaggleClient)
+    monkeypatch.setattr(kaggle_service, "_build_config_payload", fake_build_config)
+    monkeypatch.setattr(kaggle_service, "_build_secrets_payload", lambda: "{}")
+    monkeypatch.setattr(kaggle_service, "_prepare_kaggle_datasets", fake_prepare)
+    monkeypatch.setattr(kaggle_service, "register_launch_intent", fake_intent)
+    monkeypatch.setattr(kaggle_service, "_push_kernel", fake_push)
+    monkeypatch.setattr(kaggle_service, "mark_launch_intent_indeterminate", fake_mark)
+    monkeypatch.setattr(kaggle_service, "_cleanup_datasets", fake_cleanup)
+    monkeypatch.setattr(kaggle_service, "DATASET_PROPAGATION_WAIT_SECONDS", 0)
+
+    with pytest.raises(TimeoutError, match="response lost"):
+        await kaggle_service.run_guide_monitor_kaggle(
+            object(), run_id="ambiguous-run", mode="full", limit=60, days_back=5
+        )
+
+    assert [call[0] for call in calls] == ["intent", "indeterminate"]
 
 
 @pytest.mark.asyncio

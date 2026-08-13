@@ -146,7 +146,11 @@ async def run_philharmonia_kaggle_kernel(
             await register_job(
                 "parse_philharmonia",
                 kernel_ref,
-                meta={"kernel_folder": PHILHARMONIA_KERNEL_FOLDER, "pid": os.getpid()},
+                meta={
+                    "run_id": ledger_run_id,
+                    "kernel_folder": PHILHARMONIA_KERNEL_FOLDER,
+                    "pid": os.getpid(),
+                },
             )
             registered = True
         except Exception:

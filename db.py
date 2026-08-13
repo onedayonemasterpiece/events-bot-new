@@ -2709,6 +2709,19 @@ class Database:
             await _add_column(conn, "vk_inbox", "quota_scope TEXT")
             await _add_column(conn, "vk_inbox", "provider_retry_after INTEGER")
 
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS vk_auto_import_state (
+                    id INTEGER PRIMARY KEY CHECK(id=1),
+                    fresh_since_history INTEGER NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO vk_auto_import_state(id) VALUES(1)"
+            )
+
             # Raw-first VK ingestion ledger.  A row is an immutable fetched
             # revision; semantic state lives beside it but the source payload is
             # never overwritten.  The inbox points at the newest revision.

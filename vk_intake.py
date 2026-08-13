@@ -5360,6 +5360,7 @@ async def crawl_once(
 
     now_ts = int(time.time())
     for group in groups:
+        _require_vk_crawl_storage_headroom(db)
         gid = group["group_id"]
         raw_owner_type = group.get("owner_type") or "group"
         owner_type = "user" if str(raw_owner_type).strip().lower() == "user" else "group"
@@ -5405,11 +5406,27 @@ async def crawl_once(
                     (gid,),
                 )
                 row = await cur.fetchone()
+                continuation_cur = await conn.execute(
+                    """
+                    SELECT 1 FROM vk_crawl_continuation
+                    WHERE source_type='vk' AND owner_id=?
+                      AND reason='hard_cap'
+                      AND status IN ('pending','retry','processing')
+                    LIMIT 1
+                    """,
+                    (gid,),
+                )
+                hard_cap_continuation_owed = await continuation_cur.fetchone() is not None
             cursor_updated_at_existing_raw: Any = None
             if row:
                 last_seen_ts, last_post_id, updated_at, checked_at = row
                 cursor_updated_at_existing_raw = updated_at
-                idle_anchor = checked_at if checked_at is not None else updated_at
+                # Quiet sources use checked_at. An incomplete hard-cap scan is
+                # distinguished by its durable continuation record rather than
+                # overloading the cursor timestamp.
+                idle_anchor = updated_at if hard_cap_continuation_owed else (
+                    checked_at if checked_at is not None else updated_at
+                )
                 if isinstance(idle_anchor, str):
                     try:
                         idle_anchor_ts = int(
@@ -5456,6 +5473,7 @@ async def crawl_once(
                 horizon = now_ts - window_days * 86400
                 offset = 0
                 while pages_loaded < VK_CRAWL_MAX_PAGES_BACKFILL:
+                    _require_vk_crawl_storage_headroom(db)
                     page = await vk_wall_since(
                         gid,
                         0,
@@ -5481,6 +5499,7 @@ async def crawl_once(
                 safety_cap_threshold = max(1, VK_CRAWL_MAX_PAGES_INC)
                 hard_cap = safety_cap_threshold * 10
                 while True:
+                    _require_vk_crawl_storage_headroom(db)
                     page = await vk_wall_since(
                         gid,
                         since,
@@ -5543,6 +5562,7 @@ async def crawl_once(
             max_ts, max_pid = last_seen_ts, last_post_id
 
             for post in posts:
+                _require_vk_crawl_storage_headroom(db)
                 ts = int(post["date"])
                 pid = int(post["post_id"])
                 is_new_for_cursor = ts > last_seen_ts or (

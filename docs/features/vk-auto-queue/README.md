@@ -104,10 +104,12 @@ Legacy exact-full-page rows, ошибочно отмеченные `done`, reope
 
 Обычный scheduled drain остаётся oldest-first при bounded due queue. Если due
 backlog превышает `VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD` (default
-`150`), он временно сортирует publication date по убыванию, чтобы свежий
-текущий intake не ждал за многолетним replay. Исторические rows не удаляются,
-не исключаются и не получают deterministic no-event verdict; после снижения
-backlog снова действует oldest-first fairness.
+`150`), durable cursor чередует свежие carriers с одним самым старым через
+каждые `VK_AUTO_IMPORT_HISTORY_EVERY` picks (default `5`). Поэтому текущий
+intake не ждёт за многолетним replay, а история продолжает продвигаться даже
+при непрерывном притоке новых posts и после рестарта. Исторические rows не
+удаляются, не исключаются и не получают deterministic no-event verdict; после
+снижения backlog снова действует oldest-first fairness.
 
 ## Raw source envelope v1
 
@@ -257,7 +259,9 @@ Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
   принадлежит main worker;
 - `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` — timeout становится typed retry;
 - `VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD` — размер due backlog, после
-  которого scheduled importer временно даёт приоритет свежим carriers;
+  которого scheduled importer включает bounded fresh/history interleave;
+- `VK_AUTO_IMPORT_HISTORY_EVERY` — не реже каждого N-го pick при большом
+  backlog выбирается самый старый carrier (default `5`);
 - `VK_CRAWL_MIN_FREE_MB` — production-volume admission floor перед VK fetch и
   packet persistence (default `512` MiB);
 - `VK_AUTO_IMPORT_INLINE_JOBS` / `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` управляют

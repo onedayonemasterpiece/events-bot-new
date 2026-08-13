@@ -6,7 +6,7 @@ Service: Fly production `events-bot-new-wngqia`, configured-source ingestion, Ka
 Opened: 2026-08-12
 Closed: —
 Owners: events-bot production / ingestion / static-site pipelines
-Related incidents: `INC-2026-07-15-fly-volume-critical`, `INC-2026-07-19-static-site-stale-builder-lease`, `INC-2026-08-01-telegram-monitor-google-ai-package-closure`, `INC-2026-08-03-static-site-builder-failure-storm`, `INC-2026-08-10-smart-update-identity-terminal-loss`
+Related incidents: `INC-2026-06-13-kaggle-duplicate-videoannounce`, `INC-2026-07-15-fly-volume-critical`, `INC-2026-07-18-static-snapshot-disk-pressure`, `INC-2026-07-19-static-builder-root-overlay-recurrence`, `INC-2026-07-19-static-site-stale-builder-lease`, `INC-2026-08-01-telegram-monitor-google-ai-package-closure`, `INC-2026-08-03-static-site-builder-failure-storm`, `INC-2026-08-10-smart-update-identity-terminal-loss`
 Related docs: `docs/operations/runtime-logs.md`, `docs/operations/cron.md`, `docs/features/vk-auto-queue/README.md`, `docs/operations/kaggle-static-site-builder.md`
 
 ## Summary
@@ -183,14 +183,19 @@ catch-ups.
 
 - [x] use `checked_at` rather than last-post `updated_at` for idle backfill
   admission;
-- [x] block production VK crawl before fetch when free space is below 512 MiB;
-- [x] switch scheduled VK drain to fresh-first only when due backlog exceeds a
-  bounded threshold, while retaining every historical carrier;
-- [x] add fsync/read-back pre-push Guide/TG launch intents and fail registry
+- [x] block production VK crawl below 512 MiB and recheck before each source,
+  page and packet transaction;
+- [x] interleave bounded fresh-first drain with a durable oldest-row budget so
+  current carriers progress without starving historical carriers;
+- [x] add fsync/read-back pre-push Guide/TG launch intents, exact dataset-source
+  reconciliation, atomic intent-to-job promotion, and fail registry parse/schema
   corruption closed;
-- [x] add a one-hour persisted terminal-error hold to Telegram catch-up;
-- [x] safely retire only exact terminal incompatible StaticSiteBuilder owners,
-  clear their claim and delete only their exact snapshot/output;
+- [x] anchor Telegram's one-hour terminal-error hold to `finished_at` (falling
+  back to `started_at` only for legacy rows);
+- [x] safely retire only exact terminal incompatible StaticSiteBuilder owners:
+  root-confine and hash-validate the claim-bound snapshot pair, require strict
+  snapshot/output deletion receipts while the claim remains active, then clear
+  the handoff/claim;
 - [ ] merge/deploy exact main and execute controlled recovery/verification.
 
 ## Recovery / Catch-up
@@ -214,8 +219,9 @@ Not yet available. Investigation branch:
 
 Pre-release tests:
 
-- `93 passed` across Kaggle registry/Guide, VK crawl/queue and scheduler suites;
-- `23 passed` for StaticSiteBuilder debounce/recovery;
+- exact `smart-update-identity-state-machine` local command: `585 passed`;
+- focused Kaggle registry/client/Guide/TG/static recovery: `63 passed`;
+- focused VK crawl/queue: `45 passed`; Telegram finished-time hold test passed;
 - local root-overlay capacity itself became critical during the combined test
   run, so later tests used `/dev/shm` for isolated pytest temp. This is a local
   infrastructure constraint, not production evidence.
@@ -235,9 +241,11 @@ Pre-release tests:
 
 ## Prevention
 
-The storage guard acts before the high-volume writer, not after ENOSPC. VK
-backfill uses scan activity rather than content activity, current carriers can
-progress through a historical replay wave, remote pushes require a durable
-pre-push barrier, and terminal static resources are reclaimed only after exact
-owner/ledger proof. Closure still requires live catch-up and capacity evidence;
-unit tests or a green health check alone are insufficient.
+The storage guard acts before and during the high-volume writer, not after
+ENOSPC. VK backfill uses scan activity plus explicit durable continuation state
+rather than content activity, current and historical carriers both progress
+through a replay wave, and remote pushes require a durable barrier that is
+promoted only after exact remote identity. Terminal static resources are
+root-confined, hash-checked and reclaimed before their active barrier is
+released. Closure still requires live catch-up and capacity evidence; unit
+tests or a green health check alone are insufficient.

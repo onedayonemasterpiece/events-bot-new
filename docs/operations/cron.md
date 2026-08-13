@@ -124,10 +124,15 @@ terminal `error`/`crashed` attempt gets a separate persisted
 terminal registry row cannot turn the 60-second watchdog into a relaunch loop.
 
 Guide and Telegram launchers persist and read back a unique launch intent
-*before* the remote push. A full job registration replaces that transitional
-state only after push. Registry parse/I/O errors fail closed rather than
-appearing as an empty registry. Thus `push succeeded -> registry write failed`
-is observable as an untracked handoff barrier, not permission to push again.
+*before* the remote push. A successful response atomically promotes that intent
+to the recovery job. A timeout/transport exception is indeterminate and keeps
+both the barrier and its unique config datasets. The watchdog reconciles it by
+exact remote `dataset_sources`: an exact match promotes the intent, while only
+a proven pre-submit no-advance/404 after the grace window may clear it. Registry
+parse, per-record schema and I/O errors fail closed rather than appearing as an
+empty registry. Thus `push accepted -> response/registry write failed` is a
+recoverable exact handoff, never permission to push again and never an
+unbounded permanent boolean lock.
 `tg_monitoring` and `vk_auto_import` use `wait` as their default heavy-job guard mode so a nearby critical run queues behind an existing heavy operation instead of silently skipping, unless `SCHED_HEAVY_GUARD_MODE` explicitly overrides it. `guide_excursions_full` still records the initial `heavy_busy` skip, but its catch-up dispatch uses the same `wait` semantics so the missed daily digest runs as soon as the blocking heavy job releases the gate.
 
 For admin-facing scheduled reports, the bot now resolves the target chat from the superadmin row in SQLite first; `ADMIN_CHAT_ID` is only a bootstrap/legacy fallback.
@@ -391,6 +396,9 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `ENABLE_KAGGLE_RECOVERY` – enable background Kaggle recovery loop.
 - `KAGGLE_RECOVERY_INTERVAL_MINUTES` – recovery interval in minutes (default: 5).
 - `KAGGLE_JOBS_PATH` – path to Kaggle recovery registry JSON (default: `/data/kaggle_jobs.json`).
+- `KAGGLE_LAUNCH_INTENT_RECONCILE_GRACE_SECONDS` – propagation grace before an
+  old pre-push intent may be cleared on positive remote no-advance evidence
+  (default `900`; ambiguous transport/later remote advance remains blocked).
 - `TG_MONITORING_RECOVERY_TERMINAL_GRACE_MINUTES` – how long `tg_monitoring` recovery should keep rechecking Kaggle jobs that temporarily report `failed/error/cancelled` before dropping them as irrecoverable (default: `360`).
 - `RUNTIME_HEALTH_HEARTBEAT_SEC` – how often the in-process runtime heartbeat updates (default: `15` seconds).
 - `RUNTIME_HEALTH_STALE_SEC` – max allowed heartbeat age before `/healthz` turns unhealthy (default: `45` seconds, minimum `2x` heartbeat interval).

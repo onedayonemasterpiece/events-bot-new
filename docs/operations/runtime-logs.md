@@ -77,8 +77,10 @@ deleting logs or truncating WAL must not be reported as the durable root cause
 without that table-level comparison.
 
 `VK_CRAWL_MIN_FREE_MB` is a writer admission floor (default `512` MiB) and must
-remain above the `/healthz` warning/critical floors. It blocks before VK fetch
-and packet persistence. Do not lower it to make a crawl run while `/data` is in
+remain above the `/healthz` warning/critical floors. It is rechecked before
+every source/page fetch and packet transaction, so one admitted multi-source
+crawl cannot consume the full warning-to-critical margin before the next
+probe. Do not lower it to make a crawl run while `/data` is in
 warning; first reconcile exact terminal artifacts or another owner-governed
 retention action and repeat `df`/`quick_check`.
 

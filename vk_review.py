@@ -384,7 +384,7 @@ async def pick_next(
     """
 
     del strict_chronological
-    date_order = "ASC"
+    order_clause = "date ASC"
     columns = (
         "id, group_id, post_id, date, text, matched_kw, has_date, status, "
         "review_batch, imported_event_id, event_ts_hint, "
@@ -450,11 +450,37 @@ async def pick_next(
             due_count_row = await cur.fetchone()
             due_count = int((due_count_row[0] if due_count_row else 0) or 0)
             if due_count > backlog_threshold:
-                date_order = "DESC"
+                # Interleave one oldest carrier for every bounded group of
+                # fresh carriers. Store the cursor in the queue itself rather
+                # than deriving it from transient batch ids so restart and
+                # continuous arrivals cannot starve history.
+                history_every = max(
+                    2,
+                    _int_from_env("VK_AUTO_IMPORT_HISTORY_EVERY", 5),
+                )
+                state_cur = await conn.execute(
+                    "SELECT fresh_since_history FROM vk_auto_import_state WHERE id=1"
+                )
+                state_row = await state_cur.fetchone()
+                fresh_since_history = int((state_row[0] if state_row else 0) or 0)
+                pick_history = fresh_since_history >= history_every - 1
+                if not pick_history:
+                    order_clause = "date DESC"
+                await conn.execute(
+                    """
+                    UPDATE vk_auto_import_state
+                    SET fresh_since_history=?, updated_at=CURRENT_TIMESTAMP
+                    WHERE id=1
+                    """,
+                    (0 if pick_history else fresh_since_history + 1,),
+                )
                 logging.warning(
-                    "vk_review fresh_first_backlog due=%s threshold=%s",
+                    "vk_review backlog_interleave due=%s threshold=%s order=%s cursor=%s/%s",
                     due_count,
                     backlog_threshold,
+                    order_clause,
+                    fresh_since_history,
+                    history_every,
                 )
 
         cursor = await conn.execute(
@@ -463,7 +489,7 @@ async def pick_next(
                 SELECT id FROM vk_inbox
                 WHERE status='pending'
                   AND (next_attempt_at IS NULL OR next_attempt_at<=CURRENT_TIMESTAMP)
-                ORDER BY date {date_order},
+                ORDER BY {order_clause},
                          CASE WHEN event_ts_hint IS NULL THEN 1 ELSE 0 END,
                          event_ts_hint ASC,
                          id ASC
