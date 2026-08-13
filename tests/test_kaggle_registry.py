@@ -13,10 +13,18 @@ def _isolated_registry(tmp_path, monkeypatch):
     monkeypatch.setattr(kaggle_registry, "_REGISTRY_PATH", tmp_path / "jobs.json")
 
 
+def _intent_meta() -> dict:
+    return {
+        "kernel_ref_hint": "owner/kernel",
+        "dataset_slugs": ["owner/config-run-1", "owner/key-run-1"],
+        "remote_revision_before_push": 4,
+    }
+
+
 @pytest.mark.asyncio
 async def test_launch_intent_is_durable_and_visible_before_remote_push():
     await kaggle_registry.register_launch_intent(
-        "tg_monitoring", "run-1", meta={"kernel_ref_hint": "owner/kernel"}
+        "tg_monitoring", "run-1", meta=_intent_meta()
     )
 
     intents = await kaggle_registry.list_launch_intents("tg_monitoring")
@@ -36,9 +44,39 @@ async def test_corrupt_registry_fails_closed_instead_of_becoming_empty():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "dataset_slugs",
+    [
+        [],
+        ["owner/one"],
+        ["owner/one", "owner/one"],
+        ["owner/one", ""],
+        ["owner/one", "owner/two", "owner/three"],
+    ],
+)
+async def test_launch_intent_requires_two_nonempty_unique_datasets(dataset_slugs):
+    meta = _intent_meta()
+    meta["dataset_slugs"] = dataset_slugs
+    with pytest.raises(kaggle_registry.KaggleRegistryError, match="two unique"):
+        await kaggle_registry.register_launch_intent(
+            "tg_monitoring", "run-1", meta=meta
+        )
+
+
+@pytest.mark.asyncio
+async def test_launch_intent_requires_positive_exact_revision_baseline():
+    meta = _intent_meta()
+    meta["remote_revision_before_push"] = 0
+    with pytest.raises(kaggle_registry.KaggleRegistryError, match="revision baseline"):
+        await kaggle_registry.register_launch_intent(
+            "tg_monitoring", "run-1", meta=meta
+        )
+
+
+@pytest.mark.asyncio
 async def test_job_registration_preserves_pending_launch_intent():
     await kaggle_registry.register_launch_intent(
-        "guide_monitoring", "run-1", meta={"kernel_ref_hint": "owner/kernel"}
+        "guide_monitoring", "run-1", meta=_intent_meta()
     )
     await kaggle_registry.register_job(
         "guide_monitoring", "owner/kernel", meta={"run_id": "run-1"}
@@ -53,7 +91,7 @@ async def test_job_registration_preserves_pending_launch_intent():
 @pytest.mark.asyncio
 async def test_atomic_promotion_has_no_intent_job_gap():
     await kaggle_registry.register_launch_intent(
-        "guide_monitoring", "run-1", meta={"kernel_ref_hint": "owner/kernel"}
+        "guide_monitoring", "run-1", meta=_intent_meta()
     )
 
     await kaggle_registry.promote_launch_intent(
@@ -89,8 +127,7 @@ async def test_indeterminate_intent_promotes_only_on_exact_remote_datasets():
         "tg_monitoring",
         "run-1",
         meta={
-            "kernel_ref_hint": "owner/kernel",
-            "dataset_slugs": ["owner/config-run-1", "owner/key-run-1"],
+            **_intent_meta(),
         },
     )
     await kaggle_registry.mark_launch_intent_indeterminate(
@@ -117,8 +154,7 @@ async def test_pre_submit_crash_clears_only_after_remote_no_advance_evidence():
         "guide_monitoring",
         "run-1",
         meta={
-            "kernel_ref_hint": "owner/kernel",
-            "dataset_slugs": ["owner/config-run-1", "owner/key-run-1"],
+            **_intent_meta(),
         },
     )
     created_at = datetime.fromisoformat(
@@ -130,13 +166,8 @@ async def test_pre_submit_crash_clears_only_after_remote_no_advance_evidence():
         def kernel_has_dataset_sources(self, _kernel_ref, _expected):
             return False, {"dataset_sources": ["owner/previous"]}
 
-        def kernels_list(self, _owner, _limit):
-            return [
-                {
-                    "ref": "owner/kernel",
-                    "lastRunTime": created_at - timedelta(minutes=1),
-                }
-            ]
+        def get_kernel_revision(self, _kernel_ref):
+            return 4
 
         def delete_dataset(self, slug):
             deleted.append(slug)
@@ -158,8 +189,7 @@ async def test_remote_advance_with_different_identity_stays_indeterminate():
         "guide_monitoring",
         "run-1",
         meta={
-            "kernel_ref_hint": "owner/kernel",
-            "dataset_slugs": ["owner/config-run-1", "owner/key-run-1"],
+            **_intent_meta(),
         },
     )
     created_at = datetime.fromisoformat(
@@ -170,13 +200,8 @@ async def test_remote_advance_with_different_identity_stays_indeterminate():
         def kernel_has_dataset_sources(self, _kernel_ref, _expected):
             return False, {"dataset_sources": ["owner/operator-run"]}
 
-        def kernels_list(self, _owner, _limit):
-            return [
-                {
-                    "ref": "owner/kernel",
-                    "lastRunTime": created_at + timedelta(minutes=1),
-                }
-            ]
+        def get_kernel_revision(self, _kernel_ref):
+            return 5
 
     outcomes = await kaggle_registry.reconcile_launch_intents(
         "guide_monitoring",
@@ -185,6 +210,42 @@ async def test_remote_advance_with_different_identity_stays_indeterminate():
     )
 
     assert outcomes == [
-        {"run_id": "run-1", "status": "indeterminate_remote_advanced"}
+        {
+            "run_id": "run-1",
+            "status": "indeterminate_remote_advanced",
+            "baseline": 4,
+            "remote_revision": 5,
+        }
+    ]
+    assert len(await kaggle_registry.list_launch_intents()) == 1
+
+
+@pytest.mark.asyncio
+async def test_missing_remote_ref_never_clears_ambiguous_intent():
+    await kaggle_registry.register_launch_intent(
+        "guide_monitoring", "run-1", meta=_intent_meta()
+    )
+    created_at = datetime.fromisoformat(
+        (await kaggle_registry.list_launch_intents())[0]["created_at"]
+    )
+
+    class MissingResponse:
+        status_code = 404
+
+    class NotFound(RuntimeError):
+        response = MissingResponse()
+
+    class Client:
+        def kernel_has_dataset_sources(self, _kernel_ref, _expected):
+            raise NotFound("404")
+
+    outcomes = await kaggle_registry.reconcile_launch_intents(
+        "guide_monitoring",
+        client=Client(),
+        now=created_at + timedelta(hours=1),
+    )
+
+    assert outcomes == [
+        {"run_id": "run-1", "status": "indeterminate", "error": "NotFound"}
     ]
     assert len(await kaggle_registry.list_launch_intents()) == 1

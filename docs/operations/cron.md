@@ -128,7 +128,9 @@ Guide and Telegram launchers persist and read back a unique launch intent
 to the recovery job. A timeout/transport exception is indeterminate and keeps
 both the barrier and its unique config datasets. The watchdog reconciles it by
 exact remote `dataset_sources`: an exact match promotes the intent, while only
-a proven pre-submit no-advance/404 after the grace window may clear it. Registry
+a positive exact remote revision equal to the durable pre-push revision after
+the grace window may clear it. A missing/invisible ref remains indeterminate;
+bounded list/search absence is never treated as proof. Registry
 parse, per-record schema and I/O errors fail closed rather than appearing as an
 empty registry. Thus `push accepted -> response/registry write failed` is a
 recoverable exact handoff, never permission to push again and never an

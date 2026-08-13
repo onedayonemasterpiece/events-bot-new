@@ -125,6 +125,63 @@ async def test_build_config_payload_can_scope_to_single_source(tmp_path):
     await db.engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_post_push_registry_failure_preserves_tg_intent_and_datasets(
+    monkeypatch,
+):
+    import source_parsing.telegram.service as tg_service
+
+    calls: list[tuple] = []
+
+    class DummyKaggleClient:
+        def get_kernel_revision(self, _kernel_ref):
+            return 8
+
+    async def fake_build_config(*_args, **_kwargs):
+        return {"sources": [], "telegraph_urls": []}
+
+    async def fake_not_busy(**_kwargs):
+        return None
+
+    async def fake_prepare(**_kwargs):
+        return "owner/cipher-run", "owner/key-run"
+
+    async def fake_intent(*args, **kwargs):
+        calls.append(("intent", args, kwargs))
+
+    async def fake_push(*_args, **_kwargs):
+        calls.append(("push",))
+        return (
+            "zigomaro/telegram-monitor-bot",
+            {"ref": "zigomaro/telegram-monitor-bot", "version_number": 9},
+        )
+
+    async def fake_promote(*_args, **_kwargs):
+        calls.append(("promotion",))
+        raise RuntimeError("registry promotion failed")
+
+    async def fake_cleanup(slugs):
+        calls.append(("cleanup", tuple(slugs)))
+
+    monkeypatch.setattr(tg_service, "KaggleClient", DummyKaggleClient)
+    monkeypatch.setattr(tg_service, "_build_config_payload", fake_build_config)
+    monkeypatch.setattr(tg_service, "_build_secrets_payload", lambda: "{}")
+    monkeypatch.setattr(tg_service, "raise_if_remote_telegram_session_busy", fake_not_busy)
+    monkeypatch.setattr(tg_service, "_prepare_kaggle_datasets", fake_prepare)
+    monkeypatch.setattr(tg_service, "register_launch_intent", fake_intent)
+    monkeypatch.setattr(tg_service, "_push_kernel", fake_push)
+    monkeypatch.setattr(tg_service, "promote_launch_intent", fake_promote)
+    monkeypatch.setattr(tg_service, "_cleanup_datasets", fake_cleanup)
+    monkeypatch.setattr(tg_service, "DATASET_PROPAGATION_WAIT_SECONDS", 0)
+
+    with pytest.raises(RuntimeError, match="registry promotion failed"):
+        await tg_service._run_telegram_monitor_locked(
+            object(), run_id="promotion-run", send_progress=False
+        )
+
+    assert [call[0] for call in calls] == ["intent", "push", "promotion"]
+
+
 def test_build_secrets_payload_includes_yandex_storage_env(monkeypatch):
     monkeypatch.setenv("TG_API_ID", "123")
     monkeypatch.setenv("TG_API_HASH", "hash")

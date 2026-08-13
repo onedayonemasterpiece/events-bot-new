@@ -3401,12 +3401,17 @@ async def _run_telegram_monitor_locked(
             )
             await asyncio.sleep(DATASET_PROPAGATION_WAIT_SECONDS)
 
+        kernel_ref_hint = _kernel_ref_from_meta(KERNEL_PATH)
+        remote_revision_before_push = await asyncio.to_thread(
+            client.get_kernel_revision, kernel_ref_hint
+        )
         await register_launch_intent(
             "tg_monitoring",
             run_id,
             meta={
-                "kernel_ref_hint": _kernel_ref_from_meta(KERNEL_PATH),
+                "kernel_ref_hint": kernel_ref_hint,
                 "dataset_slugs": [dataset_cipher, dataset_key],
+                "remote_revision_before_push": remote_revision_before_push,
                 "remote_telegram_auth_scope": auth_scope,
                 "source_usernames": sorted(set(source_usernames or [])),
             },

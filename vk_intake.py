@@ -4486,6 +4486,7 @@ async def _persist_vk_source_packet(
             value for value in keyword_hints if not str(value).startswith("hint:")
         )
 
+    _require_vk_crawl_storage_headroom(db)
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
@@ -5045,8 +5046,10 @@ async def process_vk_crawl_continuations(
     }
     processed_ids: list[int] = []
     vk_wall_since = require_main_attr("vk_wall_since")
+    _require_vk_crawl_storage_headroom(db)
 
     for job_index in range(max_jobs):
+        _require_vk_crawl_storage_headroom(db)
         claim = await _claim_vk_crawl_continuation(
             db,
             lease_owner=worker,
@@ -5074,6 +5077,7 @@ async def process_vk_crawl_continuations(
                 await _renew_vk_crawl_continuation_lease(
                     db, claim, lease_seconds=lease_seconds
                 )
+                _require_vk_crawl_storage_headroom(db)
                 page = await vk_wall_since(
                     claim.owner_id,
                     claim.since_ts,
@@ -5411,7 +5415,7 @@ async def crawl_once(
                     SELECT 1 FROM vk_crawl_continuation
                     WHERE source_type='vk' AND owner_id=?
                       AND reason='hard_cap'
-                      AND status IN ('pending','retry','processing')
+                      AND status IN ('pending','retry','running')
                     LIMIT 1
                     """,
                     (gid,),

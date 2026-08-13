@@ -24292,6 +24292,11 @@ async def _recover_previous_static_site_attempt(
     if (
         not all(required.values())
         or required["run_id"] != claim.run_id
+        or re.fullmatch(
+            rf"static-site:{re.escape(required['build_id'])}:[^:]+",
+            claim.run_id,
+        )
+        is None
         or required["input_fingerprint"] != claim.input_fingerprint
         or not claim.dataset_ref
     ):

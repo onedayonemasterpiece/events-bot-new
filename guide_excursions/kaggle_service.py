@@ -1240,6 +1240,9 @@ async def run_guide_monitor_kaggle(
         dataset_slugs = [slug_cipher, slug_key]
         if DATASET_PROPAGATION_WAIT_SECONDS > 0:
             await asyncio.sleep(DATASET_PROPAGATION_WAIT_SECONDS)
+        remote_revision_before_push = await asyncio.to_thread(
+            client.get_kernel_revision, kernel_ref
+        )
         await register_launch_intent(
             "guide_monitoring",
             run_id,
@@ -1247,6 +1250,7 @@ async def run_guide_monitor_kaggle(
                 "mode": mode,
                 "kernel_ref_hint": kernel_ref,
                 "dataset_slugs": list(dataset_slugs),
+                "remote_revision_before_push": remote_revision_before_push,
                 "remote_telegram_auth_scope": auth_scope,
             },
         )

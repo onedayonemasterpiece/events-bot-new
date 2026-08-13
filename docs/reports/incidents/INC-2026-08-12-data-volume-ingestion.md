@@ -188,8 +188,8 @@ catch-ups.
 - [x] interleave bounded fresh-first drain with a durable oldest-row budget so
   current carriers progress without starving historical carriers;
 - [x] add fsync/read-back pre-push Guide/TG launch intents, exact dataset-source
-  reconciliation, atomic intent-to-job promotion, and fail registry parse/schema
-  corruption closed;
+  reconciliation plus positive exact pre-push remote-revision evidence, atomic
+  intent-to-job promotion, and fail registry parse/schema corruption closed;
 - [x] anchor Telegram's one-hour terminal-error hold to `finished_at` (falling
   back to `started_at` only for legacy rows);
 - [x] safely retire only exact terminal incompatible StaticSiteBuilder owners:

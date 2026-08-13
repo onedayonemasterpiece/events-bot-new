@@ -133,6 +133,48 @@ async def test_strict_terminal_output_cleanup_propagates_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_terminal_recovery_rejects_cross_owner_output_identity(monkeypatch):
+    fingerprint = "a" * 64
+    monkeypatch.setattr(
+        main,
+        "recoverable_static_site_build",
+        lambda *_args, **_kwargs: type(
+            "Claim",
+            (),
+            {
+                "claim_token": "exact-claim",
+                "run_id": "static-site:production-other-run:legacy",
+                "input_fingerprint": fingerprint,
+                "effective_date": "2026-08-09",
+                "dataset_ref": "owner/exact-input",
+            },
+        )(),
+    )
+    handoff = {
+        "build_id": "production-old-run",
+        "run_id": "static-site:production-other-run:legacy",
+        "repo_sha": "b" * 40,
+        "candidate_token": "c" * 43,
+        "snapshot_path": "/data/static_site_snapshots/snapshot-old.sqlite",
+        "manifest_path": "/data/static_site_snapshots/snapshot-old.manifest.json",
+        "input_fingerprint": fingerprint,
+        "current_datetime": "2026-08-09T12:00:00+02:00",
+    }
+
+    with pytest.raises(
+        main.StaticSitePermanentError, match="handoff_identity_mismatch"
+    ):
+        await main._recover_previous_static_site_attempt(
+            db=type("Database", (), {"path": "/data/db.sqlite"})(),
+            job_id=17,
+            request_payload={"remote_handoff": handoff},
+            limit=5000,
+            current_repo_sha="d" * 40,
+            current_source_identity=None,
+        )
+
+
+@pytest.mark.asyncio
 async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replacement(
     monkeypatch,
 ):
@@ -146,7 +188,7 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
             (),
             {
                 "claim_token": "exact-claim",
-                "run_id": "static-site:old-run",
+                "run_id": "static-site:production-old-run:legacy",
                 "input_fingerprint": fingerprint,
                 "effective_date": "2026-08-09",
                 "dataset_ref": "owner/exact-input",
@@ -194,7 +236,7 @@ async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replace
     monkeypatch.setattr(main, "delete_immutable_snapshot", delete_snapshot)
     handoff = {
         "build_id": "production-old-run",
-        "run_id": "static-site:old-run",
+        "run_id": "static-site:production-old-run:legacy",
         "repo_sha": "b" * 40,
         "candidate_token": "c" * 43,
         "snapshot_path": "/data/old.sqlite",
@@ -247,7 +289,7 @@ async def test_live_remote_recovery_cross_deploy_stays_single_flight(
             (),
             {
                 "claim_token": "exact-claim",
-                "run_id": "static-site:old-run",
+                "run_id": "static-site:production-old-run:legacy",
                 "input_fingerprint": fingerprint,
                 "effective_date": "2026-08-09",
                 "dataset_ref": "owner/exact-input",
@@ -259,7 +301,7 @@ async def test_live_remote_recovery_cross_deploy_stays_single_flight(
 
     handoff = {
         "build_id": "production-old-run",
-        "run_id": "static-site:old-run",
+        "run_id": "static-site:production-old-run:legacy",
         "repo_sha": "b" * 40,
         "candidate_token": "c" * 43,
         "snapshot_path": "/data/old.sqlite",

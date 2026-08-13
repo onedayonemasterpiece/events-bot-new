@@ -33,6 +33,10 @@ def _nonempty(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
 
 
+def _valid_datetime(value: Any) -> bool:
+    return _parse_datetime(value) is not None
+
+
 def _validate_records(data: dict[str, Any]) -> None:
     seen_jobs: set[str] = set()
     for index, job in enumerate(data["jobs"]):
@@ -43,6 +47,10 @@ def _validate_records(data: dict[str, Any]) -> None:
             raise KaggleRegistryError(f"Kaggle registry jobs[{index}] identity is malformed")
         if not isinstance(meta, dict) or not _nonempty(meta.get("run_id")):
             raise KaggleRegistryError(f"Kaggle registry jobs[{index}] run_id is malformed")
+        if job["id"] != _job_id(str(job["type"]), str(job["kernel_ref"])):
+            raise KaggleRegistryError(f"Kaggle registry jobs[{index}] id mismatch")
+        if not _valid_datetime(job.get("created_at")):
+            raise KaggleRegistryError(f"Kaggle registry jobs[{index}] created_at is malformed")
         job_id = str(job["id"])
         if job_id in seen_jobs:
             raise KaggleRegistryError(f"Kaggle registry duplicate job id: {job_id}")
@@ -63,9 +71,32 @@ def _validate_records(data: dict[str, Any]) -> None:
             raise KaggleRegistryError(
                 f"Kaggle registry launch_intents[{index}] state is malformed"
             )
+        if intent["id"] != f"{intent['type']}:{intent['run_id']}":
+            raise KaggleRegistryError(
+                f"Kaggle registry launch_intents[{index}] id mismatch"
+            )
+        if not _valid_datetime(intent.get("created_at")):
+            raise KaggleRegistryError(
+                f"Kaggle registry launch_intents[{index}] created_at is malformed"
+            )
         if not isinstance(meta, dict) or not _nonempty(meta.get("kernel_ref_hint")):
             raise KaggleRegistryError(
                 f"Kaggle registry launch_intents[{index}] kernel_ref is malformed"
+            )
+        dataset_slugs = meta.get("dataset_slugs")
+        if (
+            not isinstance(dataset_slugs, list)
+            or len(dataset_slugs) != 2
+            or not all(_nonempty(item) for item in dataset_slugs)
+            or len(set(dataset_slugs)) != 2
+        ):
+            raise KaggleRegistryError(
+                f"Kaggle registry launch_intents[{index}] datasets are malformed"
+            )
+        baseline = meta.get("remote_revision_before_push")
+        if not isinstance(baseline, int) or baseline <= 0:
+            raise KaggleRegistryError(
+                f"Kaggle registry launch_intents[{index}] baseline is malformed"
             )
         intent_id = str(intent["id"])
         if intent_id in seen_intents:
@@ -132,6 +163,19 @@ async def register_launch_intent(
     clean_meta = dict(meta or {})
     if not _nonempty(clean_meta.get("kernel_ref_hint")):
         raise KaggleRegistryError("Kaggle launch intent requires kernel_ref_hint")
+    dataset_slugs = clean_meta.get("dataset_slugs")
+    if (
+        not isinstance(dataset_slugs, list)
+        or len(dataset_slugs) != 2
+        or not all(_nonempty(item) for item in dataset_slugs)
+        or len(set(dataset_slugs)) != 2
+    ):
+        raise KaggleRegistryError(
+            "Kaggle launch intent requires exactly two unique dataset_slugs"
+        )
+    baseline = clean_meta.get("remote_revision_before_push")
+    if not isinstance(baseline, int) or baseline <= 0:
+        raise KaggleRegistryError("Kaggle launch intent requires remote revision baseline")
     intent = {
         "id": intent_id,
         "type": job_type,
@@ -248,7 +292,7 @@ async def reconcile_launch_intents(
     An accepted push is promoted only when the current remote kernel metadata
     contains exactly the two unique config datasets from the durable intent.
     An old intent is discarded only when Kaggle proves the kernel did not
-    advance after the intent was created (or the exact ref is absent).
+    advance from the exact durable pre-push revision.
     Transport/ambiguous evidence always leaves the barrier in place.
     """
 
@@ -283,22 +327,16 @@ async def reconcile_launch_intents(
                 client.kernel_has_dataset_sources, kernel_ref, datasets
             )
         except Exception as exc:
-            if old_enough and _is_not_found(exc):
-                await _discard_proven_unsubmitted_intent(
-                    client=client,
-                    job_type=job_type,
-                    run_id=run_id,
-                    dataset_slugs=datasets,
-                )
-                outcomes.append({"run_id": run_id, "status": "not_submitted_404"})
-            else:
-                outcomes.append(
-                    {
-                        "run_id": run_id,
-                        "status": "indeterminate",
-                        "error": type(exc).__name__,
-                    }
-                )
+            # A missing/temporarily invisible ref does not prove that an
+            # ambiguous push was rejected. Keep the durable barrier until
+            # exact remote revision or dataset evidence is available.
+            outcomes.append(
+                {
+                    "run_id": run_id,
+                    "status": "indeterminate",
+                    "error": type(exc).__name__,
+                }
+            )
             continue
 
         actual = {
@@ -324,29 +362,19 @@ async def reconcile_launch_intents(
             outcomes.append({"run_id": run_id, "status": "propagating"})
             continue
 
-        # A successful list response can prove that the constant kernel never
-        # advanced after this intent. A later run with different datasets is
-        # ambiguous (for example an operator push) and must remain blocked.
-        owner = kernel_ref.split("/", 1)[0] if "/" in kernel_ref else ""
+        # Only an exact current-version comparison against the durable
+        # pre-push baseline may prove that no submission was accepted.
         try:
-            listed = await asyncio.to_thread(client.kernels_list, owner, 100)
+            remote_revision = await asyncio.to_thread(
+                client.get_kernel_revision, kernel_ref
+            )
         except Exception as exc:
             outcomes.append(
                 {"run_id": run_id, "status": "indeterminate", "error": type(exc).__name__}
             )
             continue
-        remote_row = next(
-            (row for row in listed if str(row.get("ref") or "") == kernel_ref),
-            None,
-        )
-        remote_started = _parse_datetime(
-            remote_row.get("lastRunTime") if remote_row is not None else None
-        )
-        if remote_row is None or (
-            created_at is not None
-            and remote_started is not None
-            and remote_started <= created_at
-        ):
+        baseline = int(meta["remote_revision_before_push"])
+        if remote_revision == baseline:
             await _discard_proven_unsubmitted_intent(
                 client=client,
                 job_type=job_type,
@@ -355,7 +383,14 @@ async def reconcile_launch_intents(
             )
             outcomes.append({"run_id": run_id, "status": "not_submitted"})
         else:
-            outcomes.append({"run_id": run_id, "status": "indeterminate_remote_advanced"})
+            outcomes.append(
+                {
+                    "run_id": run_id,
+                    "status": "indeterminate_remote_advanced",
+                    "baseline": baseline,
+                    "remote_revision": remote_revision,
+                }
+            )
     return outcomes
 
 

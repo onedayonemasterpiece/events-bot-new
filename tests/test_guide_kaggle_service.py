@@ -107,7 +107,8 @@ async def test_only_terminal_failed_kernel_reconciles_status_lease_before_raise(
     reconciled: list[dict] = []
 
     class DummyKaggleClient:
-        pass
+        def get_kernel_revision(self, _kernel_ref):
+            return 4
 
     async def fake_build_config(*_args, **_kwargs):
         return {"sources": [{"username": "source"}]}
@@ -181,7 +182,8 @@ async def test_ambiguous_push_keeps_intent_and_unique_datasets(monkeypatch) -> N
     calls: list[tuple] = []
 
     class DummyKaggleClient:
-        pass
+        def get_kernel_revision(self, _kernel_ref):
+            return 4
 
     async def fake_build_config(*_args, **_kwargs):
         return {"sources": []}
@@ -217,6 +219,67 @@ async def test_ambiguous_push_keeps_intent_and_unique_datasets(monkeypatch) -> N
         )
 
     assert [call[0] for call in calls] == ["intent", "indeterminate"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", ["shape", "promotion"])
+async def test_post_push_handoff_failure_preserves_intent_and_datasets(
+    monkeypatch, failure_stage: str
+) -> None:
+    calls: list[tuple] = []
+
+    class DummyKaggleClient:
+        def get_kernel_revision(self, _kernel_ref):
+            return 4
+
+    async def fake_build_config(*_args, **_kwargs):
+        return {"sources": []}
+
+    async def fake_prepare(**_kwargs):
+        return "owner/cipher-run", "owner/key-run"
+
+    async def fake_intent(*args, **kwargs):
+        calls.append(("intent", args, kwargs))
+
+    async def fake_push(*_args, **_kwargs):
+        calls.append(("push",))
+        return (
+            "zigomaro/guide-excursions-monitor",
+            {"dataset_sources": ["owner/cipher-run", "owner/key-run"]},
+            {"ref": "zigomaro/guide-excursions-monitor", "version_number": 5},
+        )
+
+    async def fake_shape(*_args, **_kwargs):
+        calls.append(("shape",))
+        if failure_stage == "shape":
+            raise RuntimeError("shape unavailable")
+        return {"dataset_sources": ["owner/cipher-run", "owner/key-run"]}
+
+    async def fake_promote(*_args, **_kwargs):
+        calls.append(("promotion",))
+        raise RuntimeError("registry promotion failed")
+
+    async def fake_cleanup(slugs):
+        calls.append(("cleanup", tuple(slugs)))
+
+    monkeypatch.setattr(kaggle_service, "KaggleClient", DummyKaggleClient)
+    monkeypatch.setattr(kaggle_service, "_build_config_payload", fake_build_config)
+    monkeypatch.setattr(kaggle_service, "_build_secrets_payload", lambda: "{}")
+    monkeypatch.setattr(kaggle_service, "_prepare_kaggle_datasets", fake_prepare)
+    monkeypatch.setattr(kaggle_service, "register_launch_intent", fake_intent)
+    monkeypatch.setattr(kaggle_service, "_push_kernel", fake_push)
+    monkeypatch.setattr(kaggle_service, "_wait_for_remote_kernel_shape", fake_shape)
+    monkeypatch.setattr(kaggle_service, "promote_launch_intent", fake_promote)
+    monkeypatch.setattr(kaggle_service, "_cleanup_datasets", fake_cleanup)
+    monkeypatch.setattr(kaggle_service, "DATASET_PROPAGATION_WAIT_SECONDS", 0)
+
+    match = "shape unavailable" if failure_stage == "shape" else "promotion failed"
+    with pytest.raises(RuntimeError, match=match):
+        await kaggle_service.run_guide_monitor_kaggle(
+            object(), run_id=f"{failure_stage}-run", mode="full", limit=60, days_back=5
+        )
+
+    assert not any(call[0] == "cleanup" for call in calls)
 
 
 @pytest.mark.asyncio

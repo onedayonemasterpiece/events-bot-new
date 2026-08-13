@@ -6,7 +6,8 @@
   repeatedly replaying history, added a 512 MiB pre-fetch volume admission
   guard with per-source/page/packet rechecks and starvation-free bounded queue
   interleave, added atomic/exact-reconciled Guide/TG Kaggle launch intents with
-  fail-closed registry schema reads, and anchored Telegram terminal catch-up's
+  positive exact pre-push revision evidence and fail-closed registry schema
+  reads, and anchored Telegram terminal catch-up's
   one-hour hold to completion time. StaticSiteBuilder now confines and
   hash-validates the exact terminal snapshot, keeps its active cleanup barrier
   until strict snapshot/output receipts succeed, then releases vector sync.

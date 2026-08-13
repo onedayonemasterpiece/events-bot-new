@@ -1198,9 +1198,49 @@ class KaggleClient:
                 "title": getattr(k, "title", ""),
                 "slug": getattr(k, "slug", ""),
                 "lastRunTime": getattr(k, "lastRunTime", None),
+                "current_version_number": int(
+                    getattr(k, "current_version_number", None)
+                    or getattr(k, "currentVersionNumber", None)
+                    or 0
+                ),
             }
             for k in kernels
         ]
+
+    def get_kernel_revision(self, kernel_ref: str) -> int:
+        """Return the exact positive current remote version.
+
+        Use Kaggle's exact ``kernels/pull`` metadata endpoint rather than a
+        bounded list/search result. Absence from a list is ambiguous and must
+        never become a zero baseline that could later clear a launch barrier.
+        """
+
+        clean_ref = str(kernel_ref or "").strip()
+        if "/" not in clean_ref:
+            raise ValueError("Kaggle kernel revision requires owner/slug")
+        owner, slug = clean_ref.split("/", 1)
+        api = self._get_api()
+        from kagglesdk.kernels.types.kernels_api_service import ApiGetKernelRequest
+
+        request = ApiGetKernelRequest()
+        request.user_name = owner
+        request.kernel_slug = slug
+        with api.build_kaggle_client() as kaggle:
+            response = kaggle.kernels.kernels_api_client.get_kernel(request)
+        metadata = getattr(response, "metadata", None)
+        remote_ref = str(getattr(metadata, "ref", "") or "").strip()
+        if remote_ref and _normalize_kernel_ref(remote_ref) != clean_ref:
+            raise RuntimeError(
+                f"Kaggle exact revision identity mismatch: {remote_ref} != {clean_ref}"
+            )
+        revision = int(
+            getattr(metadata, "current_version_number", None)
+            or getattr(metadata, "currentVersionNumber", None)
+            or 0
+        )
+        if revision <= 0:
+            raise RuntimeError(f"Kaggle kernel revision unavailable: {clean_ref}")
+        return revision
 
     def kernels_pull(
         self, kernel_ref: str, path: Path | str, metadata: bool = True

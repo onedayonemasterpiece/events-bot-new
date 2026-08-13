@@ -354,6 +354,20 @@ async def test_hard_cap_triggers_backfill(tmp_path, monkeypatch, caplog):
     assert cursor_row[1] == 0
     assert cursor_row[2] <= time.time() - vk_intake.VK_CRAWL_BACKFILL_AFTER_IDLE_H * 3600
 
+    # The durable continuation worker may own the row while the next primary
+    # scan starts. Running is still an explicit incomplete-scan recall signal.
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            UPDATE vk_crawl_continuation
+            SET status='running', lease_owner='continuation-worker',
+                run_id='continuation-run',
+                lease_expires_at=datetime('now','+5 minutes')
+            WHERE reason='hard_cap'
+            """
+        )
+        await conn.commit()
+
     caplog.clear()
     stats_second = await vk_intake.crawl_once(db)
 
