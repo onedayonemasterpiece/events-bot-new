@@ -198,6 +198,10 @@ catch-ups.
   root-confine and hash-validate the claim-bound snapshot pair, require strict
   snapshot/output deletion receipts while the claim remains active, then clear
   the handoff/claim;
+- [x] reserve one current DB main-file size plus the static critical floor
+  before allocating a replacement snapshot; the first post-recovery canary
+  proved that a post-copy-only probe otherwise allocated 646.5 MiB, failed,
+  deleted it and scheduled another retry;
 - [ ] merge/deploy exact main and execute controlled recovery/verification.
 
 ## Recovery / Catch-up

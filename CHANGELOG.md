@@ -13,6 +13,9 @@
   StaticSiteBuilder now confines and
   hash-validates the exact terminal snapshot, keeps its active cleanup barrier
   until strict snapshot/output receipts succeed, then releases vector sync.
+  A replacement build now reserves the current DB size before snapshot copy so
+  insufficient post-copy headroom defers without allocating and retrying a
+  full-DB snapshot.
   Production deploy and controlled catch-up remain required before closure.
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit

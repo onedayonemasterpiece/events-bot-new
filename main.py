@@ -23716,8 +23716,16 @@ def _static_site_output_retention_context(database_path: str) -> tuple[bool, lis
         return True, [build_id]
 
 
-def _static_site_storage_preflight() -> dict[str, Any]:
-    """Verify system temp and configured durable builder work before claiming."""
+def _static_site_storage_preflight(
+    *, snapshot_source_path: str | Path | None = None
+) -> dict[str, Any]:
+    """Verify durable headroom before claiming or copying a DB snapshot.
+
+    The runner repeats the capacity check after the immutable snapshot exists,
+    but that is too late when the copy itself crosses the hard floor.  Reserve
+    the current source DB size here so an impossible build defers without
+    briefly consuming hundreds of MiB and then deleting the copy.
+    """
 
     root_scratch = runtime_scratch_health()
     if (
@@ -23742,6 +23750,31 @@ def _static_site_storage_preflight() -> dict[str, Any]:
         raise StaticSiteRetryableError(
             f"static_site_storage_preflight_failed:{storage.get('status')}:{error}"
         )
+    if snapshot_source_path is not None:
+        try:
+            snapshot_reserve_bytes = Path(snapshot_source_path).stat().st_size
+            free_mb = int(storage["free_mb"])
+            critical_free_mb = int(storage["critical_free_mb"])
+        except (OSError, TypeError, ValueError, KeyError) as exc:
+            raise StaticSiteRetryableError(
+                "static_site_snapshot_reserve_preflight_failed:unavailable:"
+                f"{type(exc).__name__}"
+            ) from exc
+        snapshot_reserve_mb = max(
+            1, math.ceil(snapshot_reserve_bytes / (1024 * 1024))
+        )
+        required_free_mb = critical_free_mb + snapshot_reserve_mb
+        if free_mb < required_free_mb:
+            raise StaticSiteRetryableError(
+                "static_site_snapshot_reserve_preflight_failed:"
+                f"free_mb={free_mb}:required_free_mb={required_free_mb}:"
+                f"snapshot_reserve_mb={snapshot_reserve_mb}"
+            )
+        storage = {
+            **storage,
+            "snapshot_reserve_mb": snapshot_reserve_mb,
+            "required_free_mb": required_free_mb,
+        }
     return {"root_scratch": root_scratch, "storage": storage}
 
 
@@ -24709,7 +24742,10 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             await _delete_terminal_static_site_output(str(handoff["build_id"]))
         return recovered_result if recovered_result is not None else True
     try:
-        await asyncio.to_thread(_static_site_storage_preflight)
+        await asyncio.to_thread(
+            _static_site_storage_preflight,
+            snapshot_source_path=db.path,
+        )
     except StaticSiteRetryableError as exc:
         # A recoverable remote handoff is reconciled above before this durable
         # capacity gate. Its already-downloaded output may be the very object
