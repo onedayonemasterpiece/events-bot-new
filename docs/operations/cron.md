@@ -122,6 +122,11 @@ materialized `remote_telegram_session_busy` skip gets the same short hold. A
 terminal `error`/`crashed` attempt gets a separate persisted
 `TG_MONITORING_TERMINAL_RETRY_SECONDS` hold (default `3600`), so removal of a
 terminal registry row cannot turn the 60-second watchdog into a relaunch loop.
+A successful/partial/empty manual full Telegram run inside the missed-slot
+window also satisfies delivery while it is running and after completion. This
+allows exactly one controlled `/tg` catch-up without the watchdog launching a
+second S22 run after the successful import clears its registry row. Manual
+`error` and `skipped` attempts do not satisfy delivery.
 
 Guide and Telegram launchers persist and read back a unique launch intent
 *before* the remote push. A successful response atomically promotes that intent

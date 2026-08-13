@@ -1153,6 +1153,12 @@ async def _ops_run_delivery_exists(
     return False
 
 
+# A successful operator-triggered full Telegram run after the missed slot is a
+# real compensating delivery. Count it so the watchdog cannot launch a second
+# S22 Kaggle run as soon as the manual run clears its recovery registry row.
+_TG_MONITORING_DELIVERY_TRIGGERS = {"scheduled", "recovery_import", "manual"}
+
+
 def _last_local_slot(
     *,
     now_utc: datetime,
@@ -2450,7 +2456,7 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
         kind="tg_monitoring",
         day_start_utc=window_start,
         day_end_utc=now_utc + timedelta(seconds=1),
-        triggers={"scheduled", "recovery_import"},
+        triggers=_TG_MONITORING_DELIVERY_TRIGGERS,
     ):
         return 0
 
@@ -2531,7 +2537,7 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
             kind="tg_monitoring",
             day_start_utc=window_start,
             day_end_utc=datetime.now(timezone.utc) + timedelta(seconds=1),
-            triggers={"scheduled", "recovery_import"},
+            triggers=_TG_MONITORING_DELIVERY_TRIGGERS,
         ):
             _critical_catchup_completed.add(catchup_key)
             _critical_catchup_deferred_until.pop(catchup_key, None)

@@ -1767,6 +1767,86 @@ async def test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash(
 
 
 @pytest.mark.asyncio
+async def test_successful_manual_tg_catchup_suppresses_watchdog_duplicate(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_TG_MONITORING", "1")
+    monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
+    monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="manual",
+        operator_id=1,
+        started_at=datetime(2026, 6, 12, 22, 15, tzinfo=timezone.utc),
+        details={"run_id": "controlled-manual-catchup"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="success",
+        finished_at=datetime(2026, 6, 12, 22, 30, tzinfo=timezone.utc),
+        details={"run_id": "controlled-manual-catchup"},
+    )
+
+    calls = []
+
+    async def fake_scheduler(*_args, **_kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "source_parsing.telegram.service",
+        SimpleNamespace(telegram_monitor_scheduler=fake_scheduler),
+    )
+
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched == 0
+    assert calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["error", "skipped"])
+async def test_failed_manual_tg_attempt_is_not_delivery(tmp_path, status):
+    db = Database(str(tmp_path / f"db-{status}.sqlite"))
+    await db.init()
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="manual",
+        operator_id=1,
+        started_at=datetime(2026, 6, 12, 22, 15, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status=status,
+        finished_at=datetime(2026, 6, 12, 22, 16, tzinfo=timezone.utc),
+    )
+
+    assert not await scheduling._ops_run_delivery_exists(
+        db,
+        kind="tg_monitoring",
+        day_start_utc=datetime(2026, 6, 12, 21, 35, tzinfo=timezone.utc),
+        day_end_utc=datetime(2026, 6, 13, 1, 0, tzinfo=timezone.utc),
+        triggers=scheduling._TG_MONITORING_DELIVERY_TRIGGERS,
+    )
+
+
+@pytest.mark.asyncio
 async def test_critical_scheduler_watchdog_defers_tg_monitoring_when_recovery_job_exists(
     tmp_path, monkeypatch
 ):

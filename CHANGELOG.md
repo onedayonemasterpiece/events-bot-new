@@ -8,7 +8,9 @@
   interleave, added atomic/exact-reconciled Guide/TG Kaggle launch intents with
   positive exact pre-push revision evidence and fail-closed registry schema
   reads, and anchored Telegram terminal catch-up's
-  one-hour hold to completion time. StaticSiteBuilder now confines and
+  one-hour hold to completion time. Successful controlled manual Telegram
+  catch-ups now satisfy the missed slot and suppress a duplicate watchdog run.
+  StaticSiteBuilder now confines and
   hash-validates the exact terminal snapshot, keeps its active cleanup barrier
   until strict snapshot/output receipts succeed, then releases vector sync.
   Production deploy and controlled catch-up remain required before closure.
