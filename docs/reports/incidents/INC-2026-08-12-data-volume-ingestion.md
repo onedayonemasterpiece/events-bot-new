@@ -237,7 +237,10 @@ catch-ups.
   before allocating a replacement snapshot; the first post-recovery canary
   proved that a post-copy-only probe otherwise allocated 646.5 MiB, failed,
   deleted it and scheduled another retry;
-- [x] merge/deploy exact main and execute controlled recovery/verification.
+- [x] merge/deploy exact runtime-bearing main and execute the bounded
+  Telegram/VK/parser recovery plus live service verification.
+- [ ] observe the seven durable parser retries through terminal scheduler
+  receipts and complete the capacity-backed exact-main static canary.
 
 ## Recovery / Catch-up
 
@@ -271,15 +274,21 @@ allocation; production currently has about 1.145 GiB. The guard leaves job
 50189 pending with no active claim and zero replacement snapshot bytes, so it
 cannot recreate the ENOSPC loop. Closing the incident requires an owner-backed,
 receipt-producing retention action that provides the remaining margin and a
-successful exact-main static canary; increasing the volume or deleting unknown
-files is not an accepted substitute.
+successful exact-main static canary, plus terminal scheduler receipts that
+account for all seven pending parser retries; increasing the volume or deleting
+unknown files is not an accepted substitute.
 
 Release chain:
 
 - PR #496 merged as `866f3978e` (VK/Kaggle/static recovery and incident
   contracts), PR #497 merged as `7dc82ece2` (exact-one Telegram catch-up), and
-  PR #498 merged as current `origin/main@0aa8f90c17f24bfad0e2215d5999e02153ef135d`
-  (pre-allocation static reserve); all required GitHub checks were green;
+  PR #498 merged as `0aa8f90c17f24bfad0e2215d5999e02153ef135d`
+  (the runtime-bearing SHA deployed as Fly v1973 and an ancestor of current
+  main). Evidence-only PR #499 merged as
+  `cd0240bb2e09433f3b6b9f63413bdb526f3b828c`, current `origin/main`; it changed
+  only this incident record, so production remains runtime-equivalent and its
+  deployed SHA is reachable from current main. All required GitHub checks were
+  green;
 - Fly version 1973 runs that exact SHA from a clean release worktree; the dirty
   unrelated root checkout was neither modified nor used for deploy;
 - after catch-up, three consecutive public health calls returned HTTP 200 with
@@ -297,6 +306,13 @@ Release chain:
 - no production DB, WAL/SHM, current release snapshot, raw VK packet or unknown
   artifact was deleted. The only automated data removal was the exact
   claim-bound terminal static snapshot/output described above.
+- ignored receipts are under
+  `artifacts/codex/inc-disk-full-20260812/final-live/`, notably
+  `v1973-tg-terminal.json`, `v1973-vk-limit5-run.log`,
+  `v1973-ingestion-post-catchup.json`,
+  `v1973-static-vector-post-catchup-terminal.json` and
+  `v1973-final-http-fly-logs.txt`; CI evidence is GitHub Actions run
+  `31663528859` for PR #499, in addition to the green release PR checks.
 
 Pre-release tests:
 
