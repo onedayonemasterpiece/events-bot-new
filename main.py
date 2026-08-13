@@ -279,6 +279,7 @@ from db import Database
 from static_site_release import (
     active_static_site_remote_run,
     CURRENT_SECRET_CANDIDATE_RECEIPT_SCHEMA,
+    SnapshotMetadata,
     StaticSitePermanentError,
     StaticSiteRetryableError,
     StaticSiteSingleFlightDeferred,
@@ -23779,6 +23780,14 @@ async def _prune_static_site_terminal_outputs(db: Database) -> dict[str, Any]:
 
 
 async def _delete_terminal_static_site_output(build_id: str) -> None:
+    await _delete_terminal_static_site_output_with_policy(build_id, strict=False)
+
+
+async def _delete_terminal_static_site_output_with_policy(
+    build_id: str,
+    *,
+    strict: bool,
+) -> int:
     try:
         removed = await asyncio.to_thread(
             delete_static_site_output,
@@ -23790,6 +23799,7 @@ async def _delete_terminal_static_site_output(build_id: str) -> None:
             build_id,
             removed,
         )
+        return int(removed)
     except Exception:
         # Durable success/failure state is authoritative.  Cleanup failure must
         # surface without turning a completed immutable publication into a
@@ -23798,6 +23808,87 @@ async def _delete_terminal_static_site_output(build_id: str) -> None:
             "static_site_build: terminal output cleanup failed build_id=%s",
             build_id,
         )
+        if strict:
+            raise
+        return 0
+
+
+def _validated_static_site_terminal_snapshot_cleanup(
+    *,
+    database_path: str,
+    request_payload: Mapping[str, Any],
+    handoff: Mapping[str, Any],
+    claim: Any,
+) -> tuple[Path, Path]:
+    """Bind terminal deletion to the active claim's immutable snapshot."""
+
+    snapshot_evidence = request_payload.get("snapshot")
+    fingerprint_evidence = request_payload.get("fingerprint_evidence")
+    if not isinstance(snapshot_evidence, Mapping) or not isinstance(
+        fingerprint_evidence, Mapping
+    ):
+        raise StaticSitePermanentError("static_site_cleanup_binding_missing")
+    if str(fingerprint_evidence.get("input_fingerprint") or "") != str(
+        claim.input_fingerprint
+    ):
+        raise StaticSitePermanentError("static_site_cleanup_fingerprint_mismatch")
+
+    snapshot_raw = str(handoff.get("snapshot_path") or "").strip()
+    manifest_raw = str(handoff.get("manifest_path") or "").strip()
+    if (
+        snapshot_raw != str(snapshot_evidence.get("sqlite_path") or "").strip()
+        or manifest_raw != str(snapshot_evidence.get("manifest_path") or "").strip()
+    ):
+        raise StaticSitePermanentError("static_site_cleanup_handoff_snapshot_mismatch")
+
+    root = Path(
+        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
+        or str(Path(database_path).resolve().parent / "static_site_snapshots")
+    ).resolve()
+    snapshot = Path(snapshot_raw)
+    manifest = Path(manifest_raw)
+    snapshot_resolved = snapshot.resolve()
+    manifest_resolved = manifest.resolve()
+    try:
+        snapshot_resolved.relative_to(root)
+        manifest_resolved.relative_to(root)
+    except ValueError as exc:
+        raise StaticSitePermanentError("static_site_cleanup_snapshot_path_escape") from exc
+    if snapshot_resolved.parent != root or manifest_resolved.parent != root:
+        raise StaticSitePermanentError("static_site_cleanup_snapshot_not_direct_child")
+    snapshot_id = str(snapshot_evidence.get("snapshot_id") or "").strip()
+    if (
+        not re.fullmatch(r"snapshot-[A-Za-z0-9][A-Za-z0-9._-]{0,99}", snapshot_id)
+        or snapshot_resolved.name != f"{snapshot_id}.sqlite"
+        or manifest_resolved.name != f"{snapshot_id}.manifest.json"
+    ):
+        raise StaticSitePermanentError("static_site_cleanup_snapshot_pair_invalid")
+    if snapshot.is_symlink() or manifest.is_symlink():
+        raise StaticSitePermanentError("static_site_cleanup_snapshot_symlink_rejected")
+
+    if not snapshot.exists() and not manifest.exists():
+        return snapshot_resolved, manifest_resolved
+    if snapshot.exists() and not manifest.exists():
+        raise StaticSitePermanentError("static_site_cleanup_manifest_missing")
+    if snapshot.exists():
+        metadata = validate_snapshot(snapshot_resolved, manifest_resolved)
+    else:
+        try:
+            metadata = SnapshotMetadata(
+                **json.loads(manifest_resolved.read_text(encoding="utf-8"))
+            )
+        except Exception as exc:
+            raise StaticSitePermanentError(
+                f"static_site_cleanup_manifest_invalid:{type(exc).__name__}"
+            ) from exc
+    if (
+        metadata.snapshot_id != snapshot_id
+        or metadata.sqlite_filename != snapshot_resolved.name
+        or metadata.sha256 != str(snapshot_evidence.get("sha256") or "")
+        or int(metadata.size_bytes) != int(snapshot_evidence.get("size_bytes") or -1)
+    ):
+        raise StaticSitePermanentError("static_site_cleanup_snapshot_identity_mismatch")
+    return snapshot_resolved, manifest_resolved
 
 
 async def _static_site_running_request(db: Database, event_id: int) -> tuple[int, dict[str, Any]]:
@@ -24201,19 +24292,23 @@ async def _recover_previous_static_site_attempt(
     if (
         not all(required.values())
         or required["run_id"] != claim.run_id
+        or re.fullmatch(
+            rf"static-site:{re.escape(required['build_id'])}:[^:]+",
+            claim.run_id,
+        )
+        is None
         or required["input_fingerprint"] != claim.input_fingerprint
         or not claim.dataset_ref
     ):
         raise StaticSitePermanentError("static_site_recovery_handoff_identity_mismatch")
-    if required["repo_sha"] != current_repo_sha:
-        raise StaticSitePermanentError(
-            "static_site_recovery_cross_deploy_repo_sha_mismatch"
-        )
     handoff_source = (
         handoff.get("source_identity")
         if isinstance(handoff.get("source_identity"), Mapping)
         else None
     )
+    incompatible_reason = None
+    if required["repo_sha"] != current_repo_sha:
+        incompatible_reason = "static_site_recovery_cross_deploy_repo_sha_mismatch"
     if current_source_identity is not None:
         expected_source = {
             "image_source_manifest_sha256": str(
@@ -24227,9 +24322,99 @@ async def _recover_previous_static_site_attempt(
             str(handoff_source.get(key) or "") != value
             for key, value in expected_source.items()
         ):
-            raise StaticSitePermanentError(
+            incompatible_reason = (
                 "static_site_recovery_cross_deploy_source_identity_mismatch"
             )
+    if incompatible_reason:
+        # A replacement image cannot adopt bytes produced from a different
+        # immutable source identity.  It also must not leave an already
+        # terminal exact-owner claim permanently wedged: prove terminality,
+        # release only that run's resources, record the rejected handoff, and
+        # only then continue to a fresh current-image build.  A live/unknown
+        # remote remains single-flight and is never replaced.
+        from kaggle_status import (
+            TERMINAL_STATUSES,
+            reconcile_kaggle_run_failure_from_host,
+        )
+
+        remote_status = str(claim.remote_status or "").strip().lower()
+        if not claim.remote_terminal_at or remote_status not in TERMINAL_STATUSES:
+            raise StaticSiteSingleFlightDeferred(
+                f"{incompatible_reason}:terminal_evidence_pending:{claim.run_id}"
+            )
+        await reconcile_kaggle_run_failure_from_host(
+            db,
+            run_id=claim.run_id,
+            message=(
+                "static-site terminal handoff rejected before replacement: "
+                f"{incompatible_reason}"
+            ),
+        )
+        snapshot_path, manifest_path = _validated_static_site_terminal_snapshot_cleanup(
+            database_path=db.path,
+            request_payload=request_payload,
+            handoff=handoff,
+            claim=claim,
+        )
+        removed_snapshot_bytes = await asyncio.to_thread(
+            delete_immutable_snapshot,
+            snapshot_path,
+            manifest_path,
+        )
+        removed_output_bytes = await _delete_terminal_static_site_output_with_policy(
+            required["build_id"], strict=True
+        )
+        cleanup_receipt = {
+            "status": "cleanup_complete",
+            "reason": incompatible_reason,
+            "run_id": claim.run_id,
+            "snapshot_bytes": int(removed_snapshot_bytes),
+            "output_bytes": int(removed_output_bytes),
+            "completed_at": static_site_iso_utc(),
+        }
+        # Keep the exact active claim as the replacement barrier until both
+        # bounded deletions have receipts durably attached to this job.
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {"remote_recovery": cleanup_receipt},
+        )
+        await asyncio.to_thread(
+            finish_static_site_build_claim,
+            db.path,
+            claim_token=claim.claim_token,
+            run_id=claim.run_id,
+            input_fingerprint=claim.input_fingerprint,
+            effective_date=claim.effective_date,
+            success=False,
+            receipt={
+                "status": "cross_deploy_recovery_rejected",
+                "reason": incompatible_reason,
+                "remote_status": remote_status,
+                "cleanup": cleanup_receipt,
+            },
+        )
+        await _patch_static_site_request_payload(
+            db,
+            job_id,
+            {
+                "remote_handoff": None,
+                "remote_recovery": {
+                    "status": "cross_deploy_recovery_rejected",
+                    "reason": incompatible_reason,
+                    "run_id": claim.run_id,
+                    "cleanup": cleanup_receipt,
+                },
+            },
+        )
+        logging.warning(
+            "static_site_build: discarded incompatible terminal recovery "
+            "run_id=%s reason=%s snapshot_bytes=%s",
+            claim.run_id,
+            incompatible_reason,
+            removed_snapshot_bytes,
+        )
+        return False, None
     snapshot_metadata = await asyncio.to_thread(
         validate_snapshot, Path(required["snapshot_path"]), Path(required["manifest_path"])
     )
@@ -24840,6 +25025,8 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                     "candidate_token": candidate_token,
                     "snapshot_path": str(snapshot_path),
                     "manifest_path": str(manifest_path),
+                    "snapshot_id": snapshot_metadata.snapshot_id,
+                    "snapshot_sha256": snapshot_metadata.sha256,
                     "input_fingerprint": input_fingerprint,
                     "related_corpus_revision": related_corpus_revision or None,
                     "semantic_cache_mode": semantic_cache_mode,

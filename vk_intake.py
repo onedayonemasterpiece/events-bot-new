@@ -8,6 +8,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import time
 import unicodedata
 from dataclasses import dataclass, field
@@ -57,6 +58,7 @@ VK_CRAWL_BACKFILL_AFTER_IDLE_H = int(os.getenv("VK_CRAWL_BACKFILL_AFTER_IDLE_H",
 VK_CRAWL_BACKFILL_OVERRIDE_MAX_DAYS = int(
     os.getenv("VK_CRAWL_BACKFILL_OVERRIDE_MAX_DAYS", "60")
 )
+VK_CRAWL_MIN_FREE_MB = int(os.getenv("VK_CRAWL_MIN_FREE_MB", "512"))
 VK_USE_PYMORPHY = os.getenv("VK_USE_PYMORPHY", "false").lower() == "true"
 
 # Sentinel used to flag posts awaiting poster OCR before keyword/date checks.
@@ -122,6 +124,33 @@ def _read_int_env(name: str, default: int) -> int:
         return int(raw)
     except Exception:
         return default
+
+
+def _require_vk_crawl_storage_headroom(db: Any) -> None:
+    """Fail before VK fetch/persistence when the production volume is unsafe."""
+
+    db_path = os.path.abspath(str(getattr(db, "path", "") or ""))
+    runtime_root = os.path.abspath(
+        (os.getenv("RUNTIME_DISK_PATH") or "/data").strip() or "/data"
+    )
+    try:
+        on_runtime_volume = os.path.commonpath((db_path, runtime_root)) == runtime_root
+    except ValueError:
+        on_runtime_volume = False
+    if not on_runtime_volume:
+        return
+    minimum_mb = max(0, _read_int_env("VK_CRAWL_MIN_FREE_MB", VK_CRAWL_MIN_FREE_MB))
+    try:
+        usage = shutil.disk_usage(runtime_root)
+    except Exception as exc:
+        raise RuntimeError(
+            f"vk_crawl_storage_admission_unknown:{type(exc).__name__}"
+        ) from exc
+    free_mb = int(usage.free // (1024 * 1024))
+    if free_mb < minimum_mb:
+        raise RuntimeError(
+            f"vk_crawl_storage_admission_blocked:free_mb={free_mb}:min_free_mb={minimum_mb}"
+        )
 
 
 def _vk_parse_should_add_giveaway_prize_hint(
@@ -4457,6 +4486,7 @@ async def _persist_vk_source_packet(
             value for value in keyword_hints if not str(value).startswith("hint:")
         )
 
+    _require_vk_crawl_storage_headroom(db)
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
@@ -5016,8 +5046,10 @@ async def process_vk_crawl_continuations(
     }
     processed_ids: list[int] = []
     vk_wall_since = require_main_attr("vk_wall_since")
+    _require_vk_crawl_storage_headroom(db)
 
     for job_index in range(max_jobs):
+        _require_vk_crawl_storage_headroom(db)
         claim = await _claim_vk_crawl_continuation(
             db,
             lease_owner=worker,
@@ -5045,6 +5077,7 @@ async def process_vk_crawl_continuations(
                 await _renew_vk_crawl_continuation_lease(
                     db, claim, lease_seconds=lease_seconds
                 )
+                _require_vk_crawl_storage_headroom(db)
                 page = await vk_wall_since(
                     claim.owner_id,
                     claim.since_ts,
@@ -5247,6 +5280,8 @@ async def crawl_once(
     to the admin chat specified by ``ADMIN_CHAT_ID`` environment variable.
     """
 
+    _require_vk_crawl_storage_headroom(db)
+
     vk_wall_since = require_main_attr(
         "vk_wall_since"
     )  # imported lazily to avoid circular import
@@ -5329,6 +5364,7 @@ async def crawl_once(
 
     now_ts = int(time.time())
     for group in groups:
+        _require_vk_crawl_storage_headroom(db)
         gid = group["group_id"]
         raw_owner_type = group.get("owner_type") or "group"
         owner_type = "user" if str(raw_owner_type).strip().lower() == "user" else "group"
@@ -5374,30 +5410,50 @@ async def crawl_once(
                     (gid,),
                 )
                 row = await cur.fetchone()
+                continuation_cur = await conn.execute(
+                    """
+                    SELECT 1 FROM vk_crawl_continuation
+                    WHERE source_type='vk' AND owner_id=?
+                      AND reason='hard_cap'
+                      AND status IN ('pending','retry','running')
+                    LIMIT 1
+                    """,
+                    (gid,),
+                )
+                hard_cap_continuation_owed = await continuation_cur.fetchone() is not None
             cursor_updated_at_existing_raw: Any = None
             if row:
-                last_seen_ts, last_post_id, updated_at, _checked_at = row
+                last_seen_ts, last_post_id, updated_at, checked_at = row
                 cursor_updated_at_existing_raw = updated_at
-                if isinstance(updated_at, str):
+                # Quiet sources use checked_at. An incomplete hard-cap scan is
+                # distinguished by its durable continuation record rather than
+                # overloading the cursor timestamp.
+                idle_anchor = updated_at if hard_cap_continuation_owed else (
+                    checked_at if checked_at is not None else updated_at
+                )
+                if isinstance(idle_anchor, str):
                     try:
-                        updated_at_ts = int(
-                            datetime.fromisoformat(updated_at).timestamp()
+                        idle_anchor_ts = int(
+                            datetime.fromisoformat(idle_anchor).timestamp()
                         )
                     except ValueError:
                         try:
-                            updated_at_ts = int(updated_at)
+                            idle_anchor_ts = int(idle_anchor)
                         except (TypeError, ValueError):
-                            updated_at_ts = 0
-                elif updated_at:
-                    updated_at_ts = int(updated_at)
+                            idle_anchor_ts = 0
+                elif idle_anchor:
+                    idle_anchor_ts = int(idle_anchor)
                 else:
-                    updated_at_ts = 0
+                    idle_anchor_ts = 0
             else:
                 last_seen_ts = last_post_id = 0
-                updated_at_ts = 0
+                idle_anchor_ts = 0
                 cursor_updated_at_existing_raw = None
 
-            idle_h = (now_ts - updated_at_ts) / 3600 if updated_at_ts else None
+            # ``updated_at`` is the last discovered post, not the last scan.
+            # Quiet sources legitimately leave it old; using it as the idle
+            # anchor repeatedly replays the full history after every 24 hours.
+            idle_h = (now_ts - idle_anchor_ts) / 3600 if idle_anchor_ts else None
             backfill = force_backfill or last_seen_ts == 0 or (
                 idle_h is not None and idle_h >= VK_CRAWL_BACKFILL_AFTER_IDLE_H
             )
@@ -5421,6 +5477,7 @@ async def crawl_once(
                 horizon = now_ts - window_days * 86400
                 offset = 0
                 while pages_loaded < VK_CRAWL_MAX_PAGES_BACKFILL:
+                    _require_vk_crawl_storage_headroom(db)
                     page = await vk_wall_since(
                         gid,
                         0,
@@ -5446,6 +5503,7 @@ async def crawl_once(
                 safety_cap_threshold = max(1, VK_CRAWL_MAX_PAGES_INC)
                 hard_cap = safety_cap_threshold * 10
                 while True:
+                    _require_vk_crawl_storage_headroom(db)
                     page = await vk_wall_since(
                         gid,
                         since,
@@ -5508,6 +5566,7 @@ async def crawl_once(
             max_ts, max_pid = last_seen_ts, last_post_id
 
             for post in posts:
+                _require_vk_crawl_storage_headroom(db)
                 ts = int(post["date"])
                 pid = int(post["post_id"])
                 is_new_for_cursor = ts > last_seen_ts or (

@@ -88,7 +88,18 @@ The production rail is a durable state machine, not a local process lock:
    points to that exact job. If a newer pending follow-up already exists, the
    generic coalesce supersession rule must not discard the older exact active
    job: its recovery/adoption runs first, then the follow-up consumes the newly
-   accumulated effects.
+   accumulated effects. A deploy can make that terminal handoff intentionally
+   non-adoptable because its repo/source identity differs from the running
+   image. In that case replacement is still forbidden until the exact Kaggle
+   ledger proves a terminal status. The host releases only resources owned by
+   that run, then validates that the snapshot/manifest pair is a direct child
+   of the configured snapshot root, matches the active payload and immutable
+   manifest hash/size, and that the output has the recognized exact build
+   identity. The active claim stays as a cleanup-pending barrier until strict
+   snapshot and output deletion receipts are durable; only then is the failed
+   `cross_deploy_recovery_rejected` claim/handoff cleared and a fresh
+   current-image run allowed. A cleanup error, live or terminal-unknown handoff
+   remains deferred under the same single-flight contract.
 6. Review publication remains create-only under a fresh secret prefix. After full
    result/manifest/object verification, the durable internal current-review
    receipt advances atomically. Failed, no-op and artifact-only runs preserve
@@ -284,7 +295,8 @@ contract for this handoff: successful publication, ledger terminal state and
 exact-owner resource release must converge even when terminal callbacks are
 lost or Smart Update briefly holds the SQLite writer lock. The same contract
 also forbids startup catch-up from erasing an active recoverable handoff when
-it rearms an error outbox row.
+it rearms an error outbox row, and requires terminal cross-deploy handoffs to
+be retired by exact run identity before any replacement push.
 
 All operator/bot link-producing paths must use
 `static_site_release.resolve_current_secret_candidate`; historical named

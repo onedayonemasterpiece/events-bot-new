@@ -1241,6 +1241,7 @@ async def _run_kaggle_render(
                     "preview3d",
                     kernel_ref,
                     meta={
+                        "run_id": f"preview3d:{run_id or session_id}",
                         "session_id": session_id,
                         "chat_id": chat_id,
                         "month": month,

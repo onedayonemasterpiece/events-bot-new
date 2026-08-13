@@ -153,7 +153,11 @@ async def run_qtickets_kaggle_kernel(
             await register_job(
                 "parse_qtickets",
                 kernel_ref,
-                meta={"kernel_folder": QTICKETS_KERNEL_FOLDER, "pid": os.getpid()},
+                meta={
+                    "run_id": ledger_run_id,
+                    "kernel_folder": QTICKETS_KERNEL_FOLDER,
+                    "pid": os.getpid(),
+                },
             )
             registered = True
         except Exception:

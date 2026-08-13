@@ -47,6 +47,43 @@ def test_normalize_kernel_ref_strips_code_and_owner_leading_slash(monkeypatch):
     )
 
 
+def test_get_kernel_revision_uses_exact_metadata_endpoint(monkeypatch):
+    _install_dummy_kaggle(monkeypatch)
+    module = importlib.import_module("video_announce.kaggle_client")
+    requests = []
+
+    class Metadata:
+        ref = "zigomaro/guide-excursions-monitor"
+        current_version_number = 41
+
+    class ExactClient:
+        class Kernels:
+            class Api:
+                def get_kernel(self, request):
+                    requests.append((request.user_name, request.kernel_slug))
+                    return types.SimpleNamespace(metadata=Metadata())
+
+            kernels_api_client = Api()
+
+        kernels = Kernels()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+    class StubApi:
+        def build_kaggle_client(self):
+            return ExactClient()
+
+    client = module.KaggleClient()
+    monkeypatch.setattr(client, "_get_api", lambda: StubApi())
+
+    assert client.get_kernel_revision("zigomaro/guide-excursions-monitor") == 41
+    assert requests == [("zigomaro", "guide-excursions-monitor")]
+
+
 def test_kaggle_test_skips_max_size(monkeypatch):
     _install_dummy_kaggle(monkeypatch)
     KaggleClient = importlib.import_module("video_announce.kaggle_client").KaggleClient

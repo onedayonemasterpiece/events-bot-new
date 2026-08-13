@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+- **SEV-1 `/data` / ingestion remediation:** recorded
+  `INC-2026-08-12-data-volume-ingestion`; stopped quiet VK sources from
+  repeatedly replaying history, added a 512 MiB pre-fetch volume admission
+  guard with per-source/page/packet rechecks and starvation-free bounded queue
+  interleave, added atomic/exact-reconciled Guide/TG Kaggle launch intents with
+  positive exact pre-push revision evidence and fail-closed registry schema
+  reads, and anchored Telegram terminal catch-up's
+  one-hour hold to completion time. StaticSiteBuilder now confines and
+  hash-validates the exact terminal snapshot, keeps its active cleanup barrier
+  until strict snapshot/output receipts succeed, then releases vector sync.
+  Production deploy and controlled catch-up remain required before closure.
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit
   controlled release operation.
@@ -114,6 +125,10 @@
   negatives, detects concept duplicates, preserves exact precision@20 and
   expected-family metrics, and remains honestly blocked without an independent
   acceptance holdout instead of publishing an unproved or empty healthy feed.
+- Fixed StaticSiteBuilder recovery after an exact-main deploy: an incompatible
+  old handoff may be retired only after its exact ledger is terminal and its
+  exact-owner resources/claim are released; a live or unknown run remains
+  single-flight deferred instead of being replaced or wedging all later builds.
 
 - Completed Current UI Behavioral Decoder v1.1 evidence closure on Actions run
   `31327863197`: all 293 breakpoint/container probes now have terminal runtime

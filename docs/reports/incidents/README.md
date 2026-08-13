@@ -2,6 +2,11 @@
 
 Канонический индекс production incidents и post-incident разборов. Эти записи должны использоваться как обязательный regression-check перед любыми новыми изменениями в затронутых prod-поверхностях.
 
+- `INC-2026-08-12-data-volume-ingestion.md`
+  — active sev1: raw-first VK historical replay plus blocked WAL and a stale
+  terminal static owner exhausted `/data`; current VK queue starvation and
+  Guide/TG Kaggle retry state require exact-main remediation and catch-up.
+
 - `INC-2026-08-10-smart-update-identity-terminal-loss.md`
   — P0 / sev1: configured-source ingestion recall collapsed from 30+ to 2–5
   events/day through acute Smart Update terminal loss plus chronic pre/post-LLM

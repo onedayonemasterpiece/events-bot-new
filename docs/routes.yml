@@ -133,6 +133,7 @@ sections:
     event_age_rating_gemini_consultation_2026_07_15: docs/reports/event-age-rating-gemini-consultation-2026-07-15.md
     interest_clubs_catalog_audit_2026_07_17: docs/reports/interest-clubs-catalog-audit-2026-07-17.md
     incidents: docs/reports/incidents/README.md
+    incident_data_volume_ingestion_2026_08_12: docs/reports/incidents/INC-2026-08-12-data-volume-ingestion.md
     incident_smart_update_identity_terminal_loss_2026_08_10: docs/reports/incidents/INC-2026-08-10-smart-update-identity-terminal-loss.md
     incident_prelaunch_registration_confirmation_dedup_2026_08_08: docs/reports/incidents/INC-2026-08-08-prelaunch-registration-confirmation-and-dedup.md
     incident_postbox_feedback_dlq_correlation_2026_08_04: docs/reports/incidents/INC-2026-08-04-postbox-feedback-dlq-correlation.md
