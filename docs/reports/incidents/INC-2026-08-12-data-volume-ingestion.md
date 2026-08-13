@@ -192,6 +192,8 @@ catch-ups.
   intent-to-job promotion, and fail registry parse/schema corruption closed;
 - [x] anchor Telegram's one-hour terminal-error hold to `finished_at` (falling
   back to `started_at` only for legacy rows);
+- [x] count a successful controlled manual Telegram catch-up in the missed-slot
+  delivery window so registry cleanup cannot expose a duplicate watchdog run;
 - [x] safely retire only exact terminal incompatible StaticSiteBuilder owners:
   root-confine and hash-validate the claim-bound snapshot pair, require strict
   snapshot/output deletion receipts while the claim remains active, then clear
