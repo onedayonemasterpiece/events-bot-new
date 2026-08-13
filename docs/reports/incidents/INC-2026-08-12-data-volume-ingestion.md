@@ -285,10 +285,10 @@ Release chain:
   PR #498 merged as `0aa8f90c17f24bfad0e2215d5999e02153ef135d`
   (the runtime-bearing SHA deployed as Fly v1973 and an ancestor of current
   main). Evidence-only PR #499 merged as
-  `cd0240bb2e09433f3b6b9f63413bdb526f3b828c`, current `origin/main`; it changed
-  only this incident record, so production remains runtime-equivalent and its
-  deployed SHA is reachable from current main. All required GitHub checks were
-  green;
+  `cd0240bb2e09433f3b6b9f63413bdb526f3b828c`; follow-up PR #500 synchronized
+  only the incident index, record and changelog. These documentation-only
+  descendants leave production runtime-equivalent, and the deployed SHA is
+  reachable from current main. All required GitHub checks were green;
 - Fly version 1973 runs that exact SHA from a clean release worktree; the dirty
   unrelated root checkout was neither modified nor used for deploy;
 - after catch-up, three consecutive public health calls returned HTTP 200 with
