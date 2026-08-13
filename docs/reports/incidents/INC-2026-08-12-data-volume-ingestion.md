@@ -84,6 +84,41 @@ catch-ups.
   webhook and Private MCP traffic resumed in place.
 - 23:29 — `/healthz` HTTP 200 and SQLite `quick_check=ok`, but `/data` had only
   280 MiB free and remained warning.
+- 00:47 — durable growth crossed the routing floor again: `/data` had 254.39
+  MiB available, Fly reported 1/1 critical, public health timed out, and the
+  Private Events MCP OAuth request failed. No managed rotated log was eligible
+  for deletion.
+- 01:01 — version 1971, built from merged PR #496, retired only the exact
+  terminal StaticSiteBuilder owner. Root/hash/claim validation and strict
+  receipts removed 337,428,488 snapshot bytes and 610,450,066 output bytes
+  before releasing its handoff/claim; no generic cleanup or DB/WAL deletion was
+  used.
+- 01:14 — deploy interruption left vector job 50186 as the sole running outbox
+  row and its `ops_run` 5653 terminal `crashed`. The supported startup
+  reconciliation primitive reclaimed that exact proven state; vector run 5654
+  then completed with a v2 coverage-complete receipt.
+- 01:43 — version 1973 started at exact merged main
+  `0aa8f90c17f24bfad0e2215d5999e02153ef135d`. Its additional pre-allocation
+  reserve guard prevents the previously observed loop that copied a 646.5 MiB
+  snapshot before discovering that the post-copy build floor was unavailable.
+- 01:51–02:40 — exactly one scheduled Telegram catch-up, `ops_run` 5655 / run
+  `93807a7e890444b0b84fbf650c4a686c`, scanned all 57 sources and 84 messages.
+  It found two messages with events, created/imported none, reported zero
+  errors, wrote the terminal callback report, released the S22 lease and
+  cleared its registry job/intent. No duplicate watchdog launch followed.
+- 02:42–02:46 — bounded VK catch-up `ops_run` 5657 processed five carriers:
+  one import updated existing event 7103, one rejection, three typed deferrals,
+  zero failures and zero creations. Selection was four newest carriers then
+  one historical carrier, proving both current progress and bounded history.
+- 02:47–03:11 — the normal scheduled parser recovery entrypoint claimed
+  `dramteatr` and `sobor`. `ops_run` 5659 processed 52 rows: `dramteatr` 28
+  (25 updates, three retries) and `sobor` 24 (three new, 17 updates, four
+  retries), with no failed rows or fatal error. Production DB inserts 7605–7607
+  at 03:10–03:11 prove that live ingestion created three new events; the seven
+  typed Smart Update retries remain durably due rather than being lost.
+- 03:12–03:14 — current-event vector run 5663 completed for all 7,198 events;
+  its v2 receipt is coverage-complete, has valid/equal corpus hashes and matches
+  every static request revision.
 
 ## Root Cause
 
@@ -202,26 +237,66 @@ catch-ups.
   before allocating a replacement snapshot; the first post-recovery canary
   proved that a post-copy-only probe otherwise allocated 646.5 MiB, failed,
   deleted it and scheduled another retry;
-- [ ] merge/deploy exact main and execute controlled recovery/verification.
+- [x] merge/deploy exact main and execute controlled recovery/verification.
 
 ## Recovery / Catch-up
 
-Pending deploy. Required order:
+Recovery followed the guarded order:
 
-1. deploy prevention from exact merged main;
-2. let terminal static recovery reclaim its exact ~947.9 MiB before another
-   heavy build;
-3. verify callback/MCP availability, then run exactly one S22 Telegram catch-up
-   (or import an already complete exact output);
-4. run one Guide full catch-up only after S22 is released;
-5. process VK in bounded fresh-first batches through normal Smart Update and
-   dedupe; do not recrawl or unbounded-drain the historical backlog;
-6. claim the two due official-parser recovery requests and record outcomes.
+1. exact-owner static recovery reclaimed 947,878,554 bytes before any new
+   build and left no active stale claim;
+2. the interrupted vector owner was reconciled only after proving it was the
+   sole running outbox row; run 5654 and the later post-ingestion run 5663 both
+   produced complete receipts;
+3. Guide was not relaunched: the already scheduled run 5651 had completed
+   partial with valid callback/lease/report evidence (21 sources, 67 posts, one
+   created, 16 updated, two errors), so another full run would have duplicated
+   the daily obligation;
+4. exactly one S22 Telegram scheduled catch-up ran to terminal success and
+   released its lease; it scanned 57/57 sources and found no new canonical
+   event to import;
+5. the bounded five-row VK batch exercised the production Smart Update/dedupe
+   path and advanced both fresh and historical work without duplicates;
+6. the official parser recovery processed 52 rows and created events
+   7605–7607. Seven item-level Smart Update retries remain represented by the
+   two pending source recovery requests and will be claimed by the normal
+   ledger-aware scheduler; no unbounded second catch-up was started.
 
 ## Release And Closure Evidence
 
-Not yet available. Investigation branch:
-`incident/INC-2026-08-12-data-volume-ingestion`.
+The incident remains open because the stale static active guard is gone but a
+fresh replacement build is capacity-deferred. The 646 MiB live DB plus the
+350 MiB build floor requires about 1.64 GiB available before snapshot
+allocation; production currently has about 1.145 GiB. The guard leaves job
+50189 pending with no active claim and zero replacement snapshot bytes, so it
+cannot recreate the ENOSPC loop. Closing the incident requires an owner-backed,
+receipt-producing retention action that provides the remaining margin and a
+successful exact-main static canary; increasing the volume or deleting unknown
+files is not an accepted substitute.
+
+Release chain:
+
+- PR #496 merged as `866f3978e` (VK/Kaggle/static recovery and incident
+  contracts), PR #497 merged as `7dc82ece2` (exact-one Telegram catch-up), and
+  PR #498 merged as current `origin/main@0aa8f90c17f24bfad0e2215d5999e02153ef135d`
+  (pre-allocation static reserve); all required GitHub checks were green;
+- Fly version 1973 runs that exact SHA from a clean release worktree; the dirty
+  unrelated root checkout was neither modified nor used for deploy;
+- after catch-up, three consecutive public health calls returned HTTP 200 with
+  `ready=true`, `db=ok`, `disk=ok`; Fly was 1/1 passing and a validation-only
+  Kaggle callback returned the expected HTTP 400 contract response;
+- `/data` had 1,200,791,552 bytes available, DB 646,381,568 bytes and WAL
+  11,667,872 bytes after the real parser write window. Direct SQLite
+  `quick_check=ok`; `/tmp` create/write/fsync/read/remove passed. A 20-minute
+  sample before catch-up stayed near 1.157 GiB free, and retained logs since
+  version 1973 contain zero ENOSPC/database-full/no-candidate signatures;
+- runtime access evidence includes successful webhook POST 200 after recovery;
+  live Telegram `/start` returned `Choose action`; Private Events MCP returned
+  repository SHA `0aa8f90c17f...` and live counts. Its bounded 350 ms quick-check
+  budget expired, while the direct read-only quick-check completed `ok`;
+- no production DB, WAL/SHM, current release snapshot, raw VK packet or unknown
+  artifact was deleted. The only automated data removal was the exact
+  claim-bound terminal static snapshot/output described above.
 
 Pre-release tests:
 
@@ -235,7 +310,8 @@ Pre-release tests:
 ## Follow-up Actions
 
 - [ ] storage owner — define owner/TTL/byte budgets for release snapshots,
-  age-backfill/incident DB copies and generic backups.
+  age-backfill/incident DB copies and generic backups; use that contract to
+  reclaim enough receipt-backed space for the pending static canary.
 - [ ] DB owner — expose WAL bytes plus checkpoint `(busy, log, checkpointed)`,
   wal-index backfill/read marks and oldest reader age.
 - [ ] Kaggle owner — type callback transport failure as indeterminate, not
