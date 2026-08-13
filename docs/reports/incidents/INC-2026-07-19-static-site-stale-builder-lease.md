@@ -306,10 +306,12 @@ The recovery contract now distinguishes terminal from live cross-deploy
 handoffs. A live or terminal-unknown old run remains deferred and cannot be
 replaced. For an exact-owner run whose ledger has both a terminal status and
 `terminal_at`, the host first reconciles/releases resources for that run only,
-records the claim as failed with `cross_deploy_recovery_rejected`, redacts the
-handoff, removes its immutable snapshot/output, and only then continues to a
-fresh build. Focused regression covers both the terminal replacement path and
-the live fail-closed path. Production warm/cold run IDs and final lease/browser
+validates and removes its exact claim-owned immutable snapshot/output, persists
+the cleanup receipt while the claim is still active, and only then records the
+claim as failed with `cross_deploy_recovery_rejected` and redacts the handoff.
+Any cleanup/receipt failure keeps the active barrier and forbids a replacement
+build. Focused regression covers both the terminal replacement path and the
+live fail-closed path. Production warm/cold run IDs and final lease/browser
 evidence remain pending until the hotfix reaches exact `origin/main`.
 
 
