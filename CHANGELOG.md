@@ -16,7 +16,11 @@
   A replacement build now reserves the current DB size before snapshot copy so
   insufficient post-copy headroom defers without allocating and retrying a
   full-DB snapshot.
-  Production deploy and controlled catch-up remain required before closure.
+  Production now runs the exact runtime-bearing main release: exact-owner
+  cleanup reclaimed 947.9 MiB, bounded Telegram/VK/parser catch-ups completed,
+  and live ingestion created three events. Closure still requires terminal
+  receipts for seven durable parser retries and owner-backed capacity for a
+  successful static-site canary.
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit
   controlled release operation.
