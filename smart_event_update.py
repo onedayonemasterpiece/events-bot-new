@@ -17,7 +17,7 @@ from enum import Enum
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import and_, delete, or_, select
@@ -16504,6 +16504,7 @@ async def retry_due_smart_update_candidates(
     *,
     limit: int = 25,
     lease_seconds: int = 300,
+    on_accepted: Callable[[EventCandidate, SmartUpdateResult], Awaitable[None]] | None = None,
 ) -> dict[str, int]:
     """Claim and automatically replay due durable candidates.
 
@@ -16557,6 +16558,23 @@ async def retry_due_smart_update_candidates(
             _lease_owner=owner,
         )
         result_counts[result.outcome.value] += 1
+        if on_accepted is not None and result.outcome in {
+            SmartUpdateTerminalOutcome.CREATED,
+            SmartUpdateTerminalOutcome.MERGED,
+        }:
+            try:
+                await on_accepted(candidate, result)
+            except Exception:
+                # Notification/observability must never roll back or obscure the
+                # already durable Smart Update terminal result.  The scheduler
+                # logs this branch and can alert independently.
+                logger.exception(
+                    "smart_update.retry accepted_callback_failed "
+                    "candidate_key=%s outcome=%s event_id=%s",
+                    item.candidate_key,
+                    result.outcome.value,
+                    result.event_id,
+                )
     return result_counts
 
 

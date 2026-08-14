@@ -275,6 +275,139 @@ async def test_resume_rendering_sessions_restarts_remote_kernel_pollers(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_resume_reconciles_old_terminal_ledger_without_repolling_mutable_kernel(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_dataset="zigomaro/cherryflash-session-1083",
+            test_chat_id=-1002210431821,
+            started_at=now - timedelta(days=2),
+            selection_params={"notify_chat_id": 123},
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    terminal_at = (now - timedelta(hours=36)).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
+                status, phase, token_hash, progress_json, created_at, updated_at,
+                last_heartbeat_at, terminal_at
+            )
+            VALUES(?, ?, 'cherryflash', 'CherryFlash', ?, ?, 'done', 'cleanup',
+                   'test', '{"progress_percent":100}', ?, ?, ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                "zigomaro/cherryflash",
+                "zigomaro/cherryflash-session-1083",
+                terminal_at,
+                terminal_at,
+                terminal_at,
+                terminal_at,
+            ),
+        )
+        await conn.commit()
+
+    def _should_not_poll(*args, **kwargs):  # noqa: ANN002,ANN003
+        raise AssertionError("terminal ledger must not poll a mutable Kaggle slug")
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _should_not_poll)
+    bot = _DummyBot()
+
+    recovered = await poller_module.resume_rendering_sessions(db, bot, chat_id=123)
+
+    assert recovered == 0
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+        assert refreshed.finished_at is not None
+        assert refreshed.video_url is None
+        assert refreshed.error == (
+            "terminal Kaggle run was not projected to a verified delivery; "
+            "publish recovery required"
+        )
+    assert len(bot.messages) == 1
+    assert "Зависший render-lock снят" in bot.messages[0][1]
+
+    # Idempotent: the terminal row is no longer RENDERING and cannot notify or
+    # trigger a second provider poll on the next recovery tick.
+    assert await poller_module.resume_rendering_sessions(db, bot, chat_id=123) == 0
+    assert len(bot.messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_terminal_ledger_grace_does_not_race_healthy_output_processing(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash",
+            kaggle_dataset="zigomaro/cherryflash-session-fresh",
+            started_at=now - timedelta(minutes=30),
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+    terminal_at = (now - timedelta(minutes=5)).isoformat()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, kernel_ref, dataset_ref,
+                status, phase, token_hash, progress_json, created_at, updated_at,
+                terminal_at
+            ) VALUES(?, ?, 'cherryflash', 'CherryFlash', ?, ?, 'done', 'cleanup',
+                     'test', '{}', ?, ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                "zigomaro/cherryflash",
+                "zigomaro/cherryflash-session-fresh",
+                terminal_at,
+                terminal_at,
+                terminal_at,
+            ),
+        )
+        await conn.commit()
+
+    assert (
+        await poller_module.reconcile_terminal_rendering_sessions(
+            db,
+            _DummyBot(),
+            chat_id=123,
+            now=now,
+            grace_minutes=60,
+        )
+        == 0
+    )
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+
+
+@pytest.mark.asyncio
 async def test_resume_rendering_sessions_revives_false_failed_live_ledger(
     monkeypatch, tmp_path: Path
 ):

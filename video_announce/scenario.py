@@ -94,6 +94,7 @@ from .story_publish import (
 from .poller import (
     VIDEO_MAX_MB,
     VIDEO_KAGGLE_TIMEOUT_MINUTES,
+    reconcile_terminal_rendering_sessions,
     remember_status_message,
     start_kernel_poller_task,
     update_status_message,
@@ -124,6 +125,12 @@ from .pattern_preview import (
 )
 
 logger = logging.getLogger(__name__)
+
+_RENDERING_NOTICE_TTL_SECONDS = 6 * 60 * 60
+_rendering_notice_cache: TTLCache = TTLCache(
+    maxsize=256,
+    ttl=_RENDERING_NOTICE_TTL_SECONDS,
+)
 
 
 def build_popular_review_story_caption(
@@ -1246,6 +1253,11 @@ class VideoAnnounceScenario:
           the account's concurrent-kernel quota and never starting).
         """
 
+        await reconcile_terminal_rendering_sessions(
+            self.db,
+            self.bot,
+            chat_id=self.chat_id,
+        )
         async with self.db.get_session() as session:
             query = select(VideoAnnounceSession).where(
                 VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
@@ -1264,6 +1276,25 @@ class VideoAnnounceScenario:
             if sess_slug and sess_slug.casefold() == target:
                 return sess
         return None
+
+    async def _notify_rendering_once(self, existing: VideoAnnounceSession) -> None:
+        key = (int(self.chat_id), int(existing.id or 0))
+        if key in _rendering_notice_cache:
+            logger.info(
+                "video_announce: suppressed duplicate render-in-progress notice session=%s chat=%s",
+                existing.id,
+                self.chat_id,
+            )
+            return
+        _rendering_notice_cache[key] = True
+        try:
+            await self.bot.send_message(
+                self.chat_id,
+                f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
+            )
+        except Exception:
+            _rendering_notice_cache.pop(key, None)
+            raise
 
     async def _load_session(self, session_id: int) -> VideoAnnounceSession | None:
         async with self.db.get_session() as session:
@@ -2480,10 +2511,7 @@ class VideoAnnounceScenario:
             return None
         existing = await self.has_rendering()
         if existing:
-            await self.bot.send_message(
-                self.chat_id,
-                f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
-            )
+            await self._notify_rendering_once(existing)
             return None
 
         try:
