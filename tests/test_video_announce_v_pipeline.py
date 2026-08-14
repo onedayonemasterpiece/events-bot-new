@@ -388,6 +388,9 @@ async def test_start_render_persists_notify_chat_id_for_recovery(monkeypatch, tm
     async def _fake_render_and_notify(self, session_obj, ranked, **kwargs):  # noqa: ANN001,ARG002
         return None
 
+    async def _fake_kernel_available(self, ref):  # noqa: ANN001,ARG002
+        return True, None
+
     monkeypatch.setattr(scenario_module, "fill_missing_about", _fake_fill_missing_about)
     monkeypatch.setattr(VideoAnnounceScenario, "_build_render_payload", _fake_build_render_payload)
     monkeypatch.setattr(
@@ -398,6 +401,11 @@ async def test_start_render_persists_notify_chat_id_for_recovery(monkeypatch, tm
     monkeypatch.setattr(scenario_module, "update_status_message", _fake_update_status_message)
     monkeypatch.setattr(VideoAnnounceScenario, "_send_payload_file", _fake_send_payload_file)
     monkeypatch.setattr(VideoAnnounceScenario, "_render_and_notify", _fake_render_and_notify)
+    monkeypatch.setattr(
+        VideoAnnounceScenario,
+        "_kaggle_kernel_target_available",
+        _fake_kernel_available,
+    )
     monkeypatch.setattr(scenario_module, "payload_as_json", lambda payload, tz: '{"ok": true}')
 
     bot = _DummyBot()
