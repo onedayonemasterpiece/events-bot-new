@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **CherryFlash / Smart Update incident recovery:** recorded
+  `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility`;
+  terminal source-render Kaggle ledgers now reconcile stale `RENDERING`
+  projections after a bounded delivery grace without claiming delivery or
+  blindly rerendering, repeated session-lock notices are suppressed, and
+  background Smart Update retries report durable `CREATED`/`MERGED` outcomes
+  to the superadmin without coupling notification failure to the accepted row.
 - **SEV-1 `/data` / ingestion remediation:** recorded
   `INC-2026-08-12-data-volume-ingestion`; stopped quiet VK sources from
   repeatedly replaying history, added a 512 MiB pre-fetch volume admission

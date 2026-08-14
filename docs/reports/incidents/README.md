@@ -2,6 +2,12 @@
 
 Канонический индекс production incidents и post-incident разборов. Эти записи должны использоваться как обязательный regression-check перед любыми новыми изменениями в затронутых prod-поверхностях.
 
+- `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility.md`
+  — active sev1: terminal Kaggle session `#1083` stayed projected as
+  `RENDERING`, causing repeated watchdog messages and blocking CherryFlash;
+  durable Smart Update retry success lacked an operator report, while a
+  recurring static CDN certificate mismatch blocked downstream publication.
+
 - `INC-2026-08-12-data-volume-ingestion.md`
   — active sev1: raw-first VK historical replay plus blocked WAL and a stale
   terminal static owner exhausted `/data`; exact-main remediation restored

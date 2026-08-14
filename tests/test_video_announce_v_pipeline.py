@@ -107,6 +107,36 @@ async def test_partner_render_lock_is_scoped_by_profile(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_popular_review_deduplicates_repeated_render_lock_notifications(
+    monkeypatch,
+) -> None:
+    bot = _DummyBot()
+    scenario = VideoAnnounceScenario(object(), bot, chat_id=123, user_id=1)
+    rendering = VideoAnnounceSession(
+        id=1083,
+        status=VideoAnnounceSessionStatus.RENDERING,
+        profile_key="popular_review",
+    )
+
+    async def _allowed() -> bool:
+        return True
+
+    async def _rendering(**_kwargs):
+        return rendering
+
+    monkeypatch.setattr(scenario, "ensure_access", _allowed)
+    monkeypatch.setattr(scenario, "has_rendering", _rendering)
+    scenario_module._rendering_notice_cache.clear()
+
+    assert await scenario.run_popular_review_pipeline() is None
+    assert await scenario.run_popular_review_pipeline() is None
+
+    assert [(chat_id, text) for chat_id, text, _kwargs in bot.messages] == [
+        (123, "Сессия #1083 уже рендерится, дождитесь завершения")
+    ]
+
+
+@pytest.mark.asyncio
 async def test_run_tomorrow_pipeline_creates_session_and_starts(monkeypatch, tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -358,6 +388,9 @@ async def test_start_render_persists_notify_chat_id_for_recovery(monkeypatch, tm
     async def _fake_render_and_notify(self, session_obj, ranked, **kwargs):  # noqa: ANN001,ARG002
         return None
 
+    async def _fake_kernel_available(self, ref):  # noqa: ANN001,ARG002
+        return True, None
+
     monkeypatch.setattr(scenario_module, "fill_missing_about", _fake_fill_missing_about)
     monkeypatch.setattr(VideoAnnounceScenario, "_build_render_payload", _fake_build_render_payload)
     monkeypatch.setattr(
@@ -368,6 +401,11 @@ async def test_start_render_persists_notify_chat_id_for_recovery(monkeypatch, tm
     monkeypatch.setattr(scenario_module, "update_status_message", _fake_update_status_message)
     monkeypatch.setattr(VideoAnnounceScenario, "_send_payload_file", _fake_send_payload_file)
     monkeypatch.setattr(VideoAnnounceScenario, "_render_and_notify", _fake_render_and_notify)
+    monkeypatch.setattr(
+        VideoAnnounceScenario,
+        "_kaggle_kernel_target_available",
+        _fake_kernel_available,
+    )
     monkeypatch.setattr(scenario_module, "payload_as_json", lambda payload, tz: '{"ok": true}')
 
     bot = _DummyBot()

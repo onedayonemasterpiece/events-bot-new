@@ -12,6 +12,7 @@ from models import Event, EventSource
 from smart_event_update import EventCandidate, SmartUpdateTerminalOutcome
 from smart_update_identity import IdentityGateMode
 from smart_update_state import (
+    ClaimedCandidate,
     IdentityDistinctReason,
     RetryReason,
     smart_update_funnel_counts,
@@ -77,6 +78,90 @@ async def _make_due(db: Database) -> dict[str, int]:
         )
         await conn.commit()
     return await su.retry_due_smart_update_candidates(db, limit=5)
+
+
+@pytest.mark.asyncio
+async def test_retry_worker_reports_only_durable_created_or_merged_results(monkeypatch) -> None:
+    claimed = ClaimedCandidate(
+        candidate_state_id=1,
+        candidate_key="retry-visible",
+        candidate_payload={
+            "source_type": "telegram",
+            "source_url": "https://t.me/source/1",
+            "source_text": "Событие",
+        },
+        attempts=2,
+        max_attempts=10,
+        previous_reason="source_verification_required",
+    )
+    monkeypatch.setattr(su, "claim_due_candidates", lambda *_args, **_kwargs: _async([claimed]))
+    monkeypatch.setattr(
+        su,
+        "smart_event_update",
+        lambda *_args, **_kwargs: _async(
+            su.SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=7618,
+                created=True,
+            )
+        ),
+    )
+    accepted: list[tuple[str, int]] = []
+
+    async def capture(candidate, result) -> None:
+        accepted.append((candidate.candidate_key or "", int(result.event_id)))
+
+    counters = await su.retry_due_smart_update_candidates(
+        object(),  # type: ignore[arg-type]
+        on_accepted=capture,
+    )
+
+    assert counters[SmartUpdateTerminalOutcome.CREATED.value] == 1
+    assert accepted == [("retry-visible", 7618)]
+
+
+@pytest.mark.asyncio
+async def test_retry_notification_failure_does_not_change_durable_result(
+    monkeypatch,
+) -> None:
+    claimed = ClaimedCandidate(
+        candidate_state_id=1,
+        candidate_key="retry-visible",
+        candidate_payload={
+            "source_type": "telegram",
+            "source_url": "https://t.me/source/1",
+            "source_text": "Событие",
+        },
+        attempts=2,
+        max_attempts=10,
+        previous_reason="source_verification_required",
+    )
+    monkeypatch.setattr(su, "claim_due_candidates", lambda *_args, **_kwargs: _async([claimed]))
+    monkeypatch.setattr(
+        su,
+        "smart_event_update",
+        lambda *_args, **_kwargs: _async(
+            su.SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.MERGED,
+                event_id=42,
+                merged=True,
+            )
+        ),
+    )
+
+    async def fail_notification(_candidate, _result) -> None:
+        raise RuntimeError("telegram unavailable")
+
+    counters = await su.retry_due_smart_update_candidates(
+        object(),  # type: ignore[arg-type]
+        on_accepted=fail_notification,
+    )
+
+    assert counters[SmartUpdateTerminalOutcome.MERGED.value] == 1
+
+
+async def _async(value):
+    return value
 
 
 @pytest.mark.asyncio

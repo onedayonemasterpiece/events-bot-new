@@ -18,8 +18,49 @@ import vk_intake
 import video_announce.scenario as scenario_module
 from db import Database
 from heavy_ops import HeavyOpMeta
-from models import User
+from models import Event, User
 from ops_run import finish_ops_run, start_ops_run
+
+
+@pytest.mark.asyncio
+async def test_smart_update_retry_accepts_report_reaches_superadmin(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "smart-update-report.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Музыка <вечером>",
+            description="Описание",
+            source_text="Источник",
+            date="2099-08-14",
+            time="19:00",
+            location_name="Зал",
+            city="Калининград",
+            telegraph_url="https://telegra.ph/safe-event-08-14",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    async def superadmin(_db):
+        return 12345
+
+    monkeypatch.setattr(scheduling, "resolve_superadmin_chat_id", superadmin)
+    bot = SimpleNamespace(send_message=AsyncMock())
+
+    sent = await scheduling._notify_smart_update_retry_accepts(
+        db,
+        bot,
+        [("CREATED", event_id), ("CREATED", event_id)],
+    )
+
+    assert sent is True
+    bot.send_message.assert_awaited_once()
+    args, kwargs = bot.send_message.await_args
+    assert args[0] == 12345
+    assert "Создано событий: <b>1</b>" in args[1]
+    assert "Музыка &lt;вечером&gt;" in args[1]
+    assert kwargs["parse_mode"] == "HTML"
 
 
 @pytest.mark.asyncio

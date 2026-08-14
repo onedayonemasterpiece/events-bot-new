@@ -8,6 +8,7 @@ import time as _time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
+from html import escape
 from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Set
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -22,10 +23,88 @@ from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin_chat import resolve_superadmin_chat_id
-from db import optimize, wal_checkpoint_truncate, vacuum
+from db import optimize, vacuum, wal_checkpoint_truncate
 from heavy_ops import current_heavy_meta, describe_heavy_meta, heavy_operation
 from ops_run import finish_ops_run, start_ops_run
 from runtime import get_running_main
+
+
+async def _notify_smart_update_retry_accepts(
+    db,
+    bot,
+    accepted: list[tuple[str, int]],
+) -> bool:
+    """Report durable retry outcomes that otherwise have no interactive caller.
+
+    Smart Update persists the result before this helper is called.  Notification
+    failure therefore stays an observability failure and must not make the
+    accepted candidate retry (or create a duplicate event).
+    """
+
+    if bot is None or not accepted:
+        return False
+    target_chat_id = await resolve_superadmin_chat_id(db)
+    if not target_chat_id:
+        logging.warning(
+            "smart_update_retry_worker accepted_report_skipped reason=no_superadmin count=%s",
+            len(accepted),
+        )
+        return False
+
+    # A batch can contain several source candidates merged into the same event.
+    # Keep one line per durable event/outcome while retaining truthful counters.
+    unique = list(dict.fromkeys((str(outcome), int(event_id)) for outcome, event_id in accepted))
+    event_ids = sorted({event_id for _, event_id in unique})
+    placeholders = ",".join("?" for _ in event_ids)
+    rows: dict[int, tuple[str, str | None]] = {}
+    try:
+        async with db.raw_conn() as conn:
+            cursor = await conn.execute(
+                f'SELECT id, title, telegraph_url FROM "event" WHERE id IN ({placeholders})',
+                tuple(event_ids),
+            )
+            for row in await cursor.fetchall():
+                rows[int(row[0])] = (str(row[1] or "Событие"), row[2])
+            await cursor.close()
+
+        created = sum(1 for outcome, _ in unique if outcome == "CREATED")
+        merged = sum(1 for outcome, _ in unique if outcome == "MERGED")
+        lines = ["✅ <b>Smart Update: фоновый повтор завершён</b>"]
+        if created:
+            lines.append(f"Создано событий: <b>{created}</b>")
+        if merged:
+            lines.append(f"Обновлено событий: <b>{merged}</b>")
+        for outcome, event_id in unique[:12]:
+            title, telegraph_url = rows.get(event_id, ("Событие", None))
+            label = "создано" if outcome == "CREATED" else "обновлено"
+            safe_title = escape(title[:180])
+            if isinstance(telegraph_url, str) and telegraph_url.startswith("https://telegra.ph/"):
+                rendered_title = f'<a href="{escape(telegraph_url, quote=True)}">{safe_title}</a>'
+            else:
+                rendered_title = safe_title
+            lines.append(f"• #{event_id} — {rendered_title} ({label})")
+        if len(unique) > 12:
+            lines.append(f"…и ещё {len(unique) - 12}")
+        await bot.send_message(
+            int(target_chat_id),
+            "\n".join(lines),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        logging.exception(
+            "smart_update_retry_worker accepted_report_failed count=%s",
+            len(unique),
+        )
+        return False
+
+    logging.info(
+        "smart_update_retry_worker accepted_report_sent created=%s merged=%s events=%s",
+        created,
+        merged,
+        len(unique),
+    )
+    return True
 
 
 @dataclass
@@ -4126,7 +4205,7 @@ def startup(
 
         async def smart_update_retry_scheduler(
             db_obj,
-            _bot_obj,
+            bot_obj,
             *,
             run_id: str | None = None,
         ) -> None:
@@ -4134,10 +4213,20 @@ def startup(
             from smart_event_update import retry_due_smart_update_candidates
             from smart_update_state import smart_update_funnel_counts
 
+            accepted: list[tuple[str, int]] = []
+
+            async def _capture_accepted(_candidate, result) -> None:
+                if not result.is_accepted:
+                    return
+                if result.event_id is not None:
+                    accepted.append((result.outcome.value, int(result.event_id)))
+
             counters = await retry_due_smart_update_candidates(
                 db_obj,
                 limit=smart_update_retry_batch,
+                on_accepted=_capture_accepted,
             )
+            await _notify_smart_update_retry_accepts(db_obj, bot_obj, accepted)
             funnel = await smart_update_funnel_counts(db_obj)
             logging.info(
                 "smart_update_retry_worker counters=%s funnel=%s",

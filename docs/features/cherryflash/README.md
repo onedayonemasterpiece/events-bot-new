@@ -46,6 +46,24 @@ The icon layer uses the approved SVG Repo-derived assets packaged in `video_anno
 - The sibling `CherryFlash libsvtav1` button must call the same direct CherryFlash pipeline with `profile_key=cherryflash_libsvtav1`, not a forked selection/render flow.
 - `/v` may still keep a separate `⚙️ Каналы` path for CherryFlash channel configuration, but launch and configuration must be distinct actions.
 
+### Terminal ledger and render-lock reconciliation
+
+- A SQLite session in `RENDERING` is not sufficient proof that its Kaggle run is
+  still active. Startup recovery and every launch guard reconcile it against the
+  durable source-render `kaggle_run_ledger`.
+- A terminal ledger is given a bounded delivery grace (60 minutes by default,
+  configured by `VIDEO_TERMINAL_RECONCILE_GRACE_MINUTES`) because Kaggle may
+  finish before the bot downloads and sends the result.
+- After that grace, a row that is still `RENDERING` must release the render lock:
+  a failed/cancelled remote run becomes `FAILED`; a successful remote run with
+  no verified local delivery receipt becomes `PUBLISH_BLOCKED`, never `DONE`.
+  This reconciliation must not trigger a blind video resend or rerender.
+- The transition is conditional on the row still being `RENDERING`, ignores
+  publish-only ledgers, and is idempotent across startup and watchdog calls.
+- Repeated launch/watchdog checks for the same blocking session and chat emit at
+  most one wait notification per six-hour process-local window. The durable
+  status transition, not notification suppression, is what releases stale locks.
+
 ## Product identity
 
 - `CherryFlash` is the user-facing / marketing name of the daily popularity-driven video product described in this document.
