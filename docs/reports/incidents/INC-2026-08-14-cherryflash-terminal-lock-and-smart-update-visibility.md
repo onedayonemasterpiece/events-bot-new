@@ -216,8 +216,12 @@ being added to decide event meaning or identity.
 
 - implementation PR: `#502`
 - implementation head: `50c5206e22e3aaf86a134697af306cf84737bfa5`
-- merge, `origin/main`, deployed, and in-container SHA:
+- implementation merge, deployed, and in-container SHA:
   `40b78c5dde888a75022832fe2fe1351a456c0775`
+- closure-evidence PR: `#503`; evidence head
+  `e696afb26b8e98cde2315ccdf21f5bb2334b6ee3`, merged as
+  `9f904f08bae8be4310d9f11152adcb8a8feb34fd`; the deployed implementation SHA
+  remains an ancestor of the current `origin/main`
 - deploy path: exact merged `origin/main` through `scripts/deploy_fly_main.sh`
 - regression checks: focused suite `134 passed`; stricter changed-surface suite
   `98 passed`; all required GitHub Actions on PR `#502` passed
