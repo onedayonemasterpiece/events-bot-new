@@ -1,10 +1,10 @@
 # INC-2026-08-14 CherryFlash Terminal Lock And Smart Update Visibility
 
-Status: open
+Status: closed
 Severity: sev1
 Service: CherryFlash scheduler, Smart Update retry worker, event publication outbox
 Opened: 2026-08-14
-Closed: —
+Closed: 2026-08-14
 Owners: bot/runtime, Smart Update, Yandex CDN operations
 Related incidents: `INC-2026-05-18-konb-cherryflash-render-lock-and-empty-selection`, `INC-2026-08-03-cherryflash-cdn-tls-retry-storm`, `INC-2026-08-10-smart-update-identity-terminal-loss`
 Related docs: `docs/features/cherryflash/README.md`, `docs/features/smart-event-update/README.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -33,10 +33,11 @@ being added to decide event meaning or identity.
   ended more than two days earlier.
 - Smart Update success was not consistently visible: the background retry path
   could create or merge an event without notifying the operator.
-- Event `#7618` exists in the canonical DB, but its media review and Telegram
-  publication remain in retry because the public static CDN TLS identity is
-  invalid. A created DB event must not be confused with successful downstream
-  publication.
+- Event `#7618` initially remained in downstream retry because the public static
+  CDN TLS identity was invalid. The incident catch-up repaired the exact CDN
+  binding and then completed media review, Telegram publication, and VK sync.
+  The created event and its downstream delivery were verified as separate
+  durable states.
 
 ## Detection
 
@@ -63,6 +64,21 @@ being added to decide event meaning or identity.
   already rendering” messages on watchdog invocations.
 - 2026-08-14: event `#7618` downstream jobs repeatedly fail with a strict TLS
   hostname mismatch for `static.kenigevents.ru`.
+- 2026-08-14 18:41 UTC: exact merged `origin/main` SHA
+  `40b78c5dde888a75022832fe2fe1351a456c0775` is deployed through
+  `scripts/deploy_fly_main.sh`; Fly reports one healthy machine and the same
+  in-container SHA.
+- 2026-08-14 18:42 UTC: startup reconciliation moves stale session `#1083`
+  from `RENDERING` to `PUBLISH_BLOCKED`, preserving the fact that remote render
+  success was not a verified local delivery.
+- 2026-08-14 18:45–18:56 UTC: after the exact CDN certificate binding repair,
+  event `#7618` media review, VK sync, and Telegram publication complete. A
+  compensating accepted-retry notification is sent to the superadmin.
+- 2026-08-14 18:55–20:44 UTC: controlled current-day catch-up session `#1097`
+  runs on Kaggle, reaches `done/cleanup`, releases its Telegram session lease,
+  downloads the final output, and finishes as `PUBLISHED_TEST`. The prior
+  automatic recovery attempt `#1096` is truthfully terminal `FAILED` after its
+  preflight callback timeout; it is not left as another render lock.
 
 ## Root Cause
 
@@ -163,6 +179,31 @@ being added to decide event meaning or identity.
 - Re-apply the exact existing Certificate Manager certificate to the exact
   static CDN resource and purge only that CDN cache after operator authentication.
 
+## Production Recovery
+
+- Session `#1083` is terminal `PUBLISH_BLOCKED` with `finished_at` populated and
+  no false publication receipt. The runtime file mirror contains the one
+  reconciliation line and zero repeated `#1083` wait notices after deployment.
+- Current-day compensating CherryFlash session `#1097` is `PUBLISHED_TEST` with
+  `video_url=cherryflash_full_final.mp4`, a terminal `report_written` and
+  `render_done`, and a released
+  `telegram_session:env:TELEGRAM_AUTH_BUNDLE_STORY` resource lease.
+- Event `#7618` (`Mu_tronic`) has durable `done` rows for media review,
+  Telegram publication, VK sync, ICS, Telegraph, and calendar publication.
+  Sanitized receipts are `https://t.me/c/3954607218/3243`,
+  `https://vk.com/wall-231920894_8967`, and the canonical Telegraph/ICS URLs in
+  the event row. The ordinary next-day media-review schedule remains pending by
+  design and is not an incident retry.
+- The retry-worker notification path sent one compensating success report for
+  event `#7618`; the code now emits the same bounded report automatically for
+  future durable `CREATED`/`MERGED` retry results.
+- SQLite `PRAGMA quick_check` is `ok`; `/healthz` is ready with no issues and
+  all critical scheduler/task checks are healthy.
+- Twenty consecutive strict HTTPS requests and ten TLS handshakes verified the
+  `static.kenigevents.ru` SAN after the exact CDN update. Static ICS retrieval
+  returned HTTP 200. No bucket, mail, shared DNS-zone, or unrelated Yandex Cloud
+  resource was changed.
+
 ## Follow-up Actions
 
 - [ ] Add an external strict-TLS SAN probe for `static.kenigevents.ru`.
@@ -173,10 +214,21 @@ being added to decide event meaning or identity.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
+- implementation PR: `#502`
+- implementation head: `50c5206e22e3aaf86a134697af306cf84737bfa5`
+- merge, `origin/main`, deployed, and in-container SHA:
+  `40b78c5dde888a75022832fe2fe1351a456c0775`
 - deploy path: exact merged `origin/main` through `scripts/deploy_fly_main.sh`
-- regression checks: focused pre-release suite passed; full/CI pending
-- post-deploy verification: pending
+- regression checks: focused suite `134 passed`; stricter changed-surface suite
+  `98 passed`; all required GitHub Actions on PR `#502` passed
+- post-deploy verification: Fly machine version `1974` is started with `1/1`
+  checks passing; `/healthz` reports `ok=true`, `ready=true`, database and
+  scheduler/task checks healthy; production SQLite quick-check is `ok`
+- incident projections: `#1083=PUBLISH_BLOCKED`, `#1096=FAILED`,
+  `#1097=PUBLISHED_TEST`; no post-deploy `#1083` wait spam was found in the
+  runtime file mirror
+- Smart Update recovery: event `#7618` downstream publication rows are `done`
+  and the missing accepted-retry notification was compensated
 
 ## Prevention
 
