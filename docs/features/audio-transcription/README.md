@@ -1,8 +1,9 @@
 # Telegram-native audio transcription
 
 Status: production-enabled for the private ChatGPT/OpenCode MCP since
-2026-08-15. Access still requires the separate `audio:transcribe` OAuth scope;
-Codex remains read-only and automatic/batch ingestion is not enabled.
+2026-08-15. Access accepts either the narrow `audio:transcribe` scope or the
+existing stable `telegram:publish` capability family; Codex remains read-only
+and automatic/batch ingestion is not enabled.
 
 ## Purpose
 
@@ -12,7 +13,11 @@ The recognizer is Telegram. Kaggle is the media and orchestration worker; it doe
 
 ## Public MCP surface
 
-The ChatGPT/OpenCode resource receives three tools only when `PRIVATE_EVENTS_MCP_AUDIO_TRANSCRIPTION_ENABLED=1` and the OAuth token contains `audio:transcribe`:
+The ChatGPT/OpenCode resource receives three tools only when
+`PRIVATE_EVENTS_MCP_AUDIO_TRANSCRIPTION_ENABLED=1`. A new least-privilege token
+may request `audio:transcribe`; existing ChatGPT/OpenCode connections holding
+the stable `telegram:publish` capability family receive the same typed tools
+without re-consent. `telegram:read` alone is insufficient.
 
 | Tool | Contract |
 |---|---|
@@ -126,8 +131,10 @@ spoken but does not claim an exact word instant inside that interval.
   three audio tools from `tools/list`.
 - The dedicated Premium session, private transcription group, Kaggle and
   Telegram credentials are present; automatic ingestion remains absent.
-- Existing ChatGPT/OpenCode connections must re-consent once to add
-  `audio:transcribe`; the connector URL and client identity do not change.
+- Existing ChatGPT/OpenCode connections with the stable `telegram:publish`
+  scope discover the audio tools without re-consent. A connection that was
+  intentionally authorized read-only remains read-only and may instead request
+  the narrower `audio:transcribe` scope.
 
 ## Chunking profiles
 

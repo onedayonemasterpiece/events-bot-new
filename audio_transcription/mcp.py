@@ -227,6 +227,7 @@ def build_audio_transcription_tools(
     }
     generic_output = {"type": "object", "additionalProperties": True}
     scope = frozenset({AUDIO_TRANSCRIPTION_SCOPE})
+    scope_options = (scope, frozenset({"telegram:publish"}))
     return (
         ToolSpec(
             name="audio_transcription_start",
@@ -269,6 +270,7 @@ def build_audio_transcription_tools(
             },
             output_schema=generic_output,
             scopes=scope,
+            scope_options=scope_options,
             handler=start,
             read_only=False,
             destructive=False,
@@ -300,6 +302,7 @@ def build_audio_transcription_tools(
             },
             output_schema=generic_output,
             scopes=scope,
+            scope_options=scope_options,
             handler=status,
             read_only=True,
             destructive=False,
@@ -333,6 +336,7 @@ def build_audio_transcription_tools(
             },
             output_schema=generic_output,
             scopes=scope,
+            scope_options=scope_options,
             handler=get_result,
             read_only=True,
             destructive=False,
