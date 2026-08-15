@@ -132,6 +132,42 @@ def validate_snapshot_input(db_path: Path, config: dict) -> dict:
             raise RuntimeError('mounted production snapshot hash/size mismatch')
         with sqlite3.connect(str(db_path)) as con:
             quick_check = str(con.execute('pragma quick_check').fetchone()[0]).lower()
+            projection_schema = str(
+                snapshot.get('projection_schema_version') or ''
+            ).strip()
+            if projection_schema:
+                if projection_schema != 'static_site_projection_sqlite_v1':
+                    raise RuntimeError('mounted projection schema mismatch')
+                expected_counts = snapshot.get('table_row_counts')
+                if not isinstance(expected_counts, dict) or not expected_counts:
+                    raise RuntimeError('mounted projection row-count manifest missing')
+                actual_tables = {
+                    str(row[0])
+                    for row in con.execute(
+                        "select name from sqlite_master "
+                        "where type='table' and name not like 'sqlite_%'"
+                    )
+                }
+                if actual_tables != set(expected_counts):
+                    raise RuntimeError('mounted projection table inventory mismatch')
+                forbidden = {
+                    'joboutbox', 'ops_run', 'vk_inbox', 'vk_source_packet',
+                    'kaggle_run_event', 'kaggle_run_ledger', 'resource_lease',
+                }
+                if actual_tables & forbidden:
+                    raise RuntimeError('mounted projection contains operational tables')
+                for table, expected_count in expected_counts.items():
+                    if not re.fullmatch(r'[a-z_][a-z0-9_]*', str(table)):
+                        raise RuntimeError('mounted projection table name invalid')
+                    actual_count = int(
+                        con.execute(
+                            f'select count(*) from "{table}"'
+                        ).fetchone()[0]
+                    )
+                    if actual_count != int(expected_count):
+                        raise RuntimeError(
+                            f'mounted projection row-count mismatch: {table}'
+                        )
         if quick_check != 'ok':
             raise RuntimeError(f'mounted production snapshot quick_check failed: {quick_check}')
     return snapshot
@@ -287,7 +323,9 @@ def cleanup_transient_workspace() -> None:
     """Remove large throwaway dependencies without deleting recoverable outputs.
 
     Keep files that are useful after a failed long run, especially
-    ``event_related_chain_cache.json`` and the copied SQLite DB.  The Node 22
+    ``event_related_chain_cache.json``.  Immutable SQLite input stays mounted
+    read-only under ``/kaggle/input`` and must never become a Kaggle output.
+    Any legacy/accidental working SQLite copy is removed fail-closed. The Node 22
     npm install can be hundreds of megabytes and must never be left in
     ``/kaggle/working`` where Kaggle publishes it as an output artifact.
     """
@@ -302,6 +340,18 @@ def cleanup_transient_workspace() -> None:
                 shutil.rmtree(path, ignore_errors=True)
         except Exception as exc:
             print(f'[static-site-builder] transient cleanup failed for {path}: {exc}', flush=True)
+    for path in WORKING.glob('*.sqlite*'):
+        if path.is_file() and not path.is_symlink():
+            try:
+                path.unlink()
+                print(
+                    f'[static-site-builder] removed forbidden SQLite output {path.name}',
+                    flush=True,
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    f'forbidden SQLite output cleanup failed: {path.name}: {exc}'
+                ) from exc
 
 
 def run(
@@ -487,10 +537,10 @@ def export_preview_data_if_configured(config: dict) -> None:
     db_path = find_input_file(db_filename) if db_filename else None
     if not db_path:
         raise FileNotFoundError(f'Kaggle export requested but sqlite DB not found: {db_filename}')
-    working_db_path = WORKING / db_filename
-    if not working_db_path.exists():
-        shutil.copy2(db_path, working_db_path)
-    db_path = working_db_path
+    # Kaggle input datasets are immutable/read-only. The exporter is read-only,
+    # so copying this database into /kaggle/working only wastes space and causes
+    # Kaggle to publish the private projection back as an output artifact.
+    db_path = db_path.resolve()
     snapshot = validate_snapshot_input(db_path, config)
     exporter = SITE_DIR / 'scripts' / 'export-production-preview-data.py'
     if not exporter.exists():

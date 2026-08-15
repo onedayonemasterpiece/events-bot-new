@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- **StaticSiteBuilder Fly-volume containment:** replaced the full production
+  SQLite handoff with a bounded, hash/row-count/quick-check bound static-only
+  projection that excludes VK raw packets, inbox, outbox, ops and Kaggle
+  ledgers. Projection creation closes its short live read transaction before
+  remote work; runner dataset staging is content-addressed and avoids a second
+  allocation, Kaggle reads the mounted projection in place and forbids SQLite
+  outputs, and downloaded validation/publication artifacts now use `/tmp`
+  rather than the persistent `/data` volume. Exact dataset/run adoption and
+  fail-closed result/publication identity remain unchanged.
 - **Smart Update / VK linear incident remediation:** replaced unchanged-evidence
   semantic and background technical retry loops with same-call closed location
   actions and visible `FAILED_TECHNICAL` terminals; the old worker is default

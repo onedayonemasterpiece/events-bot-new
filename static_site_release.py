@@ -31,6 +31,8 @@ from zoneinfo import ZoneInfo
 
 REQUEST_SCHEMA = "static_site_build_request_v1"
 SNAPSHOT_SCHEMA = "static_site_sqlite_snapshot_v1"
+PROJECTION_SNAPSHOT_SCHEMA = "static_site_projection_snapshot_v1"
+PROJECTION_CONTENT_SCHEMA = "static_site_projection_sqlite_v1"
 RELEASE_CHANNEL_SECRET = "secret_preview"
 MAX_REASONS = 24
 MAX_EVENT_IDS = 256
@@ -58,6 +60,47 @@ STATIC_SITE_COUNT_KEYS = (
     "object_count",
     "bytes",
 )
+
+# The Astro exporter is deliberately isolated from operational ingestion and
+# scheduler state.  These are the only SQLite relations it is allowed to see
+# in a production-candidate input.  Keeping the inventory beside the immutable
+# snapshot implementation makes the data boundary reviewable and testable;
+# adding a new exporter query requires changing this contract and its parity
+# tests instead of silently shipping the whole production database to Kaggle.
+STATIC_SITE_PROJECTION_TABLES: tuple[str, ...] = (
+    "artist_registry_entity",
+    "event",
+    "event_artist_appearance",
+    "event_image_geometry",
+    "event_publication",
+    "event_source",
+    "event_video_link",
+    "eventposter",
+    "festival_calendar_item",
+    "interest_club",
+    "interest_club_evaluation",
+    "interest_club_event",
+    "organization",
+    "poll_repost_run",
+    "promo_exposure",
+    "social_metric_snapshot",
+    "telegram_post_metric",
+    "user",
+    "video_asset",
+    "vk_post_metric",
+)
+STATIC_SITE_OPERATIONAL_TABLES: frozenset[str] = frozenset(
+    {
+        "joboutbox",
+        "ops_run",
+        "vk_inbox",
+        "vk_source_packet",
+        "kaggle_run_event",
+        "kaggle_run_ledger",
+        "resource_lease",
+    }
+)
+DEFAULT_STATIC_SITE_PROJECTION_MAX_BYTES = 256 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -189,6 +232,39 @@ def static_site_scratch_root(
     return root / ".tmp"
 
 
+def static_site_runtime_scratch_root() -> Path:
+    """Return ephemeral process scratch, never the persistent Fly volume."""
+
+    configured = (
+        os.getenv("STATIC_SITE_RUNTIME_SCRATCH_ROOT")
+        or os.getenv("RUNTIME_SCRATCH_PATH")
+        or tempfile.gettempdir()
+    ).strip()
+    return Path(configured).expanduser().resolve()
+
+
+def static_site_output_root() -> Path:
+    """Return ephemeral downloaded-output staging for the host validator."""
+
+    configured = (os.getenv("STATIC_SITE_OUTPUT_SCRATCH_DIR") or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return static_site_runtime_scratch_root() / "static_site_builder_outputs"
+
+
+def static_site_projection_root() -> Path:
+    """Return ephemeral immutable-input staging before Kaggle owns the bytes."""
+
+    configured = (
+        os.getenv("STATIC_SITE_PROJECTION_SCRATCH_DIR")
+        or os.getenv("STATIC_SITE_SNAPSHOT_DIR")
+        or ""
+    ).strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return static_site_runtime_scratch_root() / "static_site_projections"
+
+
 def static_site_result_counts(
     result: Mapping[str, Any],
     *,
@@ -238,6 +314,9 @@ class SnapshotMetadata:
     max_event_updated_at: str | None
     max_event_revision: str | None
     event_revisions: dict[str, str]
+    projection_schema_version: str | None = None
+    table_row_counts: dict[str, int] | None = None
+    source_table_row_counts: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -1519,6 +1598,240 @@ def finish_static_site_build_claim(
         connection.close()
 
 
+def _projection_max_bytes() -> int:
+    raw = (os.getenv("STATIC_SITE_PROJECTION_MAX_BYTES") or "").strip()
+    if not raw:
+        return DEFAULT_STATIC_SITE_PROJECTION_MAX_BYTES
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise StaticSitePermanentError(
+            "static_site_projection_max_bytes_invalid"
+        ) from exc
+    if value < 1024 * 1024:
+        raise StaticSitePermanentError(
+            "static_site_projection_max_bytes_below_minimum"
+        )
+    return value
+
+
+def _projection_read_max_seconds() -> float:
+    raw = (os.getenv("STATIC_SITE_PROJECTION_READ_MAX_SECONDS") or "").strip()
+    try:
+        value = float(raw) if raw else 60.0
+    except ValueError as exc:
+        raise StaticSitePermanentError(
+            "static_site_projection_read_timeout_invalid"
+        ) from exc
+    return max(5.0, min(value, 300.0))
+
+
+def _copy_projection_table(
+    source: sqlite3.Connection,
+    destination: sqlite3.Connection,
+    table: str,
+    *,
+    deadline: float,
+) -> int:
+    """Copy one allowlisted relation without indexes, triggers or side tables."""
+
+    schema = source.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    if not schema or not schema[0]:
+        return 0
+    destination.execute(str(schema[0]))
+    cursor = source.execute(f'SELECT * FROM "{table}"')
+    columns = [str(item[0]) for item in cursor.description or ()]
+    if not columns:
+        return 0
+    quoted = ",".join(f'"{name}"' for name in columns)
+    placeholders = ",".join("?" for _ in columns)
+    insert_sql = f'INSERT INTO "{table}" ({quoted}) VALUES ({placeholders})'
+    copied = 0
+    while True:
+        if unix_time.monotonic() > deadline:
+            raise StaticSiteRetryableError(
+                "static_site_projection_read_transaction_timeout"
+            )
+        rows = cursor.fetchmany(512)
+        if not rows:
+            break
+        destination.executemany(insert_sql, rows)
+        copied += len(rows)
+    return copied
+
+
+def create_immutable_projection_snapshot(
+    source_db: str | os.PathLike[str],
+    snapshot_dir: str | os.PathLike[str],
+    *,
+    request_payload: Mapping[str, Any],
+    snapshot_id: str | None = None,
+    now: datetime | None = None,
+) -> tuple[Path, Path, SnapshotMetadata]:
+    """Materialize the bounded SQLite read model consumed by the Astro exporter.
+
+    The live database read transaction exists only while allowlisted rows are
+    copied to process scratch.  It is closed before hashing, Kaggle upload or
+    the remote wait, so this handoff cannot pin the production WAL for the
+    duration of a build.  Operational ingestion, scheduler and Kaggle-ledger
+    relations are structurally unrepresentable in the resulting database.
+    """
+
+    source_path = Path(source_db).resolve()
+    if not source_path.is_file():
+        raise StaticSitePermanentError(
+            f"snapshot_source_missing:{source_path.name}"
+        )
+    target_dir = Path(snapshot_dir).resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    clean_id = _clean_token(snapshot_id, max_len=100) or (
+        f"snapshot-{uuid.uuid4().hex}"
+    )
+    if not all(ch.isalnum() or ch in "._-" for ch in clean_id):
+        raise StaticSitePermanentError("invalid_snapshot_id")
+    final_path = target_dir / f"{clean_id}.sqlite"
+    manifest_path = target_dir / f"{clean_id}.manifest.json"
+    if final_path.exists() or manifest_path.exists():
+        raise StaticSitePermanentError(f"immutable_snapshot_exists:{clean_id}")
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{clean_id}.", suffix=".tmp", dir=target_dir
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    source_connection: sqlite3.Connection | None = None
+    destination: sqlite3.Connection | None = None
+    table_row_counts: dict[str, int] = {}
+    source_table_row_counts: dict[str, int] = {}
+    started = unix_time.monotonic()
+    try:
+        source_connection = _readonly_sqlite_connection(source_path)
+        source_connection.execute("PRAGMA query_only=ON")
+        source_connection.execute("BEGIN")
+        destination = sqlite3.connect(tmp_path, timeout=60.0)
+        destination.execute("PRAGMA foreign_keys=OFF")
+        destination.execute("PRAGMA journal_mode=DELETE")
+        deadline = started + _projection_read_max_seconds()
+        existing = {
+            str(row[0])
+            for row in source_connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "event" not in existing:
+            raise StaticSitePermanentError(
+                "static_site_projection_event_table_missing"
+            )
+        destination.execute("BEGIN")
+        for table in STATIC_SITE_PROJECTION_TABLES:
+            if table not in existing:
+                continue
+            source_count = int(
+                source_connection.execute(
+                    f'SELECT count(*) FROM "{table}"'
+                ).fetchone()[0]
+            )
+            copied = _copy_projection_table(
+                source_connection,
+                destination,
+                table,
+                deadline=deadline,
+            )
+            if copied != source_count:
+                raise StaticSitePermanentError(
+                    f"static_site_projection_row_count_mismatch:{table}"
+                )
+            source_table_row_counts[table] = source_count
+            table_row_counts[table] = copied
+        destination.commit()
+        # End the production read transaction before any potentially slow
+        # compaction, hashing or remote work.
+        source_connection.rollback()
+        source_connection.close()
+        source_connection = None
+
+        destination.execute("VACUUM")
+        quick_check = _quick_check(destination)
+        max_event_id, max_event_updated_at = _event_snapshot_facts(destination)
+        destination.close()
+        destination = None
+        with tmp_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        size_bytes = tmp_path.stat().st_size
+        max_bytes = _projection_max_bytes()
+        if size_bytes <= 0 or size_bytes > max_bytes:
+            raise StaticSiteRetryableError(
+                "static_site_projection_size_out_of_bounds:"
+                f"size_bytes={size_bytes}:max_bytes={max_bytes}"
+            )
+        sha256 = _sha256_file(tmp_path)
+        revisions = {
+            str(key): str(value)
+            for key, value in (request_payload.get("event_revisions") or {}).items()
+            if str(key).isdigit() and value
+        }
+        metadata = SnapshotMetadata(
+            schema_version=PROJECTION_SNAPSHOT_SCHEMA,
+            snapshot_id=clean_id,
+            source_database_name=source_path.name,
+            sqlite_filename=final_path.name,
+            created_at=iso_utc(now),
+            quick_check=quick_check,
+            sha256=sha256,
+            size_bytes=size_bytes,
+            target_watermark=str(
+                request_payload.get("target_watermark")
+                or request_watermark(request_payload)
+            ),
+            latest_effect_at=(
+                str(request_payload.get("latest_effect_at") or "") or None
+            ),
+            max_event_id=max_event_id,
+            max_event_updated_at=max_event_updated_at,
+            max_event_revision=max(revisions.values(), default=None),
+            event_revisions=revisions,
+            projection_schema_version=PROJECTION_CONTENT_SCHEMA,
+            table_row_counts=table_row_counts,
+            source_table_row_counts=source_table_row_counts,
+        )
+        os.replace(tmp_path, final_path)
+        manifest_tmp = manifest_path.with_suffix(manifest_path.suffix + ".tmp")
+        manifest_tmp.write_text(
+            json.dumps(
+                asdict(metadata),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with manifest_tmp.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(manifest_tmp, manifest_path)
+        return final_path, manifest_path, metadata
+    except StaticSiteReleaseError:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    except sqlite3.Error as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise StaticSiteRetryableError(
+            f"sqlite_projection_failed:{exc.__class__.__name__}:{exc}"
+        ) from exc
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    finally:
+        if destination is not None:
+            destination.close()
+        if source_connection is not None:
+            source_connection.rollback()
+            source_connection.close()
+
+
 def create_immutable_snapshot(
     source_db: str | os.PathLike[str],
     snapshot_dir: str | os.PathLike[str],
@@ -1612,13 +1925,49 @@ def validate_snapshot(snapshot_path: str | os.PathLike[str], manifest_path: str 
         metadata = SnapshotMetadata(**payload)
     except Exception as exc:
         raise StaticSitePermanentError(f"invalid_snapshot_manifest:{exc}") from exc
-    if metadata.schema_version != SNAPSHOT_SCHEMA or metadata.sqlite_filename != snapshot.name:
+    if metadata.schema_version not in {
+        SNAPSHOT_SCHEMA,
+        PROJECTION_SNAPSHOT_SCHEMA,
+    } or metadata.sqlite_filename != snapshot.name:
         raise StaticSitePermanentError("snapshot_manifest_identity_mismatch")
     if snapshot.stat().st_size != metadata.size_bytes or _sha256_file(snapshot) != metadata.sha256:
         raise StaticSitePermanentError("snapshot_hash_or_size_mismatch")
     connection = _readonly_sqlite_connection(snapshot)
     try:
         _quick_check(connection)
+        if metadata.schema_version == PROJECTION_SNAPSHOT_SCHEMA:
+            if metadata.projection_schema_version != PROJECTION_CONTENT_SCHEMA:
+                raise StaticSitePermanentError(
+                    "static_site_projection_schema_mismatch"
+                )
+            actual_tables = {
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
+            }
+            unexpected = actual_tables - set(STATIC_SITE_PROJECTION_TABLES)
+            if unexpected or actual_tables & STATIC_SITE_OPERATIONAL_TABLES:
+                raise StaticSitePermanentError(
+                    "static_site_projection_contains_unexpected_tables:"
+                    + ",".join(sorted(unexpected or (actual_tables & STATIC_SITE_OPERATIONAL_TABLES)))
+                )
+            expected_counts = metadata.table_row_counts or {}
+            if set(expected_counts) != actual_tables:
+                raise StaticSitePermanentError(
+                    "static_site_projection_table_inventory_mismatch"
+                )
+            for table, expected in expected_counts.items():
+                actual = int(
+                    connection.execute(
+                        f'SELECT count(*) FROM "{table}"'
+                    ).fetchone()[0]
+                )
+                if actual != int(expected):
+                    raise StaticSitePermanentError(
+                        f"static_site_projection_row_count_mismatch:{table}"
+                    )
     finally:
         connection.close()
     return metadata

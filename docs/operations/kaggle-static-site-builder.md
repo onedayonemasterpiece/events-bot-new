@@ -28,7 +28,7 @@ fixture tests.
 
 `production-candidate` now requires `collection_semantic_compute=true` even when
 legacy Unusual publication is disabled and related results remain pgvector. The
-existing kernel passes the same immutable SQLite snapshot to the exporter, which
+existing kernel passes the same immutable compact SQLite projection to the exporter, which
 materializes exact collections/venue/club projections, encodes changed
 `collection_semantics_v1` rows and the namespaced prototype union once, and
 writes `collection-batch-v1.json`. Astro consumes files only after the kernel
@@ -65,7 +65,7 @@ The production rail is a durable state machine, not a local process lock:
 
 1. Smart Update and the operator endpoint coalesce effects into one singleton
    outbox request; a changed effect during a run becomes one follow-up.
-2. A read-only immutable snapshot and one `Europe/Kaliningrad` build clock feed
+2. A read-only immutable static projection and one `Europe/Kaliningrad` build clock feed
    a canonical public-projection SHA-256. Queue attempts, timestamps and elapsed
    past-only churn are excluded; public event/media/config/repo/date/related
    inputs are included.
@@ -112,7 +112,7 @@ owned by SQLite claim/CAS, Kaggle dataset identity, result receipt and
 conditional Object Storage writes.
 
 ```text
-immutable Fly SQLite snapshot
+immutable compact Fly static projection
   -> one Kaggle CPU build with status ledger
   -> checked production-form artifact + release manifest
   -> create-only unlisted secret prefix (current production phase)
@@ -122,7 +122,7 @@ immutable Fly SQLite snapshot
 Rules:
 
 - one private input dataset per run;
-- one immutable snapshot per build; new updates during a build queue a later build, they do not mutate the running build;
+- one immutable projection per build; new updates during a build queue a later build, they do not mutate the running build;
 - resource lease: `static_site:builder`; two production builds must not publish concurrently;
 - after a Fly restart, a matching terminal Kaggle ledger row immediately
   re-arms its exact JobOutbox owner for adoption/failure reconciliation; later
@@ -389,15 +389,24 @@ deleting that complete immutable prefix; root/current remain untouched.
 
 ### Fly artifact and scratch capacity
 
-Persistent builder state is rooted at `STATIC_SITE_ARTIFACT_ROOT` (production:
-`/data/static_site_builder`) and its working scratch at
-`STATIC_SITE_SCRATCH_DIR` (production: `/data/static_site_builder/tmp`). The
-generic process scratch filesystem is independently checked through
-`RUNTIME_SCRATCH_PATH` (production: `/tmp`). Both persistent storage and root
-scratch need configured free-space headroom and a successful real temporary
-file create, write, `fsync` and remove probe before a remote push. A writable
-`/data` therefore cannot mask an exhausted root overlay that makes Python
-`tempfile` unusable.
+Persistent builder state under `STATIC_SITE_ARTIFACT_ROOT` (production:
+`/data/static_site_builder`) is limited to small validated semantic
+caches/receipts and the local runner lock. Large reproducible bytes never use
+the Fly volume: projection/dataset work uses `STATIC_SITE_SCRATCH_DIR`, the
+immutable projection uses `STATIC_SITE_PROJECTION_SCRATCH_DIR`, and downloaded
+result validation uses `STATIC_SITE_OUTPUT_SCRATCH_DIR` (all production
+defaults are below `/tmp`). Root scratch is checked with a real create, write,
+`fsync` and remove probe before a remote push.
+
+The production input is `static_site_projection_sqlite_v1`, not a full SQLite
+backup. A short read-only transaction copies only the explicit Astro-exporter
+table allowlist into a compact, index-free SQLite read model, commits exact
+row counts, closes the live source connection, then performs `quick_check`,
+size cap and SHA-256 binding. Operational relations such as `vk_source_packet`,
+`vk_inbox`, `joboutbox`, `ops_run` and Kaggle ledgers are structurally excluded.
+The manifest table inventory and row counts are revalidated by the runner and
+kernel. This transaction must be closed before dataset upload/polling so the
+static build cannot pin the production WAL.
 
 Runner build identities are bounded to `preview-*` or `production-*` before
 constructing any filesystem path. Output creation uses one assertion-safe
@@ -406,7 +415,7 @@ symlink before download/adoption; it never calls permissive `rmtree(...,
 ignore_errors=True)` on a derived path.
 
 After a durable terminal receipt, the runner prunes only recognized
-`output-production-*` trees below the configured artifact root. Default
+`output-production-*` trees below the configured ephemeral output root. Default
 terminal retention is zero because counts/hashes needed for diagnostics are
 persisted in SQLite/the receipt. The exact active or recoverable handoff is
 always preserved; unknown directories, symlinks and paths outside the root are
@@ -414,9 +423,9 @@ fail-closed and never removed. Failed/nonterminal outputs remain available for
 explicit incident disposition rather than being mistaken for regenerable
 success artifacts.
 
-Downloaded immutable archives remain under the persistent artifact root until
-their terminal receipt is durable, but their expanded publication trees do
-not. Secret-candidate and optional atomic-root publishers extract into an
+Downloaded immutable archives remain under ephemeral process scratch until
+their terminal receipt is durable. Secret-candidate and optional atomic-root
+publishers extract into an
 isolated `TemporaryDirectory` on generic process scratch (`/tmp` by default,
 or `STATIC_SITE_PUBLICATION_SCRATCH_DIR`) and remove it on both success and
 failure. This prevents a roughly 600 MB generated tree from being duplicated
@@ -424,8 +433,8 @@ on the 3 GB Fly volume during create-only upload and object verification. The
 publication call stays in `asyncio.to_thread`, so the API/event loop remains
 responsive while the storage client performs the bounded object walk.
 
-Capacity recovery runs before the durable-space probe. The Fly owner removes
-all complete snapshots except the exact paths named by a readable active
+Capacity recovery runs before the scratch-space probe. The Fly owner removes
+all complete projection files except the exact paths named by a readable active
 handoff; an unreadable active handoff still fails closed. After acquiring the
 single local runner lock and before creating a new staging tree, the Kaggle
 launcher removes only real, non-symlink `static-site-kaggle-*` directories
@@ -433,14 +442,19 @@ inside its configured scratch root. Those directories are owned by
 `TemporaryDirectory` during a normal run, so their presence before a new
 locked run is evidence of process death. Unknown paths and symlinks are never
 followed or removed. This ordering ensures that a regenerable staged SQLite
-copy cannot itself cause the next storage preflight to fail.
+copy cannot itself cause the next storage preflight to fail. Dataset staging
+hard-links the immutable projection when source and dataset scratch share a
+filesystem; it never creates another DB-sized allocation merely to satisfy the
+directory-oriented Kaggle API.
 
-The host gate also reserves the current SQLite main-file size before creating
-the immutable online-backup snapshot. Available bytes must cover that copy
-*and* leave `STATIC_SITE_STORAGE_CRITICAL_FREE_MB` afterward. The runner's
-post-snapshot probe remains a second boundary check, but it is not the first
-place an oversized copy is discovered; an impossible build defers without a
-temporary full-DB allocation and retry loop.
+The mounted projection is read directly under `/kaggle/input`. It is never
+copied to `/kaggle/working`, and cleanup removes any legacy/accidental
+`*.sqlite*` working file so private SQLite bytes cannot become Kaggle output.
+The private dataset reference is content-addressed from the complete staged
+payload. Once that exact dataset identity is durable, restart adoption uses its
+stored projection manifest/SHA/size even if local process scratch disappeared;
+it still requires exact kernel dataset-source identity and result hashes and
+never pushes a replacement for a matching live/terminal run.
 
 Production health reports persistent and scratch disk separately. A critical
 or unwritable `/tmp` keeps `/healthz` not ready and blocks the static preflight
@@ -448,12 +462,15 @@ even during startup grace. The coalesced request is deferred without incrementin
 its finite attempt counter until cleanup or deploy restores capacity; it must
 not be bypassed by sending another Kaggle attempt.
 
-An exact recoverable remote handoff is adopted and reconciled before the
-durable free-space gate for a new build. The already-downloaded checked output
-may itself be the object keeping `/data` below that next-build threshold; after
-successful reconciliation it is deleted, and only then may a later request
-allocate a new snapshot. Active handoff output must not be removed blindly to
-make room.
+An exact recoverable remote handoff is adopted and reconciled before a new
+build. Active handoff output must not be removed blindly; only the exact
+terminal owner is eligible for bounded ephemeral cleanup.
+
+Direct Kaggle-to-Yandex artifact staging remains the next transport phase. It
+must use a separate least-privileged staging/review identity and leave Fly as
+the manifest-validation and root-promotion authority. Until that gate is
+implemented, checked archives may transit through `/tmp` for the existing
+create-only Yandex publisher, but never through `/data`.
 
 The adoption runner applies the same ordering internally: it verifies the
 fixed remote dataset and completed kernel, removes only the replaceable local
