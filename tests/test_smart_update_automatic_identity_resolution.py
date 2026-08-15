@@ -883,8 +883,13 @@ async def test_accepted_domain_write_survives_attempt_ack_failure_and_exact_repl
             check_source_url=False,
             schedule_tasks=False,
         )
-        assert created.outcome is SmartUpdateTerminalOutcome.CREATED
-        assert created.event_id is not None
+        assert created.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        assert created.event_id is None
+        assert created.diagnostic_event_id is not None
+        failed_counts = await smart_update_funnel_counts(db)
+        assert failed_counts["FAILED_TECHNICAL"] == 1
+        assert failed_counts["RETRY_SCHEDULED"] == 0
+        assert failed_counts["attempt_unresolved"] == 0
 
         monkeypatch.setattr(su, "finish_candidate_attempt", real_finish)
         replay = await su.smart_event_update(
@@ -894,9 +899,10 @@ async def test_accepted_domain_write_survives_attempt_ack_failure_and_exact_repl
             schedule_tasks=False,
         )
         assert replay.outcome is SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
-        assert replay.event_id == created.event_id
+        assert replay.event_id == created.diagnostic_event_id
         counts = await smart_update_funnel_counts(db)
         assert counts["NOOP_EXACT_REPLAY"] == 1
+        assert counts["FAILED_TECHNICAL"] == 0
         assert counts["terminal_unresolved"] == 0
         assert counts["attempt_starts"] == counts["attempt_terminals"] == 2
         assert counts["attempt_unresolved"] == 0
