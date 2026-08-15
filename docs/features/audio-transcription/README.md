@@ -1,6 +1,8 @@
 # Telegram-native audio transcription
 
-Status: implementation skeleton complete; default off; no production activation in this change.
+Status: production-enabled for the private ChatGPT/OpenCode MCP since
+2026-08-15. Access still requires the separate `audio:transcribe` OAuth scope;
+Codex remains read-only and automatic/batch ingestion is not enabled.
 
 ## Purpose
 
@@ -64,6 +66,13 @@ ChatGPT fileParams
 
 Telegram returns text but no word or phrase timestamps. The system therefore binds every returned text block to the exact source range that produced the temporary voice note.
 
+Uploading, converting, and sending a chunk to Telegram do not change this
+timeline. The worker plans ranges on the decoded timeline of the original
+source and retains each original `source_start_ms` / `source_end_ms` while
+ffmpeg creates a temporary voice-note representation. Telegram message time,
+upload time, Kaggle start time, temporary-file `mtime`, and transcoded duration
+are never used as the recording anchor.
+
 For each segment:
 
 ```text
@@ -94,6 +103,31 @@ Without a trustworthy anchor:
 ```text
 [00:00:16.420] Сегодня мы поговорим об истории этого здания.
 ```
+
+For photo/video correlation, prefer the JSON result: every segment contains
+both the source-relative millisecond range and, when an anchor is trustworthy,
+`absolute_start` / `absolute_end`. Plain TXT intentionally has no timing;
+timeline TXT has the readable absolute/relative timeline; SRT and VTT retain
+the source-relative timeline. A photo timestamp can therefore be matched to
+the segment interval that contains it without using any upload timestamp.
+
+Current precision is chunk-level, not word-level. With `precision=phrase` the
+normal target is about 45 seconds (pause-aware, bounded to 90 seconds), so the
+system truthfully identifies the source interval in which a phrase block was
+spoken but does not claim an exact word instant inside that interval.
+
+## Production rollout
+
+- PR [#505](https://github.com/onedayonemasterpiece/events-bot-new/pull/505)
+  merged as `f0d5f3b4de8d968fd1b43ec5b07ffda33409ecca` after all required CI jobs passed.
+- The exact merged SHA was deployed through `scripts/deploy_fly_main.sh`; the
+  Fly health check passed and the in-container immutable SHA matched.
+- The production OAuth/MCP smoke requested `audio:transcribe` and returned all
+  three audio tools from `tools/list`.
+- The dedicated Premium session, private transcription group, Kaggle and
+  Telegram credentials are present; automatic ingestion remains absent.
+- Existing ChatGPT/OpenCode connections must re-consent once to add
+  `audio:transcribe`; the connector URL and client identity do not change.
 
 ## Chunking profiles
 

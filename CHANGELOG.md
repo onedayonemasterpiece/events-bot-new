@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / audio transcription production rollout:** after the
+  dedicated-session Telegram/Kaggle canary and green PR CI, enabled the three
+  `audio:transcribe`-scoped tools on the existing private ChatGPT/OpenCode MCP.
+  Source-relative offsets remain bound to the original recording through all
+  conversions; JSON/timeline exports add absolute time only from an explicit or
+  metadata-backed recording anchor. Automatic ingestion remains disabled.
 - **Private Events MCP / Telegram-native audio transcription (default off):**
   added owner-bound audio `fileParams` ingress, durable idempotent jobs, a
   pause-aware CPU Kaggle ffmpeg worker, dedicated guarded Telethon session,

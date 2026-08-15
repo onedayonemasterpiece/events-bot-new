@@ -1,5 +1,11 @@
 # Final live-integration task for the coding agent
 
+Status: completed on 2026-08-15. The default-off canary below passed and its
+sanitized receipt is attached to PR #505. The user then explicitly authorized
+the subsequent exact-main production rollout; current operational status is
+recorded in `README.md`. This file is retained as the historical canary
+contract, not as a current instruction to disable the production feature.
+
 The implementation and repository integration are already complete. Do not redesign the architecture, rename the MCP tools, add another ASR, or reuse an existing Telegram session.
 
 Perform only the live canary closure:
