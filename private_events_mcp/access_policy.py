@@ -3,6 +3,7 @@ from __future__ import annotations
 from .social_workspace import SOCIAL_WORKSPACE_SCOPES
 
 READ_SCOPES = frozenset({"events:read", "incidents:read", "operations:read"})
+AUDIO_TRANSCRIPTION_SCOPES = frozenset({"audio:transcribe"})
 LEGACY_SOCIAL_SCOPES = frozenset(
     {"telegram:read", "telegram:publish", "vk:read", "vk:publish"}
 )
@@ -87,6 +88,8 @@ def social_scopes_authorized(
 CHATGPT_DEFAULT_SCOPES = READ_SCOPES
 CODEX_DEFAULT_SCOPES = READ_SCOPES
 OPENCODE_DEFAULT_SCOPES = READ_SCOPES
-CHATGPT_MAX_SCOPES = READ_SCOPES | SOCIAL_SCOPES | {"offline_access"}
+CHATGPT_MAX_SCOPES = (
+    READ_SCOPES | SOCIAL_SCOPES | AUDIO_TRANSCRIPTION_SCOPES | {"offline_access"}
+)
 CODEX_MAX_SCOPES = READ_SCOPES | {"offline_access"}
 OPENCODE_MAX_SCOPES = CHATGPT_MAX_SCOPES

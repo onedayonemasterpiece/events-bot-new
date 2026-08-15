@@ -1,0 +1,15 @@
+{
+  "id": "zigomaro/events-bot-audio-transcription",
+  "title": "Events Bot Audio Transcription",
+  "code_file": "audio_transcription.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "slug": "events-bot-audio-transcription",
+  "events_bot_disable_status_instrumentation": true
+}

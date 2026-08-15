@@ -1,6 +1,22 @@
 # Changelog
 
 ## [Unreleased]
+- **Private Events MCP / Telegram-native audio transcription (default off):**
+  added owner-bound audio `fileParams` ingress, durable idempotent jobs, a
+  pause-aware CPU Kaggle ffmpeg worker, dedicated guarded Telethon session,
+  native Telegram transcription, truthful relative/absolute timestamps and
+  digest-verified TXT/timeline/JSON/SRT/VTT exports. Codex remains exact-seven;
+  the dedicated Premium-session live canary completed successfully before the
+  controlled production rollout.
+- **Fixed — audio transcription Telegram internal-DC retry:** a live canary
+  exposed Telethon exhausting its short `TranscribeAudioRequest` retries on
+  `InterdcCallErrorError`; the worker now applies bounded backoff to the same
+  temporary voice message instead of failing immediately or uploading a
+  duplicate message.
+- **Fixed — private audio transcription peer resolution:** the Kaggle worker
+  can resolve a private numeric supergroup from the dedicated account's dialogs,
+  avoiding account-specific Saved Messages transcription failures without
+  requiring a public group username.
 - **SQLite maintenance safety:** periodic full-database `VACUUM` is now
   default-disabled and requires the explicit `ENABLE_DB_FULL_VACUUM=1` opt-in,
   preventing its DB-sized WAL rewrite from colliding with snapshot/vector work.
