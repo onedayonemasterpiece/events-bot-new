@@ -872,6 +872,12 @@ def _env_enabled(key: str, *, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _db_full_vacuum_enabled() -> bool:
+    """Keep the DB-rewriting maintenance operation an explicit opt-in."""
+
+    return _env_enabled("ENABLE_DB_FULL_VACUUM", default=False)
+
+
 def _env_int(key: str, default: int) -> int:
     try:
         return int((os.getenv(key) or str(default)).strip())
@@ -5771,18 +5777,24 @@ def startup(
             coalesce=True,
             misfire_grace_time=30,
         )
-        _register_job(
-            "db_vacuum",
-            _job_wrapper("db_vacuum", _run_maintenance, notify_skip=_notify_admin_skip),
-            "interval",
-            id="db_vacuum",
-            hours=12,
-            args=[partial(vacuum, db.engine), "VACUUM", 120.0],
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-            misfire_grace_time=30,
-        )
+        if _db_full_vacuum_enabled():
+            _register_job(
+                "db_vacuum",
+                _job_wrapper("db_vacuum", _run_maintenance, notify_skip=_notify_admin_skip),
+                "interval",
+                id="db_vacuum",
+                hours=12,
+                args=[partial(vacuum, db.engine), "VACUUM", 120.0],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=30,
+            )
+        else:
+            logging.info(
+                "db_maintenance VACUUM schedule disabled; "
+                "set ENABLE_DB_FULL_VACUUM=1 only after capacity review"
+            )
         if cleanup_post_metrics is not None:
             _register_job(
                 "post_metrics_cleanup",

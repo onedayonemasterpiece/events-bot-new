@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- **SQLite maintenance safety:** periodic full-database `VACUUM` is now
+  default-disabled and requires the explicit `ENABLE_DB_FULL_VACUUM=1` opt-in,
+  preventing its DB-sized WAL rewrite from colliding with snapshot/vector work.
 - **SEV-1 ingestion retry/WAL recurrence:** opened
   `INC-2026-08-15-ingestion-retry-stall-and-wal-growth` after the operator
   reported low configured-source event yield, visible Smart Update grounding
