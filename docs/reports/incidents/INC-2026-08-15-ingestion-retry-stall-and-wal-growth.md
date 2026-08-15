@@ -232,7 +232,9 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   official parsers, Smart Update retry consumption and WAL checkpoint reuse;
 - [x] deploy the independently safe WAL recurrence containment from exact main;
 - [x] implement evidence-backed linear Smart/VK/TG/parser changes with focused
-  regression replays; integrated CI, deploy and production catch-up remain due;
+  regression replays, including positive/opposite VK controls through the full
+  persist boundary on a production shadow copy; exact-main CI, deploy and
+  production catch-up remain due;
 - [x] replace the whole-DB StaticSiteBuilder handoff in the integration branch
   with a bounded immutable static-only projection and ephemeral Fly staging;
 - [ ] merge/deploy the remaining exact-main prevention and complete bounded
@@ -259,6 +261,12 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - mitigation post-deploy verification: Fly 1/1, `/healthz` HTTP 200 ready/db/
   disk ok, exact in-image SHA, `VACUUM schedule disabled`, `quick_check=ok`, WAL
   24,752 bytes, `/data` available 1,119,805,440 bytes;
+- predeploy VK shadow replay: raw `wall-32547811_11187` created one event/source
+  through `vk_intake.persist_event_and_pages`; the opposite festival-as-venue
+  control closed as `REJECTED_PRODUCT_POLICY/missing_location`. The copied
+  production DB remained `quick_check=ok`; 32 legacy retry states and 15
+  pre-existing open attempts did not increase. Ignored receipt:
+  `artifacts/codex/INC-2026-08-15-vk-smart/prod-shadow-boundary-replay.json`;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

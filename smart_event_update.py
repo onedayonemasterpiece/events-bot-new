@@ -6371,6 +6371,14 @@ def _norm_text_for_grounding(value: str | None) -> str:
     # Strip only this transport wrapper before the ordinary verbatim check;
     # semantic paraphrases and invented text still fail closed.
     raw = re.sub(r"\[[^|\]\r\n]{1,500}\|([^\]\r\n]+)\]", r"\1", raw)
+    # Source text and the canonical venue registry use equivalent Russian
+    # address spellings (for example ``проспект`` vs ``пр-кт``).  Normalize
+    # only this structural token; venue/name semantics remain LLM-owned.
+    raw = re.sub(
+        r"(?u)\bпр\s*(?:[-–—]\s*кт|оспект(?:а|у|е|ом)?)\b",
+        " проспект ",
+        raw,
+    )
     raw = re.sub(r"[«»\"'`.,;:!?()\[\]{}#№]+", " ", raw)
     raw = re.sub(r"\s+", " ", raw).strip()
     return raw

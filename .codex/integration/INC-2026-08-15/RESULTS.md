@@ -16,7 +16,7 @@
 
 ## Evidence
 
-- Raw positive/opposite VK replay fixture is present at `tests/replays/INC-2026-08-15-ingestion-retry-stall-and-wal-growth/vk_location_grounding.json`, but the positive and opposite controls have not yet both been replayed through the full VK production boundary; that remains a pre-closure gate.
+- Raw positive/opposite VK replay fixture: `tests/replays/INC-2026-08-15-ingestion-retry-stall-and-wal-growth/vk_location_grounding.json`. Both controls passed `vk_intake.persist_event_and_pages` → Smart Update → SQLite on the production shadow copy: positive created one event/source, opposite closed `REJECTED_PRODUCT_POLICY/missing_location`, `quick_check=ok`, and retry/open-attempt counts did not increase. Ignored receipt: `artifacts/codex/INC-2026-08-15-vk-smart/prod-shadow-boundary-replay.json`.
 - Production online-backup shadow (ignored artifact): `artifacts/codex/INC-2026-08-15-ingestion-linear/prod-shadow/db.sqlite`.
 - Shadow `Database.init()` twice: 0.400 s / 0.194 s; `quick_check=ok`; 195 pre-existing FK findings preserved exactly (156 `event_source_fact`, 37 `eventposter`, 2 `videoannounce_item`), no new FK drift. Receipt: `artifacts/codex/INC-2026-08-15-ingestion-linear/prod-shadow/migration-init2.json`.
 - Migration rollback injection preserves both old tables/rows and removes both `_new` tables.
@@ -25,4 +25,4 @@
 
 ## Production gates still required
 
-Incident remains open until exact-main CI/merge/deploy, the positive and opposite raw controls pass the same full VK production boundary, captured legacy Smart/VK terminal drain, one controlled TG catch-up, one full all-source parser catch-up with Sobor settlement, WAL bounded through real workload, and one secret-candidate static canary with `/data`/`/tmp`/Kaggle/Yandex receipts. No root promotion is authorized by this integration.
+Incident remains open until exact-main CI/merge/deploy, captured legacy Smart/VK terminal drain, one controlled TG catch-up, one full all-source parser catch-up with Sobor settlement, WAL bounded through real workload, and one secret-candidate static canary with `/data`/`/tmp`/Kaggle/Yandex receipts. No root promotion is authorized by this integration.

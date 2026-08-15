@@ -33,7 +33,8 @@
   actions and visible `FAILED_TECHNICAL` terminals; the old worker is default
   off and can only drain legacy rows once. Fixed blank-success OCR evidence
   cardinality, exact-parse replay uniqueness, expired max-attempt recovery, and
-  low-confidence grounded `llm_keep` fallthrough. Added idempotent SQLite CHECK
+  low-confidence grounded `llm_keep` fallthrough, including canonical
+  `проспект`/`пр-кт` address equivalence. Added idempotent SQLite CHECK
   migration and regression replays for `wall-32547811_11187`.
 - **Telegram monitoring / official source parser incident fix:** made carrier
   accounting explicit (`new_raw` / `forced_replay` / `metrics_only` / typed
