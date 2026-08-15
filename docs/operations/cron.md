@@ -115,6 +115,12 @@ copy space, so it must not share a slot with snapshot/vector work. The legacy
 12-hour interval is registered only with the explicit
 `ENABLE_DB_FULL_VACUUM=1` opt-in; leave it off until the capacity and
 serialization gates documented for the current deployment have been checked.
+When opted in, `db_vacuum` participates in the shared heavy-job guard and skips
+when another heavy operation owns it. Immediately before the rewrite it
+requires free bytes of at least
+`2 * current_db_bytes + DB_FULL_VACUUM_MIN_FREE_MB` (floor default `512` MiB),
+checks the capacity again after a successful pre-`VACUUM` truncating WAL
+checkpoint, and writes structured pre/post checkpoint and byte-size receipts.
 Hourly `PRAGMA optimize` and `PRAGMA wal_checkpoint(TRUNCATE)` remain enabled.
 Scheduled `vk_auto_import` and `tg_monitoring` entrypoints also create a bootstrap `ops_run` before resolving superadmin / entering the inner runner, so a 1ms APScheduler fire can no longer disappear without either a real run row or an explicit `skipped/error` record.
 Scheduled guide slots now also participate in the shared heavy-job guard at the scheduler layer: if another heavy job (for example a stuck `vk_auto_import`) already owns the gate, the guide slot records `ops_run(kind='guide_monitoring', status='skipped', skip_reason='heavy_busy')` instead of waiting invisibly before `run_guide_monitor()` can materialize its own run.

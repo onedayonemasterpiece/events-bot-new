@@ -69,6 +69,22 @@ Production file mirror **включён постоянно** и пишет root 
 
 ## Disk Hygiene Runbook
 
+### SQLite WAL contract
+
+Every application-managed SQLite connection sets
+`DB_WAL_JOURNAL_SIZE_LIMIT_MB` (default `64`, clamped to `4..256` MiB). This
+bounds how much already-checkpointed WAL SQLite retains after a WAL reset; it
+does **not** bypass an active reader or writer, make manual deletion of
+`db.sqlite-wal` safe, or prevent one large transaction from temporarily growing
+the WAL. The hourly truncating checkpoint is still responsible for immediate
+reclamation and logs `db_checkpoint result=[(busy, log, checkpointed)]`.
+
+For an unexpected large WAL, correlate its mtime/size with `db_checkpoint`,
+`db_full_vacuum`, and concurrent job `run_id` lines. A nonzero `busy` result is
+evidence to identify the active reader/writer; never delete WAL/SHM or replace
+the live DB file. Opt-in full `VACUUM` produces one `db_full_vacuum result=...`
+receipt containing capacity, DB/WAL sizes, duration, and both checkpoints.
+
 Before cleanup, compare durable DB growth by table as well as top-level paths.
 For raw-first VK, compare `dbstat` bytes for `vk_source_packet` with the
 predeploy DB snapshot and count packets per crawl hour. Full JSON and attachment

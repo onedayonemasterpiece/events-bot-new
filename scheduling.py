@@ -23,7 +23,7 @@ from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin_chat import resolve_superadmin_chat_id
-from db import optimize, vacuum, wal_checkpoint_truncate
+from db import full_vacuum_with_safety, optimize, wal_checkpoint_truncate
 from heavy_ops import current_heavy_meta, describe_heavy_meta, heavy_operation
 from ops_run import finish_ops_run, start_ops_run
 from runtime import get_running_main
@@ -3881,6 +3881,7 @@ _HEAVY_JOB_IDS: set[str] = {
     "telegraph_cache_sanitize",
     "vk_post_prune",
     "event_vector_sync",
+    "db_vacuum",
 }
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
@@ -5778,13 +5779,23 @@ def startup(
             misfire_grace_time=30,
         )
         if _db_full_vacuum_enabled():
+            min_free_mb = max(0, _env_int("DB_FULL_VACUUM_MIN_FREE_MB", 512))
             _register_job(
                 "db_vacuum",
                 _job_wrapper("db_vacuum", _run_maintenance, notify_skip=_notify_admin_skip),
                 "interval",
                 id="db_vacuum",
                 hours=12,
-                args=[partial(vacuum, db.engine), "VACUUM", 120.0],
+                args=[
+                    partial(
+                        full_vacuum_with_safety,
+                        db.engine,
+                        db.path,
+                        min_free_bytes=min_free_mb * 1024 * 1024,
+                    ),
+                    "capacity-gated VACUUM",
+                    120.0,
+                ],
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,
