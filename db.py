@@ -62,6 +62,109 @@ async def _add_column(conn, table: str, col_def: str) -> None:
         raise
 
 
+_SMART_UPDATE_OUTCOMES_SQL = (
+    "'CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY',"
+    "'FAILED_TECHNICAL','RETRY_SCHEDULED'"
+)
+
+
+async def _migrate_smart_update_terminal_contract(conn: aiosqlite.Connection) -> None:
+    """Add FAILED_TECHNICAL to old SQLite CHECK constraints transactionally.
+
+    SQLite cannot alter a CHECK constraint in place. Both ledger tables are
+    therefore rebuilt in one transaction with foreign-key enforcement paused;
+    ids and every payload/receipt column are copied verbatim. The migration is
+    idempotent and is intentionally run before the normal CREATE/INDEX block.
+    """
+
+    cursor = await conn.execute(
+        "SELECT name,sql FROM sqlite_master WHERE type='table' "
+        "AND name IN ('smart_update_candidate_state','smart_update_attempt')"
+    )
+    rows = {str(name): str(sql or "") for name, sql in await cursor.fetchall()}
+    await cursor.close()
+    if "smart_update_candidate_state" not in rows:
+        return
+    if all("FAILED_TECHNICAL" in rows.get(name, "") for name in rows):
+        return
+    if "smart_update_attempt" not in rows:
+        raise RuntimeError("smart_update_terminal_migration_missing_attempt_table")
+
+    await conn.commit()
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        await conn.execute("BEGIN IMMEDIATE")
+        await conn.execute("DROP TABLE IF EXISTS smart_update_candidate_state_new")
+        await conn.execute("DROP TABLE IF EXISTS smart_update_attempt_new")
+        await conn.execute(
+            f"""
+            CREATE TABLE smart_update_candidate_state_new(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_key TEXT NOT NULL UNIQUE,
+                occurrence_key TEXT NOT NULL,
+                canonical_source_url TEXT,
+                source_type TEXT NOT NULL,
+                intent TEXT NOT NULL CHECK(intent IN ('UPSERT_EVENT','ATTACH_CONTEXT')),
+                source_fingerprint TEXT NOT NULL,
+                candidate_payload JSON NOT NULL DEFAULT '{{}}',
+                current_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                    CHECK(current_outcome IN ({_SMART_UPDATE_OUTCOMES_SQL})),
+                accepted_event_id INTEGER,
+                diagnostic_event_id INTEGER,
+                reason TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                retry_attempts INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 3,
+                retry_exhausted INTEGER NOT NULL DEFAULT 0,
+                next_retry_at TIMESTAMP,
+                claimed_by TEXT,
+                claim_expires_at TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+            )
+            """
+        )
+        await conn.execute(
+            "INSERT INTO smart_update_candidate_state_new SELECT * FROM smart_update_candidate_state"
+        )
+        await conn.execute(
+            f"""
+            CREATE TABLE smart_update_attempt_new(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_state_id INTEGER NOT NULL,
+                attempt_no INTEGER NOT NULL,
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP,
+                terminal_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                    CHECK(terminal_outcome IN ({_SMART_UPDATE_OUTCOMES_SQL})),
+                accepted_event_id INTEGER,
+                diagnostic_event_id INTEGER,
+                reason TEXT,
+                UNIQUE(candidate_state_id, attempt_no),
+                FOREIGN KEY(candidate_state_id) REFERENCES smart_update_candidate_state_new(id) ON DELETE CASCADE,
+                FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+            )
+            """
+        )
+        await conn.execute("INSERT INTO smart_update_attempt_new SELECT * FROM smart_update_attempt")
+        await conn.execute("DROP TABLE smart_update_attempt")
+        await conn.execute("DROP TABLE smart_update_candidate_state")
+        await conn.execute(
+            "ALTER TABLE smart_update_candidate_state_new RENAME TO smart_update_candidate_state"
+        )
+        await conn.execute("ALTER TABLE smart_update_attempt_new RENAME TO smart_update_attempt")
+        await conn.commit()
+    except Exception:
+        await conn.rollback()
+        raise
+    finally:
+        await conn.execute("PRAGMA foreign_keys=ON")
+
+
 class Database:
     def __init__(self, path: str):
         self.path = path
@@ -231,6 +334,8 @@ class Database:
                 f"PRAGMA journal_size_limit={self._sqlite_journal_size_limit_bytes()}"
             )
             dbg(f"pragmas journal_mode={journal_mode}")
+
+            await _migrate_smart_update_terminal_contract(conn)
 
             pragma_cursor = await conn.execute("PRAGMA table_info('posterocrcache')")
             poster_ocr_columns = await pragma_cursor.fetchall()
@@ -935,7 +1040,7 @@ class Database:
                     source_fingerprint TEXT NOT NULL,
                     candidate_payload JSON NOT NULL DEFAULT '{}',
                     current_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
-                        CHECK(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                        CHECK(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','FAILED_TECHNICAL','RETRY_SCHEDULED')),
                     accepted_event_id INTEGER,
                     diagnostic_event_id INTEGER,
                     reason TEXT,
@@ -977,7 +1082,7 @@ class Database:
                     started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     finished_at TIMESTAMP,
                     terminal_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
-                        CHECK(terminal_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                        CHECK(terminal_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','FAILED_TECHNICAL','RETRY_SCHEDULED')),
                     accepted_event_id INTEGER,
                     diagnostic_event_id INTEGER,
                     reason TEXT,

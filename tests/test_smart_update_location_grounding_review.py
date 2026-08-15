@@ -183,7 +183,7 @@ def test_unrelated_source_grounded_venue_is_not_routed_by_festival_context() -> 
     assert reason == "no_explicit_location_role"
 
 
-def test_llm_location_review_fails_closed_when_only_event_context_is_grounded(monkeypatch) -> None:
+def test_llm_location_review_terminally_rejects_only_event_context(monkeypatch) -> None:
     candidate = seu.EventCandidate(
         source_type="vk",
         source_url="https://vk.com/wall-127107743_14707",
@@ -198,7 +198,7 @@ def test_llm_location_review_fails_closed_when_only_event_context_is_grounded(mo
     async def fake_ask(prompt, *_args, **_kwargs):
         assert "не является названием venue" in prompt
         return {
-            "decision": "uncertain",
+            "decision": "reject_missing_location",
             "confidence": 0.99,
             "location_name": None,
             "location_address": None,
@@ -216,8 +216,46 @@ def test_llm_location_review_fails_closed_when_only_event_context_is_grounded(mo
         )
     )
 
-    assert (ok, reason) == (False, "llm_uncertain")
+    assert (ok, reason) == (False, "llm_reject_missing_location")
     assert candidate.location_name == "День города в Янтарном"
+
+
+def test_wall_32547811_11187_low_confidence_keep_is_terminal_positive(monkeypatch) -> None:
+    candidate = seu.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-32547811_11187",
+        source_text=(
+            "18 августа в Чеховке состоится презентация экологического маршрута "
+            "«Зелёное сердце города». Начало в 15:00. "
+            "Адрес: Московский проспект, 39."
+        ),
+        title="Презентация экологического маршрута «Зелёное сердце города»",
+        date="2026-08-18",
+        time="15:00",
+        location_name="Библиотека Чехова",
+        location_address="Московский проспект, 39",
+        city="Калининград",
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "keep",
+            "confidence": 0.62,
+            "location_name": "Библиотека Чехова",
+            "location_address": "Московский проспект, 39",
+            "city": "Калининград",
+            "evidence_quote": "Адрес: Московский проспект, 39",
+            "reason_short": "The address and colloquial venue name are explicit.",
+        }
+
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(seu, "_ask_gemma_json", fake_ask)
+    assert asyncio.run(
+        seu._llm_review_candidate_location_grounding(
+            candidate,
+            trigger_reason="canonical_location_name_not_in_source",
+        )
+    ) == (True, "llm_keep")
 
 
 def test_llm_location_review_applies_only_source_grounded_repair(monkeypatch) -> None:

@@ -4198,7 +4198,11 @@ def startup(
         )
         return job
 
-    if _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=True):
+    # The product pipeline is linear: a Smart Update invocation must finish as
+    # accepted, product-rejected or FAILED_TECHNICAL. This switch is now an
+    # explicit one-time legacy-drain override, never a default background
+    # product queue.
+    if _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=False):
         try:
             smart_update_retry_interval = max(
                 15,

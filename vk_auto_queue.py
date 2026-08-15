@@ -463,6 +463,12 @@ async def _cancel_matching_event_from_notice(
                 best_id,
                 context_result.reason,
             )
+        elif context_result.is_failed_technical:
+            logger.error(
+                "vk_auto.cancel context failed_technical event_id=%s reason=%s",
+                best_id,
+                context_result.reason,
+            )
 
         try:
             async with db.get_session() as reload_session:
@@ -803,6 +809,7 @@ class VkAutoImportReport:
     inbox_imported: int = 0
     inbox_rejected: int = 0
     inbox_failed: int = 0
+    inbox_failed_technical: int = 0
     inbox_deferred: int = 0
     skipped_requeued: int = 0
     cancelled: bool = False
@@ -1865,6 +1872,7 @@ async def run_vk_auto_import(
         f"inbox imported: {report.inbox_imported}\n"
         f"inbox rejected: {report.inbox_rejected}\n"
         f"inbox failed: {report.inbox_failed}\n"
+        f"Smart Update technical terminals (без автоматического повтора): {report.inbox_failed_technical}\n"
         f"inbox deferred: {report.inbox_deferred}\n"
         f"events created: {len(set(report.created_event_ids))}\n"
         f"events updated: {len(set(report.updated_event_ids))}\n"
@@ -1894,6 +1902,7 @@ async def run_vk_auto_import(
             "inbox_imported": int(report.inbox_imported),
             "inbox_rejected": int(report.inbox_rejected),
             "inbox_failed": int(report.inbox_failed),
+            "inbox_failed_technical": int(report.inbox_failed_technical),
             "inbox_deferred": int(report.inbox_deferred),
             "events_created": int(len(set(report.created_event_ids))),
             "events_updated": int(len(set(report.updated_event_ids))),
@@ -2647,6 +2656,7 @@ async def _process_vk_inbox_row(
     partial_error: str | None = None
     smart_retry_reasons: list[str] = []
     semantic_rejections: list[str] = []
+    smart_technical_failures: list[str] = []
     child_outcomes: list[str] = []
     inline_jobs_enabled = (os.getenv("VK_AUTO_IMPORT_INLINE_JOBS", "1") or "").strip().lower() in {
         "1",
@@ -2688,6 +2698,12 @@ async def _process_vk_inbox_row(
                     smart_result.reason or "smart_update_retry"
                 )
                 continue
+            if smart_result.is_failed_technical:
+                child_outcomes.append("FAILED_TECHNICAL")
+                smart_technical_failures.append(
+                    smart_result.reason or "smart_update_failed_technical"
+                )
+                continue
             if not smart_result.is_accepted or res.event_id is None:
                 raise RuntimeError("invalid typed Smart Update result at VK boundary")
 
@@ -2726,6 +2742,39 @@ async def _process_vk_inbox_row(
         _tmark("persist_total", persist_total_sec)
 
     smart_retry_reason = smart_retry_reasons[0] if smart_retry_reasons else None
+    smart_technical_reason = (
+        smart_technical_failures[0] if smart_technical_failures else None
+    )
+    if smart_technical_reason and not imported_event_ids:
+        report.inbox_failed += 1
+        report.inbox_failed_technical += 1
+        report.errors.append(
+            f"failed_technical {source_url}: {smart_technical_reason}"
+        )
+        await vk_review.mark_carrier_outcome(
+            db,
+            inbox_id=int(post.id),
+            outcome="FAILED_TECHNICAL",
+            typed_reason=smart_technical_reason,
+        )
+        await vk_review.record_carrier_resolution(
+            db,
+            source_packet_id=getattr(post, "source_packet_id", None),
+            child_outcomes=child_outcomes,
+            terminal_carrier_outcome="FAILED_TECHNICAL",
+            typed_error_reason=smart_technical_reason,
+        )
+        await _emit_progress(
+            "❌",
+            [
+                "Результат: Smart Update завершился технической ошибкой",
+                "Автоматический повтор не запланирован",
+                f"Причина: {_shorten_reason(smart_technical_reason) or 'technical failure'}",
+                f"took_sec: {(time.monotonic() - start_ts):.1f}",
+            ],
+        )
+        _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
+        return
     if smart_retry_reason and not imported_event_ids:
         report.inbox_deferred += 1
         report.errors.append(f"retry_scheduled {source_url}: {smart_retry_reason}")
@@ -2788,7 +2837,23 @@ async def _process_vk_inbox_row(
     )
     lifecycle_retry = lifecycle_unresolved[0] if lifecycle_unresolved else None
     durable_retry_reason = smart_retry_reason or partial_error or lifecycle_retry or enrichment_retry
-    if durable_retry_reason:
+    if smart_technical_reason:
+        await vk_review.mark_carrier_outcome(
+            db,
+            inbox_id=int(post.id),
+            outcome="FAILED_TECHNICAL",
+            typed_reason=smart_technical_reason,
+        )
+        await vk_review.record_carrier_resolution(
+            db,
+            source_packet_id=getattr(post, "source_packet_id", None),
+            child_outcomes=child_outcomes,
+            terminal_carrier_outcome="FAILED_TECHNICAL",
+            typed_error_reason=smart_technical_reason,
+        )
+        report.inbox_failed += 1
+        report.inbox_failed_technical += 1
+    elif durable_retry_reason:
         await vk_review.mark_deferred(
             db,
             int(post.id),
@@ -2851,12 +2916,17 @@ async def _process_vk_inbox_row(
     ]
     if semantic_rejections:
         extra_lines.insert(0, f"⚠️ Отклонено независимых карточек: {len(semantic_rejections)}")
-    effective_retry_reason = durable_retry_reason
-    if effective_retry_reason:
+    if smart_technical_reason:
+        extra_lines.insert(
+            0,
+            "❌ Частично: Smart Update technical terminal, автоматический повтор не запланирован: "
+            f"{_shorten_reason(smart_technical_reason) or 'technical failure'}",
+        )
+    elif durable_retry_reason:
         extra_lines.insert(
             0,
             "⚠️ Частично (автоматический повтор запланирован): "
-            f"{_shorten_reason(effective_retry_reason) or 'transient'}",
+            f"{_shorten_reason(durable_retry_reason) or 'transient'}",
         )
     await _emit_progress(icon, extra_lines)
 

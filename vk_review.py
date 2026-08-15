@@ -929,7 +929,11 @@ async def record_exact_parse_replay(
             """,
             (
                 int(source_packet_id), int((attempt_row[0] if attempt_row else 1) or 1),
-                row[6], row[2], "vk", row[0], row[1], hints, row[5], str(model),
+                # ``parse_key`` identifies the single physical provider parse.
+                # Replays refer to that receipt through ``source_packet_id``;
+                # copying the successful key here violates the partial unique
+                # index for successful structured parses on every replay.
+                None, row[2], "vk", row[0], row[1], hints, row[5], str(model),
             ),
         )
         await conn.commit()
@@ -1095,6 +1099,7 @@ async def mark_carrier_outcome(
         "LIFECYCLE_RESOLVED": "imported",
         "MIXED_RESOLVED": "imported",
         "CONFIRMED_PRODUCT_EXCLUSION": "confirmed_product_exclusion",
+        "FAILED_TECHNICAL": "failed_technical",
         "EXACT_REPLAY": "imported",
     }
     status = "deferred" if keep_due else status_map.get(normalized, "pending")

@@ -18,6 +18,10 @@ class SmartUpdateTerminalOutcome(str, Enum):
     MERGED = "MERGED"
     NOOP_EXACT_REPLAY = "NOOP_EXACT_REPLAY"
     REJECTED_PRODUCT_POLICY = "REJECTED_PRODUCT_POLICY"
+    FAILED_TECHNICAL = "FAILED_TECHNICAL"
+    # Legacy/transitional value only. New Smart Update invocations must close
+    # in the same call and ``finish_candidate_attempt`` converts this value to
+    # FAILED_TECHNICAL rather than scheduling background work.
     RETRY_SCHEDULED = "RETRY_SCHEDULED"
 
 
@@ -253,12 +257,12 @@ async def begin_candidate_attempt(
             # A prior process may have committed the Event/EventSource write
             # and died before acknowledging its attempt. Once its lease is no
             # longer authoritative (or the same owner explicitly replays),
-            # close that append-only row as the durable retry it already
-            # projected before opening the next attempt. Exact packet replay
-            # will then recover the accepted terminal without losing balance.
+            # close the abandoned ledger row visibly before opening one
+            # recovery attempt. Exact packet replay can still recover an
+            # accepted domain write without leaving an automatic retry behind.
             await conn.execute(
                 "UPDATE smart_update_attempt SET finished_at=CURRENT_TIMESTAMP, "
-                "terminal_outcome='RETRY_SCHEDULED', reason='superseded_by_replay' "
+                "terminal_outcome='FAILED_TECHNICAL', reason='interrupted_before_ack' "
                 "WHERE candidate_state_id=? AND finished_at IS NULL",
                 (state_id,),
             )
@@ -308,21 +312,26 @@ async def finish_candidate_attempt(
     lifecycle_reason: LifecycleReason | None = None,
     retry_delay_seconds: int = 300,
 ) -> None:
-    """Atomically close an attempt and project its terminal onto candidate state."""
+    """Atomically close one attempt; never create background retry work.
+
+    ``RETRY_SCHEDULED`` remains readable for legacy rows and old callers, but a
+    completed invocation is projected as the visible ``FAILED_TECHNICAL``
+    terminal. The delay argument is retained for caller compatibility only.
+    """
 
     if not isinstance(outcome, SmartUpdateTerminalOutcome):
         outcome = SmartUpdateTerminalOutcome(str(outcome))
     if outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
         if not isinstance(product_exclusion_reason, ProductExclusionReason):
-            outcome = SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            outcome = SmartUpdateTerminalOutcome.FAILED_TECHNICAL
             retry_reason = RetryReason.PRODUCT_REASON_UNTYPED
             reason = retry_reason.value
         else:
             reason = product_exclusion_reason.value
-    elif outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED and isinstance(
-        retry_reason, RetryReason
-    ):
-        reason = retry_reason.value
+    elif outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
+        outcome = SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        if isinstance(retry_reason, RetryReason):
+            reason = retry_reason.value
     elif isinstance(identity_distinct_reason, IdentityDistinctReason):
         reason = identity_distinct_reason.value
     elif isinstance(lifecycle_reason, LifecycleReason):
@@ -335,7 +344,7 @@ async def finish_candidate_attempt(
     }
     accepted_event_id = int(event_id) if accepted and event_id is not None else None
     diagnostic_id = int(diagnostic_event_id) if diagnostic_event_id is not None else None
-    delay = max(1, int(retry_delay_seconds))
+    del retry_delay_seconds
     async with db.raw_conn() as conn:
         await conn.execute("BEGIN IMMEDIATE")
         try:
@@ -358,36 +367,17 @@ async def finish_candidate_attempt(
             if cursor.rowcount != 1:
                 raise RuntimeError("candidate_attempt_not_open")
             await cursor.close()
-            # ``max_attempts`` bounds identity uncertainty: the facade forces a
-            # distinct create on that final identity attempt. Pure technical
-            # failures have no safe fallback, so they remain durably due rather
-            # than becoming an unreachable pseudo-terminal. Clamp their retry
-            # counter at the last slot while the append-only attempt number
-            # continues to grow.
-            retry_exhausted = 0
-            retry_counter = (
-                min(receipt.attempt, max(0, receipt.max_attempts - 1))
-                if outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-                and receipt.attempt >= receipt.max_attempts
-                else (
-                    receipt.attempt
-                    if outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-                    else 0
-                )
-            )
-            retry_expr = (
-                f"datetime(CURRENT_TIMESTAMP, '+{delay} seconds')"
-                if outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-                else "NULL"
-            )
+            failed_technical = outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+            retry_exhausted = 1 if failed_technical else 0
+            retry_counter = receipt.attempt if failed_technical else 0
             await conn.execute(
-                f"""
+                """
                 UPDATE smart_update_candidate_state
                 SET current_outcome=?, accepted_event_id=?, diagnostic_event_id=?, reason=?,
-                    next_retry_at={retry_expr}, updated_at=CURRENT_TIMESTAMP,
+                    next_retry_at=NULL, updated_at=CURRENT_TIMESTAMP,
                     retry_attempts=?,
                     retry_exhausted=?, claimed_by=NULL, claim_expires_at=NULL,
-                    completed_at=CASE WHEN ?='RETRY_SCHEDULED' THEN NULL ELSE CURRENT_TIMESTAMP END
+                    completed_at=CURRENT_TIMESTAMP
                 WHERE id=?
                 """,
                 (
@@ -397,7 +387,6 @@ async def finish_candidate_attempt(
                     reason,
                     retry_counter,
                     retry_exhausted,
-                    outcome.value,
                     receipt.candidate_state_id,
                 ),
             )
@@ -470,8 +459,7 @@ async def claim_due_candidates(
                 """
                 SELECT id, candidate_key, candidate_payload, retry_attempts, max_attempts, reason
                 FROM smart_update_candidate_state
-                WHERE current_outcome='RETRY_SCHEDULED' AND retry_exhausted=0
-                  AND retry_attempts < max_attempts
+                WHERE current_outcome='RETRY_SCHEDULED'
                   AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP)
                   AND (claim_expires_at IS NULL OR claim_expires_at <= CURRENT_TIMESTAMP)
                 ORDER BY COALESCE(next_retry_at, created_at), id
@@ -515,3 +503,38 @@ async def claim_due_candidates(
             await conn.rollback()
             raise
     return claimed
+
+
+async def terminalize_claimed_candidate_technical(
+    db: Any,
+    *,
+    candidate_state_id: int,
+    lease_owner: str,
+    reason: str,
+) -> None:
+    """Close a claimed legacy retry that cannot even be rehydrated."""
+
+    async with db.raw_conn() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            await conn.execute(
+                "UPDATE smart_update_attempt SET finished_at=CURRENT_TIMESTAMP, "
+                "terminal_outcome='FAILED_TECHNICAL', reason=? "
+                "WHERE candidate_state_id=? AND finished_at IS NULL",
+                (str(reason), int(candidate_state_id)),
+            )
+            cursor = await conn.execute(
+                "UPDATE smart_update_candidate_state SET "
+                "current_outcome='FAILED_TECHNICAL', reason=?, retry_exhausted=1, "
+                "next_retry_at=NULL, claimed_by=NULL, claim_expires_at=NULL, "
+                "completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP "
+                "WHERE id=? AND current_outcome='RETRY_SCHEDULED' AND claimed_by=?",
+                (str(reason), int(candidate_state_id), str(lease_owner)),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("claimed_candidate_terminalization_lost_lease")
+            await cursor.close()
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise

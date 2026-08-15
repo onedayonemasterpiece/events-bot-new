@@ -585,6 +585,79 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
 
 
 @pytest.mark.asyncio
+async def test_vk_auto_import_terminalizes_smart_technical_failure_without_retry(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "failed-technical.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name,location) VALUES(1,'club1','Source','Venue')"
+        )
+        await conn.execute(
+            "INSERT INTO vk_inbox(id,group_id,post_id,date,text,matched_kw,has_date,status) "
+            "VALUES(1,1,100,0,'stub',?,0,'pending')",
+            (vk_intake.OCR_PENDING_SENTINEL,),
+        )
+        await conn.commit()
+
+    async def fake_fetch(*_args, **_kwargs):
+        return (
+            "18 августа событие в Venue",
+            [],
+            datetime.now(timezone.utc),
+            {},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build(*_args, **_kwargs):
+        draft = vk_intake.EventDraft(
+            title="Event", date="2026-08-18", time="15:00", venue="Venue"
+        )
+        decision = SourceParseDecision(
+            [{"title": "Event"}],
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source("18 августа событие в Venue"),
+        )
+        return vk_intake.DraftParseResult([draft], decision=decision), None
+
+    async def fake_persist(*_args, **_kwargs):
+        return vk_intake.PersistResult(
+            event_id=None,
+            telegraph_url=None,
+            ics_supabase_url=None,
+            ics_tg_url=None,
+            event_date=None,
+            event_end_date=None,
+            event_time=None,
+            event_type=None,
+            is_free=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
+                reason="provider_unavailable",
+            ),
+        )
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+    bot = DummyBot()
+    report = await vk_auto_queue.run_vk_auto_import(
+        db, bot, chat_id=1, limit=1, operator_id=123
+    )
+
+    assert report.inbox_failed == 1
+    assert report.inbox_failed_technical == 1
+    assert report.inbox_deferred == 0
+    assert any("без автоматического повтора" in text for _, text in bot.messages)
+    async with db.raw_conn() as conn:
+        row = await (await conn.execute(
+            "SELECT status,last_typed_reason,next_attempt_at FROM vk_inbox WHERE id=1"
+        )).fetchone()
+    assert row == ("failed_technical", "provider_unavailable", None)
+
+
+@pytest.mark.asyncio
 async def test_vk_auto_import_keeps_valid_roundup_siblings_after_semantic_rejection(
     tmp_path, monkeypatch
 ):
