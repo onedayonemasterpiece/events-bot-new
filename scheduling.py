@@ -3943,7 +3943,13 @@ def _job_next_run(job):
     return getattr(job, "next_run_time", None) or getattr(job, "next_run_at", None)
 
 
-def _job_wrapper(job_id: str, func, *, notify_skip: Callable[[str, str], None] | None = None):
+def _job_wrapper(
+    job_id: str,
+    func,
+    *,
+    notify_skip: Callable[[str, str], None] | None = None,
+    heavy_guard_mode: str | None = None,
+):
     async def _run(*args, **kwargs):
         serialize_heavy = (os.getenv("SCHED_SERIALIZE_HEAVY_JOBS") or "").strip().lower() in {
             "1",
@@ -3952,7 +3958,11 @@ def _job_wrapper(job_id: str, func, *, notify_skip: Callable[[str, str], None] |
             "on",
         }
         is_heavy = job_id in _HEAVY_JOB_IDS
-        guard_mode_raw = (os.getenv("SCHED_HEAVY_GUARD_MODE") or "").strip().lower()
+        guard_mode_raw = str(
+            heavy_guard_mode
+            if heavy_guard_mode is not None
+            else (os.getenv("SCHED_HEAVY_GUARD_MODE") or "")
+        ).strip().lower()
         if guard_mode_raw in {"0", "off", "false", "no", "disable", "disabled"}:
             guard_mode = "off"
         elif guard_mode_raw in {"wait", "block", "serialize"}:
@@ -4615,7 +4625,12 @@ def startup(
         )
         _register_job(
             "source_parsing",
-            _job_wrapper("source_parsing", source_parsing_scheduler, notify_skip=_notify_admin_skip),
+            _job_wrapper(
+                "source_parsing",
+                source_parsing_scheduler,
+                notify_skip=_notify_admin_skip,
+                heavy_guard_mode="wait",
+            ),
             "cron",
             id="source_parsing",
             hour=parsing_hour,
@@ -4644,7 +4659,12 @@ def startup(
         )
         _register_job(
             "source_parsing_day",
-            _job_wrapper("source_parsing_day", source_parsing_scheduler_if_changed, notify_skip=_notify_admin_skip),
+            _job_wrapper(
+                "source_parsing_day",
+                source_parsing_scheduler_if_changed,
+                notify_skip=_notify_admin_skip,
+                heavy_guard_mode="wait",
+            ),
             "cron",
             id="source_parsing_day",
             hour=day_hour,
@@ -5695,13 +5715,24 @@ def startup(
         _notify_admin_skip("kaggle_recovery", "ENABLE_KAGGLE_RECOVERY!=1")
 
     if os.getenv("ENABLE_NIGHTLY_PAGE_SYNC") == "1":
+        page_sync_time_raw = os.getenv("NIGHTLY_PAGE_SYNC_TIME_LOCAL", "02:30").strip()
+        page_sync_tz_name = os.getenv(
+            "NIGHTLY_PAGE_SYNC_TZ", "Europe/Kaliningrad"
+        )
+        page_sync_hour, page_sync_minute = _cron_from_local(
+            page_sync_time_raw,
+            page_sync_tz_name,
+            default_hour="0",
+            default_minute="30",
+            label="NIGHTLY_PAGE_SYNC_TIME_LOCAL",
+        )
         _register_job(
             "nightly_page_sync",
             _job_wrapper("nightly_page_sync", nightly_page_sync, notify_skip=_notify_admin_skip),
             "cron",
             id="nightly_page_sync",
-            hour="2",
-            minute="30",
+            hour=page_sync_hour,
+            minute=page_sync_minute,
             args=[db],
             replace_existing=True,
             max_instances=1,

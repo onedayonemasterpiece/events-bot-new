@@ -313,6 +313,52 @@ async def test_job_wrapper_records_skipped_heavy_ops_run(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_source_parser_guard_override_waits_even_when_global_mode_skips(
+    monkeypatch,
+):
+    monkeypatch.setenv("SCHED_HEAVY_GUARD_MODE", "skip")
+    monkeypatch.delenv("SCHED_SERIALIZE_HEAVY_JOBS", raising=False)
+    guard_calls = []
+    executed = []
+
+    @asynccontextmanager
+    async def fake_heavy_operation(**kwargs):
+        guard_calls.append(kwargs)
+        yield True
+
+    async def body(*_args, **_kwargs):
+        executed.append(True)
+
+    monkeypatch.setattr(scheduling, "heavy_operation", fake_heavy_operation)
+    wrapped = scheduling._job_wrapper(
+        "source_parsing", body, heavy_guard_mode="wait"
+    )
+    await wrapped(object(), object())
+
+    assert executed == [True]
+    assert guard_calls[0]["mode"] == "wait"
+
+
+def test_nightly_page_sync_default_precedes_source_parser_slot() -> None:
+    nightly = scheduling._cron_from_local(
+        "02:30",
+        "Europe/Kaliningrad",
+        default_hour="0",
+        default_minute="30",
+        label="NIGHTLY_PAGE_SYNC_TIME_LOCAL",
+    )
+    parser = scheduling._cron_from_local(
+        "04:30",
+        "Europe/Kaliningrad",
+        default_hour="4",
+        default_minute="30",
+        label="SOURCE_PARSING_TIME_LOCAL",
+    )
+    assert nightly == ("0", "30")
+    assert parser == ("2", "30")
+
+
+@pytest.mark.asyncio
 async def test_job_wrapper_records_skipped_guide_monitoring_ops_run(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

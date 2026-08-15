@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Telegram monitoring / official source parser incident fix:** made carrier
+  accounting explicit (`new_raw` / `forced_replay` / `metrics_only` / typed
+  candidates), replaced semantic force/Smart retry loops with visible linear
+  terminal receipts, and cleared force rows on every terminal path. Moved nightly
+  page sync away from the source-parser slot, made both parser schedules wait
+  for the heavy gate, prevented recovery-only runs from starving changed
+  sources, and made exact same-event/shared catalogue provenance attachment
+  collision-safe without another Smart retry.
 - **Fixed — audio transcription without connector re-consent:** the three typed
   audio tools now belong to the existing stable `telegram:publish` capability
   family as well as the narrower `audio:transcribe` scope, so an already

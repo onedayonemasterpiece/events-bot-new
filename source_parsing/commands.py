@@ -607,11 +607,13 @@ async def source_parsing_scheduler_if_changed(
     recovery_sources = await _claim_source_parser_recovery_requests(db)
     try:
         signatures = await _collect_source_parsing_signatures()
+        signatures_changed = True
         if not signatures:
             logger.info("source_parsing_guard: signatures unavailable, running parse")
         else:
             guard_state = _load_source_parsing_guard()
-            if guard_state.get("signatures") == signatures and not recovery_sources:
+            signatures_changed = guard_state.get("signatures") != signatures
+            if not signatures_changed and not recovery_sources:
                 logger.info("source_parsing_guard: no changes, skipping parse")
                 ops_run_id = await start_ops_run(
                     db,
@@ -641,7 +643,14 @@ async def source_parsing_scheduler_if_changed(
         result = await run_source_parsing(
             db,
             bot,
-            only_sources=recovery_sources or None,
+            # Recovery-only is valid only when the page signatures are
+            # unchanged. A changed catalogue always wins over a stale recovery
+            # row so unrelated official sources cannot starve for days.
+            only_sources=(
+                recovery_sources
+                if recovery_sources and not signatures_changed
+                else None
+            ),
             trigger="scheduled",
             operator_id=0,
             run_id=run_id,

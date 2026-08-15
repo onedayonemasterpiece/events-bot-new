@@ -9,6 +9,192 @@ import source_parsing.qtickets as qtickets
 from db import Database
 from models import Event, EventSource
 from source_parsing.parser import TheatreEvent
+from smart_event_update import SmartUpdateTerminalOutcome
+
+
+@pytest.mark.asyncio
+async def test_exact_attach_prefers_same_event_canonical_row_over_legacy_duplicate(
+    tmp_path,
+):
+    db = Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    event_date = (date.today() + timedelta(days=7)).isoformat()
+    source_url = "https://sobor39.ru/afisha/bach-night/"
+    canonical_url = source_url.rstrip("/")
+    async with db.get_session() as session:
+        stored = Event(
+            title="(Не)известный Бах",
+            description="Описание",
+            source_text="Источник",
+            date=event_date,
+            time="19:00",
+            location_name="Кафедральный собор",
+        )
+        session.add(stored)
+        await session.commit()
+        await session.refresh(stored)
+        event_id = int(stored.id)
+        session.add_all(
+            [
+                EventSource(
+                    event_id=event_id,
+                    source_type="parser:sobor",
+                    source_url=source_url,
+                    trust_level="high",
+                ),
+                EventSource(
+                    event_id=event_id,
+                    source_type="parser:sobor",
+                    source_url=canonical_url,
+                    canonical_source_url=canonical_url,
+                    source_role="identity_bearing",
+                    trust_level="high",
+                ),
+            ]
+        )
+        await session.commit()
+
+    candidate = TheatreEvent(
+        title="(Не)известный Бах",
+        date_raw=f"{event_date} 19:00",
+        parsed_date=event_date,
+        parsed_time="19:00",
+        ticket_status="available",
+        url=source_url,
+        source_type="sobor",
+    )
+    assert await handlers.attach_parser_source_to_exact_existing(
+        db, event_id, "sobor", candidate
+    )
+    async with db.get_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(EventSource).where(EventSource.event_id == event_id)
+                )
+            ).scalars()
+        )
+    assert len(rows) == 2
+    assert sum(row.canonical_source_url == canonical_url for row in rows) == 1
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_exact_shared_catalogue_url_attaches_supporting_terminal_noop(tmp_path):
+    db = Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    event_date = (date.today() + timedelta(days=7)).isoformat()
+    source_url = "https://sobor39.ru/afisha/night"
+    async with db.get_session() as session:
+        owner = Event(
+            title="Первый концерт",
+            description="Описание",
+            source_text="Источник",
+            date=event_date,
+            time="17:00",
+            location_name="Кафедральный собор",
+        )
+        target = Event(
+            title="Второй концерт",
+            description="Описание",
+            source_text="Источник",
+            date=event_date,
+            time="19:00",
+            location_name="Кафедральный собор",
+        )
+        session.add_all([owner, target])
+        await session.commit()
+        await session.refresh(owner)
+        await session.refresh(target)
+        session.add(
+            EventSource(
+                event_id=int(owner.id),
+                source_type="parser:sobor",
+                source_url=source_url,
+                canonical_source_url=source_url,
+                source_role="identity_bearing",
+                trust_level="high",
+            )
+        )
+        await session.commit()
+        target_id = int(target.id)
+
+    candidate = TheatreEvent(
+        title="Второй концерт",
+        date_raw=f"{event_date} 19:00",
+        parsed_date=event_date,
+        parsed_time="19:00",
+        ticket_status="available",
+        url=source_url,
+        source_type="sobor",
+    )
+    assert await handlers.attach_parser_source_to_exact_existing(
+        db, target_id, "sobor", candidate
+    )
+    async with db.get_session() as session:
+        row = (
+            await session.execute(
+                select(EventSource).where(EventSource.event_id == target_id)
+            )
+        ).scalar_one()
+    assert row.canonical_source_url == source_url
+    assert row.source_role == "context_only"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_parser_smart_retry_is_visible_terminal_not_durable_recovery(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    event_date = (date.today() + timedelta(days=7)).isoformat()
+
+    async def no_existing(*_args, **_kwargs):
+        return None, False
+
+    async def no_ticket_slot(*_args, **_kwargs):
+        return None
+
+    async def retry_result(*_args, **_kwargs):
+        return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+
+    async def forbidden_recovery(*_args, **_kwargs):
+        raise AssertionError("Smart terminal must not enqueue parser recovery")
+
+    monkeypatch.setattr(handlers, "find_existing_event", no_existing)
+    monkeypatch.setattr(handlers, "find_exact_parser_ticket_slot", no_ticket_slot)
+    monkeypatch.setattr(handlers, "add_new_event_via_queue", retry_result)
+    monkeypatch.setattr(
+        handlers, "_schedule_source_parser_recovery_request", forbidden_recovery
+    )
+
+    candidate = TheatreEvent(
+        title="Решение требует оператора",
+        date_raw=f"{event_date} 19:00",
+        parsed_date=event_date,
+        parsed_time="19:00",
+        ticket_status="available",
+        url="https://sobor39.ru/afisha/operator",
+        location="Кафедральный собор",
+        source_type="sobor",
+    )
+    stats, _ = await handlers.process_source_events(
+        db,
+        None,
+        [candidate],
+        source="sobor",
+        start_index=0,
+        total_count=1,
+    )
+
+    assert stats.failed == 1
+    assert stats.retry_scheduled == 0
+    assert stats.terminal_errors == [
+        "Решение требует оператора:RETRY_SCHEDULED"
+    ]
+    await db.close()
 
 
 @pytest.mark.asyncio

@@ -246,6 +246,7 @@ class SourceParsingStats:
     failed: int = 0
     skipped: int = 0  # Explicitly skipped by Smart Update (e.g. no changes / promo filters)
     retry_scheduled: int = 0
+    terminal_errors: list[str] = field(default_factory=list)
     added_event_ids: list[int] = field(default_factory=list)
     updated_event_ids: list[int] = field(default_factory=list)  # For displaying Telegraph links
 
@@ -575,7 +576,7 @@ async def attach_parser_source_to_exact_existing(
                 or stored_time != candidate_time
             ):
                 return False
-        existing = next(
+        existing_by_url = next(
             (
                 row
                 for row in rows
@@ -586,6 +587,21 @@ async def attach_parser_source_to_exact_existing(
         canonical_source_url = canonicalize_identity_url(source_url)
         if not canonical_source_url:
             return False
+        # Prefer a row that already owns this canonical identity for the same
+        # event. Legacy databases can contain both a raw/trailing-slash row and
+        # a newer canonical row. Updating the raw row would collide with the
+        # canonical row's unique identity index even though both point to this
+        # very event.
+        existing_canonical = next(
+            (
+                row
+                for row in rows
+                if str(row.canonical_source_url or "").strip()
+                == canonical_source_url
+            ),
+            None,
+        )
+        existing = existing_canonical or existing_by_url
         conflicting_owner = (
             await session.execute(
                 select(EventSource.event_id).where(
@@ -595,10 +611,14 @@ async def attach_parser_source_to_exact_existing(
                 ).limit(1)
             )
         ).scalar_one_or_none()
-        if conflicting_owner is not None:
-            # Fall through to the ordinary Smart Update path, which records a
-            # source_binding_conflict review instead of reassigning ownership.
-            return False
+        # A catalogue/performance page may legitimately carry several exact
+        # title/date/time occurrences. If another event owns that shared URL,
+        # attach it as supporting provenance rather than entering the semantic
+        # retry loop. Existing same-event canonical identity is already a
+        # terminal attachment/no-op and must not be demoted.
+        source_role = "identity_bearing"
+        if conflicting_owner is not None and existing_canonical is None:
+            source_role = "context_only"
         if existing is None:
             session.add(
                 EventSource(
@@ -606,7 +626,7 @@ async def attach_parser_source_to_exact_existing(
                     source_type=f"parser:{str(source_name).strip().lower()}",
                     source_url=source_url,
                     canonical_source_url=canonical_source_url,
-                    source_role="identity_bearing",
+                    source_role=source_role,
                     source_text=(event.description or "").strip() or None,
                     imported_at=datetime.now(timezone.utc),
                     trust_level="high",
@@ -615,7 +635,8 @@ async def attach_parser_source_to_exact_existing(
         else:
             existing.source_type = f"parser:{str(source_name).strip().lower()}"
             existing.canonical_source_url = canonical_source_url
-            existing.source_role = "identity_bearing"
+            if existing_canonical is None:
+                existing.source_role = source_role
             if event.description and not existing.source_text:
                 existing.source_text = event.description.strip()
             if not existing.trust_level:
@@ -689,30 +710,26 @@ def unpack_add_event_result(
     Backward-compatible with older 2-field tuples used in tests/mocks.
     """
     if not isinstance(raw, tuple):
-        return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        raise ValueError("smart_update_result_not_tuple")
     if len(raw) >= 3:
         event_id, was_added, outcome = raw[0], bool(raw[1]), raw[2]
         if isinstance(outcome, SmartUpdateTerminalOutcome):
             return event_id, was_added, outcome
-        return event_id, was_added, (
-            SmartUpdateTerminalOutcome.CREATED
-            if was_added
-            else (
-                SmartUpdateTerminalOutcome.MERGED
-                if event_id is not None
-                else SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-            )
-        )
+        if was_added:
+            return event_id, was_added, SmartUpdateTerminalOutcome.CREATED
+        if event_id is not None:
+            return event_id, was_added, SmartUpdateTerminalOutcome.MERGED
+        raise ValueError("smart_update_terminal_outcome_untyped")
     if len(raw) == 2:
         event_id, was_added = raw
         if event_id is None:
-            return None, bool(was_added), SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            raise ValueError("smart_update_legacy_result_unaccepted")
         return event_id, bool(was_added), (
             SmartUpdateTerminalOutcome.CREATED
             if was_added
             else SmartUpdateTerminalOutcome.MERGED
         )
-    return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+    raise ValueError("smart_update_result_empty")
 
 
 def classify_add_event_outcome(
@@ -730,7 +747,7 @@ def classify_add_event_outcome(
         return "updated"
     if terminal is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
         return "skipped"
-    return "retry_scheduled"
+    return "terminal_error"
 
 
 def _format_parser_ticket_price(
@@ -1844,6 +1861,10 @@ async def format_parsing_report(
             lines.append(f"  🔄 Обновлено: {stats.ticket_updated}")
         if stats.failed:
             lines.append(f"  ❌ Ошибок: {stats.failed}")
+        for terminal_error in list(stats.terminal_errors or [])[:3]:
+            lines.append(
+                f"    🧑‍💻 Нужен оператор: {escape_md(str(terminal_error))}"
+            )
         if stats.skipped:
             lines.append(f"  ⏭️ Пропущено: {stats.skipped}")
         if stats.retry_scheduled:
@@ -2766,6 +2787,7 @@ async def run_source_parsing(
                 "failed": int(stats.failed),
                 "skipped": int(stats.skipped),
                 "retry_scheduled": int(stats.retry_scheduled),
+                "terminal_errors": list(stats.terminal_errors or [])[:20],
             }
             for source, stats in (result.stats_by_source or {}).items()
         }
@@ -3292,8 +3314,8 @@ async def process_source_events(
 
                 # Add/merge event through Smart Update.
                 llm_used = True
-                new_id, was_added, status = unpack_add_event_result(
-                    await add_new_event_via_queue(
+                try:
+                    raw_add_result = await add_new_event_via_queue(
                         db,
                         bot,
                         event,
@@ -3302,8 +3324,23 @@ async def process_source_events(
                         poster_media=poster_media_list,
                         producer_ordinal=i,
                     )
-                )
-
+                    new_id, was_added, status = unpack_add_event_result(raw_add_result)
+                except Exception as exc:
+                    # Smart Update is an inline decision boundary. Do not turn
+                    # a provider/identity failure into a durable parser recovery
+                    # loop; close visibly for operator action.
+                    stats.failed += 1
+                    result_tag = f"{mode_prefix}_smart_update_terminal_error"
+                    stats.terminal_errors.append(
+                        f"{event.title[:80]}:exception:{type(exc).__name__}"
+                    )
+                    logger.exception(
+                        "source_parsing: smart_update terminal error source=%s title=%s error=%s",
+                        source,
+                        event.title[:80],
+                        exc,
+                    )
+                    continue
                 if new_id:
                     event_id = new_id
 
@@ -3338,12 +3375,18 @@ async def process_source_events(
                 elif outcome == "skipped":
                     stats.skipped += 1
                     result_tag = f"{mode_prefix}_skipped"
-                elif outcome == "retry_scheduled":
-                    await _retry_event("smart_update_retry_scheduled")
-                    result_tag = f"{mode_prefix}_retry_scheduled"
+                elif outcome == "terminal_error":
+                    stats.failed += 1
+                    result_tag = f"{mode_prefix}_smart_update_terminal_error"
+                    stats.terminal_errors.append(
+                        f"{event.title[:80]}:{status.value}"
+                    )
                 else:
-                    await _retry_event("untyped_or_failed_add_event_outcome")
-                    result_tag = f"{mode_prefix}_retry_scheduled"
+                    stats.failed += 1
+                    result_tag = f"{mode_prefix}_untyped_terminal_error"
+                    stats.terminal_errors.append(
+                        f"{event.title[:80]}:UNTYPED_TERMINAL"
+                    )
 
                 if new_id and outcome in {"added", "updated"}:
                     await reconcile_existing_event_lifecycle(db, new_id, event)
