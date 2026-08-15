@@ -49,6 +49,11 @@ async def test_smart_update_recovers_source_own_name_for_generic_category_title(
         monkeypatch.setattr(su, "_llm_create_description_facts_and_digest", _fake_bundle)
         monkeypatch.setattr(su, "_call_title_recovery_prompt", _fake_recover)
 
+        async def _grounded_bundle(*_args, **_kwargs):  # noqa: ANN001 - test helper
+            return True, "llm_grounded", []
+
+        monkeypatch.setattr(su, "_llm_review_create_bundle_grounding", _grounded_bundle)
+
         source_text = (
             "Городской фестиваль «ВЕЛОДЕНЬ»\n"
             "12 июля в 10:00 на парковке у Правительства Калининградской области.\n"

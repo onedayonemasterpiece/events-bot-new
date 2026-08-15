@@ -459,7 +459,13 @@ async def _cancel_matching_event_from_notice(
                 await session.commit()
         elif context_result.is_retry:
             logger.warning(
-                "vk_auto.cancel context retry_scheduled event_id=%s reason=%s",
+                "vk_auto.cancel context legacy_unresolved_terminal event_id=%s reason=%s",
+                best_id,
+                context_result.reason,
+            )
+        elif context_result.is_failed_technical:
+            logger.error(
+                "vk_auto.cancel context failed_technical event_id=%s reason=%s",
                 best_id,
                 context_result.reason,
             )
@@ -666,6 +672,46 @@ async def fetch_vk_post_text_and_photos(
     )
 
 
+def _vk_auto_fetch_inline_attempts() -> int:
+    raw = (os.getenv("VK_AUTO_IMPORT_FETCH_INLINE_ATTEMPTS") or "2").strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = 2
+    return max(1, min(value, 3))
+
+
+async def _fetch_vk_post_with_inline_retry(
+    group_id: int,
+    post_id: int,
+    **kwargs: Any,
+) -> tuple[str, list[str], datetime | None, dict[str, Any] | None, VkFetchStatus]:
+    """Retry only transient VK transport failures inside the current row call."""
+
+    attempts = _vk_auto_fetch_inline_attempts()
+    result: tuple[
+        str, list[str], datetime | None, dict[str, Any] | None, VkFetchStatus
+    ] | None = None
+    for attempt_no in range(1, attempts + 1):
+        result = await fetch_vk_post_text_and_photos(group_id, post_id, **kwargs)
+        status = result[4]
+        if status.ok or status.kind not in {"network_error", "vk_api_error"}:
+            return result
+        if attempt_no < attempts:
+            logger.warning(
+                "vk_auto: transient fetch failure; bounded inline retry "
+                "group=%s post=%s attempt=%s/%s kind=%s",
+                group_id,
+                post_id,
+                attempt_no,
+                attempts,
+                status.kind,
+            )
+            await asyncio.sleep(min(1.0, 0.25 * attempt_no))
+    assert result is not None
+    return result
+
+
 async def _load_vk_durable_packet_evidence(
     db: Database,
     *,
@@ -803,6 +849,7 @@ class VkAutoImportReport:
     inbox_imported: int = 0
     inbox_rejected: int = 0
     inbox_failed: int = 0
+    inbox_failed_technical: int = 0
     inbox_deferred: int = 0
     skipped_requeued: int = 0
     cancelled: bool = False
@@ -811,6 +858,54 @@ class VkAutoImportReport:
     inbox_ids: list[int] = field(default_factory=list)
     source_urls: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+    @property
+    def terminal_rows(self) -> int:
+        return int(self.inbox_imported + self.inbox_rejected + self.inbox_failed)
+
+    @property
+    def unresolved_rows(self) -> int:
+        return max(0, int(self.inbox_processed - self.terminal_rows))
+
+
+async def _terminalize_vk_auto_failure(
+    db: Database,
+    *,
+    post: Any,
+    report: VkAutoImportReport,
+    typed_reason: str,
+    source_url: str,
+    child_outcomes: Sequence[str] | None = None,
+    error_detail: str | None = None,
+) -> None:
+    """Close one operator-visible auto-import row without a durable retry.
+
+    Crawl continuation has its own infrastructure retry state before a carrier
+    enters this product batch.  Once ``/vk_auto_import`` claims a row, however,
+    the owner-facing contract is linear: success, proved product exclusion, or
+    a visible technical terminal that requires an explicit operator re-drive.
+    """
+
+    reason = str(typed_reason or "FAILED_TECHNICAL").strip() or "FAILED_TECHNICAL"
+    await vk_review.mark_carrier_outcome(
+        db,
+        inbox_id=int(post.id),
+        outcome="FAILED_TECHNICAL",
+        typed_reason=reason,
+    )
+    await vk_review.record_carrier_resolution(
+        db,
+        source_packet_id=getattr(post, "source_packet_id", None),
+        child_outcomes=list(child_outcomes or ()),
+        terminal_carrier_outcome="FAILED_TECHNICAL",
+        typed_error_reason=reason,
+    )
+    report.inbox_failed += 1
+    report.inbox_failed_technical += 1
+    detail = _shorten_reason(error_detail)
+    report.errors.append(
+        f"failed_technical {source_url}: {reason}{f': {detail}' if detail else ''}"
+    )
 
 
 @dataclass
@@ -860,33 +955,6 @@ def _shorten_reason(value: str | None, *, limit: int = 220) -> str | None:
     if len(text) <= limit:
         return text
     return text[: limit - 1].rstrip() + "…"
-
-
-def _rate_limit_max_defers() -> int:
-    raw = (os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_DEFERS") or "3").strip()
-    try:
-        value = int(raw)
-    except Exception:
-        value = 3
-    return max(0, min(value, 1000))
-
-
-def _partial_import_max_attempts() -> int:
-    raw = (os.getenv("VK_AUTO_IMPORT_PARTIAL_MAX_ATTEMPTS") or "3").strip()
-    try:
-        value = int(raw)
-    except Exception:
-        value = 3
-    return max(1, min(value, 1000))
-
-
-def _partial_import_retry_sec() -> float:
-    raw = (os.getenv("VK_AUTO_IMPORT_PARTIAL_RETRY_SEC") or "60").strip()
-    try:
-        value = float(raw)
-    except Exception:
-        value = 60.0
-    return max(0.0, min(value, 86_400.0))
 
 
 def _vk_auto_import_max_photos() -> int:
@@ -1290,7 +1358,7 @@ async def _prefetch_vk_inbox_row(
     # personal pages must explicitly carry their positive signed owner id.
     if post_owner_type == "user":
         fetch_kwargs["owner_type"] = "user"
-    fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
+    fetched_text, photos, published_at, metrics, vk_fetch = await _fetch_vk_post_with_inline_retry(
         post.group_id, post.post_id, **fetch_kwargs
     )
     stage["vk_fetch_post"] = float(time.monotonic() - t0)
@@ -1612,14 +1680,18 @@ async def run_vk_auto_import(
                 else:
                     await process_task
             except asyncio.TimeoutError:
-                report.inbox_failed += 1
-                report.errors.append(
-                    f"timeout_failed {source_url}: row timed out after {row_timeout_sec:.1f}s"
-                )
                 try:
-                    await vk_review.schedule_retry(db, int(post_obj.id), typed_reason="ROW_TIMEOUT", batch_id=batch_id)
+                    await _terminalize_vk_auto_failure(
+                        db,
+                        post=post_obj,
+                        report=report,
+                        typed_reason="ROW_TIMEOUT",
+                        source_url=source_url,
+                        error_detail=f"row timed out after {row_timeout_sec:.1f}s",
+                    )
                 except Exception:
-                    logger.warning("vk_auto: schedule_retry failed after timeout", exc_info=True)
+                    logger.exception("vk_auto: terminalization failed after timeout")
+                    raise
                 logger.warning(
                     "vk_auto: inbox row timeout id=%s url=%s timeout_sec=%.1f",
                     getattr(post_obj, "id", None),
@@ -1639,12 +1711,18 @@ async def run_vk_auto_import(
                 except Exception:
                     logger.warning("vk_auto: timeout_send_failed", exc_info=True)
             except Exception as exc:
-                report.inbox_failed += 1
-                report.errors.append(f"unexpected_failed {source_url}: {exc}")
                 try:
-                    await vk_review.schedule_retry(db, int(post_obj.id), typed_reason="UNEXPECTED_ERROR", batch_id=batch_id)
+                    await _terminalize_vk_auto_failure(
+                        db,
+                        post=post_obj,
+                        report=report,
+                        typed_reason="UNEXPECTED_ERROR",
+                        source_url=source_url,
+                        error_detail=str(exc),
+                    )
                 except Exception:
-                    logger.warning("vk_auto: schedule_retry failed after exception", exc_info=True)
+                    logger.exception("vk_auto: terminalization failed after exception")
+                    raise
                 logger.exception(
                     "vk_auto: unexpected exception in inbox row processing id=%s url=%s",
                     getattr(post_obj, "id", None),
@@ -1855,6 +1933,16 @@ async def run_vk_auto_import(
 
     took = time.time() - start
     total_txt = str(int(total_estimate)) if isinstance(total_estimate, int) else "?"
+    terminal_rows = report.terminal_rows
+    unresolved_rows = report.unresolved_rows
+    if unresolved_rows:
+        balance_error = (
+            "terminal_balance_violation "
+            f"processed={report.inbox_processed} terminal={terminal_rows} "
+            f"unresolved={unresolved_rows}"
+        )
+        report.errors.append(balance_error)
+        logger.error("vk_auto: %s", balance_error)
     summary = (
         "🏁 VK auto import завершён\n"
         f"batch: {batch_id}\n"
@@ -1865,7 +1953,9 @@ async def run_vk_auto_import(
         f"inbox imported: {report.inbox_imported}\n"
         f"inbox rejected: {report.inbox_rejected}\n"
         f"inbox failed: {report.inbox_failed}\n"
+        f"Smart Update technical terminals (без автоматического повтора): {report.inbox_failed_technical}\n"
         f"inbox deferred: {report.inbox_deferred}\n"
+        f"terminal balance: {terminal_rows}/{report.inbox_processed}\n"
         f"events created: {len(set(report.created_event_ids))}\n"
         f"events updated: {len(set(report.updated_event_ids))}\n"
         f"took_sec: {took:.1f}"
@@ -1879,6 +1969,8 @@ async def run_vk_auto_import(
     terminal_status = (
         "canceled"
         if report.cancelled
+        else "failed"
+        if unresolved_rows > 0
         else "partial"
         if report.inbox_failed > 0 and report.inbox_processed > report.inbox_failed
         else "failed"
@@ -1894,7 +1986,10 @@ async def run_vk_auto_import(
             "inbox_imported": int(report.inbox_imported),
             "inbox_rejected": int(report.inbox_rejected),
             "inbox_failed": int(report.inbox_failed),
+            "inbox_failed_technical": int(report.inbox_failed_technical),
             "inbox_deferred": int(report.inbox_deferred),
+            "terminal_rows": int(terminal_rows),
+            "unresolved_rows": int(unresolved_rows),
             "events_created": int(len(set(report.created_event_ids))),
             "events_updated": int(len(set(report.updated_event_ids))),
             "cancelled": int(bool(report.cancelled)),
@@ -1929,6 +2024,8 @@ async def run_vk_auto_import(
             "rejected": report.inbox_rejected,
             "failed": report.inbox_failed,
             "deferred": report.inbox_deferred,
+            "terminal_rows": terminal_rows,
+            "unresolved_rows": unresolved_rows,
             "duration_sec": round(float(took), 3),
         },
     )
@@ -2051,7 +2148,7 @@ async def _process_vk_inbox_row(
         post_owner_type = str(getattr(post, "owner_type", None) or "group")
         if post_owner_type == "user":
             fetch_kwargs["owner_type"] = "user"
-        fetched_text, photos, published_at, metrics, vk_fetch = await fetch_vk_post_text_and_photos(
+        fetched_text, photos, published_at, metrics, vk_fetch = await _fetch_vk_post_with_inline_retry(
             post.group_id, post.post_id, **fetch_kwargs
         )
         _tmark("vk_fetch_post", time.monotonic() - t0)
@@ -2117,18 +2214,19 @@ async def _process_vk_inbox_row(
             # Legacy projections prove that some material once existed but do
             # not prove complete outer/copy/attachment coverage. Never turn
             # that incomplete capture into a terminal semantic negative.
-            report.inbox_deferred += 1
-            await vk_review.schedule_retry(
+            await _terminalize_vk_auto_failure(
                 db,
-                int(post.id),
+                post=post,
+                report=report,
                 typed_reason="EVIDENCE_INCOMPLETE",
-                batch_id=batch_id,
-                retry_after_sec=86400,
+                source_url=source_url,
+                error_detail="legacy packet lacks complete VK attachment/copy evidence",
             )
             await _emit_progress(
                 "🧩",
                 [
-                    "Результат: сохранённый пакет неполон, повтор запланирован",
+                    "Результат: сохранённый пакет неполон; технический terminal",
+                    "Автоматический повтор не запланирован",
                     "Причина: legacy packet lacks complete VK attachment/copy evidence",
                     f"took_sec: {(time.monotonic() - start_ts):.1f}",
                 ],
@@ -2145,33 +2243,42 @@ async def _process_vk_inbox_row(
     if vk_fetch is not None and not vk_fetch.ok:
         allow_stale = _vk_auto_allow_stale_inbox_text()
         if vk_fetch.kind == "not_found":
-            report.inbox_deferred += 1
-            await vk_review.schedule_retry(
+            fetch_detail = f"{vk_fetch.error_code or ''} {_shorten_reason(vk_fetch.error) or ''}".strip()
+            await _terminalize_vk_auto_failure(
                 db,
-                int(post.id),
+                post=post,
+                report=report,
                 typed_reason="EVIDENCE_UNAVAILABLE",
-                batch_id=batch_id,
-                retry_after_sec=86400,
+                source_url=source_url,
+                error_detail=fetch_detail,
             )
             await _emit_progress(
                 "🗑️",
                 [
-                    "Результат: evidence недоступен, повтор запланирован",
-                    f"Причина: {vk_fetch.error_code or ''} {_shorten_reason(vk_fetch.error) or ''}".strip(),
+                    "Результат: evidence недоступен; технический terminal",
+                    "Автоматический повтор не запланирован",
+                    f"Причина: {fetch_detail}",
                     f"took_sec: {(time.monotonic() - start_ts):.1f}",
                 ],
             )
             return
         if not (allow_stale and (text or "").strip()):
-            report.inbox_failed += 1
-            report.errors.append(
-                f"vk_fetch_failed {source_url}: kind={vk_fetch.kind} code={vk_fetch.error_code} err={vk_fetch.error}"
+            fetch_detail = (
+                f"kind={vk_fetch.kind} code={vk_fetch.error_code} err={vk_fetch.error}"
             )
-            await vk_review.schedule_retry(db, int(post.id), typed_reason="SOURCE_FETCH_ERROR", batch_id=batch_id)
+            await _terminalize_vk_auto_failure(
+                db,
+                post=post,
+                report=report,
+                typed_reason="SOURCE_FETCH_ERROR",
+                source_url=source_url,
+                error_detail=fetch_detail,
+            )
             await _emit_progress(
                 "❌",
                 [
                     "Результат: не удалось загрузить пост из VK (wall.getById)",
+                    "Автоматический повтор не запланирован",
                     f"Причина: kind={vk_fetch.kind} code={vk_fetch.error_code}",
                     f"took_sec: {(time.monotonic() - start_ts):.1f}",
                 ],
@@ -2451,22 +2558,20 @@ async def _process_vk_inbox_row(
                 lifecycle_action_count=0,
                 provider_retry_after=(int(retry_after_ms / 1000) if retry_after_ms else None),
             )
-            _state, attempts = await vk_review.schedule_retry(
+            await _terminalize_vk_auto_failure(
                 db,
-                int(post.id),
+                post=post,
+                report=report,
                 typed_reason=typed_reason,
-                batch_id=batch_id,
-                retry_after_sec=(retry_after_ms / 1000 if retry_after_ms else None),
-                provider_retry_after=(int(retry_after_ms / 1000) if retry_after_ms else None),
+                source_url=source_url,
+                error_detail=str(exc),
             )
-            report.inbox_deferred += 1
-            report.errors.append(f"retry_scheduled {source_url}: {typed_reason}: {exc}")
             await _emit_progress(
-                "⏳",
+                "❌",
                 [
-                    "Результат: технический повтор запланирован",
+                    "Результат: техническая ошибка source parse",
+                    "Автоматический повтор не запланирован",
                     f"Причина: {typed_reason}",
-                    f"Попытка: {attempts}",
                     f"took_sec: {(time.monotonic() - start_ts):.1f}",
                 ],
             )
@@ -2486,33 +2591,22 @@ async def _process_vk_inbox_row(
 
     if decision.disposition is SourceDisposition.RETRY_REQUIRED:
         reason = str(getattr(getattr(decision, "retry_reason", None), "value", "RETRY_REQUIRED"))
-        latest_provider_attempt = (
-            dict((getattr(decision, "provider_attempts", ()) or ())[-1])
-            if getattr(decision, "provider_attempts", ())
-            else {}
-        )
-        retry_after_ms = int(
-            latest_provider_attempt.get("provider_retry_after_ms", 0) or 0
-        )
-        await vk_review.schedule_retry(
+        await _terminalize_vk_auto_failure(
             db,
-            int(post.id),
+            post=post,
+            report=report,
             typed_reason=reason,
-            batch_id=batch_id,
-            retry_after_sec=(retry_after_ms / 1000 if retry_after_ms else None),
-            quota_scope=latest_provider_attempt.get("quota_scope"),
-            provider_retry_after=(
-                int(math.ceil(retry_after_ms / 1000)) if retry_after_ms else None
-            ),
+            source_url=source_url,
+            error_detail="source parse did not reach a complete typed decision",
         )
-        report.inbox_deferred += 1
-        report.errors.append(f"source_retry {source_url}: {reason}")
-        await vk_review.record_carrier_resolution(
-            db,
-            source_packet_id=getattr(post, "source_packet_id", None),
-            child_outcomes=[],
-            terminal_carrier_outcome="RETRY_SCHEDULED",
-            typed_error_reason=reason,
+        await _emit_progress(
+            "❌",
+            [
+                "Результат: source parse завершён техническим terminal",
+                "Автоматический повтор не запланирован",
+                f"Причина: {reason}",
+                f"took_sec: {(time.monotonic() - start_ts):.1f}",
+            ],
         )
         return
 
@@ -2548,20 +2642,13 @@ async def _process_vk_inbox_row(
     if not drafts:
         if lifecycle_unresolved:
             reason = lifecycle_unresolved[0]
-            await vk_review.schedule_retry(
+            await _terminalize_vk_auto_failure(
                 db,
-                int(post.id),
+                post=post,
+                report=report,
                 typed_reason="LIFECYCLE_NO_MATCH",
-                batch_id=batch_id,
-            )
-            report.inbox_deferred += 1
-            report.errors.append(f"lifecycle_retry {source_url}: {reason}")
-            await vk_review.record_carrier_resolution(
-                db,
-                source_packet_id=getattr(post, "source_packet_id", None),
-                child_outcomes=[],
-                terminal_carrier_outcome="RETRY_SCHEDULED",
-                typed_error_reason="LIFECYCLE_NO_MATCH",
+                source_url=source_url,
+                error_detail=reason,
             )
             return
         if decision.disposition is SourceDisposition.LIFECYCLE_ONLY and lifecycle_event_ids:
@@ -2612,19 +2699,13 @@ async def _process_vk_inbox_row(
                 ],
             )
             return
-        await vk_review.schedule_retry(
+        await _terminalize_vk_auto_failure(
             db,
-            int(post.id),
+            post=post,
+            report=report,
             typed_reason="EVIDENCE_INCOMPLETE",
-            batch_id=batch_id,
-        )
-        report.inbox_deferred += 1
-        await vk_review.record_carrier_resolution(
-            db,
-            source_packet_id=getattr(post, "source_packet_id", None),
-            child_outcomes=[],
-            terminal_carrier_outcome="RETRY_SCHEDULED",
-            typed_error_reason="EVIDENCE_INCOMPLETE",
+            source_url=source_url,
+            error_detail="empty source result without complete no-event proof",
         )
         return
 
@@ -2647,6 +2728,7 @@ async def _process_vk_inbox_row(
     partial_error: str | None = None
     smart_retry_reasons: list[str] = []
     semantic_rejections: list[str] = []
+    smart_technical_failures: list[str] = []
     child_outcomes: list[str] = []
     inline_jobs_enabled = (os.getenv("VK_AUTO_IMPORT_INLINE_JOBS", "1") or "").strip().lower() in {
         "1",
@@ -2681,11 +2763,18 @@ async def _process_vk_inbox_row(
                 )
                 continue
             if smart_result.is_retry:
-                child_outcomes.append("RETRY_SCHEDULED")
-                # A roundup contains independent candidates. Keep the durable
-                # retry for this child while allowing valid siblings to finish.
+                # Compatibility guard for an old Smart Update caller result.
+                # The visible carrier never inherits that durable retry: its
+                # unresolved child becomes a typed technical terminal.
+                child_outcomes.append("FAILED_TECHNICAL")
                 smart_retry_reasons.append(
                     smart_result.reason or "smart_update_retry"
+                )
+                continue
+            if smart_result.is_failed_technical:
+                child_outcomes.append("FAILED_TECHNICAL")
+                smart_technical_failures.append(
+                    smart_result.reason or "smart_update_failed_technical"
                 )
                 continue
             if not smart_result.is_accepted or res.event_id is None:
@@ -2704,14 +2793,23 @@ async def _process_vk_inbox_row(
         except Exception as exc:
             ok = False
             exc_txt = str(exc)
+            child_outcomes.append("FAILED_TECHNICAL")
             report.errors.append(f"persist_failed {source_url}: {exc_txt}")
             if not imported_event_ids:
-                report.inbox_failed += 1
-                await vk_review.schedule_retry(db, int(post.id), typed_reason="PERSIST_ERROR", batch_id=batch_id)
+                await _terminalize_vk_auto_failure(
+                    db,
+                    post=post,
+                    report=report,
+                    typed_reason="PERSIST_ERROR",
+                    source_url=source_url,
+                    child_outcomes=child_outcomes,
+                    error_detail=exc_txt,
+                )
                 await _emit_progress(
                     "❌",
                     [
                         "Результат: ошибка сохранения (persist)",
+                        "Автоматический повтор не запланирован",
                         f"Причина: {_shorten_reason(exc_txt) or '—'}",
                         f"took_sec: {(time.monotonic() - start_ts):.1f}",
                     ],
@@ -2726,19 +2824,44 @@ async def _process_vk_inbox_row(
         _tmark("persist_total", persist_total_sec)
 
     smart_retry_reason = smart_retry_reasons[0] if smart_retry_reasons else None
-    if smart_retry_reason and not imported_event_ids:
-        report.inbox_deferred += 1
-        report.errors.append(f"retry_scheduled {source_url}: {smart_retry_reason}")
-        await vk_review.mark_deferred(
+    smart_technical_reason = (
+        smart_technical_failures[0] if smart_technical_failures else None
+    )
+    if smart_technical_reason and not imported_event_ids:
+        await _terminalize_vk_auto_failure(
             db,
-            int(post.id),
-            batch_id=batch_id,
-            retry_after_sec=_partial_import_retry_sec(),
+            post=post,
+            report=report,
+            typed_reason=smart_technical_reason,
+            source_url=source_url,
+            child_outcomes=child_outcomes,
         )
         await _emit_progress(
-            "⏳",
+            "❌",
             [
-                "Результат: Smart Update запланировал автоматический повтор",
+                "Результат: Smart Update завершился технической ошибкой",
+                "Автоматический повтор не запланирован",
+                f"Причина: {_shorten_reason(smart_technical_reason) or 'technical failure'}",
+                f"took_sec: {(time.monotonic() - start_ts):.1f}",
+            ],
+        )
+        _log_row_timing(drafts_count=len(drafts or []), ok_value=False)
+        return
+    if smart_retry_reason and not imported_event_ids:
+        terminal_reason = f"SMART_UPDATE_UNRESOLVED:{smart_retry_reason}"
+        await _terminalize_vk_auto_failure(
+            db,
+            post=post,
+            report=report,
+            typed_reason=terminal_reason,
+            source_url=source_url,
+            child_outcomes=child_outcomes,
+        )
+        await _emit_progress(
+            "❌",
+            [
+                "Результат: Smart Update не завершил решение; технический terminal",
+                "Автоматический повтор не запланирован",
                 f"Причина: {_shorten_reason(smart_retry_reason) or 'transient'}",
                 f"took_sec: {(time.monotonic() - start_ts):.1f}",
             ],
@@ -2787,27 +2910,31 @@ async def _process_vk_inbox_row(
         else None
     )
     lifecycle_retry = lifecycle_unresolved[0] if lifecycle_unresolved else None
-    durable_retry_reason = smart_retry_reason or partial_error or lifecycle_retry or enrichment_retry
-    if durable_retry_reason:
-        await vk_review.mark_deferred(
+    terminal_failure_detail = smart_retry_reason or partial_error or lifecycle_retry or enrichment_retry
+    if smart_technical_reason:
+        await _terminalize_vk_auto_failure(
             db,
-            int(post.id),
-            batch_id=batch_id,
-            retry_after_sec=_partial_import_retry_sec(),
-            typed_reason=(
-                "LIFECYCLE_NO_MATCH" if lifecycle_retry
-                else "EVIDENCE_INCOMPLETE" if enrichment_retry
-                else "SMART_UPDATE_RETRY" if smart_retry_reason
-                else "PERSIST_ERROR"
-            ),
-        )
-        report.inbox_deferred += 1
-        await vk_review.record_carrier_resolution(
-            db,
-            source_packet_id=getattr(post, "source_packet_id", None),
+            post=post,
+            report=report,
+            typed_reason=smart_technical_reason,
+            source_url=source_url,
             child_outcomes=child_outcomes,
-            terminal_carrier_outcome="RETRY_SCHEDULED",
-            typed_error_reason=str(durable_retry_reason),
+        )
+    elif terminal_failure_detail:
+        typed_terminal_reason = (
+            "SMART_UPDATE_UNRESOLVED" if smart_retry_reason
+            else "PERSIST_ERROR" if partial_error
+            else "LIFECYCLE_NO_MATCH" if lifecycle_retry
+            else "EVIDENCE_INCOMPLETE"
+        )
+        await _terminalize_vk_auto_failure(
+            db,
+            post=post,
+            report=report,
+            typed_reason=typed_terminal_reason,
+            source_url=source_url,
+            child_outcomes=child_outcomes,
+            error_detail=str(terminal_failure_detail),
         )
     else:
         if exact_parse_replay and child_outcomes and all(
@@ -2851,12 +2978,17 @@ async def _process_vk_inbox_row(
     ]
     if semantic_rejections:
         extra_lines.insert(0, f"⚠️ Отклонено независимых карточек: {len(semantic_rejections)}")
-    effective_retry_reason = durable_retry_reason
-    if effective_retry_reason:
+    if smart_technical_reason:
         extra_lines.insert(
             0,
-            "⚠️ Частично (автоматический повтор запланирован): "
-            f"{_shorten_reason(effective_retry_reason) or 'transient'}",
+            "❌ Частично: Smart Update technical terminal, автоматический повтор не запланирован: "
+            f"{_shorten_reason(smart_technical_reason) or 'technical failure'}",
+        )
+    elif terminal_failure_detail:
+        extra_lines.insert(
+            0,
+            "❌ Частично: технический terminal, автоматический повтор не запланирован: "
+            f"{_shorten_reason(terminal_failure_detail) or 'technical failure'}",
         )
     await _emit_progress(icon, extra_lines)
 

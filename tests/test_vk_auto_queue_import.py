@@ -29,6 +29,7 @@ from source_parse_contract import (
     SourceDisposition,
     SourceNoEventReason,
     SourceParseDecision,
+    SourceParseRetryReason,
 )
 
 
@@ -76,6 +77,89 @@ def test_ordinary_vk_gallery_keeps_all_evidence(monkeypatch):
     monkeypatch.setenv("VK_AUTO_IMPORT_MAX_PHOTOS", "4")
     monkeypatch.setenv("VK_AUTO_IMPORT_SCHEDULE_MAX_PHOTOS", "10")
     assert vk_auto_queue._vk_auto_import_photo_limit_for_text("Фото с открытия выставки") == 100
+
+
+@pytest.mark.asyncio
+async def test_vk_fetch_transient_failure_retries_only_inline(monkeypatch):
+    calls = 0
+
+    async def fake_fetch(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return "", [], None, None, vk_auto_queue.VkFetchStatus(False, "network_error")
+        return "event", [], None, None, vk_auto_queue.VkFetchStatus(True, "ok")
+
+    async def no_wait(_seconds):
+        return None
+
+    monkeypatch.setenv("VK_AUTO_IMPORT_FETCH_INLINE_ATTEMPTS", "2")
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_auto_queue.asyncio, "sleep", no_wait)
+
+    result = await vk_auto_queue._fetch_vk_post_with_inline_retry(1, 2)
+
+    assert calls == 2
+    assert result[0] == "event"
+    assert result[4].ok is True
+
+
+@pytest.mark.asyncio
+async def test_failed_technical_clears_packet_and_inbox_due_state(tmp_path):
+    db = Database(str(tmp_path / "terminal-clears-due.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','Source')"
+        )
+        await conn.commit()
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post={"date": 1, "post_id": 2, "text": "event", "photos": []},
+        source_url="https://vk.com/wall-1_2",
+        keyword_hints=(),
+        date_hints=(),
+        event_ts_hint=None,
+    )
+    async with db.raw_conn() as conn:
+        inbox_id = (
+            await (
+                await conn.execute(
+                    "SELECT id FROM vk_inbox WHERE source_packet_id=?", (packet_id,)
+                )
+            ).fetchone()
+        )[0]
+    await vk_auto_queue.vk_review.schedule_retry(
+        db, inbox_id, typed_reason="RATE_LIMITED", batch_id="old-auto"
+    )
+    await vk_auto_queue.vk_review.mark_carrier_outcome(
+        db,
+        inbox_id=inbox_id,
+        outcome="FAILED_TECHNICAL",
+        typed_reason="RATE_LIMITED",
+    )
+
+    async with db.raw_conn() as conn:
+        inbox = await (
+            await conn.execute(
+                "SELECT status,next_attempt_at FROM vk_inbox WHERE id=?", (inbox_id,)
+            )
+        ).fetchone()
+        packet = await (
+            await conn.execute(
+                "SELECT status,llm_status,next_attempt_at,terminal_carrier_outcome "
+                "FROM vk_source_packet WHERE id=?",
+                (packet_id,),
+            )
+        ).fetchone()
+    assert inbox == ("failed_technical", None)
+    assert packet[0:2] == ("failed_technical", "failed_technical")
+    # The immutable packet schema keeps a NOT NULL timestamp, but its terminal
+    # status makes that value inert; the selectable inbox projection is clear.
+    assert packet[2] is not None
+    assert packet[3] == "FAILED_TECHNICAL"
 
 
 @pytest.mark.asyncio
@@ -286,7 +370,7 @@ async def test_vk_auto_import_wait_mode_reports_heavy_gate_wait(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_import_schedules_durable_retry_on_timeout(tmp_path, monkeypatch):
+async def test_vk_auto_import_terminalizes_row_timeout_without_retry(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -312,7 +396,12 @@ async def test_vk_auto_import_schedules_durable_retry_on_timeout(tmp_path, monke
     report = await vk_auto_queue.run_vk_auto_import(db, bot, chat_id=1, limit=1, operator_id=123)
 
     assert report.inbox_failed == 1
-    assert any("timeout_failed https://vk.com/wall-1_100" in err for err in report.errors)
+    assert report.inbox_failed_technical == 1
+    assert report.inbox_deferred == 0
+    assert any(
+        "failed_technical https://vk.com/wall-1_100: ROW_TIMEOUT" in err
+        for err in report.errors
+    )
     assert any("таймаут обработки поста" in text for _, text in bot.messages)
 
     async with db.raw_conn() as conn:
@@ -325,9 +414,9 @@ async def test_vk_auto_import_schedules_durable_retry_on_timeout(tmp_path, monke
         cur = await conn.execute("SELECT status, last_typed_reason, next_attempt_at FROM vk_inbox WHERE id=1")
         row = await cur.fetchone()
         assert row is not None
-        assert row[0] == "deferred"
+        assert row[0] == "failed_technical"
         assert row[1] == "ROW_TIMEOUT"
-        assert row[2] is not None
+        assert row[2] is None
 
 
 @pytest.mark.asyncio
@@ -582,6 +671,218 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
         )
         rows = await cur.fetchall()
         assert [r[0] for r in rows] == [1001, 1002]
+
+
+@pytest.mark.asyncio
+async def test_vk_auto_import_terminalizes_smart_technical_failure_without_retry(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "failed-technical.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name,location) VALUES(1,'club1','Source','Venue')"
+        )
+        await conn.execute(
+            "INSERT INTO vk_inbox(id,group_id,post_id,date,text,matched_kw,has_date,status) "
+            "VALUES(1,1,100,0,'stub',?,0,'pending')",
+            (vk_intake.OCR_PENDING_SENTINEL,),
+        )
+        await conn.commit()
+
+    async def fake_fetch(*_args, **_kwargs):
+        return (
+            "18 августа событие в Venue",
+            [],
+            datetime.now(timezone.utc),
+            {},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build(*_args, **_kwargs):
+        draft = vk_intake.EventDraft(
+            title="Event", date="2026-08-18", time="15:00", venue="Venue"
+        )
+        decision = SourceParseDecision(
+            [{"title": "Event"}],
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source("18 августа событие в Venue"),
+        )
+        return vk_intake.DraftParseResult([draft], decision=decision), None
+
+    async def fake_persist(*_args, **_kwargs):
+        return vk_intake.PersistResult(
+            event_id=None,
+            telegraph_url=None,
+            ics_supabase_url=None,
+            ics_tg_url=None,
+            event_date=None,
+            event_end_date=None,
+            event_time=None,
+            event_type=None,
+            is_free=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
+                reason="provider_unavailable",
+            ),
+        )
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+    bot = DummyBot()
+    report = await vk_auto_queue.run_vk_auto_import(
+        db, bot, chat_id=1, limit=1, operator_id=123
+    )
+
+    assert report.inbox_failed == 1
+    assert report.inbox_failed_technical == 1
+    assert report.inbox_deferred == 0
+    assert any("без автоматического повтора" in text for _, text in bot.messages)
+    async with db.raw_conn() as conn:
+        row = await (await conn.execute(
+            "SELECT status,last_typed_reason,next_attempt_at FROM vk_inbox WHERE id=1"
+        )).fetchone()
+    assert row == ("failed_technical", "provider_unavailable", None)
+
+
+@pytest.mark.asyncio
+async def test_vk_auto_import_fifteen_row_batch_is_fully_terminal_without_retry(
+    tmp_path, monkeypatch
+):
+    """Regression for the operator screenshot: 15 selected rows must balance.
+
+    The historical batch had fourteen automatic deferrals across incomplete
+    evidence, schema/provider failures and Smart/persist failures.  The linear
+    contract keeps the one proved no-event rejection and makes every other row
+    a visible technical terminal with no due timestamp.
+    """
+
+    from google_ai.exceptions import RateLimitError
+
+    db = Database(str(tmp_path / "batch-balance.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name,location) "
+            "VALUES(1,'club1','Source','Venue')"
+        )
+        for inbox_id in range(1, 16):
+            await conn.execute(
+                "INSERT INTO vk_inbox(id,group_id,post_id,date,text,matched_kw,has_date,status) "
+                "VALUES(?,1,?,0,?,?,0,'pending')",
+                (inbox_id, 100 + inbox_id, f"case-{inbox_id}", vk_intake.OCR_PENDING_SENTINEL),
+            )
+        await conn.commit()
+
+    async def fake_fetch(_group_id, post_id, **_kwargs):
+        inbox_id = int(post_id) - 100
+        return (
+            f"case-{inbox_id}",
+            [],
+            datetime.now(timezone.utc),
+            {},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build(text, **_kwargs):
+        inbox_id = int(text.split("-", 1)[1])
+        manifest = EvidenceManifest.complete_source(text)
+        if inbox_id <= 8:
+            return vk_intake.DraftParseResult(
+                [],
+                decision=SourceParseDecision.retry(
+                    SourceParseRetryReason.EVIDENCE_INCOMPLETE,
+                    evidence_manifest=manifest,
+                ),
+            ), None
+        if inbox_id == 9:
+            return vk_intake.DraftParseResult(
+                [],
+                decision=SourceParseDecision.retry(
+                    SourceParseRetryReason.SCHEMA_MISMATCH,
+                    evidence_manifest=manifest,
+                ),
+            ), None
+        if inbox_id in {10, 11}:
+            raise RateLimitError(blocked_reason="tpm", retry_after_ms=1)
+        if inbox_id == 15:
+            decision = SourceParseDecision(
+                [],
+                disposition=SourceDisposition.CONFIRMED_NO_EVENT,
+                no_event_reason=SourceNoEventReason.NO_ATTENDABLE_EVENT,
+                evidence_manifest=manifest,
+            )
+            return vk_intake.DraftParseResult([], decision=decision), None
+        draft = vk_intake.EventDraft(
+            title=f"case-{inbox_id}",
+            date="2026-08-18",
+            time="15:00",
+            venue="Venue",
+        )
+        decision = SourceParseDecision(
+            [{"title": draft.title}],
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=manifest,
+        )
+        return vk_intake.DraftParseResult([draft], decision=decision), None
+
+    async def fake_persist(draft, *_args, **_kwargs):
+        inbox_id = int(draft.title.split("-", 1)[1])
+        if inbox_id == 12:
+            raise RuntimeError("database write unavailable")
+        if inbox_id == 13:
+            smart_result = SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                reason="legacy_retry_result",
+            )
+        else:
+            smart_result = SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
+                reason="smart_provider_unavailable",
+            )
+        return vk_intake.PersistResult(
+            event_id=None,
+            telegraph_url=None,
+            ics_supabase_url=None,
+            ics_tg_url=None,
+            event_date=None,
+            event_end_date=None,
+            event_time=None,
+            event_type=None,
+            is_free=False,
+            smart_result=smart_result,
+        )
+
+    monkeypatch.setenv("VK_AUTO_IMPORT_INLINE_JOBS", "0")
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+
+    report = await vk_auto_queue.run_vk_auto_import(
+        db, DummyBot(), chat_id=1, limit=15, operator_id=123
+    )
+
+    assert report.inbox_processed == 15
+    assert report.inbox_imported == 0
+    assert report.inbox_rejected == 1
+    assert report.inbox_failed == 14
+    assert report.inbox_failed_technical == 14
+    assert report.inbox_deferred == 0
+    assert report.inbox_processed == (
+        report.inbox_imported + report.inbox_rejected + report.inbox_failed
+    )
+    async with db.raw_conn() as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT status,next_attempt_at,COUNT(*) FROM vk_inbox "
+                "GROUP BY status,next_attempt_at ORDER BY status"
+            )
+        ).fetchall()
+    assert rows == [
+        ("confirmed_no_event", None, 1),
+        ("failed_technical", None, 14),
+    ]
 
 
 @pytest.mark.asyncio
@@ -1501,7 +1802,7 @@ async def test_prefetch_threads_user_owner_type_to_fresh_fetch(tmp_path, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_queue_retries_deleted_post_as_missing_evidence(tmp_path, monkeypatch):
+async def test_vk_auto_queue_terminalizes_deleted_post_as_missing_evidence(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     db = Database(str(tmp_path / "db.sqlite"))
@@ -1562,19 +1863,20 @@ async def test_vk_auto_queue_retries_deleted_post_as_missing_evidence(tmp_path, 
     )
 
     assert report.inbox_rejected == 0
-    assert report.inbox_deferred == 1
-    assert report.inbox_failed == 0
+    assert report.inbox_deferred == 0
+    assert report.inbox_failed == 1
+    assert report.inbox_failed_technical == 1
 
     async with db.raw_conn() as conn:
         cur = await conn.execute("SELECT status, last_typed_reason, next_attempt_at FROM vk_inbox WHERE id=?", (1,))
         row = await cur.fetchone()
-    assert row[0] == "deferred"
+    assert row[0] == "failed_technical"
     assert row[1] == "EVIDENCE_UNAVAILABLE"
-    assert row[2] is not None
+    assert row[2] is None
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_path, monkeypatch):
+async def test_vk_auto_queue_rate_limit_terminalizes_after_inline_attempt(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     from google_ai.exceptions import RateLimitError
@@ -1645,8 +1947,9 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
         progress_total_txt="1",
     )
 
-    assert report.inbox_deferred == 1
-    assert report.inbox_failed == 0
+    assert report.inbox_deferred == 0
+    assert report.inbox_failed == 1
+    assert report.inbox_failed_technical == 1
 
     async with db.raw_conn() as conn:
         cur = await conn.execute(
@@ -1654,10 +1957,10 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
             (1,),
         )
         status, locked_by, review_batch, next_attempt_at = await cur.fetchone()
-    assert status == "deferred"
+    assert status == "failed_technical"
     assert locked_by is None
     assert review_batch == "batch-x"
-    assert next_attempt_at is not None
+    assert next_attempt_at is None
 
 
 def test_build_smart_update_posters_falls_back_to_vk_photo_url_when_catbox_missing():

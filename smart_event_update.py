@@ -77,6 +77,8 @@ from smart_update_state import (
     begin_candidate_attempt,
     claim_due_candidates,
     finish_candidate_attempt,
+    terminalize_candidate_ack_failure,
+    terminalize_claimed_candidate_technical,
 )
 
 logger = logging.getLogger(__name__)
@@ -1776,6 +1778,8 @@ class SmartUpdateResult:
                 product_exclusion_reason = ProductExclusionReason(str(reason or ""))
             except ValueError:
                 product_exclusion_reason = None
+            if product_exclusion_reason is None:
+                retry_reason = RetryReason.PRODUCT_REASON_UNTYPED
         if outcome is None:
             outcome = _terminal_outcome_from_legacy_status(
                 legacy,
@@ -1793,7 +1797,7 @@ class SmartUpdateResult:
         if outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY and not isinstance(
             product_exclusion_reason, ProductExclusionReason
         ):
-            outcome = SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            outcome = SmartUpdateTerminalOutcome.FAILED_TECHNICAL
             retry_reason = RetryReason.PRODUCT_REASON_UNTYPED
         if outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED and not isinstance(
             retry_reason, RetryReason
@@ -1834,6 +1838,7 @@ class SmartUpdateResult:
             SmartUpdateTerminalOutcome.MERGED: "merged",
             SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY: "noop_exact_source_replay",
             SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY: "rejected_product_policy",
+            SmartUpdateTerminalOutcome.FAILED_TECHNICAL: "failed_technical",
             SmartUpdateTerminalOutcome.RETRY_SCHEDULED: "retry_scheduled",
         }[self.outcome]
 
@@ -1848,6 +1853,10 @@ class SmartUpdateResult:
     @property
     def is_retry(self) -> bool:
         return self.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+
+    @property
+    def is_failed_technical(self) -> bool:
+        return self.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
 
     @property
     def is_rejected(self) -> bool:
@@ -1888,7 +1897,50 @@ def _terminal_outcome_from_legacy_status(
         return SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
     if isinstance(product_exclusion_reason, ProductExclusionReason):
         return SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
-    return SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+    return SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+
+
+def _linear_product_exclusion_reason(result: SmartUpdateResult) -> ProductExclusionReason | None:
+    """Map only exact deterministic input defects to a product terminal.
+
+    Verification/provider results are not product verdicts.  In particular,
+    an invalid or uncertain LLM response must never be converted to no-event by
+    matching a diagnostic substring.
+    """
+
+    reason = str(result.reason or "").casefold()
+    if result.retry_reason is RetryReason.SOURCE_DECISION_INVALID:
+        return {
+            "missing_date": ProductExclusionReason.MISSING_DATE,
+            "invalid_date": ProductExclusionReason.MISSING_DATE,
+            "missing_title": ProductExclusionReason.MISSING_TITLE,
+            "empty_title_after_clean": ProductExclusionReason.EMPTY_TITLE_AFTER_CLEAN,
+            "missing_location": ProductExclusionReason.MISSING_LOCATION,
+        }.get(reason)
+    return None
+
+
+def _terminalize_linear_result(result: SmartUpdateResult) -> SmartUpdateResult:
+    """Close legacy retry-shaped results inside the current invocation.
+
+    Semantic uncertainty on complete evidence becomes a typed product decision;
+    provider/schema/storage uncertainty becomes a visible technical terminal.
+    No caller receives a newly scheduled background retry.
+    """
+
+    if result.outcome is not SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
+        return result
+    exclusion = _linear_product_exclusion_reason(result)
+    if exclusion is not None:
+        result.outcome = SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+        result.product_exclusion_reason = exclusion
+        result.retry_reason = None
+        result.reason = exclusion.value
+        return result
+    result.outcome = SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+    if not result.reason and isinstance(result.retry_reason, RetryReason):
+        result.reason = result.retry_reason.value
+    return result
 
 
 class SmartUpdateOutcomeKind(str, Enum):
@@ -2447,7 +2499,10 @@ EVENTNESS_REVIEW_SCHEMA = {
 LOCATION_GROUNDING_REVIEW_SCHEMA = {
     "type": "object",
     "properties": {
-        "decision": {"type": "string", "enum": ["keep", "repair", "uncertain"]},
+        "decision": {
+            "type": "string",
+            "enum": ["keep", "repair", "reject_missing_location"],
+        },
         "confidence": {"type": "number"},
         "location_name": {"type": ["string", "null"]},
         "location_address": {"type": ["string", "null"]},
@@ -6316,6 +6371,14 @@ def _norm_text_for_grounding(value: str | None) -> str:
     # Strip only this transport wrapper before the ordinary verbatim check;
     # semantic paraphrases and invented text still fail closed.
     raw = re.sub(r"\[[^|\]\r\n]{1,500}\|([^\]\r\n]+)\]", r"\1", raw)
+    # Source text and the canonical venue registry use equivalent Russian
+    # address spellings (for example ``проспект`` vs ``пр-кт``).  Normalize
+    # only this structural token; venue/name semantics remain LLM-owned.
+    raw = re.sub(
+        r"(?u)\bпр\s*(?:[-–—]\s*кт|оспект(?:а|у|е|ом)?)\b",
+        " проспект ",
+        raw,
+    )
     raw = re.sub(r"[«»\"'`.,;:!?()\[\]{}#№]+", " ", raw)
     raw = re.sub(r"\s+", " ", raw).strip()
     return raw
@@ -6878,10 +6941,12 @@ async def _llm_review_candidate_location_grounding(
         "Название программы или сообщества не является venue только потому, что оно дословно есть в посте. Event context вроде "
         "«День города в Янтарном» не является названием venue. "
         "Если источник явно называет более конкретное место, выбери его. "
-        "Если источник подтверждает только город/посёлок, но не attendee-facing площадку, "
-        "верни uncertain: не превращай событие или праздник в location_name. "
-        "Ничего не выдумывай. Для repair верни короткую дословную evidence_quote. "
-        "Если доказательств недостаточно — uncertain. Верни только JSON.\n"
+        "Если candidate уже подтверждён источником — выбери keep. Если источник явно "
+        "называет другое attendee-facing место — repair. Если источник подтверждает только "
+        "город/посёлок, название события/фестиваля или программу, но не площадку, выбери "
+        "reject_missing_location: не превращай контекст события в location_name. "
+        "Ничего не выдумывай. Для каждого решения верни короткую дословную evidence_quote. "
+        "Это финальное решение: не возвращай uncertain и не проси повтор. Верни только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
     )
     data = await _ask_gemma_json(
@@ -6904,15 +6969,25 @@ async def _llm_review_candidate_location_grounding(
         in _norm_text_for_grounding(corpus)
     )
 
-    if decision == "keep" and confidence >= 0.9 and quote_grounded:
+    if decision == "keep":
+        # Confidence is retained for observability, not used as a second
+        # semantic judge. A grounded LLM KEEP must not fall through into an
+        # endless retry merely because a scalar is below an arbitrary cutoff.
+        if not quote_grounded:
+            return False, "llm_keep_quote_invalid"
         if _source_supports_location_value(corpus, candidate.location_name) or _source_supports_location_value(
             corpus, candidate.location_address
         ):
             return True, "llm_keep"
         return False, "llm_keep_not_grounded"
 
-    if decision != "repair" or confidence < 0.8 or not quote_grounded:
-        return False, f"llm_{decision or 'uncertain'}"
+    if decision == "reject_missing_location":
+        if not quote_grounded:
+            return False, "llm_reject_quote_invalid"
+        return False, "llm_reject_missing_location"
+
+    if decision != "repair" or not quote_grounded:
+        return False, "llm_response_invalid"
 
     proposed_name = str(data.get("location_name") or "").strip() or None
     proposed_address = str(data.get("location_address") or "").strip() or None
@@ -16206,7 +16281,7 @@ async def smart_event_update(
         )
     except ValueError:
         return SmartUpdateResult(
-            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
             reason="invalid_smart_update_intent", retry_reason=RetryReason.INVALID_INTENT,
         )
     candidate.intent = intent
@@ -16264,13 +16339,13 @@ async def smart_event_update(
         candidate.force_match_event_id = None
     except CandidateAttemptInProgress:
         return SmartUpdateResult(
-            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
             reason="candidate_attempt_in_progress", retry_reason=RetryReason.CANDIDATE_ATTEMPT_IN_PROGRESS,
         )
     except Exception:
         logger.exception("smart_update: durable candidate registration failed")
         return SmartUpdateResult(
-            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
             reason="candidate_state_unavailable", retry_reason=RetryReason.CANDIDATE_STATE_UNAVAILABLE,
         )
     async with _SMART_UPDATE_LOCK:
@@ -16285,6 +16360,24 @@ async def smart_event_update(
                     schedule_tasks=schedule_tasks,
                     schedule_kwargs=schedule_kwargs,
                 )
+                if (
+                    result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+                    and result.retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
+                ):
+                    # Identity ambiguity is a semantic decision, not recovery
+                    # work. Resolve it once, inline, through the existing
+                    # LLM-first distinct-create path.
+                    candidate.force_create_distinct = True
+                    candidate.force_create_distinct_reason = (
+                        IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION
+                    )
+                    result = await _smart_event_update_impl(
+                        db,
+                        candidate,
+                        check_source_url=check_source_url,
+                        schedule_tasks=schedule_tasks,
+                        schedule_kwargs=schedule_kwargs,
+                    )
         except SourceBindingConflict as exc:
             result = SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
@@ -16321,37 +16414,61 @@ async def smart_event_update(
                 ),
             )
         except Exception:
-            logger.exception("smart_update: processing failed; scheduling durable retry")
+            logger.exception("smart_update: processing failed; closing technical terminal")
             result = SmartUpdateResult(
-                outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
                 reason="smart_update_processing_error", retry_reason=RetryReason.SMART_UPDATE_PROCESSING_ERROR,
             )
+    result = _terminalize_linear_result(result)
     result.attempt = receipt.attempt
-    try:
-        await finish_candidate_attempt(
-            db,
-            receipt,
-            outcome=result.outcome,
-            event_id=result.event_id,
-            diagnostic_event_id=result.diagnostic_event_id,
-            reason=result.reason,
-            retry_reason=result.retry_reason,
-            product_exclusion_reason=result.product_exclusion_reason,
-            identity_distinct_reason=result.identity_distinct_reason,
-            lifecycle_reason=result.lifecycle_reason,
-        )
-    except Exception:
-        logger.exception("smart_update: durable terminal acknowledgement failed")
-        if result.is_accepted:
-            # The domain write is already authoritative. Regressing the caller
-            # to RETRY would recreate the observed "imported pointer + failed
-            # queue status" incident. Candidate state remains RETRY_SCHEDULED
-            # from attempt start and exact replay will reconcile its ledger.
-            return result
+    ack_error: Exception | None = None
+    for ack_try in range(3):
+        try:
+            await finish_candidate_attempt(
+                db,
+                receipt,
+                outcome=result.outcome,
+                event_id=result.event_id,
+                diagnostic_event_id=result.diagnostic_event_id,
+                reason=result.reason,
+                retry_reason=result.retry_reason,
+                product_exclusion_reason=result.product_exclusion_reason,
+                identity_distinct_reason=result.identity_distinct_reason,
+                lifecycle_reason=result.lifecycle_reason,
+            )
+            ack_error = None
+            break
+        except Exception as exc:
+            ack_error = exc
+            logger.warning(
+                "smart_update: terminal acknowledgement attempt=%s failed",
+                ack_try + 1,
+                exc_info=True,
+            )
+            if ack_try < 2:
+                await asyncio.sleep(0.05 * (ack_try + 1))
+    if ack_error is not None:
+        diagnostic_id = result.event_id or result.diagnostic_event_id
+        try:
+            await terminalize_candidate_ack_failure(
+                db,
+                receipt,
+                diagnostic_event_id=diagnostic_id,
+            )
+        except Exception:
+            logger.critical(
+                "smart_update.candidate_ack_failure_unpersisted candidate_key=%s "
+                "attempt_no=%s diagnostic_event_id=%s",
+                receipt.candidate_key,
+                receipt.attempt_no,
+                diagnostic_id,
+                exc_info=True,
+            )
         return SmartUpdateResult(
-            outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
-            diagnostic_event_id=result.event_id or result.diagnostic_event_id,
-            reason="candidate_state_ack_failed", retry_reason=RetryReason.CANDIDATE_STATE_ACK_FAILED,
+            outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
+            diagnostic_event_id=diagnostic_id,
+            reason="candidate_state_ack_failed",
+            retry_reason=RetryReason.CANDIDATE_STATE_ACK_FAILED,
             attempt=receipt.attempt,
         )
     return result
@@ -16506,11 +16623,11 @@ async def retry_due_smart_update_candidates(
     lease_seconds: int = 300,
     on_accepted: Callable[[EventCandidate, SmartUpdateResult], Awaitable[None]] | None = None,
 ) -> dict[str, int]:
-    """Claim and automatically replay due durable candidates.
+    """One-time compatibility drain for legacy durable candidates.
 
-    The periodic scheduler imports this function lazily. Rehydration does not
-    select a provider or add an LLM stage; it invokes the same Smart Update
-    facade with the original packet and existing configured calls.
+    New invocations never enqueue rows. The drain invokes the same linear
+    facade once for each old RETRY_SCHEDULED payload and every branch closes as
+    accepted, product rejection or visible technical failure.
     """
 
     owner = f"smart-update:{os.getpid()}:{id(asyncio.current_task())}"
@@ -16545,9 +16662,16 @@ async def retry_due_smart_update_candidates(
         except Exception:
             result_counts["rehydration_failed"] += 1
             logger.exception(
-                "smart_update.retry rehydration_failed candidate_key=%s",
+                "smart_update.legacy_drain rehydration_failed candidate_key=%s",
                 item.candidate_key,
             )
+            await terminalize_claimed_candidate_technical(
+                db,
+                candidate_state_id=item.candidate_state_id,
+                lease_owner=owner,
+                reason="legacy_rehydration_failed",
+            )
+            result_counts[SmartUpdateTerminalOutcome.FAILED_TECHNICAL.value] += 1
             continue
         result = await smart_event_update(
             db,
@@ -16979,11 +17103,17 @@ async def _smart_event_update_impl(
             candidate.source_url,
             _clip_title(candidate.title),
         )
+        if decision == "non_event" and confidence >= 0.90:
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                reason=ProductExclusionReason.NON_EVENT.value,
+                product_exclusion_reason=ProductExclusionReason.NON_EVENT,
+            )
         if decision != "event" or confidence < 0.70:
             suffix = "non_event" if decision == "non_event" else "uncertain"
-            # This stage is a contradiction verifier for an already-positive
-            # source child.  It may ask the durable source pipeline to retry,
-            # but it may not convert the child into a product no-event.
+            # Only an explicit high-confidence closed LLM verdict is a product
+            # exclusion. Provider absence, invalid output, or uncertainty stays
+            # technical and the public facade closes it without background work.
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"mixed_occurrence_role_review_{suffix}",
@@ -17080,6 +17210,12 @@ async def _smart_event_update_impl(
             candidate.city,
         )
         if not location_ok:
+            if location_review_result == "llm_reject_missing_location":
+                return SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                    reason=ProductExclusionReason.MISSING_LOCATION.value,
+                    product_exclusion_reason=ProductExclusionReason.MISSING_LOCATION,
+                )
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"location_grounding_review:{location_review_result}",
@@ -17410,6 +17546,12 @@ async def _smart_event_update_impl(
                 candidate.source_url,
                 _clip_title(clean_title),
             )
+            if decision == "non_event" and confidence >= 0.90:
+                return SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                    reason=ProductExclusionReason.NON_EVENT.value,
+                    product_exclusion_reason=ProductExclusionReason.NON_EVENT,
+                )
             if decision != "event" or confidence < 0.55:
                 retry_reason = (
                     "weak_eventness_review_non_event"

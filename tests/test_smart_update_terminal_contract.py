@@ -15,6 +15,7 @@ def test_terminal_outcome_contract_is_closed():
         "MERGED",
         "NOOP_EXACT_REPLAY",
         "REJECTED_PRODUCT_POLICY",
+        "FAILED_TECHNICAL",
         "RETRY_SCHEDULED",
     }
     assert {item.value for item in SmartUpdateTerminalOutcome} == {
@@ -22,6 +23,7 @@ def test_terminal_outcome_contract_is_closed():
         "MERGED",
         "NOOP_EXACT_REPLAY",
         "REJECTED_PRODUCT_POLICY",
+        "FAILED_TECHNICAL",
         "RETRY_SCHEDULED",
     }
 
@@ -54,16 +56,16 @@ def test_legacy_internal_status_is_normalized_at_result_boundary():
     assert rejected.event_id is None
     assert rejected.diagnostic_event_id == 9
 
-    retry = SmartUpdateResult(status="review_required", event_id=11)
-    assert retry.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-    assert retry.event_id is None
-    assert retry.diagnostic_event_id == 11
+    failed = SmartUpdateResult(status="review_required", event_id=11)
+    assert failed.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+    assert failed.event_id is None
+    assert failed.diagnostic_event_id == 11
 
     uncertain = SmartUpdateResult(
         status="invalid",
         reason="occurrence_scope_review:llm_uncertain",
     )
-    assert uncertain.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+    assert uncertain.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
 
 
 def test_event_candidate_default_intent_is_upsert():

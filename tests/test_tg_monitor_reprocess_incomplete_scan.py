@@ -416,6 +416,19 @@ async def test_forced_existing_single_source_still_runs_smart_update_and_rearms_
     assert len(calls) == 1
     assert calls[0].source_url == "https://t.me/kraftmarket39/193"
     assert scheduled == [5656]
+    assert report.messages_forced_replay == 1
+    assert report.messages_new_raw == 0
+    assert report.messages_metrics_only == 0
+    assert report.messages_typed_candidates == 1
+    async with db.raw_conn() as conn:
+        force_row = await (
+            await conn.execute(
+                "SELECT 1 FROM telegram_source_force_message "
+                "WHERE source_id=? AND message_id=193",
+                (source_id,),
+            )
+        ).fetchone()
+    assert force_row is None
 
 
 @pytest.mark.asyncio
@@ -447,6 +460,8 @@ async def test_keeps_documented_skipped_scan_metrics_only(tmp_path, monkeypatch)
 
     assert calls == []
     assert report.messages_metrics_only == 1
+    assert report.messages_new_raw == 0
+    assert report.messages_forced_replay == 0
     assert report.metrics_only_posts[0].reason == "already_scanned"
 
 
@@ -481,7 +496,7 @@ async def test_stores_skip_breakdown_for_new_incomplete_scan(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_no_manifest_zero_event_tail_remains_retryable(tmp_path, monkeypatch):
+async def test_no_manifest_zero_event_tail_closes_as_visible_terminal(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     async with db.raw_conn() as conn:
@@ -564,11 +579,23 @@ async def test_no_manifest_zero_event_tail_remains_retryable(tmp_path, monkeypat
                 )
             ).fetchone()
         )[0]
-    assert row[0] is None
-    assert row[1] is None
-    # A decision without its producer-owned evidence manifest is not a typed
-    # terminal even when the old receipt claimed evidence_complete=true.
+        terminal_count = (
+            await (
+                await conn.execute(
+                    "SELECT count(*) FROM telegram_scanned_message "
+                    "WHERE source_id=? AND status='terminal_error'",
+                    (source_id,),
+                )
+            ).fetchone()
+        )[0]
+    assert row[0] == 935
+    assert row[1] is not None
+    # A decision without its producer-owned evidence manifest is not a
+    # successful no-event, even when the old receipt claimed
+    # evidence_complete=true; it closes as a visible typed error.
     assert scanned_count == 2
+    assert terminal_count == 2
+    assert report.messages_terminal_errors == 2
     await db.close()
 
 

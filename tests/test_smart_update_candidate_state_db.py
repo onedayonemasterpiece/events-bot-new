@@ -10,6 +10,7 @@ from smart_update_state import (
     finish_candidate_attempt,
     claim_due_candidates,
     smart_update_funnel_counts,
+    terminalize_claimed_candidate_technical,
 )
 
 
@@ -40,7 +41,7 @@ async def test_candidate_state_schema_and_balanced_funnel(tmp_path, monkeypatch)
     )
     counts = await smart_update_funnel_counts(db)
     assert counts["candidates_total"] == 1
-    assert counts["RETRY_SCHEDULED"] == 1
+    assert counts["FAILED_TECHNICAL"] == 1
     assert counts["terminal_unresolved"] == 0
     assert counts["attempt_starts"] == counts["attempt_terminals"] == 1
     assert counts["attempt_unresolved"] == 0
@@ -52,12 +53,12 @@ async def test_candidate_state_schema_and_balanced_funnel(tmp_path, monkeypatch)
         attempt_rows = conn.execute(
             "SELECT attempt_no, terminal_outcome FROM smart_update_attempt"
         ).fetchall()
-        assert attempt_rows == [(1, "RETRY_SCHEDULED")]
+        assert attempt_rows == [(1, "FAILED_TECHNICAL")]
     await db.close()
 
 
 @pytest.mark.asyncio
-async def test_due_claim_is_leased_once_and_retry_is_bounded(tmp_path, monkeypatch):
+async def test_completed_technical_failure_is_not_claimable(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_INIT_MINIMAL", "1")
     db = Database(str(tmp_path / "claims.sqlite"))
     await db.init()
@@ -80,16 +81,11 @@ async def test_due_claim_is_leased_once_and_retry_is_bounded(tmp_path, monkeypat
         reason="merge_identity_llm_unavailable",
         retry_delay_seconds=1,
     )
-    async with db.raw_conn() as conn:
-        await conn.execute(
-            "UPDATE smart_update_candidate_state SET next_retry_at=CURRENT_TIMESTAMP"
-        )
-        await conn.commit()
-    first = await claim_due_candidates(db, lease_owner="worker-a")
-    second = await claim_due_candidates(db, lease_owner="worker-b")
-    assert len(first) == 1
-    assert first[0].previous_reason == "merge_identity_llm_unavailable"
-    assert second == []
+    assert await claim_due_candidates(db, lease_owner="worker-a") == []
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute(
+            "SELECT current_outcome,retry_exhausted,next_retry_at FROM smart_update_candidate_state"
+        ).fetchone() == ("FAILED_TECHNICAL", 1, None)
     await db.close()
 
 
@@ -146,7 +142,7 @@ async def test_attempt_ledger_is_monotonic_and_active_claim_blocks_duplicate_exe
         lease_owner="worker-b",
     )
     assert (first.attempt_no, second.attempt_no) == (1, 2)
-    assert (first.attempt, second.attempt) == (1, 2)
+    assert (first.attempt, second.attempt) == (1, 1)
     await finish_candidate_attempt(
         db,
         second,
@@ -160,12 +156,11 @@ async def test_attempt_ledger_is_monotonic_and_active_claim_blocks_duplicate_exe
         )
         await conn.commit()
     claimed = await claim_due_candidates(db, lease_owner="worker-c")
-    assert len(claimed) == 1
-    assert claimed[0].attempts == 1
+    assert claimed == []
     counts = await smart_update_funnel_counts(db)
     assert counts["attempt_starts"] == counts["attempt_terminals"] == 2
     assert counts["attempt_unresolved"] == 0
-    assert counts["retry_exhausted"] == 0
+    assert counts["retry_exhausted"] == 1
     await db.close()
 
 
@@ -215,10 +210,55 @@ async def test_same_owner_replay_closes_interrupted_attempt_before_opening_next(
         ).fetchall()
     assert rows[0][0] == 1
     assert rows[0][1] is not None
-    assert rows[0][2:] == ("RETRY_SCHEDULED", "superseded_by_replay")
+    assert rows[0][2:] == ("FAILED_TECHNICAL", "interrupted_before_ack")
     assert rows[1][0] == 2
     assert rows[1][1] is not None
     counts = await smart_update_funnel_counts(db)
     assert counts["attempt_starts"] == counts["attempt_terminals"] == 2
     assert counts["attempt_unresolved"] == 0
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_expired_max_attempt_legacy_claim_is_recovered_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_INIT_MINIMAL", "1")
+    db = Database(str(tmp_path / "legacy-max.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO smart_update_candidate_state("
+            "candidate_key,occurrence_key,source_type,intent,source_fingerprint,candidate_payload,"
+            "current_outcome,attempts,retry_attempts,max_attempts,next_retry_at,claimed_by,claim_expires_at"
+            ") VALUES('legacy-max','ordinal:9','vk','UPSERT_EVENT','fp','{}',"
+            "'RETRY_SCHEDULED',3,3,3,CURRENT_TIMESTAMP,'dead-worker',datetime(CURRENT_TIMESTAMP,'-1 minute'))"
+        )
+        state_id = (await (await conn.execute(
+            "SELECT id FROM smart_update_candidate_state WHERE candidate_key='legacy-max'"
+        )).fetchone())[0]
+        await conn.execute(
+            "INSERT INTO smart_update_attempt(candidate_state_id,attempt_no,terminal_outcome,reason) "
+            "VALUES(?,3,'RETRY_SCHEDULED','attempt_started')",
+            (state_id,),
+        )
+        await conn.commit()
+
+    claimed = await claim_due_candidates(db, lease_owner="recovery", limit=1)
+    assert len(claimed) == 1
+    assert claimed[0].attempts == 3
+    await terminalize_claimed_candidate_technical(
+        db,
+        candidate_state_id=state_id,
+        lease_owner="recovery",
+        reason="legacy_recovery_payload_invalid",
+    )
+    assert await claim_due_candidates(db, lease_owner="other", limit=1) == []
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute(
+            "SELECT current_outcome,retry_exhausted,claimed_by FROM smart_update_candidate_state WHERE id=?",
+            (state_id,),
+        ).fetchone() == ("FAILED_TECHNICAL", 1, None)
+        assert conn.execute(
+            "SELECT terminal_outcome,finished_at IS NOT NULL FROM smart_update_attempt WHERE candidate_state_id=?",
+            (state_id,),
+        ).fetchone() == ("FAILED_TECHNICAL", 1)
     await db.close()

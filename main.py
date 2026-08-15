@@ -286,7 +286,7 @@ from static_site_release import (
     classify_failure as classify_static_site_failure,
     claim_static_site_build,
     compute_static_site_input_fingerprint,
-    create_immutable_snapshot,
+    create_immutable_projection_snapshot,
     delete_immutable_snapshot,
     delete_static_site_output,
     event_public_revision,
@@ -305,6 +305,8 @@ from static_site_release import (
     finish_static_site_build_claim,
     resolve_build_clock as resolve_static_site_build_clock,
     static_site_artifact_root,
+    static_site_output_root,
+    static_site_projection_root,
     static_site_result_counts,
     static_site_scratch_root,
     validate_static_site_image_source_manifest,
@@ -17898,7 +17900,7 @@ async def add_events_from_text(
                     "rejected_product_policy"
                     if update_result.outcome
                     is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
-                    else "retry_scheduled"
+                    else "failed_technical"
                 )
                 results.append((None, False, result_lines, result_status))
                 continue
@@ -18370,8 +18372,8 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
             message_text = f"Event rejected: {update_result.reason or 'product policy'}"
         else:
             message_text = (
-                "Event save retry scheduled: "
-                f"{update_result.reason or 'transient Smart Update failure'}"
+                "Event save failed (technical terminal; operator action required): "
+                f"{update_result.reason or 'Smart Update technical failure'}"
             )
         await bot.send_message(message.chat.id, message_text)
         return
@@ -23473,6 +23475,9 @@ def _static_site_build_kaggle_command(
     current_datetime: str | None = None,
     input_fingerprint: str | None = None,
     snapshot_manifest_path: str | None = None,
+    expected_snapshot_id: str | None = None,
+    expected_snapshot_sha256: str | None = None,
+    expected_snapshot_size: int | None = None,
     repo_sha: str | None = None,
     run_id: str | None = None,
     candidate_token: str | None = None,
@@ -23607,6 +23612,16 @@ def _static_site_build_kaggle_command(
                 f"--candidate-token={candidate_token}",
             ]
         )
+        if expected_snapshot_id:
+            cmd.extend(["--expected-snapshot-id", expected_snapshot_id])
+        if expected_snapshot_sha256:
+            cmd.extend(
+                ["--expected-snapshot-sha256", expected_snapshot_sha256]
+            )
+        if expected_snapshot_size:
+            cmd.extend(
+                ["--expected-snapshot-size", str(expected_snapshot_size)]
+            )
         if image_source_manifest_path:
             cmd.extend(["--image-source-manifest", image_source_manifest_path])
         if image_source_manifest_sha256:
@@ -23719,12 +23734,11 @@ def _static_site_output_retention_context(database_path: str) -> tuple[bool, lis
 def _static_site_storage_preflight(
     *, snapshot_source_path: str | Path | None = None
 ) -> dict[str, Any]:
-    """Verify durable headroom before claiming or copying a DB snapshot.
+    """Verify ephemeral builder scratch is writable and above its hard floor.
 
-    The runner repeats the capacity check after the immutable snapshot exists,
-    but that is too late when the copy itself crosses the hard floor.  Reserve
-    the current source DB size here so an impossible build defers without
-    briefly consuming hundreds of MiB and then deleting the copy.
+    Production projection/output staging is rooted under ``/tmp``.  The
+    optional source-size reservation remains only for compatibility with
+    callers exercising the legacy full-snapshot preflight contract.
     """
 
     root_scratch = runtime_scratch_health()
@@ -23796,7 +23810,7 @@ async def _prune_static_site_terminal_outputs(db: Database) -> dict[str, Any]:
         }
     report = await asyncio.to_thread(
         prune_static_site_outputs,
-        static_site_artifact_root(Path(__file__).resolve().parent),
+        static_site_output_root(),
         preserve_build_ids=preserve_build_ids,
         keep_latest_terminal=max(
             0, _env_int("STATIC_SITE_OUTPUT_KEEP_LATEST_TERMINAL", 0)
@@ -23824,9 +23838,16 @@ async def _delete_terminal_static_site_output_with_policy(
     try:
         removed = await asyncio.to_thread(
             delete_static_site_output,
-            static_site_artifact_root(Path(__file__).resolve().parent),
+            static_site_output_root(),
             build_id,
         )
+        legacy_root = static_site_artifact_root(Path(__file__).resolve().parent)
+        if legacy_root != static_site_output_root():
+            removed += await asyncio.to_thread(
+                delete_static_site_output,
+                legacy_root,
+                build_id,
+            )
         logging.info(
             "static_site_build: terminal output cleanup build_id=%s bytes=%s",
             build_id,
@@ -23874,10 +23895,19 @@ def _validated_static_site_terminal_snapshot_cleanup(
     ):
         raise StaticSitePermanentError("static_site_cleanup_handoff_snapshot_mismatch")
 
-    root = Path(
-        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
-        or str(Path(database_path).resolve().parent / "static_site_snapshots")
-    ).resolve()
+    evidence_schema = str(snapshot_evidence.get("schema_version") or "")
+    manifest_evidence = snapshot_evidence.get("manifest")
+    if isinstance(manifest_evidence, Mapping):
+        evidence_schema = str(
+            manifest_evidence.get("schema_version") or evidence_schema
+        )
+    if evidence_schema == "static_site_projection_snapshot_v1":
+        root = static_site_projection_root().resolve()
+    else:
+        root = Path(
+            (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
+            or str(Path(database_path).resolve().parent / "static_site_snapshots")
+        ).resolve()
     snapshot = Path(snapshot_raw)
     manifest = Path(manifest_raw)
     snapshot_resolved = snapshot.resolve()
@@ -24313,6 +24343,8 @@ async def _recover_previous_static_site_attempt(
         "candidate_token": str(handoff.get("candidate_token") or "").strip(),
         "snapshot_path": str(handoff.get("snapshot_path") or "").strip(),
         "manifest_path": str(handoff.get("manifest_path") or "").strip(),
+        "snapshot_id": str(handoff.get("snapshot_id") or "").strip(),
+        "snapshot_sha256": str(handoff.get("snapshot_sha256") or "").strip(),
         "input_fingerprint": str(handoff.get("input_fingerprint") or "").strip(),
         "current_datetime": str(handoff.get("current_datetime") or "").strip(),
     }
@@ -24322,8 +24354,13 @@ async def _recover_previous_static_site_attempt(
     semantic_cache_mode = _normalize_static_site_semantic_cache_mode(
         handoff.get("semantic_cache_mode")
     )
+    required_core = (
+        "build_id", "run_id", "repo_sha", "candidate_token",
+        "snapshot_path", "manifest_path", "input_fingerprint",
+        "current_datetime",
+    )
     if (
-        not all(required.values())
+        not all(required[key] for key in required_core)
         or required["run_id"] != claim.run_id
         or re.fullmatch(
             rf"static-site:{re.escape(required['build_id'])}:[^:]+",
@@ -24448,9 +24485,57 @@ async def _recover_previous_static_site_attempt(
             removed_snapshot_bytes,
         )
         return False, None
-    snapshot_metadata = await asyncio.to_thread(
-        validate_snapshot, Path(required["snapshot_path"]), Path(required["manifest_path"])
-    )
+    snapshot_path = Path(required["snapshot_path"])
+    manifest_path = Path(required["manifest_path"])
+    if snapshot_path.is_file() and manifest_path.is_file():
+        snapshot_metadata = await asyncio.to_thread(
+            validate_snapshot, snapshot_path, manifest_path
+        )
+    else:
+        # Once the content-addressed private Kaggle dataset is durable, local
+        # process scratch is no longer recovery state.  Reconstruct only the
+        # hash-bound manifest already committed in the running request; the
+        # adoption runner independently proves the exact dataset source and
+        # downloaded result identity before publication.
+        snapshot_evidence = request_payload.get("snapshot")
+        manifest_evidence = (
+            snapshot_evidence.get("manifest")
+            if isinstance(snapshot_evidence, Mapping)
+            else None
+        )
+        if not claim.dataset_ref:
+            raise StaticSitePermanentError(
+                "static_site_recovery_projection_dataset_missing"
+            )
+        if not isinstance(manifest_evidence, Mapping):
+            # Compatibility for a pre-projection handoff: it remains adoptable
+            # only while its exact local snapshot still validates. In normal
+            # production a missing path raises here; tests may replace the
+            # validator with an exact legacy fixture.
+            snapshot_metadata = await asyncio.to_thread(
+                validate_snapshot, snapshot_path, manifest_path
+            )
+            manifest_evidence = None
+        if manifest_evidence is None:
+            pass
+        else:
+            try:
+                snapshot_metadata = SnapshotMetadata(**dict(manifest_evidence))
+            except Exception as exc:
+                raise StaticSitePermanentError(
+                    "static_site_recovery_projection_manifest_invalid"
+                ) from exc
+            if (
+                snapshot_metadata.snapshot_id != required["snapshot_id"]
+                or snapshot_metadata.sha256 != required["snapshot_sha256"]
+                or snapshot_metadata.quick_check != "ok"
+                or not snapshot_metadata.projection_schema_version
+                or not snapshot_metadata.table_row_counts
+                or not snapshot_metadata.table_columns
+            ):
+                raise StaticSitePermanentError(
+                    "static_site_recovery_projection_manifest_identity_mismatch"
+                )
     clock = resolve_static_site_build_clock(
         current_date=claim.effective_date,
         current_datetime=required["current_datetime"],
@@ -24467,6 +24552,9 @@ async def _recover_previous_static_site_attempt(
         script_path=script_path,
         status_callback_url=_static_site_status_callback_url(),
         snapshot_manifest_path=required["manifest_path"],
+        expected_snapshot_id=getattr(snapshot_metadata, "snapshot_id", None),
+        expected_snapshot_sha256=getattr(snapshot_metadata, "sha256", None),
+        expected_snapshot_size=getattr(snapshot_metadata, "size_bytes", None),
         repo_sha=required["repo_sha"],
         run_id=claim.run_id,
         candidate_token=required["candidate_token"],
@@ -24529,7 +24617,7 @@ async def _recover_previous_static_site_attempt(
         raise StaticSiteSingleFlightDeferred(
             f"static_site_remote_recovery_probe_failed:{claim.run_id}:code={proc.returncode}"
         )
-    output_dir = static_site_artifact_root(Path(__file__).resolve().parent) / f"output-{required['build_id']}"
+    output_dir = static_site_output_root() / f"output-{required['build_id']}"
     result = await _finish_static_site_candidate(
         db=db,
         job_id=job_id,
@@ -24589,10 +24677,7 @@ async def _prune_static_site_terminal_snapshots_for_capacity(
     must not prevent the next Smart Update build from starting.
     """
 
-    snapshot_root = Path(
-        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
-        or str(Path(db.path).resolve().parent / "static_site_snapshots")
-    )
+    snapshot_root = static_site_projection_root()
     prune_safe, active_snapshot_paths = await asyncio.to_thread(
         _static_site_snapshot_retention_context, db.path
     )
@@ -24744,14 +24829,13 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     try:
         await asyncio.to_thread(
             _static_site_storage_preflight,
-            snapshot_source_path=db.path,
         )
     except StaticSiteRetryableError as exc:
         # A recoverable remote handoff is reconciled above before this durable
         # capacity gate. Its already-downloaded output may be the very object
-        # keeping /data below the next-build threshold, and successful
-        # reconciliation deletes it. Only a genuinely new build needs enough
-        # durable room for another immutable snapshot and runner handoff.
+        # keeping ephemeral scratch below the next-build threshold, and
+        # successful reconciliation deletes it. Only a genuinely new build
+        # needs scratch room for another compact projection and checked output.
         raise StaticSiteSingleFlightDeferred(f"static_site_capacity_deferred:{exc}") from exc
     request_payload, refreshed_revision_ids = (
         await _refresh_static_site_vector_barrier_payload(db, request_payload)
@@ -24779,12 +24863,10 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
     search_corpus_receipt_path = (
         (os.getenv("STATIC_SITE_VECTOR_RECEIPT_PATH") or "").strip() or None
     )
-    # ADD-BUILD-08: the runner only ever receives an immutable online-backup
-    # snapshot. The live DB remains a separate status-ledger connection.
-    snapshot_root = Path(
-        (os.getenv("STATIC_SITE_SNAPSHOT_DIR") or "").strip()
-        or str(Path(db.path).resolve().parent / "static_site_snapshots")
-    )
+    # Kaggle receives only the immutable bounded static projection.  The live
+    # DB remains a separate status-ledger connection and is closed by the
+    # projection materializer before any remote work begins.
+    snapshot_root = static_site_projection_root()
     prune_safe, active_snapshot_paths = await asyncio.to_thread(
         _static_site_snapshot_retention_context, db.path
     )
@@ -24811,7 +24893,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         logging.info("static_site_build: snapshot retention %s", json.dumps(prune_report, sort_keys=True))
     snapshot_id = f"snapshot-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:10]}"
     snapshot_path, manifest_path, snapshot_metadata = await asyncio.to_thread(
-        create_immutable_snapshot,
+        create_immutable_projection_snapshot,
         db.path,
         snapshot_root,
         request_payload=request_payload,
@@ -24965,6 +25047,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
         job_id,
         {
             "snapshot": {
+                "schema_version": snapshot_metadata.schema_version,
                 "snapshot_id": snapshot_metadata.snapshot_id,
                 "sqlite_path": str(snapshot_path),
                 "manifest_path": str(manifest_path),
@@ -24972,6 +25055,11 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 "size_bytes": snapshot_metadata.size_bytes,
                 "quick_check": snapshot_metadata.quick_check,
                 "target_watermark": snapshot_metadata.target_watermark,
+                "projection_schema_version": snapshot_metadata.projection_schema_version,
+                "table_row_counts": snapshot_metadata.table_row_counts,
+                "source_table_row_counts": snapshot_metadata.source_table_row_counts,
+                "table_columns": snapshot_metadata.table_columns,
+                "manifest": asdict(snapshot_metadata),
             },
             "vector_barrier_result": vector_evidence,
             "input_fingerprint": input_fingerprint,
@@ -25084,6 +25172,9 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             script_path=script_path,
             status_callback_url=_static_site_status_callback_url(),
             snapshot_manifest_path=str(manifest_path),
+            expected_snapshot_id=snapshot_metadata.snapshot_id,
+            expected_snapshot_sha256=snapshot_metadata.sha256,
+            expected_snapshot_size=snapshot_metadata.size_bytes,
             repo_sha=repo_sha,
             run_id=run_id,
             candidate_token=candidate_token,
@@ -25140,7 +25231,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
             raise StaticSiteRetryableError(
                 f"static-site Kaggle builder failed code={code}: " + "\n".join(tail[-20:])
             )
-        output_dir = static_site_artifact_root(Path(__file__).resolve().parent) / f"output-{build_id}"
+        output_dir = static_site_output_root() / f"output-{build_id}"
         completed = await _finish_static_site_candidate(
             db=db,
             job_id=job_id,

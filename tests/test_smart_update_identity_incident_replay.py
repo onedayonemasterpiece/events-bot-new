@@ -141,7 +141,7 @@ async def test_incident_exhibition_replay_vector_gate_prevents_public_duplicate(
 
     assert result.outcome in {
         su.SmartUpdateTerminalOutcome.MERGED,
-        su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+        su.SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
     }
     if result.outcome is su.SmartUpdateTerminalOutcome.MERGED:
         assert result.event_id == canonical_id
@@ -158,7 +158,7 @@ async def test_incident_exhibition_replay_vector_gate_prevents_public_duplicate(
         )
         logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
     assert public_count == 1
-    if result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
+    if result.outcome is su.SmartUpdateTerminalOutcome.FAILED_TECHNICAL:
         assert logs
         assert logs[-1].event_id == canonical_id
         assert logs[-1].decision == "veto_create"

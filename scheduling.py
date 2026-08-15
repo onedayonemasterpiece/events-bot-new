@@ -23,7 +23,7 @@ from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin_chat import resolve_superadmin_chat_id
-from db import optimize, vacuum, wal_checkpoint_truncate
+from db import full_vacuum_with_safety, optimize, wal_checkpoint_truncate
 from heavy_ops import current_heavy_meta, describe_heavy_meta, heavy_operation
 from ops_run import finish_ops_run, start_ops_run
 from runtime import get_running_main
@@ -3881,6 +3881,7 @@ _HEAVY_JOB_IDS: set[str] = {
     "telegraph_cache_sanitize",
     "vk_post_prune",
     "event_vector_sync",
+    "db_vacuum",
 }
 
 _OPS_RUN_KIND_BY_JOB_ID: dict[str, str] = {
@@ -3942,7 +3943,13 @@ def _job_next_run(job):
     return getattr(job, "next_run_time", None) or getattr(job, "next_run_at", None)
 
 
-def _job_wrapper(job_id: str, func, *, notify_skip: Callable[[str, str], None] | None = None):
+def _job_wrapper(
+    job_id: str,
+    func,
+    *,
+    notify_skip: Callable[[str, str], None] | None = None,
+    heavy_guard_mode: str | None = None,
+):
     async def _run(*args, **kwargs):
         serialize_heavy = (os.getenv("SCHED_SERIALIZE_HEAVY_JOBS") or "").strip().lower() in {
             "1",
@@ -3951,7 +3958,11 @@ def _job_wrapper(job_id: str, func, *, notify_skip: Callable[[str, str], None] |
             "on",
         }
         is_heavy = job_id in _HEAVY_JOB_IDS
-        guard_mode_raw = (os.getenv("SCHED_HEAVY_GUARD_MODE") or "").strip().lower()
+        guard_mode_raw = str(
+            heavy_guard_mode
+            if heavy_guard_mode is not None
+            else (os.getenv("SCHED_HEAVY_GUARD_MODE") or "")
+        ).strip().lower()
         if guard_mode_raw in {"0", "off", "false", "no", "disable", "disabled"}:
             guard_mode = "off"
         elif guard_mode_raw in {"wait", "block", "serialize"}:
@@ -4187,7 +4198,11 @@ def startup(
         )
         return job
 
-    if _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=True):
+    # The product pipeline is linear: a Smart Update invocation must finish as
+    # accepted, product-rejected or FAILED_TECHNICAL. This switch is now an
+    # explicit one-time legacy-drain override, never a default background
+    # product queue.
+    if _env_enabled("SMART_UPDATE_RETRY_WORKER_ENABLED", default=False):
         try:
             smart_update_retry_interval = max(
                 15,
@@ -4614,7 +4629,12 @@ def startup(
         )
         _register_job(
             "source_parsing",
-            _job_wrapper("source_parsing", source_parsing_scheduler, notify_skip=_notify_admin_skip),
+            _job_wrapper(
+                "source_parsing",
+                source_parsing_scheduler,
+                notify_skip=_notify_admin_skip,
+                heavy_guard_mode="wait",
+            ),
             "cron",
             id="source_parsing",
             hour=parsing_hour,
@@ -4643,7 +4663,12 @@ def startup(
         )
         _register_job(
             "source_parsing_day",
-            _job_wrapper("source_parsing_day", source_parsing_scheduler_if_changed, notify_skip=_notify_admin_skip),
+            _job_wrapper(
+                "source_parsing_day",
+                source_parsing_scheduler_if_changed,
+                notify_skip=_notify_admin_skip,
+                heavy_guard_mode="wait",
+            ),
             "cron",
             id="source_parsing_day",
             hour=day_hour,
@@ -5694,13 +5719,24 @@ def startup(
         _notify_admin_skip("kaggle_recovery", "ENABLE_KAGGLE_RECOVERY!=1")
 
     if os.getenv("ENABLE_NIGHTLY_PAGE_SYNC") == "1":
+        page_sync_time_raw = os.getenv("NIGHTLY_PAGE_SYNC_TIME_LOCAL", "02:30").strip()
+        page_sync_tz_name = os.getenv(
+            "NIGHTLY_PAGE_SYNC_TZ", "Europe/Kaliningrad"
+        )
+        page_sync_hour, page_sync_minute = _cron_from_local(
+            page_sync_time_raw,
+            page_sync_tz_name,
+            default_hour="0",
+            default_minute="30",
+            label="NIGHTLY_PAGE_SYNC_TIME_LOCAL",
+        )
         _register_job(
             "nightly_page_sync",
             _job_wrapper("nightly_page_sync", nightly_page_sync, notify_skip=_notify_admin_skip),
             "cron",
             id="nightly_page_sync",
-            hour="2",
-            minute="30",
+            hour=page_sync_hour,
+            minute=page_sync_minute,
             args=[db],
             replace_existing=True,
             max_instances=1,
@@ -5778,13 +5814,23 @@ def startup(
             misfire_grace_time=30,
         )
         if _db_full_vacuum_enabled():
+            min_free_mb = max(0, _env_int("DB_FULL_VACUUM_MIN_FREE_MB", 512))
             _register_job(
                 "db_vacuum",
                 _job_wrapper("db_vacuum", _run_maintenance, notify_skip=_notify_admin_skip),
                 "interval",
                 id="db_vacuum",
                 hours=12,
-                args=[partial(vacuum, db.engine), "VACUUM", 120.0],
+                args=[
+                    partial(
+                        full_vacuum_with_safety,
+                        db.engine,
+                        db.path,
+                        min_free_bytes=min_free_mb * 1024 * 1024,
+                    ),
+                    "capacity-gated VACUUM",
+                    120.0,
+                ],
                 replace_existing=True,
                 max_instances=1,
                 coalesce=True,

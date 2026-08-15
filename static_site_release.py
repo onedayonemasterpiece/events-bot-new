@@ -31,6 +31,8 @@ from zoneinfo import ZoneInfo
 
 REQUEST_SCHEMA = "static_site_build_request_v1"
 SNAPSHOT_SCHEMA = "static_site_sqlite_snapshot_v1"
+PROJECTION_SNAPSHOT_SCHEMA = "static_site_projection_snapshot_v1"
+PROJECTION_CONTENT_SCHEMA = "static_site_projection_sqlite_v1"
 RELEASE_CHANNEL_SECRET = "secret_preview"
 MAX_REASONS = 24
 MAX_EVENT_IDS = 256
@@ -58,6 +60,139 @@ STATIC_SITE_COUNT_KEYS = (
     "object_count",
     "bytes",
 )
+
+# The Astro exporter is deliberately isolated from operational ingestion and
+# scheduler state.  These are the only SQLite relations it is allowed to see
+# in a production-candidate input.  Keeping the inventory beside the immutable
+# snapshot implementation makes the data boundary reviewable and testable;
+# adding a new exporter query requires changing this contract and its parity
+# tests instead of silently shipping the whole production database to Kaggle.
+# This is a column allowlist, not merely a table allowlist.  In particular the
+# exporter needs three partner-CTA fields from ``user`` and a small public
+# provenance subset from ``event_source``; copying either complete row would
+# disclose unrelated account state or raw Smart Update intake text to Kaggle.
+STATIC_SITE_PROJECTION_COLUMNS: dict[str, tuple[str, ...]] = {
+    "artist_registry_entity": (
+        "artist_id", "entity_type", "display_name", "verification_status",
+        "photo_url", "photo_rights_status", "photo_rights_evidence_json",
+    ),
+    "event": (
+        "id", "title", "description", "short_description", "festival",
+        "date", "end_date", "time", "location_name", "location_address",
+        "city", "ticket_price_min", "ticket_price_max", "ticket_link",
+        "event_type", "duration_forecast_minutes", "identity_status",
+        "merged_into_event_id", "is_free", "pushkin_card", "silent",
+        "lifecycle_status", "source_text", "collection_decisions",
+        "organizer_names", "telegraph_url", "source_post_url",
+        "source_vk_post_url", "vk_repost_url", "tg_event_post_url",
+        "creator_id", "photo_urls", "topics", "added_at", "ticket_status",
+        "age_restriction", "age_restriction_status",
+        "age_restriction_provenance", "age_restriction_decision_version",
+        "age_assessment", "linked_event_ids", "revision", "updated_at",
+    ),
+    "event_artist_appearance": (
+        "event_id", "artist_id", "role", "status", "physical_visit_status",
+        "participant_evidence_json", "eligibility_status", "cancelled_at",
+        "media_identity_status",
+    ),
+    "event_image_geometry": (
+        "id", "pixel_sha256", "model", "prompt_version", "status",
+        "source_width", "source_height", "face_boxes_yxyx_json",
+        "valuable_region_yxyx_json", "valuable_region_confidence", "reason_code",
+    ),
+    "event_publication": (
+        "event_id", "platform", "target", "stored_url", "live_url", "status",
+        "resolved_at",
+    ),
+    "event_source": (
+        "id", "event_id", "source_type", "source_url",
+        "source_chat_username", "source_chat_id", "source_message_id",
+        "imported_at", "trust_level",
+    ),
+    "event_video_link": (
+        "event_id", "video_asset_id", "event_relevance_score", "ranking_score",
+        "source_url",
+    ),
+    "eventposter": (
+        "id", "event_id", "supabase_url", "catbox_url", "ocr_text",
+        "review_status", "display_order", "width", "height", "image_text_mode",
+        "media_role", "media_role_confidence", "media_semantic_status", "focal_x",
+        "focal_y", "safe_crop", "image_geometry_id", "thumbnail_256_url",
+        "thumbnail_256_width", "thumbnail_256_height", "thumbnail_512_url",
+        "thumbnail_512_width", "thumbnail_512_height", "raw_sha256",
+        "pixel_sha256", "canonical_object_path",
+    ),
+    "festival_calendar_item": (
+        "id", "calendar_year", "slug", "title", "description", "start_date",
+        "end_date", "date_precision", "date_label", "sort_date", "month_key",
+        "display_order", "place_label", "category", "status", "status_label",
+        "source_url", "source_label", "internal_event_id", "festival_id",
+        "cover_key", "image_width", "image_height", "media_mode",
+        "object_position", "catalog_version", "is_public",
+    ),
+    "interest_club": (
+        "id", "slug", "canonical_name", "topic", "description", "city",
+        "typical_place", "public_status", "updated_at",
+    ),
+    "interest_club_evaluation": (
+        "id", "club_id", "event_id", "status", "verdict", "policy_version",
+        "input_hash", "updated_at",
+    ),
+    "interest_club_event": (
+        "club_id", "event_id", "status", "policy_version", "input_hash",
+        "updated_at",
+    ),
+    "organization": ("name", "vk_source_group_ids"),
+    "poll_repost_run": (
+        "chosen_event_id", "status", "poll_chat_id", "forwarded_message_id",
+    ),
+    "promo_exposure": (
+        "event_id", "surface", "publish_status", "details_json",
+        "public_targets_json",
+    ),
+    "social_metric_snapshot": (
+        "platform", "publisher_id", "source_url", "age_bucket", "views", "likes",
+        "comments", "shares", "collected_ts", "status",
+    ),
+    "telegram_post_metric": (
+        "source_url", "collected_ts", "views", "likes", "forwards",
+    ),
+    "user": ("user_id", "is_partner", "organization"),
+    "video_asset": (
+        "id", "sha256", "analysis_status", "cdn_url", "cdn_path", "mime_type",
+        "width", "height", "duration_seconds", "aesthetic_score",
+        "technical_score", "showcase_score", "description", "search_text",
+    ),
+    "vk_post_metric": (
+        "source_url", "collected_ts", "views", "likes", "reposts",
+    ),
+}
+STATIC_SITE_PROJECTION_TABLES: tuple[str, ...] = tuple(
+    STATIC_SITE_PROJECTION_COLUMNS
+)
+STATIC_SITE_FORBIDDEN_PROJECTION_COLUMNS: dict[str, frozenset[str]] = {
+    "user": frozenset(
+        {"username", "is_superadmin", "location", "blocked", "last_partner_reminder"}
+    ),
+    "event_source": frozenset(
+        {
+            "source_text", "source_fingerprint", "candidate_key", "occurrence_key",
+            "smart_update_candidate_id", "canonical_source_url", "source_role",
+        }
+    ),
+}
+STATIC_SITE_OPERATIONAL_TABLES: frozenset[str] = frozenset(
+    {
+        "joboutbox",
+        "ops_run",
+        "vk_inbox",
+        "vk_source_packet",
+        "kaggle_run_event",
+        "kaggle_run_ledger",
+        "resource_lease",
+    }
+)
+DEFAULT_STATIC_SITE_PROJECTION_MAX_BYTES = 256 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -189,6 +324,39 @@ def static_site_scratch_root(
     return root / ".tmp"
 
 
+def static_site_runtime_scratch_root() -> Path:
+    """Return ephemeral process scratch, never the persistent Fly volume."""
+
+    configured = (
+        os.getenv("STATIC_SITE_RUNTIME_SCRATCH_ROOT")
+        or os.getenv("RUNTIME_SCRATCH_PATH")
+        or tempfile.gettempdir()
+    ).strip()
+    return Path(configured).expanduser().resolve()
+
+
+def static_site_output_root() -> Path:
+    """Return ephemeral downloaded-output staging for the host validator."""
+
+    configured = (os.getenv("STATIC_SITE_OUTPUT_SCRATCH_DIR") or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return static_site_runtime_scratch_root() / "static_site_builder_outputs"
+
+
+def static_site_projection_root() -> Path:
+    """Return ephemeral immutable-input staging before Kaggle owns the bytes."""
+
+    configured = (
+        os.getenv("STATIC_SITE_PROJECTION_SCRATCH_DIR")
+        or os.getenv("STATIC_SITE_SNAPSHOT_DIR")
+        or ""
+    ).strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return static_site_runtime_scratch_root() / "static_site_projections"
+
+
 def static_site_result_counts(
     result: Mapping[str, Any],
     *,
@@ -238,6 +406,10 @@ class SnapshotMetadata:
     max_event_updated_at: str | None
     max_event_revision: str | None
     event_revisions: dict[str, str]
+    projection_schema_version: str | None = None
+    table_row_counts: dict[str, int] | None = None
+    source_table_row_counts: dict[str, int] | None = None
+    table_columns: dict[str, list[str]] | None = None
 
 
 @dataclass(frozen=True)
@@ -755,10 +927,9 @@ def _interest_club_projection_digest(
     cutoff = _calendar_months_before(date.fromisoformat(effective_date), 6).isoformat()
     queries: tuple[tuple[str, tuple[Any, ...]], ...] = (
         (
-            """
-            SELECT id,slug,canonical_name,topic,description,city,typical_place,
-                   public_status,identity_version,policy_version,
-                   aliases_json,source_anchors_json,provenance_json
+                """
+                SELECT id,slug,canonical_name,topic,description,city,typical_place,
+                       public_status
             FROM interest_club
             WHERE public_status='approved'
             ORDER BY id
@@ -766,9 +937,9 @@ def _interest_club_projection_digest(
             (),
         ),
         (
-            """
-            SELECT ice.club_id,ice.event_id,ice.status,ice.decision_lane,
-                   ice.policy_version,ice.input_hash,
+                """
+                SELECT ice.club_id,ice.event_id,ice.status,
+                       ice.policy_version,ice.input_hash,
                    e.title,e.date,e.end_date,e.time,e.city,e.location_name,
                    e.lifecycle_status,e.identity_status,e.merged_into_event_id,
                    e.silent,e.festival
@@ -782,8 +953,8 @@ def _interest_club_projection_digest(
         ),
         (
             """
-            SELECT ie.club_id,ie.event_id,ie.status,ie.verdict,ie.decision_lane,
-                   ie.policy_version,ie.input_hash,ie.error_code
+                SELECT ie.id,ie.club_id,ie.event_id,ie.status,ie.verdict,
+                       ie.policy_version,ie.input_hash
             FROM interest_club_evaluation ie
             JOIN interest_club c ON c.id=ie.club_id AND c.public_status='approved'
             JOIN event e ON e.id=ie.event_id
@@ -1519,6 +1690,267 @@ def finish_static_site_build_claim(
         connection.close()
 
 
+def _projection_max_bytes() -> int:
+    raw = (os.getenv("STATIC_SITE_PROJECTION_MAX_BYTES") or "").strip()
+    if not raw:
+        return DEFAULT_STATIC_SITE_PROJECTION_MAX_BYTES
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise StaticSitePermanentError(
+            "static_site_projection_max_bytes_invalid"
+        ) from exc
+    if value < 1024 * 1024:
+        raise StaticSitePermanentError(
+            "static_site_projection_max_bytes_below_minimum"
+        )
+    return value
+
+
+def _projection_read_max_seconds() -> float:
+    raw = (os.getenv("STATIC_SITE_PROJECTION_READ_MAX_SECONDS") or "").strip()
+    try:
+        value = float(raw) if raw else 60.0
+    except ValueError as exc:
+        raise StaticSitePermanentError(
+            "static_site_projection_read_timeout_invalid"
+        ) from exc
+    return max(5.0, min(value, 300.0))
+
+
+def _copy_projection_table(
+    source: sqlite3.Connection,
+    destination: sqlite3.Connection,
+    table: str,
+    requested_columns: tuple[str, ...],
+    *,
+    deadline: float,
+) -> tuple[int, list[str]]:
+    """Copy one allowlisted relation without indexes, triggers or side tables."""
+
+    source_info = list(source.execute(f'PRAGMA table_xinfo("{table}")'))
+    info_by_name = {str(row[1]): row for row in source_info if int(row[6] or 0) == 0}
+    columns = [name for name in requested_columns if name in info_by_name]
+    if not columns:
+        return 0, []
+    forbidden = STATIC_SITE_FORBIDDEN_PROJECTION_COLUMNS.get(table, frozenset())
+    if forbidden & set(columns):
+        raise StaticSitePermanentError(
+            f"static_site_projection_forbidden_column:{table}"
+        )
+    definitions: list[str] = []
+    for name in columns:
+        declared_type = str(info_by_name[name][2] or "").strip()
+        if declared_type and not re.fullmatch(r"[A-Za-z0-9_(), ]{1,100}", declared_type):
+            declared_type = "BLOB"
+        definitions.append(
+            f'"{name}"' + (f" {declared_type}" if declared_type else "")
+        )
+    destination.execute(f'CREATE TABLE "{table}" ({", ".join(definitions)})')
+    quoted = ",".join(f'"{name}"' for name in columns)
+    cursor = source.execute(f'SELECT {quoted} FROM "{table}"')
+    placeholders = ",".join("?" for _ in columns)
+    insert_sql = f'INSERT INTO "{table}" ({quoted}) VALUES ({placeholders})'
+    copied = 0
+    while True:
+        if unix_time.monotonic() > deadline:
+            raise StaticSiteRetryableError(
+                "static_site_projection_read_transaction_timeout"
+            )
+        rows = cursor.fetchmany(512)
+        if not rows:
+            break
+        destination.executemany(insert_sql, rows)
+        copied += len(rows)
+    return copied, columns
+
+
+def create_immutable_projection_snapshot(
+    source_db: str | os.PathLike[str],
+    snapshot_dir: str | os.PathLike[str],
+    *,
+    request_payload: Mapping[str, Any],
+    snapshot_id: str | None = None,
+    now: datetime | None = None,
+) -> tuple[Path, Path, SnapshotMetadata]:
+    """Materialize the bounded SQLite read model consumed by the Astro exporter.
+
+    The live database read transaction exists only while allowlisted rows are
+    copied to process scratch.  It is closed before hashing, Kaggle upload or
+    the remote wait, so this handoff cannot pin the production WAL for the
+    duration of a build.  Operational ingestion, scheduler and Kaggle-ledger
+    relations are structurally unrepresentable in the resulting database.
+    """
+
+    source_path = Path(source_db).resolve()
+    if not source_path.is_file():
+        raise StaticSitePermanentError(
+            f"snapshot_source_missing:{source_path.name}"
+        )
+    target_dir = Path(snapshot_dir).resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    clean_id = _clean_token(snapshot_id, max_len=100) or (
+        f"snapshot-{uuid.uuid4().hex}"
+    )
+    if not all(ch.isalnum() or ch in "._-" for ch in clean_id):
+        raise StaticSitePermanentError("invalid_snapshot_id")
+    final_path = target_dir / f"{clean_id}.sqlite"
+    manifest_path = target_dir / f"{clean_id}.manifest.json"
+    if final_path.exists() or manifest_path.exists():
+        raise StaticSitePermanentError(f"immutable_snapshot_exists:{clean_id}")
+
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{clean_id}.", suffix=".tmp", dir=target_dir
+    )
+    os.close(fd)
+    tmp_path = Path(tmp_name)
+    source_connection: sqlite3.Connection | None = None
+    destination: sqlite3.Connection | None = None
+    table_row_counts: dict[str, int] = {}
+    source_table_row_counts: dict[str, int] = {}
+    table_columns: dict[str, list[str]] = {}
+    started = unix_time.monotonic()
+    try:
+        source_connection = _readonly_sqlite_connection(source_path)
+        source_connection.execute("PRAGMA query_only=ON")
+        source_connection.execute("BEGIN")
+        deadline = started + _projection_read_max_seconds()
+
+        # Python-side fetch checks do not cover a long SQLite COUNT/scan before
+        # the first row is returned.  Interrupt VM execution itself so every
+        # source query shares the same hard transaction deadline.
+        source_connection.set_progress_handler(
+            lambda: int(unix_time.monotonic() > deadline),
+            1000,
+        )
+        destination = sqlite3.connect(tmp_path, timeout=60.0)
+        destination.execute("PRAGMA foreign_keys=OFF")
+        destination.execute("PRAGMA journal_mode=DELETE")
+        existing = {
+            str(row[0])
+            for row in source_connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "event" not in existing:
+            raise StaticSitePermanentError(
+                "static_site_projection_event_table_missing"
+            )
+        destination.execute("BEGIN")
+        for table in STATIC_SITE_PROJECTION_TABLES:
+            if table not in existing:
+                continue
+            source_count = int(
+                source_connection.execute(
+                    # SUM(1) deliberately executes the scan under the SQLite
+                    # progress handler; COUNT(*) may use a VM fast path that
+                    # does not offer a useful interruption boundary.
+                    f'SELECT coalesce(sum(1), 0) FROM "{table}"'
+                ).fetchone()[0]
+            )
+            copied, copied_columns = _copy_projection_table(
+                source_connection,
+                destination,
+                table,
+                STATIC_SITE_PROJECTION_COLUMNS[table],
+                deadline=deadline,
+            )
+            if copied != source_count:
+                raise StaticSitePermanentError(
+                    f"static_site_projection_row_count_mismatch:{table}"
+                )
+            source_table_row_counts[table] = source_count
+            table_row_counts[table] = copied
+            table_columns[table] = copied_columns
+        destination.commit()
+        # End the production read transaction before any potentially slow
+        # compaction, hashing or remote work.
+        source_connection.rollback()
+        source_connection.set_progress_handler(None, 0)
+        source_connection.close()
+        source_connection = None
+
+        destination.execute("VACUUM")
+        quick_check = _quick_check(destination)
+        max_event_id, max_event_updated_at = _event_snapshot_facts(destination)
+        destination.close()
+        destination = None
+        with tmp_path.open("rb") as handle:
+            os.fsync(handle.fileno())
+        size_bytes = tmp_path.stat().st_size
+        max_bytes = _projection_max_bytes()
+        if size_bytes <= 0 or size_bytes > max_bytes:
+            raise StaticSiteRetryableError(
+                "static_site_projection_size_out_of_bounds:"
+                f"size_bytes={size_bytes}:max_bytes={max_bytes}"
+            )
+        sha256 = _sha256_file(tmp_path)
+        revisions = {
+            str(key): str(value)
+            for key, value in (request_payload.get("event_revisions") or {}).items()
+            if str(key).isdigit() and value
+        }
+        metadata = SnapshotMetadata(
+            schema_version=PROJECTION_SNAPSHOT_SCHEMA,
+            snapshot_id=clean_id,
+            source_database_name=source_path.name,
+            sqlite_filename=final_path.name,
+            created_at=iso_utc(now),
+            quick_check=quick_check,
+            sha256=sha256,
+            size_bytes=size_bytes,
+            target_watermark=str(
+                request_payload.get("target_watermark")
+                or request_watermark(request_payload)
+            ),
+            latest_effect_at=(
+                str(request_payload.get("latest_effect_at") or "") or None
+            ),
+            max_event_id=max_event_id,
+            max_event_updated_at=max_event_updated_at,
+            max_event_revision=max(revisions.values(), default=None),
+            event_revisions=revisions,
+            projection_schema_version=PROJECTION_CONTENT_SCHEMA,
+            table_row_counts=table_row_counts,
+            source_table_row_counts=source_table_row_counts,
+            table_columns=table_columns,
+        )
+        os.replace(tmp_path, final_path)
+        manifest_tmp = manifest_path.with_suffix(manifest_path.suffix + ".tmp")
+        manifest_tmp.write_text(
+            json.dumps(
+                asdict(metadata),
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with manifest_tmp.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(manifest_tmp, manifest_path)
+        return final_path, manifest_path, metadata
+    except StaticSiteReleaseError:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    except sqlite3.Error as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise StaticSiteRetryableError(
+            f"sqlite_projection_failed:{exc.__class__.__name__}:{exc}"
+        ) from exc
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    finally:
+        if destination is not None:
+            destination.close()
+        if source_connection is not None:
+            source_connection.set_progress_handler(None, 0)
+            source_connection.rollback()
+            source_connection.close()
+
+
 def create_immutable_snapshot(
     source_db: str | os.PathLike[str],
     snapshot_dir: str | os.PathLike[str],
@@ -1612,13 +2044,74 @@ def validate_snapshot(snapshot_path: str | os.PathLike[str], manifest_path: str 
         metadata = SnapshotMetadata(**payload)
     except Exception as exc:
         raise StaticSitePermanentError(f"invalid_snapshot_manifest:{exc}") from exc
-    if metadata.schema_version != SNAPSHOT_SCHEMA or metadata.sqlite_filename != snapshot.name:
+    if metadata.schema_version not in {
+        SNAPSHOT_SCHEMA,
+        PROJECTION_SNAPSHOT_SCHEMA,
+    } or metadata.sqlite_filename != snapshot.name:
         raise StaticSitePermanentError("snapshot_manifest_identity_mismatch")
     if snapshot.stat().st_size != metadata.size_bytes or _sha256_file(snapshot) != metadata.sha256:
         raise StaticSitePermanentError("snapshot_hash_or_size_mismatch")
     connection = _readonly_sqlite_connection(snapshot)
     try:
         _quick_check(connection)
+        if metadata.schema_version == PROJECTION_SNAPSHOT_SCHEMA:
+            if metadata.projection_schema_version != PROJECTION_CONTENT_SCHEMA:
+                raise StaticSitePermanentError(
+                    "static_site_projection_schema_mismatch"
+                )
+            actual_tables = {
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
+            }
+            unexpected = actual_tables - set(STATIC_SITE_PROJECTION_TABLES)
+            if unexpected or actual_tables & STATIC_SITE_OPERATIONAL_TABLES:
+                raise StaticSitePermanentError(
+                    "static_site_projection_contains_unexpected_tables:"
+                    + ",".join(sorted(unexpected or (actual_tables & STATIC_SITE_OPERATIONAL_TABLES)))
+                )
+            expected_counts = metadata.table_row_counts or {}
+            if set(expected_counts) != actual_tables:
+                raise StaticSitePermanentError(
+                    "static_site_projection_table_inventory_mismatch"
+                )
+            for table, expected in expected_counts.items():
+                actual = int(
+                    connection.execute(
+                        f'SELECT count(*) FROM "{table}"'
+                    ).fetchone()[0]
+                )
+                if actual != int(expected):
+                    raise StaticSitePermanentError(
+                        f"static_site_projection_row_count_mismatch:{table}"
+                    )
+            expected_columns = metadata.table_columns or {}
+            if set(expected_columns) != actual_tables:
+                raise StaticSitePermanentError(
+                    "static_site_projection_column_inventory_mismatch"
+                )
+            for table, expected in expected_columns.items():
+                actual = [
+                    str(row[1])
+                    for row in connection.execute(
+                        f'PRAGMA table_xinfo("{table}")'
+                    )
+                    if int(row[6] or 0) == 0
+                ]
+                if actual != [str(name) for name in expected]:
+                    raise StaticSitePermanentError(
+                        f"static_site_projection_column_mismatch:{table}"
+                    )
+                allowed = set(STATIC_SITE_PROJECTION_COLUMNS[table])
+                forbidden = STATIC_SITE_FORBIDDEN_PROJECTION_COLUMNS.get(
+                    table, frozenset()
+                )
+                if set(actual) - allowed or set(actual) & forbidden:
+                    raise StaticSitePermanentError(
+                        f"static_site_projection_forbidden_column:{table}"
+                    )
     finally:
         connection.close()
     return metadata

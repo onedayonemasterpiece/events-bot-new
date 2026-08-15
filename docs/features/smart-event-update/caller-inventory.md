@@ -2,9 +2,9 @@
 
 AST import/alias/callback discovery was frozen on then-latest `origin/main`
 `d7731ab4235b325e9ca52d13c45fba83eaf5de0b` before the automatic terminal
-state-machine change. After integration rebased onto `origin/main`
-`96784bd572c03b965f303366c4ff0bb85d1b9a3f`, the inventory and AST acceptance
-contract were rerun; intervening main commits added no Smart Update caller.
+state-machine change. The inventory and AST acceptance contract must be rerun
+after the final integration rebase; the release receipt records that exact-main
+result rather than freezing another intermediate base SHA here.
 Seven call expressions form six direct production boundaries.
 
 ## Direct boundaries and indirect entrypoints
@@ -68,11 +68,15 @@ ticket, festival, and manual/forwarded adapters supply stable producer ordinals
 where their envelope can contain siblings. `CREATED`, `MERGED`, and exact
 `NOOP_EXACT_REPLAY` are accepted; only those results can schedule projections,
 emit notices, increment accepted counters, or store an imported Event pointer.
-`RETRY_SCHEDULED` is left to the default-on durable worker, and
-`REJECTED_PRODUCT_POLICY` retains its explicit permanent reason.
+`RETRY_SCHEDULED` is a legacy/provisional storage value only; the worker is
+default-off and every current invocation closes as accepted, an explicitly
+typed `REJECTED_PRODUCT_POLICY`, or visible `FAILED_TECHNICAL`. Verification
+diagnostics and malformed/uncertain provider responses can never authorize a
+product rejection by substring. Ticket, festival and manual adapters preserve
+the same terminal classification instead of recreating a private retry.
 
 Telegram exact replay re-arms the same idempotent completion work as an
-accepted no-change import. VK roundup children are resolved independently: an
-unresolved child defers the carrier without erasing accepted sibling mappings,
-and a later keyed replay cannot re-create those siblings. Ticket exact replay
-is a successful queue completion.
+accepted no-change import. VK roundup children are resolved independently; a
+technical child makes the selected carrier visibly terminal without erasing
+accepted sibling mappings, and an explicit operator re-drive cannot re-create
+those siblings. Ticket exact replay is a successful queue completion.

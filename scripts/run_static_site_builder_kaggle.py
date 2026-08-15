@@ -36,9 +36,11 @@ from static_site_release import (
     STATIC_SITE_SOURCE_IDENTITY_SCHEMA,
     resolve_build_clock,
     static_site_artifact_root,
+    static_site_output_root,
     static_site_scratch_root,
     validate_static_site_image_source_manifest,
     validate_static_site_source_identity,
+    validate_snapshot,
 )
 KERNEL_SRC = ROOT / 'kaggle' / 'StaticSiteBuilder'
 SITE_SOURCE_REPO_CONTRACTS = (
@@ -62,12 +64,14 @@ SOURCE_IGNORED_PARTS = {
 SITE_SRC = ROOT / 'site'
 ARTIFACT_ROOT = static_site_artifact_root(ROOT)
 SCRATCH_ROOT = static_site_scratch_root(ARTIFACT_ROOT)
+OUTPUT_ROOT = static_site_output_root()
 LOCK_PATH = ARTIFACT_ROOT / 'static-site-kaggle.lock'
 ADOPT_REMOTE_LIVE_EXIT = 75
 ADOPT_REMOTE_UNAVAILABLE_EXIT = 76
 BUILD_ID_RE = re.compile(r'(?:preview|production)-[A-Za-z0-9][A-Za-z0-9._-]{0,191}')
 SCRATCH_DIR_RE = re.compile(r'static-site-kaggle-[A-Za-z0-9_-]+')
 SEMANTIC_CACHE_MODES = frozenset({'warm', 'cold'})
+DEFAULT_DURABLE_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
@@ -76,6 +80,19 @@ def _env_nonnegative_int(name: str, default: int) -> int:
         return max(0, int(raw) if raw else int(default))
     except (TypeError, ValueError):
         return max(0, int(default))
+
+
+def require_bounded_durable_cache(path: Path) -> None:
+    max_bytes = _env_nonnegative_int(
+        'STATIC_SITE_DURABLE_CACHE_MAX_BYTES',
+        DEFAULT_DURABLE_CACHE_MAX_BYTES,
+    )
+    size = path.stat().st_size
+    if max_bytes <= 0 or size > max_bytes:
+        raise RuntimeError(
+            'static-site durable cache exceeds bound: '
+            f'{path.name}:size={size}:max={max_bytes}'
+        )
 
 
 def collection_semantic_compute_required(args: argparse.Namespace) -> bool:
@@ -219,6 +236,27 @@ def sha256_file(path: Path) -> str:
     with path.open('rb') as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b''):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def dataset_payload_digest(dataset_dir: Path) -> str:
+    """Hash the exact private input payload before metadata is added."""
+
+    digest = hashlib.sha256()
+    for path in sorted(dataset_dir.iterdir(), key=lambda item: item.name):
+        if path.name == 'dataset-metadata.json':
+            continue
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError(
+                f'static-site dataset payload is not a regular file: {path.name}'
+            )
+        digest.update(
+            json.dumps(
+                [path.name, path.stat().st_size, sha256_file(path)],
+                separators=(',', ':'),
+            ).encode('utf-8')
+        )
+        digest.update(b'\n')
     return digest.hexdigest()
 
 
@@ -491,6 +529,7 @@ def persist_semantic_outputs(
             raise RuntimeError(f'validated semantic cache output missing: {filename}')
         if not re.fullmatch(r'[0-9a-f]{64}', expected_hash) or sha256_file(source) != expected_hash:
             raise RuntimeError(f'semantic cache output hash mismatch: {filename}')
+        require_bounded_durable_cache(source)
         target = Path(target_value)
         atomic_copy_file(source, target)
         print(f'[static-site-kaggle] semantic cache persisted atomically: {target}', flush=True)
@@ -503,6 +542,31 @@ def load_snapshot_contract(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError('production-candidate profile requires --db and --snapshot-manifest')
     db_path = Path(args.db).resolve()
     manifest_path = Path(args.snapshot_manifest).resolve()
+    if getattr(args, 'adopt_existing', False) and (
+        not db_path.is_file() or not manifest_path.is_file()
+    ):
+        snapshot_id = str(getattr(args, 'expected_snapshot_id', '') or '').strip()
+        expected_sha = str(
+            getattr(args, 'expected_snapshot_sha256', '') or ''
+        ).strip().lower()
+        expected_size = int(getattr(args, 'expected_snapshot_size', 0) or 0)
+        if (
+            not snapshot_id
+            or not re.fullmatch(r'[0-9a-f]{64}', expected_sha)
+            or expected_size <= 0
+        ):
+            raise ValueError(
+                'adoption without local projection requires exact snapshot identity'
+            )
+        return {
+            'snapshot_id': snapshot_id,
+            'sha256': expected_sha,
+            'size': expected_size,
+            'quick_check': 'ok',
+        }
+    if not db_path.is_file() or not manifest_path.is_file():
+        raise ValueError('immutable projection snapshot/manifest is missing')
+    validated_metadata = validate_snapshot(db_path, manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     snapshot = manifest.get('snapshot') if isinstance(manifest.get('snapshot'), dict) else manifest
     snapshot_id = str(snapshot.get('snapshot_id') or manifest.get('snapshot_id') or '').strip()
@@ -511,16 +575,50 @@ def load_snapshot_contract(args: argparse.Namespace) -> dict[str, object]:
     quick_check = str(snapshot.get('quick_check') or manifest.get('quick_check') or '').strip().lower()
     if not snapshot_id or not re.fullmatch(r'[0-9a-f]{64}', expected_sha):
         raise ValueError('snapshot manifest requires snapshot_id and SHA-256')
-    actual_sha = sha256_file(db_path)
-    actual_size = db_path.stat().st_size
+    actual_sha = validated_metadata.sha256
+    actual_size = validated_metadata.size_bytes
     if actual_sha != expected_sha or (expected_size and actual_size != expected_size):
         raise ValueError('immutable snapshot hash/size does not match its manifest')
     if quick_check and quick_check not in {'ok', 'passed'}:
         raise ValueError(f'snapshot quick_check is not ok: {quick_check}')
-    return {'snapshot_id': snapshot_id, 'sha256': actual_sha, 'size': actual_size, 'quick_check': quick_check or 'ok'}
+    table_row_counts = manifest.get('table_row_counts')
+    table_columns = manifest.get('table_columns')
+    return {
+        'snapshot_id': snapshot_id,
+        'sha256': actual_sha,
+        'size': actual_size,
+        'quick_check': quick_check or 'ok',
+        'projection_schema_version': manifest.get('projection_schema_version'),
+        'table_row_counts': (
+            table_row_counts if isinstance(table_row_counts, dict) else None
+        ),
+        'table_columns': table_columns if isinstance(table_columns, dict) else None,
+    }
+
+
+def assert_no_sqlite_artifacts(root: Path) -> None:
+    """Reject a recursive Kaggle output containing any SQLite private input."""
+
+    forbidden: list[str] = []
+    for path in root.rglob('*'):
+        if not path.is_file():
+            continue
+        lowered = path.name.lower()
+        if (
+            lowered.endswith('.sqlite')
+            or lowered.endswith('.sqlite-wal')
+            or lowered.endswith('.sqlite-shm')
+        ):
+            forbidden.append(path.relative_to(root).as_posix())
+    if forbidden:
+        raise RuntimeError(
+            'static-site output contains forbidden SQLite artifacts: '
+            + ','.join(sorted(forbidden))
+        )
 
 
 def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[str, object]:
+    assert_no_sqlite_artifacts(out_dir)
     result_path = out_dir / 'static_site_build_result.json'
     if not result_path.exists() or result_path.stat().st_size > 256 * 1024:
         raise RuntimeError('Kaggle result JSON is missing or unbounded')
@@ -1185,7 +1283,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
             'event-search-corpus-receipt.json' if search_receipt_source else None
         ),
         'export_in_kaggle': bool(args.export_in_kaggle),
-        'sqlite_db_filename': 'events.sqlite' if args.db and args.export_in_kaggle else None,
+        'sqlite_db_filename': None,
         'related_cache_filename': 'event_related_chain_cache.json',
         'bge_vector_cache_filename': 'static_event_bge_vectors.npz',
         'bge_vector_receipt_filename': 'static_event_bge_vectors.receipt.json',
@@ -1218,10 +1316,33 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'payload_mode': 'dataset_source',
     }
     staged_site = prepare_site_source(args, dataset_dir)
+    projection_filename: str | None = None
+    projection_manifest_filename: str | None = None
     if args.db and args.export_in_kaggle:
-        shutil.copy2(Path(args.db).resolve(), dataset_dir / 'events.sqlite')
+        source_db = Path(args.db).resolve()
+        if args.profile == 'production-candidate':
+            digest = str(args.snapshot_contract['sha256'])
+            projection_filename = f'static-projection-{digest}.sqlite'
+            projection_manifest_filename = (
+                f'static-projection-{digest}.manifest.json'
+            )
+        else:
+            projection_filename = 'events-preview.sqlite'
+            projection_manifest_filename = 'snapshot-manifest.json'
+        projection_target = dataset_dir / projection_filename
+        try:
+            # The immutable source and short-lived dataset directory live on
+            # process scratch. A hard link gives the uploader a directory-local
+            # regular file without allocating a second DB-sized copy.
+            os.link(source_db, projection_target)
+        except OSError:
+            shutil.copy2(source_db, projection_target)
+        config['sqlite_db_filename'] = projection_filename
         if args.snapshot_manifest:
-            shutil.copy2(Path(args.snapshot_manifest).resolve(), dataset_dir / 'snapshot-manifest.json')
+            shutil.copy2(
+                Path(args.snapshot_manifest).resolve(),
+                dataset_dir / projection_manifest_filename,
+            )
     if args.related_cache and Path(args.related_cache).exists():
         shutil.copy2(Path(args.related_cache).resolve(), dataset_dir / 'event_related_chain_cache.json')
     if search_receipt_source:
@@ -1261,7 +1382,11 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
     )
     shutil.rmtree(staged_site)
     run_suffix = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3)}"
-    dataset_ref = f'{env_user}/static-site-builder-input-{run_suffix}'
+    if args.profile == 'production-candidate':
+        dataset_identity = dataset_payload_digest(dataset_dir)[:24]
+        dataset_ref = f'{env_user}/static-site-builder-input-{dataset_identity}'
+    else:
+        dataset_ref = f'{env_user}/static-site-builder-input-{run_suffix}'
     write_dataset_metadata(dataset_dir, dataset_ref, f'static site builder input {run_suffix}')
     create_input_dataset(client, dataset_dir, dataset_ref)
     expected = [
@@ -1269,10 +1394,10 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'build_config.json',
         'static_site_source_manifest.json',
     ]
-    if args.db and args.export_in_kaggle:
-        expected.append('events.sqlite')
-        if args.snapshot_manifest:
-            expected.append('snapshot-manifest.json')
+    if projection_filename:
+        expected.append(projection_filename)
+        if args.snapshot_manifest and projection_manifest_filename:
+            expected.append(projection_manifest_filename)
     if args.related_cache and Path(args.related_cache).exists():
         expected.append('event_related_chain_cache.json')
     if search_receipt_source:
@@ -1323,7 +1448,7 @@ def adopt_existing_kernel_output(args: argparse.Namespace, client, kernel_ref: s
         return ADOPT_REMOTE_LIVE_EXIT
     if raw != 'COMPLETE':
         return ADOPT_REMOTE_UNAVAILABLE_EXIT
-    out_dir = prepare_output_directory(ARTIFACT_ROOT, args.build_id)
+    out_dir = prepare_output_directory(OUTPUT_ROOT, args.build_id)
     # Replacing the local duplicate can itself restore enough durable space
     # for the exact remote output. Check capacity only after the stale partial
     # directory is removed; the remote Kaggle result remains authoritative and
@@ -1356,6 +1481,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--db', help='Optional SQLite snapshot; if set, export preview JSON before staging')
     parser.add_argument('--snapshot-manifest', default=os.getenv('STATIC_SITE_SNAPSHOT_MANIFEST', ''))
+    parser.add_argument('--expected-snapshot-id', default='')
+    parser.add_argument('--expected-snapshot-sha256', default='')
+    parser.add_argument('--expected-snapshot-size', type=int, default=0)
     parser.add_argument('--profile', choices=['preview', 'production-candidate'], default=os.getenv('STATIC_SITE_BUILD_PROFILE', 'preview'))
     parser.add_argument('--catalog-mode', choices=['slice', 'full'], default=os.getenv('STATIC_SITE_CATALOG_MODE', 'slice'))
     parser.add_argument('--repo-sha', default=os.getenv('STATIC_SITE_REPO_SHA', ''))
@@ -1582,7 +1710,7 @@ def main() -> int:
                 tmp_root=tmp_root,
             )
             if args.keep_staging:
-                keep = ARTIFACT_ROOT / f'staging-{build_id}'
+                keep = OUTPUT_ROOT / f'staging-{build_id}'
                 if keep.exists():
                     shutil.rmtree(keep)
                 shutil.copytree(tmp_root, keep)
@@ -1615,7 +1743,7 @@ def main() -> int:
                     print(f"[static-site-kaggle] status={raw} raw={status}", flush=True)
                     if raw == 'COMPLETE':
                         if args.download_output:
-                            out_dir = prepare_output_directory(ARTIFACT_ROOT, build_id)
+                            out_dir = prepare_output_directory(OUTPUT_ROOT, build_id)
                             files = client.download_kernel_output(kernel_ref, path=out_dir, force=True)
                             print(f"[static-site-kaggle] downloaded {len(files)} files to {out_dir}", flush=True)
                             validated = validate_downloaded_result(out_dir, args)
@@ -1626,6 +1754,7 @@ def main() -> int:
                             )
                             cache_out = out_dir / 'event_related_chain_cache.json'
                             if args.export_in_kaggle and args.related_cache and cache_out.exists():
+                                require_bounded_durable_cache(cache_out)
                                 cache_target = Path(args.related_cache)
                                 cache_target.parent.mkdir(parents=True, exist_ok=True)
                                 atomic_copy_file(cache_out, cache_target)

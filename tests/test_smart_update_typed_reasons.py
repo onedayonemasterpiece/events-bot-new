@@ -14,8 +14,8 @@ def test_free_form_or_substring_reason_cannot_authorize_product_terminal() -> No
         reason="definitely_non_event_without_provider_timeout_words",
     )
 
-    assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-    assert result.retry_reason is RetryReason.UNKNOWN
+    assert result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+    assert result.retry_reason is RetryReason.PRODUCT_REASON_UNTYPED
     assert result.product_exclusion_reason is None
 
 
@@ -30,13 +30,13 @@ def test_closed_product_reason_authorizes_product_terminal() -> None:
     assert result.product_exclusion_reason is ProductExclusionReason.COMPLETED_EVENT_REPORT
 
 
-def test_explicit_untyped_product_outcome_fails_closed_to_retry() -> None:
+def test_explicit_untyped_product_outcome_fails_closed_to_technical_terminal() -> None:
     result = SmartUpdateResult(
         outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
         reason="unknown_new_reason",
     )
 
-    assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+    assert result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
     assert result.retry_reason is RetryReason.PRODUCT_REASON_UNTYPED
 
 

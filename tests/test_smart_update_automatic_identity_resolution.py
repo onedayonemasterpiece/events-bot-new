@@ -457,7 +457,7 @@ async def test_late_incoherent_merge_rolls_back_and_creates_distinct(
 
 
 @pytest.mark.asyncio
-async def test_identity_llm_unavailable_remains_technical_retry_past_semantic_budget(
+async def test_identity_llm_unavailable_is_visible_technical_terminal(
     tmp_path, monkeypatch
 ) -> None:
     db = Database(str(tmp_path / "llm-unavailable.sqlite"))
@@ -491,11 +491,10 @@ async def test_identity_llm_unavailable_remains_technical_retry_past_semantic_bu
             check_source_url=False,
             schedule_tasks=False,
         )
-        assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert first.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
         assert first.reason == "merge_identity_llm_unavailable"
         assert first.retry_reason is RetryReason.IDENTITY_TECHNICAL_FAILURE
-        for _ in range(4):
-            assert (await _make_due(db))["RETRY_SCHEDULED"] == 1
+        assert (await _make_due(db))["claimed"] == 0
         async with db.get_session() as session:
             assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
     finally:
@@ -503,7 +502,7 @@ async def test_identity_llm_unavailable_remains_technical_retry_past_semantic_bu
 
 
 @pytest.mark.asyncio
-async def test_typed_semantic_unknown_creates_distinct_after_bounded_adjudication(
+async def test_typed_semantic_unknown_creates_distinct_inline(
     tmp_path, monkeypatch
 ) -> None:
     db = Database(str(tmp_path / "semantic-unknown.sqlite"))
@@ -543,12 +542,10 @@ async def test_typed_semantic_unknown_creates_distinct_after_bounded_adjudicatio
         first = await su.smart_event_update(
             db, _candidate(), check_source_url=False, schedule_tasks=False
         )
-        assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-        assert first.retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
-        assert (await _make_due(db))["RETRY_SCHEDULED"] == 1
-        final = await _make_due(db)
-        assert final["CREATED"] == 1
-        assert calls == 2
+        assert first.outcome is SmartUpdateTerminalOutcome.CREATED
+        assert first.identity_distinct_reason is IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION
+        assert (await _make_due(db))["claimed"] == 0
+        assert calls == 1
         async with db.get_session() as session:
             assert int(await session.scalar(select(func.count()).select_from(Event))) == 2
         async with db.raw_conn() as conn:
@@ -563,7 +560,7 @@ async def test_typed_semantic_unknown_creates_distinct_after_bounded_adjudicatio
 
 
 @pytest.mark.asyncio
-async def test_widened_dedup_invalid_schema_is_durable_retry_not_create(
+async def test_widened_dedup_invalid_schema_is_technical_terminal_not_create(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -601,13 +598,13 @@ async def test_widened_dedup_invalid_schema_is_durable_retry_not_create(
             schedule_tasks=False,
         )
 
-        assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
         assert result.event_id is None
         assert result.reason == "dedup_adjudicator_unavailable"
         async with db.get_session() as session:
             assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
         counts = await smart_update_funnel_counts(db)
-        assert counts["RETRY_SCHEDULED"] == 1
+        assert counts["FAILED_TECHNICAL"] == 1
         assert counts["attempt_starts"] == counts["attempt_terminals"] == 1
         assert counts["terminal_unresolved"] == 0
         assert existing_id > 0
@@ -616,7 +613,7 @@ async def test_widened_dedup_invalid_schema_is_durable_retry_not_create(
 
 
 @pytest.mark.asyncio
-async def test_facade_db_exception_persists_durable_retry_candidate(
+async def test_facade_db_exception_persists_visible_technical_terminal(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -634,12 +631,12 @@ async def test_facade_db_exception_persists_durable_retry_candidate(
             schedule_tasks=False,
         )
 
-        assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
         assert result.event_id is None
         assert result.reason == "smart_update_processing_error"
         counts = await smart_update_funnel_counts(db)
         assert counts["candidates_total"] == 1
-        assert counts["RETRY_SCHEDULED"] == 1
+        assert counts["FAILED_TECHNICAL"] == 1
         assert counts["attempt_starts"] == counts["attempt_terminals"] == 1
         assert counts["attempt_unresolved"] == 0
         async with db.raw_conn() as conn:
@@ -650,7 +647,7 @@ async def test_facade_db_exception_persists_durable_retry_candidate(
             row = await cursor.fetchone()
             await cursor.close()
         assert row is not None
-        assert row[0:2] == ("RETRY_SCHEDULED", "smart_update_processing_error")
+        assert row[0:2] == ("FAILED_TECHNICAL", "smart_update_processing_error")
         assert "automatic_identity" in str(row[2])
     finally:
         await db.close()
@@ -886,8 +883,13 @@ async def test_accepted_domain_write_survives_attempt_ack_failure_and_exact_repl
             check_source_url=False,
             schedule_tasks=False,
         )
-        assert created.outcome is SmartUpdateTerminalOutcome.CREATED
-        assert created.event_id is not None
+        assert created.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        assert created.event_id is None
+        assert created.diagnostic_event_id is not None
+        failed_counts = await smart_update_funnel_counts(db)
+        assert failed_counts["FAILED_TECHNICAL"] == 1
+        assert failed_counts["RETRY_SCHEDULED"] == 0
+        assert failed_counts["attempt_unresolved"] == 0
 
         monkeypatch.setattr(su, "finish_candidate_attempt", real_finish)
         replay = await su.smart_event_update(
@@ -897,9 +899,10 @@ async def test_accepted_domain_write_survives_attempt_ack_failure_and_exact_repl
             schedule_tasks=False,
         )
         assert replay.outcome is SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
-        assert replay.event_id == created.event_id
+        assert replay.event_id == created.diagnostic_event_id
         counts = await smart_update_funnel_counts(db)
         assert counts["NOOP_EXACT_REPLAY"] == 1
+        assert counts["FAILED_TECHNICAL"] == 0
         assert counts["terminal_unresolved"] == 0
         assert counts["attempt_starts"] == counts["attempt_terminals"] == 2
         assert counts["attempt_unresolved"] == 0

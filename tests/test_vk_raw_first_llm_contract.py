@@ -11,6 +11,7 @@ import pytest_asyncio
 
 import main
 from db import Database
+from models import PosterOcrCache
 from source_parse_contract import (
     EvidenceManifest,
     LifecycleAction,
@@ -339,13 +340,22 @@ async def test_parse_receipt_is_replayable_without_second_provider_call(tmp_path
     await vk_review.record_exact_parse_replay(
         db, source_packet_id=packet_id, prompt_version="p", model="m"
     )
+    await vk_review.record_exact_parse_replay(
+        db, source_packet_id=packet_id, prompt_version="p", model="m"
+    )
     async with db.raw_conn() as conn:
         attempts = await (await conn.execute(
-            "SELECT attempt_kind,llm_started,llm_completed FROM vk_source_packet_attempt "
+            "SELECT attempt_kind,llm_started,llm_completed,parse_key FROM vk_source_packet_attempt "
             "WHERE source_packet_id=? ORDER BY attempt_no",
             (packet_id,),
         )).fetchall()
-    assert attempts == [("primary", 1, 1), ("exact_replay", 0, 0)]
+    assert len(attempts) == 3
+    assert attempts[0][0:3] == ("primary", 1, 1)
+    assert attempts[0][3]
+    assert attempts[1:] == [
+        ("exact_replay", 0, 0, None),
+        ("exact_replay", 0, 0, None),
+    ]
 
 
 @pytest.mark.asyncio
@@ -371,7 +381,7 @@ async def test_rate_limit_and_restart_never_terminal(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_typed_provider_receipt_releases_lease_and_persists_quota_metadata(
+async def test_typed_provider_receipt_terminalizes_and_persists_attempt_metadata(
     tmp_path, monkeypatch
 ):
     db = await _db(tmp_path)
@@ -457,11 +467,12 @@ async def test_typed_provider_receipt_releases_lease_and_persists_quota_metadata
             "FROM vk_source_packet_attempt WHERE source_packet_id=?",
             (packet_id,),
         )).fetchone()
-    assert report.inbox_deferred == 1
+    assert report.inbox_deferred == 0
+    assert report.inbox_failed_technical == 1
     assert inbox == (
-        "deferred",
-        "google:shared-project",
-        3600,
+        "failed_technical",
+        None,
+        None,
         SourceParseRetryReason.TECHNICAL_ERROR.value,
     )
     assert attempt == (
@@ -613,7 +624,7 @@ async def test_any_fetch_failure_keeps_legacy_packet_incomplete_without_parser(
         )
 
     async def must_not_parse(*_args, **_kwargs):
-        raise AssertionError("legacy incomplete packet must not produce a semantic terminal")
+        raise AssertionError("legacy incomplete packet must not produce a semantic verdict")
 
     monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", unavailable)
     monkeypatch.setattr(vk_auto_queue.vk_intake, "build_event_drafts", must_not_parse)
@@ -637,13 +648,14 @@ async def test_any_fetch_failure_keeps_legacy_packet_incomplete_without_parser(
         row = await (await conn.execute(
             "SELECT status,last_typed_reason FROM vk_inbox WHERE id=?", (post.id,)
         )).fetchone()
-    assert report.inbox_deferred == 1
-    assert row == ("deferred", "EVIDENCE_INCOMPLETE")
+    assert report.inbox_deferred == 0
+    assert report.inbox_failed_technical == 1
+    assert row == ("failed_technical", "EVIDENCE_INCOMPLETE")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure_kind", ["network_error", "vk_api_error"])
-async def test_fetch_failure_without_packet_uses_typed_technical_retry_not_stale_text(
+async def test_fetch_failure_without_packet_uses_typed_terminal_not_stale_text(
     tmp_path, monkeypatch, failure_kind
 ):
     db = await _db(tmp_path)
@@ -695,7 +707,8 @@ async def test_fetch_failure_without_packet_uses_typed_technical_retry_not_stale
             "SELECT status,last_typed_reason FROM vk_inbox WHERE id=1"
         )).fetchone()
     assert report.inbox_failed == 1
-    assert row == ("deferred", "SOURCE_FETCH_ERROR")
+    assert report.inbox_failed_technical == 1
+    assert row == ("failed_technical", "SOURCE_FETCH_ERROR")
 
 
 @pytest.mark.asyncio
@@ -1266,6 +1279,58 @@ async def test_vk_build_without_photos_has_explicit_ocr_state(tmp_path, monkeypa
     drafts, _ = await vk_intake.build_event_drafts("plain text", photos=[], db=db)
     assert drafts.disposition is SourceDisposition.CONFIRMED_NO_EVENT
     await db.close()
+
+
+@pytest.mark.asyncio
+async def test_successful_blank_ocr_counts_as_complete_evidence(tmp_path, monkeypatch):
+    db = await _db(tmp_path)
+    captured = {}
+
+    async def download(_urls):
+        return [(b"blank-image", "blank.jpg")]
+
+    async def media(_items, **_kwargs):
+        return [PosterMedia(data=b"blank-image", name="blank.jpg")], None
+
+    async def recognize(_db, _items, **_kwargs):
+        return [
+            PosterOcrCache(
+                hash="blank",
+                detail="auto",
+                model="mock",
+                text="",
+                title="",
+            )
+        ], 0, 100
+
+    async def provider(*_args, **kwargs):
+        captured.update(kwargs["evidence_manifest"])
+        return {
+            "disposition": "CONFIRMED_NO_EVENT",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_complete": True,
+            "parse_version": "source-parse-v1",
+            "no_event_reason": "NO_ATTENDABLE_EVENT",
+        }
+
+    monkeypatch.setattr(vk_intake, "_download_photo_media", download)
+    monkeypatch.setattr(vk_intake, "process_media", media)
+    monkeypatch.setattr(vk_intake.poster_ocr, "recognize_posters", recognize)
+    monkeypatch.setattr(main, "parse_event_via_llm", provider)
+    drafts, _ = await vk_intake.build_event_drafts(
+        "archival venue photo",
+        photos=["https://example.test/blank.jpg"],
+        db=db,
+    )
+
+    assert drafts.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+    assert captured["attachment_count"] == 1
+    assert captured["ocr_blocks_available"] == 1
+    assert captured["ocr_blocks_included"] == 1
+    assert captured["unavailable_attachment_count"] == 0
+    assert captured["ocr_complete"] is True
+    assert captured["evidence_complete"] is True
 
 
 @pytest.mark.parametrize("legacy", [[], None, "malformed"])

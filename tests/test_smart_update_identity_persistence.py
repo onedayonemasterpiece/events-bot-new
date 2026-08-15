@@ -135,7 +135,7 @@ async def test_identity_gate_exception_records_single_fail_safe_row(tmp_path, mo
 
         result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.outcome is su.SmartUpdateTerminalOutcome.FAILED_TECHNICAL
         assert result.event_id is None
         assert result.reason == "identity_gate_uncertain:identity_gate_error"
         async with db.get_session() as session:
@@ -152,7 +152,7 @@ async def test_identity_gate_exception_records_single_fail_safe_row(tmp_path, mo
 
 
 @pytest.mark.asyncio
-async def test_vector_error_schedules_retry_and_is_persisted_for_rollout_metrics(tmp_path, monkeypatch):
+async def test_vector_error_is_technical_terminal_and_is_persisted_for_rollout_metrics(tmp_path, monkeypatch):
     from scripts.inspect.audit_identity_gate_rollout import build_rollout_payload
 
     db = Database(str(tmp_path / "db.sqlite"))
@@ -187,7 +187,7 @@ async def test_vector_error_schedules_retry_and_is_persisted_for_rollout_metrics
 
         result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.outcome is su.SmartUpdateTerminalOutcome.FAILED_TECHNICAL
         assert result.event_id is None
         assert result.reason == "identity_gate_uncertain:identity_gate_error"
         async with db.get_session() as session:

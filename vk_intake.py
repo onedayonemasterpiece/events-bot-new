@@ -3347,18 +3347,24 @@ async def build_event_drafts(
             )
     photo_urls = list(photos or ())
     ocr_blocks = collect_poster_texts(poster_items)
+    # A successful OCR result is an evidence unit even when the image contains
+    # no readable text. ``collect_poster_texts`` intentionally omits empty text
+    # from the prompt, so it cannot be used to decide whether OCR ran. Doing so
+    # made blank-success posters look permanently unavailable and sent the same
+    # VK carriers through the retry queue forever.
+    ocr_processed_count = min(len(photo_bytes), len(ocr_results)) if photo_bytes else 0
     attachment_count = max(len(photo_urls), int(attachment_count_hint or 0))
     unavailable_count = max(
         int(unavailable_attachment_count_hint or 0),
         max(0, attachment_count - len(photo_bytes)),
     )
-    missing_ocr_count = max(0, len(photo_bytes) - len(ocr_blocks))
+    missing_ocr_count = max(0, len(photo_bytes) - ocr_processed_count)
     evidence_manifest = EvidenceManifest(
         raw_text_chars=len(text or ""),
         raw_text_hash=hashlib.sha256((text or "").encode("utf-8")).hexdigest(),
         attachment_count=attachment_count,
-        ocr_blocks_available=len(ocr_blocks),
-        ocr_blocks_included=len(ocr_blocks),
+        ocr_blocks_available=ocr_processed_count,
+        ocr_blocks_included=ocr_processed_count,
         included_chars=len(text or "") + sum(len(block) for block in ocr_blocks),
         omitted_blocks=tuple(
             f"attachment:{idx}:ocr_unavailable" for idx in range(missing_ocr_count)

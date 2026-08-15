@@ -102,10 +102,13 @@ Numbers below are from `ops_run` snapshots + local `/parse` logs (p50/p90/max). 
 Defaults were adjusted to reduce overlaps between the most common heavy jobs:
 
 - nightly source parsing: `SOURCE_PARSING_TIME_LOCAL=04:30` (was `02:15`)
+- nightly page sync: `NIGHTLY_PAGE_SYNC_TIME_LOCAL=02:30` (default,
+  `NIGHTLY_PAGE_SYNC_TZ=Europe/Kaliningrad`), то есть отдельный 00:30 UTC slot,
+  а не прежняя коллизия с parser в 02:30 UTC.
 - `/3di` morning run: `THREEDI_TIMES_LOCAL=07:15,15:15,17:15` (was `05:30,15:15,17:15`; older default `03:15,15:15,17:15`)
 - VK auto-import: `VK_AUTO_IMPORT_TIMES_LOCAL=06:15,10:15,12:00,15:30,18:30` with `VK_AUTO_IMPORT_LIMIT=15` by default, so queue draining relies on cadence instead of oversized single runs, picks up fresh daytime `pending` items after the `13:15` VK crawl, avoids the `/3di` `15:15` slot, and stays away from the `08:00` daily announcement window and late-evening monitoring.
 
-If you see skip notifications in admin chat often, spread the schedules further instead of switching to “wait”: skipping is a safety net, not a planning tool.
+If you see skip notifications in admin chat often, spread the schedules further instead of switching to “wait”: skipping is a safety net, not a planning tool. Оба scheduled source-parser entrypoint являются исключением и принудительно используют heavy guard `wait`, поэтому официальный каталог не теряет слот как `heavy_busy`.
 
 Skipped heavy-job attempts are now also written to `ops_run.status='skipped'` (with a reason), so `/general_stats` can show that the scheduler tried to start a job but skipped it before the job body ran.
 
@@ -115,6 +118,12 @@ copy space, so it must not share a slot with snapshot/vector work. The legacy
 12-hour interval is registered only with the explicit
 `ENABLE_DB_FULL_VACUUM=1` opt-in; leave it off until the capacity and
 serialization gates documented for the current deployment have been checked.
+When opted in, `db_vacuum` participates in the shared heavy-job guard and skips
+when another heavy operation owns it. Immediately before the rewrite it
+requires free bytes of at least
+`2 * current_db_bytes + DB_FULL_VACUUM_MIN_FREE_MB` (floor default `512` MiB),
+checks the capacity again after a successful pre-`VACUUM` truncating WAL
+checkpoint, and writes structured pre/post checkpoint and byte-size receipts.
 Hourly `PRAGMA optimize` and `PRAGMA wal_checkpoint(TRUNCATE)` remain enabled.
 Scheduled `vk_auto_import` and `tg_monitoring` entrypoints also create a bootstrap `ops_run` before resolving superadmin / entering the inner runner, so a 1ms APScheduler fire can no longer disappear without either a real run row or an explicit `skipped/error` record.
 Scheduled guide slots now also participate in the shared heavy-job guard at the scheduler layer: if another heavy job (for example a stuck `vk_auto_import`) already owns the gate, the guide slot records `ops_run(kind='guide_monitoring', status='skipped', skip_reason='heavy_busy')` instead of waiting invisibly before `run_guide_monitor()` can materialize its own run.

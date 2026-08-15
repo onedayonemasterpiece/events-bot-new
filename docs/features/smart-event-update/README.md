@@ -7,8 +7,10 @@ child-resolution boundary, а не второй eventness classifier. Для к�
 `source_disposition=EVENTS_FOUND|MIXED` regex/date/title/venue/promo/recap
 детекторы могут только добавить evidence или инициировать LLM verification; они
 не удаляют child, не ставят `silent` и не создают product terminal. Legacy
-caller без typed source decision проходит существующий LLM eventness verifier;
-provider/schema/DB/vector uncertainty всегда даёт durable retry.
+caller без typed source decision проходит существующий LLM eventness verifier.
+Решение владельца от 2026-08-15 заменяет automatic durable retry линейным
+контрактом: semantic verdict завершается в том же вызове, а provider/schema/DB/
+vector failure получает видимый `FAILED_TECHNICAL` и требует явного re-drive.
 
 Публичный результат закрыт структурно:
 
@@ -16,9 +18,10 @@ provider/schema/DB/vector uncertainty всегда даёт durable retry.
   `event_id` и разрешают downstream side effects;
 - product terminal: `REJECTED_PRODUCT_POLICY` только вместе с
   `ProductExclusionReason`; free-form/unknown reason превращается в
-  `RETRY_SCHEDULED`;
-- retry: `RETRY_SCHEDULED` + `RetryReason`; технические причины не
-  исчерпываются в create-distinct;
+  `FAILED_TECHNICAL`;
+- technical terminal: `FAILED_TECHNICAL` + typed diagnostic reason, без
+  фоновой очереди; `RETRY_SCHEDULED` остаётся только provisional/legacy value
+  для одноразового post-deploy drain;
 - distinct create: `IdentityDistinctReason` (`RELATED_BUT_DISTINCT`,
   `FESTIVAL_CONTEXT_SIBLING`, `UNSAFE_TO_MERGE`, explicit occurrence conflict,
   incoherent merge rollback или semantic unknown after bounded adjudication);
@@ -26,8 +29,8 @@ provider/schema/DB/vector uncertainty всегда даёт durable retry.
 
 `diagnostic_event_id` никогда не является accepted ID. Incoherent merge
 откатывается и создаёт подготовленный distinct Event. Provider/DB/vector failure
-остаётся due retry; только semantic identity unknown после bounded adjudication
-может закончиться distinct create. Occurrence identity выбирается в порядке
+заканчивается видимым technical terminal; semantic identity unknown делает один
+inline distinct-create pass. Occurrence identity выбирается в порядке
 source-native ID → vendor/ticket ID → structured schedule anchor → ordinal
 только как tie-breaker; разные explicit occurrence IDs являются hard distinct
 rail.
@@ -204,8 +207,9 @@ must re-render the calendar line even when the event body itself is unchanged.
   `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` keep their existing
   create/merge semantic evidence stages. In `enforce`, a same/source decision
   merges, a distinct/sibling/unsafe or explicit occurrence conflict creates a
-  distinct Event, and provider/schema/vector/DB uncertainty becomes a durable
-  bounded retry. There is no terminal veto or human review. Production runs
+  distinct Event, and provider/schema/vector/DB uncertainty closes visibly as
+  `FAILED_TECHNICAL` without a background retry. There is no hidden terminal
+  veto or human-review queue. Production runs
   both gates in `enforce`. Vector recall remains controlled by
   `SMART_UPDATE_IDENTITY_VECTOR_RECALL`, `SMART_UPDATE_IDENTITY_VECTOR_TOP_K`,
   `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY`,
@@ -431,6 +435,9 @@ weak title, date/OCR conflict, collapsed occurrences или incomplete evidence
 - Telegram Monitoring (`source_parsing/telegram/handlers.py` → `smart_event_update.py`).
 - VK ingestion (`vk_intake.persist_event_and_pages`).
 - VK auto-import очереди (`vk_inbox`) (`vk_auto_queue.run_vk_auto_import`).
+  `FAILED_TECHNICAL` переводит carrier в terminal `failed_technical`, сохраняет
+  typed reason в packet/ops report и явно пишет «без автоматического повтора»;
+  он не превращается обратно в `PERSIST_ERROR`/`deferred`.
 - Ручной импорт (`add_events_from_text`, `/addevent_raw`).
 - `/parse` (site parsers): источник сайта добавляется/мерджится через Smart Update, когда у события ещё нет этого `parser:<site>` источника.
 - Outgoing post jobs: `schedule_event_update_tasks()` ставит Telegraph rebuild, VK event post и Telegram event post ([Telegram Event Publishing](../tg-publishing/README.md)) для активных будущих/текущих событий.
@@ -486,7 +493,7 @@ Smart Update содержит детекцию фестивалей как ча�
 ## Примечания
 
 - Smart Update защищает якорные поля и дополняет данные из разных источников.
-- Legacy `skipped_non_event:*` strings are compatibility inputs only and cannot authorize a terminal without a closed `ProductExclusionReason`. Unknown/free-form reasons fail closed to durable retry.
+- Legacy `skipped_non_event:*` strings are compatibility inputs only and cannot authorize a terminal without a closed `ProductExclusionReason`. Unknown/free-form reasons fail closed to visible `FAILED_TECHNICAL`.
 - Каждый вызов Smart Update должен иметь заполненные `source_type` и `source_url` (они влияют на лог источников и счётчик в Telegraph).
 - Для ручного добавления через бота (`/addevent`, `/addevent_raw`) источник фиксируется как **bot**.
   - Для источника `bot` deterministic region filter не блокирует создание при пустом `city`.
@@ -536,11 +543,12 @@ Smart Update содержит детекцию фестивалей как ча�
 - Curated aliases in `docs/reference/location-aliases.md` force canonical `location_name/location_address/city` from `docs/reference/locations.md` when the alias matches exactly. This is intentionally a reference-normalization guardrail, not a semantic matcher: broad/ambiguous room labels such as bare `Кинозал` still need source context or the Gemma 4 venue-review stage.
 - Для нормализации по `docs/reference/locations.md` действует guardrail: неизвестная площадка не должна схлопываться в известную запись по общему токену вроде `школа`; если в источнике есть явный конфликтующий адрес, сохраняем raw `location_name/location_address/city`, а не создаём гибрид из справочника и текста поста. Fuzzy address matching и duplicate recall сравнивают границы нормализованных токенов, включая полный номер дома: `Советский 1` не совпадает с `Советский 12`, но `Советский 1, 2 этаж` остаётся допустимым уточнением канонического `Советский 1` (`INC-2026-07-27-icae-casting-wrong-venue`).
 - Географические слова `остров` и `озеро` также не являются identity-токенами площадки: `Верхнее озеро, остров Шайба` не может fuzzy-схлопнуться в `Остров Канта` только по слову `остров`.
-- После reference-нормализации подозрительные social-source локации проходят отдельный LLM-first `location_grounding_review`. Детерминированный слой только маршрутизирует случаи, где итоговая площадка/адрес отсутствуют в source+OCR, reference-recall нашёл более конкретную площадку, **адрес подтверждён, но подставленное каноническое `location_name` в источнике отсутствует**, `location_name` совпал со структурированным названием фестиваля/праздника, либо явный attendee-facing marker (`📍`, `место`, `площадка`) называет не candidate label; решение `keep|repair|uncertain` принимает LLM. Подтверждённая строка адреса сама по себе не доказывает имя организации/площадки, а название клуба/программы не становится venue только из-за дословного присутствия в тексте: это закрывает случаи `Советский 12, студия 809` → `ИЦАЭ` и `Детский книжный клуб` → `Летний читальный зал`. После `llm_repair` reference-normalization может привести только source-grounded эквивалент; если она снова подставляет неподтверждённое имя, сохраняется LLM-repaired venue вместо повторного deterministic overwrite. Поэтому source-grounded фраза вроде `День города в Янтарном` не принимается за venue только из-за дословного присутствия в источнике: если источник подтверждает лишь город/посёлок, review fail-closes и не синтезирует площадку. `repair` принимается только с дословной source/OCR evidence quote и source-grounded новым значением, а provider/grounding uncertainty fail-closes до create/merge/publication. Это предотвращает подмены вида парк `Юность` → одноимённый дворец спорта, `остров Шайба` → `Остров Канта`, `Бастион Холл` → широкий квартал `Понарт`, `Советский 12` → `ИЦАЭ` и programme/occasion label → venue. Эти triggers добавляют не более одного существующего grounding-вызова только high-risk кандидатам; это не per-event стадия и не deterministic semantic rewrite.
+- После reference-нормализации подозрительные social-source локации проходят отдельный LLM-first `location_grounding_review`. Детерминированный слой только маршрутизирует high-risk случаи; LLM обязан выбрать закрытое финальное действие `keep|repair|reject_missing_location`. Для `keep` и `repair` требуется дословная source/OCR quote и source-grounded имя либо адрес; узкая структурная нормализация считает `проспект` и `пр-кт` одним адресным токеном, не меняя venue semantics. Numeric confidence сохраняется как диагностика, но больше не отменяет валидный grounded `keep`: именно этот fallthrough зацикливал `wall-32547811_11187`. Если источник подтверждает только город/посёлок, название фестиваля/праздника или программу, LLM возвращает `reject_missing_location`, и candidate сразу получает typed product terminal без semantic retry. Malformed/provider/invalid-grounding response заканчивается `FAILED_TECHNICAL`, также без фонового повтора. После `llm_repair` reference-normalization может привести только source-grounded эквивалент; если она снова подставляет неподтверждённое имя, сохраняется LLM-repaired venue. Это предотвращает подмены парк `Юность` → одноимённый дворец спорта, `остров Шайба` → `Остров Канта`, `Советский 12` → `ИЦАЭ` и programme/occasion label → venue.
 - Цель: стабильный dedup/merge и единообразный summary-блок Telegraph.
 - Legacy eventness detectors in this layer are warning/verification routers only.
   Positive typed source children are never converted to `skipped_non_event`;
-  incomplete/contradictory cases return typed retry.
+  complete contradictory cases receive one closed LLM decision; incomplete or
+  technical cases end as visible `FAILED_TECHNICAL`.
 
 
 ## Summary-блок для выставок
@@ -603,8 +611,8 @@ Smart Update содержит детекцию фестивалей как ча�
 
 Date/OCR mismatch — contradiction evidence for source verification. Smart Update
 может записать diagnostic note, но не ставит accepted child в `event.silent=1` и
-не отменяет его публикацию. Неоднозначная или технически недоступная verification
-даёт `RETRY_SCHEDULED`.
+не отменяет его публикацию. Complete-evidence semantic ambiguity receives one closed LLM decision;
+технически недоступная verification даёт `FAILED_TECHNICAL`.
 
 ### Free / Location / Duplicate Fail-Closed Guards
 
@@ -718,7 +726,7 @@ LLM остаётся владельцем смысловых решений, н�
 
 Smart Update must treat campaign/discount/action-shaped candidates as semantic high risk and route them to the LLM eventness reviewer before create. Examples include discount campaigns and Pushkin-card mechanics: a long validity period is not enough to make the source a concrete attendable event.
 
-Operational date-role ambiguity is handled the same LLM-first way. A narrow deterministic detector may route source shapes such as visitor/cash-desk hours or `билет действителен до <date>` to eventness review, but it must not decide meaning itself. The LLM treats normal venue operation, admission-ticket purchase/validity and work-hours-only posts as `non_event` unless the same source names a concrete attendee-facing program. Identity/vector `allow_create` is never a quality approval, and uncertainty/LLM unavailability for this high-risk route fails closed before public creation.
+Operational date-role ambiguity is handled the same LLM-first way. A narrow deterministic detector may route source shapes such as visitor/cash-desk hours or `билет действителен до <date>` to eventness review, but it must not decide meaning itself. An explicit source-grounded LLM `non_event` verdict at confidence `>=0.90` closes immediately as typed `REJECTED_PRODUCT_POLICY/non_event`; lower-confidence, malformed, unavailable or `uncertain` output closes as visible `FAILED_TECHNICAL`, never as a product guess or background retry. Identity/vector `allow_create` is never a quality approval.
 
 Historical anniversary/interview prose with several explicit old years is likewise only routed, never classified, by the deterministic layer. The LLM eventness reviewer must reject museum chronology (opening, acquisition, employment or memoir dates) unless the source separately announces a future attendee-facing programme; a real future anniversary lecture remains valid when its date and venue are explicit.
 
@@ -752,24 +760,24 @@ Verbatim reviewer evidence is required before either outcome is trusted.
 
 A VK roundup row is not atomic with its child Smart Update writes. If an early
 child succeeds and a later child is rejected or fails, the successful event ids
-are linked in `vk_inbox_import_event` and the inbox row becomes `deferred` for a
-bounded, idempotent retry in a later batch (default: 60 seconds, at most three
-attempts). It must not be marked fully imported, and the committed child links
-must not be discarded by rejecting the entire row.
+remain linked in `vk_inbox_import_event`, while the carrier closes in the same
+batch with the exact child outcomes and a visible `FAILED_TECHNICAL` reason for
+any unresolved child. The row receives no `next_attempt_at` and is not silently
+reprocessed by a later batch; committed child links are never discarded.
 
-### Durable retry success visibility
+### Legacy retry drain visibility
 
-The generic `smart_update_retry_worker` has no interactive import caller, so it
-must report its own accepted outcomes. After a replay has durably reached
+The old `smart_update_retry_worker` is disabled by default and is permitted only
+as a controlled one-time drain of pre-existing `RETRY_SCHEDULED` rows. After a replay has durably reached
 `CREATED` or `MERGED`, the worker sends one bounded, HTML-escaped batch report
 to the resolved superadmin chat with event ids, safe titles, and create/update
-counts. `NOOP_EXACT_REPLAY`, product rejection, and another scheduled retry do
-not produce a success report.
+counts. Every claimed legacy row must finish accepted, product-rejected or
+`FAILED_TECHNICAL`; no new scheduled retry is produced.
 
 The report is observability only: a Telegram notification failure is logged but
 must never roll back, reclassify, or replay the already accepted Smart Update
 result. Interactive Telegram/VK callers keep their existing unified reports;
-only the background durable retry worker uses this callback, avoiding duplicate
+only the explicitly enabled legacy drain uses this callback, avoiding duplicate
 success messages.
 
 ### Vector-first future quality audit contract
@@ -822,8 +830,8 @@ grounding. Immediately before inserting a new event row, Smart Update reruns a
 cheap duplicate probe at the final write boundary. A fresh authoritative match
 is reloaded and revalidated in the same facade operation: a confirmed duplicate
 receives the keyed source packet and returns `MERGED`, while a stale/disproved
-match proceeds as distinct `CREATED`. Only a missing authoritative row or
-transient storage failure rolls back to durable `RETRY_SCHEDULED`; the probe
+match proceeds as distinct `CREATED`. A missing authoritative row or transient
+storage failure rolls back and returns visible `FAILED_TECHNICAL`; the probe
 never emits a veto/review terminal and does not add another LLM pass.
 
 The `/vystavki/` enforce rollout is monitored independently from page rendering

@@ -24,7 +24,7 @@ class DummyBot:
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_path, monkeypatch):
+async def test_vk_auto_queue_rate_limit_is_visible_terminal_for_current_batch(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -79,8 +79,9 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
         progress_total_txt="1",
     )
 
-    assert report.inbox_deferred == 1
-    assert report.inbox_failed == 0
+    assert report.inbox_deferred == 0
+    assert report.inbox_failed == 1
+    assert report.inbox_failed_technical == 1
 
     async with db.raw_conn() as conn:
         cur = await conn.execute(
@@ -88,15 +89,15 @@ async def test_vk_auto_queue_rate_limit_marks_row_deferred_for_next_batch(tmp_pa
             (1,),
         )
         status, locked_by, review_batch, next_attempt_at, attempts = await cur.fetchone()
-    assert status == "deferred"
+    assert status == "failed_technical"
     assert locked_by is None
     assert review_batch == "batch-x"
-    assert next_attempt_at is not None
-    assert attempts == 1
+    assert next_attempt_at is None
+    assert attempts == 0
 
 
 @pytest.mark.asyncio
-async def test_vk_auto_queue_rate_limit_never_becomes_terminal_after_many_defers(tmp_path, monkeypatch):
+async def test_vk_auto_queue_rate_limit_does_not_rearm_existing_attempt_counter(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
 
@@ -151,15 +152,16 @@ async def test_vk_auto_queue_rate_limit_never_becomes_terminal_after_many_defers
         progress_total_txt="1",
     )
 
-    assert report.inbox_deferred == 1
-    assert report.inbox_failed == 0
+    assert report.inbox_deferred == 0
+    assert report.inbox_failed == 1
+    assert report.inbox_failed_technical == 1
 
     async with db.raw_conn() as conn:
         row = await (await conn.execute(
             "SELECT status, attempts, last_typed_reason, next_attempt_at FROM vk_inbox WHERE id=1"
         )).fetchone()
-    assert row[0] == "deferred"
-    assert row[1] == 3
+    assert row[0] == "failed_technical"
+    assert row[1] == 2
     assert row[2] == "RATE_LIMITED"
-    assert row[3] is not None
-    assert any("retry_scheduled" in err for err in report.errors)
+    assert row[3] is None
+    assert any("failed_technical" in err for err in report.errors)

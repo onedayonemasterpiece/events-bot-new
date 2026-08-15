@@ -5,7 +5,9 @@ import hashlib
 import logging
 import os
 import re
+import shutil
 import tempfile
+import time
 from contextlib import asynccontextmanager
 
 import aiosqlite
@@ -58,6 +60,109 @@ async def _add_column(conn, table: str, col_def: str) -> None:
                 await conn.execute(f"ALTER TABLE {table} ADD COLUMN {sanitized}")
                 return
         raise
+
+
+_SMART_UPDATE_OUTCOMES_SQL = (
+    "'CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY',"
+    "'FAILED_TECHNICAL','RETRY_SCHEDULED'"
+)
+
+
+async def _migrate_smart_update_terminal_contract(conn: aiosqlite.Connection) -> None:
+    """Add FAILED_TECHNICAL to old SQLite CHECK constraints transactionally.
+
+    SQLite cannot alter a CHECK constraint in place. Both ledger tables are
+    therefore rebuilt in one transaction with foreign-key enforcement paused;
+    ids and every payload/receipt column are copied verbatim. The migration is
+    idempotent and is intentionally run before the normal CREATE/INDEX block.
+    """
+
+    cursor = await conn.execute(
+        "SELECT name,sql FROM sqlite_master WHERE type='table' "
+        "AND name IN ('smart_update_candidate_state','smart_update_attempt')"
+    )
+    rows = {str(name): str(sql or "") for name, sql in await cursor.fetchall()}
+    await cursor.close()
+    if "smart_update_candidate_state" not in rows:
+        return
+    if all("FAILED_TECHNICAL" in rows.get(name, "") for name in rows):
+        return
+    if "smart_update_attempt" not in rows:
+        raise RuntimeError("smart_update_terminal_migration_missing_attempt_table")
+
+    await conn.commit()
+    await conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        await conn.execute("BEGIN IMMEDIATE")
+        await conn.execute("DROP TABLE IF EXISTS smart_update_candidate_state_new")
+        await conn.execute("DROP TABLE IF EXISTS smart_update_attempt_new")
+        await conn.execute(
+            f"""
+            CREATE TABLE smart_update_candidate_state_new(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_key TEXT NOT NULL UNIQUE,
+                occurrence_key TEXT NOT NULL,
+                canonical_source_url TEXT,
+                source_type TEXT NOT NULL,
+                intent TEXT NOT NULL CHECK(intent IN ('UPSERT_EVENT','ATTACH_CONTEXT')),
+                source_fingerprint TEXT NOT NULL,
+                candidate_payload JSON NOT NULL DEFAULT '{{}}',
+                current_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                    CHECK(current_outcome IN ({_SMART_UPDATE_OUTCOMES_SQL})),
+                accepted_event_id INTEGER,
+                diagnostic_event_id INTEGER,
+                reason TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                retry_attempts INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 3,
+                retry_exhausted INTEGER NOT NULL DEFAULT 0,
+                next_retry_at TIMESTAMP,
+                claimed_by TEXT,
+                claim_expires_at TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+            )
+            """
+        )
+        await conn.execute(
+            "INSERT INTO smart_update_candidate_state_new SELECT * FROM smart_update_candidate_state"
+        )
+        await conn.execute(
+            f"""
+            CREATE TABLE smart_update_attempt_new(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_state_id INTEGER NOT NULL,
+                attempt_no INTEGER NOT NULL,
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP,
+                terminal_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                    CHECK(terminal_outcome IN ({_SMART_UPDATE_OUTCOMES_SQL})),
+                accepted_event_id INTEGER,
+                diagnostic_event_id INTEGER,
+                reason TEXT,
+                UNIQUE(candidate_state_id, attempt_no),
+                FOREIGN KEY(candidate_state_id) REFERENCES smart_update_candidate_state_new(id) ON DELETE CASCADE,
+                FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+            )
+            """
+        )
+        await conn.execute("INSERT INTO smart_update_attempt_new SELECT * FROM smart_update_attempt")
+        await conn.execute("DROP TABLE smart_update_attempt")
+        await conn.execute("DROP TABLE smart_update_candidate_state")
+        await conn.execute(
+            "ALTER TABLE smart_update_candidate_state_new RENAME TO smart_update_candidate_state"
+        )
+        await conn.execute("ALTER TABLE smart_update_attempt_new RENAME TO smart_update_attempt")
+        await conn.commit()
+    except Exception:
+        await conn.rollback()
+        raise
+    finally:
+        await conn.execute("PRAGMA foreign_keys=ON")
 
 
 class Database:
@@ -116,6 +221,17 @@ class Database:
             journal_mode = "WAL"
         return journal_mode
 
+    @staticmethod
+    def _sqlite_journal_size_limit_bytes() -> int:
+        """Return the bounded retained-WAL target applied to every connection."""
+
+        raw = (os.getenv("DB_WAL_JOURNAL_SIZE_LIMIT_MB") or "64").strip()
+        try:
+            size_mb = int(raw)
+        except (TypeError, ValueError):
+            size_mb = 64
+        return max(4, min(size_mb, 256)) * 1024 * 1024
+
     async def _apply_sqlite_pragmas(self, conn: aiosqlite.Connection) -> None:
         journal_mode = self._sqlite_journal_mode()
         await conn.execute(f"PRAGMA journal_mode={journal_mode}")
@@ -125,6 +241,9 @@ class Database:
         await conn.execute("PRAGMA cache_size=-40000")
         await conn.execute(f"PRAGMA busy_timeout={self._sqlite_busy_timeout_ms()}")
         await conn.execute("PRAGMA mmap_size=134217728")
+        await conn.execute(
+            f"PRAGMA journal_size_limit={self._sqlite_journal_size_limit_bytes()}"
+        )
 
     def _create_orm_engine(self):
         from sqlalchemy import event
@@ -140,6 +259,7 @@ class Database:
 
         journal_mode = self._sqlite_journal_mode()
         busy_timeout_ms = self._sqlite_busy_timeout_ms()
+        journal_size_limit_bytes = self._sqlite_journal_size_limit_bytes()
 
         @event.listens_for(engine.sync_engine, "connect")
         def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
@@ -153,6 +273,7 @@ class Database:
                 cursor.execute("PRAGMA cache_size=-40000")
                 cursor.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
                 cursor.execute("PRAGMA mmap_size=134217728")
+                cursor.execute(f"PRAGMA journal_size_limit={journal_size_limit_bytes}")
             except Exception:
                 logging.debug("Failed to apply sqlite PRAGMAs on ORM connection", exc_info=True)
             finally:
@@ -209,7 +330,12 @@ class Database:
             await conn.execute("PRAGMA cache_size=-40000")
             await conn.execute(f"PRAGMA busy_timeout={self._sqlite_busy_timeout_ms()}")
             await conn.execute("PRAGMA mmap_size=134217728")
+            await conn.execute(
+                f"PRAGMA journal_size_limit={self._sqlite_journal_size_limit_bytes()}"
+            )
             dbg(f"pragmas journal_mode={journal_mode}")
+
+            await _migrate_smart_update_terminal_contract(conn)
 
             pragma_cursor = await conn.execute("PRAGMA table_info('posterocrcache')")
             poster_ocr_columns = await pragma_cursor.fetchall()
@@ -914,7 +1040,7 @@ class Database:
                     source_fingerprint TEXT NOT NULL,
                     candidate_payload JSON NOT NULL DEFAULT '{}',
                     current_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
-                        CHECK(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                        CHECK(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','FAILED_TECHNICAL','RETRY_SCHEDULED')),
                     accepted_event_id INTEGER,
                     diagnostic_event_id INTEGER,
                     reason TEXT,
@@ -956,7 +1082,7 @@ class Database:
                     started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     finished_at TIMESTAMP,
                     terminal_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
-                        CHECK(terminal_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                        CHECK(terminal_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','FAILED_TECHNICAL','RETRY_SCHEDULED')),
                     accepted_event_id INTEGER,
                     diagnostic_event_id INTEGER,
                     reason TEXT,
@@ -3819,3 +3945,111 @@ async def optimize(engine):
 async def vacuum(engine):
     async with engine.begin() as conn:
         await conn.exec_driver_sql("VACUUM")
+
+
+def _checkpoint_result(rows) -> dict[str, int | bool | list]:
+    normalized = [tuple(int(value) for value in row) for row in rows]
+    first = normalized[0] if normalized else None
+    return {
+        "rows": normalized,
+        "busy": int(first[0]) if first and len(first) >= 1 else -1,
+        "log_frames": int(first[1]) if first and len(first) >= 2 else -1,
+        "checkpointed_frames": int(first[2]) if first and len(first) >= 3 else -1,
+        "ok": bool(first and len(first) >= 3 and first[0] == 0),
+    }
+
+
+def _db_file_sizes(db_path: str) -> dict[str, int]:
+    def _size(path: str) -> int:
+        try:
+            return int(os.path.getsize(path))
+        except OSError:
+            return 0
+
+    return {
+        "db_bytes": _size(db_path),
+        "wal_bytes": _size(f"{db_path}-wal"),
+        "shm_bytes": _size(f"{db_path}-shm"),
+    }
+
+
+async def full_vacuum_with_safety(
+    engine,
+    db_path: str,
+    *,
+    min_free_bytes: int,
+) -> dict[str, object]:
+    """Run a full VACUUM only with capacity and checkpoint safety receipts."""
+
+    started = time.perf_counter()
+    before = _db_file_sizes(db_path)
+    db_dir = os.path.dirname(os.path.abspath(db_path)) or "."
+    free_before = int(shutil.disk_usage(db_dir).free)
+    required_free = 2 * int(before["db_bytes"]) + max(0, int(min_free_bytes))
+    receipt: dict[str, object] = {
+        "operation": "full_vacuum",
+        "status": "pending",
+        "before": before,
+        "free_before_bytes": free_before,
+        "required_free_bytes": required_free,
+    }
+    if free_before < required_free:
+        receipt.update(status="skipped", reason="insufficient_capacity")
+        logging.warning("db_full_vacuum result=%s", receipt)
+        return receipt
+
+    pre = _checkpoint_result(await wal_checkpoint_truncate(engine))
+    receipt["checkpoint_pre"] = pre
+    if not pre["ok"]:
+        receipt.update(status="skipped", reason="checkpoint_pre_busy")
+        logging.warning("db_full_vacuum result=%s", receipt)
+        return receipt
+
+    free_after_pre = int(shutil.disk_usage(db_dir).free)
+    receipt["free_after_checkpoint_bytes"] = free_after_pre
+    if free_after_pre < required_free:
+        receipt.update(status="skipped", reason="capacity_changed_after_checkpoint")
+        logging.warning("db_full_vacuum result=%s", receipt)
+        return receipt
+
+    try:
+        await vacuum(engine)
+        receipt["status"] = "success"
+    except BaseException as exc:
+        receipt.update(
+            status="error",
+            reason="vacuum_failed",
+            error_type=type(exc).__name__,
+        )
+        raise
+    finally:
+        try:
+            post_receipt = _checkpoint_result(
+                await wal_checkpoint_truncate(engine)
+            )
+            receipt["checkpoint_post"] = post_receipt
+            if receipt.get("status") == "success" and not post_receipt["ok"]:
+                receipt.update(status="error", reason="checkpoint_post_busy")
+        except BaseException as checkpoint_exc:
+            receipt["checkpoint_post"] = {
+                "ok": False,
+                "error_type": type(checkpoint_exc).__name__,
+            }
+            if receipt.get("status") == "success":
+                receipt.update(status="error", reason="checkpoint_post_failed")
+                raise
+        finally:
+            receipt["after"] = _db_file_sizes(db_path)
+            receipt["free_after_bytes"] = int(shutil.disk_usage(db_dir).free)
+            receipt["duration_ms"] = round((time.perf_counter() - started) * 1000)
+            log = (
+                logging.info
+                if receipt.get("status") == "success"
+                else logging.warning
+            )
+            log("db_full_vacuum result=%s", receipt)
+
+    post = receipt.get("checkpoint_post")
+    if isinstance(post, dict) and not post.get("ok"):
+        raise RuntimeError(f"post-VACUUM WAL checkpoint did not complete: {post}")
+    return receipt

@@ -77,9 +77,10 @@ Update result; diagnostic ID не запускает downstream work.
 Official parser occurrence key стабилен: source-native/vendor identifier имеет
 приоритет, затем structured date/end-date/time schedule anchor, а producer
 ordinal — только tie-breaker. Поэтому перестановка siblings или новый первый
-сеанс не перепривязывает старые Events. Технический/identity retry создаёт
-идемпотентный `source_parser_recovery_request`, который scheduled parser
-подбирает автоматически до разрешения.
+сеанс не перепривязывает старые Events. Source-fetch/OCR/persist recovery может
+создать идемпотентный `source_parser_recovery_request`, но исчерпанный Smart
+Update semantic/identity/provider результат является видимой terminal failure
+текущего run и не создаёт новый durable Smart retry loop.
 
 ### Каноничность сайта (/parse) при конфликтах
 
@@ -154,11 +155,11 @@ Bitrix AJAX pagination до terminal page. Нулевой результат и�
 
 Создание parser occurrence может сделать несколько коротких локальных повторов
 Smart Update при transient SQLite lock (`SOURCE_PARSING_DB_LOCK_RETRY_*`). Любая
-оставшаяся technical/identity/schema uncertainty не становится skip/error
-terminal: она увеличивает `retry_scheduled` и upsert-ит source-level
-`source_parser_recovery_request` с due time. Scheduled parser повторяет полный
-официальный каталог идемпотентно; product/validation uncertainty не маскируется
-ложным успехом.
+оставшаяся Smart technical/identity/schema uncertainty после inline budget
+становится видимой terminal failure и не upsert-ит source-level recovery.
+Recovery request сохраняется только для ошибок получения/медиа/сохранения
+официального каталога; product/validation uncertainty не маскируется ложным
+успехом и требует операторского решения.
 Внутреннее создание `event_media_pair_review` также использует idempotent
 `ON CONFLICT DO NOTHING`: параллельный media worker не должен срывать
 сохранение parser occurrence из-за гонки unique `pair_input_hash`.
@@ -170,8 +171,16 @@ refresh, но только при дополнительном точном со
 ticket URL, той же даты и того же явного времени. Одного совпадения
 `parser:<source>`/host, URL без явного времени или fuzzy time недостаточно:
 общий performance URL может содержать несколько сеансов, а legacy festival
-aggregate — ссылки отдельных концертов. Такие случаи всегда возвращаются в
-Smart Update identity gate для создания или разделения occurrence.
+aggregate — ссылки отдельных концертов. Точное совпадение title/date/explicit
+time может завершиться без Smart Update: существующая same-event canonical row
+имеет приоритет над legacy-дубликатом, а URL, уже identity-owned другим сеансом,
+прикрепляется как `context_only`. Не-exact случаи по-прежнему идут в Smart
+Update identity gate для создания или разделения occurrence.
+
+Day guard запускает все источники, если изменилась хотя бы одна сигнатура,
+даже при due recovery request. Режим `only_sources=recovery_sources` допустим
+только при неизменившихся сигнатурах, поэтому одна проблемная площадка не
+блокирует свежие данные остальных.
 Если в этом exact replay одновременно не изменились `ticket_status` и
 `ticket_link`, он считается полностью идемпотентным: parser обновляет только
 provenance freshness, но не перестраивает Telegraph и не ставит публичные

@@ -1042,7 +1042,7 @@ async def _process_vk_item(
     created_events = 0
     program_only: list[dict[str, Any]] = []
     product_rejected = 0
-    retry_scheduled = 0
+    failed_technical = 0
     for producer_ordinal, ev in enumerate(parsed_events):
         if not _looks_like_strong_program_event(ev):
             program_only.append(ev)
@@ -1085,23 +1085,22 @@ async def _process_vk_item(
         elif result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY:
             product_rejected += 1
         else:
-            retry_scheduled += 1
+            # Linear Smart Update contract: a non-product failure is terminal
+            # and visible to the operator; the festival row must not re-arm it.
+            failed_technical += 1
 
     added_activities = await _append_festival_activities(
         db,
         festival_name=fest_obj.name,
         activities=program_only,
     )
-    if retry_scheduled:
-        raise RuntimeError(
-            f"festival_children_retry_scheduled:{retry_scheduled}"
-        )
     return {
         "festival_name": fest_obj.name,
         "events_created": created_events,
         "activities_added": added_activities,
         "product_rejected": product_rejected,
-        "retry_scheduled": retry_scheduled,
+        "failed_technical": failed_technical,
+        "retry_scheduled": 0,
     }
 
 

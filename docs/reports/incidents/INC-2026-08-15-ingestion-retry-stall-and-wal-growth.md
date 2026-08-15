@@ -19,11 +19,21 @@ events, due Smart Update retries might not be consumed, the SQLite WAL had
 grown again, and StaticSiteBuilder remained constrained by the full local
 SQLite snapshot required by the current immutable Kaggle handoff.
 
-This is an initial incident record, not a final diagnosis. Telegram's raw
-message count is not an event-bearing denominator, the screenshot alone does
-not prove that a retry is abandoned, and the previously reported disk/WAL
-figures have not yet been re-measured in the current investigation. Root cause,
-current backlog balance and the exact affected source set remain provisional.
+The investigation confirmed several independent regressions. Telegram's 133
+"processed" messages mixed 110 forced replays and six metrics-only old rows
+with only six event-bearing messages; all six were accepted (four creates, two
+merges), so `4/133` was a misleading denominator rather than a 3% event yield.
+At the same time, Telegram force rows, VK source evidence, Smart Update
+candidates and the Sobor parser really did contain unbounded retry loops, and
+the official full-parser slot had been skipped four days in a row.
+
+The WAL spike was also reproduced and explained: the 12-hour full SQLite
+`VACUUM`, hourly checkpoint and vector sync shared the same interval anchor.
+`VACUUM` rewrote the roughly 648 MiB DB into WAL while the vector reader pinned
+the checkpoint end mark, producing the observed roughly 687 MiB WAL. PR #506
+default-disabled that maintenance job and Fly v1975 deployed the exact merged
+main SHA. The ingestion-linear and compact static-projection fixes are being
+validated for a subsequent exact-main release; the incident remains open.
 
 ## User / Business Impact
 
@@ -39,18 +49,18 @@ current backlog balance and the exact affected source set remain provisional.
 ## Detection
 
 - the operator challenged a reported Telegram run with 57 sources, 133
-  messages, four created events and two merges as implausibly low yield; the
-  event-bearing/extracted/no-event denominator is not yet available;
-- a Telegram UI screenshot at 10:15–10:17 showed VK posts progressing through
-  a 15-row batch. Post `wall-139238690_13534` was reported as LLM-confirmed
+  messages, four created events and two merges as implausibly low yield;
+- a Telegram UI screenshot at 10:15–10:17 Europe/Kaliningrad (08:15–08:17 UTC)
+  showed VK posts progressing through a 15-row batch. Post
+  `wall-139238690_13534` was reported as LLM-confirmed
   no-event, while `wall-32547811_11187` was reported as an automatic Smart
   Update retry with reason `location_grounding_review:llm_keep`;
 - the operator separately questioned whether theatres/official sources create
   new events and whether any Smart Update retry consumer actually drains the
   queue;
-- a previous status summary reported roughly 420 MiB free and a roughly
-  687 MiB WAL. These numbers are unverified inputs to the current incident and
-  must be replaced by timestamped live filesystem and SQLite evidence.
+- live evidence recorded a roughly 687 MiB WAL and roughly 420 MiB available
+  on `/data`; after the pinned reader ended, the next truncating checkpoint
+  reduced WAL to roughly 4 MiB and restored roughly 1.06 GiB available.
 
 Observability gaps are part of the incident: raw messages are not separated
 from event-bearing carriers in the operator summary, retry messages do not show
@@ -59,30 +69,45 @@ reader is not exposed.
 
 ## Timeline
 
-- 2026-08-15, before 10:15 UTC — the operator reports unexpectedly low
-  Telegram event yield and questions VK/parser/Smart Update progress.
-- 2026-08-15 10:15–10:17 UTC — the captured VK batch shows one explicit
+- 2026-08-15 06:42 UTC — vector sync, full `VACUUM` and WAL checkpoint start on
+  the same interval anchor; checkpoint times out after 30 seconds, `VACUUM`
+  completes after 41 seconds and vector sync releases its reader at 06:43:51.
+- 2026-08-15 07:42 UTC — the scheduled truncating checkpoint succeeds and
+  returns WAL to its normal small baseline.
+- 2026-08-15 08:15–08:17 UTC — the captured VK batch shows one explicit
   confirmed no-event and one `location_grounding_review:llm_keep` automatic
   retry among the visible rows.
 - 2026-08-15 — incident workflow is reopened as a distinct recurrence rather
-  than rewriting the August 10 or August 12 incident history. Evidence
-  collection and root-cause localization are in progress.
+  than rewriting the August 10 or August 12 incident history.
+- 2026-08-15 08:50 UTC — PR #506 merges as
+  `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
+- 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
+  `VACUUM schedule disabled`, health is HTTP 200 / Fly 1 of 1, DB quick-check is
+  `ok`, WAL is 24,752 bytes and `/data` has 1,119,805,440 bytes available.
 
 ## Root Cause
 
-Not yet proven. The following are investigation hypotheses only and must not be
-treated as accepted fixes or closure evidence:
-
-1. a Smart Update verification/grounding state may be returning a positive
-   child to durable retry without a prompt claim or bounded terminal receipt;
-2. Telegram and parser summaries may hide child-level loss behind source/run
-   success counters;
-3. scheduler heavy-job contention may have delayed one or more official-source
-   obligations;
-4. a long-lived SQLite reader or equivalent checkpoint starvation may again be
-   preventing WAL reset/reuse;
-5. the current whole-SQLite immutable snapshot contract may consume more Fly
-   staging capacity than the public static projection actually needs.
+1. Smart Update deliberately clamped technical attempts below the configured
+   maximum and kept `RETRY_SCHEDULED` due forever. A grounding verifier also
+   treated a grounded low-confidence LLM `KEEP` as failure, so unchanged inputs
+   could execute hundreds of times instead of reaching a terminal decision.
+2. Telegram treated incomplete OCR/media evidence as a reason to recreate a
+   force row. The next nightly monitor counted those old carriers as processed
+   messages, rescanned them and recreated the same force state.
+3. VK counted only non-empty OCR text blocks, not successfully processed blank
+   OCR results, falsely marking ordinary photo evidence incomplete. Exact parse
+   replay also reused a successful `parse_key` under a uniqueness constraint.
+4. The official parser and nightly page sync were both scheduled at 02:30 UTC
+   under a skip-on-heavy guard. The parser lost every full slot from August 12
+   through 15; its day guard then restricted changed-source runs to the pending
+   recovery subset. Sobor also looped on same-event source attachment conflicts.
+5. Periodic full `VACUUM` was unconditionally scheduled at the same process
+   anchor as vector sync and checkpoint. SQLite must rewrite the full DB, and
+   the concurrent vector reader prevented WAL reset until it finished.
+6. StaticSiteBuilder unnecessarily copied the full production DB on Fly into
+   an immutable snapshot and runner dataset, copied it into Kaggle output, then
+   downloaded it to Fly again. Yandex capacity was never the blocker; the Fly
+   handoff could exceed 2 GiB although exporter-visible tables are much smaller.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -106,9 +131,9 @@ No keyword/regex shortcut is accepted as a remedy for this incident.
   merge, exact no-op or source-grounded confirmed no-event outcome;
 - semantic uncertainty is resolved in the current claim whenever complete
   evidence and the configured provider are available;
-- only a genuinely transient technical dependency may remain due, and every
-  such row has a visible next attempt, owner and bounded terminal receipt—no
-  indefinite or unclaimed retry loop;
+- a transient dependency may receive a bounded inline retry inside the current
+  invocation; exhaustion becomes a visible terminal technical/needs-operator
+  receipt, never a background product retry queue;
 - Telegram, VK and official parsers report the same carrier/child outcome
   vocabulary so source success cannot hide event loss;
 - WAL reuse stays bounded across real ingestion, and the static handoff uses a
@@ -146,14 +171,15 @@ No keyword/regex shortcut is accepted as a remedy for this incident.
   linked fixture and replay them through the same production import boundary
   plus `smart_event_update.py` on a production snapshot copy/shadow DB;
 - include at least one positive and one negative/opposite control, with pre/post
-  DB diff showing created, merged, no-op, confirmed no-event and retry states;
+  DB diff showing created, merged, no-op, confirmed no-event and terminal
+  technical states;
 - reconcile Telegram scanned messages into event-bearing carriers, extracted
   children, accepted creates/merges, exact no-ops, confirmed no-events and
   technical retries. Use only `TELEGRAM_AUTH_BUNDLE_S22` for the production
   monitor and run no duplicate catch-up;
 - replay the visible VK grounding case and a representative current/history
-  batch; prove current carriers progress under backlog and every row has one
-  terminal or bounded-due receipt;
+  batch; prove current carriers progress under backlog and every imported row
+  has one terminal receipt;
 - account for each configured official parser source and any missed current-day
   slot; record processed, created, merged/updated, confirmed no-event and due
   counts, then perform the required compensating catch-up after deploy;
@@ -194,19 +220,25 @@ No keyword/regex shortcut is accepted as a remedy for this incident.
 
 ## Immediate Mitigation
 
-No new mitigation is claimed in this initial record. Do not launch overlapping
-heavy catch-ups, delete storage evidence, force a checkpoint before reader
-evidence is captured, or convert semantic uncertainty into a deterministic
-terminal skip while root-cause collection is in progress.
+PR #506 / Fly v1975 default-disabled periodic full `VACUUM` before its next
+18:42 UTC collision. Production started with the expected disabled marker,
+exact merged-main SHA, HTTP 200 health, `quick_check=ok`, roughly 1.04 GiB free
+and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
+`ENABLE_DB_FULL_VACUUM` unset; the opt-in path is maintenance-only.
 
 ## Corrective Actions
 
-- [ ] localize the first broken boundary independently for Telegram, VK,
+- [x] localize the first broken boundary independently for Telegram, VK,
   official parsers, Smart Update retry consumption and WAL checkpoint reuse;
-- [ ] implement only evidence-backed changes with failing regression replays;
-- [ ] decide, document and verify whether StaticSiteBuilder continues to use a
-  whole SQLite snapshot or a minimal immutable public projection;
-- [ ] deploy exact merged main and complete bounded current-day recovery.
+- [x] deploy the independently safe WAL recurrence containment from exact main;
+- [x] implement evidence-backed linear Smart/VK/TG/parser changes with focused
+  regression replays, including positive/opposite VK controls through the full
+  persist boundary on a production shadow copy; exact-main CI, deploy and
+  production catch-up remain due;
+- [x] replace the whole-DB StaticSiteBuilder handoff in the integration branch
+  with a bounded immutable static-only projection and ephemeral Fly staging;
+- [ ] merge/deploy the remaining exact-main prevention and complete bounded
+  Telegram, VK, parser, Smart legacy-drain and static canary recovery.
 
 ## Follow-up Actions
 
@@ -220,10 +252,22 @@ terminal skip while root-cause collection is in progress.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending;
-- deploy path: pending, exact clean `origin/main` required;
-- regression checks: pending;
-- post-deploy verification: pending;
+- mitigation deployed SHA: `c655156664edcfe91da11a4b9405d4fa59573f20`,
+  PR #506, Fly v1975, clean exact `origin/main` via
+  `scripts/deploy_fly_main.sh`;
+- mitigation regression checks: GitHub `python-ci`,
+  `smart-update-identity-state-machine` and `static-browser-release-gate` all
+  passed; focused scheduler test passed locally;
+- mitigation post-deploy verification: Fly 1/1, `/healthz` HTTP 200 ready/db/
+  disk ok, exact in-image SHA, `VACUUM schedule disabled`, `quick_check=ok`, WAL
+  24,752 bytes, `/data` available 1,119,805,440 bytes;
+- predeploy VK shadow replay: raw `wall-32547811_11187` created one event/source
+  through `vk_intake.persist_event_and_pages`; the opposite festival-as-venue
+  control closed as `REJECTED_PRODUCT_POLICY/missing_location`. The copied
+  production DB remained `quick_check=ok`; 32 legacy retry states and 15
+  pre-existing open attempts did not increase. Ignored receipt:
+  `artifacts/codex/INC-2026-08-15-vk-smart/prod-shadow-boundary-replay.json`;
+- remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
 - exact-main static canary: pending.

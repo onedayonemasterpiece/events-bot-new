@@ -17207,15 +17207,15 @@ async def _vkrev_import_flow(
 
     if not persist_results:
         if retry_scheduled_reasons:
-            await vk_review.mark_deferred(
+            await vk_review.mark_carrier_outcome(
                 db,
-                inbox_id,
-                batch_id=batch_id,
-                retry_after_sec=300,
+                inbox_id=inbox_id,
+                outcome="FAILED_TECHNICAL",
+                typed_reason=retry_scheduled_reasons[0],
             )
             await bot.send_message(
                 chat_id,
-                "⏳ Smart Update запланировал автоматический повтор: "
+                "❌ Smart Update завершился технической ошибкой без автоповтора: "
                 f"{retry_scheduled_reasons[0]}",
             )
             return
@@ -17275,11 +17275,11 @@ async def _vkrev_import_flow(
         event_dates=imported_event_dates,
     )
     if retry_scheduled_reasons:
-        await vk_review.mark_deferred(
+        await vk_review.mark_carrier_outcome(
             db,
-            inbox_id,
-            batch_id=batch_id,
-            retry_after_sec=300,
+            inbox_id=inbox_id,
+            outcome="FAILED_TECHNICAL",
+            typed_reason=retry_scheduled_reasons[0],
         )
     try:
         mark_vk_import_result(

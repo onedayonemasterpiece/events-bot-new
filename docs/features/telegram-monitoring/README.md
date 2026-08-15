@@ -15,15 +15,16 @@ configured Telegram source -> durable message/album source revision
   -> discovery hints only -> attachment/OCR EvidenceManifest
   -> automatic typed SourceParseDecision
   -> optional conditional verification -> Smart Update
-  -> typed automatic outcome or durable retry
+  -> typed accepted outcome or visible terminal error
 ```
 
 Album aggregation объединяет typed decisions, сохраняя siblings и actions;
-ordinal не используется как единственная identity. Consumer не продвигает
-cursor/force-message как успешный для untyped compatibility payload,
-technical failure или incomplete evidence. Только complete typed no-event может
-закрыть zero-event carrier. Positive child можно принять при incomplete evidence,
-но message остаётся due для enrichment. Smart Update `diagnostic_event_id` не
+ordinal не используется как единственная identity. Consumer обрабатывает каждый
+доставленный carrier линейно: complete typed no-event закрывается успешно, а
+untyped/schema/technical/incomplete-evidence результат закрывается как видимый
+`terminal_error` (или `partial_terminal_error`, если positive siblings уже
+приняты). Любая legacy force-row удаляется при таком terminal receipt; semantic
+force/retry loop не создаётся. Smart Update `diagnostic_event_id` не
 увеличивает imported counters и не запускает publication. Legacy payload reader
 существует только для fail-closed диагностики/replay старых артефактов; он не
 является producer contract или нормальным terminal workflow.
@@ -38,7 +39,8 @@ Telegram не имеет отдельной копии contradiction-логик�
 `source_contradiction_facts.py`, а producer импортирует общий pure collector.
 Семь типов фактов совпадают с Fly/VK/direct/parser callers, collector не меняет
 вердикт, и на один carrier допускается максимум один conditional verifier.
-Positive children сохраняются, а uncertain/technical verification даёт retry.
+Positive children сохраняются, а исчерпанная inline verification фиксируется
+как typed terminal error для оператора, не как вечная очередь.
 Канонический prompt contract и закрытые reason definitions:
 [`../../llm/prompts.md`](../../llm/prompts.md).
 
@@ -216,15 +218,22 @@ Live validation (`2026-04-22`):
 actions. Producer не останавливается на первой дате, отличает historical recap
 от будущего анонса и возвращает `MIXED`, если отмена/перенос соседствует с новым
 event. Каждый child получает стабильный occurrence/candidate key и независимо
-проходит Smart Update; один retry не удаляет принятых siblings.
+проходит Smart Update; terminal error одного child не удаляет принятых siblings.
 
 `Событий извлечено` — occurrence count, не carrier count. Разница между
-extracted/imported обязана иметь typed retry/product/exact receipt. Legacy
-`skipped|partial|error`, `events_extracted > events_imported` и technical/identity
-losses остаются в automatic recovery selection. Complete typed
+extracted/imported обязана иметь typed terminal/product/exact receipt. Legacy
+force replay закрывается тем же вызовом и удаляется из force-таблицы; technical
+или identity uncertainty остаётся видимой в receipt и требует операторского
+решения, а не бесконечного semantic replay. Complete typed
 `CONFIRMED_NO_EVENT` может продвинуть cursor без Event; untyped compatibility
 payload без children не может. Старые сообщения, прочитанные только для метрик после уже успешного exact
 revision, не вызывают LLM повторно.
+
+Operator report и `ops_run.metrics_json` раздельно показывают
+`messages_new_raw`, `messages_forced_replay`, `messages_metrics_only` и
+`messages_typed_candidates`; первые три — взаимоисключающие carrier buckets,
+последний — число carriers с event children. `messages_terminal_errors` отдельно
+показывает незакрытые по смыслу/технике terminal receipts.
 
 Forum/multithread-группа остаётся одним source с общим message-id cursor; topic
 root сам по себе не event, но это решает typed source parse, а не local semantic

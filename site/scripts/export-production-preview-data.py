@@ -6461,7 +6461,8 @@ def main() -> int:
     global SKIP_IMAGE_PROBES
     SKIP_IMAGE_PROBES = bool(args.skip_image_probes)
 
-    con = sqlite3.connect(args.db)
+    db_path = Path(args.db).expanduser().resolve()
+    con = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
     include_ids = [int(part) for part in args.include_ids.split(",") if part.strip().isdigit()]
     if args.catalog_mode == "full":

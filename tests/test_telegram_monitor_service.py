@@ -10,13 +10,19 @@ import pytest
 
 from db import Database
 from models import TelegramSource
-from source_parsing.telegram.handlers import TelegramMonitorEventInfo
+from source_parsing.telegram.handlers import TelegramMonitorEventInfo, TelegramMonitorReport
 from source_parsing.telegram.service import (
     _build_config_payload,
     _build_secrets_payload,
     _format_event_block,
     _poll_kaggle_kernel,
+    _resolve_tg_monitor_ops_status,
 )
+
+
+def test_terminal_carrier_error_makes_monitor_run_partial() -> None:
+    report = TelegramMonitorReport(messages_scanned=1, messages_terminal_errors=1)
+    assert _resolve_tg_monitor_ops_status(report, report_loaded=True) == "partial"
 
 
 def test_google_ai_bundle_contains_complete_deterministic_source_tree(tmp_path) -> None:

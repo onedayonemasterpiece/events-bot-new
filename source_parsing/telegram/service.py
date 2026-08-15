@@ -142,7 +142,7 @@ def _resolve_tg_monitor_ops_status(
 ) -> str:
     if not report_loaded:
         return "error"
-    if report.errors:
+    if report.errors or int(getattr(report, "messages_terminal_errors", 0) or 0):
         return "partial"
     if int(report.messages_scanned or 0) == 0:
         return "empty"
@@ -2815,9 +2815,11 @@ def format_report(report: TelegramMonitorReport) -> str:
             f"Источников: {report.sources_total}",
             f"Сообщений (Kaggle): {report.messages_scanned}",
             f"Сообщений с событиями: {report.messages_with_events}",
-            f"Новые посты (message_id): {int(getattr(report, 'messages_new', 0) or 0)}",
-            f"Форс-обработка постов: {int(getattr(report, 'messages_forced', 0) or 0)}",
+            f"Новые raw-посты: {int(getattr(report, 'messages_new_raw', 0) or 0)}",
+            f"Повторно запрошенные посты: {int(getattr(report, 'messages_forced_replay', 0) or 0)}",
             f"Посты только для метрик: {int(getattr(report, 'messages_metrics_only', 0) or 0)}",
+            f"Typed-кандидаты с событиями: {int(getattr(report, 'messages_typed_candidates', 0) or 0)}",
+            f"Терминальные ошибки постов: {int(getattr(report, 'messages_terminal_errors', 0) or 0)}",
             f"Сообщений пропущено: {report.messages_skipped}",
             f"Событий извлечено (Kaggle): {report.events_extracted}",
             f"Событий в новых постах: {int(getattr(report, 'events_extracted_new', 0) or 0)}",
@@ -3004,7 +3006,11 @@ async def run_telegram_import_from_results(
                 "messages_with_events": int(report.messages_with_events or 0),
                 "messages_new": int(getattr(report, "messages_new", 0) or 0),
                 "messages_forced": int(getattr(report, "messages_forced", 0) or 0),
+                "messages_new_raw": int(getattr(report, "messages_new_raw", 0) or 0),
+                "messages_forced_replay": int(getattr(report, "messages_forced_replay", 0) or 0),
                 "messages_metrics_only": int(getattr(report, "messages_metrics_only", 0) or 0),
+                "messages_typed_candidates": int(getattr(report, "messages_typed_candidates", 0) or 0),
+                "messages_terminal_errors": int(getattr(report, "messages_terminal_errors", 0) or 0),
                 "events_imported": int((report.events_created or 0) + (report.events_merged or 0)),
                 "events_created": int(report.events_created or 0),
                 "events_merged": int(report.events_merged or 0),
@@ -3131,7 +3137,11 @@ async def run_telegram_dev_recreate_reimport(
                 "messages_with_events": int(report.messages_with_events or 0),
                 "messages_new": int(getattr(report, "messages_new", 0) or 0),
                 "messages_forced": int(getattr(report, "messages_forced", 0) or 0),
+                "messages_new_raw": int(getattr(report, "messages_new_raw", 0) or 0),
+                "messages_forced_replay": int(getattr(report, "messages_forced_replay", 0) or 0),
                 "messages_metrics_only": int(getattr(report, "messages_metrics_only", 0) or 0),
+                "messages_typed_candidates": int(getattr(report, "messages_typed_candidates", 0) or 0),
+                "messages_terminal_errors": int(getattr(report, "messages_terminal_errors", 0) or 0),
                 "events_imported": int((report.events_created or 0) + (report.events_merged or 0)),
                 "events_created": int(report.events_created or 0),
                 "events_merged": int(report.events_merged or 0),
@@ -3243,7 +3253,11 @@ async def run_telegram_monitor(
                 "messages_with_events": int(report.messages_with_events or 0),
                 "messages_new": int(getattr(report, "messages_new", 0) or 0),
                 "messages_forced": int(getattr(report, "messages_forced", 0) or 0),
+                "messages_new_raw": int(getattr(report, "messages_new_raw", 0) or 0),
+                "messages_forced_replay": int(getattr(report, "messages_forced_replay", 0) or 0),
                 "messages_metrics_only": int(getattr(report, "messages_metrics_only", 0) or 0),
+                "messages_typed_candidates": int(getattr(report, "messages_typed_candidates", 0) or 0),
+                "messages_terminal_errors": int(getattr(report, "messages_terminal_errors", 0) or 0),
                 "events_imported": int((report.events_created or 0) + (report.events_merged or 0)),
                 "events_created": int(report.events_created or 0),
                 "events_merged": int(report.events_merged or 0),

@@ -138,7 +138,7 @@ def test_missing_ocr_or_truncation_keeps_carrier_unresolved() -> None:
 
 
 @pytest.mark.asyncio
-async def test_untyped_empty_telegram_carrier_keeps_force_and_cursor(tmp_path) -> None:
+async def test_untyped_empty_telegram_carrier_is_visible_linear_terminal(tmp_path) -> None:
     db = Database(str(tmp_path / "telegram-retry.sqlite"))
     await db.init()
     try:
@@ -175,7 +175,7 @@ async def test_untyped_empty_telegram_carrier_keeps_force_and_cursor(tmp_path) -
             ),
             encoding="utf-8",
         )
-        await process_telegram_results(path, db)
+        report = await process_telegram_results(path, db)
 
         async with db.raw_conn() as conn:
             cursor_row = await (
@@ -198,9 +198,14 @@ async def test_untyped_empty_telegram_carrier_keeps_force_and_cursor(tmp_path) -
                     (source_id,),
                 )
             ).fetchone()
-        assert cursor_row[0] is None
-        assert scan_row[0] == "retry_scheduled"
-        assert force_row == (1,)
+        assert cursor_row[0] == 98765
+        assert scan_row[0] == "terminal_error"
+        assert force_row is None
+        assert report.messages_new_raw == 1
+        assert report.messages_forced_replay == 0
+        assert report.messages_metrics_only == 0
+        assert report.messages_terminal_errors == 1
+        assert report.skipped_posts[0].status == "terminal_error"
     finally:
         await db.close()
 

@@ -250,7 +250,7 @@ def test_all_direct_boundaries_use_typed_helpers_or_terminal_enum() -> None:
         "source_parsing/handlers.py": ("update_result.is_accepted", "occurrence_key"),
         "source_parsing/telegram/handlers.py": (
             "result.is_accepted",
-            "result.is_retry",
+            "SmartUpdateTerminalOutcome.FAILED_TECHNICAL",
             "candidate.producer_ordinal",
         ),
         "vk_intake.py": ("update_result.is_accepted", "smart_result=update_result"),
@@ -275,3 +275,15 @@ def test_forbidden_operator_terminals_are_absent_from_caller_adapters() -> None:
             if terminal in source:
                 violations.append(f"{relative}:{terminal}")
     assert violations == []
+
+
+def test_remaining_callers_do_not_rearm_failed_technical_as_smart_retry() -> None:
+    festival = (ROOT / "festival_queue.py").read_text(encoding="utf-8")
+    tickets = (ROOT / "ticket_sites_queue.py").read_text(encoding="utf-8")
+    manual = (ROOT / "main.py").read_text(encoding="utf-8")
+    legacy_vk = (ROOT / "main_part2.py").read_text(encoding="utf-8")
+
+    assert "festival_children_retry_scheduled" not in festival
+    assert 'status="error"' in tickets and "failed_technical:" in tickets
+    assert "Event save retry scheduled" not in manual
+    assert "Smart Update запланировал автоматический повтор" not in legacy_vk

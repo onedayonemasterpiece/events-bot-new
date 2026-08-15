@@ -1,6 +1,49 @@
 # Changelog
 
 ## [Unreleased]
+- **Linear Smart caller fail-closed completion:** verification/provider
+  diagnostics no longer become product no-event decisions by substring;
+  only an explicit source-grounded high-confidence LLM `non_event` verdict
+  authorizes that typed product terminal, while uncertain output stays technical.
+  accepted-write acknowledgement failures are retried inline then close the
+  ledger as visible `FAILED_TECHNICAL`. Ticket, festival, manual and legacy VK
+  adapters no longer recreate hidden Smart Update retry state.
+- **VK auto-import linear batch closure:** removed the remaining durable retry
+  transitions from operator-visible `/vk_auto_import` rows. Source fetch,
+  missing/incomplete evidence, provider/schema, lifecycle, persist, timeout and
+  legacy Smart retry results now close as receipted `FAILED_TECHNICAL` with no
+  `next_attempt_at`; each batch reports a processed/terminal balance. Kept only
+  the separate pre-import crawl-continuation retry and added a bounded inline
+  VK transport retry (two attempts by default, hard maximum three).
+- **StaticSiteBuilder Fly-volume containment:** replaced the full production
+  SQLite handoff with a bounded, hash/row-count/quick-check bound static-only
+  projection that excludes VK raw packets, inbox, outbox, ops and Kaggle
+  ledgers. Projection creation closes its short live read transaction before
+  remote work; runner dataset staging is content-addressed and avoids a second
+  allocation, Kaggle reads the mounted projection in place and forbids SQLite
+  outputs, and downloaded validation/publication artifacts now use `/tmp`
+  rather than the persistent `/data` volume. Exact dataset/run adoption and
+  fail-closed result/publication identity remain unchanged. The projection is
+  also column-allowlisted (excluding private account/source-intake fields), its
+  ordered column manifest is independently validated, SQLite source scans have
+  a hard VM progress-handler deadline, and recursive kernel/host output gates
+  reject every SQLite database/WAL/SHM artifact.
+- **Smart Update / VK linear incident remediation:** replaced unchanged-evidence
+  semantic and background technical retry loops with same-call closed location
+  actions and visible `FAILED_TECHNICAL` terminals; the old worker is default
+  off and can only drain legacy rows once. Fixed blank-success OCR evidence
+  cardinality, exact-parse replay uniqueness, expired max-attempt recovery, and
+  low-confidence grounded `llm_keep` fallthrough, including canonical
+  `проспект`/`пр-кт` address equivalence. Added idempotent SQLite CHECK
+  migration and regression replays for `wall-32547811_11187`.
+- **Telegram monitoring / official source parser incident fix:** made carrier
+  accounting explicit (`new_raw` / `forced_replay` / `metrics_only` / typed
+  candidates), replaced semantic force/Smart retry loops with visible linear
+  terminal receipts, and cleared force rows on every terminal path. Moved nightly
+  page sync away from the source-parser slot, made both parser schedules wait
+  for the heavy gate, prevented recovery-only runs from starving changed
+  sources, and made exact same-event/shared catalogue provenance attachment
+  collision-safe without another Smart retry.
 - **Fixed — audio transcription without connector re-consent:** the three typed
   audio tools now belong to the existing stable `telegram:publish` capability
   family as well as the narrower `audio:transcribe` scope, so an already
@@ -31,11 +74,18 @@
 - **SQLite maintenance safety:** periodic full-database `VACUUM` is now
   default-disabled and requires the explicit `ENABLE_DB_FULL_VACUUM=1` opt-in,
   preventing its DB-sized WAL rewrite from colliding with snapshot/vector work.
+  Opted-in runs now share the heavy-job guard, require twice the DB size plus a
+  configurable free-space floor, recheck after a preflight WAL checkpoint, and
+  emit structured pre/post receipts. Application SQLite connections also use a
+  bounded retained-WAL journal size limit.
 - **SEV-1 ingestion retry/WAL recurrence:** opened
   `INC-2026-08-15-ingestion-retry-stall-and-wal-growth` after the operator
   reported low configured-source event yield, visible Smart Update grounding
-  retries and renewed WAL/static staging concern. Evidence collection and root
-  cause remain provisional; this entry claims no new fix, deploy or recovery.
+  retries and renewed WAL/static staging concern. The WAL cause was a full
+  `VACUUM` colliding with vector sync/checkpoint; PR #506 default-disabled it
+  and Fly v1975 deployed exact main. Linear ingestion and compact static
+  projection fixes are implemented but still require merge, deploy and
+  controlled production recovery before closure.
 - **CherryFlash / Smart Update incident recovery:** recorded
   `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility`;
   terminal source-render Kaggle ledgers now reconcile stale `RENDERING`
