@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Fixed — ChatGPT audio MCP runtime discovery:** the app-settings Refresh
+  successfully scanned all 30 private MCP tools, but conversations materialized
+  only an older bounded subset because the three audio tools were appended at
+  positions 28–30. Audio start/status/get now lead discovery order without
+  removing or renaming existing tools or requiring another OAuth scope.
 - **Linear Smart caller fail-closed completion:** verification/provider
   diagnostics no longer become product no-event decisions by substring;
   only an explicit source-grounded high-confidence LLM `non_event` verdict

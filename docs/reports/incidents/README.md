@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-15-audio-mcp-runtime-catalog-truncation.md`
+  - Scope: private eventsBot ChatGPT MCP catalog ordering, audio tool discovery,
+    existing `telegram:publish` authorization, and live conversation runtime.
+  - Must not regress: all three `audio_transcription_*` tools must stay inside
+    the bounded discovery prefix while the complete `tools/list` retains every
+    existing tool; closure requires a real ChatGPT start call, not only an app
+    settings scan or direct protocol smoke.
 - `INC-2026-08-15-ingestion-retry-stall-and-wal-growth.md`
   - Scope: current Telegram/VK/official-source yield, Smart Update grounding
     retries and their consumer, SQLite WAL reuse, and the StaticSiteBuilder
