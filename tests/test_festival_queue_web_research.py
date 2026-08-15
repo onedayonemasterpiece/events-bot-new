@@ -61,7 +61,7 @@ async def test_enabled_url_contour_stops_at_review_without_legacy_apply(tmp_path
             session.add(FestivalQueueItem(
                 status="pending", source_kind="url", source_url="https://uhana.ru/",
                 festival_name="Балтийская Ухана", festival_full="2026",
-                signals_json={"period": {"start_date": "2026-08-07", "end_date": "2026-08-09"}},
+                signals_json={"period": {"start_date": "2099-08-07", "end_date": "2099-08-09"}},
                 next_run_at=datetime.now(timezone.utc),
             ))
             await session.commit()
@@ -91,7 +91,7 @@ async def test_enabled_url_contour_fails_closed_without_injected_service(tmp_pat
             session.add(FestivalQueueItem(
                 status="pending", source_kind="url", source_url="https://example.org/",
                 festival_name="Test", next_run_at=datetime.now(timezone.utc),
-                signals_json={"period": {"date": "2026-08-07"}},
+                signals_json={"period": {"date": "2099-08-07"}},
             ))
             await session.commit()
         report = await process_festival_queue(db, source_kind="url", limit=1, trigger="test")

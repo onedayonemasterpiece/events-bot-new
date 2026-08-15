@@ -3,6 +3,8 @@
 ## [Unreleased]
 - **Linear Smart caller fail-closed completion:** verification/provider
   diagnostics no longer become product no-event decisions by substring;
+  only an explicit source-grounded high-confidence LLM `non_event` verdict
+  authorizes that typed product terminal, while uncertain output stays technical.
   accepted-write acknowledgement failures are retried inline then close the
   ledger as visible `FAILED_TECHNICAL`. Ticket, festival, manual and legacy VK
   adapters no longer recreate hidden Smart Update retry state.

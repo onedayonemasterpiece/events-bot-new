@@ -2,9 +2,9 @@
 
 AST import/alias/callback discovery was frozen on then-latest `origin/main`
 `d7731ab4235b325e9ca52d13c45fba83eaf5de0b` before the automatic terminal
-state-machine change. After integration rebased onto `origin/main`
-`96784bd572c03b965f303366c4ff0bb85d1b9a3f`, the inventory and AST acceptance
-contract were rerun; intervening main commits added no Smart Update caller.
+state-machine change. The inventory and AST acceptance contract must be rerun
+after the final integration rebase; the release receipt records that exact-main
+result rather than freezing another intermediate base SHA here.
 Seven call expressions form six direct production boundaries.
 
 ## Direct boundaries and indirect entrypoints

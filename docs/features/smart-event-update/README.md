@@ -207,8 +207,9 @@ must re-render the calendar line even when the event body itself is unchanged.
   `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` keep their existing
   create/merge semantic evidence stages. In `enforce`, a same/source decision
   merges, a distinct/sibling/unsafe or explicit occurrence conflict creates a
-  distinct Event, and provider/schema/vector/DB uncertainty becomes a durable
-  bounded retry. There is no terminal veto or human review. Production runs
+  distinct Event, and provider/schema/vector/DB uncertainty closes visibly as
+  `FAILED_TECHNICAL` without a background retry. There is no hidden terminal
+  veto or human-review queue. Production runs
   both gates in `enforce`. Vector recall remains controlled by
   `SMART_UPDATE_IDENTITY_VECTOR_RECALL`, `SMART_UPDATE_IDENTITY_VECTOR_TOP_K`,
   `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY`,
@@ -725,7 +726,7 @@ LLM остаётся владельцем смысловых решений, н�
 
 Smart Update must treat campaign/discount/action-shaped candidates as semantic high risk and route them to the LLM eventness reviewer before create. Examples include discount campaigns and Pushkin-card mechanics: a long validity period is not enough to make the source a concrete attendable event.
 
-Operational date-role ambiguity is handled the same LLM-first way. A narrow deterministic detector may route source shapes such as visitor/cash-desk hours or `билет действителен до <date>` to eventness review, but it must not decide meaning itself. The LLM treats normal venue operation, admission-ticket purchase/validity and work-hours-only posts as `non_event` unless the same source names a concrete attendee-facing program. Identity/vector `allow_create` is never a quality approval, and uncertainty/LLM unavailability for this high-risk route fails closed before public creation.
+Operational date-role ambiguity is handled the same LLM-first way. A narrow deterministic detector may route source shapes such as visitor/cash-desk hours or `билет действителен до <date>` to eventness review, but it must not decide meaning itself. An explicit source-grounded LLM `non_event` verdict at confidence `>=0.90` closes immediately as typed `REJECTED_PRODUCT_POLICY/non_event`; lower-confidence, malformed, unavailable or `uncertain` output closes as visible `FAILED_TECHNICAL`, never as a product guess or background retry. Identity/vector `allow_create` is never a quality approval.
 
 Historical anniversary/interview prose with several explicit old years is likewise only routed, never classified, by the deterministic layer. The LLM eventness reviewer must reject museum chronology (opening, acquisition, employment or memoir dates) unless the source separately announces a future attendee-facing programme; a real future anniversary lecture remains valid when its date and venue are explicit.
 
@@ -759,10 +760,10 @@ Verbatim reviewer evidence is required before either outcome is trusted.
 
 A VK roundup row is not atomic with its child Smart Update writes. If an early
 child succeeds and a later child is rejected or fails, the successful event ids
-are linked in `vk_inbox_import_event` and the inbox row becomes `deferred` for a
-bounded, idempotent retry in a later batch (default: 60 seconds, at most three
-attempts). It must not be marked fully imported, and the committed child links
-must not be discarded by rejecting the entire row.
+remain linked in `vk_inbox_import_event`, while the carrier closes in the same
+batch with the exact child outcomes and a visible `FAILED_TECHNICAL` reason for
+any unresolved child. The row receives no `next_attempt_at` and is not silently
+reprocessed by a later batch; committed child links are never discarded.
 
 ### Legacy retry drain visibility
 

@@ -17095,11 +17095,17 @@ async def _smart_event_update_impl(
             candidate.source_url,
             _clip_title(candidate.title),
         )
+        if decision == "non_event" and confidence >= 0.90:
+            return SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                reason=ProductExclusionReason.NON_EVENT.value,
+                product_exclusion_reason=ProductExclusionReason.NON_EVENT,
+            )
         if decision != "event" or confidence < 0.70:
             suffix = "non_event" if decision == "non_event" else "uncertain"
-            # This stage is a contradiction verifier for an already-positive
-            # source child.  It may ask the durable source pipeline to retry,
-            # but it may not convert the child into a product no-event.
+            # Only an explicit high-confidence closed LLM verdict is a product
+            # exclusion. Provider absence, invalid output, or uncertainty stays
+            # technical and the public facade closes it without background work.
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"mixed_occurrence_role_review_{suffix}",
@@ -17532,6 +17538,12 @@ async def _smart_event_update_impl(
                 candidate.source_url,
                 _clip_title(clean_title),
             )
+            if decision == "non_event" and confidence >= 0.90:
+                return SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                    reason=ProductExclusionReason.NON_EVENT.value,
+                    product_exclusion_reason=ProductExclusionReason.NON_EVENT,
+                )
             if decision != "event" or confidence < 0.55:
                 retry_reason = (
                     "weak_eventness_review_non_event"

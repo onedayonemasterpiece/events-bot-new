@@ -1,3 +1,5 @@
+import sqlite3
+
 import smart_event_update as su
 import pytest
 from sqlalchemy import select
@@ -13,6 +15,18 @@ async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
 
 async def _grounded_bundle_review():
     return True, "llm_grounded", []
+
+
+def _assert_latest_candidate_is_terminal_technical(db: Database) -> None:
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute(
+            "SELECT current_outcome,next_retry_at,claimed_by "
+            "FROM smart_update_candidate_state ORDER BY id DESC LIMIT 1"
+        ).fetchone() == ("FAILED_TECHNICAL", None, None)
+        assert conn.execute(
+            "SELECT COUNT(*) FROM smart_update_attempt "
+            "WHERE terminal_outcome='RETRY_SCHEDULED'"
+        ).fetchone()[0] == 0
 
 
 def _historical_museum_interview_source() -> str:
@@ -347,9 +361,9 @@ async def test_e6853_replay_llm_fails_closed_before_duration_or_create(tmp_path,
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
-        assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
-        assert result.reason == "mixed_occurrence_role_review_non_event"
+        assert result.status == "rejected_product_policy"
+        assert result.product_exclusion_reason is su.ProductExclusionReason.NON_EVENT
+        assert result.reason == "non_event"
     finally:
         await db.close()
 
@@ -509,8 +523,9 @@ async def test_retrocar_recap_replay_skips_before_create(tmp_path, monkeypatch):
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
+        assert result.status == "failed_technical"
         assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
+        _assert_latest_candidate_is_terminal_technical(db)
     finally:
         await db.close()
 
@@ -580,8 +595,9 @@ async def test_garazhka_recap_replay_skips_before_create(tmp_path, monkeypatch):
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
+        assert result.status == "failed_technical"
         assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
+        _assert_latest_candidate_is_terminal_technical(db)
     finally:
         await db.close()
 
@@ -652,8 +668,9 @@ async def test_festdir_entry_notice_replay_skips_before_create(tmp_path, monkeyp
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
+        assert result.status == "failed_technical"
         assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
+        _assert_latest_candidate_is_terminal_technical(db)
     finally:
         await db.close()
 
@@ -863,8 +880,9 @@ async def test_digest_stub_is_routed_to_llm_eventness_and_skipped(tmp_path, monk
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
-        assert result.reason == "weak_eventness_review_non_event"
+        assert result.status == "rejected_product_policy"
+        assert result.product_exclusion_reason is su.ProductExclusionReason.NON_EVENT
+        assert result.reason == "non_event"
         assert calls and calls[0][0] == "eventness_review"
     finally:
         await db.close()
@@ -1030,8 +1048,9 @@ async def test_ungrounded_social_date_routes_to_llm_eventness_and_skips(tmp_path
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
-        assert result.reason == "weak_eventness_review_non_event"
+        assert result.status == "rejected_product_policy"
+        assert result.product_exclusion_reason is su.ProductExclusionReason.NON_EVENT
+        assert result.reason == "non_event"
         assert calls == ["eventness_review"]
     finally:
         await db.close()
@@ -1302,8 +1321,9 @@ async def test_campaign_discount_action_routes_to_llm_eventness_and_skips(tmp_pa
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
-        assert result.reason == "weak_eventness_review_non_event"
+        assert result.status == "rejected_product_policy"
+        assert result.product_exclusion_reason is su.ProductExclusionReason.NON_EVENT
+        assert result.reason == "non_event"
         assert calls == ["eventness_review"]
     finally:
         await db.close()
@@ -1399,8 +1419,9 @@ async def test_zoo_ticket_validity_notice_is_llm_reviewed_and_skipped(tmp_path, 
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
-        assert result.reason == "weak_eventness_review_non_event"
+        assert result.status == "rejected_product_policy"
+        assert result.product_exclusion_reason is su.ProductExclusionReason.NON_EVENT
+        assert result.reason == "non_event"
         assert calls == ["eventness_review"]
         async with db.get_session() as session:
             rows = (await session.execute(select(Event))).scalars().all()

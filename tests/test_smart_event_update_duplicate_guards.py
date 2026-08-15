@@ -1,4 +1,5 @@
 import inspect
+import sqlite3
 
 import pytest
 
@@ -10,6 +11,18 @@ from smart_event_update import EventCandidate, smart_event_update
 
 async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
     return None
+
+
+def _assert_latest_candidate_is_terminal_technical(db: Database) -> None:
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute(
+            "SELECT current_outcome,next_retry_at,claimed_by "
+            "FROM smart_update_candidate_state ORDER BY id DESC LIMIT 1"
+        ).fetchone() == ("FAILED_TECHNICAL", None, None)
+        assert conn.execute(
+            "SELECT COUNT(*) FROM smart_update_attempt "
+            "WHERE terminal_outcome='RETRY_SCHEDULED'"
+        ).fetchone()[0] == 0
 
 
 def test_match_create_prompt_distinguishes_time_conflict_from_multi_session():
@@ -503,9 +516,10 @@ async def test_smart_update_rejects_unmatched_prose_location_candidate(
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
+        assert result.status == "failed_technical"
         assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
         assert result.reason == "prose_location"
+        _assert_latest_candidate_is_terminal_technical(db)
     finally:
         await db.close()
 
@@ -540,9 +554,10 @@ async def test_smart_update_rejects_temporal_location_candidate(
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
+        assert result.status == "failed_technical"
         assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
         assert result.reason == "prose_location"
+        _assert_latest_candidate_is_terminal_technical(db)
     finally:
         await db.close()
 
@@ -579,9 +594,10 @@ async def test_smart_update_rejects_reaction_text_location_candidate(
 
         result = await smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.status == "retry_scheduled"
+        assert result.status == "failed_technical"
         assert result.retry_reason is su.RetryReason.SOURCE_VERIFICATION_REQUIRED
         assert result.reason == "weak_eventness_review_uncertain"
+        _assert_latest_candidate_is_terminal_technical(db)
     finally:
         await db.close()
 
