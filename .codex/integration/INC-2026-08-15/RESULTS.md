@@ -21,7 +21,7 @@
 - Shadow `Database.init()` twice: 0.400 s / 0.194 s; `quick_check=ok`; 195 pre-existing FK findings preserved exactly (156 `event_source_fact`, 37 `eventposter`, 2 `videoannounce_item`), no new FK drift. Receipt: `artifacts/codex/INC-2026-08-15-ingestion-linear/prod-shadow/migration-init2.json`.
 - Migration rollback injection preserves both old tables/rows and removes both `_new` tables.
 - Approved Opus consultation was attempted but unavailable: `a-opus` required interactive OAuth and Claude alias was not logged in; no lower-class substitute was used. Redacted ignored receipt: `artifacts/codex/INC-2026-08-15-vk-smart/CONSULTANT_STATUS.md`.
-- Integrated focused regression suite before the final review corrections: **630 passed in 90.01 s**. The current post-correction Smart/VK/caller suite is **454 passed in 73.54 s**; static re-review reran **58 passed**. Changed Python modules compile and `git diff --check` is clean.
+- Integrated focused regression suite before the final review corrections: **630 passed in 90.01 s**. The current post-correction Smart/VK/caller suite, including the full-boundary raw control replay, is **455 passed in 72.57 s**; static re-review reran **58 passed**. Changed Python modules compile and `git diff --check` is clean.
 
 ## Production gates still required
 
