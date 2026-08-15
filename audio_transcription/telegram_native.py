@@ -49,6 +49,36 @@ def normalize_transcript_text(value: Any) -> str:
     return " ".join(str(value or "").strip().split())
 
 
+async def resolve_telegram_peer(client: Any, peer_ref: str) -> Any:
+    """Resolve private numeric dialog IDs without a persistent entity cache."""
+
+    value = str(peer_ref or "").strip()
+    if not value:
+        raise RuntimeError("configured Telegram peer is empty")
+    if not value.lstrip("-").isdigit():
+        return await client.get_input_entity(value)
+
+    try:
+        from telethon import utils
+    except ImportError as exc:  # pragma: no cover - runtime dependency
+        raise RuntimeError("telethon is not installed") from exc
+
+    wanted = int(value)
+    async for dialog in client.iter_dialogs():
+        entity = getattr(dialog, "entity", None)
+        if entity is None:
+            continue
+        try:
+            actual = int(utils.get_peer_id(entity))
+        except (TypeError, ValueError):
+            continue
+        if actual == wanted:
+            return await client.get_input_entity(entity)
+    raise RuntimeError(
+        "configured Telegram peer is not visible to the transcription session"
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NativeTranscript:
     text: str

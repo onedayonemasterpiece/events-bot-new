@@ -12,6 +12,10 @@
   `InterdcCallErrorError`; the worker now applies bounded backoff to the same
   temporary voice message instead of failing immediately or uploading a
   duplicate message.
+- **Fixed — private audio transcription peer resolution:** the Kaggle worker
+  can resolve a private numeric supergroup from the dedicated account's dialogs,
+  avoiding account-specific Saved Messages transcription failures without
+  requiring a public group username.
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit
   controlled release operation.

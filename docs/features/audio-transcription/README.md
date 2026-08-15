@@ -241,6 +241,14 @@ Telegram internal-DC exhaustion (including Telethon's bounded
 temporary voice message with bounded backoff before failing closed; it does not
 upload a duplicate voice note merely to recover from a provider transient.
 
+For the live lane, prefer a dedicated private supergroup over `me`. Telegram
+native transcription can fail with an internal DC error for Saved Messages on
+an otherwise Premium-capable account while the same native and generated voice
+documents transcribe successfully in a private supergroup. A private numeric
+`-100...` peer is resolved from the dedicated account's dialogs so the group
+does not need a public username. The account must already be a member; the
+worker never joins or creates chats automatically.
+
 ## Code map
 
 ```text

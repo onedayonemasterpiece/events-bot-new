@@ -20,7 +20,11 @@ from .ffmpeg import (
     probe_audio,
     transcode_chunk_to_voice,
 )
-from .telegram_native import NativeTranscriptionError, TelegramNativeTranscriber
+from .telegram_native import (
+    NativeTranscriptionError,
+    TelegramNativeTranscriber,
+    resolve_telegram_peer,
+)
 from .time_anchor import absolute_at, resolve_recording_anchor
 
 INPUT_ROOT = Path("/kaggle/input")
@@ -226,7 +230,7 @@ async def run() -> None:
 
     client = await _open_telegram(secrets)
     try:
-        peer = await client.get_input_entity(str(request["telegram_peer"]))
+        peer = await resolve_telegram_peer(client, str(request["telegram_peer"]))
         transcriber = TelegramNativeTranscriber(
             client,
             peer,

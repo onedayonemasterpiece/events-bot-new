@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,7 @@ from audio_transcription.telegram_native import (
     is_transient_internal_error,
     is_voice_too_long_error,
     normalize_transcript_text,
+    resolve_telegram_peer,
 )
 
 
@@ -39,6 +41,25 @@ def test_cleanup_counters_start_at_zero():
     assert transcriber.cleanup_attempts == 0
     assert transcriber.cleanup_succeeded == 0
     assert transcriber.cleanup_failed == 0
+
+
+def test_private_numeric_peer_is_resolved_from_dialogs(monkeypatch):
+    entity = SimpleNamespace(peer_id=-1001234567890)
+
+    class Client:
+        async def iter_dialogs(self):
+            yield SimpleNamespace(entity=entity)
+
+        async def get_input_entity(self, value):
+            return value
+
+    monkeypatch.setattr("telethon.utils.get_peer_id", lambda value: value.peer_id)
+
+    async def exercise():
+        resolved = await resolve_telegram_peer(Client(), "-1001234567890")
+        assert resolved is entity
+
+    asyncio.run(exercise())
 
 
 class InterdcCallErrorError(Exception):
