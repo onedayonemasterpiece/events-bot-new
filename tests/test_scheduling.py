@@ -22,6 +22,17 @@ from models import Event, User
 from ops_run import finish_ops_run, start_ops_run
 
 
+def test_db_full_vacuum_is_explicit_opt_in(monkeypatch):
+    monkeypatch.delenv("ENABLE_DB_FULL_VACUUM", raising=False)
+    assert scheduling._db_full_vacuum_enabled() is False
+
+    monkeypatch.setenv("ENABLE_DB_FULL_VACUUM", "1")
+    assert scheduling._db_full_vacuum_enabled() is True
+
+    monkeypatch.setenv("ENABLE_DB_FULL_VACUUM", "0")
+    assert scheduling._db_full_vacuum_enabled() is False
+
+
 @pytest.mark.asyncio
 async def test_smart_update_retry_accepts_report_reaches_superadmin(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "smart-update-report.sqlite"))

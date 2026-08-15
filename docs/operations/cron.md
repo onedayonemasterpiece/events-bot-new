@@ -108,6 +108,14 @@ Defaults were adjusted to reduce overlaps between the most common heavy jobs:
 If you see skip notifications in admin chat often, spread the schedules further instead of switching to “wait”: skipping is a safety net, not a planning tool.
 
 Skipped heavy-job attempts are now also written to `ops_run.status='skipped'` (with a reason), so `/general_stats` can show that the scheduler tried to start a job but skipped it before the job body ran.
+
+Full SQLite `VACUUM` is **not scheduled by default**. It rewrites the complete
+database and can temporarily require roughly another database-sized WAL plus
+copy space, so it must not share a slot with snapshot/vector work. The legacy
+12-hour interval is registered only with the explicit
+`ENABLE_DB_FULL_VACUUM=1` opt-in; leave it off until the capacity and
+serialization gates documented for the current deployment have been checked.
+Hourly `PRAGMA optimize` and `PRAGMA wal_checkpoint(TRUNCATE)` remain enabled.
 Scheduled `vk_auto_import` and `tg_monitoring` entrypoints also create a bootstrap `ops_run` before resolving superadmin / entering the inner runner, so a 1ms APScheduler fire can no longer disappear without either a real run row or an explicit `skipped/error` record.
 Scheduled guide slots now also participate in the shared heavy-job guard at the scheduler layer: if another heavy job (for example a stuck `vk_auto_import`) already owns the gate, the guide slot records `ops_run(kind='guide_monitoring', status='skipped', skip_reason='heavy_busy')` instead of waiting invisibly before `run_guide_monitor()` can materialize its own run.
 `tg_monitoring`, scheduled `guide_excursions_full`, and `vk_auto_import` are additionally protected by a critical-run catch-up path: their APScheduler misfire grace is longer than the generic 30s default, and a live `critical_scheduler_watchdog` interval job re-checks `ops_run` after the last local slot inside the configured lookback window. If APScheduler emits `JOB_SUBMITTED`/`JOB_MISSED` but the entrypoint never writes a materialized successful run, or the process is killed and startup cleanup marks the materialized run `crashed`, the watchdog dispatches the same scheduled entrypoint with a catch-up `run_id` instead of waiting for the next day/slot. The watchdog resolves the last local slot, not just "today", so a 23:40 slot remains recoverable after local midnight.
