@@ -6948,7 +6948,7 @@ async def process_telegram_results(
                     if result.reason:
                         key = f"{key}:{result.reason}"
                     skip_breakdown[key] += 1
-                else:
+                elif result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL:
                     message_terminal_error_reason = (
                         result.reason or "smart_update_unresolved"
                     )
@@ -6956,6 +6956,13 @@ async def process_telegram_results(
                     if result.reason:
                         key = f"{key}:{result.reason}"
                     skip_breakdown[key] += 1
+                else:  # Fail closed if a future terminal enum is not integrated.
+                    message_terminal_error_reason = (
+                        result.reason or f"unsupported_terminal:{result.outcome.value}"
+                    )
+                    skip_breakdown[
+                        f"terminal_error:unsupported:{result.outcome.value}"
+                    ] += 1
                 logger.info(
                     "tg_monitor.event outcome=%s event_id=%s source=%s message_id=%s title=%s linked_added=%s",
                     result.outcome.value,

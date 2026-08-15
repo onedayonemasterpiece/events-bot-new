@@ -250,7 +250,7 @@ def test_all_direct_boundaries_use_typed_helpers_or_terminal_enum() -> None:
         "source_parsing/handlers.py": ("update_result.is_accepted", "occurrence_key"),
         "source_parsing/telegram/handlers.py": (
             "result.is_accepted",
-            "result.is_retry",
+            "SmartUpdateTerminalOutcome.FAILED_TECHNICAL",
             "candidate.producer_ordinal",
         ),
         "vk_intake.py": ("update_result.is_accepted", "smart_result=update_result"),
