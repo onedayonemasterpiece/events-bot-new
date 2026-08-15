@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Fixed — audio transcription without connector re-consent:** the three typed
+  audio tools now belong to the existing stable `telegram:publish` capability
+  family as well as the narrower `audio:transcribe` scope, so an already
+  authorized ChatGPT/OpenCode connector discovers and invokes them without
+  deletion, renaming, or a new OAuth grant. Read-only tokens remain read-only.
 - **Private Events MCP / audio transcription production rollout:** after the
   dedicated-session Telegram/Kaggle canary and green PR CI, enabled the three
   `audio:transcribe`-scoped tools on the existing private ChatGPT/OpenCode MCP.

@@ -60,6 +60,12 @@ def legacy_social_scope_for(required_scope: str) -> str | None:
     because its client policy never permits any legacy social scope.
     """
 
+    # Audio transcription sends short-lived voice notes through Telegram and
+    # deletes them after recognition.  Treat it as a later typed capability of
+    # the stable Telegram publish family so existing ChatGPT connectors do not
+    # need a new OAuth consent solely because the tool was added later.
+    if required_scope == "audio:transcribe":
+        return "telegram:publish"
     if not isinstance(required_scope, str) or ":" not in required_scope:
         return None
     platform, suffix = required_scope.split(":", 1)
