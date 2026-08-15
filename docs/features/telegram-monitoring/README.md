@@ -165,6 +165,12 @@ Positive children сохраняются, а исчерпанная inline verif
 - Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`. Если `GOOGLE_API_KEY3` ещё не зарегистрирован в Supabase quota registry, gateway не должен молча брать общий key pool: он переходит на process-local limiter и всё равно вызывает provider через выбранный `GOOGLE_API_KEY3`.
 - Kaggle secrets для Telegram Monitoring не передают unrelated `GOOGLE_API_KEY*` pools: `GOOGLE_API_KEY` внутри notebook является legacy alias на выбранный monitoring key, а дефолтный fallback env тоже указывает на `GOOGLE_API_KEY3`.
 - Provider calls ограничены таймаутом: `TG_MONITORING_LLM_TIMEOUT_SECONDS` (default `45`) выставляет `GOOGLE_AI_PROVIDER_TIMEOUT_SEC`, чтобы retryable Gemma 4 `500/504` или зависшие calls fail-open на уровне поста/стадии, а не съедали весь Kaggle window.
+- Отказ shared limiter по минутным `rpm`/`tpm` происходит **до** provider send.
+  Monitor ждёт указанный `retry_after` и продолжает тот же carrier внутри
+  текущего запуска (до четырёх попыток и не более 65 секунд на одно ожидание
+  по умолчанию). Это не durable/background retry и не создаёт второй provider
+  send; `rpd`, отсутствие ключей и исчерпание bounded inline attempts остаются
+  видимой технической ошибкой.
 - Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
@@ -453,6 +459,10 @@ filter. Point replay старого message выполняется по `message
 ## OCR
 
 - OCR выполняется **внутри Kaggle‑ноутбука** для сообщений с афишами, даже если в тексте поста уже есть описание.
+- Успешный OCR с пустым текстом считается обработанным вложением: producer
+  сохраняет один evidence block на каждую обработанную карточку, включая
+  пустой block, и не дедуплицирует одинаковые карточки внутри альбома. Только
+  реальный download/provider failure помечает вложение недоступным.
 - Результаты OCR сохраняются в `telegram_results.json`:
   - `messages[].posters[].ocr_text` и `messages[].posters[].ocr_title`;
   - агрегированный `messages[].ocr_text` (для удобства дебага).
@@ -592,6 +602,9 @@ Live E2E multi-source (VK+TG): `tests/e2e/features/multi_source_vk_tg.feature` (
 Сервер принимает `telegram_results.json`:
 
 - `schema_version=2`: `messages[]` + top-level `sources_meta[]`; каждый новый message содержит `source_parse_decision` и `evidence_manifest`. Это единственный канонический producer contract.
+  Слитый media-group дополнительно содержит все исходные
+  `source_message_ids`; consumer проверяет force-state по любому member и
+  очищает все member rows после единственного terminal carrier receipt.
 - `schema_version=1` (legacy): только fail-closed reader для диагностики/replay ранее сохранённых `messages[]` без `sources_meta`; positive children можно адаптировать, zero-event/technical result не подтверждается и cursor не продвигается.
 
 - Producer (Kaggle): `kaggle/TelegramMonitor/telegram_monitor.py` -> sync в `telegram_monitor.ipynb`

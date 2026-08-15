@@ -182,6 +182,76 @@ def test_telegram_manifest_builder_infers_missing_attachment_ocr() -> None:
     assert manifest["evidence_complete"] is False
 
 
+def test_telegram_blank_ocr_success_is_complete_attachment_evidence() -> None:
+    ns = _producer_contract_namespace()
+    manifest = ns["_source_evidence_manifest"](
+        "Полная текстовая подпись",
+        [""],
+        attachment_count=1,
+        unavailable_attachment_count=0,
+        ocr_complete=True,
+    )
+
+    assert manifest["attachment_count"] == 1
+    assert manifest["ocr_blocks_available"] == 1
+    assert manifest["unavailable_attachment_count"] == 0
+    assert manifest["ocr_complete"] is True
+    assert manifest["evidence_complete"] is True
+
+
+def test_telegram_quota_rejection_waits_inline_before_same_carrier_retry() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    function_names = {"_generation_config", "_call_model"}
+    nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in function_names
+    ]
+
+    class _RateLimitError(Exception):
+        def __init__(self, *, blocked_reason: str, retry_after_ms: int):
+            self.blocked_reason = blocked_reason
+            self.retry_after_ms = retry_after_ms
+
+    class _Client:
+        calls = 0
+
+        async def generate_content_async(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise _RateLimitError(blocked_reason="tpm", retry_after_ms=1)
+            return '{"ok":true}', SimpleNamespace()
+
+    waits: list[float] = []
+
+    async def _sleep(seconds: float) -> None:
+        waits.append(seconds)
+
+    client = _Client()
+    namespace = {
+        "asyncio": SimpleNamespace(sleep=_sleep),
+        "random": SimpleNamespace(uniform=lambda _a, _b: 0.2),
+        "RateLimitError": _RateLimitError,
+        "MODEL_REGISTRY": {"text": {"name": "model", "fallback": ""}},
+        "LLM_QUOTA_WAIT_MAX_ATTEMPTS": 4,
+        "LLM_QUOTA_WAIT_MAX_SECONDS": 65.0,
+        "_get_gemma_client": lambda: client,
+        "_resolve_candidate_key_ids": lambda: None,
+        "_is_not_found": lambda _exc: False,
+        "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
+    }
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "<quota-wait>", "exec"), namespace)
+
+    result = asyncio.run(namespace["_call_model"]("text", "carrier"))
+
+    assert result == '{"ok":true}'
+    assert client.calls == 2
+    assert len(waits) == 1
+    assert waits[0] >= 0.001
+
+
 def test_telegram_producer_keeps_all_events_and_lifecycle_actions_in_mixed_decision() -> None:
     ns = _producer_contract_namespace()
     response = _provider_payload(
@@ -577,6 +647,46 @@ def test_telegram_primary_call_receives_every_multicard_ocr_block_once() -> None
     assert result["evidence_manifest"]["ocr_blocks_available"] == 2
     assert result["evidence_manifest"]["ocr_blocks_included"] == 2
     assert len(result["events"]) == 2
+
+
+def test_telegram_album_preserves_every_source_message_id_and_blank_ocr_block() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    merge_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_merge_media_groups"
+    )
+    namespace: dict = {"_assign_posters_to_events": lambda _message: None}
+    exec(
+        compile(ast.Module(body=[merge_node], type_ignores=[]), "<tg-album-merge>", "exec"),
+        namespace,
+    )
+
+    merged = namespace["_merge_media_groups"](
+        [
+            {
+                "source_username": "album",
+                "message_id": 101,
+                "source_message_ids": [101],
+                "grouped_id": 7,
+                "text": "Подпись",
+                "posters": [{"sha256": "one", "ocr_text": "", "ocr_title": None}],
+            },
+            {
+                "source_username": "album",
+                "message_id": 102,
+                "source_message_ids": [102],
+                "grouped_id": 7,
+                "text": "",
+                "posters": [{"sha256": "two", "ocr_text": "Афиша", "ocr_title": None}],
+            },
+        ]
+    )
+
+    assert len(merged) == 1
+    assert merged[0]["message_id"] == 101
+    assert merged[0]["source_message_ids"] == [101, 102]
 
 
 def test_telegram_scan_has_no_free_form_or_regex_terminal_skip_authority() -> None:

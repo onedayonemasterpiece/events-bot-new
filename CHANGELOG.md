@@ -6,6 +6,12 @@
   only an older bounded subset because the three audio tools were appended at
   positions 28–30. Audio start/status/get now lead discovery order without
   removing or renaming existing tools or requiring another OAuth scope.
+- **Telegram monitor false-skip containment:** minute `rpm`/`tpm` admission
+  failures now wait and resume the same carrier inline instead of becoming a
+  terminal skip before any provider call. Successful blank OCR counts as
+  processed evidence, duplicate/blank album cards retain one evidence unit
+  each, and merged albums carry/clear every source message id so child force
+  rows cannot replay the same album indefinitely.
 - **Linear Smart caller fail-closed completion:** verification/provider
   diagnostics no longer become product no-event decisions by substring;
   only an explicit source-grounded high-confidence LLM `non_event` verdict

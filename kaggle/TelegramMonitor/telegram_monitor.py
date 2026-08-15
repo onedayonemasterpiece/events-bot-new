@@ -153,7 +153,7 @@ ensure_libs()
 
 from PIL import Image
 import imagehash
-from google_ai import GoogleAIClient, SecretsProvider
+from google_ai import GoogleAIClient, RateLimitError, SecretsProvider
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import Channel, Chat, DocumentAttributeVideo, MessageEntityCustomEmoji, MessageEntityTextUrl, MessageEntityUrl, PeerChannel, PeerChat, PeerUser, User
@@ -285,6 +285,14 @@ VIDEO_MODEL = (os.getenv('TG_MONITORING_VIDEO_MODEL') or DEFAULT_TG_MONITORING_V
 LLM_CALL_TIMEOUT_SECONDS = float(
     (os.getenv('TG_MONITORING_LLM_TIMEOUT_SECONDS') or os.getenv('GOOGLE_AI_PROVIDER_TIMEOUT_SEC') or '45').strip()
     or '45'
+)
+LLM_QUOTA_WAIT_MAX_ATTEMPTS = max(
+    1,
+    min(6, int(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_ATTEMPTS', '4'))),
+)
+LLM_QUOTA_WAIT_MAX_SECONDS = max(
+    1.0,
+    min(90.0, float(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_SECONDS', '65'))),
 )
 if LLM_CALL_TIMEOUT_SECONDS > 0:
     os.environ.setdefault('GOOGLE_AI_PROVIDER_TIMEOUT_SEC', str(LLM_CALL_TIMEOUT_SECONDS))
@@ -1984,24 +1992,59 @@ async def _call_model(
     last_error: Exception | None = None
 
     for idx, model_name in enumerate(models_to_try):
-        try:
-            text, _usage = await client.generate_content_async(
-                model=model_name,
-                prompt=payload,
-                generation_config=_generation_config(
-                    response_schema=response_schema,
-                    max_output_tokens=max_output_tokens,
-                ),
-                max_output_tokens=max(1, int(max_output_tokens)),
-                candidate_key_ids=candidate_key_ids,
-            )
-            return text
-        except Exception as exc:
-            last_error = exc
-            if idx < len(models_to_try) - 1 and _is_not_found(exc):
-                logger.warning('tg_monitor.model_not_found fallback=%s failed=%s', models_to_try[idx + 1], model_name)
+        quota_attempt = 0
+        while True:
+            quota_attempt += 1
+            try:
+                text, _usage = await client.generate_content_async(
+                    model=model_name,
+                    prompt=payload,
+                    generation_config=_generation_config(
+                        response_schema=response_schema,
+                        max_output_tokens=max_output_tokens,
+                    ),
+                    max_output_tokens=max(1, int(max_output_tokens)),
+                    candidate_key_ids=candidate_key_ids,
+                )
+                return text
+            except RateLimitError as exc:
+                last_error = exc
+                blocked_reason = str(exc.blocked_reason or '').strip().lower()
+                retry_after_s = max(0.0, float(exc.retry_after_ms or 0) / 1000.0)
+                can_wait_inline = bool(
+                    blocked_reason in {'rpm', 'tpm'}
+                    and retry_after_s > 0
+                    and retry_after_s <= LLM_QUOTA_WAIT_MAX_SECONDS
+                    and quota_attempt < LLM_QUOTA_WAIT_MAX_ATTEMPTS
+                )
+                if not can_wait_inline:
+                    raise
+                # This limiter rejection happens before a provider request is
+                # sent.  Waiting here is therefore a bounded continuation of
+                # the same carrier, not a duplicate provider call or a hidden
+                # background retry queue.
+                wait_s = min(
+                    LLM_QUOTA_WAIT_MAX_SECONDS,
+                    retry_after_s + random.uniform(0.15, 0.45),
+                )
+                logger.warning(
+                    'tg_monitor.llm_quota_wait kind=%s model=%s reason=%s '
+                    'wait=%.2fs attempt=%d/%d',
+                    kind,
+                    model_name,
+                    blocked_reason,
+                    wait_s,
+                    quota_attempt,
+                    LLM_QUOTA_WAIT_MAX_ATTEMPTS,
+                )
+                await asyncio.sleep(wait_s)
                 continue
-            raise
+            except Exception as exc:
+                last_error = exc
+                if idx < len(models_to_try) - 1 and _is_not_found(exc):
+                    logger.warning('tg_monitor.model_not_found fallback=%s failed=%s', models_to_try[idx + 1], model_name)
+                    break
+                raise
 
     raise last_error or RuntimeError(f'tg_monitor model call failed kind={kind}')
 
@@ -5904,8 +5947,11 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 str(poster.get('ocr_text') or '').strip(),
             ]
             block = '\n'.join(part for part in block_parts if part)
-            if block and block not in ocr_blocks:
-                ocr_blocks.append(block)
+            # One block per successfully processed attachment is part of the
+            # evidence cardinality contract.  A successful blank OCR result
+            # is real evidence (the image contained no readable text), not a
+            # missing attachment.  Do not deduplicate identical album cards.
+            ocr_blocks.append(block)
         # A Telegram album is one logical carrier.  Defer its only primary
         # semantic call until every sibling's OCR block has been collected.
         source_parse_pending = bool(grouped_id)
@@ -6091,6 +6137,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
             'source_chat_id': getattr(entity, 'id', None),
             'source_title': (getattr(entity, 'title', None) or '').strip() or None,
             'message_id': msg.id,
+            'source_message_ids': [int(msg.id)],
             'message_date': msg_date,
             'grouped_id': grouped_id,
             'has_video': bool(has_video),
@@ -6228,8 +6275,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 )
                 if part
             )
-            if block and block not in album_ocr_blocks:
-                album_ocr_blocks.append(block)
+            album_ocr_blocks.append(block)
         semantic_source_text = str(
             item.get('semantic_source_text') or item.get('text') or ''
         )
@@ -6499,6 +6545,7 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
                 'source_chat_id': msg.get('source_chat_id'),
                 'source_title': msg.get('source_title'),
                 'message_id': msg.get('message_id'),
+                'source_message_ids': [],
                 'message_date': msg.get('message_date'),
                 'post_author': msg.get('post_author'),
                 'text': msg.get('text') or '',
@@ -6530,6 +6577,14 @@ def _merge_media_groups(messages: list[dict]) -> list[dict]:
                 acc['message_id'] = msg_id
         except Exception:
             pass
+
+        for raw_message_id in msg.get('source_message_ids') or [msg.get('message_id')]:
+            try:
+                source_message_id = int(raw_message_id)
+            except (TypeError, ValueError):
+                continue
+            if source_message_id > 0 and source_message_id not in acc['source_message_ids']:
+                acc['source_message_ids'].append(source_message_id)
 
         # prefer non-empty text (caption)
         if (msg.get('text') or '').strip() and len((msg.get('text') or '')) > len((acc.get('text') or '')):

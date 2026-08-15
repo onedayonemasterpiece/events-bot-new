@@ -211,6 +211,74 @@ async def test_untyped_empty_telegram_carrier_is_visible_linear_terminal(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_album_force_child_marks_carrier_forced_and_clears_every_member(tmp_path) -> None:
+    db = Database(str(tmp_path / "telegram-album-force.sqlite"))
+    await db.init()
+    try:
+        async with db.raw_conn() as conn:
+            source_row = await (
+                await conn.execute(
+                    "SELECT id FROM telegram_source WHERE username='ecodvor39'"
+                )
+            ).fetchone()
+            source_id = int(source_row[0])
+            await conn.execute(
+                "INSERT INTO telegram_source_force_message(source_id,message_id) VALUES(?,?)",
+                (source_id, 70002),
+            )
+            await conn.commit()
+
+        manifest = EvidenceManifest.complete_source(
+            "Полная подпись альбома", [], attachment_count=0
+        ).to_payload()
+        path = tmp_path / "telegram-album-results.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "run_id": "album-force-test",
+                    "stats": {"sources_total": 1, "messages_scanned": 2},
+                    "messages": [
+                        {
+                            "source_username": "ecodvor39",
+                            "message_id": 70001,
+                            "source_message_ids": [70001, 70002],
+                            "message_date": "2026-08-15T08:00:00+00:00",
+                            "source_link": "https://t.me/ecodvor39/70001",
+                            "text": "Полная подпись альбома",
+                            "events": [],
+                            "source_parse_decision": {
+                                "disposition": "CONFIRMED_NO_EVENT",
+                                "no_event_reason": "NO_ATTENDABLE_EVENT",
+                                "events": [],
+                                "lifecycle_actions": [],
+                                "evidence_manifest": manifest,
+                                "evidence_complete": True,
+                                "parse_version": "source-parse-v1",
+                            },
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        report = await process_telegram_results(path, db)
+
+        assert report.messages_forced_replay == 1
+        async with db.raw_conn() as conn:
+            remaining = await (
+                await conn.execute(
+                    "SELECT message_id FROM telegram_source_force_message WHERE source_id=?",
+                    (source_id,),
+                )
+            ).fetchall()
+        assert remaining == []
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_complete_typed_no_event_advances_telegram_cursor(tmp_path) -> None:
     db = Database(str(tmp_path / "telegram-no-event.sqlite"))
     await db.init()
