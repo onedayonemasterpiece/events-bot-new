@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **SEV-1 ingestion retry/WAL recurrence:** opened
+  `INC-2026-08-15-ingestion-retry-stall-and-wal-growth` after the operator
+  reported low configured-source event yield, visible Smart Update grounding
+  retries and renewed WAL/static staging concern. Evidence collection and root
+  cause remain provisional; this entry claims no new fix, deploy or recovery.
 - **CherryFlash / Smart Update incident recovery:** recorded
   `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility`;
   terminal source-render Kaggle ledgers now reconcile stale `RENDERING`
@@ -76,7 +81,7 @@
   existing-identity-preserving generator mode. Codex remains exactly seven
   read-only tools; OpenCode local-file media still requires the separately
   authenticated streaming bridge rather than accepting Windows paths.
-- **P0 / SEV-1 LLM-first ingestion recall remediation (Draft PR #494, not deployed):** added raw-first immutable VK revisions before semantic selection, cursor-safe continuation, complete source/OCR manifests, one typed source verdict with mixed lifecycle/events, conditional contradiction verification, durable provider/backpressure receipts, fair automatic retry and exact successful parse replay. Removed production VK pre-LLM semantic filters, cancellation bypass, post-LLM child veto and technical terminal failure. The Google gateway now exposes countTokens-backed calibrated admission plus input/output/thought/reserved/finish metadata without reducing semantic output/evidence. Completed Smart Update with closed reasons, accepted/diagnostic ID isolation, occurrence-scoped bindings, stable source-native/vendor/structured keys, incoherent-merge distinct create and durable technical retry across Telegram, parser, ticket/festival and manual callers. Added A–T all-source census/recovery planning, February–July availability-aware sampling, funnel/static gates and clone-only production-snapshot migration rehearsal. Production audits/rehearsal were read-only; historical/model-derived recovery totals, provider-tier verification, merge, deploy and recovery apply remain explicitly pending.
+- **P0 / SEV-1 LLM-first ingestion recall remediation (merged PR #494; incident open):** added raw-first immutable VK revisions before semantic selection, cursor-safe continuation, complete source/OCR manifests, one typed source verdict with mixed lifecycle/events, conditional contradiction verification, durable provider/backpressure receipts, fair automatic retry and exact successful parse replay. Removed production VK pre-LLM semantic filters, cancellation bypass, post-LLM child veto and technical terminal failure. The Google gateway now exposes countTokens-backed calibrated admission plus input/output/thought/reserved/finish metadata without reducing semantic output/evidence. Completed Smart Update with closed reasons, accepted/diagnostic ID isolation, occurrence-scoped bindings, stable source-native/vendor/structured keys, incoherent-merge distinct create and durable technical retry across Telegram, parser, ticket/festival and manual callers. Added A–T all-source census/recovery planning, February–July availability-aware sampling, funnel/static gates and clone-only production-snapshot migration rehearsal. Pre-merge audits/rehearsal were read-only; PR #494 later merged as `69ec40342` and its production release is recorded by `INC-2026-08-12-data-volume-ingestion`. Historical/model-derived recovery, provider and backlog-terminal acceptance gates remain open.
   Preserved compatibility for legacy/structural Smart Update candidates without
   an optional explicit-occurrence conflict set, so the duplicate probe treats
   it as empty instead of failing before identity resolution.
@@ -93,9 +98,9 @@
 - **Changed — typed prompts/static gate:** source parsing prompts and repository
   static acceptance are bound to the closed typed disposition/retry contract and
   reject reintroduction of deterministic semantic shortcuts.
-- **Release gate — not deploy-ready:** real provider quota/tier proof, an atomic
-  fresh-production-snapshot rehearsal, explicit FK-orphan disposition, and
-  model-derived recovery replay through typed Smart Update remain required.
+- **Open incident gates after deployment:** real provider quota/tier proof, an
+  atomic fresh-production-snapshot rehearsal, explicit FK-orphan disposition,
+  and model-derived recovery replay through typed Smart Update remain required.
 - **Fixed — mutable VK continuation drift:** repeated/full-duplicate/non-deeper
   pages now retain the deepest durable `(date, post_id)` and become typed
   `OFFSET_DRIFT`/`NO_PROGRESS` retry/rebase; only empty, short, horizon, or

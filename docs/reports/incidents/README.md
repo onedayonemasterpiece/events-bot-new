@@ -18,9 +18,41 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-15-ingestion-retry-stall-and-wal-growth.md`
+  - Scope: current Telegram/VK/official-source yield, Smart Update grounding
+    retries and their consumer, SQLite WAL reuse, and the StaticSiteBuilder
+    immutable input handoff.
+  - Must not regress: every event-bearing child must reach a visible accepted
+    create/merge/no-op/no-event or bounded technical-due receipt; current source
+    obligations must not hide behind run-level success; WAL must stay bounded
+    through real ingestion; static build input must remain immutable,
+    coverage-complete and capacity-safe.
 - `INC-2026-08-15-mtproto-proxy-desktop-reconnect.md`
   - Scope: Telegram Desktop saved MTProto profile recovery after a VPS reboot, DD protocol health, DNS-alias profile identity, TCP `1443`, current-day logs and disk capacity.
   - Must not regress: closure requires a full DD handshake to Telegram DCs plus real Desktop recovery confirmation; a healthy listener alone is insufficient, and stale same-endpoint profiles must be bypassed with a distinct hostname without rotating the shared secret.
+- `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility.md`
+  - Scope: closed sev1 regression contract for CherryFlash terminal-ledger
+    reconciliation, Smart Update retry-worker accepted-result reporting and
+    downstream static CDN delivery.
+  - Must not regress: a terminal remote render must release a stale local lock
+    without claiming unverified delivery; durable retry `CREATED`/`MERGED`
+    results emit one bounded report, while report failure cannot alter the
+    accepted result.
+- `INC-2026-08-12-data-volume-ingestion.md`
+  - Scope: open sev1 contract for raw-first VK volume growth, WAL checkpoint
+    starvation, Kaggle launch recovery and StaticSiteBuilder snapshot ownership.
+  - Must not regress: high-volume writes stop before the disk floor, current VK
+    carriers progress under history, WAL remains bounded across real writes,
+    catch-ups are exact-one, and static recovery/publishing uses exact-owner
+    receipts and an exact-main capacity-backed canary.
+- `INC-2026-08-10-smart-update-identity-terminal-loss.md`
+  - Scope: open P0/sev1 configured-source ingestion recall and Smart Update
+    typed identity/terminal-state contract. PR #494 merged as `69ec40342`; the
+    record remains open for replay, backlog and production acceptance gates.
+  - Must not regress: no pre-LLM semantic terminal, deterministic post-LLM veto,
+    incomplete-evidence no-event or generic technical terminal; occurrence
+    identity, accepted-only side effects and raw-boundary replay must remain
+    balanced and auditable.
 - `INC-2026-07-29-mtproto-proxy-desktop-disconnect.md`
   - Scope: host-level `vpn-server` MTProto container, TCP `1443`, Telegram DC connectivity, persistent application-log mount and bounded retention.
   - Must not regress: current-day proxy logs must survive container recreation; old rotations must stay bounded; closure requires a live listener, fresh Telegram DC handshake evidence, downstream connections and disk-usage evidence.
