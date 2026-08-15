@@ -135,6 +135,10 @@ spoken but does not claim an exact word instant inside that interval.
   scope discover the audio tools without re-consent. A connection that was
   intentionally authorized read-only remains read-only and may instead request
   the narrower `audio:transcribe` scope.
+- ChatGPT conversation discovery is order-sensitive for this large shared MCP
+  catalog. The three audio workflow tools are therefore registered first while
+  every existing tool remains present. Regression contract:
+  `INC-2026-08-15-audio-mcp-runtime-catalog-truncation`.
 
 ## Chunking profiles
 

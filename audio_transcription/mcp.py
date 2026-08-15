@@ -349,6 +349,27 @@ def build_audio_transcription_tools(
     )
 
 
+def _merge_audio_tools_for_discovery(
+    existing_tools: tuple[Any, ...],
+    audio_tools: tuple[Any, ...],
+) -> tuple[Any, ...]:
+    """Keep audio entry points ahead of large legacy tool catalogs.
+
+    ChatGPT's app settings can ingest the complete MCP catalog while an
+    individual conversation materializes only a bounded prefix of a large
+    catalog.  Preserve every existing tool, but put this three-step workflow
+    first so a successful app refresh also makes it callable in the runtime.
+    """
+
+    existing_names = {tool.name for tool in existing_tools}
+    conflicts = sorted(existing_names & {tool.name for tool in audio_tools})
+    if conflicts:
+        raise ValueError(
+            "audio transcription tool name conflict: " + ", ".join(conflicts)
+        )
+    return tuple((*audio_tools, *existing_tools))
+
+
 def attach_audio_transcription_mcp(
     app: web.Application,
     server: Any,
@@ -364,11 +385,10 @@ def attach_audio_transcription_mcp(
         return app[AUDIO_TRANSCRIPTION_APP_KEY]
     service = AudioTranscriptionService(config)
     tools = build_audio_transcription_tools(service, signing_key=signing_key)
-    existing = {tool.name for tool in server.protocol.tools}
-    conflicts = sorted(existing & {tool.name for tool in tools})
-    if conflicts:
-        raise ValueError("audio transcription tool name conflict: " + ", ".join(conflicts))
-    server.protocol.tools = tuple((*server.protocol.tools, *tools))
+    server.protocol.tools = _merge_audio_tools_for_discovery(
+        server.protocol.tools,
+        tools,
+    )
     server.protocol.by_name = {tool.name: tool for tool in server.protocol.tools}
     server.protocol.policy_fingerprint += "+audio-transcription-v1"
     server.protocol.instructions += (
