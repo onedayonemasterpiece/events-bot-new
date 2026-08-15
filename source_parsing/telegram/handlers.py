@@ -234,6 +234,31 @@ async def _clear_force_message(db: Database, *, source_id: int, message_id: int)
             await asyncio.sleep(0.15 * attempt)
 
 
+def _carrier_source_message_ids(message: dict[str, Any], anchor_message_id: int) -> list[int]:
+    values = message.get("source_message_ids")
+    raw_values = values if isinstance(values, list) else []
+    result: list[int] = []
+    for raw in [anchor_message_id, *raw_values]:
+        value = _to_int(raw)
+        if value is not None and value > 0 and value not in result:
+            result.append(value)
+    return result
+
+
+async def _clear_force_messages(
+    db: Database,
+    *,
+    source_id: int,
+    message_ids: list[int],
+) -> None:
+    for message_id in message_ids:
+        await _clear_force_message(
+            db,
+            source_id=int(source_id),
+            message_id=int(message_id),
+        )
+
+
 def _event_telegraph_url(event) -> str | None:
     url = getattr(event, "telegraph_url", None)
     if url:
@@ -5809,6 +5834,7 @@ async def process_telegram_results(
         if message_id is None:
             report.errors.append(f"missing message_id for source {username}")
             continue
+        carrier_message_ids = _carrier_source_message_ids(message, int(message_id))
         source_link = message.get("source_link")
         if not source_link and username and message_id:
             source_link = f"https://t.me/{username}/{message_id}"
@@ -5931,7 +5957,16 @@ async def process_telegram_results(
                 logger.warning("tg_monitor: failed to persist channel title", exc_info=True)
         filters = _source_filters(source)
 
-        forced = await _is_force_message(db, source_id=int(source.id), message_id=int(message_id))
+        forced = any(
+            [
+                await _is_force_message(
+                    db,
+                    source_id=int(source.id),
+                    message_id=int(carrier_message_id),
+                )
+                for carrier_message_id in carrier_message_ids
+            ]
+        )
         existing = await _is_message_scanned(db, int(source.id), int(message_id))
         reprocess_incomplete = False
         if existing and not forced:
@@ -6059,8 +6094,10 @@ async def process_telegram_results(
                 )
                 await _update_source_scan_meta(db, int(source.id), int(message_id))
                 if forced:
-                    await _clear_force_message(
-                        db, source_id=int(source.id), message_id=int(message_id)
+                    await _clear_force_messages(
+                        db,
+                        source_id=int(source.id),
+                        message_ids=carrier_message_ids,
                     )
                 continue
 
@@ -6106,8 +6143,10 @@ async def process_telegram_results(
             report.messages_terminal_errors += 1
             await _update_source_scan_meta(db, int(source.id), int(message_id))
             if forced:
-                await _clear_force_message(
-                    db, source_id=int(source.id), message_id=int(message_id)
+                await _clear_force_messages(
+                    db,
+                    source_id=int(source.id),
+                    message_ids=carrier_message_ids,
                 )
             await _notify_done(
                 status="terminal_error",
@@ -6457,7 +6496,11 @@ async def process_telegram_results(
                 skip_breakdown_payload={"source_disabled": 1},
             )
             if forced:
-                await _clear_force_message(db, source_id=int(source.id), message_id=int(message_id))
+                await _clear_force_messages(
+                    db,
+                    source_id=int(source.id),
+                    message_ids=carrier_message_ids,
+                )
             continue
 
         # Metrics: persist only for posts that represent real event content (events/forced/existing).
@@ -7174,7 +7217,11 @@ async def process_telegram_results(
         )
         if forced:
             try:
-                await _clear_force_message(db, source_id=int(source.id), message_id=int(message_id))
+                await _clear_force_messages(
+                    db,
+                    source_id=int(source.id),
+                    message_ids=carrier_message_ids,
+                )
             except Exception:
                 logger.warning(
                     "tg_monitor.force_message cleanup failed source=%s message_id=%s",

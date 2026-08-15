@@ -84,6 +84,15 @@ reader is not exposed.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
   `VACUUM schedule disabled`, health is HTTP 200 / Fly 1 of 1, DB quick-check is
   `ok`, WAL is 24,752 bytes and `/data` has 1,119,805,440 bytes available.
+- 2026-08-15 11:42–12:59 UTC — controlled Telegram catch-up ops run 5941 scans
+  57 sources / 141 messages but closes as partial: 104 forced replays and 36
+  metrics-only rows dominate the denominator; only one raw-new message arrives.
+  The importer reports 101 visible terminal errors, zero creates and one merge.
+- 2026-08-15 13:00 UTC — exact Kaggle log/output review attributes the failed
+  linear run to 123 primary parse, 33 OCR and six verification calls rejected
+  by the shared `tpm` limiter before provider send (log lines are duplicated in
+  Kaggle output). Blank successful OCR and orphaned media-group force members
+  are confirmed as two additional repeat amplifiers.
 
 ## Root Cause
 
@@ -108,6 +117,12 @@ reader is not exposed.
    an immutable snapshot and runner dataset, copied it into Kaggle output, then
    downloaded it to Fly again. Yandex capacity was never the blocker; the Fly
    handoff could exceed 2 GiB although exporter-visible tables are much smaller.
+7. The first linear Telegram remediation converted every producer technical
+   result into a visible terminal result but did not wait for the shared
+   limiter's pre-send minute `retry_after`. A normal high-volume catch-up thus
+   terminalized carriers which had never reached OCR/LLM. Separately, blank
+   successful OCR was counted as missing because only non-empty text blocks
+   were retained, and a merged album cleared only its anchor force id.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -239,6 +254,11 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   with a bounded immutable static-only projection and ephemeral Fly staging;
 - [ ] merge/deploy the remaining exact-main prevention and complete bounded
   Telegram, VK, parser, Smart legacy-drain and static canary recovery.
+- [x] identify the post-deploy Telegram false-skip boundary from exact run 5941
+  logs/output and implement pre-send inline quota wait, blank-OCR evidence
+  cardinality and all-member album force settlement with focused tests;
+- [ ] deploy that Telegram correction and repeat a bounded S22 catch-up with a
+  carrier outcome balance and no unexplained source-evidence terminal wave.
 
 ## Follow-up Actions
 
