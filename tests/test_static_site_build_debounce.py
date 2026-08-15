@@ -87,8 +87,197 @@ def test_static_site_image_source_identity_is_bound_to_repo_sha(
         main._resolve_static_site_image_source_identity("f" * 40)
 
 
+def test_terminal_snapshot_cleanup_rejects_path_outside_snapshot_root(
+    tmp_path, monkeypatch
+):
+    snapshot_root = tmp_path / "snapshots"
+    snapshot_root.mkdir()
+    monkeypatch.setenv("STATIC_SITE_SNAPSHOT_DIR", str(snapshot_root))
+    fingerprint = "a" * 64
+    handoff = {
+        "snapshot_path": str(tmp_path / "db.sqlite"),
+        "manifest_path": str(tmp_path / "db.manifest.json"),
+    }
+    payload = {
+        "snapshot": {
+            "snapshot_id": "snapshot-escape",
+            "sqlite_path": handoff["snapshot_path"],
+            "manifest_path": handoff["manifest_path"],
+            "sha256": "b" * 64,
+            "size_bytes": 1,
+        },
+        "fingerprint_evidence": {"input_fingerprint": fingerprint},
+    }
+    claim = type("Claim", (), {"input_fingerprint": fingerprint})()
+
+    with pytest.raises(main.StaticSitePermanentError, match="path_escape"):
+        main._validated_static_site_terminal_snapshot_cleanup(
+            database_path=str(tmp_path / "live" / "db.sqlite"),
+            request_payload=payload,
+            handoff=handoff,
+            claim=claim,
+        )
+
+
 @pytest.mark.asyncio
-async def test_remote_recovery_rejects_cross_deploy_repo_sha_before_subprocess(
+async def test_strict_terminal_output_cleanup_propagates_failure(monkeypatch):
+    def fail_delete(*_args, **_kwargs):
+        raise OSError("cleanup failed")
+
+    monkeypatch.setattr(main, "delete_static_site_output", fail_delete)
+
+    with pytest.raises(OSError, match="cleanup failed"):
+        await main._delete_terminal_static_site_output_with_policy(
+            "production-old-run", strict=True
+        )
+
+
+@pytest.mark.asyncio
+async def test_terminal_recovery_rejects_cross_owner_output_identity(monkeypatch):
+    fingerprint = "a" * 64
+    monkeypatch.setattr(
+        main,
+        "recoverable_static_site_build",
+        lambda *_args, **_kwargs: type(
+            "Claim",
+            (),
+            {
+                "claim_token": "exact-claim",
+                "run_id": "static-site:production-other-run:legacy",
+                "input_fingerprint": fingerprint,
+                "effective_date": "2026-08-09",
+                "dataset_ref": "owner/exact-input",
+            },
+        )(),
+    )
+    handoff = {
+        "build_id": "production-old-run",
+        "run_id": "static-site:production-other-run:legacy",
+        "repo_sha": "b" * 40,
+        "candidate_token": "c" * 43,
+        "snapshot_path": "/data/static_site_snapshots/snapshot-old.sqlite",
+        "manifest_path": "/data/static_site_snapshots/snapshot-old.manifest.json",
+        "input_fingerprint": fingerprint,
+        "current_datetime": "2026-08-09T12:00:00+02:00",
+    }
+
+    with pytest.raises(
+        main.StaticSitePermanentError, match="handoff_identity_mismatch"
+    ):
+        await main._recover_previous_static_site_attempt(
+            db=type("Database", (), {"path": "/data/db.sqlite"})(),
+            job_id=17,
+            request_payload={"remote_handoff": handoff},
+            limit=5000,
+            current_repo_sha="d" * 40,
+            current_source_identity=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_terminal_remote_recovery_rejects_cross_deploy_then_allows_replacement(
+    monkeypatch,
+):
+    fingerprint = "a" * 64
+    calls = []
+    monkeypatch.setattr(
+        main,
+        "recoverable_static_site_build",
+        lambda *_args, **_kwargs: type(
+            "Claim",
+            (),
+            {
+                "claim_token": "exact-claim",
+                "run_id": "static-site:production-old-run:legacy",
+                "input_fingerprint": fingerprint,
+                "effective_date": "2026-08-09",
+                "dataset_ref": "owner/exact-input",
+                "remote_status": "done",
+                "remote_terminal_at": "2026-08-09T12:30:00Z",
+            },
+        )(),
+    )
+
+    async def forbidden_subprocess(*_args, **_kwargs):
+        raise AssertionError("cross-deploy recovery crossed the subprocess boundary")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", forbidden_subprocess)
+
+    async def reconcile(_db, *, run_id, message):
+        calls.append(("reconcile", run_id, message))
+        return {"status": "already_terminal", "released_resource_count": 1}
+
+    async def patch(_db, job_id, payload):
+        calls.append(("patch", job_id, payload))
+
+    async def delete_output(build_id, *, strict):
+        assert strict is True
+        calls.append(("delete_output", build_id))
+        return 456
+
+    def validate_cleanup(**kwargs):
+        calls.append(("validate_cleanup", kwargs))
+        return kwargs["handoff"]["snapshot_path"], kwargs["handoff"]["manifest_path"]
+
+    def finish(_path, **kwargs):
+        calls.append(("finish", kwargs))
+
+    def delete_snapshot(snapshot_path, manifest_path):
+        calls.append(("delete_snapshot", snapshot_path, manifest_path))
+        return 123
+
+    import kaggle_status
+
+    monkeypatch.setattr(kaggle_status, "reconcile_kaggle_run_failure_from_host", reconcile)
+    monkeypatch.setattr(main, "_patch_static_site_request_payload", patch)
+    monkeypatch.setattr(main, "_delete_terminal_static_site_output_with_policy", delete_output)
+    monkeypatch.setattr(main, "_validated_static_site_terminal_snapshot_cleanup", validate_cleanup)
+    monkeypatch.setattr(main, "finish_static_site_build_claim", finish)
+    monkeypatch.setattr(main, "delete_immutable_snapshot", delete_snapshot)
+    handoff = {
+        "build_id": "production-old-run",
+        "run_id": "static-site:production-old-run:legacy",
+        "repo_sha": "b" * 40,
+        "candidate_token": "c" * 43,
+        "snapshot_path": "/data/old.sqlite",
+        "manifest_path": "/data/old.manifest.json",
+        "input_fingerprint": fingerprint,
+        "current_datetime": "2026-08-09T12:00:00+02:00",
+    }
+
+    result = await main._recover_previous_static_site_attempt(
+        db=type("Database", (), {"path": "/data/db.sqlite"})(),
+        job_id=17,
+        request_payload={
+            "remote_handoff": handoff,
+            "snapshot": {"snapshot_id": "snapshot-old"},
+            "fingerprint_evidence": {"input_fingerprint": fingerprint},
+        },
+        limit=5000,
+        current_repo_sha="d" * 40,
+        current_source_identity=None,
+    )
+
+    assert result == (False, None)
+    assert [call[0] for call in calls] == [
+        "reconcile",
+        "validate_cleanup",
+        "delete_snapshot",
+        "delete_output",
+        "patch",
+        "finish",
+        "patch",
+    ]
+    assert calls[5][1]["claim_token"] == "exact-claim"
+    assert calls[5][1]["success"] is False
+    assert calls[6][2]["remote_handoff"] is None
+    assert calls[6][2]["remote_recovery"]["reason"] == (
+        "static_site_recovery_cross_deploy_repo_sha_mismatch"
+    )
+
+
+@pytest.mark.asyncio
+async def test_live_remote_recovery_cross_deploy_stays_single_flight(
     monkeypatch,
 ):
     fingerprint = "a" * 64
@@ -99,20 +288,20 @@ async def test_remote_recovery_rejects_cross_deploy_repo_sha_before_subprocess(
             "Claim",
             (),
             {
-                "run_id": "static-site:old-run",
+                "claim_token": "exact-claim",
+                "run_id": "static-site:production-old-run:legacy",
                 "input_fingerprint": fingerprint,
+                "effective_date": "2026-08-09",
                 "dataset_ref": "owner/exact-input",
+                "remote_status": "running",
+                "remote_terminal_at": None,
             },
         )(),
     )
 
-    async def forbidden_subprocess(*_args, **_kwargs):
-        raise AssertionError("cross-deploy recovery crossed the subprocess boundary")
-
-    monkeypatch.setattr(asyncio, "create_subprocess_exec", forbidden_subprocess)
     handoff = {
         "build_id": "production-old-run",
-        "run_id": "static-site:old-run",
+        "run_id": "static-site:production-old-run:legacy",
         "repo_sha": "b" * 40,
         "candidate_token": "c" * 43,
         "snapshot_path": "/data/old.sqlite",
@@ -122,8 +311,8 @@ async def test_remote_recovery_rejects_cross_deploy_repo_sha_before_subprocess(
     }
 
     with pytest.raises(
-        main.StaticSitePermanentError,
-        match="cross_deploy_repo_sha_mismatch",
+        StaticSiteSingleFlightDeferred,
+        match="terminal_evidence_pending",
     ):
         await main._recover_previous_static_site_attempt(
             db=type("Database", (), {"path": "/data/db.sqlite"})(),

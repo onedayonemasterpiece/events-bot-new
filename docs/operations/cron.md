@@ -108,12 +108,46 @@ Defaults were adjusted to reduce overlaps between the most common heavy jobs:
 If you see skip notifications in admin chat often, spread the schedules further instead of switching to “wait”: skipping is a safety net, not a planning tool.
 
 Skipped heavy-job attempts are now also written to `ops_run.status='skipped'` (with a reason), so `/general_stats` can show that the scheduler tried to start a job but skipped it before the job body ran.
+
+Full SQLite `VACUUM` is **not scheduled by default**. It rewrites the complete
+database and can temporarily require roughly another database-sized WAL plus
+copy space, so it must not share a slot with snapshot/vector work. The legacy
+12-hour interval is registered only with the explicit
+`ENABLE_DB_FULL_VACUUM=1` opt-in; leave it off until the capacity and
+serialization gates documented for the current deployment have been checked.
+Hourly `PRAGMA optimize` and `PRAGMA wal_checkpoint(TRUNCATE)` remain enabled.
 Scheduled `vk_auto_import` and `tg_monitoring` entrypoints also create a bootstrap `ops_run` before resolving superadmin / entering the inner runner, so a 1ms APScheduler fire can no longer disappear without either a real run row or an explicit `skipped/error` record.
 Scheduled guide slots now also participate in the shared heavy-job guard at the scheduler layer: if another heavy job (for example a stuck `vk_auto_import`) already owns the gate, the guide slot records `ops_run(kind='guide_monitoring', status='skipped', skip_reason='heavy_busy')` instead of waiting invisibly before `run_guide_monitor()` can materialize its own run.
 `tg_monitoring`, scheduled `guide_excursions_full`, and `vk_auto_import` are additionally protected by a critical-run catch-up path: their APScheduler misfire grace is longer than the generic 30s default, and a live `critical_scheduler_watchdog` interval job re-checks `ops_run` after the last local slot inside the configured lookback window. If APScheduler emits `JOB_SUBMITTED`/`JOB_MISSED` but the entrypoint never writes a materialized successful run, or the process is killed and startup cleanup marks the materialized run `crashed`, the watchdog dispatches the same scheduled entrypoint with a catch-up `run_id` instead of waiting for the next day/slot. The watchdog resolves the last local slot, not just "today", so a 23:40 slot remains recoverable after local midnight.
 For `guide_excursions_full`, the watchdog only treats a materialized `ops_run(kind='guide_monitoring', details.mode='full')` as delivery; a same-day `light` scan must not suppress recovery of the missed `full` auto-publish slot.
 If a catch-up dispatch only materializes another resource-busy `guide_monitoring` skip (for example `remote_telegram_session_busy` while another Kaggle run still owns the shared Telegram session or Kaggle status lookup is temporarily `UNKNOWN`), the slot stays pending in the watchdog memory and is deferred by `GUIDE_MONITORING_REMOTE_BUSY_RETRY_SECONDS` instead of being marked "completed" for the day or retried every watchdog tick.
-For `tg_monitoring`, the watchdog also checks the persistent Kaggle recovery registry before dispatching a catch-up. If a `tg_monitoring` kernel is already registered, the watchdog defers for `TG_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `300`) and lets `kaggle_recovery` poll/import that kernel, avoiding a second `TELEGRAM_AUTH_BUNDLE_S22` push while the remote Telethon session may still be active. A materialized `remote_telegram_session_busy` skip gets the same short retry hold.
+For `tg_monitoring`, the watchdog checks both the persistent Kaggle recovery
+registry and the fsync/read-back pre-push launch intent before dispatching a
+catch-up. If either exists, it defers for
+`TG_MONITORING_REMOTE_BUSY_RETRY_SECONDS` (default `300`) and lets the exact
+handoff be reconciled, avoiding a second `TELEGRAM_AUTH_BUNDLE_S22` push. A
+materialized `remote_telegram_session_busy` skip gets the same short hold. A
+terminal `error`/`crashed` attempt gets a separate persisted
+`TG_MONITORING_TERMINAL_RETRY_SECONDS` hold (default `3600`), so removal of a
+terminal registry row cannot turn the 60-second watchdog into a relaunch loop.
+A successful/partial/empty manual full Telegram run inside the missed-slot
+window also satisfies delivery while it is running and after completion. This
+allows exactly one controlled `/tg` catch-up without the watchdog launching a
+second S22 run after the successful import clears its registry row. Manual
+`error` and `skipped` attempts do not satisfy delivery.
+
+Guide and Telegram launchers persist and read back a unique launch intent
+*before* the remote push. A successful response atomically promotes that intent
+to the recovery job. A timeout/transport exception is indeterminate and keeps
+both the barrier and its unique config datasets. The watchdog reconciles it by
+exact remote `dataset_sources`: an exact match promotes the intent, while only
+a positive exact remote revision equal to the durable pre-push revision after
+the grace window may clear it. A missing/invisible ref remains indeterminate;
+bounded list/search absence is never treated as proof. Registry
+parse, per-record schema and I/O errors fail closed rather than appearing as an
+empty registry. Thus `push accepted -> response/registry write failed` is a
+recoverable exact handoff, never permission to push again and never an
+unbounded permanent boolean lock.
 `tg_monitoring` and `vk_auto_import` use `wait` as their default heavy-job guard mode so a nearby critical run queues behind an existing heavy operation instead of silently skipping, unless `SCHED_HEAVY_GUARD_MODE` explicitly overrides it. `guide_excursions_full` still records the initial `heavy_busy` skip, but its catch-up dispatch uses the same `wait` semantics so the missed daily digest runs as soon as the blocking heavy job releases the gate.
 
 For admin-facing scheduled reports, the bot now resolves the target chat from the superadmin row in SQLite first; `ADMIN_CHAT_ID` is only a bootstrap/legacy fallback.
@@ -377,6 +411,9 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `ENABLE_KAGGLE_RECOVERY` – enable background Kaggle recovery loop.
 - `KAGGLE_RECOVERY_INTERVAL_MINUTES` – recovery interval in minutes (default: 5).
 - `KAGGLE_JOBS_PATH` – path to Kaggle recovery registry JSON (default: `/data/kaggle_jobs.json`).
+- `KAGGLE_LAUNCH_INTENT_RECONCILE_GRACE_SECONDS` – propagation grace before an
+  old pre-push intent may be cleared on positive remote no-advance evidence
+  (default `900`; ambiguous transport/later remote advance remains blocked).
 - `TG_MONITORING_RECOVERY_TERMINAL_GRACE_MINUTES` – how long `tg_monitoring` recovery should keep rechecking Kaggle jobs that temporarily report `failed/error/cancelled` before dropping them as irrecoverable (default: `360`).
 - `RUNTIME_HEALTH_HEARTBEAT_SEC` – how often the in-process runtime heartbeat updates (default: `15` seconds).
 - `RUNTIME_HEALTH_STALE_SEC` – max allowed heartbeat age before `/healthz` turns unhealthy (default: `45` seconds, minimum `2x` heartbeat interval).

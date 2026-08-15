@@ -106,10 +106,12 @@ async def run_kaggle_kernel(
         await _notify("metadata_error")
         return "error", [], time.time() - start_time
 
+    run_token = str(
+        (run_config or {}).get("run_id") or f"{kernel_folder}-{int(start_time)}"
+    )
+    ledger_prefix = "parser" if ledger_kind == "parser_kernel" else ledger_kind
+    ledger_run_id = f"{ledger_prefix}:{kernel_folder}:{run_token}"
     if db is not None:
-        run_token = str((run_config or {}).get("run_id") or f"{kernel_folder}-{int(start_time)}")
-        ledger_prefix = "parser" if ledger_kind == "parser_kernel" else ledger_kind
-        ledger_run_id = f"{ledger_prefix}:{kernel_folder}:{run_token}"
         kaggle_run_config = await create_kaggle_run_config(
             db,
             run_id=ledger_run_id,
@@ -200,6 +202,7 @@ async def run_kaggle_kernel(
             registry_job_type,
             kernel_ref,
             meta={
+                "run_id": ledger_run_id,
                 "kernel_folder": kernel_folder,
                 "pid": os.getpid(),
                 **dict(registry_meta or {}),

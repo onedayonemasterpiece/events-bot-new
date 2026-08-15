@@ -8,6 +8,7 @@ import time as _time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
+from html import escape
 from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Set
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -22,10 +23,88 @@ from apscheduler.executors.asyncio import AsyncIOExecutor
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from admin_chat import resolve_superadmin_chat_id
-from db import optimize, wal_checkpoint_truncate, vacuum
+from db import optimize, vacuum, wal_checkpoint_truncate
 from heavy_ops import current_heavy_meta, describe_heavy_meta, heavy_operation
 from ops_run import finish_ops_run, start_ops_run
 from runtime import get_running_main
+
+
+async def _notify_smart_update_retry_accepts(
+    db,
+    bot,
+    accepted: list[tuple[str, int]],
+) -> bool:
+    """Report durable retry outcomes that otherwise have no interactive caller.
+
+    Smart Update persists the result before this helper is called.  Notification
+    failure therefore stays an observability failure and must not make the
+    accepted candidate retry (or create a duplicate event).
+    """
+
+    if bot is None or not accepted:
+        return False
+    target_chat_id = await resolve_superadmin_chat_id(db)
+    if not target_chat_id:
+        logging.warning(
+            "smart_update_retry_worker accepted_report_skipped reason=no_superadmin count=%s",
+            len(accepted),
+        )
+        return False
+
+    # A batch can contain several source candidates merged into the same event.
+    # Keep one line per durable event/outcome while retaining truthful counters.
+    unique = list(dict.fromkeys((str(outcome), int(event_id)) for outcome, event_id in accepted))
+    event_ids = sorted({event_id for _, event_id in unique})
+    placeholders = ",".join("?" for _ in event_ids)
+    rows: dict[int, tuple[str, str | None]] = {}
+    try:
+        async with db.raw_conn() as conn:
+            cursor = await conn.execute(
+                f'SELECT id, title, telegraph_url FROM "event" WHERE id IN ({placeholders})',
+                tuple(event_ids),
+            )
+            for row in await cursor.fetchall():
+                rows[int(row[0])] = (str(row[1] or "Событие"), row[2])
+            await cursor.close()
+
+        created = sum(1 for outcome, _ in unique if outcome == "CREATED")
+        merged = sum(1 for outcome, _ in unique if outcome == "MERGED")
+        lines = ["✅ <b>Smart Update: фоновый повтор завершён</b>"]
+        if created:
+            lines.append(f"Создано событий: <b>{created}</b>")
+        if merged:
+            lines.append(f"Обновлено событий: <b>{merged}</b>")
+        for outcome, event_id in unique[:12]:
+            title, telegraph_url = rows.get(event_id, ("Событие", None))
+            label = "создано" if outcome == "CREATED" else "обновлено"
+            safe_title = escape(title[:180])
+            if isinstance(telegraph_url, str) and telegraph_url.startswith("https://telegra.ph/"):
+                rendered_title = f'<a href="{escape(telegraph_url, quote=True)}">{safe_title}</a>'
+            else:
+                rendered_title = safe_title
+            lines.append(f"• #{event_id} — {rendered_title} ({label})")
+        if len(unique) > 12:
+            lines.append(f"…и ещё {len(unique) - 12}")
+        await bot.send_message(
+            int(target_chat_id),
+            "\n".join(lines),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        logging.exception(
+            "smart_update_retry_worker accepted_report_failed count=%s",
+            len(unique),
+        )
+        return False
+
+    logging.info(
+        "smart_update_retry_worker accepted_report_sent created=%s merged=%s events=%s",
+        created,
+        merged,
+        len(unique),
+    )
+    return True
 
 
 @dataclass
@@ -793,6 +872,12 @@ def _env_enabled(key: str, *, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _db_full_vacuum_enabled() -> bool:
+    """Keep the DB-rewriting maintenance operation an explicit opt-in."""
+
+    return _env_enabled("ENABLE_DB_FULL_VACUUM", default=False)
+
+
 def _env_int(key: str, default: int) -> int:
     try:
         return int((os.getenv(key) or str(default)).strip())
@@ -976,6 +1061,15 @@ def _tg_monitoring_remote_busy_retry_seconds() -> int:
     return max(300, value)
 
 
+def _tg_monitoring_terminal_retry_seconds() -> int:
+    raw = (os.getenv("TG_MONITORING_TERMINAL_RETRY_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 3600
+    except ValueError:
+        value = 3600
+    return max(300, value)
+
+
 _critical_catchup_inflight: set[str] = set()
 _critical_catchup_completed: set[str] = set()
 _critical_catchup_deferred_until: dict[str, datetime] = {}
@@ -1142,6 +1236,12 @@ async def _ops_run_delivery_exists(
         if str(status or "").strip() in ok_statuses:
             return True
     return False
+
+
+# A successful operator-triggered full Telegram run after the missed slot is a
+# real compensating delivery. Count it so the watchdog cannot launch a second
+# S22 Kaggle run as soon as the manual run clears its recovery registry row.
+_TG_MONITORING_DELIVERY_TRIGGERS = {"scheduled", "recovery_import", "manual"}
 
 
 def _last_local_slot(
@@ -1346,15 +1446,111 @@ async def _latest_tg_monitoring_remote_busy_skip_started_at(
     return _parse_ops_run_datetime(started_at_raw)
 
 
-async def _tg_monitoring_recovery_job_exists() -> bool:
-    try:
-        from kaggle_registry import list_jobs
+async def _latest_tg_monitoring_retry_hold_started_at(
+    db: Any,
+    *,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+) -> datetime | None:
+    if db is None or not hasattr(db, "raw_conn"):
+        return None
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT status, details_json, started_at, finished_at
+            FROM ops_run
+            WHERE kind = 'tg_monitoring'
+              AND trigger = 'scheduled'
+              AND started_at >= ?
+              AND started_at < ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (_utc_sql_text(day_start_utc), _utc_sql_text(day_end_utc)),
+        )
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    status, details_raw, started_at_raw, finished_at_raw = row
+    normalized_status = str(status or "").strip()
+    if normalized_status in {"running", "success", "partial", "empty"}:
+        return None
+    details: dict[str, Any] = {}
+    if isinstance(details_raw, str) and details_raw.strip():
+        try:
+            parsed = json.loads(details_raw)
+        except Exception:
+            parsed = {}
+        if isinstance(parsed, dict):
+            details = parsed
+    elif isinstance(details_raw, dict):
+        details = details_raw
+    if normalized_status == "skipped" and not _details_have_remote_telegram_busy(details):
+        return None
+    if normalized_status in {"error", "crashed", "skipped"}:
+        return _parse_ops_run_datetime(finished_at_raw or started_at_raw)
+    return None
 
+
+async def _kaggle_launch_intent_exists(
+    job_type: str,
+    *,
+    db: Any | None = None,
+    bot: Any | None = None,
+) -> bool:
+    try:
+        from kaggle_registry import list_jobs, list_launch_intents, reconcile_launch_intents
+
+        await reconcile_launch_intents(job_type)
+        jobs = await list_jobs(job_type)
+        intents = await list_launch_intents(job_type)
+        reconciled_jobs = [
+            job
+            for job in jobs
+            if isinstance(job.get("meta"), dict)
+            and job["meta"].get("intent_reconciliation")
+        ]
+        if reconciled_jobs and db is not None and job_type == "guide_monitoring":
+            from guide_excursions.service import resume_guide_monitor_jobs
+
+            await resume_guide_monitor_jobs(db, bot)
+            jobs = await list_jobs(job_type)
+            reconciled_jobs = [
+                job
+                for job in jobs
+                if isinstance(job.get("meta"), dict)
+                and job["meta"].get("intent_reconciliation")
+            ]
+    except Exception:
+        logging.warning(
+            "SCHED critical watchdog could not inspect %s launch intents",
+            job_type,
+            exc_info=True,
+        )
+        return True
+    return bool(intents or reconciled_jobs)
+
+
+async def _tg_monitoring_recovery_job_exists(
+    *,
+    db: Any | None = None,
+    bot: Any | None = None,
+) -> bool:
+    try:
+        from kaggle_registry import list_jobs, list_launch_intents, reconcile_launch_intents
+
+        await reconcile_launch_intents("tg_monitoring")
         jobs = await list_jobs("tg_monitoring")
+        intents = await list_launch_intents("tg_monitoring")
+        if jobs and db is not None:
+            from source_parsing.telegram.service import resume_telegram_monitor_jobs
+
+            await resume_telegram_monitor_jobs(db, bot)
+            jobs = await list_jobs("tg_monitoring")
     except Exception:
         logging.warning("SCHED critical watchdog could not inspect tg_monitoring registry", exc_info=True)
         return True
-    return bool(jobs)
+    return bool(jobs or intents)
 
 
 
@@ -2242,6 +2438,17 @@ async def _maybe_dispatch_guide_critical_watchdog(db: Any, bot: Any) -> int:
                 retry_seconds,
             )
             return 0
+    if await _kaggle_launch_intent_exists(
+        "guide_monitoring", db=db, bot=bot
+    ):
+        _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(
+            seconds=retry_seconds
+        )
+        logging.warning(
+            "SCHED critical watchdog deferring guide_excursions_full while a "
+            "durable pre-push launch intent exists"
+        )
+        return 0
 
     _critical_catchup_inflight.add(catchup_key)
     try:
@@ -2334,7 +2541,7 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
         kind="tg_monitoring",
         day_start_utc=window_start,
         day_end_utc=now_utc + timedelta(seconds=1),
-        triggers={"scheduled", "recovery_import"},
+        triggers=_TG_MONITORING_DELIVERY_TRIGGERS,
     ):
         return 0
 
@@ -2359,7 +2566,27 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
         if now_utc < db_deferred_until:
             _critical_catchup_deferred_until[catchup_key] = db_deferred_until
             return 0
-    if await _tg_monitoring_recovery_job_exists():
+    latest_retry_hold_started = await _latest_tg_monitoring_retry_hold_started_at(
+        db,
+        day_start_utc=window_start,
+        day_end_utc=now_utc + timedelta(seconds=1),
+    )
+    terminal_retry_seconds = _tg_monitoring_terminal_retry_seconds()
+    if latest_retry_hold_started is not None:
+        db_deferred_until = latest_retry_hold_started + timedelta(
+            seconds=terminal_retry_seconds
+        )
+        if now_utc < db_deferred_until:
+            _critical_catchup_deferred_until[catchup_key] = db_deferred_until
+            logging.warning(
+                "SCHED critical watchdog deferring tg_monitoring catch-up after "
+                "recent terminal run scheduled_local=%s now_local=%s retry_seconds=%s",
+                scheduled_local.isoformat(),
+                now_local.isoformat(),
+                terminal_retry_seconds,
+            )
+            return 0
+    if await _tg_monitoring_recovery_job_exists(db=db, bot=bot):
         _critical_catchup_deferred_until[catchup_key] = now_utc + timedelta(seconds=retry_seconds)
         logging.warning(
             "SCHED critical watchdog deferring tg_monitoring catch-up while recovery registry exists "
@@ -2395,7 +2622,7 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
             kind="tg_monitoring",
             day_start_utc=window_start,
             day_end_utc=datetime.now(timezone.utc) + timedelta(seconds=1),
-            triggers={"scheduled", "recovery_import"},
+            triggers=_TG_MONITORING_DELIVERY_TRIGGERS,
         ):
             _critical_catchup_completed.add(catchup_key)
             _critical_catchup_deferred_until.pop(catchup_key, None)
@@ -2416,6 +2643,28 @@ async def _maybe_dispatch_tg_monitoring_watchdog(db: Any, bot: Any) -> int:
                     now_local.isoformat(),
                     retry_seconds,
                 )
+            else:
+                latest_retry_hold_started = (
+                    await _latest_tg_monitoring_retry_hold_started_at(
+                        db,
+                        day_start_utc=window_start,
+                        day_end_utc=datetime.now(timezone.utc)
+                        + timedelta(seconds=1),
+                    )
+                )
+                if latest_retry_hold_started is not None:
+                    _critical_catchup_deferred_until[catchup_key] = (
+                        latest_retry_hold_started
+                        + timedelta(seconds=terminal_retry_seconds)
+                    )
+                    logging.warning(
+                        "SCHED critical watchdog deferring tg_monitoring catch-up "
+                        "after terminal run scheduled_local=%s now_local=%s "
+                        "retry_seconds=%s",
+                        scheduled_local.isoformat(),
+                        now_local.isoformat(),
+                        terminal_retry_seconds,
+                    )
         return 1
     finally:
         _critical_catchup_inflight.discard(catchup_key)
@@ -3962,7 +4211,7 @@ def startup(
 
         async def smart_update_retry_scheduler(
             db_obj,
-            _bot_obj,
+            bot_obj,
             *,
             run_id: str | None = None,
         ) -> None:
@@ -3970,10 +4219,20 @@ def startup(
             from smart_event_update import retry_due_smart_update_candidates
             from smart_update_state import smart_update_funnel_counts
 
+            accepted: list[tuple[str, int]] = []
+
+            async def _capture_accepted(_candidate, result) -> None:
+                if not result.is_accepted:
+                    return
+                if result.event_id is not None:
+                    accepted.append((result.outcome.value, int(result.event_id)))
+
             counters = await retry_due_smart_update_candidates(
                 db_obj,
                 limit=smart_update_retry_batch,
+                on_accepted=_capture_accepted,
             )
+            await _notify_smart_update_retry_accepts(db_obj, bot_obj, accepted)
             funnel = await smart_update_funnel_counts(db_obj)
             logging.info(
                 "smart_update_retry_worker counters=%s funnel=%s",
@@ -5518,18 +5777,24 @@ def startup(
             coalesce=True,
             misfire_grace_time=30,
         )
-        _register_job(
-            "db_vacuum",
-            _job_wrapper("db_vacuum", _run_maintenance, notify_skip=_notify_admin_skip),
-            "interval",
-            id="db_vacuum",
-            hours=12,
-            args=[partial(vacuum, db.engine), "VACUUM", 120.0],
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-            misfire_grace_time=30,
-        )
+        if _db_full_vacuum_enabled():
+            _register_job(
+                "db_vacuum",
+                _job_wrapper("db_vacuum", _run_maintenance, notify_skip=_notify_admin_skip),
+                "interval",
+                id="db_vacuum",
+                hours=12,
+                args=[partial(vacuum, db.engine), "VACUUM", 120.0],
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=30,
+            )
+        else:
+            logging.info(
+                "db_maintenance VACUUM schedule disabled; "
+                "set ENABLE_DB_FULL_VACUUM=1 only after capacity review"
+            )
         if cleanup_post_metrics is not None:
             _register_job(
                 "post_metrics_cleanup",

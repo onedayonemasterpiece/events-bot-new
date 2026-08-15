@@ -18,8 +18,130 @@ import vk_intake
 import video_announce.scenario as scenario_module
 from db import Database
 from heavy_ops import HeavyOpMeta
-from models import User
+from models import Event, User
 from ops_run import finish_ops_run, start_ops_run
+
+
+def test_db_full_vacuum_is_explicit_opt_in(monkeypatch):
+    monkeypatch.delenv("ENABLE_DB_FULL_VACUUM", raising=False)
+    assert scheduling._db_full_vacuum_enabled() is False
+
+    monkeypatch.setenv("ENABLE_DB_FULL_VACUUM", "1")
+    assert scheduling._db_full_vacuum_enabled() is True
+
+    monkeypatch.setenv("ENABLE_DB_FULL_VACUUM", "0")
+    assert scheduling._db_full_vacuum_enabled() is False
+
+
+@pytest.mark.asyncio
+async def test_smart_update_retry_accepts_report_reaches_superadmin(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "smart-update-report.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Музыка <вечером>",
+            description="Описание",
+            source_text="Источник",
+            date="2099-08-14",
+            time="19:00",
+            location_name="Зал",
+            city="Калининград",
+            telegraph_url="https://telegra.ph/safe-event-08-14",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    async def superadmin(_db):
+        return 12345
+
+    monkeypatch.setattr(scheduling, "resolve_superadmin_chat_id", superadmin)
+    bot = SimpleNamespace(send_message=AsyncMock())
+
+    sent = await scheduling._notify_smart_update_retry_accepts(
+        db,
+        bot,
+        [("CREATED", event_id), ("CREATED", event_id)],
+    )
+
+    assert sent is True
+    bot.send_message.assert_awaited_once()
+    args, kwargs = bot.send_message.await_args
+    assert args[0] == 12345
+    assert "Создано событий: <b>1</b>" in args[1]
+    assert "Музыка &lt;вечером&gt;" in args[1]
+    assert kwargs["parse_mode"] == "HTML"
+
+
+@pytest.mark.asyncio
+async def test_tg_terminal_retry_hold_anchors_to_finished_at(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    started = datetime(2026, 8, 12, 18, 0, tzinfo=timezone.utc)
+    finished = datetime(2026, 8, 12, 20, 15, tzinfo=timezone.utc)
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=started,
+        details={"run_id": "long-failure"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="error",
+        finished_at=finished,
+        details={"run_id": "long-failure", "fatal_error": "remote failed"},
+    )
+
+    held_from = await scheduling._latest_tg_monitoring_retry_hold_started_at(
+        db,
+        day_start_utc=started.replace(hour=0),
+        day_end_utc=finished.replace(hour=23, minute=59),
+    )
+
+    assert held_from == finished
+
+
+@pytest.mark.asyncio
+async def test_guide_watchdog_consumes_reconciled_intent_job(monkeypatch):
+    import kaggle_registry
+    from guide_excursions import service as guide_service
+
+    jobs = [
+        {
+            "meta": {
+                "run_id": "run-1",
+                "intent_reconciliation": "exact_dataset_sources",
+            }
+        }
+    ]
+
+    async def reconcile(_job_type):
+        return [{"run_id": "run-1", "status": "promoted"}]
+
+    async def list_jobs(_job_type=None):
+        return list(jobs)
+
+    async def list_intents(_job_type=None):
+        return []
+
+    async def resume(_db, _bot):
+        jobs.clear()
+        return 1
+
+    monkeypatch.setattr(kaggle_registry, "reconcile_launch_intents", reconcile)
+    monkeypatch.setattr(kaggle_registry, "list_jobs", list_jobs)
+    monkeypatch.setattr(kaggle_registry, "list_launch_intents", list_intents)
+    monkeypatch.setattr(guide_service, "resume_guide_monitor_jobs", resume)
+
+    blocked = await scheduling._kaggle_launch_intent_exists(
+        "guide_monitoring", db=object(), bot=object()
+    )
+
+    assert blocked is False
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -1631,6 +1753,7 @@ async def test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash(
     monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
     monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
     monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("TG_MONITORING_TERMINAL_RETRY_SECONDS", "300")
     monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
     monkeypatch.setenv("DEV_MODE", "1")
     monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
@@ -1696,6 +1819,86 @@ async def test_critical_scheduler_watchdog_dispatches_tg_monitoring_after_crash(
 
 
 @pytest.mark.asyncio
+async def test_successful_manual_tg_catchup_suppresses_watchdog_duplicate(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_TG_MONITORING", "1")
+    monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
+    monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="manual",
+        operator_id=1,
+        started_at=datetime(2026, 6, 12, 22, 15, tzinfo=timezone.utc),
+        details={"run_id": "controlled-manual-catchup"},
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="success",
+        finished_at=datetime(2026, 6, 12, 22, 30, tzinfo=timezone.utc),
+        details={"run_id": "controlled-manual-catchup"},
+    )
+
+    calls = []
+
+    async def fake_scheduler(*_args, **_kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "source_parsing.telegram.service",
+        SimpleNamespace(telegram_monitor_scheduler=fake_scheduler),
+    )
+
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched == 0
+    assert calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["error", "skipped"])
+async def test_failed_manual_tg_attempt_is_not_delivery(tmp_path, status):
+    db = Database(str(tmp_path / f"db-{status}.sqlite"))
+    await db.init()
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="manual",
+        operator_id=1,
+        started_at=datetime(2026, 6, 12, 22, 15, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status=status,
+        finished_at=datetime(2026, 6, 12, 22, 16, tzinfo=timezone.utc),
+    )
+
+    assert not await scheduling._ops_run_delivery_exists(
+        db,
+        kind="tg_monitoring",
+        day_start_utc=datetime(2026, 6, 12, 21, 35, tzinfo=timezone.utc),
+        day_end_utc=datetime(2026, 6, 13, 1, 0, tzinfo=timezone.utc),
+        triggers=scheduling._TG_MONITORING_DELIVERY_TRIGGERS,
+    )
+
+
+@pytest.mark.asyncio
 async def test_critical_scheduler_watchdog_defers_tg_monitoring_when_recovery_job_exists(
     tmp_path, monkeypatch
 ):
@@ -1748,6 +1951,60 @@ async def test_critical_scheduler_watchdog_defers_tg_monitoring_when_recovery_jo
     assert dispatched == 0
     assert calls == []
     assert scheduling._critical_catchup_deferred_until
+
+
+@pytest.mark.asyncio
+async def test_critical_scheduler_watchdog_defers_tg_after_recent_terminal_error(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ENABLE_TG_MONITORING", "1")
+    monkeypatch.setenv("TG_MONITORING_TZ", "Europe/Kaliningrad")
+    monkeypatch.setenv("TG_MONITORING_TIME_LOCAL", "23:40")
+    monkeypatch.setenv("TG_MONITORING_MISFIRE_GRACE_SECONDS", "60")
+    monkeypatch.setenv("TG_MONITORING_TERMINAL_RETRY_SECONDS", "3600")
+    monkeypatch.setenv("CRITICAL_SCHED_WATCHDOG_GRACE_SECONDS", "60")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setattr(scheduling, "datetime", _FixedCriticalAfterMidnightDatetime)
+    scheduling._critical_catchup_inflight.clear()
+    scheduling._critical_catchup_completed.clear()
+    scheduling._critical_catchup_deferred_until.clear()
+    run_id = await start_ops_run(
+        db,
+        kind="tg_monitoring",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 6, 12, 22, 10, tzinfo=timezone.utc),
+        details={"errors": ["Kaggle kernel failed"]},
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="error",
+        finished_at=datetime(2026, 6, 12, 22, 12, tzinfo=timezone.utc),
+        details={"errors": ["Kaggle kernel failed"]},
+    )
+    calls = []
+
+    async def fake_scheduler(*_args, **_kwargs):
+        calls.append(1)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "source_parsing.telegram.service",
+        SimpleNamespace(telegram_monitor_scheduler=fake_scheduler),
+    )
+    monkeypatch.setattr(
+        scheduling, "_tg_monitoring_recovery_job_exists", AsyncMock(return_value=False)
+    )
+
+    dispatched = await scheduling.maybe_dispatch_critical_scheduler_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched == 0
+    assert calls == []
 
 
 @pytest.mark.asyncio

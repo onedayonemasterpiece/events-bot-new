@@ -757,6 +757,21 @@ bounded, idempotent retry in a later batch (default: 60 seconds, at most three
 attempts). It must not be marked fully imported, and the committed child links
 must not be discarded by rejecting the entire row.
 
+### Durable retry success visibility
+
+The generic `smart_update_retry_worker` has no interactive import caller, so it
+must report its own accepted outcomes. After a replay has durably reached
+`CREATED` or `MERGED`, the worker sends one bounded, HTML-escaped batch report
+to the resolved superadmin chat with event ids, safe titles, and create/update
+counts. `NOOP_EXACT_REPLAY`, product rejection, and another scheduled retry do
+not produce a success report.
+
+The report is observability only: a Telegram notification failure is logged but
+must never roll back, reclassify, or replay the already accepted Smart Update
+result. Interactive Telegram/VK callers keep their existing unified reports;
+only the background durable retry worker uses this callback, avoiding duplicate
+success messages.
+
 ### Vector-first future quality audit contract
 
 The future-event quality audit is separate from identity deduplication:

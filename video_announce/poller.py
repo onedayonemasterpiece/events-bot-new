@@ -282,6 +282,183 @@ async def _live_video_ledger_session_ids(
     return live
 
 
+def _terminal_reconcile_grace_minutes() -> int:
+    """Bound the window in which the original poller may finish post-processing.
+
+    A Kaggle notebook marks its durable ledger terminal before the bot has
+    downloaded and delivered the render output.  A short grace therefore avoids
+    racing a healthy poller.  After the grace, a session that is *still*
+    ``RENDERING`` is a stale projection and must not hold the global/profile
+    render lock forever.
+    """
+
+    raw = (os.getenv("VIDEO_TERMINAL_RECONCILE_GRACE_MINUTES") or "60").strip()
+    try:
+        return max(10, min(24 * 60, int(raw)))
+    except ValueError:
+        return 60
+
+
+async def _terminal_video_ledger_rows(db: Database) -> dict[int, dict[str, object]]:
+    """Return terminal source-render ledgers keyed by session id.
+
+    Publish-only ledgers are deliberately excluded: their terminal state does
+    not authorize changing the source render session.
+    """
+
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT run_id, session_id, kind, notebook, status,
+                       terminal_at, updated_at
+                FROM kaggle_run_ledger
+                WHERE run_id LIKE 'videoannounce:%'
+                  AND session_id IS NOT NULL
+                  AND (
+                    terminal_at IS NOT NULL
+                    OR lower(COALESCE(status, '')) IN (
+                        'done', 'complete', 'failed', 'error', 'cancelled', 'canceled'
+                    )
+                  )
+                ORDER BY updated_at DESC
+                """
+            )
+            rows = await cur.fetchall()
+            await cur.close()
+    except Exception:
+        logger.exception("video_announce: failed to read terminal Kaggle video ledgers")
+        return {}
+
+    terminal: dict[int, dict[str, object]] = {}
+    for run_id_raw, session_id_raw, kind_raw, notebook_raw, status_raw, terminal_raw, updated_raw in rows:
+        run_id = str(run_id_raw or "").strip()
+        kind = str(kind_raw or "").strip().casefold()
+        notebook = str(notebook_raw or "").strip().casefold()
+        if ":publish-only:" in run_id or kind.endswith("publish_only") or "publishonly" in notebook:
+            continue
+        try:
+            session_id = int(session_id_raw)
+        except (TypeError, ValueError):
+            continue
+        terminal.setdefault(
+            session_id,
+            {
+                "status": str(status_raw or "").strip().casefold(),
+                "terminal_at": terminal_raw,
+                "updated_at": updated_raw,
+            },
+        )
+    return terminal
+
+
+async def reconcile_terminal_rendering_sessions(
+    db: Database,
+    bot=None,
+    *,
+    chat_id: int | None = None,
+    now: datetime | None = None,
+    grace_minutes: int | None = None,
+) -> int:
+    """Release stale ``RENDERING`` locks whose Kaggle ledger is terminal.
+
+    The notebook ledger proves that remote execution has stopped, but it does
+    not prove that the bot downloaded and delivered the final video.  Successful
+    remote runs without a durable local delivery receipt are therefore marked
+    ``PUBLISH_BLOCKED`` (not ``DONE``); failed/cancelled remote runs become
+    ``FAILED``.  The transition is idempotent and emits at most one operator
+    notification because only ``RENDERING`` rows are eligible.
+    """
+
+    terminal_rows = await _terminal_video_ledger_rows(db)
+    if not terminal_rows:
+        return 0
+    now_utc = now or datetime.now(timezone.utc)
+    grace = _terminal_reconcile_grace_minutes() if grace_minutes is None else max(0, int(grace_minutes))
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(VideoAnnounceSession).where(
+                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING,
+                VideoAnnounceSession.id.in_(sorted(terminal_rows)),
+            )
+        )
+        candidates = list(result.scalars().all())
+
+    reconciled = 0
+    for sess in candidates:
+        ledger = terminal_rows.get(int(sess.id or 0)) or {}
+        terminal_at = _parse_utc_iso(ledger.get("terminal_at")) or _parse_utc_iso(
+            ledger.get("updated_at")
+        )
+        if terminal_at is None:
+            continue
+        age_seconds = (now_utc - terminal_at).total_seconds()
+        if age_seconds < max(0, grace) * 60:
+            continue
+
+        ledger_status = str(ledger.get("status") or "").casefold()
+        remote_failed = ledger_status in {"failed", "error", "cancelled", "canceled"}
+        target_status = (
+            VideoAnnounceSessionStatus.FAILED
+            if remote_failed
+            else VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+        )
+        safe_error = (
+            "terminal Kaggle run failed; stale rendering lock reconciled"
+            if remote_failed
+            else "terminal Kaggle run was not projected to a verified delivery; publish recovery required"
+        )
+        updated = await _update_status(
+            db,
+            int(sess.id),
+            status=target_status,
+            error=safe_error,
+            expected_status=VideoAnnounceSessionStatus.RENDERING,
+        )
+        if updated is None:
+            continue
+        task = _poller_tasks.get(int(sess.id or 0))
+        if task is not None and not task.done():
+            task.cancel()
+            # Let cancellation reach the first cooperative boundary without
+            # waiting on provider/network cleanup indefinitely.
+            await asyncio.sleep(0)
+        reconciled += 1
+        logger.error(
+            "video_announce: reconciled stale terminal render session=%s ledger_status=%s target_status=%s terminal_age_sec=%.0f",
+            updated.id,
+            ledger_status or "terminal",
+            target_status.value,
+            age_seconds,
+        )
+        if bot is not None:
+            notify_chat_id = await _resolve_recovery_notify_chat_id(
+                db,
+                updated,
+                chat_id=chat_id,
+            )
+            if notify_chat_id:
+                try:
+                    await asyncio.wait_for(
+                        bot.send_message(
+                            notify_chat_id,
+                            (
+                                f"⚠️ Сессия #{updated.id}: Kaggle уже завершился, но итоговая "
+                                "доставка видео не была подтверждена. Зависший render-lock снят; "
+                                "слепой повтор публикации не выполнялся."
+                            ),
+                        ),
+                        timeout=15,
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to notify terminal reconciliation session=%s",
+                        updated.id,
+                        exc_info=True,
+                    )
+    return reconciled
+
+
 def _video_thumbnail_input(video_path: str | Path) -> types.InputFile | None:
     preview_path = Path(video_path).with_name("telegram_preview.jpg")
     if preview_path.exists():
@@ -1318,6 +1495,7 @@ async def _update_status(
     status: VideoAnnounceSessionStatus,
     error: str | None = None,
     video_url: str | None = None,
+    expected_status: VideoAnnounceSessionStatus | None = None,
 ) -> VideoAnnounceSession | None:
     last_exc: Exception | None = None
     for attempt in range(1, 6):
@@ -1325,6 +1503,8 @@ async def _update_status(
             async with db.get_session() as session:
                 obj = await session.get(VideoAnnounceSession, session_id)
                 if not obj:
+                    return None
+                if expected_status is not None and obj.status != expected_status:
                     return None
                 obj.status = status
                 if status in {
@@ -2621,6 +2801,7 @@ async def run_kernel_poller(
 
 
 async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = None) -> int:
+    await reconcile_terminal_rendering_sessions(db, bot, chat_id=chat_id)
     live_ledger_session_ids = await _live_video_ledger_session_ids(db)
     await reconcile_terminal_local_outputs(
         db,

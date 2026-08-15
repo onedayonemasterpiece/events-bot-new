@@ -74,6 +74,77 @@ async def test_pick_next_and_skip(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_scheduled_pick_prefers_fresh_when_historical_backlog_exceeds_budget(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD", "2")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO vk_inbox(
+                group_id,post_id,date,text,has_date,status
+            ) VALUES(1,?,?,?,0,'pending')
+            """,
+            [
+                (1, 1_500_000_000, "historic"),
+                (2, 1_600_000_000, "older"),
+                (3, 1_800_000_000, "fresh"),
+            ],
+        )
+        await conn.commit()
+
+    post = await vk_review.pick_next(
+        db, 10, "scheduled", prefer_oldest=True, resume_locked=False
+    )
+
+    assert post is not None
+    assert post.post_id == 3
+
+
+@pytest.mark.asyncio
+async def test_scheduled_pick_advances_history_under_continuous_fresh_arrivals(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD", "2")
+    monkeypatch.setenv("VK_AUTO_IMPORT_HISTORY_EVERY", "3")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO vk_inbox(group_id,post_id,date,text,has_date,status)
+            VALUES(1,?,?,?,0,'pending')
+            """,
+            [(1, 100, "historic"), (2, 200, "old"), (3, 300, "fresh")],
+        )
+        await conn.commit()
+
+    picked = []
+    for turn in range(3):
+        post = await vk_review.pick_next(
+            db, 10, f"scheduled-{turn}", prefer_oldest=True, resume_locked=False
+        )
+        assert post is not None
+        picked.append(post.post_id)
+        await vk_review.mark_rejected(
+            db, post.id, no_event_reason=SourceNoEventReason.OUT_OF_SCOPE
+        )
+        async with db.raw_conn() as conn:
+            await conn.execute(
+                """
+                INSERT INTO vk_inbox(group_id,post_id,date,text,has_date,status)
+                VALUES(1,?,?,?,0,'pending')
+                """,
+                (10 + turn, 400 + turn, "new arrival"),
+            )
+            await conn.commit()
+
+    assert picked[-1] == 1
+
+
+@pytest.mark.asyncio
 async def test_pick_next_never_rejects_from_timestamp_hints(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

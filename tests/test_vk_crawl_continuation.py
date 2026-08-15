@@ -392,6 +392,108 @@ async def test_fetch_failure_records_typed_capped_retry(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_storage_cutoff_before_packet_keeps_continuation_offset(tmp_path, monkeypatch):
+    db = await _db(tmp_path / "disk-cutoff.sqlite")
+    await _schedule(db, page_size=1, offset=3)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_crawl_cursor(group_id,last_seen_ts,last_post_id,updated_at) "
+            "VALUES(1,123,45,CURRENT_TIMESTAMP)"
+        )
+        await conn.commit()
+
+    async def wall(*_args, **_kwargs):
+        return _posts(1, first_id=77)
+
+    probes = 0
+
+    def guard(_db):
+        nonlocal probes
+        probes += 1
+        # invocation, claim and fetch admission pass; packet transaction fails
+        if probes >= 4:
+            raise RuntimeError("vk_crawl_storage_admission_blocked")
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", guard)
+
+    outcome = await vk_intake.process_vk_crawl_continuations(
+        db, max_jobs=1, max_pages_per_job=1, worker_id="disk", run_id="disk-run"
+    )
+
+    async with db.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT status,offset,last_typed_reason FROM vk_crawl_continuation"
+            )
+        ).fetchone()
+        packet_count = (
+            await (await conn.execute("SELECT COUNT(*) FROM vk_source_packet")).fetchone()
+        )[0]
+        cursor = await (
+            await conn.execute(
+                "SELECT last_seen_ts,last_post_id FROM vk_crawl_cursor WHERE group_id=1"
+            )
+        ).fetchone()
+    assert outcome["retried"] == 1
+    assert row[0:2] == ("retry", 3)
+    assert row[2] == "VK_CRAWL_PERSIST_FAILED"
+    assert packet_count == 0
+    assert cursor == (123, 45)
+
+
+@pytest.mark.asyncio
+async def test_storage_cutoff_before_page_fetch_retries_without_cursor_advance(
+    tmp_path, monkeypatch
+):
+    db = await _db(tmp_path / "page-disk-cutoff.sqlite")
+    await _schedule(db, page_size=1, offset=9)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_crawl_cursor(group_id,last_seen_ts,last_post_id,updated_at) "
+            "VALUES(1,123,45,CURRENT_TIMESTAMP)"
+        )
+        await conn.commit()
+    fetches = 0
+    probes = 0
+
+    async def wall(*_args, **_kwargs):
+        nonlocal fetches
+        fetches += 1
+        return _posts(1, first_id=88)
+
+    def guard(_db):
+        nonlocal probes
+        probes += 1
+        # Invocation and claim admission pass; the page fetch is never issued.
+        if probes >= 3:
+            raise RuntimeError("vk_crawl_storage_admission_blocked")
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    monkeypatch.setattr(vk_intake, "_require_vk_crawl_storage_headroom", guard)
+
+    outcome = await vk_intake.process_vk_crawl_continuations(
+        db, max_jobs=1, max_pages_per_job=1, worker_id="disk", run_id="page-disk"
+    )
+
+    async with db.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT status,offset,last_typed_reason FROM vk_crawl_continuation"
+            )
+        ).fetchone()
+        cursor = await (
+            await conn.execute(
+                "SELECT last_seen_ts,last_post_id FROM vk_crawl_cursor WHERE group_id=1"
+            )
+        ).fetchone()
+    assert outcome["retried"] == 1
+    assert row == ("retry", 9, "VK_CRAWL_FETCH_FAILED")
+    assert fetches == 0
+    assert cursor == (123, 45)
+
+
+@pytest.mark.asyncio
 async def test_concurrent_workers_cannot_process_same_row(tmp_path, monkeypatch):
     path = tmp_path / "concurrent.sqlite"
     db1 = await _db(path)

@@ -271,7 +271,7 @@ async def test_remote_recovery_forwards_handoff_semantic_cache_mode(
 
     fingerprint = "a" * 64
     claim = SimpleNamespace(
-        run_id="static-site:cold-recovery",
+        run_id="static-site:production-cold-recovery:cold-recovery",
         input_fingerprint=fingerprint,
         dataset_ref="owner/exact-cold-input",
         effective_date="2026-08-09",

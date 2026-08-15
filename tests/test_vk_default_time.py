@@ -1,10 +1,79 @@
 from datetime import timezone
 from types import SimpleNamespace
+from shutil import _ntuple_diskusage
 
 import pytest
 
 import main
 import vk_intake
+from db import Database
+
+
+def test_vk_crawl_storage_guard_blocks_before_volume_is_critical(monkeypatch):
+    monkeypatch.setattr(
+        vk_intake.shutil,
+        "disk_usage",
+        lambda _path: _ntuple_diskusage(3 * 1024**3, 3 * 1024**3 - 280 * 1024**2, 280 * 1024**2),
+    )
+    monkeypatch.setenv("VK_CRAWL_MIN_FREE_MB", "512")
+
+    with pytest.raises(RuntimeError, match="vk_crawl_storage_admission_blocked"):
+        vk_intake._require_vk_crawl_storage_headroom(
+            SimpleNamespace(path="/data/db.sqlite")
+        )
+
+
+def test_vk_crawl_storage_guard_does_not_apply_to_local_test_db(monkeypatch):
+    monkeypatch.setattr(
+        vk_intake.shutil,
+        "disk_usage",
+        lambda _path: (_ for _ in ()).throw(AssertionError("unexpected disk probe")),
+    )
+
+    vk_intake._require_vk_crawl_storage_headroom(
+        SimpleNamespace(path="/tmp/test-db.sqlite")
+    )
+
+
+@pytest.mark.asyncio
+async def test_vk_crawl_rechecks_capacity_between_sources(tmp_path, monkeypatch):
+    monkeypatch.setenv("RUNTIME_DISK_PATH", str(tmp_path))
+    monkeypatch.setenv("VK_CRAWL_MIN_FREE_MB", "512")
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.executemany(
+            """
+            INSERT INTO vk_source(group_id,screen_name,name,location,default_time,default_ticket_link)
+            VALUES(?,?,?,?,?,?)
+            """,
+            [(1, "one", "One", "", None, None), (2, "two", "Two", "", None, None)],
+        )
+        await conn.commit()
+
+    probes = 0
+
+    def shrinking_usage(_path):
+        nonlocal probes
+        probes += 1
+        free_mb = 900 if probes <= 3 else 500
+        return _ntuple_diskusage(3 * 1024**3, 3 * 1024**3 - free_mb * 1024**2, free_mb * 1024**2)
+
+    seen_groups = []
+
+    async def fake_wall(group_id, since, count, offset=0, owner_type="group"):
+        seen_groups.append(group_id)
+        return []
+
+    monkeypatch.setattr(vk_intake.shutil, "disk_usage", shrinking_usage)
+    monkeypatch.setattr(main, "vk_wall_since", fake_wall)
+
+    with pytest.raises(RuntimeError, match="vk_crawl_storage_admission_blocked"):
+        await vk_intake.crawl_once(db)
+
+    assert len(seen_groups) == 1
+    assert probes >= 4
+    await db.close()
 
 
 def test_vk_llm_text_field_cleaner_drops_location_placeholders():
@@ -261,6 +330,46 @@ async def test_vk_crawl_empty_group_updates_checked_at(tmp_path, monkeypatch):
     assert bot.messages, "no message sent"
     lines = bot.messages[0].text.splitlines()
     assert "последнее сканирование: 2024-06-01 12:34" in lines[0]
+
+
+@pytest.mark.asyncio
+async def test_vk_quiet_source_uses_checked_at_to_avoid_repeated_backfill(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    fixed_now = 1_717_245_296
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id, screen_name, name) VALUES(1,'club1','Group 1')"
+        )
+        await conn.execute(
+            """
+            INSERT INTO vk_crawl_cursor(
+                group_id,last_seen_ts,last_post_id,updated_at,checked_at
+            ) VALUES(1,?,?,?,?)
+            """,
+            (fixed_now - 10 * 86400, 10, fixed_now - 10 * 86400, fixed_now - 60),
+        )
+        await conn.commit()
+
+    calls = []
+
+    async def fake_wall_since(gid, since, count, offset=0, owner_type="group"):
+        calls.append((gid, since, count, offset))
+        return []
+
+    async def no_sleep(_):
+        pass
+
+    monkeypatch.setattr(main, "vk_wall_since", fake_wall_since)
+    monkeypatch.setattr(vk_intake.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(vk_intake.time, "time", lambda: fixed_now)
+
+    stats = await vk_intake.crawl_once(db)
+
+    assert stats["backfill_days_used"] is None
+    assert calls[0][1] == fixed_now - 10 * 86400 - vk_intake.VK_CRAWL_OVERLAP_SEC
 
 
 @pytest.mark.asyncio

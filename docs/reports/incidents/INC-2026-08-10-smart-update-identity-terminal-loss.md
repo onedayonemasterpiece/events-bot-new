@@ -28,6 +28,19 @@ The count “109” from the first recovery pass meant **carrier rows** (5 Teleg
 + 104 VK), not 109 events. One carrier can contain zero, one or many event
 occurrences and lifecycle actions.
 
+### Current release-status correction (2026-08-15)
+
+PR #494 is no longer Draft or undeployed. It merged to `origin/main` as
+`69ec40342` and the related August 12 incident records Fly version 1970 starting
+from that merged runtime. Statements below that say “Draft”, “not deployed”,
+“production unchanged” or “merge/deploy outside this task” are retained as
+historical checkpoint constraints, not as the current release state.
+
+This incident remains open: merge/deploy did not by itself satisfy the
+model-derived replay, backlog-terminal, provider and production acceptance
+gates, and the distinct August 15 recurrence is tracked in
+`INC-2026-08-15-ingestion-retry-stall-and-wal-growth`.
+
 ## Impact and detection
 
 - Canonical/public events were missing; some imported carriers regressed to a
@@ -125,10 +138,11 @@ recovery apply was performed.
 8. Telegram/parser/VK/ticket/festival/manual callers translated results
    independently; attempt and child balances were not durable.
 
-## Corrective implementation in Draft PR #494
+## Corrective implementation developed in then-Draft PR #494
 
-The unmerged branch `integration/smart-update-identity-state-machine` now
-contains the following reviewable blocks:
+At that checkpoint the then-unmerged branch
+`integration/smart-update-identity-state-machine` contained the following
+reviewable blocks:
 
 - raw-first `vk_source_packet` revisions, append-only physical-attempt receipts,
   continuation jobs, cursor-after-durability and changed-revision replay;
@@ -265,11 +279,12 @@ integrated test/static receipts are kept in
 
 ## Release, rollback and open blockers
 
-This task explicitly forbids merge, deploy, production write and recovery
-apply. Production is unchanged and the incident remains open. Review readiness
-is blocked/partial where exact historical evidence, provider-tier verification,
-live model routing benchmark or model-derived recovery counts are unavailable;
-green CI alone does not close the incident.
+At this audit checkpoint the task explicitly forbade merge, deploy, production
+write and recovery apply, so production was unchanged at that time. Review
+readiness was blocked/partial where exact historical evidence, provider-tier
+verification, live model routing benchmark or model-derived recovery counts
+were unavailable; green CI alone did not close the incident. The later merge
+and deploy are recorded in the current release-status correction above.
 
 Rollback is code-first. Keep additive packet/candidate/attempt tables and
 nullable EventSource keys; do not restore global one-URL/one-event uniqueness
@@ -363,12 +378,14 @@ raw-first/cursor contract and SQLite test engines were closed deterministically:
 - Google AI path audit: 1,139 files, zero unapproved/unreadable; log SHA-256
   `a51585a63d3eb060dcc4b94e0109d63d5c9efa8c35151d48bc26dd0573606c15`.
 
-The incident remains **open**. Draft PR #494 must remain Draft. Merge, deploy,
-production writes and recovery apply were not performed. Regardless of local/CI
-results, release remains blocked until all four separately requested proofs
-exist: real provider quota/tier, an atomic production DB snapshot rehearsal,
-approved disposition of the 195 known FK-orphan references, and model-derived
-recovery replay through the deployed typed pipeline.
+At this checkpoint the incident remained **open**, PR #494 was required to
+remain Draft, and merge, deploy, production writes and recovery apply had not
+been performed. Regardless of those local/CI results, the four requested proofs
+remained absent: real provider quota/tier, an atomic production DB snapshot
+rehearsal, approved disposition of the 195 known FK-orphan references, and
+model-derived recovery replay through the typed pipeline. The Draft/deploy
+constraint was later superseded by the release recorded above; the unfulfilled
+evidence gates were not thereby closed.
 
 ## 2026-08-12 — final-code review corrections on reviewed HEAD `5291c4289`
 
@@ -453,11 +470,12 @@ apply, deploy or merge occurred.
 
 ### Status after final-code remediation
 
-The four code blockers are corrected, but the incident remains **open P0 /
-SEV-1**, and Draft PR #494 remains **not deploy-ready**. T68 is still Partial:
-historical/model-derived recovery cannot be proven from unavailable raw
-payloads. Exact-head GitHub Actions must be green before any merge decision.
-Four external gates also remain open: real provider quota/tier entitlement, a
-guaranteed atomic production snapshot rehearsal, approved disposition of the
-195 known FK-orphan references, and model-derived recovery through the deployed
-typed pipeline. Merge, deploy and recovery apply remain outside this task.
+At this final-code checkpoint the four code blockers were corrected, but the
+incident remained **open P0 / SEV-1** and PR #494 was not yet deploy-ready. T68
+was still Partial: historical/model-derived recovery could not be proven from
+unavailable raw payloads. Exact-head GitHub Actions were required before a
+merge decision. Four evidence gates remained open: real provider quota/tier
+entitlement, a guaranteed atomic production snapshot rehearsal, approved
+disposition of the 195 known FK-orphan references, and model-derived recovery
+through the typed pipeline. Merge, deploy and recovery apply were outside that
+checkpoint's scope; see the current correction above for the later release.

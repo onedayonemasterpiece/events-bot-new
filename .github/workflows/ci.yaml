@@ -195,6 +195,8 @@ jobs:
           tests/test_static_site_auth_session_broker_sql.py
           tests/test_supabase_security_hardening.py
           tests/test_vk_auto_queue_import.py
+          tests/test_video_announce_poller.py
+          tests/test_video_announce_v_pipeline.py
       - name: Enforce shared Google AI limiter contracts
         run: |
           python scripts/inspect/audit_google_ai_provider_paths.py --root .
