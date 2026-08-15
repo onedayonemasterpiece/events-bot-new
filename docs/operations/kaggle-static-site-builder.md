@@ -400,13 +400,18 @@ defaults are below `/tmp`). Root scratch is checked with a real create, write,
 
 The production input is `static_site_projection_sqlite_v1`, not a full SQLite
 backup. A short read-only transaction copies only the explicit Astro-exporter
-table allowlist into a compact, index-free SQLite read model, commits exact
-row counts, closes the live source connection, then performs `quick_check`,
-size cap and SHA-256 binding. Operational relations such as `vk_source_packet`,
-`vk_inbox`, `joboutbox`, `ops_run` and Kaggle ledgers are structurally excluded.
-The manifest table inventory and row counts are revalidated by the runner and
-kernel. This transaction must be closed before dataset upload/polling so the
-static build cannot pin the production WAL.
+table **and column** allowlist into a compact, index-free SQLite read model,
+commits exact row and ordered-column manifests, closes the live source
+connection, then performs `quick_check`, size cap and SHA-256 binding. The
+`user` projection contains only `user_id,is_partner,organization`; the
+`event_source` projection contains only public provenance/CTA fields and never
+raw source text, candidate identity, fingerprints or Smart Update state.
+Operational relations such as `vk_source_packet`, `vk_inbox`, `joboutbox`,
+`ops_run` and Kaggle ledgers are structurally excluded. The manifest table,
+column and row-count inventory is revalidated by the runner and kernel. A
+SQLite VM progress handler interrupts even a long `COUNT`/`SELECT` at the
+configured deadline. The transaction must be closed before dataset
+upload/polling so the static build cannot pin the production WAL.
 
 Runner build identities are bounded to `preview-*` or `production-*` before
 constructing any filesystem path. Output creation uses one assertion-safe
@@ -448,8 +453,10 @@ filesystem; it never creates another DB-sized allocation merely to satisfy the
 directory-oriented Kaggle API.
 
 The mounted projection is read directly under `/kaggle/input`. It is never
-copied to `/kaggle/working`, and cleanup removes any legacy/accidental
-`*.sqlite*` working file so private SQLite bytes cannot become Kaggle output.
+copied to `/kaggle/working`; recursive cleanup removes any legacy/accidental
+`*.sqlite`, `*.sqlite-wal` or `*.sqlite-shm` working file. Fly's final downloaded
+output validator repeats that recursive zero-SQLite assertion before accepting
+the build result, so nested private SQLite bytes cannot become a candidate.
 The private dataset reference is content-addressed from the complete staged
 payload. Once that exact dataset identity is durable, restart adoption uses its
 stored projection manifest/SHA/size even if local process scratch disappeared;

@@ -24531,6 +24531,7 @@ async def _recover_previous_static_site_attempt(
                 or snapshot_metadata.quick_check != "ok"
                 or not snapshot_metadata.projection_schema_version
                 or not snapshot_metadata.table_row_counts
+                or not snapshot_metadata.table_columns
             ):
                 raise StaticSitePermanentError(
                     "static_site_recovery_projection_manifest_identity_mismatch"
@@ -25057,6 +25058,7 @@ async def job_static_site_build_kaggle(event_id: int, db: Database, bot: Bot) ->
                 "projection_schema_version": snapshot_metadata.projection_schema_version,
                 "table_row_counts": snapshot_metadata.table_row_counts,
                 "source_table_row_counts": snapshot_metadata.source_table_row_counts,
+                "table_columns": snapshot_metadata.table_columns,
                 "manifest": asdict(snapshot_metadata),
             },
             "vector_barrier_result": vector_evidence,

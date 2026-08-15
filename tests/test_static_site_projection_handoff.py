@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -88,20 +90,65 @@ def test_kernel_reads_mounted_projection_without_working_copy(
     assert not list(working.glob("*.sqlite*"))
 
 
+def test_kernel_validates_exact_projection_column_manifest(tmp_path: Path) -> None:
+    kernel = _load_kernel()
+    projection = tmp_path / "projection.sqlite"
+    with sqlite3.connect(projection) as con:
+        con.execute("create table event(id integer, title text)")
+        con.execute("insert into event values(1,'Event')")
+        con.commit()
+    digest = hashlib.sha256(projection.read_bytes()).hexdigest()
+    config = {
+        "profile": "production-candidate",
+        "snapshot": {
+            "snapshot_id": "snapshot",
+            "sha256": digest,
+            "size": projection.stat().st_size,
+            "projection_schema_version": "static_site_projection_sqlite_v1",
+            "table_row_counts": {"event": 1},
+            "table_columns": {"event": ["id", "title"]},
+        },
+    }
+    assert kernel.validate_snapshot_input(projection, config)["snapshot_id"] == "snapshot"
+    config["snapshot"]["table_columns"]["event"].append("source_text")
+    with pytest.raises(RuntimeError, match="column mismatch"):
+        kernel.validate_snapshot_input(projection, config)
+
+
 def test_kernel_cleanup_refuses_to_publish_legacy_sqlite_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     kernel = _load_kernel()
     working = tmp_path / "working"
     working.mkdir()
-    leaked = working / "events.sqlite"
-    leaked.write_bytes(b"private")
+    nested = working / "nested" / "deep"
+    nested.mkdir(parents=True)
+    leaked = nested / "events.sqlite"
+    leaked_wal = nested / "events.sqlite-wal"
+    leaked_shm = nested / "events.sqlite-shm"
+    for path in (leaked, leaked_wal, leaked_shm):
+        path.write_bytes(b"private")
     monkeypatch.setattr(kernel, "WORKING", working)
     monkeypatch.setattr(kernel, "EXTRACT_ROOT", working / "source")
 
     kernel.cleanup_transient_workspace()
 
-    assert not leaked.exists()
+    assert not any(path.exists() for path in (leaked, leaked_wal, leaked_shm))
+
+
+def test_final_output_validation_recursively_rejects_sqlite_artifacts(
+    tmp_path: Path,
+) -> None:
+    import scripts.run_static_site_builder_kaggle as runner
+
+    output = tmp_path / "output"
+    nested = output / "archive" / "private"
+    nested.mkdir(parents=True)
+    leaked = nested / "projection.sqlite-shm"
+    leaked.write_bytes(b"private")
+
+    with pytest.raises(RuntimeError, match="forbidden SQLite artifacts"):
+        runner.assert_no_sqlite_artifacts(output)
 
 
 def _runner_args(db: Path, manifest: Path):
@@ -119,6 +166,7 @@ def _runner_args(db: Path, manifest: Path):
             "quick_check": "ok",
             "projection_schema_version": "static_site_projection_sqlite_v1",
             "table_row_counts": {"event": 1},
+            "table_columns": {"event": ["id"]},
         },
         current_date="2026-08-15",
         current_datetime="2026-08-15T12:00:00+02:00",

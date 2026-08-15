@@ -41,3 +41,13 @@ Direct Kaggle-to-Yandex candidate staging is intentionally not part of this boun
 7. Validate downloaded report/archive identities and exporter parity, publish only the secret candidate, and run the existing candidate/public object and browser probes. Root promotion must remain disabled unless it receives a separate explicit approval.
 8. Exercise one safe exact-adoption path (or inspect equivalent restart evidence): no second dataset push/kernel, exact dataset/ref identities preserved, successful terminal reconciliation, claim/lease released, and no duplicate publication.
 9. Re-check health, DB/WAL/space, job terminal state, current candidate receipt, Yandex candidate objects, and public root state. The public-root freshness problem is separate from this storage redesign until a candidate is explicitly promoted.
+
+## Follow-up reviewer gate closure
+
+A separate follow-up commit closes the reviewer block on column-level disclosure and bounded execution:
+
+- Every relation now has an explicit ordered exporter-required column allowlist. `user` is reduced to `user_id,is_partner,organization`; `event_source` excludes raw source text, source/candidate fingerprints and keys, canonical/role identity state, and Smart Update candidate ids. Optional product tables similarly omit evidence, trace, analysis and editor-only payloads.
+- The immutable manifest carries the exact ordered column inventory per table. Fly validation and the Kaggle kernel independently compare it with `PRAGMA table_xinfo` and fail closed on additions, omissions or ordering changes.
+- A SQLite progress handler enforces the projection transaction deadline inside long VM scans. Row counting uses `SUM(1)` rather than SQLite's `COUNT(*)` fast path so it has an interrupt boundary; Python fetch checks remain a second boundary.
+- Kernel cleanup is recursive for `*.sqlite`, `*.sqlite-wal` and `*.sqlite-shm`. Final Fly output validation independently performs the same recursive zero-SQLite assertion before result acceptance.
+- Parity coverage now constructs and compares full catalog events/archive/ledger, source records, participant/video/image/geometry/metrics/publication/promo/poll data, both interest-club products, and festival timeline across source and projection. Private columns are populated in every optional fixture and asserted absent.

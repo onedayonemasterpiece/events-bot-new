@@ -141,6 +141,9 @@ def validate_snapshot_input(db_path: Path, config: dict) -> dict:
                 expected_counts = snapshot.get('table_row_counts')
                 if not isinstance(expected_counts, dict) or not expected_counts:
                     raise RuntimeError('mounted projection row-count manifest missing')
+                expected_columns = snapshot.get('table_columns')
+                if not isinstance(expected_columns, dict) or not expected_columns:
+                    raise RuntimeError('mounted projection column manifest missing')
                 actual_tables = {
                     str(row[0])
                     for row in con.execute(
@@ -150,6 +153,8 @@ def validate_snapshot_input(db_path: Path, config: dict) -> dict:
                 }
                 if actual_tables != set(expected_counts):
                     raise RuntimeError('mounted projection table inventory mismatch')
+                if actual_tables != set(expected_columns):
+                    raise RuntimeError('mounted projection column inventory mismatch')
                 forbidden = {
                     'joboutbox', 'ops_run', 'vk_inbox', 'vk_source_packet',
                     'kaggle_run_event', 'kaggle_run_ledger', 'resource_lease',
@@ -167,6 +172,15 @@ def validate_snapshot_input(db_path: Path, config: dict) -> dict:
                     if actual_count != int(expected_count):
                         raise RuntimeError(
                             f'mounted projection row-count mismatch: {table}'
+                        )
+                    actual_columns = [
+                        str(row[1])
+                        for row in con.execute(f'pragma table_xinfo("{table}")')
+                        if int(row[6] or 0) == 0
+                    ]
+                    if actual_columns != [str(name) for name in expected_columns[table]]:
+                        raise RuntimeError(
+                            f'mounted projection column mismatch: {table}'
                         )
         if quick_check != 'ok':
             raise RuntimeError(f'mounted production snapshot quick_check failed: {quick_check}')
@@ -340,7 +354,10 @@ def cleanup_transient_workspace() -> None:
                 shutil.rmtree(path, ignore_errors=True)
         except Exception as exc:
             print(f'[static-site-builder] transient cleanup failed for {path}: {exc}', flush=True)
-    for path in WORKING.glob('*.sqlite*'):
+    forbidden_sqlite: set[Path] = set()
+    for pattern in ('*.sqlite', '*.sqlite-wal', '*.sqlite-shm'):
+        forbidden_sqlite.update(WORKING.rglob(pattern))
+    for path in sorted(forbidden_sqlite):
         if path.is_file() and not path.is_symlink():
             try:
                 path.unlink()

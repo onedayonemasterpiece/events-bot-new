@@ -582,6 +582,7 @@ def load_snapshot_contract(args: argparse.Namespace) -> dict[str, object]:
     if quick_check and quick_check not in {'ok', 'passed'}:
         raise ValueError(f'snapshot quick_check is not ok: {quick_check}')
     table_row_counts = manifest.get('table_row_counts')
+    table_columns = manifest.get('table_columns')
     return {
         'snapshot_id': snapshot_id,
         'sha256': actual_sha,
@@ -591,10 +592,33 @@ def load_snapshot_contract(args: argparse.Namespace) -> dict[str, object]:
         'table_row_counts': (
             table_row_counts if isinstance(table_row_counts, dict) else None
         ),
+        'table_columns': table_columns if isinstance(table_columns, dict) else None,
     }
 
 
+def assert_no_sqlite_artifacts(root: Path) -> None:
+    """Reject a recursive Kaggle output containing any SQLite private input."""
+
+    forbidden: list[str] = []
+    for path in root.rglob('*'):
+        if not path.is_file():
+            continue
+        lowered = path.name.lower()
+        if (
+            lowered.endswith('.sqlite')
+            or lowered.endswith('.sqlite-wal')
+            or lowered.endswith('.sqlite-shm')
+        ):
+            forbidden.append(path.relative_to(root).as_posix())
+    if forbidden:
+        raise RuntimeError(
+            'static-site output contains forbidden SQLite artifacts: '
+            + ','.join(sorted(forbidden))
+        )
+
+
 def validate_downloaded_result(out_dir: Path, args: argparse.Namespace) -> dict[str, object]:
+    assert_no_sqlite_artifacts(out_dir)
     result_path = out_dir / 'static_site_build_result.json'
     if not result_path.exists() or result_path.stat().st_size > 256 * 1024:
         raise RuntimeError('Kaggle result JSON is missing or unbounded')

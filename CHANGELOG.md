@@ -21,7 +21,11 @@
   allocation, Kaggle reads the mounted projection in place and forbids SQLite
   outputs, and downloaded validation/publication artifacts now use `/tmp`
   rather than the persistent `/data` volume. Exact dataset/run adoption and
-  fail-closed result/publication identity remain unchanged.
+  fail-closed result/publication identity remain unchanged. The projection is
+  also column-allowlisted (excluding private account/source-intake fields), its
+  ordered column manifest is independently validated, SQLite source scans have
+  a hard VM progress-handler deadline, and recursive kernel/host output gates
+  reject every SQLite database/WAL/SHM artifact.
 - **Smart Update / VK linear incident remediation:** replaced unchanged-evidence
   semantic and background technical retry loops with same-call closed location
   actions and visible `FAILED_TECHNICAL` terminals; the old worker is default
