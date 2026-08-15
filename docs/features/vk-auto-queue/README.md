@@ -3,7 +3,10 @@
 Канонический контракт автоматического VK ingestion после
 `INC-2026-08-10-smart-update-identity-terminal-loss`: максимальная полнота,
 raw-first durability и строгая LLM-first семантика. Очередь не требует
-операторского review и не имеет terminal technical failure.
+операторского semantic review. Решение владельца от 2026-08-15 заменяет часть
+старого контракта про бесконечный background retry: строка, уже выбранная в
+видимый `/vk_auto_import` batch, обязана завершиться в этом batch как accepted,
+подтверждённое product exclusion или `FAILED_TECHNICAL` с причиной и receipt.
 
 **Release status:** incident остаётся open; этот final-code candidate не
 deployed и не deploy-ready. Green focused CI не заменяет внешние gates ниже.
@@ -27,8 +30,16 @@ VK API fetch
   -> SourceParseDecision
   -> optional contradiction verifier
   -> Smart Update per event child / typed lifecycle action
-  -> typed carrier terminal OR durable retry
+  -> typed carrier terminal (no automatic durable retry from this batch)
 ```
+
+Здесь важно разделять две очереди. `vk_crawl_continuation` — внутренняя
+инфраструктурная доставка ещё не выбранных raw pages; её bounded durable retry
+сохраняется. `vk_inbox`, уже claimed конкретным auto-import batch, не получает
+`next_attempt_at`: даже timeout, fetch/evidence/provider/schema/persist error,
+неполный evidence или unresolved lifecycle закрываются как
+`failed_technical`/`FAILED_TECHNICAL`. Повтор возможен только как явно
+наблюдаемое операторское re-drive, а не как фоновый вечный цикл.
 
 Cursor не продвигается, пока не сохранены все полученные in-horizon packets.
 Page/hard cap создаёт `vk_crawl_continuation`. Неизменившийся revision с тем же
@@ -157,9 +168,9 @@ must not enter logs, prompts or LLM receipts.
 Replay matrix: a deleted/unavailable post may be parsed from its complete v1
 envelope; a successful fresh refresh first persists its new immutable revision
 and only then parses it; a legacy text/photos projection is explicitly
-`replayable_legacy_incomplete` and schedules `EVIDENCE_INCOMPLETE`, never a
-semantic terminal. Media selection limits OCR candidates, not the attachment
-inventory or capture-complete claim.
+`replayable_legacy_incomplete` and closes the selected auto-import row as
+technical `EVIDENCE_INCOMPLETE`, never as a semantic no-event. Media selection
+limits OCR candidates, not the attachment inventory or capture-complete claim.
 
 ## Evidence и source verdict
 
@@ -180,26 +191,28 @@ Typed `SourceParseDecision` допускает только:
 Пустой ответ, malformed/schema mismatch, truncation, timeout, quota error,
 неполный OCR или unresolved lifecycle action не равны no-event. Положительные
 children из incomplete evidence можно провести через Smart Update, но carrier
-остаётся `RETRY_SCHEDULED` для enrichment. `CONFIRMED_NO_EVENT` принимается
-только при `llm_completed && structured_response_valid && evidence_complete`.
+закрывается видимым `FAILED_TECHNICAL`: уже принятые children сохраняются, а
+неподтверждённый остаток не переигрывается автоматически. `CONFIRMED_NO_EVENT`
+принимается только при
+`llm_completed && structured_response_valid && evidence_complete`.
 
 Кроме того, `CONFIRMED_NO_EVENT` обязан иметь ровно один
 `SourceNoEventReason`: `NO_ATTENDABLE_EVENT`, `GIVEAWAY_ONLY`, `VAGUE_TEASER`,
 `REFERRAL_ONLY`, `SERVICE_OR_RENTAL`, `RECAP_ONLY` или `OUT_OF_SCOPE`. У всех
 остальных dispositions reason отсутствует. Missing/unknown/misplaced reason —
-`SCHEMA_MISMATCH` retry; terminal carrier state, successful receipt и terminal
-metrics до исправления запрещены.
+`SCHEMA_MISMATCH` и terminal `FAILED_TECHNICAL`, никогда product rejection.
 
 Обычный carrier выполняет один primary semantic parse. Второй вызов допустим
 только как conditional verifier для закрытого набора противоречий: сильные
 signals против no-event, date/OCR conflict, collapsed occurrences, generic
 ungrounded title, mixed lifecycle conflict, impossible schema или incomplete
-coverage. Технически недоступная/неоднозначная verification означает retry.
+coverage. Технически недоступная/неоднозначная verification означает
+`FAILED_TECHNICAL` в том же invocation.
 
 Все эти trigger-факты вычисляет общий pure `source_contradiction_facts` collector
 для shared main/VK/direct/parser callers; Telegram stages ровно тот же module.
 Collector не выдаёт product verdict и не удаляет positive children. На carrier
-разрешён максимум один verifier, а uncertain result остаётся retry. Тексты
+разрешён максимум один verifier, а uncertain result закрывается technical. Тексты
 prompts и provider examples не копируются сюда: см.
 [`../../llm/prompts.md`](../../llm/prompts.md). Static audit проверяет mandatory
 reason, закрытые enums/parity и terminal prompt gates.
@@ -208,26 +221,33 @@ reason, закрытые enums/parity и terminal prompt gates.
 
 Cancellation/reschedule regex не изменяет Event до primary parse. LLM может
 вернуть несколько `LifecycleAction` и одновременно новые event children.
-Действия применяются независимо; no-match action сохраняется как durable retry
-и не уничтожает siblings.
+Действия применяются независимо; no-match action даёт carrier-level
+`FAILED_TECHNICAL` и не уничтожает уже принятые siblings.
 
 Каждый child проходит Smart Update. Downstream Telegraph/ICS/publication/month
 rebuild запускаются только для typed accepted `CREATED`, `MERGED` или
 `NOOP_EXACT_REPLAY`; `diagnostic_event_id` не считается успехом. Carrier-level
 итоги: `EVENTS_RESOLVED`, `LIFECYCLE_RESOLVED`, `MIXED_RESOLVED`,
-`CONFIRMED_NO_EVENT`, `CONFIRMED_PRODUCT_EXCLUSION`, `RETRY_SCHEDULED` или
-`EXACT_REPLAY`.
+`CONFIRMED_NO_EVENT`, `CONFIRMED_PRODUCT_EXCLUSION`, `FAILED_TECHNICAL` или
+`EXACT_REPLAY`. Summary обязан балансировать
+`processed = imported + rejected + failed`; `deferred=0`.
 
 ## Backpressure
 
-Quota/RPM/TPM/RPD/429, OCR/provider/schema/persist error, timeout, restart или
-orphaned lease освобождают claim и записывают due retry. Они не переводят row в
-terminal `failed`/`rejected`. Provider `retry_after` и `quota_scope` переносятся
-из typed parse boundary в packet/inbox и append-only attempt. После быстрых
-повторов применяется capped backoff, но row остаётся в automatic selection.
-Startup recovery сообщает только число возвращённых в очередь orphaned locks;
-у него нет terminal-failed исхода или отдельного `failed` счётчика.
-Worker не спит десятки минут на carrier и может взять другой due row/scope.
+`wall.getById` network/VK API failure допускает максимум два (configurable до
+трёх) коротких transport attempts внутри текущего row invocation. Primary LLM
+provider сохраняет собственный bounded physical-attempt contract; одинаковый
+complete evidence не запускает semantic background retry. После исчерпания
+текущего invocation quota/RPM/TPM/RPD/429, OCR/provider/schema/persist error,
+timeout или orphaned claim закрывают row как `FAILED_TECHNICAL`, очищают lease и
+selectable `vk_inbox.next_attempt_at`, сохраняют typed reason в packet/latest
+attempt и попадают в summary/ops receipt. У immutable packet остаётся
+schema-required timestamp, но terminal status делает его inert. Это не product
+rejection и не автоматическая due queue.
+
+Только предшествующий crawl continuation остаётся durable retryable: он ещё
+доставляет raw page до `vk_source_packet` и не является одной из 15
+операторски видимых строк auto-import batch.
 
 Prefetch загружает только transport evidence и не запускает второй LLM parse.
 Успешный `(payload hash, source revision, evidence manifest, prompt version,
@@ -257,7 +277,10 @@ Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
 - `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` — существующий scoped model route;
 - `VK_AUTO_IMPORT_PREFETCH=0` по умолчанию; даже при включении semantic parse
   принадлежит main worker;
-- `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` — timeout становится typed retry;
+- `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` — timeout становится terminal
+  `FAILED_TECHNICAL` без background retry;
+- `VK_AUTO_IMPORT_FETCH_INLINE_ATTEMPTS` — bounded transport attempts в одном
+  row invocation (default `2`, hard max `3`);
 - `VK_AUTO_IMPORT_FRESH_FIRST_BACKLOG_THRESHOLD` — размер due backlog, после
   которого scheduled importer включает bounded fresh/history interleave;
 - `VK_AUTO_IMPORT_HISTORY_EVERY` — не реже каждого N-го pick при большом
@@ -270,7 +293,8 @@ Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
 Старые `VK_AUTO_IMPORT_PREFILTER_OBVIOUS_NON_EVENTS` и semantic prefilter API
 удалены из production path. Старые photo/OCR semantic caps не являются
 допустимым способом экономии TPM: если transport не дал полный материал,
-negative outcome запрещён и планируется enrichment retry.
+negative outcome запрещён; строка завершается `FAILED_TECHNICAL` и требует
+явного re-drive после восстановления evidence.
 
 `/vk`, `/vk_queue`, `/vk_misses`, manual accept/reject/skip и editor actions
 остаются legacy diagnostic/admin surfaces. Они могут помочь исследовать receipt
@@ -299,8 +323,11 @@ recovery отдельно считают carrier revisions, event occurrences и
 actions; carrier count нельзя выдавать за число model-derived occurrences.
 
 Zero-инварианты: semantic terminal before LLM, deterministic post-LLM veto,
-incomplete-evidence no-event, terminal technical failed и carrier/child balance
-violation. Канонический incident и release gates:
+incomplete-evidence no-event, новый `RETRY_SCHEDULED`/due row из
+`/vk_auto_import` и carrier/child balance violation. `FAILED_TECHNICAL` теперь
+обязательный наблюдаемый исход технической неопределённости; это явно
+supersedes старый August-10 zero-terminal-technical пункт по решению владельца.
+Канонический incident и release gates:
 
 - `docs/reports/incidents/INC-2026-08-10-smart-update-identity-terminal-loss.md`;
 - `docs/operations/smart-update-prod-audit.md`;
@@ -321,7 +348,8 @@ blockers остаются все четыре независимых доказ�
 - `vk_auto_queue.py` — claim, typed processing и downstream boundary;
 - `vk_source_envelope.py` — exact raw envelope v1, hashes и replayability;
 - `source_contradiction_facts.py` — общий pure seven-reason collector;
-- `vk_review.py` — durable state/attempt/retry receipts;
+- `vk_review.py` — durable carrier/attempt receipts и отдельные crawl
+  continuation retry primitives;
 - `source_parse_contract.py` — typed source/lifecycle/evidence contract;
 - `smart_event_update.py`, `smart_update_state.py` — child resolution;
 - `tests/test_source_parse_contract.py`;

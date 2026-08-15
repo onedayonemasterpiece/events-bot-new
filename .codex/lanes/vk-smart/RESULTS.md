@@ -99,3 +99,87 @@ Required gates: both first counts are zero; every captured id is accounted for; 
 - TG/parser callers synthesize their own retry states; that lane must map Smart Update `FAILED_TECHNICAL` to its visible terminal and alert rather than enqueueing again.
 - `RETRY_SCHEDULED` remains in the SQLite CHECK/enum only for provisional attempt registration and the one-time legacy drain. Removing it entirely requires a separate crash-safe `PROCESSING` schema transition.
 - Accepted domain write followed by failed state acknowledgement remains an unavoidable two-authority crash window; exact input replay/legacy drain is the recovery rail, not a polling product queue.
+
+## Follow-up: `/vk_auto_import` batch closure
+
+The first commit closed Smart Update itself, but the VK caller still had nine
+independent calls to `vk_review.schedule_retry()` / `mark_deferred()` around
+source fetch, missing/incomplete evidence, provider/schema output, unresolved
+lifecycle, persist, row timeout, legacy Smart retry results and partial
+roundups. This exactly explained the 15-row operator screenshot: Smart could be
+linear while 14 carriers were still rearmed by its caller.
+
+The follow-up removes every durable-retry transition from `vk_auto_queue.py`.
+One selected row now closes as imported, confirmed no-event/product exclusion,
+or receipted `failed_technical`; `vk_inbox.next_attempt_at` is null and the
+packet/attempt terminal is `FAILED_TECHNICAL`. The immutable packet table keeps
+its schema-required NOT NULL timestamp, but terminal packet status makes that
+timestamp non-selectable/inert. `vk_review.schedule_retry()` remains unchanged
+for pre-import/legacy infrastructure users; `vk_crawl_continuation` keeps its
+separate bounded delivery retry.
+
+Transient `wall.getById` network/VK API failures get two short inline attempts
+by default (hard maximum three) inside the same row invocation. Exhaustion,
+provider/schema uncertainty and unchanged incomplete evidence do not create a
+background semantic attempt. Batch summaries and `ops_run` now expose
+`terminal_rows` and `unresolved_rows`; the invariant is:
+
+```text
+processed = imported + rejected + failed
+deferred = 0
+unresolved_rows = 0
+```
+
+The screenshot-class regression seeds 15 real inbox rows: eight
+`EVIDENCE_INCOMPLETE`, one `SCHEMA_MISMATCH`, two provider/rate-limit failures,
+one persist failure, one legacy Smart retry result, one Smart technical failure
+and one proved no-event. It finishes `14 failed_technical + 1
+confirmed_no_event`, with zero due rows.
+
+### Follow-up validation
+
+- focused VK batch/timeout/fetch/rate-limit: `6 passed`;
+- VK auto-import + rate-limit modules: `42 passed` before the final packet
+  terminal assertion was added;
+- final Smart/VK/source aggregate: `384 passed, 9 warnings in 54.22s`;
+- `python3.12 -m py_compile` and `git diff --check`: passed.
+
+### Exact production VK catch-up selector
+
+After exact-main deploy, first capture the immutable legacy auto-import set;
+do not select the unrelated pending crawl backlog:
+
+```sql
+SELECT vi.id,vi.group_id,vi.post_id,vi.owner_type,vi.review_batch,
+       vi.last_typed_reason,vi.attempts,vi.source_packet_id
+FROM vk_inbox AS vi
+LEFT JOIN vk_source_packet AS sp ON sp.id=vi.source_packet_id
+WHERE vi.status IN ('deferred','locked')
+  AND (
+    vi.review_batch LIKE 'auto:%'
+    OR sp.terminal_carrier_outcome='RETRY_SCHEDULED'
+    OR sp.status='retry_scheduled'
+  )
+ORDER BY vi.id;
+```
+
+Persist that exact ID list in the deployment receipt. Claim/re-drive each
+captured ID through `_process_vk_inbox_row` exactly once on the new runtime (not
+through an unconstrained `pick_next`, which can consume the ~4.9k unrelated
+pending rows). Closure query:
+
+```sql
+SELECT status,COUNT(*)
+FROM vk_inbox
+WHERE id IN (<captured comma-separated ids>)
+GROUP BY status;
+
+SELECT COUNT(*)
+FROM vk_inbox
+WHERE id IN (<captured comma-separated ids>)
+  AND (status IN ('pending','locked','deferred') OR next_attempt_at IS NOT NULL);
+```
+
+The second count must be zero and the first result may contain only `imported`,
+`confirmed_no_event`, `confirmed_product_exclusion` and `failed_technical`.
+There is no schema migration in this follow-up commit.

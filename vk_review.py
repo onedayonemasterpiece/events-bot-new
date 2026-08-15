@@ -1120,11 +1120,19 @@ async def mark_carrier_outcome(
             await conn.execute(
                 """
                 UPDATE vk_source_packet
-                SET status=?,terminal_carrier_outcome=?,lease_owner=NULL,
-                    lease_expires_at=NULL,last_typed_reason=?,updated_at=CURRENT_TIMESTAMP
+                SET status=?,llm_status=?,terminal_carrier_outcome=?,
+                    lease_owner=NULL,lease_expires_at=NULL,
+                    provider_retry_after=NULL,last_typed_reason=?,
+                    updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
                 """,
-                (status, normalized, typed_reason or normalized, int(row[0])),
+                (
+                    status,
+                    "failed_technical" if normalized == "FAILED_TECHNICAL" else "completed",
+                    normalized,
+                    typed_reason or normalized,
+                    int(row[0]),
+                ),
             )
         await conn.commit()
 

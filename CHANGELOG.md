@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **VK auto-import linear batch closure:** removed the remaining durable retry
+  transitions from operator-visible `/vk_auto_import` rows. Source fetch,
+  missing/incomplete evidence, provider/schema, lifecycle, persist, timeout and
+  legacy Smart retry results now close as receipted `FAILED_TECHNICAL` with no
+  `next_attempt_at`; each batch reports a processed/terminal balance. Kept only
+  the separate pre-import crawl-continuation retry and added a bounded inline
+  VK transport retry (two attempts by default, hard maximum three).
 - **StaticSiteBuilder Fly-volume containment:** replaced the full production
   SQLite handoff with a bounded, hash/row-count/quick-check bound static-only
   projection that excludes VK raw packets, inbox, outbox, ops and Kaggle
