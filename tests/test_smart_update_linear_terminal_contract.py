@@ -269,3 +269,100 @@ async def test_accepted_write_ack_failure_closes_technical_not_retry(tmp_path, m
             "SELECT terminal_outcome,finished_at IS NOT NULL FROM smart_update_attempt"
         ).fetchone() == ("FAILED_TECHNICAL", 1)
     await db.close()
+
+@pytest.mark.asyncio
+async def test_old_contract_migration_rolls_back_atomically_on_swap_failure(tmp_path):
+    path = tmp_path / "old-contract-rollback.sqlite"
+    async with aiosqlite.connect(path) as conn:
+        await conn.executescript(
+            """
+            PRAGMA foreign_keys=ON;
+            CREATE TABLE event(id INTEGER PRIMARY KEY);
+            CREATE TABLE smart_update_candidate_state(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_key TEXT NOT NULL UNIQUE,
+                occurrence_key TEXT NOT NULL,
+                canonical_source_url TEXT,
+                source_type TEXT NOT NULL,
+                intent TEXT NOT NULL CHECK(intent IN ('UPSERT_EVENT','ATTACH_CONTEXT')),
+                source_fingerprint TEXT NOT NULL,
+                candidate_payload JSON NOT NULL DEFAULT '{}',
+                current_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                    CHECK(current_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                accepted_event_id INTEGER,
+                diagnostic_event_id INTEGER,
+                reason TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                retry_attempts INTEGER NOT NULL DEFAULT 0,
+                max_attempts INTEGER NOT NULL DEFAULT 3,
+                retry_exhausted INTEGER NOT NULL DEFAULT 0,
+                next_retry_at TIMESTAMP,
+                claimed_by TEXT,
+                claim_expires_at TIMESTAMP,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+            );
+            CREATE TABLE smart_update_attempt(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_state_id INTEGER NOT NULL,
+                attempt_no INTEGER NOT NULL,
+                started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                finished_at TIMESTAMP,
+                terminal_outcome TEXT NOT NULL DEFAULT 'RETRY_SCHEDULED'
+                    CHECK(terminal_outcome IN ('CREATED','MERGED','NOOP_EXACT_REPLAY','REJECTED_PRODUCT_POLICY','RETRY_SCHEDULED')),
+                accepted_event_id INTEGER,
+                diagnostic_event_id INTEGER,
+                reason TEXT,
+                UNIQUE(candidate_state_id, attempt_no),
+                FOREIGN KEY(candidate_state_id) REFERENCES smart_update_candidate_state(id) ON DELETE CASCADE,
+                FOREIGN KEY(accepted_event_id) REFERENCES event(id) ON DELETE SET NULL,
+                FOREIGN KEY(diagnostic_event_id) REFERENCES event(id) ON DELETE SET NULL
+            );
+            INSERT INTO smart_update_candidate_state(
+                id,candidate_key,occurrence_key,source_type,intent,
+                source_fingerprint,candidate_payload
+            ) VALUES(7,'legacy','ordinal:0','vk','UPSERT_EVENT','fp','{}');
+            INSERT INTO smart_update_attempt(id,candidate_state_id,attempt_no)
+            VALUES(9,7,1);
+            """
+        )
+        await conn.commit()
+
+        class FailingSwapConnection:
+            def __init__(self, wrapped):
+                self.wrapped = wrapped
+
+            async def execute(self, sql, *args, **kwargs):
+                if str(sql).strip() == "DROP TABLE smart_update_attempt":
+                    raise RuntimeError("injected swap failure")
+                return await self.wrapped.execute(sql, *args, **kwargs)
+
+            async def commit(self):
+                await self.wrapped.commit()
+
+            async def rollback(self):
+                await self.wrapped.rollback()
+
+        with pytest.raises(RuntimeError, match="injected swap failure"):
+            await _migrate_smart_update_terminal_contract(FailingSwapConnection(conn))
+
+        tables = {
+            row[0]
+            for row in await (
+                await conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            ).fetchall()
+        }
+        assert "smart_update_candidate_state" in tables
+        assert "smart_update_attempt" in tables
+        assert "smart_update_candidate_state_new" not in tables
+        assert "smart_update_attempt_new" not in tables
+        assert await (
+            await conn.execute("SELECT id,current_outcome FROM smart_update_candidate_state")
+        ).fetchall() == [(7, "RETRY_SCHEDULED")]
+        assert await (
+            await conn.execute("SELECT id,terminal_outcome FROM smart_update_attempt")
+        ).fetchall() == [(9, "RETRY_SCHEDULED")]
+        assert (await (await conn.execute("PRAGMA foreign_keys")).fetchone())[0] == 1
