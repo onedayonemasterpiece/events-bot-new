@@ -62,8 +62,11 @@
 - **SEV-1 ingestion retry/WAL recurrence:** opened
   `INC-2026-08-15-ingestion-retry-stall-and-wal-growth` after the operator
   reported low configured-source event yield, visible Smart Update grounding
-  retries and renewed WAL/static staging concern. Evidence collection and root
-  cause remain provisional; this entry claims no new fix, deploy or recovery.
+  retries and renewed WAL/static staging concern. The WAL cause was a full
+  `VACUUM` colliding with vector sync/checkpoint; PR #506 default-disabled it
+  and Fly v1975 deployed exact main. Linear ingestion and compact static
+  projection fixes are implemented but still require merge, deploy and
+  controlled production recovery before closure.
 - **CherryFlash / Smart Update incident recovery:** recorded
   `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility`;
   terminal source-render Kaggle ledgers now reconcile stale `RENDERING`

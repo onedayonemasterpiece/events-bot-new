@@ -23,7 +23,8 @@
     retries and their consumer, SQLite WAL reuse, and the StaticSiteBuilder
     immutable input handoff.
   - Must not regress: every event-bearing child must reach a visible accepted
-    create/merge/no-op/no-event or bounded technical-due receipt; current source
+    create/merge/no-op/no-event or terminal technical receipt in the same
+    product invocation; current source
     obligations must not hide behind run-level success; WAL must stay bounded
     through real ingestion; static build input must remain immutable,
     coverage-complete and capacity-safe.
