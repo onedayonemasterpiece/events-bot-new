@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 
 import smart_event_update as seu
 
@@ -221,32 +223,19 @@ def test_llm_location_review_terminally_rejects_only_event_context(monkeypatch) 
 
 
 def test_wall_32547811_11187_low_confidence_keep_is_terminal_positive(monkeypatch) -> None:
-    candidate = seu.EventCandidate(
-        source_type="vk",
-        source_url="https://vk.com/wall-32547811_11187",
-        source_text=(
-            "18 августа в Чеховке состоится презентация экологического маршрута "
-            "«Зелёное сердце города». Начало в 15:00. "
-            "Адрес: Московский проспект, 39."
-        ),
-        title="Презентация экологического маршрута «Зелёное сердце города»",
-        date="2026-08-18",
-        time="15:00",
-        location_name="Библиотека Чехова",
-        location_address="Московский проспект, 39",
-        city="Калининград",
-    )
+    fixture = json.loads(
+        (
+            Path(__file__).parent
+            / "replays"
+            / "INC-2026-08-15-ingestion-retry-stall-and-wal-growth"
+            / "vk_location_grounding.json"
+        ).read_text(encoding="utf-8")
+    )["positive"]
+    provider_result = fixture.pop("provider_result")
+    candidate = seu.EventCandidate(**fixture)
 
     async def fake_ask(*_args, **_kwargs):
-        return {
-            "decision": "keep",
-            "confidence": 0.62,
-            "location_name": "Библиотека Чехова",
-            "location_address": "Московский проспект, 39",
-            "city": "Калининград",
-            "evidence_quote": "Адрес: Московский проспект, 39",
-            "reason_short": "The address and colloquial venue name are explicit.",
-        }
+        return provider_result
 
     monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(seu, "_ask_gemma_json", fake_ask)

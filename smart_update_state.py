@@ -396,6 +396,72 @@ async def finish_candidate_attempt(
             raise
 
 
+async def terminalize_candidate_ack_failure(
+    db: Any,
+    receipt: CandidateAttemptReceipt,
+    *,
+    diagnostic_event_id: int | None,
+    reason: str = "candidate_state_ack_failed",
+) -> None:
+    """Fail closed after an accepted domain write cannot be acknowledged.
+
+    This is deliberately a separate minimal transaction from the normal
+    accepted acknowledgement.  It prevents the provisional state/attempt from
+    remaining an ownerless ``RETRY_SCHEDULED`` row when the product retry worker
+    is disabled.  The already-written Event is diagnostic evidence only until
+    an operator reconciles the explicit technical terminal.
+    """
+
+    diagnostic_id = (
+        int(diagnostic_event_id) if diagnostic_event_id is not None else None
+    )
+    async with db.raw_conn() as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = await conn.execute(
+                """
+                UPDATE smart_update_attempt
+                SET finished_at=COALESCE(finished_at, CURRENT_TIMESTAMP),
+                    terminal_outcome='FAILED_TECHNICAL', accepted_event_id=NULL,
+                    diagnostic_event_id=?, reason=?
+                WHERE candidate_state_id=? AND attempt_no=?
+                """,
+                (
+                    diagnostic_id,
+                    reason,
+                    receipt.candidate_state_id,
+                    receipt.attempt_no,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("candidate_ack_failure_attempt_missing")
+            await cursor.close()
+            cursor = await conn.execute(
+                """
+                UPDATE smart_update_candidate_state
+                SET current_outcome='FAILED_TECHNICAL', accepted_event_id=NULL,
+                    diagnostic_event_id=?, reason=?, next_retry_at=NULL,
+                    retry_attempts=?, retry_exhausted=1,
+                    claimed_by=NULL, claim_expires_at=NULL,
+                    completed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    diagnostic_id,
+                    reason,
+                    receipt.attempt,
+                    receipt.candidate_state_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("candidate_ack_failure_state_missing")
+            await cursor.close()
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+
+
 async def smart_update_funnel_counts(db: Any) -> dict[str, int]:
     """Return a balance-checkable snapshot of current candidate terminals."""
 

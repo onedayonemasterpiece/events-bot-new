@@ -68,11 +68,15 @@ ticket, festival, and manual/forwarded adapters supply stable producer ordinals
 where their envelope can contain siblings. `CREATED`, `MERGED`, and exact
 `NOOP_EXACT_REPLAY` are accepted; only those results can schedule projections,
 emit notices, increment accepted counters, or store an imported Event pointer.
-`RETRY_SCHEDULED` is left to the default-on durable worker, and
-`REJECTED_PRODUCT_POLICY` retains its explicit permanent reason.
+`RETRY_SCHEDULED` is a legacy/provisional storage value only; the worker is
+default-off and every current invocation closes as accepted, an explicitly
+typed `REJECTED_PRODUCT_POLICY`, or visible `FAILED_TECHNICAL`. Verification
+diagnostics and malformed/uncertain provider responses can never authorize a
+product rejection by substring. Ticket, festival and manual adapters preserve
+the same terminal classification instead of recreating a private retry.
 
 Telegram exact replay re-arms the same idempotent completion work as an
-accepted no-change import. VK roundup children are resolved independently: an
-unresolved child defers the carrier without erasing accepted sibling mappings,
-and a later keyed replay cannot re-create those siblings. Ticket exact replay
-is a successful queue completion.
+accepted no-change import. VK roundup children are resolved independently; a
+technical child makes the selected carrier visibly terminal without erasing
+accepted sibling mappings, and an explicit operator re-drive cannot re-create
+those siblings. Ticket exact replay is a successful queue completion.

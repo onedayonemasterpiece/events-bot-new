@@ -17900,7 +17900,7 @@ async def add_events_from_text(
                     "rejected_product_policy"
                     if update_result.outcome
                     is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
-                    else "retry_scheduled"
+                    else "failed_technical"
                 )
                 results.append((None, False, result_lines, result_status))
                 continue
@@ -18372,8 +18372,8 @@ async def handle_add_event_raw(message: types.Message, db: Database, bot: Bot):
             message_text = f"Event rejected: {update_result.reason or 'product policy'}"
         else:
             message_text = (
-                "Event save retry scheduled: "
-                f"{update_result.reason or 'transient Smart Update failure'}"
+                "Event save failed (technical terminal; operator action required): "
+                f"{update_result.reason or 'Smart Update technical failure'}"
             )
         await bot.send_message(message.chat.id, message_text)
         return

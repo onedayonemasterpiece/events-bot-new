@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Linear Smart caller fail-closed completion:** verification/provider
+  diagnostics no longer become product no-event decisions by substring;
+  accepted-write acknowledgement failures are retried inline then close the
+  ledger as visible `FAILED_TECHNICAL`. Ticket, festival, manual and legacy VK
+  adapters no longer recreate hidden Smart Update retry state.
 - **VK auto-import linear batch closure:** removed the remaining durable retry
   transitions from operator-visible `/vk_auto_import` rows. Source fetch,
   missing/incomplete evidence, provider/schema, lifecycle, persist, timeout and

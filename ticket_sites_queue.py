@@ -578,15 +578,14 @@ async def process_ticket_sites_queue(
                         err=f"product_policy:{smart_result.reason or 'unspecified'}",
                     )
                     return
-                # Smart Update owns the durable bounded retry. Keep the ticket
-                # source active for its ordinary refresh cycle without turning
-                # the candidate into a queue error or copying a diagnostic ID.
-                report.skipped += 1
+                # Linear Smart Update contract: technical exhaustion is a
+                # visible terminal error, not an active hidden retry.
+                report.failed += 1
                 await _mark_done(
                     item,
-                    status="active",
+                    status="error",
                     result=payload,
-                    err=None,
+                    err=f"failed_technical:{smart_result.reason or 'unspecified'}",
                 )
 
             # Pyramida: URL-scoped kernel

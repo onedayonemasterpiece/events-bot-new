@@ -77,6 +77,7 @@ from smart_update_state import (
     begin_candidate_attempt,
     claim_due_candidates,
     finish_candidate_attempt,
+    terminalize_candidate_ack_failure,
     terminalize_claimed_candidate_technical,
 )
 
@@ -1900,27 +1901,23 @@ def _terminal_outcome_from_legacy_status(
 
 
 def _linear_product_exclusion_reason(result: SmartUpdateResult) -> ProductExclusionReason | None:
-    """Map complete-evidence semantic vetoes to a closed product terminal."""
+    """Map only exact deterministic input defects to a product terminal.
+
+    Verification/provider results are not product verdicts.  In particular,
+    an invalid or uncertain LLM response must never be converted to no-event by
+    matching a diagnostic substring.
+    """
 
     reason = str(result.reason or "").casefold()
     if result.retry_reason is RetryReason.SOURCE_DECISION_INVALID:
-        if "missing_date" in reason:
-            return ProductExclusionReason.MISSING_DATE
-        if "missing_title" in reason:
-            return ProductExclusionReason.MISSING_TITLE
-        if "empty_title" in reason:
-            return ProductExclusionReason.EMPTY_TITLE_AFTER_CLEAN
-        if "missing_location" in reason:
-            return ProductExclusionReason.MISSING_LOCATION
-    if result.retry_reason is not RetryReason.SOURCE_VERIFICATION_REQUIRED:
-        return None
-    if "location" in reason:
-        return ProductExclusionReason.MISSING_LOCATION
-    if "anchor_role" in reason:
-        return ProductExclusionReason.MISSING_DATE
-    if "eventness" in reason or "non_event" in reason or "occurrence" in reason:
-        return ProductExclusionReason.NON_EVENT
-    return ProductExclusionReason.NON_EVENT
+        return {
+            "missing_date": ProductExclusionReason.MISSING_DATE,
+            "invalid_date": ProductExclusionReason.MISSING_DATE,
+            "missing_title": ProductExclusionReason.MISSING_TITLE,
+            "empty_title_after_clean": ProductExclusionReason.EMPTY_TITLE_AFTER_CLEAN,
+            "missing_location": ProductExclusionReason.MISSING_LOCATION,
+        }.get(reason)
+    return None
 
 
 def _terminalize_linear_result(result: SmartUpdateResult) -> SmartUpdateResult:
@@ -16416,31 +16413,54 @@ async def smart_event_update(
             )
     result = _terminalize_linear_result(result)
     result.attempt = receipt.attempt
-    try:
-        await finish_candidate_attempt(
-            db,
-            receipt,
-            outcome=result.outcome,
-            event_id=result.event_id,
-            diagnostic_event_id=result.diagnostic_event_id,
-            reason=result.reason,
-            retry_reason=result.retry_reason,
-            product_exclusion_reason=result.product_exclusion_reason,
-            identity_distinct_reason=result.identity_distinct_reason,
-            lifecycle_reason=result.lifecycle_reason,
-        )
-    except Exception:
-        logger.exception("smart_update: durable terminal acknowledgement failed")
-        if result.is_accepted:
-            # The domain write is already authoritative. Regressing the caller
-            # to RETRY would recreate the observed "imported pointer + failed
-            # queue status" incident. Candidate state remains RETRY_SCHEDULED
-            # from attempt start and exact replay will reconcile its ledger.
-            return result
+    ack_error: Exception | None = None
+    for ack_try in range(3):
+        try:
+            await finish_candidate_attempt(
+                db,
+                receipt,
+                outcome=result.outcome,
+                event_id=result.event_id,
+                diagnostic_event_id=result.diagnostic_event_id,
+                reason=result.reason,
+                retry_reason=result.retry_reason,
+                product_exclusion_reason=result.product_exclusion_reason,
+                identity_distinct_reason=result.identity_distinct_reason,
+                lifecycle_reason=result.lifecycle_reason,
+            )
+            ack_error = None
+            break
+        except Exception as exc:
+            ack_error = exc
+            logger.warning(
+                "smart_update: terminal acknowledgement attempt=%s failed",
+                ack_try + 1,
+                exc_info=True,
+            )
+            if ack_try < 2:
+                await asyncio.sleep(0.05 * (ack_try + 1))
+    if ack_error is not None:
+        diagnostic_id = result.event_id or result.diagnostic_event_id
+        try:
+            await terminalize_candidate_ack_failure(
+                db,
+                receipt,
+                diagnostic_event_id=diagnostic_id,
+            )
+        except Exception:
+            logger.critical(
+                "smart_update.candidate_ack_failure_unpersisted candidate_key=%s "
+                "attempt_no=%s diagnostic_event_id=%s",
+                receipt.candidate_key,
+                receipt.attempt_no,
+                diagnostic_id,
+                exc_info=True,
+            )
         return SmartUpdateResult(
             outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
-            diagnostic_event_id=result.event_id or result.diagnostic_event_id,
-            reason="candidate_state_ack_failed", retry_reason=RetryReason.CANDIDATE_STATE_ACK_FAILED,
+            diagnostic_event_id=diagnostic_id,
+            reason="candidate_state_ack_failed",
+            retry_reason=RetryReason.CANDIDATE_STATE_ACK_FAILED,
             attempt=receipt.attempt,
         )
     return result

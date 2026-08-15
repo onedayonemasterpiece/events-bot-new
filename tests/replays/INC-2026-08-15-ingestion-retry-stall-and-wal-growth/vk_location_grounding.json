@@ -1,0 +1,39 @@
+{
+  "positive": {
+    "source_type": "vk",
+    "source_url": "https://vk.com/wall-32547811_11187",
+    "source_text": "18 августа в Чеховке состоится презентация экологического маршрута «Зелёное сердце города». Начало в 15:00. Адрес: Московский проспект, 39.",
+    "title": "Презентация экологического маршрута «Зелёное сердце города»",
+    "date": "2026-08-18",
+    "time": "15:00",
+    "location_name": "Библиотека Чехова",
+    "location_address": "Московский проспект, 39",
+    "city": "Калининград",
+    "provider_result": {
+      "decision": "keep",
+      "confidence": 0.62,
+      "location_name": "Библиотека Чехова",
+      "location_address": "Московский проспект, 39",
+      "city": "Калининград",
+      "evidence_quote": "Адрес: Московский проспект, 39",
+      "reason_short": "The address and colloquial venue name are explicit."
+    }
+  },
+  "negative": {
+    "source_type": "vk",
+    "source_url": "https://vk.com/wall-negative-control",
+    "source_text": "Встретимся на Дне города в Янтарном.",
+    "title": "Праздничная программа",
+    "date": "2026-08-18",
+    "location_name": "День города в Янтарном",
+    "city": "Янтарный",
+    "provider_result": {
+      "decision": "reject_missing_location",
+      "confidence": 0.95,
+      "location_name": "День города в Янтарном",
+      "city": "Янтарный",
+      "evidence_quote": "на Дне города в Янтарном",
+      "reason_short": "The source names an occasion and settlement, not a venue."
+    }
+  }
+}

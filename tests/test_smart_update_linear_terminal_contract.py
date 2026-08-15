@@ -9,6 +9,7 @@ import pytest
 import smart_event_update as seu
 import scheduling
 from db import Database, _migrate_smart_update_terminal_contract
+from models import Event
 from smart_update_state import ProductExclusionReason, RetryReason, SmartUpdateTerminalOutcome
 
 
@@ -150,12 +151,12 @@ async def test_unchanged_semantic_fingerprint_never_schedules_retry(tmp_path, mo
     monkeypatch.setattr(seu, "_smart_event_update_impl", semantic_veto)
     first = await seu.smart_event_update(db, candidate, schedule_tasks=False)
     second = await seu.smart_event_update(db, candidate, schedule_tasks=False)
-    assert first.outcome is second.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
-    assert first.product_exclusion_reason is ProductExclusionReason.MISSING_LOCATION
+    assert first.outcome is second.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+    assert first.product_exclusion_reason is None
     with sqlite3.connect(db.path) as conn:
         assert conn.execute(
             "SELECT current_outcome,next_retry_at,claimed_by FROM smart_update_candidate_state"
-        ).fetchone() == ("REJECTED_PRODUCT_POLICY", None, None)
+        ).fetchone() == ("FAILED_TECHNICAL", None, None)
         assert conn.execute(
             "SELECT COUNT(*) FROM smart_update_attempt WHERE terminal_outcome='RETRY_SCHEDULED'"
         ).fetchone()[0] == 0
@@ -191,4 +192,80 @@ async def test_technical_result_is_visible_terminal_not_background_work(tmp_path
         assert conn.execute(
             "SELECT current_outcome,retry_exhausted,next_retry_at FROM smart_update_candidate_state"
         ).fetchone() == ("FAILED_TECHNICAL", 1, None)
+    await db.close()
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "occurrence_scope_review:llm_response_invalid",
+        "create_bundle_grounding:llm_response_invalid",
+        "anchor_role_review:llm_response_invalid",
+        "mixed_occurrence_role_review_non_event",
+    ],
+)
+def test_verification_diagnostics_never_become_product_rejections(reason):
+    result = seu.SmartUpdateResult(
+        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+        reason=reason,
+        retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
+    )
+
+    terminal = seu._terminalize_linear_result(result)
+
+    assert terminal.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+    assert terminal.product_exclusion_reason is None
+
+
+@pytest.mark.asyncio
+async def test_accepted_write_ack_failure_closes_technical_not_retry(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_INIT_MINIMAL", "1")
+    db = Database(str(tmp_path / "ack-failure.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        event = Event(
+            title="Accepted before ack",
+            description="Accepted before ack",
+            date="2026-08-20",
+            time="18:00",
+            location_name="Venue",
+            source_text="Accepted before ack",
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        event_id = int(event.id)
+
+    async def accepted(*_args, **_kwargs):
+        return seu.SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.CREATED,
+            event_id=event_id,
+        )
+
+    async def broken_ack(*_args, **_kwargs):
+        raise OSError("injected acknowledgement failure")
+
+    monkeypatch.setattr(seu, "_smart_event_update_impl", accepted)
+    monkeypatch.setattr(seu, "finish_candidate_attempt", broken_ack)
+    candidate = seu.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_99",
+        source_text="Event at Venue",
+        title="Event",
+        date="2026-08-20",
+        location_name="Venue",
+    )
+
+    result = await seu.smart_event_update(db, candidate, schedule_tasks=False)
+
+    assert result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+    assert result.diagnostic_event_id == event_id
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute(
+            "SELECT current_outcome,retry_exhausted,next_retry_at,claimed_by "
+            "FROM smart_update_candidate_state"
+        ).fetchone() == ("FAILED_TECHNICAL", 1, None, None)
+        assert conn.execute(
+            "SELECT terminal_outcome,finished_at IS NOT NULL FROM smart_update_attempt"
+        ).fetchone() == ("FAILED_TECHNICAL", 1)
     await db.close()

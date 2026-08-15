@@ -31,6 +31,9 @@
      - Дом искусств: `kaggle/ParseDomIskusstv/` (URL‑scoped),
      - Qtickets: `kaggle/ParseQtickets/` (full scan → фильтрация по URL из очереди).
    - для каждого результата вызывает Smart Update как `parser:<site_kind>` с trust=`high`.
+   - `FAILED_TECHNICAL` завершает строку как видимую `error` с typed reason;
+     очередь не оставляет источник `active` под предположением, что скрытый
+     Smart Update worker когда-нибудь повторит решение.
   - если Smart Update принимает событие как active/non-silent, очередь ставит обычный managed fanout (Telegraph/ICS + Telegram event + VK), а не только enrichment/page jobs; уже опубликованные поверхности должны становиться no-op/edit через хэши/idempotency.
 
 3) После успешной обработки:
