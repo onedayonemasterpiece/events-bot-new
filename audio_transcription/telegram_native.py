@@ -23,6 +23,18 @@ def is_voice_too_long_error(exc: BaseException) -> bool:
     )
 
 
+def is_transient_internal_error(exc: BaseException) -> bool:
+    """Recognize Telegram/Telethon internal-DC exhaustion without broad retries."""
+
+    name = type(exc).__name__.casefold()
+    message = str(exc).strip().casefold()
+    return "interdccallerror" in name or bool(
+        message.startswith("request was unsuccessful ")
+        and message.endswith(" time(s)")
+        and message[len("request was unsuccessful ") : -len(" time(s)")].isdigit()
+    )
+
+
 def flood_wait_seconds(exc: BaseException) -> int | None:
     raw = getattr(exc, "seconds", None)
     if raw is None:
@@ -103,6 +115,19 @@ class TelegramNativeTranscriber:
                     ):
                         await asyncio.sleep(wait_seconds + 1)
                         continue
+                    if is_transient_internal_error(exc):
+                        if attempt < 2:
+                            # Telethon has already exhausted its short internal
+                            # request retry budget. Retry the same durable voice
+                            # message after a bounded backoff; do not upload a
+                            # duplicate temporary message for a DC transient.
+                            await asyncio.sleep(10 * (attempt + 1))
+                            continue
+                        raise NativeTranscriptionError(
+                            "TELEGRAM_INTERNAL_RETRY_EXHAUSTED",
+                            "Telegram transcription service remained unavailable",
+                            retry_safe=False,
+                        ) from exc
                     raise
                 if not bool(getattr(result, "pending", False)):
                     text = normalize_transcript_text(getattr(result, "text", ""))

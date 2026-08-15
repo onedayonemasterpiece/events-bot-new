@@ -236,6 +236,10 @@ KAGGLE_OUTPUT_INVALID
 ```
 
 A Telegram timeout or unknown provider outcome is not blindly resent under a different idempotency key.
+Telegram internal-DC exhaustion (including Telethon's bounded
+`Request was unsuccessful N time(s)` wrapper) is retried against the same
+temporary voice message with bounded backoff before failing closed; it does not
+upload a duplicate voice note merely to recover from a provider transient.
 
 ## Code map
 

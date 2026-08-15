@@ -7,6 +7,11 @@
   native Telegram transcription, truthful relative/absolute timestamps and
   digest-verified TXT/timeline/JSON/SRT/VTT exports. Codex remains exact-seven;
   activation still requires a separate Premium-capable session and live canary.
+- **Fixed — audio transcription Telegram internal-DC retry:** a live canary
+  exposed Telethon exhausting its short `TranscribeAudioRequest` retries on
+  `InterdcCallErrorError`; the worker now applies bounded backoff to the same
+  temporary voice message instead of failing immediately or uploading a
+  duplicate message.
 - **Release control:** disabled the workflow that automatically promoted Draft
   PRs and enabled auto-merge; readiness and merge now require an explicit
   controlled release operation.
