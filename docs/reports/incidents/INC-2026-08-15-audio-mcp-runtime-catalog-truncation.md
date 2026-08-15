@@ -122,10 +122,17 @@ or renaming any existing tool and without changing OAuth consent.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending exact-main deploy
-- regression checks: pending
-- post-deploy verification: pending
+- deployed SHA: `5e86d87583875b240f3cdbac9f198e6742e4b6c0`, reachable
+  from `origin/main`
+- deploy path: `scripts/deploy_fly_main.sh` from a clean detached worktree at
+  exact `origin/main`; PR #510, all three required GitHub checks passed
+- regression checks: focused audio `20 passed`; private MCP `454 passed`;
+  remote-session `7 passed`; package compileall passed
+- post-deploy verification: `/healthz` ready with zero issues; in-container
+  immutable SHA matched; exact-scope production `tools/list` retained all 30
+  tools and returned start/status/get as positions 1–3 with
+  `telegram:publish`. The final real ChatGPT start/job/result acceptance remains
+  pending before incident closure.
 
 ## Prevention
 
