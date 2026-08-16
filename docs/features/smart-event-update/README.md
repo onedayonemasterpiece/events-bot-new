@@ -252,6 +252,11 @@ outbox work; only its durable attempt receipt may be written. A changed packet
 with the same key proceeds as an update, while a different key in the same
 carrier may create a distinct Event.
 
+For the upstream VK parse receipt, provider-model identity is audit metadata,
+not replay identity. An unchanged packet with the same parse prompt version
+must reuse the successful receipt even if the requested model was routed to a
+different provider model or the configured requested model later changes.
+
 A canonical source URL plus the same date, time and venue is not sufficient
 identity evidence by itself: one programme post can contain several distinct
 titled sibling events in the same slot. The deterministic same-source gate may

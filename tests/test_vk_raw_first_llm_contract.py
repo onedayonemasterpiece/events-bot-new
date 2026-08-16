@@ -424,7 +424,9 @@ async def test_successful_parse_receipt_survives_later_terminal_carrier_failure(
         db,
         source_packet_id=packet_id,
         prompt_version="p",
-        model="models/gemma-4-31b-it",
+        # Requested-model configuration may differ from the provider model
+        # stored on the immutable receipt after large-carrier routing.
+        model="gemini-3.1-flash-lite",
     )
     assert loaded == receipt
     await vk_review.record_exact_parse_replay(

@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **VK immutable parse replay across model routing:** unchanged source packets
+  now reuse their successful prompt-version receipt even when the requested
+  model is routed to, or later configured as, another provider model. This
+  prevents a redundant provider call and duplicate successful-parse-key
+  failure during exact recovery.
 - **Smart Update same-source sibling identity:** a shared source URL, date,
   time and venue no longer deterministically collapse distinct titled children
   from one programme post. Exact title-related occurrences remain protected

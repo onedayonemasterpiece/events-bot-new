@@ -343,6 +343,10 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   18558 to four distinct child bindings without duplicates, then repeat a
   bounded current/history VK qualification with zero unexplained/technical
   outcomes.
+- [ ] deploy the exact-receipt routing correction exposed by recovery ops 6063:
+  an unchanged packet must reuse its immutable successful parse when requested
+  and actual routed model names differ, without another provider call or a
+  duplicate `parse_key` failure.
 - [ ] run one S22 Telegram catch-up and require a complete carrier/child outcome
   balance plus verified new DB writes before reporting ingestion healthy.
 - [ ] static-site projection canary remains open but is explicitly deferred by
@@ -428,6 +432,17 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   titled films were created while the second and fourth sibling films sharing
   the same source/date/time/venue were vetoed. This is failure evidence, not a
   successful ingestion gate;
+- PR #518 merged as
+  `99782ea21e26e326948e631c4dd7e5d1216fa78a` and deployed from clean exact
+  main as Fly v1987. CI and 339 focused Smart/VK regressions passed; Fly was
+  1/1, three health probes returned HTTP 200, `quick_check=ok`, WAL was 49,472
+  bytes and `/data` had about 1.10 GiB available;
+- exact carrier recovery ops 6063 did not reach the sibling identity code:
+  its immutable successful parse was stored under routed model
+  `gemini-3.1-flash-lite`, while lookup required the configured requested model
+  `models/gemma-4-31b-it`. The unchanged packet was redundantly parsed and its
+  successful `parse_key` collided with the existing receipt. This is a newly
+  proven replay-boundary blocker and the carrier remains failed technical;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
