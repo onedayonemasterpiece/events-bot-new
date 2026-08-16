@@ -107,6 +107,20 @@ reader is not exposed.
   fallbacks, recurring parser URL matching and authoritative parser create/
   update metrics. Merge, exact-main deploy and live compensating runs remain
   required before these changes may be called effective.
+- 2026-08-16 12:15–12:47 UTC — all-source parser run 6024 processes 238 rows
+  across all eight configured sources and creates six events, but leaves one
+  Sobor and three Qtickets rows as visible `FAILED_TECHNICAL`; parser recovery
+  is therefore still required.
+- 2026-08-16 12:51 UTC — PR #514 is deployed from clean exact
+  `origin/main@3458b549d326d373cb3181e3672c4b7c8b2c739c` as Fly v1983;
+  Fly is 1/1, health is HTTP 200, `quick_check=ok`, WAL is about 2.4 MiB and
+  `/data` has about 1.07 GiB available.
+- 2026-08-16 12:54–12:56 UTC — exact four-row VK replay run 6033 proves the
+  OCR/final-adjudication fixes on two rows (`RECAP_ONLY` and
+  `NO_ATTENDABLE_EVENT`) but exposes two remaining boundaries: a 19.445-second
+  TPM Retry-After was not honoured, and a later carrier failure hid a durable
+  successful parse receipt, causing a duplicate successful `parse_key`
+  attempt. Both are prevention blockers, not accepted product outcomes.
 
 ## Root Cause
 
@@ -292,8 +306,14 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - [x] implement the run-6020 residual corrections: bounded retryable OCR with
   per-image evidence preservation, one schema-strict same-invocation VK final
   adjudication, and explicit unmatched-lifecycle product no-op semantics.
-- [ ] merge/deploy the run-6020 residual corrections from exact main, re-drive
-  the exact four carriers and require zero technical/unresolved outcomes.
+- [x] merge/deploy the run-6020 residual corrections from exact main as PR
+  #514 / Fly v1983.
+- [x] re-drive the exact four carriers in run 6033; two closed correctly and
+  two exposed exact provider-wait/parse-receipt preservation blockers.
+- [x] implement bounded same-claim provider Retry-After and immutable
+  successful-receipt preservation with focused regression tests.
+- [ ] merge/deploy that live-qualification follow-up and re-drive exact inbox
+  19444/19488 to zero technical/unresolved outcomes.
 - [ ] run one
   S22 Telegram catch-up, bounded current/history VK drain and all-source parser
   catch-up, and require zero unexplained/technical outcomes plus verified new
@@ -338,6 +358,16 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   7692/7693/7694 and updated 7130, with `deferred=0`, but also produced four
   `FAILED_TECHNICAL` receipts. Those four exact carriers are the mandatory
   post-residual-deploy replay cohort; ingestion is not declared healthy yet;
+- PR #514 merged as `3458b549d326d373cb3181e3672c4b7c8b2c739c` and Fly v1983
+  runs that exact in-image SHA. Postdeploy `/healthz` is HTTP 200, Fly is 1/1,
+  `quick_check=ok`, WAL is 2,504,992 bytes and `/data` available is
+  1,147,731,968 bytes;
+- all-source parser run 6024: 238 processed / eight sources / six created /
+  five updated / 223 unchanged / four `FAILED_TECHNICAL` / zero deferred;
+- exact VK replay run 6033: four processed / four terminal / two confirmed
+  no-event / two `FAILED_TECHNICAL` / zero deferred. The remaining exact IDs
+  are 19444 (provider TPM Retry-After) and 19488 (successful parse receipt
+  hidden by later carrier terminal); neither is accepted as ingestion health;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

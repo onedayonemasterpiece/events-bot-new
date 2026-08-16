@@ -630,10 +630,17 @@ async def load_successful_parse_receipt(
             """
             SELECT parse_result_json
             FROM vk_source_packet
-            WHERE id=? AND llm_status='completed'
+            WHERE id=?
               AND prompt_version=? AND model=?
               AND successful_parse_key IS NOT NULL
               AND parse_result_json IS NOT NULL
+              AND EXISTS(
+                  SELECT 1 FROM vk_source_packet_attempt AS attempt
+                  WHERE attempt.parse_key=vk_source_packet.successful_parse_key
+                    AND attempt.source_packet_id=vk_source_packet.id
+                    AND attempt.llm_completed=1
+                    AND attempt.structured_response_valid=1
+              )
             """,
             (int(source_packet_id), str(prompt_version), str(model)),
         )
@@ -871,8 +878,23 @@ async def record_source_parse_attempt(
             await conn.execute(
                 """
                 UPDATE vk_source_packet
-                SET llm_status='retry_scheduled', evidence_manifest_json=?,
-                    prompt_version=?, model=?, quota_scope=?,
+                SET llm_status=CASE
+                        WHEN successful_parse_key IS NOT NULL
+                         AND parse_result_json IS NOT NULL
+                        THEN 'completed' ELSE 'retry_scheduled' END,
+                    evidence_manifest_json=CASE
+                        WHEN successful_parse_key IS NOT NULL
+                         AND parse_result_json IS NOT NULL
+                        THEN evidence_manifest_json ELSE ? END,
+                    prompt_version=CASE
+                        WHEN successful_parse_key IS NOT NULL
+                         AND parse_result_json IS NOT NULL
+                        THEN prompt_version ELSE ? END,
+                    model=CASE
+                        WHEN successful_parse_key IS NOT NULL
+                         AND parse_result_json IS NOT NULL
+                        THEN model ELSE ? END,
+                    quota_scope=?,
                     last_typed_reason=?, updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
                 """,
@@ -1121,7 +1143,11 @@ async def mark_carrier_outcome(
             await conn.execute(
                 """
                 UPDATE vk_source_packet
-                SET status=?,llm_status=?,terminal_carrier_outcome=?,
+                SET status=?,llm_status=CASE
+                        WHEN successful_parse_key IS NOT NULL
+                         AND parse_result_json IS NOT NULL
+                        THEN 'completed' ELSE ? END,
+                    terminal_carrier_outcome=?,
                     lease_owner=NULL,lease_expires_at=NULL,
                     provider_retry_after=NULL,last_typed_reason=?,
                     updated_at=CURRENT_TIMESTAMP
