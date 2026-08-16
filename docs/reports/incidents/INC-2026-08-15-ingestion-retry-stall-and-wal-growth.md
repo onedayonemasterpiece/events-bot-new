@@ -121,6 +121,14 @@ reader is not exposed.
   TPM Retry-After was not honoured, and a later carrier failure hid a durable
   successful parse receipt, causing a duplicate successful `parse_key`
   attempt. Both are prevention blockers, not accepted product outcomes.
+- 2026-08-16 13:51–13:53 UTC — after PR #516 / Fly v1985, exact inbox 19444
+  still closes `FAILED_TECHNICAL`. A read-only reconstruction of the exact
+  complete carrier (444 source chars plus four cached OCR blocks, 5,630 OCR
+  chars) and provider `countTokens` proves 9,733 input tokens and a 16,422-token
+  calibrated reservation against Gemma's 15,000 TPM bucket. This is an
+  impossible admission, not a transient quota window. VK's explicit default
+  model spelling had accidentally disabled the already-supported large-post
+  Flash-Lite route.
 
 ## Root Cause
 
@@ -318,8 +326,13 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   pre-pass exposed same-event source-row non-idempotency.
 - [x] implement the resulting bounded multi-throttle loop, same-event exact
   source-row reuse and canonical-parser identity-adjudicator routing.
-- [ ] merge/deploy those final live residuals and re-drive inbox 19444 plus the
-  four run-6024 parser carriers to zero technical/unresolved outcomes.
+- [x] merge/deploy the PR #516 live residuals as exact main
+  `b8277f5390145ac3349aa57194e20e359820ff42` / Fly v1985; scheduled run 6041
+  then processed 15/15 terminal rows with four created events and zero
+  technical/deferred outcomes.
+- [ ] merge/deploy the exact oversized-carrier route correction and re-drive
+  inbox 19444 plus the four run-6024 parser carriers to zero technical/
+  unresolved outcomes.
 - [ ] run one
   S22 Telegram catch-up, bounded current/history VK drain and all-source parser
   catch-up, and require zero unexplained/technical outcomes plus verified new
@@ -383,6 +396,13 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   remained technical because two consecutive coarse 1ms TPM throttles exceeded
   the old one-retry implementation. This is evidence for the multi-throttle
   same-claim correction, not a successful ingestion gate;
+- PR #516 merged/deployed as
+  `b8277f5390145ac3349aa57194e20e359820ff42` / Fly v1985. Scheduled VK run
+  6041 processed 15 rows, created events 7701–7704, produced 11 typed product
+  rejections and zero technical/deferred/unresolved rows. Exact replay 6045
+  still left inbox 19444 technical; exact read-only prompt reconstruction then
+  proved `input_tokens=9733`, calibrated `reserved_tpm=16422`, while every
+  registered Gemma project lane is capped at `tpm=15000`;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

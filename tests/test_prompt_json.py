@@ -159,6 +159,61 @@ async def test_parse_event_via_llm_no_escalation_when_output_is_clean(monkeypatc
     assert result[0]["title"].startswith("Лекция")
 
 
+@pytest.mark.asyncio
+async def test_explicit_default_model_does_not_disable_large_post_route(monkeypatch):
+    """VK's receipt model spelling must not pin an oversized carrier to Gemma.
+
+    Regression for INC-2026-08-15 carrier 19444: four complete OCR pages made
+    the exact Gemma reservation larger than the model's whole TPM bucket.
+    """
+
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_MODEL", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "2500")
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_MODEL", "gemini-3.1-flash-lite")
+    calls: list[str | None] = []
+
+    async def fake_gemma(_text, source_channel=None, **kwargs):
+        calls.append(kwargs.get("gemma_model"))
+        return main.ParsedEvents(
+            [{"title": "Лекция «Без потери события»", "date": "2026-08-20"}]
+        )
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+
+    result = await main.parse_event_via_llm(
+        "Короткий основной текст",
+        poster_texts=["Полный OCR " + ("данные " * 500)],
+        gemma_model="models/gemma-4-31b-it",
+    )
+
+    assert len(result) == 1
+    assert calls == ["gemini-3.1-flash-lite"]
+
+
+@pytest.mark.asyncio
+async def test_explicit_nondefault_model_remains_operator_pin_for_large_post(monkeypatch):
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.delenv("EVENT_PARSE_GEMMA_MODEL", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "2500")
+    calls: list[str | None] = []
+
+    async def fake_gemma(_text, source_channel=None, **kwargs):
+        calls.append(kwargs.get("gemma_model"))
+        return main.ParsedEvents(
+            [{"title": "Лекция «Явный маршрут»", "date": "2026-08-20"}]
+        )
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    await main.parse_event_via_llm(
+        "Короткий основной текст",
+        poster_texts=["Полный OCR " + ("данные " * 500)],
+        gemma_model="gemini-3.5-flash-lite",
+    )
+
+    assert calls == ["gemini-3.5-flash-lite"]
+
+
 def test_event_parse_defender_check_returns_reasons_for_each_flagged_event():
     events = [
         {"title": "Концерт «Скитальцы»: Артур Беркут и Сергей Маврин"},

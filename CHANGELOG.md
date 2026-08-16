@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **VK complete-evidence quota routing:** an explicit spelling of the normal
+  Gemma event-parse model (as supplied by VK receipt accounting) no longer
+  disables the existing large-carrier route. Complete long text/OCR carriers
+  now go straight to Gemini Flash-Lite instead of repeatedly requesting more
+  TPM than the whole Gemma project bucket can admit; an explicitly different
+  operator model remains pinned.
 - **Linear ingestion live residuals:** VK now keeps retrying explicit provider
   throttles inside the current bounded claim instead of stopping after the
   first retry. Same-event lifecycle/context replays reuse the existing
