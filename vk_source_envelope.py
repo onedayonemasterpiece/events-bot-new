@@ -240,7 +240,11 @@ def _attachment_preview(
         sizes = photo.get("sizes") if isinstance(photo, Mapping) else ()
         return _best_image_url(sizes or ()), expected, "link_preview"
     if attachment_type == "video":
-        images = payload.get("first_frame") or payload.get("image") or ()
+        # VK/OK ``first_frame`` links often carry short-lived tokens and can
+        # return 404 minutes later.  The regular ``image`` variants are the
+        # stable preview family used by the web client; prefer them so a valid
+        # carrier does not lose its only visual evidence during import.
+        images = payload.get("image") or payload.get("first_frame") or ()
         expected = bool(images)
         return _best_image_url(images), expected, "video_preview"
     if attachment_type == "doc":

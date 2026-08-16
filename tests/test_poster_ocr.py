@@ -324,6 +324,7 @@ async def test_recognize_posters_uses_cache(tmp_path, monkeypatch):
 async def test_recognize_posters_preserves_successful_siblings_after_one_failure(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setenv("POSTER_OCR_GOOGLE_FALLBACK_ENABLED", "0")
     db = Database(str(tmp_path / "partial.sqlite"))
     await db.init()
 
@@ -345,6 +346,42 @@ async def test_recognize_posters_preserves_successful_siblings_after_one_failure
     async with db.get_session() as session:
         rows = (await session.execute(select(PosterOcrCache))).scalars().all()
     assert sorted(item.text for item in rows) == ["text-good-1", "text-good-2"]
+
+
+@pytest.mark.asyncio
+async def test_recognize_posters_uses_bounded_google_fallback_before_losing_evidence(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "fallback.sqlite"))
+    await db.init()
+    calls: list[str] = []
+
+    async def failed_primary(*_args, **_kwargs):
+        calls.append("primary")
+        raise RuntimeError("primary OCR attempts exhausted")
+
+    async def successful_fallback(data, *, detail):
+        calls.append(f"fallback:{detail}:{data.decode()}")
+        return OcrResult(
+            text="18 августа, концерт",
+            title="Концерт",
+            usage=OcrUsageStats(prompt_tokens=2, completion_tokens=3, total_tokens=5),
+            provider_model="gemini-3.1-flash-lite",
+        )
+
+    monkeypatch.setattr(poster_ocr, "run_ocr", failed_primary)
+    monkeypatch.setattr(poster_ocr, "_run_google_ocr_fallback", successful_fallback)
+    monkeypatch.setenv("POSTER_OCR_GOOGLE_FALLBACK_ENABLED", "1")
+
+    results, spent, _remaining = await poster_ocr.recognize_posters(
+        db, [DummyPoster(b"poster")]
+    )
+
+    assert calls == ["primary", "fallback:auto:poster"]
+    assert len(results) == 1
+    assert results[0].text == "18 августа, концерт"
+    assert results[0].title == "Концерт"
+    assert spent == 5
 
 
 @pytest.mark.asyncio

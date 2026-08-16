@@ -127,6 +127,33 @@ def test_builder_inventory_keeps_semantic_nonvisual_attachments_and_previews() -
     assert envelope["attachment_inventory"][3]["semantic"]["content"]["question"] == "Придёте?"
 
 
+def test_video_prefers_stable_image_preview_over_first_frame_token() -> None:
+    raw = {
+        "id": 14,
+        "date": 100,
+        "text": "Фотоотчёт завершившегося турнира",
+        "attachments": [
+            {
+                "type": "video",
+                "video": {
+                    "owner_id": -1,
+                    "id": 4,
+                    "first_frame": [
+                        {"width": 1080, "height": 1920, "url": "https://img/dead-first-frame"}
+                    ],
+                    "image": [
+                        {"width": 720, "height": 1280, "url": "https://img/stable-image"}
+                    ],
+                },
+            }
+        ],
+    }
+
+    envelope = build_vk_source_envelope(raw, owner_id=1)
+
+    assert envelope["photos"] == ["https://img/stable-image"]
+
+
 def test_semantic_revision_hash_matrix_ignores_counters_and_key_order() -> None:
     raw = {
         "id": 12,

@@ -477,6 +477,23 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   substring check mistook `Калининградская область` in an unrelated exhibition
   title for an explicit mention of city `Калининград`. This is failure evidence
   and keeps the VK gate open.
+- PR #521 merged as
+  `d9809f8c3becf49a5a9d31b5f01509bdd0041b4a` and was deployed from clean exact
+  main as Fly v1990. Three `/healthz` probes returned HTTP 200, Fly was 1/1,
+  the callback validation endpoint returned the expected HTTP 400 contract,
+  `quick_check=ok`, WAL stayed near 4 MiB and `/data` had about 1.10 GiB
+  available. Exact replay ops 6078 closed the city-grounding carrier as a
+  correct merge into event 7711 with zero technical/deferred/unresolved rows.
+- bounded qualification ops 6079 then processed 15/15 terminal rows, created
+  five events (7718-7722) and produced zero technical/deferred/unresolved
+  outcomes. The next automatic scheduled batch, ops 6085, created event 7723
+  and updated 3798 but exposed three new `FAILED_TECHNICAL` carriers. Readback
+  proved two concrete evidence-availability boundaries: a stale VK/OK
+  `first_frame` video preview returned HTTP 404, and one photo in each of two
+  galleries exhausted three OpenAI OCR attempts. The strict incomplete-
+  evidence guard then correctly refused to guess `CONFIRMED_NO_EVENT`; this is
+  failure evidence and keeps the ingestion gate open until the same-claim
+  visual fallback is deployed and all three exact carriers are replayed.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

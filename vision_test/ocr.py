@@ -63,6 +63,7 @@ class OcrResult:
     usage: OcrUsage
     title: str | None = None
     request_id: str | None = None
+    provider_model: str | None = None
 
 
 def configure_http(*, session: ClientSession, semaphore: asyncio.Semaphore) -> None:
