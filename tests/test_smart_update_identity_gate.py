@@ -134,6 +134,29 @@ def test_same_source_same_slot_and_venue_does_not_veto_distinct_sibling_title():
     assert verdict.reason_code == "no_identity_veto"
 
 
+def test_same_source_same_slot_generic_format_word_does_not_collapse_short_titles():
+    cand = _Cand(
+        title="Кинопоказ «Малыш»",
+        date="2026-08-29",
+        time="19:00",
+        source_url="https://vk.com/wall-53460968_11826",
+        location_name="Гусевский музей",
+    )
+    ev = _Event(
+        id=7710,
+        title="Кинопоказ «Буратино»",
+        date="2026-08-29",
+        time="19:00",
+        source_vk_post_url="https://vk.com/wall-53460968_11826",
+        location_name="Гусевский музей",
+    )
+
+    verdict = build_identity_gate_verdict(cand, [ev], mode=IdentityGateMode.ENFORCE)
+
+    assert not verdict.should_veto_create
+    assert verdict.reason_code == "no_identity_veto"
+
+
 def test_enforce_vetoes_same_ticket_same_slot_without_auto_merge():
     cand = _Cand(
         title="Pianissimo Илья Папоян",

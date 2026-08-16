@@ -343,10 +343,13 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   18558 to four distinct child bindings without duplicates, then repeat a
   bounded current/history VK qualification with zero unexplained/technical
   outcomes.
-- [ ] deploy the exact-receipt routing correction exposed by recovery ops 6063:
+- [x] deploy the exact-receipt routing correction exposed by recovery ops 6063:
   an unchanged packet must reuse its immutable successful parse when requested
   and actual routed model names differ, without another provider call or a
   duplicate `parse_key` failure.
+- [ ] deploy the positive-child boundary correction exposed by recovery ops
+  6066: preserve the upstream `EVENTS_FOUND` decision into Smart Update and do
+  not treat the generic word `кинопоказ` as identity between different films.
 - [ ] run one S22 Telegram catch-up and require a complete carrier/child outcome
   balance plus verified new DB writes before reporting ingestion healthy.
 - [ ] static-site projection canary remains open but is explicitly deferred by
@@ -443,6 +446,18 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   `models/gemma-4-31b-it`. The unchanged packet was redundantly parsed and its
   successful `parse_key` collided with the existing receipt. This is a newly
   proven replay-boundary blocker and the carrier remains failed technical;
+- PR #519 merged as
+  `7d98ca54282febb6a1398aaea69f05dd914e4550` and was deployed from clean exact
+  main as Fly v1988. CI and 128 focused VK/Smart tests passed; Fly was 1/1,
+  three health probes returned HTTP 200, `quick_check=ok`, WAL was 49,472 bytes
+  and `/data` had about 1.10 GiB available;
+- recovery ops 6066 proved parse replay itself fixed (`exact successful source
+  parse replay packet=5063`, no source-parse provider call), then exposed two
+  later loss boundaries: the VK persist adapter omitted the upstream positive
+  source disposition, so Smart eventness rejected specific children because
+  the carrier was a multi-film programme; and short titles `Малыш`/`Буратино`
+  were falsely related only by the generic word `кинопоказ`. The carrier is
+  still failed technical and this run is not accepted as recovery;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

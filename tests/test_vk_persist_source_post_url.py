@@ -1,9 +1,52 @@
 import pytest
 
 import main
+import smart_event_update as su
 import vk_intake
 from main import Database
 from models import Event, JobTask
+
+
+@pytest.mark.asyncio
+async def test_persist_forwards_typed_positive_source_decision(tmp_path, monkeypatch):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    captured = {}
+
+    async def fake_smart_update(_db, candidate, **_kwargs):
+        captured["candidate"] = candidate
+        return su.SmartUpdateResult(
+            outcome=su.SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+            product_exclusion_reason=su.ProductExclusionReason.NON_EVENT,
+            reason=su.ProductExclusionReason.NON_EVENT.value,
+        )
+
+    monkeypatch.setattr(su, "smart_event_update", fake_smart_update)
+    draft = vk_intake.EventDraft(
+        title="Кинопоказ «Ангелы Ладоги»",
+        date="2026-08-28",
+        time="19:00",
+        venue="Гусевский музей",
+        source_text="Программа Ночи кино",
+    )
+
+    await vk_intake.persist_event_and_pages(
+        draft,
+        [],
+        db,
+        source_post_url="https://vk.com/wall-53460968_11826",
+        producer_ordinal=1,
+        source_disposition="EVENTS_FOUND",
+        source_parse_version="source-parse-v1",
+        source_evidence_complete=True,
+        source_verification_reasons=["multi_event_program"],
+    )
+
+    candidate = captured["candidate"]
+    assert candidate.source_disposition == "EVENTS_FOUND"
+    assert candidate.source_parse_version == "source-parse-v1"
+    assert candidate.source_evidence_complete is True
+    assert candidate.source_verification_reasons == ["multi_event_program"]
 
 
 @pytest.mark.asyncio

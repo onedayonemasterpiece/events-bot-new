@@ -315,6 +315,7 @@ async def test_same_source_same_slot_distinct_titles_create_sibling_events(
         city="Гусев",
         event_type="кинопоказ",
         producer_ordinal=1,
+        source_disposition="EVENTS_FOUND",
     )
 
     result = await smart_event_update(

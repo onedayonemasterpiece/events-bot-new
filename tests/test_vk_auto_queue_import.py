@@ -788,10 +788,11 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
 
     # Persist stub: we only need deterministic ids to verify mapping table; the events
     # themselves are not required for this unit test.
-    counter = {"n": 0}
+    counter = {"n": 0, "persist_kwargs": []}
 
     async def fake_persist(*_args, **_kwargs):
         counter["n"] += 1
+        counter["persist_kwargs"].append(dict(_kwargs))
         return vk_intake.PersistResult(
             event_id=1000 + counter["n"],
             telegraph_url="",
@@ -825,7 +826,12 @@ async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp
             "SELECT event_id FROM vk_inbox_import_event WHERE inbox_id=1 ORDER BY event_id"
         )
         rows = await cur.fetchall()
-        assert [r[0] for r in rows] == [1001, 1002]
+    assert [r[0] for r in rows] == [1001, 1002]
+    assert len(counter["persist_kwargs"]) == 2
+    for persist_kwargs in counter["persist_kwargs"]:
+        assert persist_kwargs["source_disposition"] == "EVENTS_FOUND"
+        assert persist_kwargs["source_parse_version"] == "source-parse-v1"
+        assert persist_kwargs["source_evidence_complete"] is True
 
 
 @pytest.mark.asyncio

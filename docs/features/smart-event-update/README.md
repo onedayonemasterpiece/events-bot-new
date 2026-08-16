@@ -264,6 +264,13 @@ veto creation only when the titles are related; otherwise the candidate must
 continue through the normal distinct-event adjudication. Exact occurrence keys
 and fingerprints, not carrier URL equality, provide replay idempotency.
 
+VK must carry its typed `EVENTS_FOUND`/`MIXED` source decision, parse version,
+evidence completeness and verification reasons through
+`persist_event_and_pages` into every Smart Update child. Such a child is a
+specific extracted event; the downstream eventness gate must not reclassify the
+whole multi-event carrier as a no-event digest. Generic format words such as
+`кинопоказ` do not make otherwise different short titles identity-related.
+
 For read-only rollout evidence independent of the scheduler, run
 `python3 scripts/inspect/audit_identity_gate_rollout.py --db /data/db.sqlite --since-days 14 --format both`.
 It reports decision/gate/vector-error evidence
