@@ -352,6 +352,9 @@ async def test_edited_multi_event_child_reuses_authoritative_occurrence_binding(
     db = Database(str(tmp_path / "edited-multi-event-child.sqlite"))
     await db.init()
     try:
+        # This fixed-date regression isolates occurrence-binding identity; the
+        # independent wall-clock past-event policy is covered separately.
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
         monkeypatch.setattr(

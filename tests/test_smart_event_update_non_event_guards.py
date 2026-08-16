@@ -373,6 +373,9 @@ async def test_mixed_recap_grounded_future_event_keeps_one_day_shape(tmp_path, m
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     try:
+        # This regression exercises mixed-role scoping, not the independent
+        # wall-clock past-event policy; keep its fixed 2026 fixture stable.
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
 

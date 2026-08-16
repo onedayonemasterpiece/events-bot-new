@@ -195,6 +195,46 @@ async def test_technical_result_is_visible_terminal_not_background_work(tmp_path
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_automated_past_event_is_terminal_product_exclusion(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_INIT_MINIMAL", "1")
+    monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "1")
+    db = Database(str(tmp_path / "past-event.sqlite"))
+    await db.init()
+    candidate = seu.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-216003600_16",
+        source_text="Школа Арт-критики 10 ноября 2022 года в 19:00",
+        title="Школа Арт-критики",
+        date="2022-11-10",
+        time="19:00",
+        location_name="Калининградский музей изобразительных искусств",
+        city="Калининград",
+    )
+
+    result = await seu.smart_event_update(db, candidate, schedule_tasks=False)
+
+    assert result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+    assert result.product_exclusion_reason is ProductExclusionReason.PAST_EVENT
+    assert result.reason == ProductExclusionReason.PAST_EVENT.value
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM event").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM event_source").fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT current_outcome,reason,next_retry_at,claimed_by "
+            "FROM smart_update_candidate_state"
+        ).fetchone() == (
+            "REJECTED_PRODUCT_POLICY",
+            "past_event",
+            None,
+            None,
+        )
+        assert conn.execute(
+            "SELECT terminal_outcome,finished_at IS NOT NULL FROM smart_update_attempt"
+        ).fetchone() == ("REJECTED_PRODUCT_POLICY", 1)
+    await db.close()
+
+
 @pytest.mark.parametrize(
     "reason",
     [

@@ -590,9 +590,31 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - Follow-up prevention now treats the existing unique child binding as final
   identity for changed packets: it bypasses the generic merge gate and permits
   only an exact source-grounded title to repair that same Event. A regression
-  reproduces `Большое кино` -> `1+1` with one EventSource and no retry. Merge,
-  exact-main deploy, one corrected replay of state 7205, and readback of event
-  7751 remain pending.
+  reproduces `Большое кино` -> `1+1` with one EventSource and no retry. PR #528
+  merged as `922812dca4ce8a99d03762ef96bb4d7cf9756548` and was deployed from clean
+  exact main as Fly v1997. The corrected replay closed state 7205 as `MERGED`
+  and restored event 7751 to exact title `1+1`, venue `Заря`, address
+  `Мира 41-43`, with one EventSource and no retry.
+- targeted current-day Qtickets parser catch-up ops 6139 completed `success`:
+  36 processed, 2 created, 34 unchanged, zero failures/retries/errors. The
+  three older Qtickets `FAILED_TECHNICAL` attempts are superseded by accepted
+  current-occurrence Events with exact canonical source bindings; they are not
+  active missing-event work.
+- bounded VK qualification ops 6143 processed all 5 selected rows terminally:
+  2 imported carriers, 3 typed product exclusions, zero technical/deferred or
+  unresolved rows. It created one valid current event 7755, but also created
+  stale 2022 events 7756/7757 from historical inbox row 15300. Root cause is a
+  regression in Smart Update: `_should_skip_past_smart_update_candidate`
+  emitted only a `possible_past_event` log hint and continued into create.
+  These two rows are invalid product output and must be repaired through the
+  ingestion boundary; ops 6143 is failure evidence, not a successful gate.
+- prevention restores the existing typed product contract: an automated child
+  whose extracted occurrence has fully ended before the current local date
+  terminates in the same claim as `REJECTED_PRODUCT_POLICY/past_event`, creates
+  no Event/EventSource and schedules no retry. A production-shaped regression
+  uses the exact historical source `wall-216003600_16`. Merge, exact-main
+  deploy, repair/replay of inbox 15300, the regular 21:40 Telegram slot and a
+  fresh bounded VK qualification remain pending.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

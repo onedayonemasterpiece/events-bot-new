@@ -17719,12 +17719,17 @@ async def _smart_event_update_impl(
 
     if _should_skip_past_smart_update_candidate(candidate):
         logger.info(
-            "smart_update.semantic_hint reason=possible_past_event source_type=%s source_url=%s title=%s date=%s end_date=%s",
+            "smart_update.product_exclusion reason=past_event source_type=%s source_url=%s title=%s date=%s end_date=%s",
             candidate.source_type,
             candidate.source_url,
             _clip_title(candidate.title),
             candidate.date,
             candidate.end_date,
+        )
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+            reason=ProductExclusionReason.PAST_EVENT.value,
+            product_exclusion_reason=ProductExclusionReason.PAST_EVENT,
         )
 
     await _maybe_disambiguate_telegram_default_location_city(candidate)
