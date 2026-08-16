@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Authoritative child repair:** a changed packet that already owns a unique
+  `(canonical_source_url, candidate_key)` binding no longer re-enters the
+  generic merge-identity gate. Its exact source-grounded title may repair the
+  already-bound Event, including restoring `1+1` after an older extraction
+  stored the surrounding programme title.
 - **Exact short event titles:** source-grounded symbolic/numbered titles such
   as the film `1+1` are no longer treated as generic placeholders and renamed
   to the surrounding programme by title recovery.

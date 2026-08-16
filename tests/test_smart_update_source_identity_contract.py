@@ -417,6 +417,87 @@ async def test_edited_multi_event_child_reuses_authoritative_occurrence_binding(
 
 
 @pytest.mark.asyncio
+async def test_authoritative_child_edit_repairs_exact_symbolic_title_without_merge_gate(
+    tmp_path, monkeypatch
+) -> None:
+    """The durable child binding outranks a stale, previously polluted title."""
+
+    db = Database(str(tmp_path / "authoritative-child-title-repair.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.ENFORCE
+        )
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        async def _unexpected_merge_gate(*_args, **_kwargs):
+            raise AssertionError("authoritative candidate binding must bypass merge gate")
+
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", _unexpected_merge_gate)
+        source_url = "https://t.me/zaryakinoteatr/964"
+        first = await su.smart_event_update(
+            db,
+            EventCandidate(
+                source_type="telegram",
+                source_url=source_url,
+                source_text="18 августа в 19:00 — Большое кино в большом зале Зари.",
+                raw_excerpt="18 августа 19:00 Большое кино в большом зале Зари.",
+                title="Большое кино",
+                date="2026-08-18",
+                time="19:00",
+                location_name="Заря",
+                location_address="Мира 41-43",
+                city="Калининград",
+                event_type="кино",
+                producer_ordinal=2,
+                source_disposition="EVENTS_FOUND",
+                source_evidence_complete=True,
+            ),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+        assert first.outcome is SmartUpdateTerminalOutcome.CREATED
+
+        corrected = EventCandidate(
+            source_type="telegram",
+            source_url=source_url,
+            source_text="18 августа в 19:00 — фильм «1+1» в большом зале Зари.",
+            raw_excerpt="18 августа 19:00 1+1. Большое кино в большом зале Зари.",
+            title="1+1",
+            date="2026-08-18",
+            time="19:00",
+            location_name="Заря",
+            location_address="Мира 41-43",
+            city="Калининград",
+            event_type="кино",
+            producer_ordinal=2,
+            source_disposition="EVENTS_FOUND",
+            source_evidence_complete=True,
+        )
+        second = await su.smart_event_update(
+            db,
+            corrected,
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        assert second.outcome is SmartUpdateTerminalOutcome.MERGED
+        assert second.event_id == first.event_id
+        async with db.get_session() as session:
+            event = await session.get(Event, int(first.event_id or 0))
+            sources = (await session.execute(select(EventSource))).scalars().all()
+        assert event is not None
+        assert event.title == "1+1"
+        assert len(sources) == 1
+        assert sources[0].candidate_key == corrected.candidate_key
+        assert sources[0].source_fingerprint == input_packet_fingerprint(corrected)
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_tretyakov_direct_ticket_identity_cannot_cross_bind_screenings(tmp_path) -> None:
     db = Database(str(tmp_path / "tretyakov-bindings.sqlite"))
     await db.init()

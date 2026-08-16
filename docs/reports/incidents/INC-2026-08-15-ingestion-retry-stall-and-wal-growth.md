@@ -575,8 +575,24 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   ingestion boundary.
 - Follow-up prevention treats a compact symbolic/numbered title as authoritative
   when that exact title is present in child/source/OCR evidence, so title
-  recovery cannot replace it with a sibling or programme title. Merge, deploy
-  and exact re-drive of state 7205/event 7751 remain pending.
+  recovery cannot replace it with a sibling or programme title. PR #527 merged
+  as `bfff9a1244fcabd97d1410898150cbfe65e4632f` and was deployed from clean
+  exact main as Fly v1996; Fly was 1/1 and three health probes returned HTTP
+  200 with about 1.05 GiB free on `/data`.
+- The first v1996 exact packet replay correctly produced
+  `NOOP_EXACT_REPLAY`, proving idempotency, but could not repair the historical
+  event title because the accepted packet fingerprint had not changed. A
+  source-corrected replay (same exact child, configured venue restored) reached
+  the unique `candidate_key` owner, then the generic merge gate incorrectly
+  called that owner a programme sibling and left state 7205
+  `FAILED_TECHNICAL:source_binding_conflict`; event 7751 still read
+  `Большое кино`. This is new failure evidence, not closure.
+- Follow-up prevention now treats the existing unique child binding as final
+  identity for changed packets: it bypasses the generic merge gate and permits
+  only an exact source-grounded title to repair that same Event. A regression
+  reproduces `Большое кино` -> `1+1` with one EventSource and no retry. Merge,
+  exact-main deploy, one corrected replay of state 7205, and readback of event
+  7751 remain pending.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

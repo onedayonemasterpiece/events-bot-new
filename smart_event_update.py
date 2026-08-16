@@ -20279,7 +20279,10 @@ async def _smart_event_update_impl(
         or ticket_changes_needed
     )
 
-    if SMART_UPDATE_MERGE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF:
+    if (
+        SMART_UPDATE_MERGE_IDENTITY_GATE_MODE is not IdentityGateMode.OFF
+        and not authoritative_candidate_anchor
+    ):
         merge_identity_verdict = None
         gate_error: Exception | None = None
         existing_poster_texts = [
@@ -20556,6 +20559,36 @@ async def _smart_event_update_impl(
             event_db.title = cand_title
             updated_fields = True
             updated_keys.append("title")
+        elif (
+            authoritative_candidate_anchor
+            and cand_title
+            and cand_title != event_db.title
+            and _source_supports_exact_child_title(
+                _candidate_location_grounding_corpus(candidate),
+                cand_title,
+            )
+        ):
+            # A classified EventSource candidate_key identifies this exact
+            # producer child.  A changed packet for that same child is an
+            # authoritative source edit, so an exact source-grounded title may
+            # repair a title polluted by an older extraction.  Do not ask the
+            # generic merge identity gate to compare the two titles: the
+            # durable child binding already owns identity, while the gate can
+            # incorrectly classify a short symbolic title (for example 1+1)
+            # as a sibling of the surrounding programme.
+            old_title = event_db.title
+            event_db.title = cand_title
+            updated_fields = True
+            updated_keys.append("title")
+            logger.info(
+                "smart_update.title_updated_from_authoritative_child "
+                "event_id=%s source_type=%s source_url=%s old_title=%s new_title=%s",
+                getattr(event_db, "id", None),
+                candidate.source_type,
+                candidate.source_url,
+                _clip_title(old_title),
+                _clip_title(cand_title),
+            )
 
         # Long-running events (e.g. exhibitions/fairs) may legitimately extend the
         # closing date across sources. Allow end_date extension by trust.
