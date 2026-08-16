@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: historical intake cannot bypass `past_event` through an impossible multi-year range produced by missing-year end-date normalization.
+
 - Fixed: Smart Update снова терминализирует полностью прошедшие автоматические VK/TG/parser candidates как `REJECTED_PRODUCT_POLICY/past_event`, не создавая старые события из исторической очереди и не оставляя retry.
 - **Authoritative child repair:** a changed packet that already owns a unique
   `(canonical_source_url, candidate_key)` binding no longer re-enters the

@@ -11807,7 +11807,15 @@ def _should_skip_past_smart_update_candidate(candidate: EventCandidate) -> bool:
     if not cand_start or not cand_end:
         return False
     today = _smart_update_today_local()
-    return cand_end < today
+    if cand_end < today:
+        return True
+    # A missing-year end date can be anchored to the current extraction year
+    # while the explicit start remains tied to an old source publication.  The
+    # result (for example 2022-11-10..2026-12-10) must not masquerade as an
+    # ongoing event and resurrect a historical backlog row.  Ranges longer
+    # than two years are outside the product's concrete-event contract.
+    implausible_span = (cand_end - cand_start).days > 730
+    return cand_start < today and implausible_span
 
 
 def _ranges_overlap(a_start: date | None, a_end: date | None, b_start: date | None, b_end: date | None) -> bool:

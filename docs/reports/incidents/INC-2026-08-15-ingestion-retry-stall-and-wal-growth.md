@@ -615,6 +615,19 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   uses the exact historical source `wall-216003600_16`. Merge, exact-main
   deploy, repair/replay of inbox 15300, the regular 21:40 Telegram slot and a
   fresh bounded VK qualification remain pending.
+- PR #529 merged as
+  `62b9048dc52036d3a2f5e3d52e059afe8b4a61d9` and was deployed from clean exact
+  main as Fly v1998. Public cleanup retracted both erroneous Telegraph pages
+  and removed ICS channel message 8300; the two bad Events were backed up and
+  removed. Exact replay then exposed a second date-normalization defect before
+  it could be accepted as recovery: both candidates had old start
+  `2022-11-10` but fabricated end `2026-12-10`, so the ordinary `end < today`
+  guard did not fire and the first child was recreated. The replay was stopped;
+  its open second attempt remains explicit incident work. Follow-up prevention
+  classifies an automated range longer than two years with a past start as the
+  same typed `past_event` product exclusion. The Telegram scheduled slot must
+  not be interrupted by another deploy; merge/deploy/replay continues after
+  that exact-once run is safely handed off.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
