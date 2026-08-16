@@ -12,6 +12,17 @@ caller без typed source decision проходит существующий LL
 контрактом: semantic verdict завершается в том же вызове, а provider/schema/DB/
 vector failure получает видимый `FAILED_TECHNICAL` и требует явного re-drive.
 
+Для `INC-2026-08-15` граница полноты дополнительно закрывает известные
+ложно-технические исходы без ослабления LLM-first. Grounded producer excerpt
+может восстановить scope одного child после невалидной LLM-цитаты; location и
+anchor reviewers получают одну correction-попытку с требованием дословного
+evidence. Необязательный generated public bundle при unavailable/uncertain/
+non-verbatim review полностью отбрасывается, а source-grounded occurrence
+продолжает create/merge. Отсутствующий city восстанавливается только по точному
+названию из поддерживаемого списка области в title/raw_excerpt/location.
+Canonical parser URL может terminal-match occurrence внутри явно заданного
+recurring date range, но другой time/session по-прежнему не схлопывается.
+
 Публичный результат закрыт структурно:
 
 - accepted: `CREATED`, `MERGED`, `NOOP_EXACT_REPLAY`; только они несут

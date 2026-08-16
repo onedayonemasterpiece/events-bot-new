@@ -317,7 +317,7 @@ async def test_bundle_grounding_rejects_unrelated_fallback_fields(monkeypatch) -
 
 
 @pytest.mark.asyncio
-async def test_uncertain_bundle_grounding_cannot_trigger_field_stripping(monkeypatch) -> None:
+async def test_uncertain_bundle_grounding_strips_optional_generated_prose(monkeypatch) -> None:
     candidate = su.EventCandidate(
         source_type="vk",
         source_url="https://vk.com/wall-1_4",
@@ -340,7 +340,7 @@ async def test_uncertain_bundle_grounding_cannot_trigger_field_stripping(monkeyp
     monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
     assert await su._llm_review_create_bundle_grounding(
         {"description": "Текст"}, candidate
-    ) == (False, "llm_uncertain", [])
+    ) == (False, "llm_uncertain", ["description"])
 
 
 @pytest.mark.asyncio

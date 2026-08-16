@@ -45,6 +45,12 @@ find_existing_event(location, date, time, title)
 | ❌ Ошибок | Не удалось обработать событие |
 | ⏭️ Пропущено | Smart Update вернул реальный skip-статус |
 
+Scheduled `ops_run.metrics_json` считает create/update/unchanged/
+failed/skipped по authoritative `SourceParsingStats` каждого источника.
+Optional списки карточек для Telegram UI не являются счётчиками,
+поэтому headless плановый run тоже показывает реальные новые
+и обновлённые события.
+
 ## Источники данных
 
 | Источник | Файл JSON | Локация в БД |

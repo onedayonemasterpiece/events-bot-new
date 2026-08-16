@@ -59,33 +59,73 @@ def _normalize_city(raw: str | None) -> str:
     return value.casefold()
 
 
-def _load_allowlist_norm() -> set[str]:
+def _load_allowlist_entries() -> list[tuple[str, str]]:
     path = Path("docs/reference/kaliningrad_oblast_places.md")
     try:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return set()
-    out: set[str] = set()
+        return []
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
     for line in raw.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         values = line.split("=>", 1) if "=>" in line else [line]
         for value in values:
-            norm = _normalize_city(value)
-            if norm:
-                out.add(norm)
+            canonical = value.strip()
+            norm = _normalize_city(canonical)
+            if norm and norm not in seen:
+                seen.add(norm)
+                out.append((norm, canonical))
     return out
 
 
+def _load_allowlist_norm() -> set[str]:
+    return {norm for norm, _canonical in _load_allowlist_entries()}
+
+
+_ALLOWLIST_ENTRIES: list[tuple[str, str]] | None = None
 _ALLOWLIST_NORM: set[str] | None = None
+
+
+def _allowlist_entries() -> list[tuple[str, str]]:
+    global _ALLOWLIST_ENTRIES
+    if _ALLOWLIST_ENTRIES is None:
+        _ALLOWLIST_ENTRIES = _load_allowlist_entries()
+    return _ALLOWLIST_ENTRIES
 
 
 def _allowlist_norm() -> set[str]:
     global _ALLOWLIST_NORM
     if _ALLOWLIST_NORM is None:
-        _ALLOWLIST_NORM = _load_allowlist_norm()
+        _ALLOWLIST_NORM = {norm for norm, _canonical in _allowlist_entries()}
     return _ALLOWLIST_NORM
+
+
+def is_allowlisted_kaliningrad_place(value: str | None) -> bool:
+    """Return whether an exact place name is in the maintained region list."""
+
+    return bool(_normalize_city(value) in _allowlist_norm())
+
+
+def find_allowlisted_kaliningrad_places(text_value: str | None) -> list[str]:
+    """Find maintained region names in already-selected source evidence.
+
+    This is a grounding helper, not a semantic region classifier: it only
+    returns maintained names that occur as complete tokens in the supplied
+    title/excerpt/location text.
+    """
+
+    text_norm = _normalize_city(text_value)
+    if not text_norm:
+        return []
+    matches: list[tuple[int, str]] = []
+    for norm, canonical in _allowlist_entries():
+        if re.search(rf"(?<!\w){re.escape(norm)}(?!\w)", text_norm):
+            matches.append((len(norm), canonical))
+    matches.sort(key=lambda item: (-item[0], item[1].casefold()))
+    return [canonical for _size, canonical in matches]
 
 
 async def _wikidata_throttle(min_interval_sec: float = 0.5) -> None:

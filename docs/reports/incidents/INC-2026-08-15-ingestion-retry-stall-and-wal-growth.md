@@ -93,6 +93,20 @@ reader is not exposed.
   by the shared `tpm` limiter before provider send (log lines are duplicated in
   Kaggle output). Blank successful OCR and orphaned media-group force members
   are confirmed as two additional repeat amplifiers.
+- 2026-08-16 — a fresh production audit separates actual accepted writes from
+  scan denominators: Telegram creates/merges events but still leaves provider,
+  evidence and Smart reviewer terminal errors; VK creates events but its six
+  latest technical rows map to region/bundle/anchor review boundaries; the
+  official parser creates events but under-reports them and leaves four exact
+  canonical-source identity failures. The operator explicitly prioritizes
+  zero lost new events; the static canary is deferred as a separate open
+  obligation, not treated as ingestion success.
+- 2026-08-16 — implementation adds same-claim Telegram quota/model recovery,
+  uncapped scanned media and video evidence before parse, terminal-only final
+  adjudication, Smart reviewer correction/source-grounded conservative
+  fallbacks, recurring parser URL matching and authoritative parser create/
+  update metrics. Merge, exact-main deploy and live compensating runs remain
+  required before these changes may be called effective.
 
 ## Root Cause
 
@@ -144,6 +158,11 @@ No keyword/regex shortcut is accepted as a remedy for this incident.
 
 - every admitted event-bearing child reaches one explicit accepted create,
   merge, exact no-op or source-grounded confirmed no-event outcome;
+- the production acceptance metric is not merely "terminal": across the
+  current catch-up window every source-grounded new event must reach a DB
+  `CREATED` or correct existing-event `MERGED/NOOP` receipt, with zero
+  unexplained/technical child outcomes; `CONFIRMED_NO_EVENT` is valid only for
+  a complete-evidence carrier that truly contains no event;
 - semantic uncertainty is resolved in the current claim whenever complete
   evidence and the configured provider are available;
 - a transient dependency may receive a bounded inline retry inside the current
@@ -259,6 +278,17 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   cardinality and all-member album force settlement with focused tests;
 - [ ] deploy that Telegram correction and repeat a bounded S22 catch-up with a
   carrier outcome balance and no unexplained source-evidence terminal wave.
+- [x] implement the second-wave completion fixes for provider fallback,
+  video/album evidence, final source adjudication, Smart review correction,
+  exact region hints, recurring official-source identity and truthful parser
+  create/update metrics; focused local regression suites are green.
+- [ ] merge/deploy the second-wave completion fixes from exact main, run one
+  S22 Telegram catch-up, bounded current/history VK drain and all-source parser
+  catch-up, and require zero unexplained/technical outcomes plus verified new
+  DB writes before reporting ingestion healthy.
+- [ ] static-site projection canary remains open but is explicitly deferred by
+  the operator; it must not block the ingestion deployment and must not be
+  silently marked complete.
 
 ## Follow-up Actions
 

@@ -159,7 +159,9 @@ Positive children сохраняются, а исчерпанная inline verif
       - `@username` в контексте «запись/бронь/напиши» → `ticket_link=https://t.me/username`;
       - если в Kaggle‑payload пришли `messages[].links` (кнопки/hidden URL entities типа “More info”, “билеты”, “здесь”) и `ticket_link` пустой, сервер может best-effort выбрать один «сильный» registration/ticket URL.
     - заголовок: если extractor вернул мусор вроде `(4 места)`, заголовок берётся из первой содержательной строки поста. Short contentful titles returned by the LLM (`Идиот`, `Гараж`, `№ 13`) are valid and must not be overwritten only because they are short; umbrella/service lines such as `завтра в театре`, `афиша`, `анонс`, `в продаже репертуар` are skipped by this fallback.
-- В Kaggle используются только модели Gemma (текст/vision); 4o там не участвует.
+- Primary text/vision в Kaggle остаётся Gemma 4; при исчерпании bounded
+  transport/quota попыток тот же carrier в том же claim переходит на
+  independently-limited stable `gemini-3.5-flash-lite`. 4o здесь не участвует.
 - Актуальный Kaggle runtime для LLM-stage теперь строится из [telegram_monitor.py](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.py:1), а [telegram_monitor.ipynb](/workspaces/events-bot-new/kaggle/TelegramMonitor/telegram_monitor.ipynb:1) синхронизируется из него перед push.
 - Kaggle producer переведён на shared `GoogleAIClient`/`google_ai` runtime с native `response_schema` для Gemma 4 structured stages вместо direct `google.generativeai` calls.
 - Primary Kaggle key isolation для этого surface: `GOOGLE_API_KEY3` / `GOOGLE_API_LOCALNAME3`. Если `GOOGLE_API_KEY3` ещё не зарегистрирован в Supabase quota registry, gateway не должен молча брать общий key pool: он переходит на process-local limiter и всё равно вызывает provider через выбранный `GOOGLE_API_KEY3`.
@@ -167,11 +169,18 @@ Positive children сохраняются, а исчерпанная inline verif
 - Provider calls ограничены таймаутом: `TG_MONITORING_LLM_TIMEOUT_SECONDS` (default `45`) выставляет `GOOGLE_AI_PROVIDER_TIMEOUT_SEC`, чтобы retryable Gemma 4 `500/504` или зависшие calls fail-open на уровне поста/стадии, а не съедали весь Kaggle window.
 - Отказ shared limiter по минутным `rpm`/`tpm` происходит **до** provider send.
   Monitor ждёт указанный `retry_after` и продолжает тот же carrier внутри
-  текущего запуска (до четырёх попыток и не более 65 секунд на одно ожидание
-  по умолчанию). Это не durable/background retry и не создаёт второй provider
-  send; `rpd`, отсутствие ключей и исчерпание bounded inline attempts остаются
-  видимой технической ошибкой.
+  текущего запуска (до восьми попыток и не более 65 секунд на одно ожидание
+  по умолчанию). Это не durable/background retry. После exhaustion primary
+  model тот же carrier использует explicit `gemini-3.5-flash-lite` fallback;
+  лишь exhaustion обеих моделей становится видимой технической ошибкой.
 - Дефолтные Kaggle text/vision модели для этого surface: `models/gemma-4-31b-it`.
+- Evidence completeness не ограничивается скрытым числом media на source:
+  `TG_MONITORING_MEDIA_MAX_PER_SOURCE=0` по умолчанию. Видео-only carrier и
+  видео в album получают bounded video/thumbnail evidence до финального
+  source-parse решения; анализ видео больше не зависит от уже созданного event.
+- Complete-evidence `RETRY_REQUIRED`, verifier uncertainty или transient
+  verifier failure получают один terminal-only final adjudication в том же
+  invocation. Background semantic force/retry для такого carrier не создаётся.
 - `Gemma 4` prompt hardening для source metadata запрещает сохранять social/profile links (`Telegram`, `Telegra.ph`, `Instagram`, `VK`, `YouTube`, `Linktree`, `Taplink`, `Boosty`, `Patreon`) как `suggested_website_url`; туда должен попадать только standalone website самого фестиваля/проекта/источника.
 - `Gemma 4` extract prompt для Telegram text+OCR явно требует мерджить venue/date/time facts из OCR в event object, заполнять `location_name`/`location_address`, избегать whitespace-only strings и не придумывать `end_date` для single-date событий.
 - Historical-date contract explicitly treats interviews, memoirs, museum chronicles and anniversary articles as non-events: an old opening/acquisition/employment day-month cannot be rolled into the current year without a separate future attendee-facing announcement.

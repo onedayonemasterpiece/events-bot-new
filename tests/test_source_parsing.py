@@ -1,7 +1,7 @@
 """Tests for source_parsing module."""
 
 import pytest
-from datetime import date
+from datetime import date, timedelta
 
 from source_parsing.parser import (
     TheatreEvent,
@@ -309,6 +309,15 @@ async def test_inc_20260713_existing_source_media_replay_uses_smart_update_cdn_g
     for payload in raw_events:
         parsed.extend(parse_theatre_json(payload, payload["source_type"]))
     assert len(parsed) == 2
+    # This fixture verifies media replay, not historical date filtering. Keep
+    # it perennial as the fixed 2026-07 occurrence ages past wall-clock today.
+    for source_event in parsed:
+        parsed_day = source_event.parsed_date
+        if isinstance(parsed_day, str):
+            parsed_day = date.fromisoformat(parsed_day)
+        if parsed_day and parsed_day < date.today():
+            replacement = date.today() + timedelta(days=30)
+            source_event.parsed_date = replacement.isoformat()
 
     db = Database(str(tmp_path / "replay.sqlite"))
     await db.init()

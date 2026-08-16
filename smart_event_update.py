@@ -6420,6 +6420,122 @@ def _candidate_needs_llm_occurrence_scope_review(candidate: "EventCandidate") ->
     return dated_lines >= 2 or len(pairs) >= 3
 
 
+def _apply_grounded_occurrence_scope_fallback(candidate: "EventCandidate") -> bool:
+    """Adopt the producer's child excerpt when all identity anchors are grounded.
+
+    This is not a semantic classifier.  The source producer already selected
+    ``raw_excerpt`` for one child; this guard only verifies that its title,
+    target date and available place anchors occur in the full source/OCR
+    corpus before using it after a scope-review abstention.
+    """
+
+    excerpt = str(candidate.raw_excerpt or "").strip()
+    corpus = _candidate_location_grounding_corpus(candidate)
+    target_date = _parse_iso_date(candidate.date)
+    if not excerpt or not corpus or target_date is None:
+        return False
+    target_pair = (target_date.day, target_date.month)
+    if target_pair not in _extract_day_month_pairs(excerpt):
+        return False
+    if target_pair not in _extract_day_month_pairs(corpus):
+        return False
+    if not _titles_look_related(candidate.title, excerpt):
+        return False
+    if not _titles_look_related(candidate.title, corpus):
+        return False
+    place_values = [candidate.location_name, candidate.location_address]
+    grounded_places = [
+        value
+        for value in place_values
+        if value and _source_supports_location_value(corpus, value)
+    ]
+    if any(place_values) and not grounded_places:
+        return False
+    if grounded_places and not any(
+        _source_supports_location_value(excerpt, value) for value in grounded_places
+    ):
+        # Preserve one exact common place line when the compact child excerpt
+        # omitted it (common in digest cards).
+        common_lines = [
+            line.strip()
+            for line in corpus.splitlines()
+            if line.strip()
+            and any(
+                _source_supports_location_value(line, value)
+                for value in grounded_places
+            )
+        ]
+        if common_lines:
+            excerpt = "\n".join([excerpt, common_lines[0]])
+        else:
+            return False
+    candidate.occurrence_scope_text = excerpt
+    return True
+
+
+def _restore_configured_telegram_location(candidate: "EventCandidate") -> bool:
+    """Restore producer/configured venue evidence before semantic review."""
+
+    if str(candidate.source_type or "").strip().lower() not in {"tg", "telegram"}:
+        return False
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    default_location = str(metrics.get("tg_default_location") or "").strip()
+    extracted_name = str(metrics.get("tg_extracted_location_name") or "").strip()
+    extracted_address = str(metrics.get("tg_extracted_location_address") or "").strip()
+    extracted_city = str(metrics.get("tg_extracted_city") or "").strip()
+    if not extracted_name or not default_location:
+        return False
+    configured_norm = _norm_text_for_grounding(default_location)
+    extracted_norm = _norm_text_for_grounding(extracted_name)
+    source_corpus = _candidate_location_grounding_corpus(candidate)
+    extracted_is_grounded = bool(
+        extracted_norm
+        and (
+            extracted_norm in configured_norm
+            or configured_norm in extracted_norm
+            or _source_supports_location_value(source_corpus, extracted_name)
+        )
+    )
+    if not extracted_is_grounded:
+        return False
+    current_is_grounded = bool(
+        _source_supports_location_value(source_corpus, candidate.location_name)
+        or _source_supports_location_value(source_corpus, candidate.location_address)
+    )
+    current_matches_config = bool(
+        candidate.location_name
+        and _norm_text_for_grounding(candidate.location_name) in configured_norm
+    )
+    if current_is_grounded and current_matches_config:
+        return False
+    candidate.location_name = extracted_name
+    candidate.location_address = extracted_address or candidate.location_address
+    candidate.city = extracted_city or candidate.city
+    return True
+
+
+def _source_grounded_region_place_hint(candidate: "EventCandidate") -> str | None:
+    """Return one maintained place explicitly present in child evidence.
+
+    The producer already selected the child occurrence.  This helper only
+    repairs a missing ``city`` from its most specific evidence, so a generic
+    region mention elsewhere in a long source cannot change event scope.
+    """
+
+    from geo_region import find_allowlisted_kaliningrad_places
+
+    for evidence in (
+        candidate.title,
+        candidate.raw_excerpt,
+        candidate.location_name,
+        candidate.location_address,
+    ):
+        matches = find_allowlisted_kaliningrad_places(evidence)
+        if matches:
+            return matches[0]
+    return None
+
+
 async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[bool, str]:
     """Select exact source excerpts belonging to the candidate occurrence."""
     if SMART_UPDATE_LLM_DISABLED:
@@ -6471,16 +6587,24 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         candidate.occurrence_scope_text = corpus
         return True, "llm_single_event"
     if decision != "scoped" or confidence < 0.8:
+        if _apply_grounded_occurrence_scope_fallback(candidate):
+            return True, "grounded_producer_excerpt"
         return False, f"llm_{decision or 'uncertain'}"
     excerpts = [str(x or "").strip() for x in (data.get("selected_excerpts") or []) if str(x or "").strip()]
     if not excerpts:
+        if _apply_grounded_occurrence_scope_fallback(candidate):
+            return True, "grounded_producer_excerpt"
         return False, "llm_scoped_empty"
     corpus_norm = _norm_text_for_grounding(corpus)
     if any(_norm_text_for_grounding(x) not in corpus_norm for x in excerpts):
+        if _apply_grounded_occurrence_scope_fallback(candidate):
+            return True, "grounded_producer_excerpt"
         return False, "llm_scope_not_verbatim"
     scoped = "\n".join(dict.fromkeys(excerpts)).strip()
     target_date = _parse_iso_date(candidate.date)
     if target_date and (target_date.day, target_date.month) not in _extract_day_month_pairs(scoped):
+        if _apply_grounded_occurrence_scope_fallback(candidate):
+            return True, "grounded_producer_excerpt"
         return False, "llm_scope_missing_target_date"
     # Narrow grounding rail: when the full multi-occurrence source explicitly
     # contains the candidate city, the selected occurrence must preserve it.
@@ -6491,6 +6615,8 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         and _source_supports_location_value(corpus, candidate.city)
         and not _source_supports_location_value(scoped, candidate.city)
     ):
+        if _apply_grounded_occurrence_scope_fallback(candidate):
+            return True, "grounded_producer_excerpt"
         return False, "llm_scope_missing_target_city"
     candidate.occurrence_scope_text = scoped
     return True, "llm_scoped"
@@ -6617,23 +6743,43 @@ async def _llm_review_candidate_anchor_roles(
         "короткими ДОСЛОВНЫМИ фрагментами source_and_ocr. Не додумывай период. Только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
     )
-    data = await _ask_gemma_json(
-        prompt,
-        ANCHOR_ROLE_REVIEW_SCHEMA,
-        max_tokens=500,
-        label="anchor_role_review",
-    )
+    data: dict[str, Any] | None = None
+    for review_attempt in range(2):
+        review_prompt = prompt
+        if review_attempt:
+            review_prompt = (
+                f"{prompt}\n\n"
+                "PREVIOUS ANSWER FAILED VALIDATION. Return the final keep/repair/uncertain "
+                "decision again, but every evidence_quotes item must be copied verbatim "
+                "from source_and_ocr. Do not paraphrase a quote."
+            )
+        candidate_data = await _ask_gemma_json(
+            review_prompt,
+            ANCHOR_ROLE_REVIEW_SCHEMA,
+            max_tokens=500,
+            label="anchor_role_review",
+        )
+        if not isinstance(candidate_data, dict):
+            continue
+        candidate_quotes = [
+            str(item or "").strip()
+            for item in (candidate_data.get("evidence_quotes") or [])
+            if str(item or "").strip()
+        ]
+        corpus_norm = _norm_text_for_grounding(corpus)
+        if candidate_quotes and not any(
+            _norm_text_for_grounding(item) not in corpus_norm
+            for item in candidate_quotes
+        ):
+            data = candidate_data
+            break
     if not isinstance(data, dict):
-        return False, "llm_unavailable"
+        return False, "llm_evidence_not_verbatim"
     decision = str(data.get("decision") or "uncertain").strip().lower()
     try:
         confidence = float(data.get("confidence") or 0.0)
     except Exception:
         confidence = 0.0
-    quotes = [str(item or "").strip() for item in (data.get("evidence_quotes") or []) if str(item or "").strip()]
-    corpus_norm = _norm_text_for_grounding(corpus)
-    if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
-        return False, "llm_evidence_not_verbatim"
     explicit_unknown_start = _candidate_explicitly_leaves_start_time_unknown(candidate, corpus)
     if decision == "keep" and confidence >= 0.9:
         if explicit_unknown_start and _valid_hhmm_or_none(candidate.time):
@@ -6670,9 +6816,13 @@ async def _llm_review_create_bundle_grounding(
 ) -> tuple[bool, str, list[str]]:
     """LLM-first, source-only entailment gate for every generated public field."""
 
+    public_fields = ("title", "description", "facts", "search_digest", "short_description")
+    populated_public_fields = [
+        field for field in public_fields if bundle.get(field) not in (None, "", [])
+    ]
     corpus = _candidate_location_grounding_corpus(candidate)
     if not corpus:
-        return False, "empty_source"
+        return False, "empty_source", populated_public_fields
     public_bundle = {
         key: bundle.get(key)
         for key in ("title", "description", "facts", "search_digest", "short_description")
@@ -6693,7 +6843,7 @@ async def _llm_review_create_bundle_grounding(
         label="create_bundle_grounding",
     )
     if not isinstance(data, dict):
-        return False, "llm_unavailable", []
+        return False, "llm_unavailable", populated_public_fields
     decision = str(data.get("decision") or "uncertain").strip().lower()
     unsupported = [str(item or "").strip() for item in (data.get("unsupported_fields") or []) if str(item or "").strip()]
     try:
@@ -6703,9 +6853,11 @@ async def _llm_review_create_bundle_grounding(
     quotes = [str(item or "").strip() for item in (data.get("evidence_quotes") or []) if str(item or "").strip()]
     corpus_norm = _norm_text_for_grounding(corpus)
     if not quotes or any(_norm_text_for_grounding(item) not in corpus_norm for item in quotes):
-        return False, "llm_evidence_not_verbatim", []
+        # Generated prose is optional.  A malformed reviewer citation must not
+        # discard the source-grounded occurrence; remove generated public
+        # fields and continue with the producer candidate instead.
+        return False, "llm_evidence_not_verbatim", populated_public_fields
     if decision != "grounded" or confidence < 0.9 or unsupported:
-        public_fields = ("title", "description", "facts", "search_digest", "short_description")
         safe_unsupported = [
             field
             for field in dict.fromkeys(unsupported)
@@ -6718,16 +6870,14 @@ async def _llm_review_create_bundle_grounding(
             # optional per-field diagnosis, drop every populated public field
             # rather than reject an otherwise valid occurrence or guess which
             # generated sentence was unsafe.  Verbatim evidence was validated
-            # above; ``uncertain`` still fails closed without this repair.
+            # above.
             if not safe_unsupported:
-                safe_unsupported = [
-                    field
-                    for field in public_fields
-                    if bundle.get(field) not in (None, "", [])
-                ]
+                safe_unsupported = populated_public_fields
             if safe_unsupported:
                 return False, "llm_ungrounded", safe_unsupported
-        return False, f"llm_{decision or 'uncertain'}", []
+        # An uncertain/low-confidence reviewer cannot approve generated prose,
+        # but it also cannot veto an otherwise valid source occurrence.
+        return False, f"llm_{decision or 'uncertain'}", populated_public_fields
     return True, "llm_grounded", []
 
 
@@ -6949,62 +7099,69 @@ async def _llm_review_candidate_location_grounding(
         "Это финальное решение: не возвращай uncertain и не проси повтор. Верни только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
     )
-    data = await _ask_gemma_json(
-        prompt,
-        LOCATION_GROUNDING_REVIEW_SCHEMA,
-        max_tokens=500,
-        label="location_grounding_review",
-    )
-    if not isinstance(data, dict):
-        return False, "llm_unavailable"
-    decision = str(data.get("decision") or "uncertain").strip().lower()
-    try:
-        confidence = float(data.get("confidence") or 0.0)
-    except Exception:
-        confidence = 0.0
-    evidence_quote = str(data.get("evidence_quote") or "").strip()
-    quote_grounded = bool(
-        evidence_quote
-        and _norm_text_for_grounding(evidence_quote)
-        in _norm_text_for_grounding(corpus)
-    )
+    review_prompt = prompt
+    last_reason = "llm_unavailable"
+    for review_attempt in range(2):
+        data = await _ask_gemma_json(
+            review_prompt,
+            LOCATION_GROUNDING_REVIEW_SCHEMA,
+            max_tokens=500,
+            label="location_grounding_review",
+        )
+        if not isinstance(data, dict):
+            last_reason = "llm_unavailable"
+        else:
+            decision = str(data.get("decision") or "uncertain").strip().lower()
+            evidence_quote = str(data.get("evidence_quote") or "").strip()
+            quote_grounded = bool(
+                evidence_quote
+                and _norm_text_for_grounding(evidence_quote)
+                in _norm_text_for_grounding(corpus)
+            )
 
-    if decision == "keep":
-        # Confidence is retained for observability, not used as a second
-        # semantic judge. A grounded LLM KEEP must not fall through into an
-        # endless retry merely because a scalar is below an arbitrary cutoff.
-        if not quote_grounded:
-            return False, "llm_keep_quote_invalid"
-        if _source_supports_location_value(corpus, candidate.location_name) or _source_supports_location_value(
-            corpus, candidate.location_address
-        ):
-            return True, "llm_keep"
-        return False, "llm_keep_not_grounded"
+            if decision == "keep":
+                if quote_grounded and (
+                    _source_supports_location_value(corpus, candidate.location_name)
+                    or _source_supports_location_value(corpus, candidate.location_address)
+                ):
+                    return True, "llm_keep"
+                last_reason = (
+                    "llm_keep_not_grounded" if quote_grounded else "llm_keep_quote_invalid"
+                )
+            elif decision == "reject_missing_location":
+                if quote_grounded:
+                    return False, "llm_reject_missing_location"
+                last_reason = "llm_reject_quote_invalid"
+            elif decision == "repair" and quote_grounded:
+                proposed_name = str(data.get("location_name") or "").strip() or None
+                proposed_address = str(data.get("location_address") or "").strip() or None
+                proposed_city = str(data.get("city") or "").strip() or None
+                if not proposed_name:
+                    last_reason = "llm_repair_missing_name"
+                elif not (
+                    _source_supports_location_value(corpus, proposed_name)
+                    or _source_supports_location_value(corpus, proposed_address)
+                ):
+                    last_reason = "llm_repair_value_not_grounded"
+                else:
+                    candidate.location_name = proposed_name
+                    candidate.location_address = proposed_address
+                    if proposed_city:
+                        candidate.city = proposed_city
+                    return True, "llm_repair"
+            else:
+                last_reason = "llm_response_invalid"
 
-    if decision == "reject_missing_location":
-        if not quote_grounded:
-            return False, "llm_reject_quote_invalid"
-        return False, "llm_reject_missing_location"
-
-    if decision != "repair" or not quote_grounded:
-        return False, "llm_response_invalid"
-
-    proposed_name = str(data.get("location_name") or "").strip() or None
-    proposed_address = str(data.get("location_address") or "").strip() or None
-    proposed_city = str(data.get("city") or "").strip() or None
-    if not proposed_name:
-        return False, "llm_repair_missing_name"
-    if not (
-        _source_supports_location_value(corpus, proposed_name)
-        or _source_supports_location_value(corpus, proposed_address)
-    ):
-        return False, "llm_repair_value_not_grounded"
-
-    candidate.location_name = proposed_name
-    candidate.location_address = proposed_address
-    if proposed_city:
-        candidate.city = proposed_city
-    return True, "llm_repair"
+        if review_attempt == 0:
+            review_prompt = (
+                f"{prompt}\n\n"
+                "PREVIOUS ANSWER FAILED VALIDATION. Return one final decision. "
+                "evidence_quote and every non-null repaired location value must be copied "
+                "verbatim from source_and_poster_evidence; otherwise choose "
+                "reject_missing_location. Do not return uncertain.\n"
+                f"validation_error={last_reason}"
+            )
+    return False, last_reason
 
 
 def _has_retrospective_future_teaser_shape(title: str | None, text: str | None) -> bool:
@@ -15125,8 +15282,7 @@ async def _match_existing_event_by_event_source_url(
         return None
     if _candidate_source_role(candidate) != "identity_bearing":
         return None
-    if str(candidate.source_type or "").strip().lower().startswith("parser:"):
-        return None
+    is_canonical_site = str(candidate.source_type or "").strip().lower().startswith("parser:")
 
     async with db.get_session() as session:
         stmt = (
@@ -15150,7 +15306,6 @@ async def _match_existing_event_by_event_source_url(
 
     date_raw = str(candidate.date or "").strip()
     title_raw = str(candidate.title or "").strip()
-    is_canonical_site = str(candidate.source_type or "").startswith("parser:")
     cand_time_anchor = _candidate_anchor_time(candidate, is_canonical_site=is_canonical_site)
     allow_parallel = _allow_parallel_events(candidate.location_name)
     anchor_filtered: list[Event] = []
@@ -15158,8 +15313,15 @@ async def _match_existing_event_by_event_source_url(
     for ev in anchored:
         if _event_blocked_by_explicit_occurrence(candidate, ev):
             continue
-        if date_raw and str(getattr(ev, "date", "") or "").strip() != date_raw:
-            continue
+        if date_raw:
+            event_start = _parse_iso_date(getattr(ev, "date", None))
+            event_end = _parse_iso_date(getattr(ev, "end_date", None)) or event_start
+            candidate_day = _parse_iso_date(date_raw)
+            if is_canonical_site and event_start and event_end and candidate_day:
+                if not (event_start <= candidate_day <= event_end):
+                    continue
+            elif str(getattr(ev, "date", "") or "").strip() != date_raw:
+                continue
         if _has_explicit_time_conflict(cand_time_anchor, _event_anchor_time(ev)):
             continue
         ev_title = str(getattr(ev, "title", "") or "").strip()
@@ -17179,6 +17341,15 @@ async def _smart_event_update_impl(
             if not isinstance(candidate.metrics, dict):
                 candidate.metrics = {}
             candidate.metrics[_EXPLICIT_UNKNOWN_START_LLM_CONFIRMED_METRIC] = True
+    restored_configured_location = _restore_configured_telegram_location(candidate)
+    if restored_configured_location:
+        logger.info(
+            "smart_update.location_restored_from_source_profile source_url=%s location=%s address=%s city=%s",
+            candidate.source_url,
+            _clip_title(candidate.location_name, 100),
+            _clip_title(candidate.location_address, 100),
+            candidate.city,
+        )
     (
         candidate.location_name,
         candidate.location_address,
@@ -17296,6 +17467,16 @@ async def _smart_event_update_impl(
             if (candidate.source_type or "").strip().lower() not in {"bot"}:
                 from geo_region import decide_kaliningrad_oblast
 
+                if not str(candidate.city or "").strip():
+                    grounded_region_hint = _source_grounded_region_place_hint(candidate)
+                    if grounded_region_hint:
+                        candidate.city = grounded_region_hint
+                        logger.info(
+                            "smart_update.region_place_restored source_type=%s source_url=%s city=%s",
+                            candidate.source_type,
+                            candidate.source_url,
+                            candidate.city,
+                        )
                 region_decision = await decide_kaliningrad_oblast(
                     db,
                     city=candidate.city,
@@ -18901,10 +19082,7 @@ async def _smart_event_update_impl(
                 candidate.source_url,
             )
             if not bundle_ok:
-                if (
-                    bundle_grounding_result == "llm_ungrounded"
-                    and unsupported_bundle_fields
-                ):
+                if unsupported_bundle_fields:
                     bundled = _remove_llm_rejected_bundle_fields(
                         bundled,
                         unsupported_bundle_fields,
