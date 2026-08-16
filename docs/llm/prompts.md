@@ -35,6 +35,7 @@ Typed carrier policy is mandatory:
 - Giveaway mechanics do not erase the real event being promoted: when the carrier contains both, return the event and exclude only the giveaway mechanics from event facts.
 - Mixed content may contain cancellations/postponements/updates **and** new events. Return both sides with `MIXED`; an unresolved lifecycle target must not destroy new event children.
 - Distinguish an update to an existing occurrence from a distinct new event. Return lifecycle actions separately from `events`.
+- VK operator batches use one additional same-invocation terminal adjudication only when primary/conditional verification remains malformed or technical. Its closed output excludes `RETRY_REQUIRED`: it must return grounded events/lifecycle or complete-evidence `CONFIRMED_NO_EVENT`. A second provider/schema failure remains visible technical; it never authorizes an invented no-event verdict or a background semantic retry.
 
 Each object in `events` uses these keys:
 title             - name of the event

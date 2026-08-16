@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- **VK qualification residuals:** poster OCR now retries only transient
+  transport/408/409/429/5xx failures inside the same claim with distinct client
+  request IDs and preserves successful gallery siblings. A malformed primary
+  or conditional verifier gets one schema-strict terminal adjudication instead
+  of an ownerless semantic retry, and an unmatched lifecycle action is an
+  explicit product no-op that cannot turn a successfully created mixed-carrier
+  event into a technical failure.
 - **Configured-source ingestion completion:** Telegram now keeps quota/provider
   recovery, terminal adjudication, uncapped scanned media and video/album
   evidence inside one carrier claim, with stable Gemini 3.5 Flash-Lite as the

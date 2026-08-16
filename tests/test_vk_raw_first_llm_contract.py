@@ -916,7 +916,7 @@ def test_static_vk_ingestion_bans_semantic_shortcuts():
     assert "def mark_failed" not in review
     assert "event_ts_hint IS NULL OR event_ts_hint >=" not in queue + review
     assert "lifecycle_unresolved" in queue
-    assert 'typed_reason="LIFECYCLE_NO_MATCH"' in queue
+    assert 'outcome="LIFECYCLE_NO_MATCH_NOOP"' in queue
     assert 'carrier_outcome = "MIXED_RESOLVED"' in queue
     ast.parse(intake)
     ast.parse(queue)

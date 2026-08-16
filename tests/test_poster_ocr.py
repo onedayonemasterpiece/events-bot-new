@@ -18,6 +18,7 @@ import vision_test.ocr
 from vision_test.ocr import OcrResult, OcrUsage as OcrUsageStats
 from poster_media import PosterMedia, apply_ocr_results_to_media
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
 
 
 @dataclass
@@ -320,6 +321,33 @@ async def test_recognize_posters_uses_cache(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_recognize_posters_preserves_successful_siblings_after_one_failure(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "partial.sqlite"))
+    await db.init()
+
+    async def fake_run_ocr(data, *, model, detail):
+        if data == b"bad":
+            raise RuntimeError("bounded OCR attempts exhausted")
+        return OcrResult(
+            text=f"text-{data.decode()}",
+            usage=OcrUsageStats(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+        )
+
+    monkeypatch.setattr(poster_ocr, "run_ocr", fake_run_ocr)
+    results, spent, _remaining = await poster_ocr.recognize_posters(
+        db, [DummyPoster(b"good-1"), DummyPoster(b"bad"), DummyPoster(b"good-2")]
+    )
+
+    assert [item.text for item in results] == ["text-good-1", "text-good-2"]
+    assert spent == 4
+    async with db.get_session() as session:
+        rows = (await session.execute(select(PosterOcrCache))).scalars().all()
+    assert sorted(item.text for item in rows) == ["text-good-1", "text-good-2"]
+
+
+@pytest.mark.asyncio
 async def test_recognize_posters_usage_resets_by_date(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -380,12 +408,15 @@ async def test_recognize_posters_concurrent_upsert(tmp_path, monkeypatch):
     (first_results, first_spent, first_remaining) = first_call
     (second_results, second_spent, second_remaining) = second_call
 
-    assert call_count == 2
+    # Scheduling may let the second session observe the first committed cache
+    # row (one provider call) or race before that commit (two idempotent calls).
+    assert call_count in {1, 2}
     assert first_results[0].text in {"text-1", "text-2"}
     assert second_results[0].text in {"text-1", "text-2"}
     assert first_results[0].hash == second_results[0].hash
-    assert first_spent == 2
-    assert second_spent == 2
+    assert first_spent in {0, 2}
+    assert second_spent in {0, 2}
+    assert first_spent + second_spent in {2, 4}
     assert 0 <= first_remaining <= poster_ocr.DAILY_TOKEN_LIMIT
     assert 0 <= second_remaining <= poster_ocr.DAILY_TOKEN_LIMIT
 

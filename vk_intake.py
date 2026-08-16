@@ -2229,6 +2229,10 @@ async def vk_intake_parse_llm(
         parse_kwargs["gemma_model"] = str(parse_gemma_model).strip()
     if evidence_manifest is not None:
         parse_kwargs["evidence_manifest"] = evidence_manifest.to_payload()
+    # VK auto-import is an operator-visible linear batch: schema/provider
+    # uncertainty gets one bounded final adjudication in the same invocation,
+    # never an invisible background semantic retry.
+    parse_kwargs["require_terminal_decision"] = True
     if source_text is not None:
         # The primary prompt contains VK policy overlays.  Contradiction facts
         # and the verifier must receive the untouched carrier, not those

@@ -282,7 +282,19 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   video/album evidence, final source adjudication, Smart review correction,
   exact region hints, recurring official-source identity and truthful parser
   create/update metrics; focused local regression suites are green.
-- [ ] merge/deploy the second-wave completion fixes from exact main, run one
+- [x] merge PR #513 and deploy exact `origin/main@225a5ccf9` as Fly v1982;
+  post-deploy health converged HTTP 200, DB quick-check passed and the WAL was
+  small before the real qualification workload.
+- [x] execute VK qualification ops run 6020: all 15 selected rows reached a
+  terminal receipt and three new events were created, but four technical
+  outcomes proved ingestion was not yet healthy (two OCR timeouts, one mixed
+  lifecycle no-match masking a created sibling, one malformed parse/verifier).
+- [x] implement the run-6020 residual corrections: bounded retryable OCR with
+  per-image evidence preservation, one schema-strict same-invocation VK final
+  adjudication, and explicit unmatched-lifecycle product no-op semantics.
+- [ ] merge/deploy the run-6020 residual corrections from exact main, re-drive
+  the exact four carriers and require zero technical/unresolved outcomes.
+- [ ] run one
   S22 Telegram catch-up, bounded current/history VK drain and all-source parser
   catch-up, and require zero unexplained/technical outcomes plus verified new
   DB writes before reporting ingestion healthy.
@@ -317,6 +329,15 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   production DB remained `quick_check=ok`; 32 legacy retry states and 15
   pre-existing open attempts did not increase. Ignored receipt:
   `artifacts/codex/INC-2026-08-15-vk-smart/prod-shadow-boundary-replay.json`;
+- configured-source prevention: PR #513 merged as
+  `225a5ccf933f7bce4438639bf87d9874556a6a29` and was deployed from a clean
+  exact-main worktree as Fly v1982; `/healthz` returned HTTP 200 three times,
+  Fly was 1/1, `quick_check=ok`, `/data` had about 1.10 GiB available and the
+  post-start WAL was 609,792 bytes;
+- VK qualification ops run 6020 processed 15/15 terminal rows, created events
+  7692/7693/7694 and updated 7130, with `deferred=0`, but also produced four
+  `FAILED_TECHNICAL` receipts. Those four exact carriers are the mandatory
+  post-residual-deploy replay cohort; ingestion is not declared healthy yet;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

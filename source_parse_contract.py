@@ -876,6 +876,50 @@ def build_verification_request(
     }
 
 
+def build_terminal_adjudication_request(
+    *,
+    source_text: str,
+    ocr_blocks: Sequence[str] | None,
+    evidence_manifest: EvidenceManifest,
+    previous_decision: SourceParseDecision,
+    today: str,
+    published_at: str | None,
+    source_context: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Build one final, same-invocation semantic decision request.
+
+    This is used only by a source adapter that explicitly requires a linear
+    product result.  It does not guess around missing evidence: the typed
+    schema still rejects ``CONFIRMED_NO_EVENT`` unless the evidence manifest
+    is complete.  It does prevent a malformed primary/verifier response from
+    becoming an ownerless background retry.
+    """
+
+    return {
+        "task": "terminal_source_parse_adjudication",
+        "rules": [
+            "Read all supplied source text and every OCR block again and make one final semantic decision.",
+            "RETRY_REQUIRED is forbidden in this final stage.",
+            "Return EVENTS_FOUND, MIXED or LIFECYCLE_ONLY when any attendable event or lifecycle action is present.",
+            "Return CONFIRMED_NO_EVENT with an exact no_event_reason only when complete evidence proves there is no attendable event.",
+            "A prior malformed/schema/provider result is not evidence that the carrier is a non-event.",
+            "Return the same typed SourceParseDecision JSON schema and no prose.",
+        ],
+        "today": today,
+        "published_at": published_at,
+        "source_context": dict(source_context or {}),
+        "source_text": source_text or "",
+        "ocr_blocks": list(ocr_blocks or ()),
+        "evidence_manifest": evidence_manifest.to_payload(),
+        "previous_result": previous_decision.to_payload(),
+        "previous_retry_reason": (
+            previous_decision.retry_reason.value
+            if previous_decision.retry_reason is not None
+            else None
+        ),
+    }
+
+
 async def conditionally_verify_source_decision(
     primary_decision: SourceParseDecision,
     *,
