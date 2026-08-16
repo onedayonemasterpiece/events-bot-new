@@ -258,6 +258,15 @@ outbox work; only its durable attempt receipt may be written. A changed packet
 with the same key proceeds as an update, while a different key in the same
 carrier may create a distinct Event.
 
+For that changed-packet path, an existing unique
+`(canonical_source_url, candidate_key)` binding is the authoritative owner of
+the child. Smart Update returns the edit to that Event before fuzzy title or
+venue matching. This is especially important for programme posts: a richer
+parse may rename `Рок-хиты` to `NEW VERSION`, but it must update the already
+accepted occurrence rather than try to create it again and end in
+`source_binding_conflict`. A different candidate key is not covered by this
+rule and continues through the normal sibling-event decision path.
+
 For the upstream VK parse receipt, provider-model identity is audit metadata,
 not replay identity. An unchanged packet with the same parse prompt version
 must reuse the successful receipt even if the requested model was routed to a

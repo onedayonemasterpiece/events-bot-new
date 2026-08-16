@@ -339,6 +339,84 @@ async def test_edited_packet_same_url_continues_real_update(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_edited_multi_event_child_reuses_authoritative_occurrence_binding(
+    tmp_path, monkeypatch
+) -> None:
+    """A richer replay may rename a child but must not fight its own binding.
+
+    Multi-event venues legitimately allow parallel events, so fuzzy title matching
+    cannot recover this case.  The stable source/candidate/occurrence binding is
+    the authoritative identity for an edited replay of the same child.
+    """
+
+    db = Database(str(tmp_path / "edited-multi-event-child.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.OFF
+        )
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+        source_url = "https://vk.com/wall-149955604_24253"
+        first = await su.smart_event_update(
+            db,
+            EventCandidate(
+                source_type="vk",
+                source_url=source_url,
+                source_text="14 августа в 21:00 — рок-хиты в баре Бастион.",
+                title="Рок-хиты 🎵",
+                date="2026-08-14",
+                time="21:00",
+                location_name="Бар Бастион",
+                location_address="Судостроительная 6/1",
+                city="Калининград",
+                event_type="концерт",
+                producer_ordinal=1,
+                source_disposition="EVENTS_FOUND",
+                source_evidence_complete=True,
+            ),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+        assert first.outcome is SmartUpdateTerminalOutcome.CREATED
+
+        edited = EventCandidate(
+            source_type="vk",
+            source_url=source_url,
+            source_text=(
+                "14 августа в 21:00 — хиты мирового и русского рока от "
+                "NEW VERSION в баре Бастион."
+            ),
+            title="🎸 Концерт «NEW VERSION»",
+            date="2026-08-14",
+            time="21:00",
+            location_name="Бар Бастион",
+            location_address="Судостроительная 6/1",
+            city="Калининград",
+            event_type="концерт",
+            producer_ordinal=1,
+            source_disposition="EVENTS_FOUND",
+            source_evidence_complete=True,
+        )
+        second = await su.smart_event_update(
+            db,
+            edited,
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        assert second.outcome is SmartUpdateTerminalOutcome.MERGED
+        assert second.event_id == first.event_id
+        async with db.get_session() as session:
+            sources = (await session.execute(select(EventSource))).scalars().all()
+        assert len(sources) == 1
+        assert sources[0].source_fingerprint == input_packet_fingerprint(edited)
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_tretyakov_direct_ticket_identity_cannot_cross_bind_screenings(tmp_path) -> None:
     db = Database(str(tmp_path / "tretyakov-bindings.sqlite"))
     await db.init()

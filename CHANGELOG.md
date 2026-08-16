@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Smart Update authoritative child replay:** an edited or richer packet with
+  an existing unique source `candidate_key` now updates its already-bound Event
+  before fuzzy title matching. Multi-event VK replays therefore no longer
+  reject previously accepted children as `source_binding_conflict` merely
+  because the refined child title differs from the earlier extraction.
 - **VK roundup child scope completion:** when the scope LLM abstains for a
   complete typed positive child whose parser summary is not verbatim, Smart
   Update may recover only one exact source line under the matching date heading

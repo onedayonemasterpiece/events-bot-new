@@ -528,6 +528,24 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   event under an exact source date heading/time/title, while the parser's
   `raw_excerpt` is a generated summary without the date. This is failure
   evidence and the VK health gate remains open.
+- PR #524 merged as
+  `b7ee76fb4d131c7bbe09fe89ab87217bc9b19e83` and was deployed from clean exact
+  main as Fly v1993. The exact replay reached the new grounded source-line
+  fallback and created the missing `Руки Вверх!` event 7729, but two already
+  accepted sibling children (`NEW VERSION`, state 7442, and the Viktor Tsoi
+  tribute, state 7447) then closed `FAILED_TECHNICAL` as
+  `source_binding_conflict`. Their first attempts had already merged into
+  events 7591 and 7539 and persisted unique candidate/occurrence bindings;
+  the second, richer parse changed the packet fingerprint and title, fuzzy
+  matching discarded the exact owner, and the create path collided with its
+  own authoritative binding. This is failure evidence, not a successful gate.
+- Prevention for that replay conflict now resolves the unique
+  `(canonical_source_url, candidate_key)` owner before fuzzy title/venue
+  matching; a changed packet updates the same child while a different
+  candidate key remains a distinct sibling. A production-shaped regression
+  reproducing the `Рок-хиты` -> `NEW VERSION` title refinement is green, along
+  with 148 focused Smart/VK tests. Merge, exact-main deploy and exact carrier
+  replay remain pending.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

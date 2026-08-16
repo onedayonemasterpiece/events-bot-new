@@ -15374,6 +15374,51 @@ async def _match_existing_event_by_source_anchor(
     return None
 
 
+async def _match_existing_event_by_candidate_key(
+    db: Database,
+    candidate: EventCandidate,
+) -> Event | None:
+    """Resolve the authoritative owner of one durable source child."""
+
+    canonical_source_url = canonicalize_identity_url(candidate.source_url)
+    candidate_key = str(candidate.candidate_key or "").strip()
+    if (
+        not canonical_source_url
+        or not candidate_key
+        or _candidate_source_role(candidate) != "identity_bearing"
+    ):
+        return None
+    async with db.get_session() as session:
+        stmt = (
+            select(Event)
+            .join(EventSource, EventSource.event_id == Event.id)
+            .where(
+                EventSource.canonical_source_url == canonical_source_url,
+                EventSource.source_role == "identity_bearing",
+                EventSource.candidate_key == candidate_key,
+            )
+        )
+        if candidate.source_type:
+            stmt = stmt.where(EventSource.source_type == candidate.source_type)
+        bound_rows = list((await session.execute(stmt)).scalars().all())
+    if len(bound_rows) == 1:
+        logger.info(
+            "smart_update.source_candidate_anchor event_id=%s candidate_key=%s",
+            getattr(bound_rows[0], "id", None),
+            candidate_key[:12],
+        )
+        return bound_rows[0]
+    if len(bound_rows) > 1:
+        # The unique DB contract should make this unreachable. Never guess an
+        # owner if a legacy/corrupt database violates it.
+        logger.error(
+            "smart_update.source_candidate_anchor ambiguous candidate_key=%s owners=%s",
+            candidate_key[:12],
+            sorted(int(row.id) for row in bound_rows if row.id),
+        )
+    return None
+
+
 async def _match_existing_event_by_event_source_url(
     db: Database,
     candidate: EventCandidate,
@@ -18187,8 +18232,12 @@ async def _smart_event_update_impl(
 
     # A classified identity-bearing binding outranks legacy Event source fields.
     # This prevents a shared/context URL from being rebound by fuzzy anchors.
+    authoritative_candidate_anchor = False
     try:
-        anchor_match = await _match_existing_event_by_event_source_url(db, candidate)
+        anchor_match = await _match_existing_event_by_candidate_key(db, candidate)
+        authoritative_candidate_anchor = anchor_match is not None
+        if anchor_match is None:
+            anchor_match = await _match_existing_event_by_event_source_url(db, candidate)
     except Exception:
         logger.warning("smart_update: event_source_url anchor match failed", exc_info=True)
         anchor_match = None
@@ -18372,7 +18421,12 @@ async def _smart_event_update_impl(
     candidate_hall = _extract_hall_hint(
         (candidate.source_text or "") + "\n" + "\n".join(candidate_poster_texts)
     )
-    if allow_parallel and candidate_hall and shortlist:
+    if (
+        not authoritative_candidate_anchor
+        and allow_parallel
+        and candidate_hall
+        and shortlist
+    ):
         filtered: list[Event] = []
         for ev in shortlist:
             ev_posters = posters_map.get(ev.id or 0, [])
@@ -18403,7 +18457,10 @@ async def _smart_event_update_impl(
 
         # Deterministic single-candidate match is allowed only when anchors look sane.
         # Otherwise fall back to LLM matching / create to avoid catastrophic cross-event merges.
-        if anchor_forced:
+        if authoritative_candidate_anchor:
+            match_event = shortlist[0]
+            match_reason = "source_candidate_anchor"
+        elif anchor_forced:
             match_event = shortlist[0]
             match_reason = "anchor_forced"
         elif longrun_exhibition_match is not None:
@@ -18717,6 +18774,7 @@ async def _smart_event_update_impl(
             if not _titles_look_related(candidate.title, getattr(match_event, "title", None)):
                 narrow_reason = str(match_reason or "").strip().lower()
                 safe_single = narrow_reason in {
+                    "source_candidate_anchor",
                     "deterministic_specific_ticket_same_slot",
                     "deterministic_specific_ticket_same_place",
                     "deterministic_same_slot_near_text",
