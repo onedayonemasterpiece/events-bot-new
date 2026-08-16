@@ -10537,7 +10537,27 @@ async def parse_event_via_llm(
     # below that Gemma still leads. Size, not token count, is used because
     # the system prompt (~6000 tokens of venues/holidays/rules) dominates the
     # provider-reported input_tokens and would mask the per-post signal.
-    if not use_4o and "gemma_model" not in extra:
+    # ``vk_auto_queue`` passes its default model explicitly so the durable parse
+    # receipt records the requested route.  Treat that spelling (including the
+    # provider ``models/`` prefix) as the ordinary default, not as an operator
+    # pin.  Previously this innocuous explicit default disabled the large-post
+    # route entirely.  A complete four-page OCR carrier then needed 16,422 TPM
+    # against Gemma's 15,000 TPM bucket and could only repeat the same
+    # impossible reservation until it became FAILED_TECHNICAL.
+    requested_parse_model = str(extra.get("gemma_model") or "").strip()
+    configured_default_model = (
+        os.getenv("EVENT_PARSE_GEMMA_MODEL", "gemma-4-31b-it") or ""
+    ).strip()
+
+    def _normalized_model_ref(value: str) -> str:
+        return value.strip().casefold().removeprefix("models/")
+
+    default_route_requested = (
+        not requested_parse_model
+        or _normalized_model_ref(requested_parse_model)
+        == _normalized_model_ref(configured_default_model)
+    )
+    if not use_4o and default_route_requested:
         try:
             threshold_chars = int(
                 os.getenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "2500") or "2500"
@@ -10556,10 +10576,11 @@ async def parse_event_via_llm(
             if total_chars >= threshold_chars:
                 extra["gemma_model"] = large_model
                 logging.info(
-                    "event_parse: large_post route source_channel=%s total_chars=%d threshold=%d primary=%s",
+                    "event_parse: large_post route source_channel=%s total_chars=%d threshold=%d requested=%s primary=%s",
                     source_channel,
                     total_chars,
                     threshold_chars,
+                    requested_parse_model or configured_default_model,
                     large_model,
                 )
 

@@ -182,6 +182,14 @@ must re-render the calendar line even when the event body itself is unchanged.
 - `SMART_UPDATE_FORCE_STAGED_GEMINI=0` — steady-state quota-safe routing. `1`
   must not be left enabled in production; it is only a bounded diagnostic override.
 - `EVENT_PARSE_GEMMA_MODEL=gemma-4-31b-it` (default) — upstream VK/TG draft extraction uses Gemma 4 before Smart Update receives candidates. Legacy parser forcing remains explicit via `EVENT_PARSE_LLM=4o`; automatic parser fallback to 4o is disabled unless `EVENT_PARSE_ENABLE_4O_FALLBACK=1`.
+- `EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS=2500` routes a complete long source
+  text/OCR carrier to `EVENT_PARSE_LARGE_POST_MODEL` (default
+  `gemini-3.1-flash-lite`) before quota reservation, without dropping or
+  shortening evidence. The `models/gemma-4-31b-it` spelling supplied by VK
+  receipt accounting is the ordinary default and does not suppress this
+  route; only an explicitly different model is treated as an operator pin.
+  This is required when exact counted input plus the calibrated completion
+  reserve is larger than Gemma's whole admitted TPM bucket.
 - `EVENT_PARSE_GEMMA_TPM_RESERVATION_TARGET=14500` keeps Gemma 4 event-parse
   input+output+reserve-extra below the canonical 15K TPM cap. The configured
   `EVENT_PARSE_GEMMA_MAX_TOKENS` remains the upper bound, while the per-request
