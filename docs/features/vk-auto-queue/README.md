@@ -8,10 +8,13 @@ raw-first durability и строгая LLM-first семантика. Очере�
 видимый `/vk_auto_import` batch, обязана завершиться в этом batch как accepted,
 подтверждённое product exclusion или `FAILED_TECHNICAL` с причиной и receipt.
 
-**Release status:** базовый linear-ingestion fix из PR #513 уже работает в
-production (`225a5ccf9`, Fly v1982). Контрольный run 6020 создал три события,
-но выявил четыре остаточных technical outcome; описанные ниже OCR/final-
-adjudication/lifecycle уточнения ещё требуют merge, deploy и повторного run.
+**Release status:** базовый linear-ingestion fix из PR #513 и остаточные
+OCR/final-adjudication/lifecycle исправления из PR #514 работают в production
+(`3458b549d3`, Fly v1983). Exact replay четырёх строк run 6020 закрыл два
+исторических carrier как доказанный no-event, но выявил ещё две точные границы:
+sub-minute provider Retry-After не ожидался внутри VK claim, а более поздний
+carrier terminal скрывал уже сохранённый успешный parse receipt. Эти границы
+остаются release-gate текущего открытого инцидента до повторного exact replay.
 
 ## Граница покрытия
 
@@ -30,6 +33,7 @@ VK API fetch
   -> vk_inbox due state
   -> attachments/OCR + EvidenceManifest
   -> SourceParseDecision
+  -> one bounded sub-minute provider Retry-After inside the same claim
   -> optional contradiction verifier
   -> bounded final adjudication only if the VK decision is still technical
   -> Smart Update per event child / typed lifecycle action
@@ -51,6 +55,16 @@ Page/hard cap создаёт `vk_crawl_continuation`. Неизменившийс
 payload/revision hash использует exact successful receipt без provider-вызова;
 изменившийся пост получает новый immutable revision и снова становится due.
 Blank/photo-only packets также сохраняются и идут через OCR и LLM.
+
+`VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC` (default `60`, hard max `180`) задаёт
+общий wall-clock budget для одного явного provider `Retry-After` внутри
+текущего carrier claim. Это не background retry: после исчерпания budget строка
+сразу получает видимый `FAILED_TECHNICAL`. Успешный immutable parse receipt не
+перестаёт быть replayable, если последующий lifecycle/Smart этап завершил
+carrier техническим terminal; failed attempt не имеет права перезаписать
+identity/result уже принятого provider parse. Exact replay добавляет только
+receipt с `parse_key=NULL`, поэтому не конфликтует с единственным physical
+successful-parse key.
 
 Idle backfill определяется по `vk_crawl_cursor.checked_at` — времени последнего
 успешного scan, а не по `updated_at` последнего найденного поста. Иначе тихий,

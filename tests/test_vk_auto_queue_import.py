@@ -2053,6 +2053,7 @@ async def test_vk_auto_queue_rate_limit_terminalizes_after_inline_attempt(tmp_pa
         return "text", [], None, {"views": 10, "likes": 1}, vk_auto_queue.VkFetchStatus(True, "ok")
 
     async def fake_build_event_drafts(*_args, **_kwargs):
+        assert _kwargs["rate_limit_max_wait_sec"] == 5.0
         raise RateLimitError(blocked_reason="tpm", retry_after_ms=3000)
 
     # Advance a deterministic clock instead of busy-spinning for five real

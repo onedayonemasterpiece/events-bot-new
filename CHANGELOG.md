@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **VK live-qualification follow-up:** a sub-minute provider `Retry-After` is
+  now honoured once inside the current VK claim under a 60-second bounded
+  budget, rather than becoming an immediate technical terminal. Later
+  carrier/lifecycle failures no longer erase or hide an immutable successful
+  parse receipt, so exact replay reuses it without another provider call or a
+  duplicate successful `parse_key`.
 - **VK qualification residuals:** poster OCR now retries only transient
   transport/408/409/429/5xx failures inside the same claim with distinct client
   request IDs and preserves successful gallery siblings. A malformed primary

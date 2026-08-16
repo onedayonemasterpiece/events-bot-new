@@ -10586,6 +10586,66 @@ async def parse_event_via_llm(
             ), timeout=cap_sec
         )
 
+    rate_limit_wait_raw = str(extra.get("rate_limit_max_wait_sec") or "0").strip()
+    try:
+        rate_limit_wait_budget_sec = float(rate_limit_wait_raw)
+    except (TypeError, ValueError):
+        rate_limit_wait_budget_sec = 0.0
+    rate_limit_wait_budget_sec = max(0.0, min(rate_limit_wait_budget_sec, 180.0))
+    rate_limit_wait_spent_sec = 0.0
+
+    async def _invoke_with_bounded_rate_limit_wait(
+        parse_extra: Mapping[str, Any],
+        *,
+        attempt_kind: str,
+    ) -> ParsedEvents:
+        """Retry one provider throttle inside the current linear claim.
+
+        The owning VK row supplies a small wall-clock budget.  We never put
+        semantic work back on a background queue, but a provider's explicit
+        sub-minute Retry-After is safe to honour once before declaring a
+        visible technical terminal.
+        """
+
+        nonlocal rate_limit_wait_spent_sec
+        try:
+            return await _invoke_primary(parse_extra)
+        except Exception as exc:
+            retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
+            status_code = int(getattr(exc, "status_code", 0) or 0)
+            is_rate_limit = (
+                retry_after_ms > 0
+                or status_code == 429
+                or type(exc).__name__ == "RateLimitError"
+            )
+            wait_sec = (
+                max(0.1, retry_after_ms / 1000.0)
+                if retry_after_ms > 0
+                else 1.0
+            )
+            remaining_sec = max(
+                0.0, rate_limit_wait_budget_sec - rate_limit_wait_spent_sec
+            )
+            if not is_rate_limit or wait_sec > remaining_sec:
+                raise
+            failure_receipt = provider_attempt_metadata(
+                exc,
+                attempt_kind=f"{attempt_kind}_rate_limit_wait",
+            )
+            logging.warning(
+                "event_parse: bounded provider wait attempt_kind=%s "
+                "wait_sec=%.3f remaining_sec=%.3f",
+                attempt_kind,
+                wait_sec,
+                remaining_sec,
+            )
+            await asyncio.sleep(wait_sec)
+            rate_limit_wait_spent_sec += wait_sec
+            result = await _invoke_primary(parse_extra)
+            return result.with_provider_attempts(
+                [failure_receipt, *result.provider_attempts]
+            )
+
     async def _invoke_terminal_adjudicator(
         previous: SourceParseDecision,
     ) -> SourceParseDecision:
@@ -10628,7 +10688,10 @@ async def parse_event_via_llm(
             "configured-4o" if use_4o else terminal_extra.get("gemma_model"),
         )
         try:
-            terminal = await _invoke_primary(terminal_extra)
+            terminal = await _invoke_with_bounded_rate_limit_wait(
+                terminal_extra,
+                attempt_kind="terminal_adjudication",
+            )
         except Exception as exc:
             terminal = SourceParseDecision.retry(
                 SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR,
@@ -10664,7 +10727,10 @@ async def parse_event_via_llm(
         )
 
     try:
-        result = await _invoke_primary(extra)
+        result = await _invoke_with_bounded_rate_limit_wait(
+            extra,
+            attempt_kind="primary",
+        )
     except asyncio.TimeoutError:
         logging.warning(
             "event_parse: gemma wall_clock_timeout cap_sec=%.1f source_channel=%s; raising",

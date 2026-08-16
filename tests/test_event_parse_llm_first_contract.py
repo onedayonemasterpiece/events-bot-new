@@ -463,3 +463,46 @@ async def test_provider_rate_limit_metadata_survives_typed_parse_boundary(monkey
         "quota_reason": "RPD_EXHAUSTED",
         "provider_retry_after_ms": 3_600_000,
     }
+
+
+@pytest.mark.asyncio
+async def test_vk_linear_parse_waits_once_for_bounded_provider_retry(monkeypatch):
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    calls = []
+    sleeps = []
+
+    async def fake_gemma(*_args, **_kwargs):
+        calls.append(dict(_kwargs))
+        if len(calls) == 1:
+            raise RateLimitError(
+                blocked_reason="tpm",
+                retry_after_ms=3_000,
+                model="gemma-4-31b-it",
+                quota_scope="google:test-project",
+            )
+        return _decision(
+            [{"title": "Лекция", "date": "2026-09-01"}],
+            SourceDisposition.EVENTS_FOUND,
+        )
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    monkeypatch.setattr(main.asyncio, "sleep", fake_sleep)
+
+    result = await main.parse_event_via_llm(
+        "Лекция 1 сентября",
+        poster_texts=["Лекция 1 сентября"],
+        rate_limit_max_wait_sec="5",
+        require_terminal_decision=True,
+    )
+
+    # Two primary invocations (throttle + bounded retry) and the normal
+    # contradiction verifier for this deliberately terse fixture.
+    assert len(calls) == 3
+    assert sleeps == [3.0]
+    assert result.disposition is SourceDisposition.EVENTS_FOUND
+    assert result.provider_attempts[0]["attempt_kind"] == "primary_rate_limit_wait"
+    assert result.provider_attempts[0]["provider_retry_after_ms"] == 3_000

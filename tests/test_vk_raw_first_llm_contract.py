@@ -359,6 +359,83 @@ async def test_parse_receipt_is_replayable_without_second_provider_call(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_successful_parse_receipt_survives_later_terminal_carrier_failure(tmp_path):
+    db = await _db(tmp_path)
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post=build_vk_source_envelope(
+            {"id": 2, "date": 1, "text": "event", "attachments": []},
+            owner_id=1,
+        ),
+        source_url="https://vk.com/wall-1_2",
+        keyword_hints=[],
+        date_hints=[],
+        event_ts_hint=None,
+    )
+    receipt = {
+        "decision": SourceParseDecision(
+            [{"title": "Event"}],
+            disposition=SourceDisposition.EVENTS_FOUND,
+            evidence_manifest=EvidenceManifest.complete_source("event"),
+        ).to_payload(),
+        "drafts": [{"title": "Event", "date": "2026-10-01"}],
+    }
+    await vk_review.record_source_parse_attempt(
+        db,
+        source_packet_id=packet_id,
+        prompt_version="p",
+        model="models/gemma-4-31b-it",
+        evidence_manifest=EvidenceManifest.complete_source("event").to_payload(),
+        parse_result=receipt,
+        disposition="EVENTS_FOUND",
+        retry_reason=None,
+        event_child_count=1,
+        lifecycle_action_count=0,
+    )
+    await vk_review.record_source_parse_attempt(
+        db,
+        source_packet_id=packet_id,
+        prompt_version="p",
+        model="models/gemma-4-31b-it",
+        evidence_manifest=EvidenceManifest.complete_source("event").to_payload(),
+        parse_result=None,
+        disposition="RETRY_REQUIRED",
+        retry_reason=SourceParseRetryReason.TECHNICAL_ERROR.value,
+        event_child_count=0,
+        lifecycle_action_count=0,
+    )
+    async with db.raw_conn() as conn:
+        inbox_id = int(
+            (await (await conn.execute(
+                "SELECT id FROM vk_inbox WHERE source_packet_id=?",
+                (packet_id,),
+            )).fetchone())[0]
+        )
+    await vk_review.mark_carrier_outcome(
+        db,
+        inbox_id=inbox_id,
+        outcome="FAILED_TECHNICAL",
+        typed_reason="LIFECYCLE_NO_MATCH",
+    )
+
+    loaded = await vk_review.load_successful_parse_receipt(
+        db,
+        source_packet_id=packet_id,
+        prompt_version="p",
+        model="models/gemma-4-31b-it",
+    )
+    assert loaded == receipt
+    await vk_review.record_exact_parse_replay(
+        db,
+        source_packet_id=packet_id,
+        prompt_version="p",
+        model="models/gemma-4-31b-it",
+    )
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_and_restart_never_terminal(tmp_path):
     db = await _db(tmp_path)
     async with db.raw_conn() as conn:

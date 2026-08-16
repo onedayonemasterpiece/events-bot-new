@@ -97,6 +97,17 @@ def _vk_auto_parse_gemma_model() -> str:
     return value or "models/gemma-4-31b-it"
 
 
+def _vk_auto_rate_limit_wait_sec() -> float:
+    """Bound one explicit provider Retry-After inside the current row claim."""
+
+    raw = (os.getenv("VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC") or "60").strip()
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = 60.0
+    return max(0.0, min(value, 180.0))
+
+
 async def _record_vk_auto_import_scheduler_skip(
     db: Database,
     *,
@@ -2422,7 +2433,7 @@ async def _process_vk_inbox_row(
                 festival_hint=bool(source_is_festival),
                 publish_ts=publish_ts,
                 event_ts_hint=post.event_ts_hint,
-                rate_limit_max_wait_sec=0,
+                rate_limit_max_wait_sec=_vk_auto_rate_limit_wait_sec(),
                 parse_gemma_model=model_name,
                 attachment_count_hint=int(getattr(vk_fetch, "attachment_count", 0) or len(photos)),
                 unavailable_attachment_count_hint=int(
