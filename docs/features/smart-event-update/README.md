@@ -787,6 +787,13 @@ failure blocks automatic creation. This prevents performer/program facts from
 sibling dates being written into `event_source_fact`, descriptions, search
 digests and public projections.
 
+The cross-city safety rail considers a city explicit only as a standalone
+place token in the complete source and in the selected child excerpt. A
+regional adjective such as `Калининградская область` is not evidence that the
+source explicitly named the city `Калининград`; otherwise an unrelated
+exhibition title can falsely turn an exact event child into
+`llm_scope_missing_target_city`. Venue and address semantics remain LLM-owned.
+
 The generated public bundle has a second source-grounding review. A `grounded`
 decision is accepted only at confidence `>=0.9` with no unsupported fields. An
 `uncertain` decision remains fail-closed. An explicit `ungrounded` decision does

@@ -417,6 +417,46 @@ async def test_multicity_occurrence_cannot_mix_target_date_and_sibling_city(monk
     )
 
 
+@pytest.mark.asyncio
+async def test_region_adjective_does_not_fake_explicit_target_city(monkeypatch) -> None:
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-29891284_14297",
+        source_text=(
+            "15 августа 13:00 | Кураторская экскурсия по выставке "
+            "\u00abМатериальные свидетельства контактов пруссов с Русью\u00bb.\n"
+            "Выставка \u00abКалининградская область в эфире\u00bb."
+        ),
+        raw_excerpt=(
+            "15 августа 13:00 | Кураторская экскурсия по выставке "
+            "\u00abМатериальные свидетельства контактов пруссов с Русью\u00bb."
+        ),
+        title=(
+            "Кураторская экскурсия по выставке "
+            "\u00abМатериальные свидетельства контактов пруссов с Русью\u00bb"
+        ),
+        date="2026-08-15",
+        time="13:00",
+        location_name="Историко-художественный музей",
+        location_address="Клиническая 21",
+        city="Калининград",
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "scoped",
+            "confidence": 0.99,
+            "selected_excerpts": [candidate.raw_excerpt],
+            "reason_short": "exact target block",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_scope_candidate_occurrence(candidate) == (
+        True,
+        "llm_scoped",
+    )
+
+
 def test_smart_update_stage_does_not_send_unsupported_thinking_config() -> None:
     config = su._smart_update_gemma_generation_config()
     assert config == {"temperature": 0.0}

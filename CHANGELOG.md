@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **VK digest city-scope grounding:** Smart Update now treats a city as
+  explicit cross-occurrence evidence only when it appears as a standalone
+  place token. Regional adjectives such as `Калининградская область` no
+  longer manufacture a missing-city technical failure for an otherwise exact
+  LLM-scoped event child.
 - **VK programme-child boundary:** the typed `EVENTS_FOUND`/`MIXED` source
   verdict now crosses the VK persist boundary into Smart Update, so a specific
   extracted child is not rejected merely because its carrier contains several
