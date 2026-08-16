@@ -621,7 +621,15 @@ async def load_successful_parse_receipt(
     prompt_version: str,
     model: str,
 ) -> dict[str, Any] | None:
-    """Return an immutable successful parse for exact packet replay."""
+    """Return an immutable successful parse for exact packet replay.
+
+    The stored provider model is evidence, not part of packet identity.  The
+    requested model can legitimately route to another provider model (for
+    example the large-carrier Flash-Lite route), and configuration may change
+    between attempts.  Requiring model equality here would re-call the provider
+    for an unchanged packet and can collide with its already successful parse
+    receipt.  Prompt-version equality remains the semantic compatibility gate.
+    """
 
     if source_packet_id is None:
         return None
@@ -631,7 +639,7 @@ async def load_successful_parse_receipt(
             SELECT parse_result_json
             FROM vk_source_packet
             WHERE id=?
-              AND prompt_version=? AND model=?
+              AND prompt_version=?
               AND successful_parse_key IS NOT NULL
               AND parse_result_json IS NOT NULL
               AND EXISTS(
@@ -642,7 +650,7 @@ async def load_successful_parse_receipt(
                     AND attempt.structured_response_valid=1
               )
             """,
-            (int(source_packet_id), str(prompt_version), str(model)),
+            (int(source_packet_id), str(prompt_version)),
         )
         row = await cur.fetchone()
     if not row or not row[0]:
