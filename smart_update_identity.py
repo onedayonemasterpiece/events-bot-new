@@ -335,7 +335,12 @@ def deterministic_identity_veto(
             and candidate.source_url == ev.source_url
             and same_day
             and (same_time or candidate.time_is_default or ev.time_is_default or not candidate.time or not ev.time)
-            and (title_related or location_related)
+            # One source post may legitimately announce several sibling events
+            # in the same venue and time slot (for example a festival/program
+            # card).  Location equality is therefore not identity evidence on
+            # its own: require a related title before the deterministic gate can
+            # veto creation.  The LLM dedup path still adjudicates weaker cases.
+            and title_related
         ):
             return _veto("deterministic_same_source_identity", candidate, ev, 0.98, "same source URL and compatible anchors")
 

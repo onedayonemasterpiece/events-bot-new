@@ -330,13 +330,21 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   `b8277f5390145ac3349aa57194e20e359820ff42` / Fly v1985; scheduled run 6041
   then processed 15/15 terminal rows with four created events and zero
   technical/deferred outcomes.
-- [ ] merge/deploy the exact oversized-carrier route correction and re-drive
-  inbox 19444 plus the four run-6024 parser carriers to zero technical/
-  unresolved outcomes.
-- [ ] run one
-  S22 Telegram catch-up, bounded current/history VK drain and all-source parser
-  catch-up, and require zero unexplained/technical outcomes plus verified new
-  DB writes before reporting ingestion healthy.
+- [x] merge/deploy the exact oversized-carrier route correction as PR #517 /
+  Fly v1986 and re-drive inbox 19444 to a typed no-event terminal with zero
+  technical/deferred outcomes.
+- [x] run an all-source official-parser catch-up (ops 6050): 236 processed
+  across eight sources, three created, ten updated, 223 unchanged, zero failed,
+  retry or errors; the overdue Sobor recovery request reached `done`.
+- [x] run bounded VK qualification ops 6057: 15/15 reached terminal receipts
+  and five events were created, but one technical identity result exposed two
+  real sibling films lost from a four-event source post.
+- [ ] deploy the same-source sibling identity correction, re-drive exact inbox
+  18558 to four distinct child bindings without duplicates, then repeat a
+  bounded current/history VK qualification with zero unexplained/technical
+  outcomes.
+- [ ] run one S22 Telegram catch-up and require a complete carrier/child outcome
+  balance plus verified new DB writes before reporting ingestion healthy.
 - [ ] static-site projection canary remains open but is explicitly deferred by
   the operator; it must not block the ingestion deployment and must not be
   silently marked complete.
@@ -403,6 +411,23 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   still left inbox 19444 technical; exact read-only prompt reconstruction then
   proved `input_tokens=9733`, calibrated `reserved_tpm=16422`, while every
   registered Gemma project lane is capped at `tpm=15000`;
+- PR #517 merged as
+  `238dd5f3756b17812c461234a13455ca0f0ff518` and deployed from clean exact
+  main as Fly v1986. Three health probes returned HTTP 200, Fly was 1/1,
+  `quick_check=ok`, and `/data` had about 1.09 GiB available;
+- exact oversized-carrier replay ops 6049 routed inbox 19444 to
+  `gemini-3.1-flash-lite` and closed as
+  `CONFIRMED_NO_EVENT:RECAP_ONLY`, with zero technical/deferred/unresolved
+  outcomes;
+- official-parser catch-up ops 6050 processed all eight configured sources:
+  236 processed, three created, ten updated, 223 unchanged and zero failed,
+  retry or errors; the Sobor recovery request is terminal `done`;
+- bounded VK qualification ops 6057 processed 15/15 terminal rows and created
+  events 7708–7712, but one `deterministic_same_source_identity` technical
+  result proved real recall loss in `wall-53460968_11826`: the first and third
+  titled films were created while the second and fourth sibling films sharing
+  the same source/date/time/venue were vetoed. This is failure evidence, not a
+  successful ingestion gate;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

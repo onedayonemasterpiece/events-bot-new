@@ -252,6 +252,13 @@ outbox work; only its durable attempt receipt may be written. A changed packet
 with the same key proceeds as an update, while a different key in the same
 carrier may create a distinct Event.
 
+A canonical source URL plus the same date, time and venue is not sufficient
+identity evidence by itself: one programme post can contain several distinct
+titled sibling events in the same slot. The deterministic same-source gate may
+veto creation only when the titles are related; otherwise the candidate must
+continue through the normal distinct-event adjudication. Exact occurrence keys
+and fingerprints, not carrier URL equality, provide replay idempotency.
+
 For read-only rollout evidence independent of the scheduler, run
 `python3 scripts/inspect/audit_identity_gate_rollout.py --db /data/db.sqlite --since-days 14 --format both`.
 It reports decision/gate/vector-error evidence

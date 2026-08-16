@@ -72,7 +72,7 @@ def test_off_mode_never_vetoes_even_with_strong_identity_signal():
     )
     ev = _Event(
         id=7,
-        title="Валерия",
+        title="Концерт Валерии",
         date="2026-07-01",
         time="19:00",
         source_post_url="https://t.me/source/10",
@@ -96,7 +96,7 @@ def test_shadow_mode_reports_would_veto_but_does_not_enforce():
     )
     ev = _Event(
         id=7,
-        title="Валерия",
+        title="Концерт Валерии",
         date="2026-07-01",
         time="19:00",
         source_post_url="https://t.me/source/10",
@@ -109,6 +109,29 @@ def test_shadow_mode_reports_would_veto_but_does_not_enforce():
     assert verdict.would_veto_create
     assert not verdict.should_veto_create
     assert verdict.matched_event_id == 7
+
+
+def test_same_source_same_slot_and_venue_does_not_veto_distinct_sibling_title():
+    cand = _Cand(
+        title="Кинопоказ «Ангелы Ладоги»",
+        date="2026-08-28",
+        time="19:00",
+        source_url="https://vk.com/wall-53460968_11826",
+        location_name="Гусевский музей",
+    )
+    ev = _Event(
+        id=7709,
+        title="Кинопоказ «Чебурашка 2»",
+        date="2026-08-28",
+        time="19:00",
+        source_vk_post_url="https://vk.com/wall-53460968_11826",
+        location_name="Гусевский музей",
+    )
+
+    verdict = build_identity_gate_verdict(cand, [ev], mode=IdentityGateMode.ENFORCE)
+
+    assert not verdict.should_veto_create
+    assert verdict.reason_code == "no_identity_veto"
 
 
 def test_enforce_vetoes_same_ticket_same_slot_without_auto_merge():

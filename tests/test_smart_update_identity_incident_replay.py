@@ -266,3 +266,66 @@ async def test_multi_session_same_source_different_explicit_time_is_not_vector_m
     async with db.get_session() as session:
         total = await session.scalar(select(func.count()).select_from(Event))
     assert total == 2
+
+
+@pytest.mark.asyncio
+async def test_same_source_same_slot_distinct_titles_create_sibling_events(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "same-slot-siblings.sqlite"))
+    await db.init()
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
+    monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+    monkeypatch.setattr(su, "_classify_topics", _no_topics)
+    source_url = "https://vk.com/wall-53460968_11826"
+    await _seed_event(
+        db,
+        event_id=7709,
+        title="Кинопоказ «Чебурашка 2»",
+        date="2026-08-28",
+        time="19:00",
+        location_name="Гусевский музей",
+        event_type="кинопоказ",
+        source_url=source_url,
+    )
+
+    async def _no_vector_match(_candidate):
+        return IdentityVectorEvidence(
+            available=True,
+            nearest_event_id=None,
+            score=None,
+            reason="same-source sibling negative control",
+        )
+
+    monkeypatch.setattr(su, "_smart_update_identity_vector_evidence", _no_vector_match)
+
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url=source_url,
+        source_text=(
+            "28 августа в 19:00 в Гусевском музее состоятся отдельные "
+            "кинопоказы «Чебурашка 2» и «Ангелы Ладоги»."
+        ),
+        title="Кинопоказ «Ангелы Ладоги»",
+        date="2026-08-28",
+        time="19:00",
+        location_name="Гусевский музей",
+        city="Гусев",
+        event_type="кинопоказ",
+        producer_ordinal=1,
+    )
+
+    result = await smart_event_update(
+        db, candidate, check_source_url=False, schedule_tasks=False
+    )
+
+    assert result.status == "created"
+    async with db.get_session() as session:
+        total = await session.scalar(select(func.count()).select_from(Event))
+        created = await session.get(Event, result.event_id)
+    assert total == 2
+    assert created is not None
+    assert created.title == "Кинопоказ «Ангелы Ладоги»"
+    await db.close()
