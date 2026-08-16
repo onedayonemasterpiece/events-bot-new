@@ -207,6 +207,9 @@ async def test_automated_past_event_is_terminal_product_exclusion(tmp_path, monk
         source_text="Школа Арт-критики 10 ноября 2022 года в 19:00",
         title="Школа Арт-критики",
         date="2022-11-10",
+        # Production replay exposed a missing-year normalization defect that
+        # paired the old start with the current extraction year.
+        end_date="2026-12-10",
         time="19:00",
         location_name="Калининградский музей изобразительных искусств",
         city="Калининград",
