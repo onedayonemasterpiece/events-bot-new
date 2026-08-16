@@ -6399,6 +6399,25 @@ def _source_supports_location_value(text: str | None, value: str | None) -> bool
     return len(probe_compact) >= 5 and probe_compact in haystack_compact
 
 
+def _source_supports_city_value(text: str | None, value: str | None) -> bool:
+    """Require a standalone city mention for the cross-city scope rail.
+
+    A substring check is unsafe here: ``Калининград`` is contained in the
+    regional adjective ``Калининградская`` and used to make an otherwise valid
+    digest child fail when the selected child block quite correctly omitted
+    that unrelated exhibition title.  This helper is deliberately narrower
+    than general venue/address grounding; the LLM still owns occurrence
+    selection and this rail only detects an explicit sibling-city conflict.
+    """
+
+    probe = _norm_text_for_grounding(value)
+    haystack = _norm_text_for_grounding(text)
+    if len(probe) < 3 or not haystack:
+        return False
+    pattern = r"(?<!\w)" + re.escape(probe).replace(r"\ ", r"\s+") + r"(?!\w)"
+    return bool(re.search(pattern, haystack))
+
+
 def _candidate_location_grounding_corpus(candidate: "EventCandidate") -> str:
     parts = [candidate.occurrence_scope_text or candidate.source_text or "", candidate.raw_excerpt or ""]
     for poster in candidate.posters[:4]:
@@ -6612,8 +6631,8 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     # the LLM still owns selection, while this only validates its evidence.
     if (
         candidate.city
-        and _source_supports_location_value(corpus, candidate.city)
-        and not _source_supports_location_value(scoped, candidate.city)
+        and _source_supports_city_value(corpus, candidate.city)
+        and not _source_supports_city_value(scoped, candidate.city)
     ):
         if _apply_grounded_occurrence_scope_fallback(candidate):
             return True, "grounded_producer_excerpt"

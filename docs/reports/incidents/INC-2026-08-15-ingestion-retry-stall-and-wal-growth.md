@@ -339,17 +339,21 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - [x] run bounded VK qualification ops 6057: 15/15 reached terminal receipts
   and five events were created, but one technical identity result exposed two
   real sibling films lost from a four-event source post.
-- [ ] deploy the same-source sibling identity correction, re-drive exact inbox
-  18558 to four distinct child bindings without duplicates, then repeat a
-  bounded current/history VK qualification with zero unexplained/technical
-  outcomes.
+- [x] deploy the same-source sibling identity correction and re-drive exact
+  inbox 18558 to four distinct child bindings without duplicates.
 - [x] deploy the exact-receipt routing correction exposed by recovery ops 6063:
   an unchanged packet must reuse its immutable successful parse when requested
   and actual routed model names differ, without another provider call or a
   duplicate `parse_key` failure.
-- [ ] deploy the positive-child boundary correction exposed by recovery ops
+- [x] deploy the positive-child boundary correction exposed by recovery ops
   6066: preserve the upstream `EVENTS_FOUND` decision into Smart Update and do
   not treat the generic word `кинопоказ` as identity between different films.
+- [x] re-drive exact inbox 18558 on Fly v1989: all four film children now have
+  distinct source occurrence bindings; two existing events were merged and
+  the two previously lost siblings were created as events 7713 and 7714.
+- [ ] deploy the standalone-city scope correction exposed by qualification ops
+  6071, re-drive `wall-29891284_14297`, and repeat a bounded VK batch with zero
+  technical outcomes.
 - [ ] run one S22 Telegram catch-up and require a complete carrier/child outcome
   balance plus verified new DB writes before reporting ingestion healthy.
 - [ ] static-site projection canary remains open but is explicitly deferred by
@@ -458,6 +462,21 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   the carrier was a multi-film programme; and short titles `Малыш`/`Буратино`
   were falsely related only by the generic word `кинопоказ`. The carrier is
   still failed technical and this run is not accepted as recovery;
+- PR #520 merged as
+  `12563a55d7aa569c052c329d14682c009dea358c` and was deployed from clean exact
+  main as Fly v1989. Exact recovery ops 6069 persisted the complete product
+  result before its SSH stdout pipe closed: the source has four distinct
+  occurrence bindings, existing events 7709/7710 were merged and missing
+  siblings 7713/7714 were created. The ops transport receipt is `error`, so the
+  DB/source-binding readback is the authoritative recovery evidence.
+- bounded VK qualification ops 6071 processed 15/15 terminal rows, created
+  events 7715-7717 and updated 7212/7681, with zero deferred/unresolved rows;
+  one carrier still closed `FAILED_TECHNICAL`. Exact state 7423 shows a valid
+  15 August museum excursion was rejected as
+  `occurrence_scope_review:llm_scope_missing_target_city` because the generic
+  substring check mistook `Калининградская область` in an unrelated exhibition
+  title for an explicit mention of city `Калининград`. This is failure evidence
+  and keeps the VK gate open.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
