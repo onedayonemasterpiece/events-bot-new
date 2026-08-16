@@ -199,6 +199,84 @@ def test_telegram_blank_ocr_success_is_complete_attachment_evidence() -> None:
     assert manifest["evidence_complete"] is True
 
 
+def test_telegram_media_evidence_is_not_abandoned_after_per_source_cap() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(
+        item
+        for item in tree.body
+        if isinstance(item, ast.FunctionDef)
+        and item.name == "_media_download_allowed"
+    )
+    namespace: dict = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "<media-cap>", "exec"), namespace)
+
+    assert namespace["_media_download_allowed"](0, 500) is True
+    assert namespace["_media_download_allowed"](12, 11) is True
+    assert namespace["_media_download_allowed"](12, 12) is False
+    assert "TG_MONITORING_MEDIA_MAX_PER_SOURCE', '0'" in source
+
+
+def test_telegram_video_only_carrier_is_analyzed_before_final_no_event() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    scan = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "scan_source"
+    )
+    scan_source = ast.unparse(scan)
+
+    assert "await _recover_video_source_evidence" in scan_source
+    assert "video_evidence_text" in scan_source
+    assert "int(unavailable_attachment_count) - 1" in scan_source
+
+
+def test_telegram_album_video_is_analyzed_before_album_final_decision() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    scan = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "scan_source"
+    )
+    scan_source = ast.unparse(scan)
+    merged_start = scan_source.index("messages_out = _merge_media_groups(messages_out)")
+    recovery = scan_source.index(
+        "await _recover_video_source_evidence", merged_start
+    )
+    decision = scan_source.index(
+        "decision = await extract_source_parse_decision", merged_start
+    )
+
+    assert recovery < decision
+
+
+def test_telegram_video_observation_becomes_one_semantic_evidence_block() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(
+        item
+        for item in tree.body
+        if isinstance(item, ast.FunctionDef)
+        and item.name == "_video_analysis_evidence_block"
+    )
+    namespace: dict = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "<video-evidence>", "exec"), namespace)
+
+    block = namespace["_video_analysis_evidence_block"](
+        {
+            "description": "На экране афиша концерта 22 августа.",
+            "visible_text": ["22 августа", "Янтарь-холл"],
+        }
+    )
+
+    assert block == (
+        "На экране афиша концерта 22 августа.\n"
+        "Видимый текст: 22 августа | Янтарь-холл"
+    )
+
+
 def test_telegram_quota_rejection_waits_inline_before_same_carrier_retry() -> None:
     source = PRODUCER.read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -250,6 +328,176 @@ def test_telegram_quota_rejection_waits_inline_before_same_carrier_retry() -> No
     assert client.calls == 2
     assert len(waits) == 1
     assert waits[0] >= 0.001
+
+
+def test_telegram_quota_wait_does_not_abandon_carrier_after_four_minute_buckets() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {"_generation_config", "_call_model"}
+    ]
+
+    class _RateLimitError(Exception):
+        def __init__(self, *, blocked_reason: str, retry_after_ms: int):
+            self.blocked_reason = blocked_reason
+            self.retry_after_ms = retry_after_ms
+
+    class _ProviderError(Exception):
+        retryable = False
+        error_type = "provider"
+
+    class _Client:
+        calls = 0
+
+        async def generate_content_async(self, **kwargs):
+            self.calls += 1
+            if self.calls <= 4:
+                raise _RateLimitError(blocked_reason="tpm", retry_after_ms=1)
+            return '{"ok":true}', SimpleNamespace()
+
+    async def _sleep(_seconds: float) -> None:
+        return None
+
+    client = _Client()
+    namespace = {
+        "asyncio": SimpleNamespace(sleep=_sleep),
+        "random": SimpleNamespace(uniform=lambda _a, _b: 0.2),
+        "RateLimitError": _RateLimitError,
+        "ProviderError": _ProviderError,
+        "MODEL_REGISTRY": {"text": {"name": "model", "fallback": ""}},
+        "LLM_QUOTA_WAIT_MAX_ATTEMPTS": 8,
+        "LLM_QUOTA_WAIT_MAX_SECONDS": 65.0,
+        "LLM_TRANSIENT_RECOVERY_ATTEMPTS": 2,
+        "LLM_MAX_OUTPUT_TOKENS": 8192,
+        "_get_gemma_client": lambda: client,
+        "_resolve_candidate_key_ids": lambda: None,
+        "_is_not_found": lambda _exc: False,
+        "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
+    }
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "<quota-wait>", "exec"), namespace)
+
+    result = asyncio.run(namespace["_call_model"]("text", "carrier"))
+
+    assert result == '{"ok":true}'
+    assert client.calls == 5
+
+
+def test_telegram_model_recovers_timeout_and_truncation_inside_same_carrier() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {"_generation_config", "_call_model"}
+    ]
+
+    class _RateLimitError(Exception):
+        pass
+
+    class _ProviderError(Exception):
+        def __init__(self, error_type: str, *, retryable: bool):
+            self.error_type = error_type
+            self.retryable = retryable
+
+    class _Client:
+        calls: list[int] = []
+
+        async def generate_content_async(self, **kwargs):
+            self.calls.append(kwargs["max_output_tokens"])
+            if len(self.calls) == 1:
+                raise _ProviderError("TimeoutError", retryable=True)
+            if len(self.calls) == 2:
+                raise _ProviderError("output_truncated", retryable=True)
+            return '{"ok":true}', SimpleNamespace()
+
+    async def _sleep(_seconds: float) -> None:
+        return None
+
+    client = _Client()
+    namespace = {
+        "asyncio": SimpleNamespace(sleep=_sleep),
+        "random": SimpleNamespace(uniform=lambda _a, _b: 0.0),
+        "RateLimitError": _RateLimitError,
+        "ProviderError": _ProviderError,
+        "MODEL_REGISTRY": {"vision": {"name": "model", "fallback": ""}},
+        "LLM_QUOTA_WAIT_MAX_ATTEMPTS": 8,
+        "LLM_QUOTA_WAIT_MAX_SECONDS": 65.0,
+        "LLM_TRANSIENT_RECOVERY_ATTEMPTS": 3,
+        "LLM_MAX_OUTPUT_TOKENS": 8192,
+        "_get_gemma_client": lambda: client,
+        "_resolve_candidate_key_ids": lambda: None,
+        "_is_not_found": lambda _exc: False,
+        "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
+    }
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "<provider-recovery>", "exec"), namespace)
+
+    result = asyncio.run(
+        namespace["_call_model"]("vision", "poster", max_output_tokens=800)
+    )
+
+    assert result == '{"ok":true}'
+    assert client.calls == [800, 800, 1600]
+
+
+def test_telegram_exhausted_primary_quota_uses_independent_model_same_carrier() -> None:
+    source = PRODUCER.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {"_generation_config", "_call_model"}
+    ]
+
+    class _RateLimitError(Exception):
+        def __init__(self):
+            self.blocked_reason = "rpd"
+            self.retry_after_ms = 0
+
+    class _ProviderError(Exception):
+        retryable = False
+        error_type = "provider"
+
+    class _Client:
+        calls: list[str] = []
+
+        async def generate_content_async(self, **kwargs):
+            self.calls.append(kwargs["model"])
+            if kwargs["model"] == "primary":
+                raise _RateLimitError()
+            return '{"ok":true}', SimpleNamespace()
+
+    async def _sleep(_seconds: float) -> None:
+        return None
+
+    client = _Client()
+    namespace = {
+        "asyncio": SimpleNamespace(sleep=_sleep),
+        "random": SimpleNamespace(uniform=lambda _a, _b: 0.0),
+        "RateLimitError": _RateLimitError,
+        "ProviderError": _ProviderError,
+        "MODEL_REGISTRY": {
+            "text": {"name": "primary", "fallback": "gemini-3.5-flash-lite"}
+        },
+        "LLM_QUOTA_WAIT_MAX_ATTEMPTS": 8,
+        "LLM_QUOTA_WAIT_MAX_SECONDS": 65.0,
+        "LLM_TRANSIENT_RECOVERY_ATTEMPTS": 2,
+        "LLM_MAX_OUTPUT_TOKENS": 8192,
+        "_get_gemma_client": lambda: client,
+        "_resolve_candidate_key_ids": lambda: None,
+        "_is_not_found": lambda _exc: False,
+        "logger": SimpleNamespace(warning=lambda *args, **kwargs: None),
+    }
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "<quota-fallback>", "exec"), namespace)
+
+    result = asyncio.run(namespace["_call_model"]("text", "carrier"))
+
+    assert result == '{"ok":true}'
+    assert client.calls == ["primary", "gemini-3.5-flash-lite"]
 
 
 def test_telegram_producer_keeps_all_events_and_lifecycle_actions_in_mixed_decision() -> None:
@@ -326,6 +574,91 @@ def test_telegram_producer_maps_provider_exception_to_typed_retry() -> None:
 
     assert result["disposition"] == "RETRY_REQUIRED"
     assert result["retry_reason"] == "TECHNICAL_ERROR"
+
+
+def test_telegram_producer_finalizes_complete_primary_retry_in_same_invocation() -> None:
+    ns = _producer_contract_namespace()
+    responses = iter(
+        [
+            json.dumps(
+                {
+                    "disposition": "RETRY_REQUIRED",
+                    "events": [],
+                    "lifecycle_actions": [],
+                    "evidence_complete": False,
+                    "parse_version": "source-parse-v1",
+                    "retry_reason": "SCHEMA_MISMATCH",
+                }
+            ),
+            _provider_payload(
+                "EVENTS_FOUND",
+                events=[{"title": "Лекция", "date": "2026-08-20"}],
+            ),
+        ]
+    )
+    prompts: list[dict] = []
+
+    async def model_call(kind, prompt, **kwargs):
+        prompts.append(json.loads(prompt))
+        return next(responses)
+
+    result = asyncio.run(
+        ns["extract_source_parse_decision"](
+            "20 августа приглашаем на лекцию",
+            [],
+            _model_call=model_call,
+        )
+    )
+
+    assert [item["task"] for item in prompts] == [
+        "parse_source",
+        "finalize_source_parse",
+    ]
+    assert result["disposition"] == "EVENTS_FOUND"
+    assert result["events"][0]["title"] == "Лекция"
+
+
+def test_telegram_producer_finalizes_uncertain_verification_in_same_invocation() -> None:
+    ns = _producer_contract_namespace()
+    responses = iter(
+        [
+            _provider_payload("CONFIRMED_NO_EVENT"),
+            json.dumps(
+                {
+                    "disposition": "RETRY_REQUIRED",
+                    "events": [],
+                    "lifecycle_actions": [],
+                    "evidence_complete": False,
+                    "parse_version": "source-parse-v1",
+                    "retry_reason": "VERIFICATION_UNCERTAIN",
+                }
+            ),
+            _provider_payload(
+                "EVENTS_FOUND",
+                events=[{"title": "Концерт", "date": "2026-08-20"}],
+            ),
+        ]
+    )
+    prompts: list[dict] = []
+
+    async def model_call(kind, prompt, **kwargs):
+        prompts.append(json.loads(prompt))
+        return next(responses)
+
+    result = asyncio.run(
+        ns["extract_source_parse_decision"](
+            "20 августа ждём вас на концерт, билеты доступны",
+            [],
+            _model_call=model_call,
+        )
+    )
+
+    assert [item["task"] for item in prompts] == [
+        "parse_source",
+        "conditionally_verify_source_parse",
+        "finalize_source_parse",
+    ]
+    assert result["disposition"] == "EVENTS_FOUND"
 
 
 def test_telegram_producer_does_not_accept_free_form_reject_authority() -> None:
@@ -502,7 +835,9 @@ def test_v10_telegram_verifier_timeout_preserves_positive_sibling() -> None:
             _model_call=model_call,
         )
     )
-    assert calls == 2
+    # Primary + verifier + one final same-invocation adjudication.  If both
+    # verifier calls fail, the positive child is still preserved visibly.
+    assert calls == 3
     assert result["disposition"] == "RETRY_REQUIRED"
     assert result["retry_reason"] == "VERIFICATION_TECHNICAL_ERROR"
     assert result["events"] == [{"title": "Лекция", "date": "2026-09-13"}]

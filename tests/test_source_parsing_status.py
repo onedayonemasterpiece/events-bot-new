@@ -8,6 +8,7 @@ from source_parsing.handlers import (
     SourceParsingResult,
     SourceParsingStats,
     _smart_event_update_with_lock_retry,
+    _source_parsing_ops_metrics,
     _source_parsing_terminal_status,
 )
 from source_parsing.commands import SOURCE_PARSING_GUARD_URLS
@@ -59,6 +60,35 @@ def test_failed_items_are_partial_but_clean_sources_are_success():
         }
     )
     assert _source_parsing_terminal_status(clean) == "success"
+
+
+def test_ops_metrics_use_authoritative_source_stats_without_ui_lists():
+    result = SourceParsingResult(
+        total_events=9,
+        stats_by_source={
+            "sobor": SourceParsingStats(
+                source="sobor",
+                total_received=4,
+                new_added=2,
+                ticket_updated=1,
+                already_exists=1,
+            ),
+            "qtickets": SourceParsingStats(
+                source="qtickets",
+                total_received=5,
+                ticket_updated=3,
+            ),
+        },
+        # Scheduled runs do not populate the optional Telegram UI lists.
+        added_events=[],
+        updated_events=[],
+    )
+
+    metrics = _source_parsing_ops_metrics(result)
+
+    assert metrics["events_created"] == 2
+    assert metrics["events_updated"] == 4
+    assert metrics["events_unchanged"] == 1
 
 
 def test_smart_update_retries_transient_sqlite_writer_lock():

@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Configured-source ingestion completion:** Telegram now keeps quota/provider
+  recovery, terminal adjudication, uncapped scanned media and video/album
+  evidence inside one carrier claim, with stable Gemini 3.5 Flash-Lite as the
+  explicit Gemma transport fallback. Smart Update corrects invalid reviewer
+  citations inline, drops only optional unverified generated prose, restores
+  exact grounded region-place hints, and terminal-matches recurring canonical
+  parser URLs without collapsing another session. Official parser ops metrics
+  now report real creates/updates from authoritative source stats.
 - **Fixed — ChatGPT audio MCP runtime discovery:** the app-settings Refresh
   successfully scanned all 30 private MCP tools, but conversations materialized
   only an older bounded subset because the three audio tools were appended at

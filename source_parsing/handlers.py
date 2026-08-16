@@ -327,6 +327,25 @@ def _source_parsing_terminal_status(result: SourceParsingResult) -> str:
     return "success"
 
 
+def _source_parsing_ops_metrics(result: SourceParsingResult) -> dict[str, int | float]:
+    """Build counters from authoritative per-source stats, not optional UI lists."""
+
+    stats_values = list((result.stats_by_source or {}).values())
+    return {
+        "total_events": int(result.total_events or 0),
+        "sources_processed": int(len(stats_values)),
+        "events_created": sum(int(stats.new_added or 0) for stats in stats_values),
+        "events_updated": sum(int(stats.ticket_updated or 0) for stats in stats_values),
+        "events_unchanged": sum(int(stats.already_exists or 0) for stats in stats_values),
+        "events_failed": sum(int(stats.failed or 0) for stats in stats_values),
+        "events_skipped": sum(int(stats.skipped or 0) for stats in stats_values),
+        "retry_scheduled": sum(int(stats.retry_scheduled or 0) for stats in stats_values),
+        "errors_count": int(len(result.errors or [])),
+        "kernel_duration": round(float(result.kernel_duration or 0.0), 3),
+        "processing_duration": round(float(result.processing_duration or 0.0), 3),
+    }
+
+
 def _event_telegraph_url(event) -> str | None:
     url = getattr(event, "telegraph_url", None)
     if url:
@@ -2795,15 +2814,7 @@ async def run_source_parsing(
             db,
             run_id=ops_run_id,
             status=ops_status,
-            metrics={
-                "total_events": int(result.total_events or 0),
-                "sources_processed": int(len(result.stats_by_source or {})),
-                "events_created": int(len(result.added_events or [])),
-                "events_updated": int(len(result.updated_events or [])),
-                "errors_count": int(len(result.errors or [])),
-                "kernel_duration": round(float(result.kernel_duration or 0.0), 3),
-                "processing_duration": round(float(result.processing_duration or 0.0), 3),
-            },
+            metrics=_source_parsing_ops_metrics(result),
             details={
                 "run_id": run_id,
                 "log_file_path": result.log_file_path,

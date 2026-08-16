@@ -153,7 +153,7 @@ ensure_libs()
 
 from PIL import Image
 import imagehash
-from google_ai import GoogleAIClient, RateLimitError, SecretsProvider
+from google_ai import GoogleAIClient, ProviderError, RateLimitError, SecretsProvider
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.types import Channel, Chat, DocumentAttributeVideo, MessageEntityCustomEmoji, MessageEntityTextUrl, MessageEntityUrl, PeerChannel, PeerChat, PeerUser, User
@@ -251,6 +251,7 @@ TG_API_HASH = os.getenv('TG_API_HASH', '')
 
 DEFAULT_TG_MONITORING_TEXT_MODEL = 'models/gemma-4-31b-it'
 DEFAULT_TG_MONITORING_VISION_MODEL = 'models/gemma-4-31b-it'
+DEFAULT_TG_MONITORING_FALLBACK_MODEL = 'gemini-3.5-flash-lite'
 DEFAULT_TG_MONITORING_VIDEO_MODEL = 'gemini-3.1-flash-lite'
 GOOGLE_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_KEY_ENV') or 'GOOGLE_API_KEY3').strip() or 'GOOGLE_API_KEY3'
 GOOGLE_FALLBACK_KEY_ENV = (os.getenv('TG_MONITORING_GOOGLE_FALLBACK_KEY_ENV') or GOOGLE_KEY_ENV).strip() or GOOGLE_KEY_ENV
@@ -279,8 +280,14 @@ logger.info(
 # Gemma models
 TEXT_MODEL = (os.getenv('TG_MONITORING_TEXT_MODEL') or DEFAULT_TG_MONITORING_TEXT_MODEL).strip()
 VISION_MODEL = (os.getenv('TG_MONITORING_VISION_MODEL') or os.getenv('TG_MONITORING_TEXT_MODEL') or DEFAULT_TG_MONITORING_VISION_MODEL).strip()
-FALLBACK_TEXT_MODEL = (os.getenv('TG_MONITORING_TEXT_MODEL_FALLBACK') or '').strip()
-FALLBACK_VISION_MODEL = (os.getenv('TG_MONITORING_VISION_MODEL_FALLBACK') or '').strip()
+FALLBACK_TEXT_MODEL = (
+    os.getenv('TG_MONITORING_TEXT_MODEL_FALLBACK')
+    or DEFAULT_TG_MONITORING_FALLBACK_MODEL
+).strip()
+FALLBACK_VISION_MODEL = (
+    os.getenv('TG_MONITORING_VISION_MODEL_FALLBACK')
+    or DEFAULT_TG_MONITORING_FALLBACK_MODEL
+).strip()
 VIDEO_MODEL = (os.getenv('TG_MONITORING_VIDEO_MODEL') or DEFAULT_TG_MONITORING_VIDEO_MODEL).strip()
 LLM_CALL_TIMEOUT_SECONDS = float(
     (os.getenv('TG_MONITORING_LLM_TIMEOUT_SECONDS') or os.getenv('GOOGLE_AI_PROVIDER_TIMEOUT_SEC') or '45').strip()
@@ -288,11 +295,19 @@ LLM_CALL_TIMEOUT_SECONDS = float(
 )
 LLM_QUOTA_WAIT_MAX_ATTEMPTS = max(
     1,
-    min(6, int(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_ATTEMPTS', '4'))),
+    min(12, int(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_ATTEMPTS', '8'))),
 )
 LLM_QUOTA_WAIT_MAX_SECONDS = max(
     1.0,
     min(90.0, float(os.getenv('TG_MONITORING_LLM_QUOTA_WAIT_MAX_SECONDS', '65'))),
+)
+LLM_TRANSIENT_RECOVERY_ATTEMPTS = max(
+    1,
+    min(4, int(os.getenv('TG_MONITORING_LLM_TRANSIENT_RECOVERY_ATTEMPTS', '2'))),
+)
+LLM_MAX_OUTPUT_TOKENS = max(
+    1024,
+    min(16384, int(os.getenv('TG_MONITORING_LLM_MAX_OUTPUT_TOKENS', '8192'))),
 )
 if LLM_CALL_TIMEOUT_SECONDS > 0:
     os.environ.setdefault('GOOGLE_AI_PROVIDER_TIMEOUT_SEC', str(LLM_CALL_TIMEOUT_SECONDS))
@@ -313,7 +328,11 @@ HUMAN_LONG_PAUSE_MAX = float(os.getenv('TG_MONITORING_LONG_PAUSE_MAX', '9'))
 SOURCE_PAUSE_MIN = float(os.getenv('TG_MONITORING_SOURCE_PAUSE_MIN', '2'))
 SOURCE_PAUSE_MAX = float(os.getenv('TG_MONITORING_SOURCE_PAUSE_MAX', '6'))
 # Media download throttling (helps avoid Telethon FloodWait on busy channels)
-MAX_MEDIA_PER_SOURCE = int(os.getenv('TG_MONITORING_MEDIA_MAX_PER_SOURCE', '12'))
+# A per-source media cap silently turned later album cards into unavailable
+# evidence.  Zero means unlimited within the already-bounded message scan; an
+# operator may still set an explicit positive cap for a diagnostic run, but a
+# capped run cannot be accepted as complete ingestion evidence.
+MAX_MEDIA_PER_SOURCE = max(0, int(os.getenv('TG_MONITORING_MEDIA_MAX_PER_SOURCE', '0')))
 HUMAN_MEDIA_DELAY_MIN = float(os.getenv('TG_MONITORING_MEDIA_DELAY_MIN', '1.2'))
 HUMAN_MEDIA_DELAY_MAX = float(os.getenv('TG_MONITORING_MEDIA_DELAY_MAX', '3.0'))
 
@@ -465,6 +484,10 @@ async def human_sleep(min_s: float, max_s: float) -> None:
     if random.random() < 0.12:
         delay += random.uniform(0.8, 2.5)
     await asyncio.sleep(delay)
+
+
+def _media_download_allowed(media_cap: int, media_downloaded: int) -> bool:
+    return int(media_cap) <= 0 or int(media_downloaded) < int(media_cap)
 
 
 async def _sleep_flood(wait_seconds: int, label: str, attempt: int) -> bool:
@@ -786,6 +809,10 @@ TG_MONITORING_VIDEO_MAX_DURATION_SEC = _env_float('TG_MONITORING_VIDEO_MAX_DURAT
 TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN = max(
     0,
     min(6, _env_int('TG_MONITORING_VIDEO_MAX_MODEL_CALLS_PER_RUN', 6)),
+)
+TG_MONITORING_VIDEO_EVIDENCE_MAX_CALLS_PER_RUN = max(
+    0,
+    min(32, _env_int('TG_MONITORING_VIDEO_EVIDENCE_MAX_CALLS_PER_RUN', 16)),
 )
 TG_MONITORING_VIDEO_GOOGLE_KEY_ENVS = [
     item.strip()
@@ -1429,6 +1456,7 @@ _VIDEO_GEMINI_CLIENT: GoogleAIClient | None = None
 _CANDIDATE_KEY_IDS: list[str] | None = None
 _SUPABASE_CLIENT = None
 _VIDEO_MODEL_CALLS_USED = 0
+_VIDEO_EVIDENCE_MODEL_CALLS_USED = 0
 
 
 def _key_env_aliases(name: str | None) -> list[str]:
@@ -1809,6 +1837,20 @@ SOURCE_PARSE_DECISION_SCHEMA = {
     ],
 }
 
+SOURCE_PARSE_FINAL_DISPOSITIONS = {
+    'EVENTS_FOUND', 'CONFIRMED_NO_EVENT', 'LIFECYCLE_ONLY', 'MIXED'
+}
+SOURCE_PARSE_FINAL_DECISION_SCHEMA = {
+    **SOURCE_PARSE_DECISION_SCHEMA,
+    'properties': {
+        **SOURCE_PARSE_DECISION_SCHEMA['properties'],
+        'disposition': {
+            'type': 'string',
+            'enum': sorted(SOURCE_PARSE_FINAL_DISPOSITIONS),
+        },
+    },
+}
+
 SOURCE_METADATA_SCHEMA = {
     'type': 'object',
     'properties': {
@@ -1993,6 +2035,8 @@ async def _call_model(
 
     for idx, model_name in enumerate(models_to_try):
         quota_attempt = 0
+        transient_attempt = 0
+        output_token_budget = max(1, int(max_output_tokens))
         while True:
             quota_attempt += 1
             try:
@@ -2001,10 +2045,11 @@ async def _call_model(
                     prompt=payload,
                     generation_config=_generation_config(
                         response_schema=response_schema,
-                        max_output_tokens=max_output_tokens,
+                        max_output_tokens=output_token_budget,
                     ),
-                    max_output_tokens=max(1, int(max_output_tokens)),
+                    max_output_tokens=output_token_budget,
                     candidate_key_ids=candidate_key_ids,
+                    allow_model_fallback=False,
                 )
                 return text
             except RateLimitError as exc:
@@ -2018,6 +2063,18 @@ async def _call_model(
                     and quota_attempt < LLM_QUOTA_WAIT_MAX_ATTEMPTS
                 )
                 if not can_wait_inline:
+                    if idx < len(models_to_try) - 1:
+                        logger.warning(
+                            'tg_monitor.llm_quota_fallback kind=%s failed=%s '
+                            'fallback=%s reason=%s attempt=%d/%d',
+                            kind,
+                            model_name,
+                            models_to_try[idx + 1],
+                            blocked_reason or 'unknown',
+                            quota_attempt,
+                            LLM_QUOTA_WAIT_MAX_ATTEMPTS,
+                        )
+                        break
                     raise
                 # This limiter rejection happens before a provider request is
                 # sent.  Waiting here is therefore a bounded continuation of
@@ -2039,6 +2096,45 @@ async def _call_model(
                 )
                 await asyncio.sleep(wait_s)
                 continue
+            except ProviderError as exc:
+                last_error = exc
+                transient_attempt += 1
+                retryable = bool(getattr(exc, 'retryable', False))
+                error_type = str(getattr(exc, 'error_type', '') or '').strip()
+                if (
+                    retryable
+                    and transient_attempt < LLM_TRANSIENT_RECOVERY_ATTEMPTS
+                ):
+                    previous_budget = output_token_budget
+                    if error_type == 'output_truncated':
+                        output_token_budget = min(
+                            LLM_MAX_OUTPUT_TOKENS,
+                            max(previous_budget + 1, previous_budget * 2),
+                        )
+                    logger.warning(
+                        'tg_monitor.llm_transient_recovery kind=%s model=%s '
+                        'error_type=%s attempt=%d/%d output_tokens=%d->%d',
+                        kind,
+                        model_name,
+                        error_type or type(exc).__name__,
+                        transient_attempt,
+                        LLM_TRANSIENT_RECOVERY_ATTEMPTS,
+                        previous_budget,
+                        output_token_budget,
+                    )
+                    await asyncio.sleep(random.uniform(0.35, 0.85))
+                    continue
+                if idx < len(models_to_try) - 1:
+                    logger.warning(
+                        'tg_monitor.llm_provider_fallback kind=%s failed=%s '
+                        'fallback=%s error_type=%s',
+                        kind,
+                        model_name,
+                        models_to_try[idx + 1],
+                        error_type or type(exc).__name__,
+                    )
+                    break
+                raise
             except Exception as exc:
                 last_error = exc
                 if idx < len(models_to_try) - 1 and _is_not_found(exc):
@@ -2412,8 +2508,13 @@ def _source_parse_prompt(
     source_default_location: str | None,
     primary_decision: dict | None = None,
     contradiction_facts=None,
+    final_decision: bool = False,
 ) -> str:
-    task = 'conditionally_verify_source_parse' if primary_decision is not None else 'parse_source'
+    task = (
+        'finalize_source_parse'
+        if final_decision
+        else ('conditionally_verify_source_parse' if primary_decision is not None else 'parse_source')
+    )
     request = {
         'task': task,
         'rules': [
@@ -2446,10 +2547,84 @@ def _source_parse_prompt(
     if primary_decision is not None:
         request['primary_result'] = dict(primary_decision)
         request['contradiction_facts'] = list(contradiction_facts or [])
-        request['rules'].append(
-            'Confirm or correct the primary result; verification uncertainty requires RETRY_REQUIRED.'
-        )
+        if final_decision:
+            request['allowed_dispositions'] = sorted(SOURCE_PARSE_FINAL_DISPOSITIONS)
+            request['rules'].extend(
+                [
+                    'This is the final same-invocation adjudication. RETRY_REQUIRED is forbidden.',
+                    'Resolve every source-grounded child now as EVENTS_FOUND/MIXED/LIFECYCLE_ONLY, or use CONFIRMED_NO_EVENT only when the producer evidence manifest is complete.',
+                    'Never discard a positive child merely because another field is uncertain; keep the grounded child and leave an unknown optional field empty.',
+                    'When the prior result contains positive events or lifecycle actions, preserve them unless exact source evidence contradicts them.',
+                ]
+            )
+        else:
+            request['rules'].append(
+                'Confirm or correct the primary result; verification uncertainty requires RETRY_REQUIRED.'
+            )
     return json.dumps(request, ensure_ascii=False)
+
+
+async def _finalize_source_parse_decision(
+    *,
+    invoke,
+    source_text: str,
+    ocr_blocks: list[str],
+    manifest: dict,
+    message_date: str | None,
+    source_username: str | None,
+    source_title: str | None,
+    source_default_location: str | None,
+    primary_decision: dict,
+    contradiction_facts=None,
+    verification_meta: dict | None = None,
+) -> dict:
+    """Make one closed, same-claim decision after a retry-shaped LLM result."""
+
+    final_prompt = _source_parse_prompt(
+        source_text=source_text,
+        ocr_blocks=ocr_blocks,
+        evidence_manifest=manifest,
+        message_date=message_date,
+        source_username=source_username,
+        source_title=source_title,
+        source_default_location=source_default_location,
+        primary_decision=primary_decision,
+        contradiction_facts=contradiction_facts,
+        final_decision=True,
+    )
+    try:
+        raw_final = await invoke(
+            'text',
+            final_prompt,
+            response_schema=SOURCE_PARSE_FINAL_DECISION_SCHEMA,
+            max_output_tokens=4096,
+        )
+    except Exception as exc:
+        logger.warning(
+            'source_parse.final technical_error source=%s: %s',
+            source_username,
+            exc,
+        )
+        result = _source_parse_retry(
+            str(primary_decision.get('retry_reason') or 'TECHNICAL_ERROR'),
+            manifest,
+            events=primary_decision.get('events'),
+            lifecycle_actions=primary_decision.get('lifecycle_actions'),
+            verification=verification_meta,
+        )
+        return result
+    final = _parse_source_decision_response(raw_final, manifest)
+    if final.get('disposition') == 'RETRY_REQUIRED':
+        return _source_parse_retry(
+            str(final.get('retry_reason') or 'SCHEMA_MISMATCH'),
+            manifest,
+            events=primary_decision.get('events'),
+            lifecycle_actions=primary_decision.get('lifecycle_actions'),
+            verification=verification_meta,
+        )
+    if verification_meta is not None:
+        final['verification'] = dict(verification_meta)
+    return final
 
 
 async def extract_source_parse_decision(
@@ -2500,11 +2675,36 @@ async def extract_source_parse_decision(
             source_username,
             exc,
         )
-        return _source_parse_retry('TECHNICAL_ERROR', manifest)
+        primary = _source_parse_retry('TECHNICAL_ERROR', manifest)
+        if manifest.get('evidence_complete') is not True:
+            return primary
+        return await _finalize_source_parse_decision(
+            invoke=invoke,
+            source_text=source_text,
+            ocr_blocks=blocks,
+            manifest=manifest,
+            message_date=message_date,
+            source_username=source_username,
+            source_title=source_title,
+            source_default_location=source_default_location,
+            primary_decision=primary,
+        )
 
     primary = _parse_source_decision_response(raw_primary, manifest)
     if primary.get('disposition') == 'RETRY_REQUIRED':
-        return primary
+        if manifest.get('evidence_complete') is not True:
+            return primary
+        return await _finalize_source_parse_decision(
+            invoke=invoke,
+            source_text=source_text,
+            ocr_blocks=blocks,
+            manifest=manifest,
+            message_date=message_date,
+            source_username=source_username,
+            source_title=source_title,
+            source_default_location=source_default_location,
+            primary_decision=primary,
+        )
     facts = _source_parse_contradictions(
         primary,
         source_text=source_text,
@@ -2547,22 +2747,48 @@ async def extract_source_parse_decision(
             verification_meta['reasons'],
             exc,
         )
-        return _source_parse_retry(
+        uncertain = _source_parse_retry(
             'VERIFICATION_TECHNICAL_ERROR',
             manifest,
             events=primary.get('events'),
             lifecycle_actions=primary.get('lifecycle_actions'),
             verification=verification_meta,
         )
+        return await _finalize_source_parse_decision(
+            invoke=invoke,
+            source_text=source_text,
+            ocr_blocks=blocks,
+            manifest=manifest,
+            message_date=message_date,
+            source_username=source_username,
+            source_title=source_title,
+            source_default_location=source_default_location,
+            primary_decision=uncertain,
+            contradiction_facts=facts,
+            verification_meta=verification_meta,
+        )
 
     verified = _parse_source_decision_response(raw_verified, manifest)
     if verified.get('disposition') == 'RETRY_REQUIRED':
-        return _source_parse_retry(
+        uncertain = _source_parse_retry(
             'VERIFICATION_UNCERTAIN',
             manifest,
             events=primary.get('events'),
             lifecycle_actions=primary.get('lifecycle_actions'),
             verification=verification_meta,
+        )
+        return await _finalize_source_parse_decision(
+            invoke=invoke,
+            source_text=source_text,
+            ocr_blocks=blocks,
+            manifest=manifest,
+            message_date=message_date,
+            source_username=source_username,
+            source_title=source_title,
+            source_default_location=source_default_location,
+            primary_decision=uncertain,
+            contradiction_facts=facts,
+            verification_meta=verification_meta,
         )
     verified['verification'] = verification_meta
     return verified
@@ -2986,6 +3212,109 @@ async def _call_video_model(
         candidate_key_ids=None,
     )
     return _safe_json(raw)
+
+
+def _video_analysis_evidence_block(analysis: dict | None) -> str | None:
+    """Convert validated video observation into one source evidence block."""
+
+    if not isinstance(analysis, dict):
+        return None
+    parts = [str(analysis.get('description') or '').strip()]
+    visible = [
+        str(item or '').strip()
+        for item in (analysis.get('visible_text') or [])
+        if str(item or '').strip()
+    ]
+    if visible:
+        parts.append('Видимый текст: ' + ' | '.join(visible))
+    block = '\n'.join(part for part in parts if part).strip()
+    return block or None
+
+
+async def _recover_video_source_evidence(
+    *,
+    client,
+    msg,
+    username: str,
+    post_text: str,
+) -> tuple[str | None, str]:
+    """Inspect an otherwise missing video before allowing a no-event verdict."""
+
+    global _VIDEO_EVIDENCE_MODEL_CALLS_USED
+    video_meta = _video_meta_from_message(msg)
+    video_bytes = None
+    if _video_size_allowed(video_meta.get('size_bytes')):
+        try:
+            await human_sleep(HUMAN_MEDIA_DELAY_MIN, HUMAN_MEDIA_DELAY_MAX)
+            video_bytes = await tg_call(
+                f'download_video_evidence:{username}:{getattr(msg, "id", "-")}',
+                client.download_media,
+                msg,
+                bytes,
+            )
+        except Exception as exc:
+            logger.warning(
+                'video evidence download failed for %s/%s: %s',
+                username,
+                getattr(msg, 'id', '-'),
+                exc,
+            )
+    if video_bytes and _video_size_allowed(len(video_bytes)):
+        if _VIDEO_EVIDENCE_MODEL_CALLS_USED >= TG_MONITORING_VIDEO_EVIDENCE_MAX_CALLS_PER_RUN:
+            return None, 'evidence:model_budget_exhausted'
+        _VIDEO_EVIDENCE_MODEL_CALLS_USED += 1
+        try:
+            raw_analysis = await _call_video_model(
+                video_bytes,
+                mime_type=video_meta.get('mime_type') or 'video/mp4',
+                post_text=post_text,
+                events=[],
+                video_meta=video_meta,
+            )
+            analysis = _validated_video_analysis(
+                raw_analysis,
+                event_count=0,
+                duration_seconds=video_meta.get('duration_seconds'),
+            )
+            block = _video_analysis_evidence_block(analysis)
+            if block:
+                return block, 'evidence:video_analyzed'
+        except Exception as exc:
+            logger.warning(
+                'video evidence analysis failed for %s/%s: %s',
+                username,
+                getattr(msg, 'id', '-'),
+                exc,
+            )
+
+    # A large/ineligible video still normally exposes an image thumbnail. OCR
+    # the largest non-video preview rather than silently treating the carrier
+    # as text-only. This is a fallback; failure keeps evidence incomplete.
+    try:
+        thumbnail = await tg_call(
+            f'download_video_thumbnail:{username}:{getattr(msg, "id", "-")}',
+            client.download_media,
+            msg,
+            bytes,
+            thumb=-2,
+        )
+    except Exception as exc:
+        logger.warning(
+            'video evidence thumbnail failed for %s/%s: %s',
+            username,
+            getattr(msg, 'id', '-'),
+            exc,
+        )
+        thumbnail = None
+    if thumbnail:
+        text, title, succeeded = await ocr_image(thumbnail)
+        if succeeded:
+            block = '\n'.join(
+                part for part in (str(title or '').strip(), str(text or '').strip()) if part
+            ).strip()
+            # Blank OCR is still a completed observation of this thumbnail.
+            return block, 'evidence:video_thumbnail_ocr'
+    return None, 'evidence:video_unavailable'
 
 
 def _accepted_video_payload(
@@ -5858,7 +6187,7 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         unavailable_attachment_count = 1 if has_video else 0
         if media_obj is not None:
             ocr_succeeded = False
-        if media_obj is not None and media_downloaded < media_cap:
+        if media_obj is not None and _media_download_allowed(media_cap, media_downloaded):
             # Media downloads are the most expensive Telegram calls and often trigger FloodWait.
             # Throttle them and cap per-source to keep monitoring stable.
             await human_sleep(HUMAN_MEDIA_DELAY_MIN, HUMAN_MEDIA_DELAY_MAX)
@@ -5969,6 +6298,40 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
                 unavailable_attachment_count=unavailable_attachment_count,
                 ocr_complete=bool(ocr_succeeded),
             )
+            if (
+                has_video
+                and source_parse_decision.get('disposition') == 'RETRY_REQUIRED'
+                and source_parse_decision.get('retry_reason') == 'EVIDENCE_INCOMPLETE'
+            ):
+                video_evidence_text, video_evidence_status = (
+                    await _recover_video_source_evidence(
+                        client=client,
+                        msg=msg,
+                        username=username,
+                        post_text=text_for_extract,
+                    )
+                )
+                video_status = video_evidence_status
+                if video_evidence_status in {
+                    'evidence:video_analyzed',
+                    'evidence:video_thumbnail_ocr',
+                }:
+                    ocr_blocks.append(str(video_evidence_text or ''))
+                    unavailable_attachment_count = max(
+                        0,
+                        int(unavailable_attachment_count) - 1,
+                    )
+                    source_parse_decision = await extract_source_parse_decision(
+                        text_for_extract,
+                        ocr_blocks,
+                        message_date=msg_date,
+                        source_username=username,
+                        source_title=(source_meta or {}).get('title') if isinstance(source_meta, dict) else None,
+                        source_default_location=default_location,
+                        attachment_count=attachment_count,
+                        unavailable_attachment_count=unavailable_attachment_count,
+                        ocr_complete=bool(ocr_succeeded and unavailable_attachment_count == 0),
+                    )
         events = list((source_parse_decision or {}).get('events') or [])
 
         cleaned_events = []
@@ -6213,7 +6576,14 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
 
         prev_media_cap = media_cap
         try:
-            media_cap = max(int(media_cap), sum(1 for m in expanded.values() if getattr(m, 'photo', None)))
+            forced_photo_count = sum(
+                1 for m in expanded.values() if getattr(m, 'photo', None)
+            )
+            if int(media_cap) > 0:
+                media_cap = max(
+                    int(media_cap),
+                    int(media_downloaded) + forced_photo_count,
+                )
         except Exception:
             media_cap = prev_media_cap
 
@@ -6279,6 +6649,29 @@ async def scan_source(client: TelegramClient, source: dict) -> dict:
         semantic_source_text = str(
             item.get('semantic_source_text') or item.get('text') or ''
         )
+        grouped_id = item.get('grouped_id')
+        if grouped_id and unavailable_attachment_count > 0:
+            for video_msg in pending_group_videos:
+                if getattr(video_msg, 'grouped_id', None) != grouped_id:
+                    continue
+                video_evidence_text, video_evidence_status = (
+                    await _recover_video_source_evidence(
+                        client=client,
+                        msg=video_msg,
+                        username=username,
+                        post_text=semantic_source_text,
+                    )
+                )
+                item['video_status'] = video_evidence_status
+                if video_evidence_status in {
+                    'evidence:video_analyzed',
+                    'evidence:video_thumbnail_ocr',
+                }:
+                    album_ocr_blocks.append(str(video_evidence_text or ''))
+                    unavailable_attachment_count = max(
+                        0,
+                        unavailable_attachment_count - 1,
+                    )
         try:
             decision = await extract_source_parse_decision(
                 semantic_source_text,
