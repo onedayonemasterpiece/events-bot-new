@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+- Fixed: Smart Update снова терминализирует полностью прошедшие автоматические VK/TG/parser candidates как `REJECTED_PRODUCT_POLICY/past_event`, не создавая старые события из исторической очереди и не оставляя retry.
 - **Authoritative child repair:** a changed packet that already owns a unique
   `(canonical_source_url, candidate_key)` binding no longer re-enters the
   generic merge-identity gate. Its exact source-grounded title may repair the
