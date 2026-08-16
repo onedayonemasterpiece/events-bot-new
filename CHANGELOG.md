@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **VK roundup child scope completion:** when the scope LLM abstains for a
+  complete typed positive child whose parser summary is not verbatim, Smart
+  Update may recover only one exact source line under the matching date heading
+  with the explicit time and related title, plus shared venue evidence.
+  Ambiguous or incomplete matches remain technical, preventing one real child
+  in a multi-event post from being lost while sibling events succeed.
 - **VK complete visual evidence fallback:** after bounded primary poster OCR
   exhausts, one separately rate-limited Google multimodal OCR call now runs
   inside the same carrier claim. VK video carriers prefer the stable `image`
