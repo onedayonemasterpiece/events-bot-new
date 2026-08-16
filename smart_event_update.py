@@ -6396,7 +6396,28 @@ def _source_supports_location_value(text: str | None, value: str | None) -> bool
     # Addresses often differ only by spaces around dashes/slashes.
     probe_compact = re.sub(r"[\s\-–—/]+", "", probe)
     haystack_compact = re.sub(r"[\s\-–—/]+", "", haystack)
-    return len(probe_compact) >= 5 and probe_compact in haystack_compact
+    if len(probe_compact) >= 5 and probe_compact in haystack_compact:
+        return True
+
+    # Russian venue names in the source are commonly inflected while the
+    # reference catalogue stores the nominative form (``музей`` / ``музее``,
+    # ``художественный`` / ``художественном``). A literal substring
+    # check therefore rejected a source-grounded KOIHM exhibition. Accept an
+    # inflected match only when at least two meaningful venue tokens are
+    # present and every token has the same conservative 4–7 character stem in
+    # the source. A lone generic token such as ``остров`` is insufficient.
+    probe_tokens = [token for token in probe.split() if len(token) >= 5]
+    haystack_tokens = [token for token in haystack.split() if len(token) >= 5]
+    if len(probe_tokens) < 2 or not haystack_tokens:
+        return False
+
+    def _stem(token: str) -> str:
+        return token[: max(4, min(7, len(token) - 1))]
+
+    return all(
+        any(source_token.startswith(_stem(token)) for source_token in haystack_tokens)
+        for token in probe_tokens
+    )
 
 
 def _source_supports_city_value(text: str | None, value: str | None) -> bool:
@@ -6439,6 +6460,45 @@ def _candidate_needs_llm_occurrence_scope_review(candidate: "EventCandidate") ->
     return dated_lines >= 2 or len(pairs) >= 3
 
 
+def _telegram_profile_supports_location(candidate: "EventCandidate") -> bool:
+    """Return whether the current venue is the configured, extracted TG venue."""
+
+    if str(candidate.source_type or "").strip().lower() not in {"tg", "telegram"}:
+        return False
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    default_location = str(metrics.get("tg_default_location") or "").strip()
+    extracted_name = str(metrics.get("tg_extracted_location_name") or "").strip()
+    current_name = str(candidate.location_name or "").strip()
+    if not default_location or not extracted_name or not current_name:
+        return False
+    configured_norm = _norm_text_for_grounding(default_location)
+    extracted_norm = _norm_text_for_grounding(extracted_name)
+    current_norm = _norm_text_for_grounding(current_name)
+    return bool(
+        extracted_norm
+        and current_norm == extracted_norm
+        and (
+            extracted_norm in configured_norm
+            or configured_norm in extracted_norm
+        )
+    )
+
+
+def _source_supports_exact_child_title(text: str | None, title: str | None) -> bool:
+    """Ground very short producer titles such as ``1+1`` by exact text only."""
+
+    title_norm = _norm_text_for_grounding(title)
+    text_norm = _norm_text_for_grounding(text)
+    if len(title_norm) < 3 or not text_norm:
+        return False
+    return bool(
+        re.search(
+            r"(?<!\w)" + re.escape(title_norm).replace(r"\ ", r"\s+") + r"(?!\w)",
+            text_norm,
+        )
+    )
+
+
 def _apply_grounded_occurrence_scope_fallback(candidate: "EventCandidate") -> bool:
     """Adopt the producer's child excerpt when all identity anchors are grounded.
 
@@ -6458,9 +6518,15 @@ def _apply_grounded_occurrence_scope_fallback(candidate: "EventCandidate") -> bo
         return False
     if target_pair not in _extract_day_month_pairs(corpus):
         return False
-    if not _titles_look_related(candidate.title, excerpt):
+    if not (
+        _titles_look_related(candidate.title, excerpt)
+        or _source_supports_exact_child_title(excerpt, candidate.title)
+    ):
         return False
-    if not _titles_look_related(candidate.title, corpus):
+    if not (
+        _titles_look_related(candidate.title, corpus)
+        or _source_supports_exact_child_title(corpus, candidate.title)
+    ):
         return False
     place_values = [candidate.location_name, candidate.location_address]
     grounded_places = [
@@ -6468,7 +6534,8 @@ def _apply_grounded_occurrence_scope_fallback(candidate: "EventCandidate") -> bo
         for value in place_values
         if value and _source_supports_location_value(corpus, value)
     ]
-    if any(place_values) and not grounded_places:
+    profile_location_grounded = _telegram_profile_supports_location(candidate)
+    if any(place_values) and not grounded_places and not profile_location_grounded:
         return False
     if grounded_places and not any(
         _source_supports_location_value(excerpt, value) for value in grounded_places
@@ -6640,6 +6707,11 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     """Select exact source excerpts belonging to the candidate occurrence."""
     if SMART_UPDATE_LLM_DISABLED:
         return False, "llm_disabled"
+    # Restore a venue explicitly extracted from the configured Telegram source
+    # before validating a multi-event child. Otherwise a sibling title
+    # accidentally placed into ``location_name`` can make the producer's exact
+    # child excerpt look ungrounded and terminally lose the child.
+    _restore_configured_telegram_location(candidate)
     corpus = str(candidate.source_text or "").strip()
     payload = {
         "target": {

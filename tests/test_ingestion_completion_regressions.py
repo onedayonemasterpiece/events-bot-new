@@ -133,6 +133,65 @@ def test_configured_telegram_location_repairs_bad_child_location() -> None:
     assert candidate.city == "Калининград"
 
 
+@pytest.mark.asyncio
+async def test_configured_telegram_location_is_restored_before_digest_scope_validation(
+    monkeypatch,
+) -> None:
+    """Regression for the missing ``1+1`` child from zaryakinoteatr/964."""
+
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/zaryakinoteatr/964",
+        source_text=(
+            "Провожаем лето большим кино.\n"
+            "В программе: Интерстеллар, 1+1, Леон.\n"
+            "16–23 августа · большой зал «Зари»."
+        ),
+        raw_excerpt="18 августа 19:00 1+1. Большое кино в большом зале Зари.",
+        title="1+1",
+        date="2026-08-18",
+        time="19:00",
+        location_name="«Интерстеллар»",
+        city="Калининград",
+        metrics={
+            "tg_default_location": "Заря, Мира 41-43, Калининград",
+            "tg_extracted_location_name": "Заря",
+            "tg_extracted_location_address": "Мира 41-43",
+            "tg_extracted_city": "Калинград",
+        },
+    )
+
+    async def scoped_without_date(*_args, **_kwargs):
+        return {
+            "decision": "scoped",
+            "confidence": 0.99,
+            "selected_excerpts": ["1+1"],
+            "reason_short": "provider omitted the poster date",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", scoped_without_date)
+    assert await su._llm_scope_candidate_occurrence(candidate) == (
+        True,
+        "grounded_producer_excerpt",
+    )
+    assert candidate.location_name == "Заря"
+    assert "18 августа" in str(candidate.occurrence_scope_text)
+
+
+def test_inflected_source_venue_name_is_still_grounded() -> None:
+    """Regression for koihm/6041: nominative registry vs locative source text."""
+
+    source = (
+        "13 августа в Калининградском областном "
+        "историко-художественном музее открылась выставка."
+    )
+
+    assert su._source_supports_location_value(
+        source,
+        "Историко-художественный музей",
+    ) is True
+
+
 def test_source_grounded_allowlist_place_recovers_missing_city() -> None:
     candidate = EventCandidate(
         source_type="vk",

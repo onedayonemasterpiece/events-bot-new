@@ -30,6 +30,48 @@ def test_unsupported_named_island_routes_to_llm_review() -> None:
     assert reason == "canonical_location_not_in_source"
 
 
+def test_inflected_museum_quote_allows_terminal_keep(monkeypatch) -> None:
+    """Regression for the lost KOIHM exhibition from t.me/koihm/6041."""
+
+    candidate = seu.EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/koihm/6041",
+        source_text=(
+            "13 августа в Калининградском областном "
+            "историко-художественном музее открылась выставка."
+        ),
+        title="Цветные сны немолодого романтика",
+        date="2026-08-13",
+        end_date="2026-08-31",
+        location_name="Историко-художественный музей",
+        location_address="Клиническая 21",
+        city="Калининград",
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "keep",
+            "confidence": 0.99,
+            "location_name": None,
+            "location_address": None,
+            "city": "Калининград",
+            "evidence_quote": (
+                "в Калининградском областном "
+                "историко-художественном музее"
+            ),
+            "reason_short": "venue is explicit in an inflected form",
+        }
+
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(seu, "_ask_gemma_json", fake_ask)
+    assert asyncio.run(
+        seu._llm_review_candidate_location_grounding(
+            candidate,
+            trigger_reason="explicit_location_role_conflicts_candidate",
+        )
+    ) == (True, "llm_keep")
+
+
 def test_supported_address_does_not_ground_unmentioned_venue_name() -> None:
     """Regression for linked source sofit_models/145 / event 7124."""
 

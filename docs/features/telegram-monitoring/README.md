@@ -144,6 +144,12 @@ Positive children сохраняются, а исчерпанная inline verif
   Любой принятый alias перед сохранением канонизируется в `https://t.me/...`; producer и public
   output также пишут только `t.me`, поэтому смена host не создаёт дубль источника/события.
 - Перед вызовом Smart Update candidate build дополнительно проверяет площадку по `source_text` и OCR афиши:
+  - в multi-event carrier название соседнего события никогда не принимается за
+    venue; настроенная и извлечённая площадка источника восстанавливается до
+    проверки границ конкретного child;
+  - русские падежные формы одного многословного venue (например `музей` /
+    `музее`) считаются source-grounded только при совпадении всех значимых
+    токенов; одного общего слова для этого недостаточно;
   - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
   - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
   - если extractor разложил соседнюю прозу между `location_name` и `location_address`, сервер отбрасывает prose-like address-фрагмент и восстанавливает структурные `location_name/location_address/city` из единственной известной площадки в исходном тексте/алиасах.

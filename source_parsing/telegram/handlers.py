@@ -3143,6 +3143,25 @@ def _location_is_grounded_in_text(location: str | None, text: str | None) -> boo
     return all(tok in probe for tok in loc_tokens)
 
 
+def _location_is_sibling_event_title(
+    location: str | None,
+    message: dict[str, Any],
+) -> bool:
+    """Reject a multi-event sibling title accidentally inferred as a venue."""
+
+    if not str(location or "").strip():
+        return False
+    events = message.get("events")
+    if not isinstance(events, list) or len(events) < 2:
+        return False
+    return any(
+        isinstance(item, dict)
+        and str(item.get("title") or "").strip()
+        and _location_matches(location, item.get("title"))
+        for item in events
+    )
+
+
 def _looks_like_bad_title(title: str | None) -> bool:
     raw = str(title or "").strip()
     if not raw:
@@ -4779,6 +4798,7 @@ def _build_candidate(
             if (
                 grounded_loc
                 and _location_override_candidate_ok(grounded_loc, grounded_addr)
+                and not _location_is_sibling_event_title(grounded_loc, message)
                 and not _location_matches(extracted_location, grounded_loc)
                 and _location_is_grounded_in_text(grounded_loc, probe_text)
                 and not _location_is_grounded_in_text(extracted_location, probe_text)
@@ -4822,6 +4842,7 @@ def _build_candidate(
         if (
             grounded_loc
             and _location_override_candidate_ok(grounded_loc, grounded_addr)
+            and not _location_is_sibling_event_title(grounded_loc, message)
             and not _location_matches(extracted_location, grounded_loc)
             and _location_is_grounded_in_text(grounded_loc, probe_text)
             and not _location_is_grounded_in_text(extracted_location, probe_text)
@@ -4856,6 +4877,7 @@ def _build_candidate(
         if (
             grounded_loc
             and _location_override_candidate_ok(grounded_loc, grounded_addr)
+            and not _location_is_sibling_event_title(grounded_loc, message)
             and not _location_matches(grounded_loc, source.default_location)
             and _location_payload_grounded_in_text(
                 location_name=grounded_loc,

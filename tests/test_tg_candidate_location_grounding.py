@@ -93,6 +93,63 @@ async def test_tg_build_candidate_replaces_unsupported_extracted_location_from_p
     assert "железнодорож" in (cand.location_name or "").casefold()
 
 
+def test_tg_build_candidate_never_uses_a_sibling_title_as_venue() -> None:
+    """Regression for the eight-film poster at zaryakinoteatr/964."""
+
+    from source_parsing.telegram.handlers import (
+        _build_candidate,
+        _location_is_sibling_event_title,
+    )
+
+    src = SimpleNamespace(
+        default_location="Заря, Мира 41-43, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+    )
+    message = {
+        "source_username": "zaryakinoteatr",
+        "message_id": 964,
+        "source_link": "https://t.me/zaryakinoteatr/964",
+        "text": (
+            "В программе: «Интерстеллар», «Волк с Уолл-стрит», «1+1».\n"
+            "16–23 августа · каждый вечер · большой зал «Зари»"
+        ),
+        "events": [
+            {
+                "title": "Интерстеллар",
+                "date": "2026-08-16",
+                "time": "19:00",
+                "location_name": "Заря",
+            },
+            {
+                "title": "1+1",
+                "date": "2026-08-18",
+                "time": "19:00",
+                "location_name": "Заря",
+                "raw_excerpt": "18 августа 19:00 1+1. Большое кино в большом зале Зари.",
+            },
+        ],
+        "posters": [
+            {
+                "sha256": "poster1",
+                "ocr_title": "БОЛЬШОЕ КИНО",
+                "ocr_text": (
+                    "ИНТЕРСТЕЛЛАР\n18 АВГУСТА 19:00\n1+1\n"
+                    "БОЛЬШОЙ ЗАЛ ЗАРИ"
+                ),
+            }
+        ],
+    }
+
+    assert _location_is_sibling_event_title("Интерстеллар", message) is True
+    assert _location_is_sibling_event_title("Заря", message) is False
+
+    candidate = _build_candidate(src, message, message["events"][1])
+
+    assert candidate.location_name == "Заря"
+    assert candidate.location_address == "Мира 41-43"
+
+
 @pytest.mark.asyncio
 async def test_tg_build_candidate_drops_prose_location_and_uses_address_reference():
     from source_parsing.telegram.handlers import _build_candidate

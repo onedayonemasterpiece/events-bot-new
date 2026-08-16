@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **Telegram child completion:** configured Telegram venues are restored before
+  multi-event scope validation, Russian inflected venue names count as exact
+  source grounding, and a sibling event title can no longer be promoted to a
+  venue. This closes the two real events lost from the 16 August recovery
+  import (`zaryakinoteatr/964` and `koihm/6041`) without adding a background
+  retry path.
 - **Smart Update authoritative child replay:** an edited or richer packet with
   an existing unique source `candidate_key` now updates its already-bound Event
   before fuzzy title matching. Multi-event VK replays therefore no longer
