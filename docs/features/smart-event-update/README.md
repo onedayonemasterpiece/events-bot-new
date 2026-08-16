@@ -139,6 +139,12 @@ Before merge/create, social candidates now receive targeted LLM-first checks:
   and raw excerpt. If a caption merely refers readers to an attached poster,
   concrete date/program/venue evidence from that poster is valid source
   evidence and must not be rejected as an LLM hallucination;
+- VK poster OCR exhausts the bounded primary provider attempts and then, only
+  when necessary, makes one separately rate-limited Google multimodal fallback
+  call in the same carrier claim. There is no background semantic retry. Video
+  attachments use VK's stable `image` preview before short-lived
+  `first_frame` URLs, so a stale preview token does not manufacture incomplete
+  evidence;
 
 - occurrence scope must support the target date and target city/venue together;
 - doors/guest gathering/opening times are distinguished from the public start;

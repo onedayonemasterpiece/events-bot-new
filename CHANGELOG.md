@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- **VK complete visual evidence fallback:** after bounded primary poster OCR
+  exhausts, one separately rate-limited Google multimodal OCR call now runs
+  inside the same carrier claim. VK video carriers prefer the stable `image`
+  preview family over expiring `first_frame` tokens. This prevents transient
+  OCR failures and stale video-preview 404s from becoming unexplained
+  `FAILED_TECHNICAL` outcomes for otherwise decidable source posts.
 - **VK digest city-scope grounding:** Smart Update now treats a city as
   explicit cross-occurrence evidence only when it appears as a standalone
   place token. Regional adjectives such as `Калининградская область` no

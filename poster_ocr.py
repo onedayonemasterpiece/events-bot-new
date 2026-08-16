@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -15,12 +16,136 @@ from sqlmodel import select
 from db import Database
 from models import OcrUsage as OcrUsageModel, PosterOcrCache
 import vision_test.ocr
-from vision_test.ocr import run_ocr
+from vision_test.ocr import OcrResult, OcrUsage, run_ocr
 
 DAILY_TOKEN_LIMIT = 10_000_000
 
 
 logger = logging.getLogger(__name__)
+
+
+def _google_fallback_enabled() -> bool:
+    raw = os.getenv("POSTER_OCR_GOOGLE_FALLBACK_ENABLED", "1") or "1"
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _image_mime(data: bytes) -> str:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
+def _parse_ocr_json(raw: str) -> tuple[str, str]:
+    value = (raw or "").strip()
+    if value.startswith("```"):
+        lines = value.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        value = "\n".join(lines).strip()
+    payload = json.loads(value)
+    if not isinstance(payload, dict):
+        raise ValueError("Google OCR fallback returned a non-object")
+    text = payload.get("poster_ocr_text")
+    title = payload.get("ocr_title")
+    if not isinstance(text, str) or not isinstance(title, str):
+        raise ValueError("Google OCR fallback omitted string OCR fields")
+    return text.strip(), title.strip()
+
+
+async def _run_google_ocr_fallback(data: bytes, *, detail: str) -> OcrResult:
+    """Use one separately limited multimodal provider after primary OCR exhausts.
+
+    The fallback stays inside the same source-row invocation.  It is not a
+    background retry and therefore cannot strand an event-bearing poster in a
+    queue that nobody drains.
+    """
+
+    from google_ai import GoogleAIClient, SecretsProvider
+    from google_ai.limiter_supabase import build_google_ai_limiter_supabase_client
+    from main import get_supabase_client
+
+    model = (
+        os.getenv("POSTER_OCR_GOOGLE_FALLBACK_MODEL")
+        or "gemini-3.1-flash-lite"
+    ).strip()
+    key_pool = [
+        item.strip()
+        for item in (
+            os.getenv("POSTER_OCR_GOOGLE_FALLBACK_KEY_ENVS")
+            or "GOOGLE_API_KEY5,GOOGLE_API_KEY6"
+        ).split(",")
+        if item.strip()
+    ]
+    client = GoogleAIClient(
+        supabase_client=build_google_ai_limiter_supabase_client(
+            fallback_factory=get_supabase_client
+        ),
+        secrets_provider=SecretsProvider(),
+        consumer="poster_ocr_fallback",
+        account_name="poster-ocr-fallback",
+        default_env_var_name=(key_pool[0] if key_pool else "GOOGLE_API_KEY5"),
+        reserve_key_envs=key_pool,
+        reserve_overflow_key_envs=[],
+    )
+    client.allow_reserve_fallback = False
+    client.allow_local_limiter_fallback = False
+    client.allow_local_limiter_on_reserve_error = False
+    client.fallback_models = []
+    client.max_retries = 1
+    client.hard_single_provider_attempt = True
+    client.provider_timeout_seconds = float(
+        os.getenv("POSTER_OCR_GOOGLE_FALLBACK_TIMEOUT_SEC", "45") or "45"
+    )
+    schema = {
+        "type": "object",
+        "properties": {
+            "poster_ocr_text": {"type": "string"},
+            "ocr_title": {"type": "string"},
+        },
+        "required": ["poster_ocr_text", "ocr_title"],
+        "additionalProperties": False,
+    }
+    raw, usage = await client.generate_content_async(
+        model=model,
+        prompt=[
+            {
+                "inline_data": {
+                    "mime_type": _image_mime(data),
+                    "data": data,
+                }
+            },
+            (
+                "Распознай весь видимый текст. Верни только JSON: "
+                '{"poster_ocr_text":"...","ocr_title":"..."}. '
+                "ocr_title — крупнейший смысловой заголовок; если его нет, "
+                f"верни пустую строку. detail={detail}."
+            ),
+        ],
+        generation_config={
+            "temperature": 0,
+            "response_mime_type": "application/json",
+            "response_json_schema": schema,
+        },
+        max_output_tokens=2048,
+        allow_model_fallback=False,
+        max_provider_attempts=1,
+    )
+    text, title = _parse_ocr_json(raw)
+    return OcrResult(
+        text=text,
+        title=title,
+        usage=OcrUsage(
+            prompt_tokens=int(usage.input_tokens or 0),
+            completion_tokens=int(usage.output_tokens or 0),
+            total_tokens=int(usage.total_tokens or 0),
+        ),
+        request_id=usage.provider_response_id or usage.provider_request_id,
+        provider_model=model,
+    )
 
 
 class PosterOcrLimitExceededError(RuntimeError):
@@ -175,7 +300,42 @@ async def recognize_posters(
 
             try:
                 ocr_result = await run_ocr(data, model=model, detail=detail)
-            except Exception as exc:
+            except Exception as primary_exc:
+                if _google_fallback_enabled():
+                    try:
+                        ocr_result = await _run_google_ocr_fallback(data, detail=detail)
+                        logger.warning(
+                            "poster_ocr.fallback_recovered hash=%s primary_model=%s fallback_model=%s",
+                            digest,
+                            model,
+                            ocr_result.provider_model,
+                            extra=log_extra,
+                        )
+                    except Exception as fallback_exc:
+                        # Preserve both provider failures in the durable log;
+                        # the caller will keep the evidence manifest incomplete
+                        # rather than silently declaring a no-event.
+                        failed_uncached_count += 1
+                        logger.error(
+                            "poster_ocr.image_failed hash=%s primary_error=%s fallback_error=%s",
+                            digest,
+                            primary_exc,
+                            fallback_exc,
+                            extra=log_extra,
+                            exc_info=True,
+                        )
+                        continue
+                else:
+                    failed_uncached_count += 1
+                    logger.error(
+                        "poster_ocr.image_failed hash=%s error=%s",
+                        digest,
+                        primary_exc,
+                        extra=log_extra,
+                        exc_info=True,
+                    )
+                    continue
+            if ocr_result is None:  # pragma: no cover - defensive
                 # One persistently unreadable/unavailable image must not erase
                 # successful OCR evidence from its siblings.  Keep processing
                 # the bounded gallery; the caller derives an incomplete
@@ -185,9 +345,8 @@ async def recognize_posters(
                 logger.error(
                     "poster_ocr.image_failed hash=%s error=%s",
                     digest,
-                    exc,
+                    "provider returned no result",
                     extra=log_extra,
-                    exc_info=True,
                 )
                 continue
             logger.info(
@@ -218,9 +377,13 @@ async def recognize_posters(
                     try:
                         await _LOG_TOKEN_USAGE(
                             _BOT_CODE,
-                            model,
+                            ocr_result.provider_model or model,
                             usage_payload,
-                            endpoint="chat.completions",
+                            endpoint=(
+                                "google_ai.generate_content"
+                                if ocr_result.provider_model
+                                else "chat.completions"
+                            ),
                             request_id=ocr_result.request_id,
                             meta=meta,
                         )
