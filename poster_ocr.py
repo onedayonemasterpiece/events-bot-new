@@ -157,6 +157,7 @@ async def recognize_posters(
         limit_remaining = DAILY_TOKEN_LIMIT - spent_before
         block_new_requests = count_usage and limit_remaining <= 0
         encountered_uncached_after_limit = False
+        failed_uncached_count = 0
 
         for data, digest in payloads:
             cache_key = (digest, detail, model)
@@ -172,7 +173,23 @@ async def recognize_posters(
                 blocked_uncached_count += 1
                 continue
 
-            ocr_result = await run_ocr(data, model=model, detail=detail)
+            try:
+                ocr_result = await run_ocr(data, model=model, detail=detail)
+            except Exception as exc:
+                # One persistently unreadable/unavailable image must not erase
+                # successful OCR evidence from its siblings.  Keep processing
+                # the bounded gallery; the caller derives an incomplete
+                # manifest from the missing result count and cannot falsely
+                # terminalize the carrier as a proved no-event.
+                failed_uncached_count += 1
+                logger.error(
+                    "poster_ocr.image_failed hash=%s error=%s",
+                    digest,
+                    exc,
+                    extra=log_extra,
+                    exc_info=True,
+                )
+                continue
             logger.info(
                 "poster_ocr.llm_result hash=%s ocr_title=%r",
                 digest,
@@ -319,10 +336,11 @@ async def recognize_posters(
             spent_tokens = 0
 
         logger.info(
-            "poster_ocr.stats cache_hits=%d new_entries=%d blocked_uncached=%d spent_tokens=%d charged_tokens=%d total_new_tokens=%d remaining=%d",
+            "poster_ocr.stats cache_hits=%d new_entries=%d blocked_uncached=%d failed_uncached=%d spent_tokens=%d charged_tokens=%d total_new_tokens=%d remaining=%d",
             cache_hits,
             len(entries_to_upsert),
             blocked_uncached_count,
+            failed_uncached_count,
             spent_tokens,
             charged_amount,
             total_new_tokens,

@@ -8,8 +8,10 @@ raw-first durability и строгая LLM-first семантика. Очере�
 видимый `/vk_auto_import` batch, обязана завершиться в этом batch как accepted,
 подтверждённое product exclusion или `FAILED_TECHNICAL` с причиной и receipt.
 
-**Release status:** incident остаётся open; этот final-code candidate не
-deployed и не deploy-ready. Green focused CI не заменяет внешние gates ниже.
+**Release status:** базовый linear-ingestion fix из PR #513 уже работает в
+production (`225a5ccf9`, Fly v1982). Контрольный run 6020 создал три события,
+но выявил четыре остаточных technical outcome; описанные ниже OCR/final-
+adjudication/lifecycle уточнения ещё требуют merge, deploy и повторного run.
 
 ## Граница покрытия
 
@@ -29,6 +31,7 @@ VK API fetch
   -> attachments/OCR + EvidenceManifest
   -> SourceParseDecision
   -> optional contradiction verifier
+  -> bounded final adjudication only if the VK decision is still technical
   -> Smart Update per event child / typed lifecycle action
   -> typed carrier terminal (no automatic durable retry from this batch)
 ```
@@ -37,8 +40,10 @@ VK API fetch
 инфраструктурная доставка ещё не выбранных raw pages; её bounded durable retry
 сохраняется. `vk_inbox`, уже claimed конкретным auto-import batch, не получает
 `next_attempt_at`: даже timeout, fetch/evidence/provider/schema/persist error,
-неполный evidence или unresolved lifecycle закрываются как
-`failed_technical`/`FAILED_TECHNICAL`. Повтор возможен только как явно
+неполный evidence или исчерпанный provider/schema path закрываются как
+`failed_technical`/`FAILED_TECHNICAL`. Unmatched lifecycle action получает
+явный product no-op; он не превращает уже созданного event sibling в ошибку.
+Повтор возможен только как явно
 наблюдаемое операторское re-drive, а не как фоновый вечный цикл.
 
 Cursor не продвигается, пока не сохранены все полученные in-horizon packets.
@@ -101,7 +106,8 @@ Legacy exact-full-page rows, ошибочно отмеченные `done`, reope
   state, lease, attempts, prompt/model/quota scope, `next_attempt_at`, typed
   reason and carrier outcome.
 - `vk_source_packet_attempt` — append-only receipt каждого physical primary,
-  repair, conditional-verification или exact-replay attempt: evidence manifest,
+  repair, conditional-verification, terminal-adjudication или exact-replay
+  attempt: evidence manifest,
   request/response/finish metadata, input/output/thought/reserved tokens,
   disposition, child/action counts, Smart Update child outcomes and terminal.
   API keys, secrets и полный payload сюда не пишутся.
@@ -188,8 +194,8 @@ Typed `SourceParseDecision` допускает только:
 - `MIXED`;
 - `RETRY_REQUIRED`.
 
-Пустой ответ, malformed/schema mismatch, truncation, timeout, quota error,
-неполный OCR или unresolved lifecycle action не равны no-event. Положительные
+Пустой ответ, malformed/schema mismatch, truncation, timeout, quota error или
+неполный OCR не равны no-event. Положительные
 children из incomplete evidence можно провести через Smart Update, но carrier
 закрывается видимым `FAILED_TECHNICAL`: уже принятые children сохраняются, а
 неподтверждённый остаток не переигрывается автоматически. `CONFIRMED_NO_EVENT`
@@ -206,8 +212,12 @@ children из incomplete evidence можно провести через Smart U
 только как conditional verifier для закрытого набора противоречий: сильные
 signals против no-event, date/OCR conflict, collapsed occurrences, generic
 ungrounded title, mixed lifecycle conflict, impossible schema или incomplete
-coverage. Технически недоступная/неоднозначная verification означает
-`FAILED_TECHNICAL` в том же invocation.
+coverage. Если primary/verifier всё ещё вернул malformed/schema/technical
+результат, VK выполняет ровно один final adjudication в том же invocation на
+отдельном schema-strict запросе, где `RETRY_REQUIRED` запрещён. Он обязан
+вернуть events/lifecycle либо complete-evidence `CONFIRMED_NO_EVENT`; повторный
+provider/schema failure остаётся видимым `FAILED_TECHNICAL`, а не скрытой
+очередью.
 
 Все эти trigger-факты вычисляет общий pure `source_contradiction_facts` collector
 для shared main/VK/direct/parser callers; Telegram stages ровно тот же module.
@@ -221,15 +231,17 @@ reason, закрытые enums/parity и terminal prompt gates.
 
 Cancellation/reschedule regex не изменяет Event до primary parse. LLM может
 вернуть несколько `LifecycleAction` и одновременно новые event children.
-Действия применяются независимо; no-match action даёт carrier-level
-`FAILED_TECHNICAL` и не уничтожает уже принятые siblings.
+Действия применяются независимо. No-match action означает явный
+`LIFECYCLE_NO_MATCH_NOOP`: lifecycle-only carrier закрывается как product
+no-op, а mixed carrier остаётся `MIXED_RESOLVED` вместе с созданным/обновлённым
+event child. Это не уничтожает sibling и не считается технической ошибкой.
 
 Каждый child проходит Smart Update. Downstream Telegraph/ICS/publication/month
 rebuild запускаются только для typed accepted `CREATED`, `MERGED` или
 `NOOP_EXACT_REPLAY`; `diagnostic_event_id` не считается успехом. Carrier-level
 итоги: `EVENTS_RESOLVED`, `LIFECYCLE_RESOLVED`, `MIXED_RESOLVED`,
-`CONFIRMED_NO_EVENT`, `CONFIRMED_PRODUCT_EXCLUSION`, `FAILED_TECHNICAL` или
-`EXACT_REPLAY`. Summary обязан балансировать
+`CONFIRMED_NO_EVENT`, `CONFIRMED_PRODUCT_EXCLUSION`, `FAILED_TECHNICAL`,
+`LIFECYCLE_NO_MATCH_NOOP` или `EXACT_REPLAY`. Summary обязан балансировать
 `processed = imported + rejected + failed`; `deferred=0`.
 
 ## Backpressure
@@ -244,6 +256,11 @@ selectable `vk_inbox.next_attempt_at`, сохраняют typed reason в packet
 attempt и попадают в summary/ops receipt. У immutable packet остаётся
 schema-required timestamp, но terminal status делает его inert. Это не product
 rejection и не автоматическая due queue.
+
+Poster OCR отдельно делает до трёх transport attempts (hard max четыре) только
+для timeout/connection и HTTP `408/409/429/5xx`, с коротким backoff и отдельным
+`X-Client-Request-Id` на попытку. Ошибка одной картинки не стирает уже успешно
+распознанные siblings; manifest остаётся честно incomplete для отсутствующей.
 
 Только предшествующий crawl continuation остаётся durable retryable: он ещё
 доставляет raw page до `vk_source_packet` и не является одной из 15

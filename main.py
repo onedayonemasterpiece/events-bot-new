@@ -177,6 +177,7 @@ from source_parse_contract import (
     SourceParseRetryReason,
     VerificationReason,
     build_verification_request,
+    build_terminal_adjudication_request,
     conditionally_verify_source_decision,
     decision_from_provider_payload,
     provider_attempt_metadata,
@@ -9934,12 +9935,13 @@ def _event_parse_normalize_parsed_events(
     *,
     evidence_manifest: EvidenceManifest | None = None,
     provider_metadata: Any = None,
+    attempt_kind: str = "primary",
 ) -> ParsedEvents:
     if evidence_manifest is None:
         decision = SourceParseDecision.retry(SourceParseRetryReason.SCHEMA_MISMATCH)
         if provider_metadata is not None:
             decision.with_provider_attempts(
-                [provider_attempt_metadata(provider_metadata, attempt_kind="primary")]
+                [provider_attempt_metadata(provider_metadata, attempt_kind=attempt_kind)]
             )
         return decision
     festival = None
@@ -9974,7 +9976,7 @@ def _event_parse_normalize_parsed_events(
     )
     if provider_metadata is not None:
         decision.with_provider_attempts(
-            [provider_attempt_metadata(provider_metadata, attempt_kind="primary")]
+            [provider_attempt_metadata(provider_metadata, attempt_kind=attempt_kind)]
         )
     for obj in decision:
         if isinstance(obj, dict):
@@ -10093,9 +10095,17 @@ async def _parse_event_via_gemma(
         source_channel = extra.get("channel_title")
     today = datetime.now(LOCAL_TZ).date().isoformat()
     verification_request = extra.get("verification_request")
+    terminal_adjudication = (
+        isinstance(verification_request, Mapping)
+        and verification_request.get("task") == "terminal_source_parse_adjudication"
+    )
     if isinstance(verification_request, Mapping):
         user_msg = (
-            f"Today is {today}. Conditional source-parse verification.\n"
+            (
+                f"Today is {today}. Final source-parse adjudication.\n"
+                if terminal_adjudication
+                else f"Today is {today}. Conditional source-parse verification.\n"
+            )
             + json.dumps(verification_request, ensure_ascii=False, separators=(",", ":"))
         )
     else:
@@ -10125,6 +10135,11 @@ async def _parse_event_via_gemma(
         "no_event_reason is mandatory only for CONFIRMED_NO_EVENT and forbidden for every other disposition.\n"
         "CRITICAL: No comments. No markdown. No trailing commas. No text outside JSON."
     )
+    if terminal_adjudication:
+        output_contract += (
+            "\nThis is the final adjudication: RETRY_REQUIRED is forbidden; choose one of "
+            "EVENTS_FOUND, CONFIRMED_NO_EVENT, LIFECYCLE_ONLY or MIXED."
+        )
 
     def _compose_full_prompt(*, omit_venue_catalog: bool) -> str:
         base_prompt = _build_prompt(
@@ -10154,7 +10169,11 @@ async def _parse_event_via_gemma(
     max_tokens = max(400, min(max_tokens, 8000))
 
     evidence_manifest = _event_parse_evidence_manifest(text, poster_texts, extra)
-    initial_attempt_kind = "verification" if isinstance(verification_request, Mapping) else "primary"
+    initial_attempt_kind = (
+        "terminal_adjudication"
+        if terminal_adjudication
+        else "verification" if isinstance(verification_request, Mapping) else "primary"
+    )
     raw, usage = await _generate_once(
         full_prompt,
         label="parse",
@@ -10309,9 +10328,17 @@ async def _parse_event_via_4o(
     }
     today = datetime.now(LOCAL_TZ).date().isoformat()
     verification_request = extra.get("verification_request")
+    terminal_adjudication = (
+        isinstance(verification_request, Mapping)
+        and verification_request.get("task") == "terminal_source_parse_adjudication"
+    )
     if isinstance(verification_request, Mapping):
         user_msg = (
-            f"Today is {today}. Conditional source-parse verification.\n"
+            (
+                f"Today is {today}. Final source-parse adjudication.\n"
+                if terminal_adjudication
+                else f"Today is {today}. Conditional source-parse verification.\n"
+            )
             + json.dumps(verification_request, ensure_ascii=False, separators=(",", ":"))
         )
     else:
@@ -10406,7 +10433,19 @@ async def _parse_event_via_4o(
         meta=meta_payload or None,
     )
     choice = (data_raw.get("choices") or [{}])[0]
-    provider_metadata = {"finish_reason": choice.get("finish_reason")}
+    attempt_kind = (
+        "terminal_adjudication"
+        if terminal_adjudication
+        else "verification" if isinstance(verification_request, Mapping) else "primary"
+    )
+    provider_metadata = {
+        "finish_reason": choice.get("finish_reason"),
+        "request_id": request_id,
+        "model": model_name,
+    }
+    provider_attempts = [
+        provider_attempt_metadata(provider_metadata, attempt_kind=attempt_kind)
+    ]
     content = (
         choice
         .get("message", {})
@@ -10422,11 +10461,13 @@ async def _parse_event_via_4o(
         return SourceParseDecision.retry(
             SourceParseRetryReason.OUTPUT_TRUNCATED,
             evidence_manifest=evidence_manifest.with_provider_truncation(),
+            provider_attempts=provider_attempts,
         )
     if not content:
         return SourceParseDecision.retry(
             SourceParseRetryReason.EMPTY_PROVIDER_RESPONSE,
             evidence_manifest=evidence_manifest,
+            provider_attempts=provider_attempts,
         )
     if content.startswith("```"):
         content = content.strip("`\n")
@@ -10439,11 +10480,13 @@ async def _parse_event_via_4o(
         return SourceParseDecision.retry(
             SourceParseRetryReason.MALFORMED_JSON,
             evidence_manifest=evidence_manifest,
+            provider_attempts=provider_attempts,
         )
     return _event_parse_normalize_parsed_events(
         data,
         evidence_manifest=evidence_manifest,
         provider_metadata=provider_metadata,
+        attempt_kind=attempt_kind,
     )
 
 
@@ -10543,6 +10586,83 @@ async def parse_event_via_llm(
             ), timeout=cap_sec
         )
 
+    async def _invoke_terminal_adjudicator(
+        previous: SourceParseDecision,
+    ) -> SourceParseDecision:
+        evidence_manifest = previous.evidence_manifest or _event_parse_evidence_manifest(
+            semantic_source_text, poster_texts, extra
+        )
+        source_context = (
+            dict(extra.get("source_context"))
+            if isinstance(extra.get("source_context"), Mapping)
+            else {}
+        )
+        request = build_terminal_adjudication_request(
+            source_text=semantic_source_text,
+            ocr_blocks=poster_texts,
+            evidence_manifest=evidence_manifest,
+            previous_decision=previous,
+            today=datetime.now(LOCAL_TZ).date().isoformat(),
+            published_at=(
+                str(extra.get("published_at"))
+                if extra.get("published_at") is not None
+                else None
+            ),
+            source_context={"channel": source_channel, **source_context},
+        )
+        terminal_extra = dict(extra)
+        terminal_extra.pop("contradiction_facts", None)
+        terminal_extra.pop("require_terminal_decision", None)
+        terminal_extra["verification_request"] = request
+        if not use_4o:
+            terminal_model = (
+                os.getenv("EVENT_PARSE_TERMINAL_ADJUDICATION_MODEL", "")
+                or os.getenv("EVENT_PARSE_DEFENDER_ESCALATION_MODEL", "")
+                or "gemini-3.5-flash-lite"
+            ).strip()
+            terminal_extra["gemma_model"] = terminal_model
+        logging.info(
+            "event_parse: terminal adjudication source_channel=%s previous_reason=%s model=%s",
+            source_channel,
+            previous.retry_reason.value if previous.retry_reason is not None else None,
+            "configured-4o" if use_4o else terminal_extra.get("gemma_model"),
+        )
+        try:
+            terminal = await _invoke_primary(terminal_extra)
+        except Exception as exc:
+            terminal = SourceParseDecision.retry(
+                SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR,
+                evidence_manifest=evidence_manifest,
+                provider_attempts=[
+                    provider_attempt_metadata(exc, attempt_kind="terminal_adjudication")
+                ],
+            )
+        combined_attempts = [
+            *previous.provider_attempts,
+            *terminal.provider_attempts,
+        ]
+        if not terminal.is_retry:
+            terminal.with_provider_attempts(combined_attempts)
+            terminal.verification = {
+                "performed": True,
+                "terminal_adjudication": True,
+                "previous_retry_reason": (
+                    previous.retry_reason.value
+                    if previous.retry_reason is not None
+                    else None
+                ),
+            }
+            return terminal
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR,
+            evidence_manifest=evidence_manifest,
+            events=list(previous),
+            lifecycle_actions=previous.lifecycle_actions,
+            verification_reasons=previous.verification_reasons,
+            festival=previous.festival,
+            provider_attempts=combined_attempts,
+        )
+
     try:
         result = await _invoke_primary(extra)
     except asyncio.TimeoutError:
@@ -10578,6 +10698,8 @@ async def parse_event_via_llm(
     # A typed primary retry is already a terminal technical outcome for this
     # attempt.  Do not recursively "verify" schema/provider uncertainty.
     if result.is_retry:
+        if bool(extra.get("require_terminal_decision")):
+            return await _invoke_terminal_adjudicator(result)
         return result
 
     # The verifier is not an always-on stage.  Deterministic checks can only
@@ -10673,6 +10795,8 @@ async def parse_event_via_llm(
         contradiction_facts=supplied_facts,
         invoke=_invoke_verifier,
     )
+    if resolved.is_retry and bool(extra.get("require_terminal_decision")):
+        return await _invoke_terminal_adjudicator(resolved)
     return resolved
 
 

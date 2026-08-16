@@ -239,6 +239,89 @@ async def test_verifier_technical_failure_returns_typed_retry(monkeypatch):
     assert result.retry_reason is SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR
 
 
+@pytest.mark.asyncio
+async def test_vk_linear_primary_schema_failure_gets_one_terminal_adjudication(monkeypatch):
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    calls = []
+
+    async def fake_gemma(*args, **kwargs):
+        calls.append(kwargs)
+        request = kwargs.get("verification_request")
+        if request:
+            assert request["task"] == "terminal_source_parse_adjudication"
+            assert "RETRY_REQUIRED is forbidden" in " ".join(request["rules"])
+            return _decision([], SourceDisposition.CONFIRMED_NO_EVENT)
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.MALFORMED_JSON,
+            evidence_manifest=EvidenceManifest.complete_source("source", ["ocr"]),
+        )
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    result = await main.parse_event_via_llm(
+        "source",
+        poster_texts=["ocr"],
+        require_terminal_decision=True,
+    )
+
+    assert len(calls) == 2
+    assert calls[1]["gemma_model"] == "gemini-3.5-flash-lite"
+    assert result.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+    assert result.verification["terminal_adjudication"] is True
+    assert result.verification["previous_retry_reason"] == "MALFORMED_JSON"
+
+
+@pytest.mark.asyncio
+async def test_vk_linear_verifier_failure_gets_third_and_final_call(monkeypatch):
+    monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
+    monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
+    calls = []
+
+    async def fake_gemma(*args, **kwargs):
+        calls.append(kwargs)
+        request = kwargs.get("verification_request")
+        if request and request.get("task") == "terminal_source_parse_adjudication":
+            return _decision([{"title": "Лекция", "date": "2026-09-12"}])
+        if request:
+            raise TimeoutError("verification unavailable")
+        return _decision([{"title": "Лекция", "date": "2026-09-13"}])
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    result = await main.parse_event_via_llm(
+        "Лекция 12.09.2026 в 18:00",
+        require_terminal_decision=True,
+    )
+
+    assert len(calls) == 3
+    assert calls[2]["verification_request"]["task"] == "terminal_source_parse_adjudication"
+    assert result.disposition is SourceDisposition.EVENTS_FOUND
+    assert result[0]["date"] == "2026-09-12"
+
+
+@pytest.mark.asyncio
+async def test_vk_linear_terminal_adjudication_is_bounded_when_provider_still_invalid(
+    monkeypatch,
+):
+    calls = 0
+
+    async def fake_gemma(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return SourceParseDecision.retry(
+            SourceParseRetryReason.MALFORMED_JSON,
+            evidence_manifest=EvidenceManifest.complete_source("source"),
+        )
+
+    monkeypatch.setattr(main, "_parse_event_via_gemma", fake_gemma)
+    result = await main.parse_event_via_llm(
+        "source", require_terminal_decision=True
+    )
+
+    assert calls == 2
+    assert result.disposition is SourceDisposition.RETRY_REQUIRED
+    assert result.retry_reason is SourceParseRetryReason.VERIFICATION_TECHNICAL_ERROR
+
+
 def test_maximum_recall_prompt_contains_complete_semantic_contract():
     main._read_base_prompt.cache_clear()
     prompt = main._read_base_prompt()

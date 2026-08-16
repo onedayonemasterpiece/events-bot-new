@@ -2642,13 +2642,28 @@ async def _process_vk_inbox_row(
     if not drafts:
         if lifecycle_unresolved:
             reason = lifecycle_unresolved[0]
-            await _terminalize_vk_auto_failure(
+            report.inbox_rejected += 1
+            await vk_review.mark_carrier_outcome(
                 db,
-                post=post,
-                report=report,
-                typed_reason="LIFECYCLE_NO_MATCH",
-                source_url=source_url,
-                error_detail=reason,
+                inbox_id=int(post.id),
+                outcome="LIFECYCLE_NO_MATCH_NOOP",
+                typed_reason=f"LIFECYCLE_NO_MATCH_NOOP:{reason}",
+            )
+            await vk_review.record_carrier_resolution(
+                db,
+                source_packet_id=getattr(post, "source_packet_id", None),
+                child_outcomes=["LIFECYCLE_NO_MATCH_NOOP"],
+                terminal_carrier_outcome="LIFECYCLE_NO_MATCH_NOOP",
+                typed_error_reason=f"LIFECYCLE_NO_MATCH_NOOP:{reason}",
+            )
+            await _emit_progress(
+                "⏭️",
+                [
+                    "Результат: lifecycle-уведомление не относится к известному событию",
+                    "Итог: подтверждённый no-op без технической ошибки",
+                    f"Причина: {_shorten_reason(reason) or 'no matching event'}",
+                    f"took_sec: {(time.monotonic() - start_ts):.1f}",
+                ],
             )
             return
         if decision.disposition is SourceDisposition.LIFECYCLE_ONLY and lifecycle_event_ids:
@@ -2904,12 +2919,25 @@ async def _process_vk_inbox_row(
     )
     _tmark("mark_imported_events", time.monotonic() - t0)
     report.updated_event_ids.extend(lifecycle_event_ids)
+    if lifecycle_unresolved and imported_event_ids:
+        # A mixed carrier may both announce a real new event and mention a
+        # cancellation/update for a target absent from our catalogue.  The
+        # accepted child remains a complete product success; the unmatched
+        # lifecycle action is an explicit terminal no-op, not a technical
+        # failure for the entire carrier.
+        child_outcomes.extend(
+            "LIFECYCLE_NO_MATCH_NOOP" for _ in lifecycle_unresolved
+        )
     enrichment_retry = (
         "EVIDENCE_INCOMPLETE"
         if not bool(getattr(decision, "evidence_complete", False))
         else None
     )
-    lifecycle_retry = lifecycle_unresolved[0] if lifecycle_unresolved else None
+    lifecycle_retry = (
+        lifecycle_unresolved[0]
+        if lifecycle_unresolved and not imported_event_ids
+        else None
+    )
     terminal_failure_detail = smart_retry_reason or partial_error or lifecycle_retry or enrichment_retry
     if smart_technical_reason:
         await _terminalize_vk_auto_failure(
@@ -2941,7 +2969,7 @@ async def _process_vk_inbox_row(
             outcome == "NOOP_EXACT_REPLAY" for outcome in child_outcomes
         ):
             carrier_outcome = "EXACT_REPLAY"
-        elif lifecycle_event_ids:
+        elif lifecycle_event_ids or lifecycle_unresolved:
             carrier_outcome = "MIXED_RESOLVED"
         else:
             carrier_outcome = "EVENTS_RESOLVED"

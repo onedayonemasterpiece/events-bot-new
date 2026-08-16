@@ -361,8 +361,154 @@ async def test_run_ocr_payload_structure(monkeypatch):
     assert headers["Authorization"] == "Bearer token"
     content = payload["messages"][1]["content"]
     assert isinstance(content, list)
-    assert content[0] == {
-        "type": "text",
-        "text": "Распознай текст на изображении.",
-    }
+    assert content[0]["type"] == "text"
+    assert content[0]["text"].startswith("Распознай текст на изображении.")
     assert all(item.get("type") != "input_text" for item in content)
+
+
+@pytest.mark.asyncio
+async def test_run_ocr_retries_timeout_then_succeeds_with_distinct_request_ids(monkeypatch):
+    class SuccessResponse:
+        status = 200
+        headers = {"x-request-id": "server-request"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def json(self):
+            return {
+                "choices": [{"message": {"content": '{"poster_ocr_text":"афиша","ocr_title":""}'}}],
+                "usage": {},
+            }
+
+    class TimeoutThenSuccessSession:
+        def __init__(self):
+            self.calls = []
+
+        def post(self, url, *, json, headers):
+            self.calls.append(dict(headers))
+            if len(self.calls) == 1:
+                raise asyncio.TimeoutError("synthetic timeout")
+            return SuccessResponse()
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setenv("FOUR_O_TOKEN", "token")
+    monkeypatch.setenv("FOUR_O_OCR_MAX_ATTEMPTS", "3")
+    monkeypatch.setattr(vision_ocr.asyncio, "sleep", no_sleep)
+    session = TimeoutThenSuccessSession()
+    vision_ocr.configure_http(session=session, semaphore=asyncio.Semaphore(1))
+    try:
+        result = await vision_ocr.run_ocr(MINIMAL_PNG, model="test-model", detail="high")
+    finally:
+        vision_ocr.clear_http()
+
+    assert result.text == "афиша"
+    assert len(session.calls) == 2
+    request_ids = [call["X-Client-Request-Id"] for call in session.calls]
+    assert all(value.startswith("ocr-") for value in request_ids)
+    assert len(set(request_ids)) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [408, 409, 429, 500, 503])
+async def test_run_ocr_retries_only_retryable_http_status(monkeypatch, status):
+    class Response:
+        def __init__(self, response_status):
+            self.status = response_status
+            self.headers = {"Retry-After": "0"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def text(self):
+            return "temporary"
+
+        async def json(self):
+            return {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+
+    class Session:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, *_args, **_kwargs):
+            self.calls += 1
+            return Response(status if self.calls == 1 else 200)
+
+    monkeypatch.setenv("FOUR_O_TOKEN", "token")
+    monkeypatch.setenv("FOUR_O_OCR_MAX_ATTEMPTS", "3")
+    session = Session()
+    vision_ocr.configure_http(session=session, semaphore=asyncio.Semaphore(1))
+    try:
+        result = await vision_ocr.run_ocr(MINIMAL_PNG, model="test-model", detail="high")
+    finally:
+        vision_ocr.clear_http()
+    assert result.text == "ok"
+    assert session.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_run_ocr_does_not_retry_nonretryable_http_status(monkeypatch):
+    class Response:
+        status = 400
+        headers = {}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def text(self):
+            return "invalid image"
+
+    class Session:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, *_args, **_kwargs):
+            self.calls += 1
+            return Response()
+
+    monkeypatch.setenv("FOUR_O_TOKEN", "token")
+    session = Session()
+    vision_ocr.configure_http(session=session, semaphore=asyncio.Semaphore(1))
+    try:
+        with pytest.raises(RuntimeError, match="status 400"):
+            await vision_ocr.run_ocr(MINIMAL_PNG, model="test-model", detail="high")
+    finally:
+        vision_ocr.clear_http()
+    assert session.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_run_ocr_exhausts_bounded_attempts(monkeypatch):
+    class Session:
+        def __init__(self):
+            self.calls = 0
+
+        def post(self, *_args, **_kwargs):
+            self.calls += 1
+            raise asyncio.TimeoutError("still unavailable")
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setenv("FOUR_O_TOKEN", "token")
+    monkeypatch.setenv("FOUR_O_OCR_MAX_ATTEMPTS", "3")
+    monkeypatch.setattr(vision_ocr.asyncio, "sleep", no_sleep)
+    session = Session()
+    vision_ocr.configure_http(session=session, semaphore=asyncio.Semaphore(1))
+    try:
+        with pytest.raises(RuntimeError, match="after 3 attempts"):
+            await vision_ocr.run_ocr(MINIMAL_PNG, model="test-model", detail="high")
+    finally:
+        vision_ocr.clear_http()
+    assert session.calls == 3

@@ -534,6 +534,161 @@ async def test_vk_auto_import_cancellation_requires_typed_llm_action(tmp_path, m
     assert seen_actions[0].action is LifecycleActionType.CANCEL
 
 
+@pytest.mark.asyncio
+async def test_vk_auto_import_keeps_new_event_when_mixed_lifecycle_target_is_absent(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "mixed-lifecycle-noop.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name,location) "
+            "VALUES(1,'club1','Source','Venue')"
+        )
+        await conn.execute(
+            "INSERT INTO vk_inbox(id,group_id,post_id,date,text,matched_kw,has_date,status) "
+            "VALUES(1,1,100,0,'stub',?,0,'pending')",
+            (vk_intake.OCR_PENDING_SENTINEL,),
+        )
+        await conn.commit()
+
+    async def fake_fetch(*_args, **_kwargs):
+        return (
+            "Старая лекция отменена. Новая лекция 20 августа в 18:30.",
+            [],
+            datetime.now(timezone.utc),
+            {},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build(*_args, **_kwargs):
+        draft = vk_intake.EventDraft(
+            title="Новая лекция", date="2026-08-20", time="18:30", venue="Venue"
+        )
+        decision = SourceParseDecision(
+            [{"title": draft.title}],
+            disposition=SourceDisposition.MIXED,
+            lifecycle_actions=(
+                LifecycleAction(
+                    action=LifecycleActionType.CANCEL,
+                    target_title="Старая лекция",
+                    evidence="Старая лекция отменена",
+                ),
+            ),
+            evidence_manifest=EvidenceManifest.complete_source("source"),
+        )
+        return vk_intake.DraftParseResult([draft], decision=decision), None
+
+    async def fake_cancel(*_args, **_kwargs):
+        return None, "no matching event"
+
+    async def fake_persist(*_args, **_kwargs):
+        return vk_intake.PersistResult(
+            event_id=7001,
+            telegraph_url="",
+            ics_supabase_url="",
+            ics_tg_url="",
+            event_date="2026-08-20",
+            event_end_date=None,
+            event_time="18:30",
+            event_type=None,
+            is_free=False,
+            smart_result=SmartUpdateResult(
+                outcome=SmartUpdateTerminalOutcome.CREATED,
+                event_id=7001,
+            ),
+        )
+
+    resolutions = []
+
+    async def capture_resolution(*_args, **kwargs):
+        resolutions.append(kwargs)
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
+    monkeypatch.setattr(vk_auto_queue, "_cancel_matching_event_from_notice", fake_cancel)
+    monkeypatch.setattr(vk_intake, "persist_event_and_pages", fake_persist)
+    monkeypatch.setattr(vk_auto_queue.vk_review, "record_carrier_resolution", capture_resolution)
+
+    report = await vk_auto_queue.run_vk_auto_import(
+        db, DummyBot(), chat_id=1, limit=1, operator_id=123
+    )
+
+    assert report.inbox_imported == 1
+    assert report.inbox_failed_technical == 0
+    assert report.created_event_ids == [7001]
+    async with db.raw_conn() as conn:
+        inbox = await (await conn.execute(
+            "SELECT status,imported_event_id,last_typed_reason FROM vk_inbox WHERE id=1"
+        )).fetchone()
+    assert inbox[0:2] == ("imported", 7001)
+    assert inbox[2] == "MIXED_RESOLVED"
+    assert resolutions[-1]["terminal_carrier_outcome"] == "MIXED_RESOLVED"
+    assert "LIFECYCLE_NO_MATCH_NOOP" in resolutions[-1]["child_outcomes"]
+
+
+@pytest.mark.asyncio
+async def test_vk_auto_import_terminalizes_unmatched_lifecycle_only_as_product_noop(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "lifecycle-only-noop.sqlite"))
+    await db.init()
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "INSERT INTO vk_source(group_id,screen_name,name) VALUES(1,'club1','Source')"
+        )
+        await conn.execute(
+            "INSERT INTO vk_inbox(id,group_id,post_id,date,text,matched_kw,has_date,status) "
+            "VALUES(1,1,100,0,'stub',?,0,'pending')",
+            (vk_intake.OCR_PENDING_SENTINEL,),
+        )
+        await conn.commit()
+
+    async def fake_fetch(*_args, **_kwargs):
+        return (
+            "Несуществующая в каталоге лекция отменена.",
+            [],
+            datetime.now(timezone.utc),
+            {},
+            vk_auto_queue.VkFetchStatus(True, "ok"),
+        )
+
+    async def fake_build(*_args, **_kwargs):
+        decision = SourceParseDecision(
+            [],
+            disposition=SourceDisposition.LIFECYCLE_ONLY,
+            lifecycle_actions=(
+                LifecycleAction(
+                    action=LifecycleActionType.CANCEL,
+                    target_title="Несуществующая лекция",
+                ),
+            ),
+            evidence_manifest=EvidenceManifest.complete_source("source"),
+        )
+        return vk_intake.DraftParseResult([], decision=decision), None
+
+    async def fake_cancel(*_args, **_kwargs):
+        return None, "no matching event"
+
+    monkeypatch.setattr(vk_auto_queue, "fetch_vk_post_text_and_photos", fake_fetch)
+    monkeypatch.setattr(vk_intake, "build_event_drafts", fake_build)
+    monkeypatch.setattr(vk_auto_queue, "_cancel_matching_event_from_notice", fake_cancel)
+
+    report = await vk_auto_queue.run_vk_auto_import(
+        db, DummyBot(), chat_id=1, limit=1, operator_id=123
+    )
+
+    assert report.inbox_rejected == 1
+    assert report.inbox_failed_technical == 0
+    async with db.raw_conn() as conn:
+        row = await (await conn.execute(
+            "SELECT status,last_typed_reason,next_attempt_at FROM vk_inbox WHERE id=1"
+        )).fetchone()
+    assert row[0] == "confirmed_product_exclusion"
+    assert row[1].startswith("LIFECYCLE_NO_MATCH_NOOP:")
+    assert row[2] is None
+
+
 def test_vk_auto_import_time_reschedule_notice_stays_on_normal_import_path():
     text = (
         "Друзья, 8 мая время начала Винного вечера перенесено на 19.30!\n"

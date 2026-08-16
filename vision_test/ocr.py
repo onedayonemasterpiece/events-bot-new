@@ -5,6 +5,7 @@ import base64
 import hashlib
 import logging
 import os
+import uuid
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -24,6 +25,29 @@ __all__ = [
 _HTTP_SESSION: ClientSession | None = None
 _HTTP_SEMAPHORE: asyncio.Semaphore | None = None
 _FOUR_O_TIMEOUT = float(os.getenv("FOUR_O_TIMEOUT", "60"))
+
+
+class _RetryableOcrError(RuntimeError):
+    def __init__(self, message: str, *, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _ocr_max_attempts() -> int:
+    try:
+        configured = int(os.getenv("FOUR_O_OCR_MAX_ATTEMPTS", "3") or "3")
+    except (TypeError, ValueError):
+        configured = 3
+    return max(1, min(configured, 4))
+
+
+def _retry_after_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    try:
+        return max(0.0, min(float(value), 5.0))
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass(slots=True)
@@ -109,13 +133,13 @@ async def run_ocr(image_bytes: bytes, *, model: str, detail: str) -> OcrResult:
         "response_format": {"type": "json_object"},
         "temperature": 0,
     }
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-
-    async def _call() -> dict:
+    async def _call(*, client_request_id: str) -> dict:
         assert _HTTP_SESSION is not None and _HTTP_SEMAPHORE is not None
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-Client-Request-Id": client_request_id,
+        }
         async with _HTTP_SEMAPHORE:
             async with _HTTP_SESSION.post(url, json=payload, headers=headers) as resp:
                 status = resp.status
@@ -144,22 +168,52 @@ async def run_ocr(image_bytes: bytes, *, model: str, detail: str) -> OcrResult:
                 }
 
                 logging.error(
-                    "OCR request failed: status=%s model=%s detail=%s headers=%s body=%s",
+                    "OCR request failed: status=%s model=%s detail=%s client_request_id=%s headers=%s body=%s",
                     status,
                     model,
                     detail,
+                    client_request_id,
                     headers_to_log,
                     snippet,
                 )
-                raise RuntimeError(
-                    f"OCR request failed with status {status}: {snippet or 'no body'}"
-                )
+                message = f"OCR request failed with status {status}: {snippet or 'no body'}"
+                if status in {408, 409, 429} or status >= 500:
+                    raise _RetryableOcrError(
+                        message,
+                        retry_after=_retry_after_seconds(resp.headers.get("Retry-After")),
+                    )
+                raise RuntimeError(message)
 
-    try:
-        data = await asyncio.wait_for(_call(), _FOUR_O_TIMEOUT)
-    except (asyncio.TimeoutError, ClientError) as exc:  # pragma: no cover - network errors
-        logging.error("OCR request failed: model=%s detail=%s error=%s", model, detail, exc)
-        raise RuntimeError(f"OCR request failed: {exc}") from exc
+    max_attempts = _ocr_max_attempts()
+    data: dict | None = None
+    last_error: BaseException | None = None
+    for attempt in range(1, max_attempts + 1):
+        client_request_id = f"ocr-{uuid.uuid4()}"
+        try:
+            data = await asyncio.wait_for(
+                _call(client_request_id=client_request_id), _FOUR_O_TIMEOUT
+            )
+            break
+        except (asyncio.TimeoutError, ClientError, _RetryableOcrError) as exc:
+            last_error = exc
+            logging.warning(
+                "OCR retryable failure: model=%s detail=%s attempt=%d/%d client_request_id=%s error=%s",
+                model,
+                detail,
+                attempt,
+                max_attempts,
+                client_request_id,
+                exc,
+            )
+            if attempt >= max_attempts:
+                break
+            retry_after = getattr(exc, "retry_after", None)
+            delay = retry_after if retry_after is not None else 0.5 * (2 ** (attempt - 1))
+            await asyncio.sleep(min(float(delay), 5.0))
+    if data is None:
+        raise RuntimeError(
+            f"OCR request failed after {max_attempts} attempts: {last_error}"
+        ) from last_error
 
     try:
         choice = data.get("choices", [{}])[0]

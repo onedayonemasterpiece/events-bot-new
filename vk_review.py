@@ -1097,6 +1097,7 @@ async def mark_carrier_outcome(
     status_map = {
         "EVENTS_RESOLVED": "imported",
         "LIFECYCLE_RESOLVED": "imported",
+        "LIFECYCLE_NO_MATCH_NOOP": "confirmed_product_exclusion",
         "MIXED_RESOLVED": "imported",
         "CONFIRMED_PRODUCT_EXCLUSION": "confirmed_product_exclusion",
         "FAILED_TECHNICAL": "failed_technical",
