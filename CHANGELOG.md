@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **Smart Update same-source sibling identity:** a shared source URL, date,
+  time and venue no longer deterministically collapse distinct titled children
+  from one programme post. Exact title-related occurrences remain protected
+  from duplication, while sibling films/shows in the same slot proceed through
+  the normal distinct-event decision path.
 - **VK complete-evidence quota routing:** an explicit spelling of the normal
   Gemma event-parse model (as supplied by VK receipt accounting) no longer
   disables the existing large-carrier route. Complete long text/OCR carriers
