@@ -10599,52 +10599,69 @@ async def parse_event_via_llm(
         *,
         attempt_kind: str,
     ) -> ParsedEvents:
-        """Retry one provider throttle inside the current linear claim.
+        """Retry provider throttles inside the current linear claim.
 
         The owning VK row supplies a small wall-clock budget.  We never put
         semantic work back on a background queue, but a provider's explicit
-        sub-minute Retry-After is safe to honour once before declaring a
-        visible technical terminal.
+        sub-minute Retry-After is safe to honour while the owning row's
+        explicit wall-clock budget remains.  Some limiter responses expose a
+        coarse 1ms remainder more than once around a rolling-window boundary,
+        so a single retry is not a sufficient product decision.
         """
 
         nonlocal rate_limit_wait_spent_sec
-        try:
-            return await _invoke_primary(parse_extra)
-        except Exception as exc:
-            retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
-            status_code = int(getattr(exc, "status_code", 0) or 0)
-            is_rate_limit = (
-                retry_after_ms > 0
-                or status_code == 429
-                or type(exc).__name__ == "RateLimitError"
-            )
-            wait_sec = (
-                max(0.1, retry_after_ms / 1000.0)
-                if retry_after_ms > 0
-                else 1.0
-            )
-            remaining_sec = max(
-                0.0, rate_limit_wait_budget_sec - rate_limit_wait_spent_sec
-            )
-            if not is_rate_limit or wait_sec > remaining_sec:
-                raise
-            failure_receipt = provider_attempt_metadata(
-                exc,
-                attempt_kind=f"{attempt_kind}_rate_limit_wait",
-            )
-            logging.warning(
-                "event_parse: bounded provider wait attempt_kind=%s "
-                "wait_sec=%.3f remaining_sec=%.3f",
-                attempt_kind,
-                wait_sec,
-                remaining_sec,
-            )
-            await asyncio.sleep(wait_sec)
-            rate_limit_wait_spent_sec += wait_sec
-            result = await _invoke_primary(parse_extra)
-            return result.with_provider_attempts(
-                [failure_receipt, *result.provider_attempts]
-            )
+        failure_receipts: list[dict[str, Any]] = []
+        while True:
+            try:
+                result = await _invoke_primary(parse_extra)
+                if failure_receipts:
+                    return result.with_provider_attempts(
+                        [*failure_receipts, *result.provider_attempts]
+                    )
+                return result
+            except Exception as exc:
+                retry_after_ms = int(getattr(exc, "retry_after_ms", 0) or 0)
+                status_code = int(getattr(exc, "status_code", 0) or 0)
+                is_rate_limit = (
+                    retry_after_ms > 0
+                    or status_code == 429
+                    or type(exc).__name__ == "RateLimitError"
+                )
+                provider_wait_sec = (
+                    max(0.001, retry_after_ms / 1000.0)
+                    if retry_after_ms > 0
+                    else 1.0
+                )
+                remaining_sec = max(
+                    0.0, rate_limit_wait_budget_sec - rate_limit_wait_spent_sec
+                )
+                if (
+                    not is_rate_limit
+                    or provider_wait_sec > remaining_sec
+                    or remaining_sec <= 0
+                ):
+                    raise
+                backoff_floor_sec = min(15.0, float(2 ** len(failure_receipts)))
+                wait_sec = min(
+                    remaining_sec,
+                    max(provider_wait_sec, backoff_floor_sec),
+                )
+                failure_receipts.append(
+                    provider_attempt_metadata(
+                        exc,
+                        attempt_kind=f"{attempt_kind}_rate_limit_wait",
+                    )
+                )
+                logging.warning(
+                    "event_parse: bounded provider wait attempt_kind=%s "
+                    "wait_sec=%.3f remaining_sec=%.3f retry_no=%d",
+                    attempt_kind,
+                    wait_sec,
+                    remaining_sec,
+                    len(failure_receipts),
+                )
+                await asyncio.sleep(wait_sec)
+                rate_limit_wait_spent_sec += wait_sec
 
     async def _invoke_terminal_adjudicator(
         previous: SourceParseDecision,

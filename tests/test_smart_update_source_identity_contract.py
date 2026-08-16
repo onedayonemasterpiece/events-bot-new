@@ -480,6 +480,68 @@ async def test_explicit_context_intent_supports_multi_event_carrier_and_exact_re
 
 
 @pytest.mark.asyncio
+async def test_context_replay_reuses_same_event_source_url_across_lifecycle_receipts(tmp_path) -> None:
+    db = Database(str(tmp_path / "same-event-context-replay.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            event = Event(
+                title="Лекция",
+                description="Описание",
+                source_text="Источник",
+                date="2026-09-01",
+                time="19:00",
+                location_name="Музей",
+            )
+            session.add(event)
+            await session.flush()
+            event_id = int(event.id)
+            await session.commit()
+
+        source_url = "https://vk.com/wall-30777579_15803"
+        first = await su.smart_event_update(
+            db,
+            EventCandidate(
+                intent=SmartUpdateIntent.ATTACH_CONTEXT,
+                target_event_id=event_id,
+                source_type="vk_lifecycle",
+                source_url=source_url,
+                source_text="Событие отменено",
+                occurrence_key=f"lifecycle:CANCEL:{event_id}:{source_url}",
+                candidate_key="cancel-receipt",
+            ),
+            schedule_tasks=False,
+        )
+        second = await su.smart_event_update(
+            db,
+            EventCandidate(
+                intent=SmartUpdateIntent.ATTACH_CONTEXT,
+                target_event_id=event_id,
+                source_type="vk",
+                source_url=source_url,
+                source_text="Полная карточка события",
+                occurrence_key=f"event:{event_id}:{source_url}",
+                candidate_key="event-replay-receipt",
+            ),
+            schedule_tasks=False,
+        )
+
+        assert first.outcome is SmartUpdateTerminalOutcome.MERGED
+        assert second.outcome is SmartUpdateTerminalOutcome.NOOP_EXACT_REPLAY
+        async with db.get_session() as session:
+            sources = (
+                await session.execute(
+                    select(EventSource).where(EventSource.event_id == event_id)
+                )
+            ).scalars().all()
+        assert len(sources) == 1
+        assert sources[0].source_url == source_url
+        assert sources[0].candidate_key == "event-replay-receipt"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_distinct_create_enqueues_festival_only_after_identity_acceptance(
     tmp_path, monkeypatch
 ) -> None:

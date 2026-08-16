@@ -17119,6 +17119,37 @@ async def _maybe_disambiguate_telegram_default_location_city(candidate: EventCan
     )
 
 
+def _should_run_widened_dedup_adjudicator(
+    *,
+    candidate: EventCandidate,
+    match_event: Event | None,
+    identity_gate_match: Event | None,
+    anchor_forced: bool,
+    is_canonical_site: bool,
+) -> bool:
+    """Return whether the create-path identity adjudicator owns this decision.
+
+    Canonical parser sources normally avoid the broad widened-recall pass.  If
+    the identity gate has already vetoed CREATE with a concrete event owner,
+    however, skipping the adjudicator leaves a guaranteed technical terminal.
+    In that narrow case the same typed same/distinct adjudicator must run for a
+    parser source too.
+    """
+
+    return bool(
+        SMART_UPDATE_DEDUP_ADJUDICATOR
+        and match_event is None
+        and not candidate.force_create_distinct
+        and not anchor_forced
+        and (not is_canonical_site or identity_gate_match is not None)
+        and not SMART_UPDATE_LLM_DISABLED
+        and (
+            _title_has_meaningful_tokens(candidate.title)
+            or identity_gate_match is not None
+        )
+    )
+
+
 async def _smart_event_update_impl(
     db: Database,
     candidate: EventCandidate,
@@ -18846,17 +18877,12 @@ async def _smart_event_update_impl(
     # doors/start time). Re-fetch a wider date+city recall, block it down by a cheap
     # title/venue/ticket/poster key, and let an LLM decide match-vs-create while a
     # deterministic guard ladder keeps multi-session / parallel events separate.
-    if (
-        SMART_UPDATE_DEDUP_ADJUDICATOR
-        and match_event is None
-        and not candidate.force_create_distinct
-        and not anchor_forced
-        and not is_canonical_site
-        and not SMART_UPDATE_LLM_DISABLED
-        and (
-            _title_has_meaningful_tokens(candidate.title)
-            or identity_gate_match is not None
-        )
+    if _should_run_widened_dedup_adjudicator(
+        candidate=candidate,
+        match_event=match_event,
+        identity_gate_match=identity_gate_match,
+        anchor_forced=anchor_forced,
+        is_canonical_site=is_canonical_site,
     ):
         try:
             from datetime import timedelta
@@ -22031,33 +22057,48 @@ async def _ensure_event_source(
         raise SourceBindingConflict(conflicting_event_id)
     raw = _strip_private_use(candidate.source_text) or (candidate.source_text or "")
     clean_source_text = _strip_promo_lines(raw) or raw
+    # The physical schema has always owned one row per exact
+    # ``(event_id, source_url)``.  Lifecycle/context receipts may legitimately
+    # refine occurrence/candidate metadata for that same binding.  Resolve the
+    # physical owner first; otherwise a changed occurrence key makes the
+    # semantic lookup miss and the later autoflush violates the older unique
+    # constraint.
     existing = (
         await session.execute(
             select(EventSource).where(
                 EventSource.event_id == event_id,
-                or_(
-                    and_(
-                        EventSource.canonical_source_url == canonical_source_url,
-                        EventSource.occurrence_key == candidate.occurrence_key,
-                    ),
-                    # An evidence-backed replay may be the first touch that can
-                    # safely key a legacy binding on this same Event. Reuse and
-                    # upgrade that row rather than violating the older raw
-                    # ``(event_id, source_url)`` uniqueness constraint.
-                    and_(
-                        EventSource.canonical_source_url == canonical_source_url,
-                        EventSource.occurrence_key.is_(None),
-                        EventSource.candidate_key.is_(None),
-                    ),
-                    EventSource.candidate_key == candidate.candidate_key,
-                    and_(
-                        EventSource.canonical_source_url.is_(None),
-                        EventSource.source_url == candidate.source_url,
-                    ),
-                ),
+                EventSource.source_url == candidate.source_url,
             )
         )
     ).scalar_one_or_none()
+    if existing is None:
+        existing = (
+            await session.execute(
+                select(EventSource).where(
+                    EventSource.event_id == event_id,
+                    or_(
+                        and_(
+                            EventSource.canonical_source_url == canonical_source_url,
+                            EventSource.occurrence_key == candidate.occurrence_key,
+                        ),
+                        # An evidence-backed replay may be the first touch that can
+                        # safely key a legacy binding on this same Event. Reuse and
+                        # upgrade that row rather than violating the older raw
+                        # ``(event_id, source_url)`` uniqueness constraint.
+                        and_(
+                            EventSource.canonical_source_url == canonical_source_url,
+                            EventSource.occurrence_key.is_(None),
+                            EventSource.candidate_key.is_(None),
+                        ),
+                        EventSource.candidate_key == candidate.candidate_key,
+                        and_(
+                            EventSource.canonical_source_url.is_(None),
+                            EventSource.source_url == candidate.source_url,
+                        ),
+                    ),
+                )
+            )
+        ).scalar_one_or_none()
     if existing:
         updated = False
         if clean_source_text and clean_source_text != existing.source_text:

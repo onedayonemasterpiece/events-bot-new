@@ -1,8 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- **Linear ingestion live residuals:** VK now keeps retrying explicit provider
+  throttles inside the current bounded claim instead of stopping after the
+  first retry. Same-event lifecycle/context replays reuse the existing
+  `(event_id, source_url)` provenance row even when occurrence metadata changes,
+  and a canonical `parser:*` candidate vetoed by the identity gate now reaches
+  the typed same/distinct adjudicator instead of an automatic technical result.
 - **VK live-qualification follow-up:** a sub-minute provider `Retry-After` is
-  now honoured once inside the current VK claim under a 60-second bounded
+  now honoured inside the current VK claim under a 60-second bounded
   budget, rather than becoming an immediate technical terminal. Later
   carrier/lifecycle failures no longer erase or hide an immutable successful
   parse receipt, so exact replay reuses it without another provider call or a

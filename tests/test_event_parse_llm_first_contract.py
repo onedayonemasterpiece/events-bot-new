@@ -466,7 +466,7 @@ async def test_provider_rate_limit_metadata_survives_typed_parse_boundary(monkey
 
 
 @pytest.mark.asyncio
-async def test_vk_linear_parse_waits_once_for_bounded_provider_retry(monkeypatch):
+async def test_vk_linear_parse_retries_rate_limit_within_bounded_provider_budget(monkeypatch):
     monkeypatch.delenv("EVENT_PARSE_LLM", raising=False)
     monkeypatch.setenv("EVENT_PARSE_LARGE_POST_THRESHOLD_CHARS", "0")
     calls = []
@@ -474,10 +474,10 @@ async def test_vk_linear_parse_waits_once_for_bounded_provider_retry(monkeypatch
 
     async def fake_gemma(*_args, **_kwargs):
         calls.append(dict(_kwargs))
-        if len(calls) == 1:
+        if len(calls) <= 2:
             raise RateLimitError(
                 blocked_reason="tpm",
-                retry_after_ms=3_000,
+                retry_after_ms=1,
                 model="gemma-4-31b-it",
                 quota_scope="google:test-project",
             )
@@ -499,10 +499,11 @@ async def test_vk_linear_parse_waits_once_for_bounded_provider_retry(monkeypatch
         require_terminal_decision=True,
     )
 
-    # Two primary invocations (throttle + bounded retry) and the normal
+    # Three primary invocations (two throttles + bounded retries) and the normal
     # contradiction verifier for this deliberately terse fixture.
-    assert len(calls) == 3
-    assert sleeps == [3.0]
+    assert len(calls) == 4
+    assert sleeps == [1.0, 2.0]
     assert result.disposition is SourceDisposition.EVENTS_FOUND
     assert result.provider_attempts[0]["attempt_kind"] == "primary_rate_limit_wait"
-    assert result.provider_attempts[0]["provider_retry_after_ms"] == 3_000
+    assert result.provider_attempts[0]["provider_retry_after_ms"] == 1
+    assert result.provider_attempts[1]["provider_retry_after_ms"] == 1

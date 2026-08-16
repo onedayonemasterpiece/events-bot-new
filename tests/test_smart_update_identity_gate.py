@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import smart_event_update as su
+from models import Event
+from smart_event_update import EventCandidate
 from smart_update_identity import (
     IdentityGateAction,
     IdentityGateMode,
@@ -210,3 +213,39 @@ def test_recurring_different_date_is_not_blocked_by_vector_similarity_alone():
 
     assert not verdict.should_veto_create
     assert verdict.reason_code == "no_identity_veto"
+
+
+def test_canonical_parser_identity_veto_runs_typed_adjudicator(monkeypatch):
+    monkeypatch.setattr(su, "SMART_UPDATE_DEDUP_ADJUDICATOR", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    candidate = EventCandidate(
+        source_type="parser:qtickets",
+        source_url="https://kaliningrad.qtickets.events/251792-amalienau-dusha",
+        source_text="Экскурсия 17 августа в 13:30",
+        title="Экскурсия «Амалиенау — душа Калининграда»",
+        date="2026-08-17",
+        time="13:30",
+        location_name="Главный вход в Центральный парк",
+    )
+    owner = Event(
+        id=7602,
+        title=candidate.title,
+        date=candidate.date,
+        time=candidate.time,
+        location_name=candidate.location_name,
+    )
+
+    assert su._should_run_widened_dedup_adjudicator(
+        candidate=candidate,
+        match_event=None,
+        identity_gate_match=owner,
+        anchor_forced=False,
+        is_canonical_site=True,
+    )
+    assert not su._should_run_widened_dedup_adjudicator(
+        candidate=candidate,
+        match_event=None,
+        identity_gate_match=None,
+        anchor_forced=False,
+        is_canonical_site=True,
+    )

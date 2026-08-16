@@ -312,8 +312,14 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   two exposed exact provider-wait/parse-receipt preservation blockers.
 - [x] implement bounded same-claim provider Retry-After and immutable
   successful-receipt preservation with focused regression tests.
-- [ ] merge/deploy that live-qualification follow-up and re-drive exact inbox
-  19444/19488 to zero technical/unresolved outcomes.
+- [x] merge/deploy the live-qualification follow-up as PR #515 / Fly v1984;
+  exact receipt replay for 19488 then reached event 7694 without a duplicate
+  parse, but 19444 exposed repeated coarse provider throttles and the lifecycle
+  pre-pass exposed same-event source-row non-idempotency.
+- [x] implement the resulting bounded multi-throttle loop, same-event exact
+  source-row reuse and canonical-parser identity-adjudicator routing.
+- [ ] merge/deploy those final live residuals and re-drive inbox 19444 plus the
+  four run-6024 parser carriers to zero technical/unresolved outcomes.
 - [ ] run one
   S22 Telegram catch-up, bounded current/history VK drain and all-source parser
   catch-up, and require zero unexplained/technical outcomes plus verified new
@@ -368,6 +374,15 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   no-event / two `FAILED_TECHNICAL` / zero deferred. The remaining exact IDs
   are 19444 (provider TPM Retry-After) and 19488 (successful parse receipt
   hidden by later carrier terminal); neither is accepted as ingestion health;
+- PR #515 merged as `40ea51fba58f0fa9bd3a3d65a2d46dc9ea2556bb`
+  and was deployed from clean exact main as Fly v1984. Three `/healthz` probes
+  returned HTTP 200, Fly was 1/1, `quick_check=ok`, WAL was 148,352 bytes and
+  `/data` available was 1,149,550,592 bytes;
+- exact VK replay run 6038 processed two terminal rows: immutable parse replay
+  correctly imported/updated event 7694 for inbox 19488, while inbox 19444
+  remained technical because two consecutive coarse 1ms TPM throttles exceeded
+  the old one-retry implementation. This is evidence for the multi-throttle
+  same-claim correction, not a successful ingestion gate;
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
