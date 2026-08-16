@@ -6492,6 +6492,87 @@ def _apply_grounded_occurrence_scope_fallback(candidate: "EventCandidate") -> bo
     return True
 
 
+def _apply_source_anchored_occurrence_scope_fallback(candidate: "EventCandidate") -> bool:
+    """Recover one producer child from exact date/time/title source anchors.
+
+    Some source parsers keep a generated child summary in ``raw_excerpt``
+    rather than a verbatim source fragment.  The ordinary grounded fallback
+    must reject that summary because it contains no date.  When the upstream
+    parse is nevertheless a complete, typed positive result, we can safely
+    recover the *verbatim* source line without making another semantic
+    decision: require one and only one line under the target date heading that
+    contains the target time and is title-related to the already selected
+    child.  Shared venue/address text may then be appended verbatim.
+
+    This remains a grounding rail, not a regex event classifier.  Ambiguous
+    matches, inferred/default times, incomplete evidence and non-positive
+    producer results all fail closed.
+    """
+
+    if str(candidate.source_disposition or "").strip().upper() not in {
+        "EVENTS_FOUND",
+        "MIXED",
+    }:
+        return False
+    if candidate.source_evidence_complete is not True or candidate.time_is_default:
+        return False
+    target_date = _parse_iso_date(candidate.date)
+    target_time = _normalize_time_for_match(candidate.time)
+    corpus = str(candidate.source_text or "").strip()
+    if target_date is None or not target_time or not corpus or not candidate.title:
+        return False
+    try:
+        hour, minute = (int(part) for part in target_time.split(":", 1))
+    except (TypeError, ValueError):
+        return False
+    time_re = re.compile(
+        rf"(?<!\d)0?{hour}\s*[:.]\s*{minute:02d}(?!\d)",
+        flags=re.IGNORECASE,
+    )
+    target_pair = (target_date.day, target_date.month)
+    active_date_line: str | None = None
+    matches: list[tuple[str, str]] = []
+    for raw_line in corpus.splitlines():
+        line = str(raw_line or "").strip()
+        if not line:
+            continue
+        pairs = _extract_day_month_pairs(line)
+        if pairs:
+            active_date_line = line if target_pair in pairs else None
+        if (
+            active_date_line
+            and time_re.search(line)
+            and _titles_look_related(candidate.title, line)
+        ):
+            matches.append((active_date_line, line))
+    if len(matches) != 1:
+        return False
+
+    date_line, event_line = matches[0]
+    selected = [date_line]
+    if event_line != date_line:
+        selected.append(event_line)
+    place_values = [candidate.location_name, candidate.location_address]
+    if any(place_values):
+        common_lines = [
+            str(line or "").strip()
+            for line in corpus.splitlines()
+            if str(line or "").strip()
+            and any(
+                _source_supports_location_value(line, value)
+                for value in place_values
+                if value
+            )
+        ]
+        if not common_lines:
+            return False
+        common_line = common_lines[-1]
+        if common_line not in selected:
+            selected.append(common_line)
+    candidate.occurrence_scope_text = "\n".join(selected).strip()
+    return True
+
+
 def _restore_configured_telegram_location(candidate: "EventCandidate") -> bool:
     """Restore producer/configured venue evidence before semantic review."""
 
@@ -6608,22 +6689,30 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     if decision != "scoped" or confidence < 0.8:
         if _apply_grounded_occurrence_scope_fallback(candidate):
             return True, "grounded_producer_excerpt"
+        if _apply_source_anchored_occurrence_scope_fallback(candidate):
+            return True, "grounded_source_anchor"
         return False, f"llm_{decision or 'uncertain'}"
     excerpts = [str(x or "").strip() for x in (data.get("selected_excerpts") or []) if str(x or "").strip()]
     if not excerpts:
         if _apply_grounded_occurrence_scope_fallback(candidate):
             return True, "grounded_producer_excerpt"
+        if _apply_source_anchored_occurrence_scope_fallback(candidate):
+            return True, "grounded_source_anchor"
         return False, "llm_scoped_empty"
     corpus_norm = _norm_text_for_grounding(corpus)
     if any(_norm_text_for_grounding(x) not in corpus_norm for x in excerpts):
         if _apply_grounded_occurrence_scope_fallback(candidate):
             return True, "grounded_producer_excerpt"
+        if _apply_source_anchored_occurrence_scope_fallback(candidate):
+            return True, "grounded_source_anchor"
         return False, "llm_scope_not_verbatim"
     scoped = "\n".join(dict.fromkeys(excerpts)).strip()
     target_date = _parse_iso_date(candidate.date)
     if target_date and (target_date.day, target_date.month) not in _extract_day_month_pairs(scoped):
         if _apply_grounded_occurrence_scope_fallback(candidate):
             return True, "grounded_producer_excerpt"
+        if _apply_source_anchored_occurrence_scope_fallback(candidate):
+            return True, "grounded_source_anchor"
         return False, "llm_scope_missing_target_date"
     # Narrow grounding rail: when the full multi-occurrence source explicitly
     # contains the candidate city, the selected occurrence must preserve it.
@@ -6636,6 +6725,8 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     ):
         if _apply_grounded_occurrence_scope_fallback(candidate):
             return True, "grounded_producer_excerpt"
+        if _apply_source_anchored_occurrence_scope_fallback(candidate):
+            return True, "grounded_source_anchor"
         return False, "llm_scope_missing_target_city"
     candidate.occurrence_scope_text = scoped
     return True, "llm_scoped"

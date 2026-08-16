@@ -793,6 +793,16 @@ failure blocks automatic creation. This prevents performer/program facts from
 sibling dates being written into `event_source_fact`, descriptions, search
 digests and public projections.
 
+One narrow recovery is allowed after an LLM abstention: when a complete typed
+producer result already selected a positive child, Smart Update may construct
+the scope from one **unique verbatim** source line that matches the child's
+exact date heading, explicit time and related title, plus a verbatim shared
+venue/address line. This rail makes no eventness decision and fails closed for
+zero or multiple matches, default/inferred time, incomplete evidence or a
+non-positive producer result. It covers roundup parsers whose `raw_excerpt` is
+a generated summary rather than a literal source fragment without turning
+free-form regex matching into a semantic classifier.
+
 The cross-city safety rail considers a city explicit only as a standalone
 place token in the complete source and in the selected child excerpt. A
 regional adjective such as `Калининградская область` is not evidence that the

@@ -356,6 +356,9 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   technical outcomes.
 - [ ] run one S22 Telegram catch-up and require a complete carrier/child outcome
   balance plus verified new DB writes before reporting ingestion healthy.
+- [ ] deploy the exact-source roundup scope correction exposed by qualification
+  ops 6099, re-drive `wall-149955604_24253`, and repeat the bounded VK gate
+  until it has zero unexplained technical child outcomes.
 - [ ] static-site projection canary remains open but is explicitly deferred by
   the operator; it must not block the ingestion deployment and must not be
   silently marked complete.
@@ -509,6 +512,22 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   the same carrier claim. Unit/contract gate: 158 affected tests pass. Merge,
   deploy, exact replay of inbox 15304/17943/17991 and a fresh bounded scheduled
   qualification remain pending; no successful recovery is claimed yet.
+- PR #523 merged as
+  `3363d8c2d046214d4915f3a611da596262a0c046` and was deployed from clean exact
+  main as Fly v1992. Exact replay ops 6098 closed inbox 15304/17943/17991 as
+  three grounded product no-events with zero technical/deferred outcomes: two
+  used the independently limited Google poster-OCR fallback after the primary
+  daily budget was exhausted, and the video carrier used user-token
+  `video.get` plus a 437,269-byte inline MP4 analysis.
+- bounded VK qualification ops 6099 processed 15/15 terminal rows, created five
+  events (7724-7728), updated/merged four event ids and left zero deferred or
+  unresolved rows, but one of seven children from
+  `wall-149955604_24253` closed `FAILED_TECHNICAL` as
+  `occurrence_scope_review:llm_uncertain`. Six siblings completed. Readback
+  proves the missing child is a complete typed 14 August 20:00 `Руки Вверх!`
+  event under an exact source date heading/time/title, while the parser's
+  `raw_excerpt` is a generated summary without the date. This is failure
+  evidence and the VK health gate remains open.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;

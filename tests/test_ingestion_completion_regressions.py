@@ -36,6 +36,79 @@ def test_grounded_raw_excerpt_closes_digest_occurrence_scope() -> None:
     assert "Другой концерт" not in str(candidate.occurrence_scope_text)
 
 
+@pytest.mark.asyncio
+async def test_complete_vk_digest_child_uses_unique_verbatim_source_anchor_on_llm_abstention(
+    monkeypatch,
+) -> None:
+    source_text = (
+        "Планы на выходные — семь мероприятий.\n"
+        "14 августа (пятница):\n"
+        "20:00 опен-эйр вечеринка «Руки Вверх! И друзья», живой вокал и DJs.\n"
+        "21:00 Хиты рока от NEW VERSION в баре Бастион.\n"
+        "15 августа (суббота):\n"
+        "12:00 Фестиваль народного единства.\n"
+        "Бастион, ул. Судостроительная 6/1 (Культурный квартал «Понарт»)"
+    )
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-149955604_24253",
+        source_text=source_text,
+        raw_excerpt="Трибьют-вечеринка с хитами 90-х и живым вокалом.",
+        source_disposition="EVENTS_FOUND",
+        source_evidence_complete=True,
+        producer_ordinal=0,
+        title="Вечеринка «Руки Вверх! И друзья»",
+        date="2026-08-14",
+        time="20:00",
+        location_name="Понарт",
+        location_address="Судостроительная 6",
+        city="Калининград",
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "uncertain",
+            "confidence": 0.61,
+            "selected_excerpts": [],
+            "reason_short": "abstain",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_scope_candidate_occurrence(candidate) == (
+        True,
+        "grounded_source_anchor",
+    )
+    scoped = str(candidate.occurrence_scope_text)
+    assert "14 августа" in scoped
+    assert "20:00" in scoped
+    assert "Судостроительная 6/1" in scoped
+    assert "NEW VERSION" not in scoped
+    assert "Фестиваль народного единства" not in scoped
+
+
+def test_source_anchor_scope_fails_closed_for_two_matching_lines() -> None:
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_2",
+        source_text=(
+            "14 августа:\n"
+            "20:00 Концерт группы Север на первой сцене.\n"
+            "20:00 Концерт группы Север на второй сцене.\n"
+            "Адрес: Центральная 1."
+        ),
+        source_disposition="EVENTS_FOUND",
+        source_evidence_complete=True,
+        producer_ordinal=0,
+        title="Концерт группы Север",
+        date="2026-08-14",
+        time="20:00",
+        location_address="Центральная 1",
+    )
+
+    assert su._apply_source_anchored_occurrence_scope_fallback(candidate) is False
+    assert candidate.occurrence_scope_text is None
+
+
 def test_configured_telegram_location_repairs_bad_child_location() -> None:
     candidate = EventCandidate(
         source_type="telegram",
