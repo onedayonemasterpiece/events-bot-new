@@ -264,11 +264,15 @@ carrier may create a distinct Event.
 For that changed-packet path, an existing unique
 `(canonical_source_url, candidate_key)` binding is the authoritative owner of
 the child. Smart Update returns the edit to that Event before fuzzy title or
-venue matching. This is especially important for programme posts: a richer
-parse may rename `Рок-хиты` to `NEW VERSION`, but it must update the already
+venue matching and does not ask the generic merge-identity gate to reclassify
+an identity that the durable child binding already established. An exact title
+present in the changed child/source/OCR evidence may correct the title of that
+same Event even when the older title is unrelated. This is especially important
+for programme posts: a richer parse may rename `Рок-хиты` to `NEW VERSION` or
+repair `Большое кино` to the exact child `1+1`, but it must update the already
 accepted occurrence rather than try to create it again and end in
-`source_binding_conflict`. A different candidate key is not covered by this
-rule and continues through the normal sibling-event decision path.
+`source_binding_conflict`. Ungrounded titles and different candidate keys are
+not covered by this rule and continue through the normal safety/identity path.
 
 For the upstream VK parse receipt, provider-model identity is audit metadata,
 not replay identity. An unchanged packet with the same parse prompt version
