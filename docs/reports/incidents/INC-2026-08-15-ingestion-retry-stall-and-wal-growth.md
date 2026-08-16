@@ -544,8 +544,27 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   matching; a changed packet updates the same child while a different
   candidate key remains a distinct sibling. A production-shaped regression
   reproducing the `Рок-хиты` -> `NEW VERSION` title refinement is green, along
-  with 148 focused Smart/VK tests. Merge, exact-main deploy and exact carrier
-  replay remain pending.
+  with 148 focused Smart/VK tests. Its merge/deploy/replay receipt follows.
+- PR #525 merged as
+  `8e08db05ec4670ee2138ed7c01af55462e4fcb51` and was deployed from clean exact
+  main as Fly v1994. Exact VK replay ops 6115 processed the one carrier with
+  zero technical/deferred/unresolved rows: all seven children now have unique
+  authoritative bindings; states 7442/7447 merged back into events 7591/7539.
+- Telegram recovery import ops 6117 adopted the already-terminal COMPLETE
+  remote result without launching a second kernel. It processed 56 messages
+  (3 new raw + 53 forced replays), created 21 events and merged 64, with no
+  transport errors. It nevertheless left two proven real children as
+  `FAILED_TECHNICAL`: film `1+1` from `zaryakinoteatr/964` because a sibling
+  title had been written as venue before scope validation, and exhibition
+  `Цветные сны немолодого романтика` from `koihm/6041` because the nominative
+  catalogue venue did not match its ordinary Russian locative form in the
+  source. This is failure evidence; the Telegram gate remains open.
+- Follow-up prevention restores the configured/extracted Telegram venue before
+  multi-event scope validation, rejects sibling titles as venues, and accepts
+  an inflected multi-token venue only when every significant token is present
+  in source evidence. Focused regression tests cover both exact lost children.
+  Merge, exact-main deploy, bounded exact-carrier replay and the regular 21:40
+  UTC monitoring slot remain pending.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
