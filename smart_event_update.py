@@ -15025,6 +15025,21 @@ def _is_candidate_title_weak_for_llm_override(
     candidate: "EventCandidate",
     normalized_event_type: str | None,
 ) -> bool:
+    raw_title = str(title or "").strip()
+    # Symbolic/numbered titles such as the film ``1+1`` have no >=3-letter
+    # "meaningful" tokens, but they are not generic placeholders. If the exact
+    # compact title is present in the producer child/source/OCR evidence, keep
+    # it. Otherwise the generic-title recovery can rename the child to the
+    # surrounding programme (production event 7751 became ``Большое кино``).
+    if (
+        len(raw_title) <= 24
+        and re.search(r"[0-9+#&/]", raw_title)
+        and _source_supports_exact_child_title(
+            _candidate_location_grounding_corpus(candidate),
+            raw_title,
+        )
+    ):
+        return False
     if _is_generic_title_event_type_venue(
         title,
         event_type=normalized_event_type or candidate.event_type,

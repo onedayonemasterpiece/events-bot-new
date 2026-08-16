@@ -11,6 +11,9 @@ caller без typed source decision проходит существующий LL
 Решение владельца от 2026-08-15 заменяет automatic durable retry линейным
 контрактом: semantic verdict завершается в том же вызове, а provider/schema/DB/
 vector failure получает видимый `FAILED_TECHNICAL` и требует явного re-drive.
+Source-grounded compact symbolic/numbered titles (например `1+1`) являются
+identity-bearing названиями child, а не weak placeholder: title recovery не
+может заменять их названием окружающего дайджеста, фестиваля или программы.
 
 Для `INC-2026-08-15` граница полноты дополнительно закрывает известные
 ложно-технические исходы без ослабления LLM-first. Grounded producer excerpt

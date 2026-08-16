@@ -192,6 +192,32 @@ def test_inflected_source_venue_name_is_still_grounded() -> None:
     ) is True
 
 
+def test_exact_symbolic_film_title_is_not_recovered_to_programme_name() -> None:
+    """Production replay must keep film ``1+1``, not rename it ``Большое кино``."""
+
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/zaryakinoteatr/964",
+        source_text=(
+            "В программе: Интерстеллар, Волк с Уолл-стрит, 1+1, Леон.\n"
+            "16–23 августа · каждый вечер · большой зал «Зари»."
+        ),
+        raw_excerpt="18 августа 19:00 1+1. Большое кино в большом зале Зари.",
+        title="1+1",
+        date="2026-08-18",
+        time="19:00",
+        event_type="кинопоказ",
+        location_name="Заря",
+        city="Калининград",
+    )
+
+    assert su._is_candidate_title_weak_for_llm_override(
+        candidate.title,
+        candidate=candidate,
+        normalized_event_type="кинопоказ",
+    ) is False
+
+
 def test_source_grounded_allowlist_place_recovers_missing_city() -> None:
     candidate = EventCandidate(
         source_type="vk",

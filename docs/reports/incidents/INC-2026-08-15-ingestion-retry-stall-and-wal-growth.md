@@ -565,6 +565,18 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   in source evidence. Focused regression tests cover both exact lost children.
   Merge, exact-main deploy, bounded exact-carrier replay and the regular 21:40
   UTC monitoring slot remain pending.
+- PR #526 merged as
+  `fb0b7ce31c8a3501fc8e7dd6b2c8469c3b993415` and was deployed from clean exact
+  main as Fly v1995. The first exact state replay closed the original scope
+  failure and created event 7751, but exposed a later independent product bug:
+  generic-title recovery treated the exact film title `1+1` as weak and renamed
+  the event to the carrier programme `Большое кино`. Event 7751 is not accepted
+  as correct recovery evidence until the exact title is restored through the
+  ingestion boundary.
+- Follow-up prevention treats a compact symbolic/numbered title as authoritative
+  when that exact title is present in child/source/OCR evidence, so title
+  recovery cannot replace it with a sibling or programme title. Merge, deploy
+  and exact re-drive of state 7205/event 7751 remain pending.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
