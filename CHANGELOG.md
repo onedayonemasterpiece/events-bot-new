@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- **Exact short event titles:** source-grounded symbolic/numbered titles such
+  as the film `1+1` are no longer treated as generic placeholders and renamed
+  to the surrounding programme by title recovery.
 - **Telegram child completion:** configured Telegram venues are restored before
   multi-event scope validation, Russian inflected venue names count as exact
   source grounding, and a sibling event title can no longer be promoted to a
