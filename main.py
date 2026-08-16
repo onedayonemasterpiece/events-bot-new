@@ -3568,12 +3568,17 @@ async def vk_api(method: str, **params: Any) -> Any:
     # error, suppress every caller/provider value rather than logging draft
     # publication text, owner IDs, GUIDs or credential fragments.
     private_mcp_log_boundary = params.pop("_private_events_mcp_log_boundary", False) is True
+    force_user_actor = params.pop("_force_user_actor", False) is True
     service_allowed = method in VK_SERVICE_READ_METHODS or any(
         method.startswith(prefix) for prefix in VK_SERVICE_READ_PREFIXES
     )
     token: str | None = None
     kind: str | None = None
-    if VK_READ_VIA_SERVICE and VK_SERVICE_TOKEN and service_allowed:
+    forced_user_token = _vk_user_token() if force_user_actor else None
+    if forced_user_token:
+        token = forced_user_token
+        kind = "user"
+    elif VK_READ_VIA_SERVICE and VK_SERVICE_TOKEN and service_allowed:
         token = VK_SERVICE_TOKEN
         kind = "service"
     else:

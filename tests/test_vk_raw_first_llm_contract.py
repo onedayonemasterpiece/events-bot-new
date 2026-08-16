@@ -5,6 +5,7 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -1410,6 +1411,54 @@ async def test_successful_blank_ocr_counts_as_complete_evidence(tmp_path, monkey
     assert captured["unavailable_attachment_count"] == 0
     assert captured["ocr_complete"] is True
     assert captured["evidence_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_short_video_analysis_completes_same_attachment_evidence(tmp_path, monkeypatch):
+    db = await _db(tmp_path)
+    captured = {}
+
+    async def download_video(_urls):
+        return [(b"short-mp4", "clip.mp4")]
+
+    async def analyze_video(data, *, detail):
+        assert data == b"short-mp4"
+        assert detail == "video"
+        return SimpleNamespace(
+            title="Финал уже завершился",
+            text="Видео является фотоотчётом; будущего посещаемого события нет.",
+        )
+
+    async def provider(*_args, **kwargs):
+        captured["manifest"] = dict(kwargs["evidence_manifest"])
+        captured["poster_texts"] = list(kwargs["poster_texts"])
+        return {
+            "disposition": "CONFIRMED_NO_EVENT",
+            "events": [],
+            "lifecycle_actions": [],
+            "evidence_complete": True,
+            "parse_version": "source-parse-v1",
+            "no_event_reason": "RECAP_ONLY",
+        }
+
+    monkeypatch.setattr(vk_intake, "_download_video_evidence", download_video)
+    monkeypatch.setattr(vk_intake.poster_ocr, "recognize_video_evidence", analyze_video)
+    monkeypatch.setattr(main, "parse_event_via_llm", provider)
+
+    drafts, _ = await vk_intake.build_event_drafts(
+        "Завершился отборочный этап",
+        photos=[],
+        videos=["https://video.test/clip.mp4"],
+        attachment_count_hint=1,
+        db=db,
+    )
+
+    assert drafts.disposition is SourceDisposition.CONFIRMED_NO_EVENT
+    assert captured["manifest"]["attachment_count"] == 1
+    assert captured["manifest"]["ocr_blocks_available"] == 1
+    assert captured["manifest"]["unavailable_attachment_count"] == 0
+    assert captured["manifest"]["ocr_complete"] is True
+    assert any("фотоотчётом" in block for block in captured["poster_texts"])
 
 
 @pytest.mark.parametrize("legacy", [[], None, "malformed"])

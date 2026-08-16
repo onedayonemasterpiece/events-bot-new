@@ -156,6 +156,13 @@
   and Fly v1975 deployed exact main. Linear ingestion and compact static
   projection fixes are implemented but still require merge, deploy and
   controlled production recovery before closure.
+- **VK complete visual evidence:** when the primary poster-OCR daily budget is
+  exhausted, the already bounded Google OCR fallback now runs in the same
+  carrier claim instead of silently leaving one gallery item unavailable.
+  VK/OK video attachments now refresh through user-token `video.get` and feed
+  a bounded low-resolution MP4 to the same-claim Google multimodal evidence
+  pass, because signed preview images can all remain HTTP 404. No background
+  semantic retry or automatic product rejection is introduced.
 - **CherryFlash / Smart Update incident recovery:** recorded
   `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility`;
   terminal source-render Kaggle ledgers now reconcile stale `RENDERING`

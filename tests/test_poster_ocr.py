@@ -385,6 +385,44 @@ async def test_recognize_posters_uses_bounded_google_fallback_before_losing_evid
 
 
 @pytest.mark.asyncio
+async def test_recognize_posters_uses_google_fallback_when_primary_daily_budget_is_empty(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "fallback-after-limit.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(OcrUsage(date=poster_ocr._today_key(), spent_tokens=poster_ocr.DAILY_TOKEN_LIMIT))
+        await session.commit()
+    calls: list[str] = []
+
+    async def forbidden_primary(*_args, **_kwargs):
+        calls.append("primary")
+        raise AssertionError("primary provider must remain behind its daily limit")
+
+    async def successful_fallback(data, *, detail):
+        calls.append(f"fallback:{detail}:{data.decode()}")
+        return OcrResult(
+            text="полный текст афиши",
+            title="Афиша",
+            usage=OcrUsageStats(prompt_tokens=2, completion_tokens=3, total_tokens=5),
+            provider_model="gemini-3.1-flash-lite",
+        )
+
+    monkeypatch.setattr(poster_ocr, "run_ocr", forbidden_primary)
+    monkeypatch.setattr(poster_ocr, "_run_google_ocr_fallback", successful_fallback)
+    monkeypatch.setenv("POSTER_OCR_GOOGLE_FALLBACK_ENABLED", "1")
+
+    results, spent, remaining = await poster_ocr.recognize_posters(
+        db, [DummyPoster(b"poster")]
+    )
+
+    assert calls == ["fallback:auto:poster"]
+    assert [(item.text, item.title) for item in results] == [("полный текст афиши", "Афиша")]
+    assert spent == 0
+    assert remaining == 0
+
+
+@pytest.mark.asyncio
 async def test_recognize_posters_usage_resets_by_date(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

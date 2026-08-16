@@ -1875,6 +1875,64 @@ async def test_fetch_vk_post_text_and_photos_includes_repost_text(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_fetch_vk_post_resolves_expiring_video_to_inline_evidence_file(monkeypatch):
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_vk_api(method, **params):
+        calls.append((method, params))
+        if method == "wall.getById":
+            return {
+                "items": [
+                    {
+                        "id": 14766,
+                        "text": "Завершился отборочный этап",
+                        "date": 1760000000,
+                        "attachments": [
+                            {
+                                "type": "video",
+                                "video": {
+                                    "owner_id": -179910542,
+                                    "id": 456239978,
+                                    "title": "Clip",
+                                    "image": [
+                                        {"width": 720, "height": 1280, "url": "https://old/expired"}
+                                    ],
+                                },
+                            }
+                        ],
+                    }
+                ]
+            }
+        assert method == "video.get"
+        assert params["videos"] == "-179910542_456239978"
+        assert params["_force_user_actor"] is True
+        return {
+            "items": [
+                {
+                    "owner_id": -179910542,
+                    "id": 456239978,
+                    "image": [
+                        {"width": 720, "height": 1280, "url": "https://fresh/preview"}
+                    ],
+                    "files": {"mp4_144": "https://fresh/video.mp4"},
+                }
+            ]
+        }
+
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+
+    text, photos, _published_at, _metrics, status = (
+        await vk_auto_queue.fetch_vk_post_text_and_photos(179910542, 14766)
+    )
+
+    assert [method for method, _params in calls] == ["wall.getById", "video.get"]
+    assert "Завершился" in text and "Clip" in text
+    assert photos == []
+    assert status.ok is True
+    assert status.video_urls == ("https://fresh/video.mp4",)
+
+
+@pytest.mark.asyncio
 async def test_fetch_vk_post_retains_link_doc_video_semantics_but_counts_only_visual_candidates(
     monkeypatch,
 ):

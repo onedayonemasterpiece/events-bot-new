@@ -494,6 +494,21 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   evidence guard then correctly refused to guess `CONFIRMED_NO_EVENT`; this is
   failure evidence and keeps the ingestion gate open until the same-claim
   visual fallback is deployed and all three exact carriers are replayed.
+- PR #522 merged as
+  `ff6f264a64e2b3a4983031071d8f5ca5ff92c299` and was deployed from clean exact
+  main as Fly v1991. Fly was 1/1; three health probes returned HTTP 200; the
+  validation callback returned HTTP 400; `quick_check=ok`; WAL was 325,512
+  bytes and `/data` had about 1.10 GiB available. Exact replay ops 6093 still
+  closed all three carriers `FAILED_TECHNICAL`: the primary OCR daily budget
+  was already exhausted, so the provider-failure-only Google fallback was not
+  reached, and both stale and freshly resolved VK/OK preview URL families
+  returned HTTP 404. This is failure evidence, not recovery.
+- Follow-up prevention now treats a primary daily-budget refusal as an inline
+  fallback trigger and resolves short video evidence through user-token
+  `video.get` low-resolution MP4 plus one bounded Google multimodal analysis in
+  the same carrier claim. Unit/contract gate: 158 affected tests pass. Merge,
+  deploy, exact replay of inbox 15304/17943/17991 and a fresh bounded scheduled
+  qualification remain pending; no successful recovery is claimed yet.
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
