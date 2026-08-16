@@ -2775,6 +2775,33 @@ async def _process_vk_inbox_row(
                 source_post_url=source_url,
                 wait_for_telegraph_url=not inline_jobs_enabled,
                 producer_ordinal=producer_ordinal,
+                # Preserve the typed upstream source decision across the VK
+                # persist boundary. A specific child extracted from an
+                # EVENTS_FOUND/MIXED programme is already an event candidate;
+                # Smart Update must not reclassify the whole carrier digest as
+                # a product no-event.
+                source_disposition=str(
+                    getattr(
+                        getattr(decision, "disposition", None),
+                        "value",
+                        getattr(decision, "disposition", None),
+                    )
+                    or ""
+                )
+                or None,
+                source_parse_version=(
+                    str(getattr(decision, "parse_version", "") or "").strip()
+                    or None
+                ),
+                source_evidence_complete=getattr(
+                    decision, "evidence_complete", None
+                ),
+                source_verification_reasons=[
+                    str(getattr(reason, "value", reason))
+                    for reason in (
+                        getattr(decision, "verification_reasons", ()) or ()
+                    )
+                ],
             )
             took_one = time.monotonic() - t0
             persist_total_sec += float(took_one)

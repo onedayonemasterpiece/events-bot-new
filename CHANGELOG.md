@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- **VK programme-child boundary:** the typed `EVENTS_FOUND`/`MIXED` source
+  verdict now crosses the VK persist boundary into Smart Update, so a specific
+  extracted child is not rejected merely because its carrier contains several
+  events. `кинопоказ` is also treated as a generic format word, preventing
+  short distinct film titles in the same slot from becoming false duplicates.
 - **VK immutable parse replay across model routing:** unchanged source packets
   now reuse their successful prompt-version receipt even when the requested
   model is routed to, or later configured as, another provider model. This

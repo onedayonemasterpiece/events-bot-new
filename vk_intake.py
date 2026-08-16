@@ -4109,6 +4109,10 @@ async def persist_event_and_pages(
     holiday_tolerance_days: int | None = None,
     wait_for_telegraph_url: bool = True,
     producer_ordinal: int | None = None,
+    source_disposition: str | None = None,
+    source_parse_version: str | None = None,
+    source_evidence_complete: bool | None = None,
+    source_verification_reasons: Sequence[str] | None = None,
 ) -> PersistResult:
     """Store a drafted event and produce all public artefacts.
 
@@ -4187,6 +4191,10 @@ async def persist_event_and_pages(
         posters=posters,
         organizer_names=_curated_vk_event_organizers(vk_source_chat_id),
         producer_ordinal=producer_ordinal,
+        source_disposition=source_disposition,
+        source_parse_version=source_parse_version,
+        source_evidence_complete=source_evidence_complete,
+        source_verification_reasons=list(source_verification_reasons or ()),
     )
 
     update_result = await smart_event_update(
