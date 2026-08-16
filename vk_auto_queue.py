@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import math
@@ -542,6 +543,100 @@ def _extract_media_urls(item: Mapping[str, Any], *, limit: int = 12) -> list[str
     )
 
 
+def _iter_vk_video_payloads(value: Any):
+    """Yield mutable VK video payloads from a wall item and nested reposts."""
+
+    if isinstance(value, dict):
+        if value.get("type") == "video" and isinstance(value.get("video"), dict):
+            yield value["video"]
+        for child in value.values():
+            yield from _iter_vk_video_payloads(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _iter_vk_video_payloads(child)
+
+
+async def _refresh_vk_video_evidence(
+    main_mod: Any, item: Mapping[str, Any]
+) -> tuple[dict[str, Any], dict[tuple[int, int], str]]:
+    """Resolve expiring video evidence through VK's canonical video.get.
+
+    ``wall.getById`` can return stale signed OK CDN URLs even for a currently
+    readable post.  VK's object schema exposes ``image``/``first_frame`` but
+    does not promise durable URLs, so refresh every referenced video once,
+    inside the same bounded carrier invocation, before building the evidence
+    envelope.  Failure keeps the original payload and therefore remains
+    fail-closed at the ordinary evidence boundary.
+    """
+
+    refreshed_item = copy.deepcopy(dict(item))
+    payloads = list(_iter_vk_video_payloads(refreshed_item))
+    refs: list[str] = []
+    for payload in payloads:
+        try:
+            owner_id = int(payload.get("owner_id"))
+            video_id = int(payload.get("id"))
+        except (TypeError, ValueError):
+            continue
+        ref = f"{owner_id}_{video_id}"
+        access_key = str(payload.get("access_key") or "").strip()
+        if access_key:
+            ref = f"{ref}_{access_key}"
+        refs.append(ref)
+    if not refs:
+        return refreshed_item, {}
+    try:
+        # Service tokens expose metadata/previews but omit playable files.
+        # The configured user read token returns the low-resolution MP4 that
+        # can be analysed inline without borrowing any Telegram/Kaggle auth.
+        response = await main_mod.vk_api(
+            "video.get",
+            videos=",".join(dict.fromkeys(refs)),
+            _force_user_actor=True,
+        )
+    except Exception as exc:
+        logger.warning("vk_auto: video.get evidence refresh failed refs=%d err=%s", len(refs), exc)
+        return refreshed_item, {}
+    raw_items = response.get("items") if isinstance(response, Mapping) else None
+    if not isinstance(raw_items, list):
+        return refreshed_item, {}
+    by_identity: dict[tuple[int, int], Mapping[str, Any]] = {}
+    for fresh in raw_items:
+        if not isinstance(fresh, Mapping):
+            continue
+        try:
+            by_identity[(int(fresh.get("owner_id")), int(fresh.get("id")))] = fresh
+        except (TypeError, ValueError):
+            continue
+    refreshed = 0
+    video_files: dict[tuple[int, int], str] = {}
+    for payload in payloads:
+        try:
+            fresh = by_identity.get((int(payload.get("owner_id")), int(payload.get("id"))))
+        except (TypeError, ValueError):
+            fresh = None
+        if fresh is None:
+            continue
+        # Merge rather than replace: short-video responses sometimes omit the
+        # semantic title while still returning the refreshed preview families.
+        payload.update(dict(fresh))
+        files = fresh.get("files") if isinstance(fresh.get("files"), Mapping) else {}
+        file_url = next(
+            (
+                str(files[key]).strip()
+                for key in ("mp4_144", "mp4_240", "mp4_360")
+                if isinstance(files.get(key), str) and str(files.get(key)).strip()
+            ),
+            "",
+        )
+        if file_url:
+            video_files[(int(payload.get("owner_id")), int(payload.get("id")))] = file_url
+        refreshed += 1
+    if refreshed:
+        logger.info("vk_auto: refreshed video previews count=%d", refreshed)
+    return refreshed_item, video_files
+
+
 @dataclass(frozen=True)
 class VkFetchStatus:
     ok: bool
@@ -553,6 +648,7 @@ class VkFetchStatus:
     source_envelope: dict[str, Any] | None = None
     source_replayed: bool = False
     source_unavailable: bool = False
+    video_urls: tuple[str, ...] = ()
 
 
 def _vk_auto_allow_stale_inbox_text() -> bool:
@@ -647,6 +743,7 @@ async def fetch_vk_post_text_and_photos(
         ),
         items[0],
     )
+    item, video_files = await _refresh_vk_video_evidence(main_mod, item)
     envelope = build_vk_source_envelope(
         item,
         owner_id=int(group_id),
@@ -666,9 +763,27 @@ async def fetch_vk_post_text_and_photos(
     visual_count = int(counts.get("visual_candidate_count") or 0)
     unavailable_visual = int(counts.get("unavailable_visual_count") or 0)
     omitted_media = int(counts.get("omitted_media_count") or 0)
+    inventory = envelope.get("attachment_inventory")
+    resolved_video_previews: set[str] = set()
+    if isinstance(inventory, list):
+        for attachment in inventory:
+            if not isinstance(attachment, Mapping) or attachment.get("type") != "video":
+                continue
+            ids = attachment.get("ids") if isinstance(attachment.get("ids"), Mapping) else {}
+            try:
+                identity = (int(ids.get("owner_id")), int(ids.get("id")))
+            except (TypeError, ValueError):
+                continue
+            if identity in video_files and isinstance(attachment.get("preview_url"), str):
+                resolved_video_previews.add(str(attachment["preview_url"]))
+    image_urls = [
+        str(value)
+        for value in (envelope.get("photos") or ())
+        if str(value) not in resolved_video_previews
+    ]
     return (
         str(envelope.get("text") or ""),
-        [str(value) for value in (envelope.get("photos") or ())],
+        image_urls,
         published_at,
         dict(envelope.get("metrics") or {}) or None,
         VkFetchStatus(
@@ -679,6 +794,7 @@ async def fetch_vk_post_text_and_photos(
             attachment_count=visual_count + unavailable_visual,
             unavailable_attachment_count=unavailable_visual + omitted_media,
             source_envelope=envelope,
+            video_urls=tuple(video_files.values()),
         ),
     )
 
@@ -2439,6 +2555,7 @@ async def _process_vk_inbox_row(
                 unavailable_attachment_count_hint=int(
                     getattr(vk_fetch, "unavailable_attachment_count", 0) or 0
                 ),
+                videos=tuple(getattr(vk_fetch, "video_urls", ()) or ()),
                 db=db,
             )
             drafts = _adapt_vk_draft_result(

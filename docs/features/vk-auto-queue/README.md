@@ -16,6 +16,19 @@ sub-minute provider Retry-After не ожидался внутри VK claim, а 
 carrier terminal скрывал уже сохранённый успешный parse receipt. Эти границы
 остаются release-gate текущего открытого инцидента до повторного exact replay.
 
+Дополнительный production-аудит ops 6085/6093 доказал ещё две visual-evidence
+границы. Исчерпанный дневной бюджет primary poster OCR раньше не допускал уже
+реализованный Google fallback, а `wall.getById` возвращал для VK/OK video
+истёкшие preview URL (все варианты отвечали HTTP 404). Текущий linear contract
+поэтому требует: при исчерпанном primary budget выполнить один independently
+limited Google OCR в том же claim; для video выполнить один user-token
+`video.get`, взять минимальный доступный MP4 и проанализировать короткий файл
+Google multimodal inline. Видео не превращается в poster и не сохраняется как
+event media; его распознанный текст/аудио входит только в EvidenceManifest и
+LLM source decision. `VK_VIDEO_EVIDENCE_MAX_BYTES` ограничен 19 MiB hard cap
+(default 18 MiB). Ошибка download/analysis остаётся видимым technical terminal,
+а не ложным `CONFIRMED_NO_EVENT`.
+
 ## Граница покрытия
 
 В обработку попадает каждый пост, который crawler фактически получил из
@@ -31,7 +44,7 @@ admission. `no_keywords`, `no_date`, `past_event`, `too_far`, historical/admin,
 VK API fetch
   -> vk_source_packet (commit)
   -> vk_inbox due state
-  -> attachments/OCR + EvidenceManifest
+  -> attachments/OCR + bounded inline short-video evidence + EvidenceManifest
   -> SourceParseDecision
   -> one bounded sub-minute provider Retry-After inside the same claim
   -> optional contradiction verifier

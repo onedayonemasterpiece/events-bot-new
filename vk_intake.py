@@ -2187,6 +2187,54 @@ async def _download_photo_media(urls: Sequence[str]) -> list[tuple[bytes, str]]:
     return results
 
 
+async def _download_video_evidence(urls: Sequence[str]) -> list[tuple[bytes, str]]:
+    """Download bounded short MP4 evidence for same-invocation Gemini analysis."""
+
+    if not urls:
+        return []
+    import sys
+
+    main_mod = sys.modules.get("main") or sys.modules.get("__main__")
+    if main_mod is None:  # pragma: no cover - defensive
+        raise RuntimeError("main module not found")
+    session = main_mod.get_http_session()
+    semaphore = main_mod.HTTP_SEMAPHORE
+    timeout = main_mod.HTTP_TIMEOUT
+    try:
+        max_size = int(os.getenv("VK_VIDEO_EVIDENCE_MAX_BYTES", str(18 * 1024 * 1024)))
+    except ValueError:
+        max_size = 18 * 1024 * 1024
+    max_size = max(1024 * 1024, min(max_size, 19 * 1024 * 1024))
+    results: list[tuple[bytes, str]] = []
+    for idx, url in enumerate(urls):
+        try:
+            async with semaphore:
+                async with asyncio.timeout(timeout):
+                    async with session.get(
+                        url,
+                        headers={"User-Agent": getattr(main_mod, "VK_BROWSER_USER_AGENT", "Mozilla/5.0")},
+                    ) as resp:
+                        resp.raise_for_status()
+                        content_type = str(resp.headers.get("Content-Type") or "").casefold()
+                        if content_type and "video" not in content_type and "octet-stream" not in content_type:
+                            raise ValueError(f"unexpected video content type: {content_type}")
+                        if resp.content_length and int(resp.content_length) > max_size:
+                            raise ValueError("video evidence file too large")
+                        buf = bytearray()
+                        async for chunk in resp.content.iter_chunked(128 * 1024):
+                            buf.extend(chunk)
+                            if len(buf) > max_size:
+                                raise ValueError("video evidence file too large")
+            payload = bytes(buf)
+            if not payload:
+                raise ValueError("empty video evidence")
+            results.append((payload, f"vk_video_{idx + 1}.mp4"))
+            logging.info("vk.video_evidence downloaded idx=%d bytes=%d", idx, len(payload))
+        except Exception as exc:
+            logging.warning("vk.video_evidence download_failed idx=%d error=%s", idx, exc)
+    return results
+
+
 async def vk_intake_parse_llm(
     prompt_text: str,
     *,
@@ -2198,6 +2246,7 @@ async def vk_intake_parse_llm(
     rate_limit_max_wait_sec: float | int | str | None = None,
     parse_gemma_model: str | None = None,
     evidence_manifest: EvidenceManifest | None = None,
+    additional_ocr_blocks: Sequence[str] | None = None,
 ) -> Any:
     """Parse a VK post text into structured events using the universal LLM parser.
 
@@ -2212,9 +2261,15 @@ async def vk_intake_parse_llm(
 
     parse_kwargs: dict[str, Any] = {}
     poster_items = list(poster_media or [])
+    raw_poster_texts = collect_poster_texts(poster_items)
+    raw_poster_texts.extend(
+        str(value).strip()
+        for value in (additional_ocr_blocks or ())
+        if isinstance(value, str) and str(value).strip()
+    )
     poster_texts = _budget_vk_parse_poster_texts(
         source_text if source_text is not None else prompt_text,
-        collect_poster_texts(poster_items),
+        raw_poster_texts,
     )
     poster_summary = build_poster_summary(poster_items)
     if poster_texts:
@@ -2266,6 +2321,7 @@ async def build_event_drafts_from_vk(
     rate_limit_max_wait_sec: float | int | str | None = None,
     parse_gemma_model: str | None = None,
     evidence_manifest: EvidenceManifest | None = None,
+    additional_ocr_blocks: Sequence[str] | None = None,
 ) -> tuple[list[EventDraft], dict[str, Any] | None]:
     """Return normalised event drafts extracted from a VK post.
 
@@ -2287,6 +2343,11 @@ async def build_event_drafts_from_vk(
     timings_on = (os.getenv("PIPELINE_TIMINGS") or "").strip().lower() in {"1", "true", "yes", "on"}
     poster_items = list(poster_media or [])
     poster_texts = collect_poster_texts(poster_items)
+    poster_texts.extend(
+        str(value).strip()
+        for value in (additional_ocr_blocks or ())
+        if isinstance(value, str) and str(value).strip()
+    )
     poster_summary = build_poster_summary(poster_items)
     evidence_manifest = evidence_manifest or EvidenceManifest.complete_source(
         text or "", poster_texts, attachment_count=len(poster_items)
@@ -2439,6 +2500,7 @@ async def build_event_drafts_from_vk(
         rate_limit_max_wait_sec=rate_limit_max_wait_sec,
         parse_gemma_model=parse_gemma_model,
         evidence_manifest=evidence_manifest,
+        additional_ocr_blocks=additional_ocr_blocks,
     )
     if timings_on:
         try:
@@ -3238,6 +3300,7 @@ async def build_event_drafts(
     text: str,
     *,
     photos: Sequence[str] | None = None,
+    videos: Sequence[str] | None = None,
     source_name: str | None = None,
     location_hint: str | None = None,
     default_time: str | None = None,
@@ -3269,6 +3332,17 @@ async def build_event_drafts(
     t0 = time.monotonic()
     photo_bytes = await _download_photo_media(photos or [])
     _tmark("download_photos", time.monotonic() - t0)
+    t0 = time.monotonic()
+    video_bytes = await _download_video_evidence(videos or [])
+    _tmark("download_videos", time.monotonic() - t0)
+    video_evidence_results: list[poster_ocr.OcrResult] = []
+    for payload, _name in video_bytes:
+        try:
+            video_evidence_results.append(
+                await poster_ocr.recognize_video_evidence(payload, detail="video")
+            )
+        except Exception as exc:
+            logging.warning("vk.video_evidence analysis_failed error=%s", exc, exc_info=True)
     poster_items: list[PosterMedia] = []
     # This flag participates in the source-level evidence verdict even when a
     # post has no downloadable photos.  Keep it explicitly initialised rather
@@ -3350,26 +3424,41 @@ async def build_event_drafts(
                 db, [], log_context=ocr_log_context
             )
     photo_urls = list(photos or ())
+    video_urls = list(videos or ())
     ocr_blocks = collect_poster_texts(poster_items)
+    video_evidence_blocks = [
+        "\n".join(part for part in (result.title, result.text) if (part or "").strip()).strip()
+        for result in video_evidence_results
+    ]
+    video_evidence_blocks = [value for value in video_evidence_blocks if value]
     # A successful OCR result is an evidence unit even when the image contains
     # no readable text. ``collect_poster_texts`` intentionally omits empty text
     # from the prompt, so it cannot be used to decide whether OCR ran. Doing so
     # made blank-success posters look permanently unavailable and sent the same
     # VK carriers through the retry queue forever.
-    ocr_processed_count = min(len(photo_bytes), len(ocr_results)) if photo_bytes else 0
-    attachment_count = max(len(photo_urls), int(attachment_count_hint or 0))
+    image_processed_count = min(len(photo_bytes), len(ocr_results)) if photo_bytes else 0
+    video_processed_count = min(len(video_bytes), len(video_evidence_results)) if video_bytes else 0
+    ocr_processed_count = image_processed_count + video_processed_count
+    attachment_count = max(
+        len(photo_urls) + len(video_urls), int(attachment_count_hint or 0)
+    )
     unavailable_count = max(
         int(unavailable_attachment_count_hint or 0),
-        max(0, attachment_count - len(photo_bytes)),
+        max(0, attachment_count - len(photo_bytes) - len(video_bytes)),
     )
-    missing_ocr_count = max(0, len(photo_bytes) - ocr_processed_count)
+    missing_ocr_count = max(0, len(photo_bytes) - image_processed_count) + max(
+        0, len(video_bytes) - video_processed_count
+    )
+    ocr_failed = bool(ocr_failed or missing_ocr_count or unavailable_count)
     evidence_manifest = EvidenceManifest(
         raw_text_chars=len(text or ""),
         raw_text_hash=hashlib.sha256((text or "").encode("utf-8")).hexdigest(),
         attachment_count=attachment_count,
         ocr_blocks_available=ocr_processed_count,
         ocr_blocks_included=ocr_processed_count,
-        included_chars=len(text or "") + sum(len(block) for block in ocr_blocks),
+        included_chars=len(text or "") + sum(
+            len(block) for block in [*ocr_blocks, *video_evidence_blocks]
+        ),
         omitted_blocks=tuple(
             f"attachment:{idx}:ocr_unavailable" for idx in range(missing_ocr_count)
         ),
@@ -3394,6 +3483,7 @@ async def build_event_drafts(
         rate_limit_max_wait_sec=rate_limit_max_wait_sec,
         parse_gemma_model=parse_gemma_model,
         evidence_manifest=evidence_manifest,
+        additional_ocr_blocks=video_evidence_blocks,
     )
     _tmark("build_drafts_from_vk_total", time.monotonic() - t_all)
     for draft in drafts:

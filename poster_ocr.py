@@ -56,8 +56,13 @@ def _parse_ocr_json(raw: str) -> tuple[str, str]:
     return text.strip(), title.strip()
 
 
-async def _run_google_ocr_fallback(data: bytes, *, detail: str) -> OcrResult:
-    """Use one separately limited multimodal provider after primary OCR exhausts.
+async def _run_google_media_evidence(
+    data: bytes,
+    *,
+    detail: str,
+    mime_type: str,
+) -> OcrResult:
+    """Use one separately limited multimodal provider for visual evidence.
 
     The fallback stays inside the same source-row invocation.  It is not a
     background retry and therefore cannot strand an event-bearing poster in a
@@ -109,17 +114,25 @@ async def _run_google_ocr_fallback(data: bytes, *, detail: str) -> OcrResult:
         "required": ["poster_ocr_text", "ocr_title"],
         "additionalProperties": False,
     }
+    media_instruction = (
+        "Распознай весь видимый текст."
+        if mime_type.startswith("image/")
+        else (
+            "Проанализируй видео целиком: распознай видимый и произнесённый текст, "
+            "даты, время, место и явно показанные сведения о событии."
+        )
+    )
     raw, usage = await client.generate_content_async(
         model=model,
         prompt=[
             {
                 "inline_data": {
-                    "mime_type": _image_mime(data),
+                    "mime_type": mime_type,
                     "data": data,
                 }
             },
             (
-                "Распознай весь видимый текст. Верни только JSON: "
+                f"{media_instruction} Верни только JSON: "
                 '{"poster_ocr_text":"...","ocr_title":"..."}. '
                 "ocr_title — крупнейший смысловой заголовок; если его нет, "
                 f"верни пустую строку. detail={detail}."
@@ -145,6 +158,26 @@ async def _run_google_ocr_fallback(data: bytes, *, detail: str) -> OcrResult:
         ),
         request_id=usage.provider_response_id or usage.provider_request_id,
         provider_model=model,
+    )
+
+
+async def _run_google_ocr_fallback(data: bytes, *, detail: str) -> OcrResult:
+    """Use Google after the bounded primary image OCR path is unavailable."""
+
+    return await _run_google_media_evidence(
+        data,
+        detail=detail,
+        mime_type=_image_mime(data),
+    )
+
+
+async def recognize_video_evidence(data: bytes, *, detail: str = "video") -> OcrResult:
+    """Extract event-bearing evidence from one short inline MP4, once."""
+
+    return await _run_google_media_evidence(
+        data,
+        detail=detail,
+        mime_type="video/mp4",
     )
 
 
@@ -293,12 +326,20 @@ async def recognize_posters(
                 cache_hits += 1
                 continue
 
+            primary_error: Exception | None = None
             if block_new_requests:
-                encountered_uncached_after_limit = True
-                blocked_uncached_count += 1
-                continue
-
+                primary_error = PosterOcrLimitExceededError(
+                    "primary poster OCR daily token limit exhausted",
+                    spent_tokens=spent_before,
+                    remaining=0,
+                )
+                if not _google_fallback_enabled():
+                    encountered_uncached_after_limit = True
+                    blocked_uncached_count += 1
+                    continue
             try:
+                if primary_error is not None:
+                    raise primary_error
                 ocr_result = await run_ocr(data, model=model, detail=detail)
             except Exception as primary_exc:
                 if _google_fallback_enabled():
@@ -316,6 +357,9 @@ async def recognize_posters(
                         # the caller will keep the evidence manifest incomplete
                         # rather than silently declaring a no-event.
                         failed_uncached_count += 1
+                        if block_new_requests:
+                            encountered_uncached_after_limit = True
+                            blocked_uncached_count += 1
                         logger.error(
                             "poster_ocr.image_failed hash=%s primary_error=%s fallback_error=%s",
                             digest,
