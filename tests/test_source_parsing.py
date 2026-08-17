@@ -116,6 +116,22 @@ class TestParseTheatreJson:
         assert len(events) == 1
         assert events[0].title == "Valid Event"
 
+    def test_tretyakov_preserves_explicit_no_dates_disposition(self):
+        events = parse_theatre_json(
+            {
+                "title": "Россия — пути времени",
+                "date_raw": "",
+                "ticket_status": "available",
+                "url": "https://ticketstret.gallery/event/example",
+                "source_type": "no_dates",
+            },
+            "tretyakov",
+        )
+
+        assert len(events) == 1
+        assert events[0].source_type == "tretyakov"
+        assert events[0].source_disposition == "no_dates"
+
 
 class TestNormalizeLocationName:
     """Tests for location name normalization."""

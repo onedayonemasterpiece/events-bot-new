@@ -7,6 +7,11 @@
   prevents parser/Smart Update acknowledgements and recovery-ledger writes
   from cascading into `database is locked` / `candidate_state_unavailable`
   after an unrelated concurrent `BEGIN IMMEDIATE`.
+- Fixed: Tretyakov catalogue rows explicitly classified by the producer as
+  `no_dates` now retain that evidence and finish as a visible
+  `confirmed_no_active_schedule` product outcome. They no longer enter an
+  endless `missing_date` recovery loop; an unexplained missing date remains a
+  fail-closed technical result.
 
 - Fixed: Telegram Smart Update now accepts a maintained configured source venue as LLM-visible grounding when a post omits the full venue but names no conflicting place. A concrete identity-gate owner also reaches the typed same/distinct adjudicator even under an existing source anchor, and filtered replays preserve the producer's original child ordinal instead of aliasing it to child zero; real programme children therefore cannot disappear into an unexplained technical terminal or sibling binding.
 

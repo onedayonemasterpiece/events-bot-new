@@ -135,6 +135,10 @@ class TheatreEvent:
     age_restriction: str = ""
     scene: str = ""
     source_type: str = ""  # 'main', 'sobor', etc.
+    # Producer-side disposition is separate from the canonical source name.
+    # Tretyakov uses ``no_dates`` only after its calendar and detail-page
+    # checks both prove that the catalogue item has no active occurrence.
+    source_disposition: str = ""
     
     # Parsed date/time
     parsed_date: Optional[str] = None  # ISO format YYYY-MM-DD
@@ -277,6 +281,7 @@ def parse_theatre_json(json_data: str | list | dict, source_name: str = "") -> l
             age_restriction=item.get("age_restriction", "") or "",
             scene=item.get("scene", "") or "",
             source_type=source_name,
+            source_disposition=str(item.get("source_type") or "").strip().lower(),
             parsed_date=parsed_date,
             parsed_time=parsed_time,
             ticket_price_min=item.get("ticket_price_min"),

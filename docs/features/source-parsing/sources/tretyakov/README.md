@@ -123,14 +123,22 @@ CSS селектор: `div.item.active`
 | `scripts/debug/debug_tretyakov_v2.py` | Локальный тест-скрипт |
 | `kaggle/ParseTheatres/parse_theatres.ipynb` | Ноутбук Kaggle |
 
-### Поля источника (`source`)
+### Поля диспозиции каталога (`source_type`)
 
 | Значение | Описание |
 |----------|----------|
 | `direct_url_date` | Дата из URL кнопки "Купить билет" (Pianissimo) |
 | `all_dates_extracted` | Все даты из календаря виджета |
-| `detail_page_fallback` | Дата с детальной страницы (запасной вариант) |
+| `detail_fallback` | Дата с детальной страницы (запасной вариант) |
 | `no_dates` | Дат не найдено |
+
+Host-адаптер хранит это поле отдельно от канонического
+`source_type=tretyakov`. `no_dates` означает, что и календарь билетного
+виджета, и detail page не дали активной даты. Такой item
+завершается явным product outcome `confirmed_no_active_schedule`,
+считается в `events_confirmed_no_event` и не создаёт бесконечный
+`missing_date` recovery. Обычное отсутствие даты без `no_dates` по-
+прежнему fail-closed и требует recovery.
 
 ---
 

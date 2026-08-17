@@ -243,6 +243,7 @@ class SourceParsingStats:
     new_added: int = 0
     ticket_updated: int = 0
     already_exists: int = 0
+    confirmed_no_event: int = 0
     failed: int = 0
     skipped: int = 0  # Explicitly skipped by Smart Update (e.g. no changes / promo filters)
     retry_scheduled: int = 0
@@ -337,6 +338,9 @@ def _source_parsing_ops_metrics(result: SourceParsingResult) -> dict[str, int | 
         "events_created": sum(int(stats.new_added or 0) for stats in stats_values),
         "events_updated": sum(int(stats.ticket_updated or 0) for stats in stats_values),
         "events_unchanged": sum(int(stats.already_exists or 0) for stats in stats_values),
+        "events_confirmed_no_event": sum(
+            int(stats.confirmed_no_event or 0) for stats in stats_values
+        ),
         "events_failed": sum(int(stats.failed or 0) for stats in stats_values),
         "events_skipped": sum(int(stats.skipped or 0) for stats in stats_values),
         "retry_scheduled": sum(int(stats.retry_scheduled or 0) for stats in stats_values),
@@ -1856,6 +1860,7 @@ async def format_parsing_report(
     total_updated = 0
     total_failed = 0
     total_skipped = 0
+    total_confirmed_no_event = 0
     total_retry_scheduled = 0
     
     for source, stats in result.stats_by_source.items():
@@ -1863,6 +1868,7 @@ async def format_parsing_report(
         total_updated += stats.ticket_updated
         total_failed += stats.failed
         total_skipped += stats.skipped
+        total_confirmed_no_event += stats.confirmed_no_event
         total_retry_scheduled += stats.retry_scheduled
         
         # Use descriptive labels if available
@@ -1886,6 +1892,10 @@ async def format_parsing_report(
             )
         if stats.skipped:
             lines.append(f"  ⏭️ Пропущено: {stats.skipped}")
+        if stats.confirmed_no_event:
+            lines.append(
+                f"  ℹ️ Нет активной даты: {stats.confirmed_no_event}"
+            )
         if stats.retry_scheduled:
             lines.append(f"  🔁 Повтор назначен: {stats.retry_scheduled}")
     
@@ -1896,6 +1906,10 @@ async def format_parsing_report(
         lines.append(f"🔄 Всего обновлено: {total_updated}")
     if total_failed:
         lines.append(f"❌ Всего ошибок: {total_failed}")
+    if total_confirmed_no_event:
+        lines.append(
+            f"ℹ️ Без активной даты: {total_confirmed_no_event}"
+        )
     if total_retry_scheduled:
         lines.append(f"🔁 Всего автоматических повторов: {total_retry_scheduled}")
     
@@ -2803,6 +2817,7 @@ async def run_source_parsing(
                 "processed": int(stats.total_received),
                 "new_events": int(stats.new_added),
                 "updated_events": int(stats.ticket_updated + stats.already_exists),
+                "confirmed_no_event": int(stats.confirmed_no_event),
                 "failed": int(stats.failed),
                 "skipped": int(stats.skipped),
                 "retry_scheduled": int(stats.retry_scheduled),
@@ -3006,6 +3021,22 @@ async def process_source_events(
                 logger.warning("source_parsing: failed to update progress: %s", e)
         
         if not event.parsed_date:
+            source_disposition = str(
+                getattr(event, "source_disposition", "") or ""
+            ).strip().lower()
+            if source == "tretyakov" and source_disposition == "no_dates":
+                stats.confirmed_no_event += 1
+                result_tag = "confirmed_no_active_schedule"
+                logger.info(
+                    "source_parsing: event_result source=%s title=%s "
+                    "result=%s producer_disposition=%s duration=%.2fs",
+                    source,
+                    event.title[:80],
+                    result_tag,
+                    source_disposition,
+                    time.monotonic() - event_start,
+                )
+                continue
             logger.warning(
                 "source_parsing: skipping event without date title=%s",
                 event.title,

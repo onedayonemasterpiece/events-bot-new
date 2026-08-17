@@ -86,6 +86,13 @@ reader is not exposed.
   `candidate_state_unavailable`, and the Tretyakov missing-date recovery write
   also fails. Runtime mirror traces show `database is locked` only on the
   cached raw connection while ordinary ORM parser writes continue.
+- 2026-08-17 — the same run exposes one separate product-state loss:
+  Tretyakov's producer had already marked `РОССИЯ - ПУТИ ВРЕМЕНИ (12+)` as
+  `no_dates` after checking both its calendar and detail page, but the host
+  adapter discarded that disposition and scheduled a generic `missing_date`
+  retry. The adapter now preserves the producer evidence and reports a
+  separate `confirmed_no_active_schedule` terminal; unknown missing dates
+  remain fail-closed.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
@@ -220,6 +227,11 @@ reader is not exposed.
     contended shared connection and failed immediately. This is the same
     transaction-ownership class recorded by the July 27 parser incident, but
     the unsafe primitive remained available globally.
+13. The Tretyakov notebook encoded a closed `no_dates` disposition, but
+    `parse_theatre_json()` overwrote the producer's `source_type` with the host
+    source name. The handler could therefore see only a missing date and
+    created a recovery request for a catalogue item already proven to have no
+    active occurrence.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -361,6 +373,10 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   file-backed `Database.raw_conn()` call; focused DB/Smart/parser regression
   tests cover both generic transaction isolation and accepted-state
   acknowledgement waiting behind an unrelated writer.
+- [x] preserve Tretyakov's explicit `no_dates` producer disposition separately
+  from the canonical source name and terminalize it as a visible no-active-
+  schedule product outcome; regression tests keep unexplained missing dates
+  fail-closed.
 - [ ] deploy the raw-connection isolation from exact main, reconcile the open
   ops-6167 attempt, and replay all seven Sobor/Tretyakov technical outcomes to
   accepted create/merge/no-op or an evidence-backed product exclusion with no

@@ -82,6 +82,14 @@ ordinal — только tie-breaker. Поэтому перестановка si
 Update semantic/identity/provider результат является видимой terminal failure
 текущего run и не создаёт новый durable Smart retry loop.
 
+Единственный missing-date product terminal для official parser требует
+явного producer evidence. Для Третьяковки `source_disposition=no_dates`
+означает, что билетный календарь и detail page оба проверены и
+не содержат активной даты. Только тогда item терминализируется
+как `confirmed_no_active_schedule`; missing date без этой диспозиции остаётся
+технической ошибкой. `ops_run` и Telegram-отчёт показывают этот
+счётчик отдельно от created/merged/failed.
+
 ### Каноничность сайта (/parse) при конфликтах
 
 Источник сайта/парсера считается **каноническим** (trust high):
