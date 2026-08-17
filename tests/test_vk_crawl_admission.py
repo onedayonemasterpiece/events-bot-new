@@ -393,7 +393,9 @@ async def test_blank_visual_post_is_kept_for_later_ocr_without_text_only_llm(
 
 
 @pytest.mark.asyncio
-async def test_text_only_llm_cannot_reject_unseen_visual_evidence(tmp_path, monkeypatch):
+async def test_grounded_llm_can_reject_dispositive_text_despite_visual_media(
+    tmp_path, monkeypatch
+):
     db = await _db(tmp_path)
     client = _AdmissionClient({"decisions": [{
         "id": "1:55",
@@ -422,8 +424,46 @@ async def test_text_only_llm_cannot_reject_unseen_visual_evidence(tmp_path, monk
         packet = await (await conn.execute(
             "SELECT admission_reason FROM vk_source_packet WHERE post_id=55"
         )).fetchone()
+    assert inbox is None
+    assert packet == ("llm_non_event",)
+    assert stats["admission_rejected"] == 1
+    assert stats["admission_fail_open"] == 0
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_text_with_unseen_visual_evidence_still_fails_open(
+    tmp_path, monkeypatch
+):
+    db = await _db(tmp_path)
+    client = _AdmissionClient({"decisions": [{
+        "id": "1:56",
+        "outcome": "UNCERTAIN",
+        "confidence": 0.51,
+        "evidence_quote": "",
+        "reason": "poster_may_contain_event",
+    }]})
+    monkeypatch.setattr(vk_intake, "_get_vk_crawl_admission_client", lambda: client)
+
+    stats = await _crawl(
+        db,
+        monkeypatch,
+        [{
+            "date": int(time.time()),
+            "post_id": 56,
+            "text": "Подробности смотрите на прикреплённой афише.",
+            "photos": ["https://example.test/poster.jpg"],
+        }],
+    )
+
+    async with db.raw_conn() as conn:
+        inbox = await (await conn.execute(
+            "SELECT status FROM vk_inbox WHERE post_id=56"
+        )).fetchone()
+        packet = await (await conn.execute(
+            "SELECT admission_reason FROM vk_source_packet WHERE post_id=56"
+        )).fetchone()
     assert inbox == ("pending",)
-    assert packet == ("fail_open_unseen_visual_evidence",)
+    assert packet == ("fail_open_llm_uncertain",)
     assert stats["admission_fail_open"] == 1
 
 

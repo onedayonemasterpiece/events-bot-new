@@ -593,6 +593,14 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   `PAST_ONLY/NON_EVENT` outside the queue; all uncertainty/visual/provider/schema
   cases fail-open. The continuation path uses the same gate, and a bounded
   operator entrypoint requalifies legacy pending rows without parsing Events.
+- [x] deploy the first admission release as Fly v2008 at exact main
+  `c156839debd367493778f1059c7e81e5b87a1000`; three public health probes were
+  ready with DB/disk OK, SQLite `quick_check=ok`, WAL zero and about 1033 MiB
+  free. The first bounded recovery samples exposed a real acceptance bug: both
+  newest and oldest 20-row batches rejected 0 rows because the code overrode
+  grounded LLM decisions whenever any visual attachment existed (24/40 rows
+  failed open for this reason/uncertainty). Keep the incident open and remove
+  that blanket veto before continuing the backlog drain.
 - [ ] merge/deploy the VK admission gate from exact main, requalify the legacy
   pending cohort in bounded batches, then prove on a real crawl and subsequent
   separate scheduled auto-import that queue size/no-event share fall while all

@@ -41,12 +41,14 @@ immutable `vk_source_packet`. Но в дорогую очередь `vk_inbox` �
    пропускается, потому что его смысл ещё скрыт в афише.
 2. Если детерминистика не смогла уверенно подтвердить пост, небольшой LLM batch
    решает только `ADMIT | PAST_ONLY | NON_EVENT | UNCERTAIN`.
-3. Только grounded `PAST_ONLY/NON_EVENT` с confidence `>=0.90` и дословной
-   цитатой, при отсутствии нерассмотренных visual attachments, получает
-   terminal admission receipt и **не входит** в `vk_inbox`.
-4. `ADMIT`, `UNCERTAIN`, invalid schema, timeout/provider failure или unseen
-   visual evidence fail-open в `vk_inbox`, чтобы admission не мог потерять
-   реальное событие.
+3. Grounded `PAST_ONLY/NON_EVENT` с confidence `>=0.90` и дословной цитатой
+   получает terminal admission receipt и **не входит** в `vk_inbox`, даже если
+   у поста есть media: приложенная картинка не отменяет доказательный текст.
+   Если содержимое непроверенной афиши способно изменить решение, LLM обязан
+   вернуть `UNCERTAIN`, и такой пост сохраняется в очереди.
+4. `ADMIT`, `UNCERTAIN`, invalid schema, timeout/provider failure или реально
+   неоднозначное visual evidence fail-open в `vk_inbox`, чтобы admission не мог
+   потерять реальное событие.
 
 Это не авторазбор: crawler лишь собирает, проверяет допуск и формирует очередь.
 Отдельный scheduled `vk_auto_import` позднее берёт bounded batch из `vk_inbox`,
