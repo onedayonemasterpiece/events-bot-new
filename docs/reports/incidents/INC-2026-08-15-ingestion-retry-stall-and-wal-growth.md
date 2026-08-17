@@ -610,6 +610,12 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   rows carrying stale `review_batch` markers that the recovery selector alone
   skipped. Align the operator selector with auto-import: only an actual lock,
   not a stale batch label, protects a row.
+- [x] deploy the stale-batch selector correction as Fly v2010 at exact main
+  `08c6c16b2d9b316ccb76f857051938208c079fde`; public health remained ready and
+  DB/disk OK. Recovery reached zero legacy-unclassified pending rows, but the
+  final 455-row burst exhausted provider RPM/TPM and correctly failed open 292
+  rows instead of dropping them. Add an explicit transient-fail-open selector
+  and resume only in small post-cooldown chunks; do not repeat the burst.
 - [ ] merge/deploy the VK admission gate from exact main, requalify the legacy
   pending cohort in bounded batches, then prove on a real crawl and subsequent
   separate scheduled auto-import that queue size/no-event share fall while all

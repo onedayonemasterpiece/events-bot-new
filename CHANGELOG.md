@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Added: VK admission recovery can re-evaluate only pending rows that failed
+  open on a transient provider/schema error. The mode is explicit and bounded,
+  so operators can wait for provider capacity and retry small chunks instead
+  of either losing those carriers or silently keeping quota-induced queue noise.
+
 - Fixed: the bounded VK admission requalifier no longer mistakes a stale
   `review_batch` marker on an unlocked `pending` row for an active claim. This
   made the final legacy cohort invisible to recovery even though scheduled

@@ -50,6 +50,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Persist decisions; without this flag the command is read-only",
     )
+    parser.add_argument(
+        "--retry-transient-fail-open",
+        action="store_true",
+        help=(
+            "Reclassify only pending rows admitted after a provider/schema failure; "
+            "use in small bounded chunks after provider capacity has recovered"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -61,6 +69,7 @@ async def run(args: argparse.Namespace) -> dict[str, object]:
             limit=max(1, min(int(args.limit), 500)),
             newest_first=not bool(args.oldest_first),
             dry_run=not bool(args.apply),
+            retry_transient_fail_open=bool(args.retry_transient_fail_open),
         )
     finally:
         await db.close()
