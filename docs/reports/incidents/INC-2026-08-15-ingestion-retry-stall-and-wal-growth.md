@@ -149,6 +149,14 @@ reader is not exposed.
   bounded 15/25-row product batch. Historical code confirms the former
   keyword+date gate; replaying the actual recent positive cohort shows nine of
   ten still pass it, while bare nominative `концерт` is the one regex miss.
+- 2026-08-17 10:33–10:38 UTC — PR #540 merges as
+  `bbb4e4ffa869fcade43ddb296fc20ea585bce789` after all three CI gates pass and
+  deploys as Fly v2007 from clean exact main. Three public health probes are
+  ready/DB/disk OK, Fly reports 1/1 passing, SQLite `quick_check=ok`, the three
+  admission columns exist, `/data` has about 1033 MiB free and WAL is zero.
+  The first 20-row dry-run changed no DB rows but exposed a standalone CLI
+  bootstrap defect (`main.get_tz_offset` was not loaded); the recovery command
+  is held until that entrypoint fix is merged and deployed.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records

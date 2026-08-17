@@ -12,6 +12,9 @@
   use the same admission contract, bare `концерт` is recognized, and a bounded
   operator command can requalify the legacy pending backlog without creating
   Events.
+  The standalone recovery CLI explicitly bootstraps the shared runtime module,
+  so its dry-run/apply path can use the production timezone and provider
+  contract outside the bot process.
 
 - Fixed: a committed Smart Update create/merge can no longer be reported as
   `FAILED_TECHNICAL` merely because the later best-effort topic-classification
