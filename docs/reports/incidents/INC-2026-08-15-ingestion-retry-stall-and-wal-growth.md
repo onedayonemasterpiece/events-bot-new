@@ -127,6 +127,19 @@ reader is not exposed.
   still becomes technical because the occurrence-scope reviewer, before the
   already-fixed anchor reviewer, selected a block with no exact start date.
   This is a new exact residual; it is not accepted as a successful gate.
+- 2026-08-17 07:07 UTC — PR #538 is deployed from clean exact merged main
+  `6af244abb6b1fb952c2ea4bef8292b54a6560335` as Fly v2005. Exact replay ops
+  6198 closes the remaining museum child as typed `missing_date`; its accepted
+  exhibition binding stays attached to event 7690 and the carrier has zero
+  failed/deferred/unresolved children.
+- 2026-08-17 07:16–07:26 UTC — the first 25-row production qualification on
+  v2005 creates six events, updates one and gives 18 source-grounded product
+  terminals, with zero deferrals. One row is falsely reported technical:
+  `wall-214027639_11760` had already committed event 7788 and EventSource
+  12101288, but a later topics update waited 30 seconds and lost a concurrent
+  SQLite write race. The outer facade discarded the accepted `event_id` and
+  marked inbox 19775 `smart_update_processing_error`; this is an accounting
+  and replay defect after a real accepted write, not a missing event parse.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
@@ -282,6 +295,11 @@ reader is not exposed.
     accepted occurrence binding. Separately, the production VK batch cap was
     lower than the measured fresh-carrier arrival rate after applying the
     required history fairness ratio.
+17. Topic classification runs after the canonical Event/EventSource commit,
+    but the create and merge callers did not isolate that derived observer.
+    An ordinary concurrent SQLite writer made the topics commit time out; the
+    facade then converted an already durable accepted event into a technical
+    terminal with no accepted `event_id` in the VK batch receipt.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -531,6 +549,12 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - [ ] confirm the production 25-row cadence keeps fresh pending age bounded
   while the historical lane decreases; do not call the 4,818-carrier debt
   resolved merely because fresh items are prioritized.
+- [x] reproduce the ops-6199 post-commit observer downgrade with a red
+  create-path regression and protect both create and merge: topics failure is
+  logged after the accepted commit and cannot change its terminal outcome.
+- [ ] merge/deploy that observer isolation from exact main, replay inbox 19775
+  through the supported VK boundary and require the existing event 7788 to
+  settle as accepted exact replay with no failed/deferred/unresolved row.
 
 ## Follow-up Actions
 

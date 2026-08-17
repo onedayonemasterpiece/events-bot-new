@@ -55,6 +55,13 @@ source-native ID → vendor/ticket ID → structured schedule anchor → ordinal
 только как tie-breaker; разные explicit occurrence IDs являются hard distinct
 rail.
 
+После коммита `Event` и identity-bearing `EventSource` результат уже accepted.
+Производные post-commit observers (в частности повторная классификация topics)
+не имеют права превратить его в `FAILED_TECHNICAL`: временный SQLite lock или
+ошибка такого observer только логируется. Это важно для carrier-отчёта — он
+должен вернуть фактический `CREATED|MERGED` и `event_id`, а не скрывать уже
+созданное событие под технической ошибкой.
+
 Durable authority — `smart_update_candidate_state` плюс append-only
 `smart_update_attempt`; Event/EventSource/facts/terminal attempt коммитятся в
 одной write transaction, а LLM не выполняется под SQLite transaction.

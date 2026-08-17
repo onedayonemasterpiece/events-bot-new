@@ -908,3 +908,108 @@ async def test_accepted_domain_write_survives_attempt_ack_failure_and_exact_repl
         assert counts["attempt_unresolved"] == 0
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_created_event_is_not_downgraded_when_postcommit_topic_observer_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db = Database(str(tmp_path / "postcommit-topic-observer.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su,
+            "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE",
+            IdentityGateMode.OFF,
+        )
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", _eventness)
+
+        async def _locked_topic_observer(*_args, **_kwargs):
+            raise RuntimeError("synthetic post-commit database lock")
+
+        monkeypatch.setattr(su, "_classify_topics", _locked_topic_observer)
+
+        result = await su.smart_event_update(
+            db,
+            _candidate(),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        assert result.outcome is SmartUpdateTerminalOutcome.CREATED
+        assert result.event_id is not None
+        async with db.get_session() as session:
+            assert await session.get(Event, int(result.event_id)) is not None
+            source = await session.scalar(
+                select(EventSource).where(
+                    EventSource.event_id == int(result.event_id),
+                    EventSource.source_url == _candidate().source_url,
+                )
+            )
+            assert source is not None
+        counts = await smart_update_funnel_counts(db)
+        assert counts["CREATED"] == 1
+        assert counts["FAILED_TECHNICAL"] == 0
+        assert counts["attempt_unresolved"] == 0
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_merged_event_is_not_downgraded_when_postcommit_topic_observer_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db = Database(str(tmp_path / "postcommit-merge-topic-observer.sqlite"))
+    await db.init()
+    try:
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su,
+            "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE",
+            IdentityGateMode.OFF,
+        )
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", _eventness)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        initial = _candidate()
+        initial.source_text = ""
+        created = await su.smart_event_update(
+            db,
+            initial,
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+        assert created.outcome is SmartUpdateTerminalOutcome.CREATED
+
+        topic_calls = 0
+
+        async def _locked_topic_observer(*_args, **_kwargs):
+            nonlocal topic_calls
+            topic_calls += 1
+            raise RuntimeError("synthetic post-merge database lock")
+
+        monkeypatch.setattr(su, "_classify_topics", _locked_topic_observer)
+        edited = _candidate()
+        edited.source_text = ""
+        edited.is_free = True
+        merged = await su.smart_event_update(
+            db,
+            edited,
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        assert merged.outcome is SmartUpdateTerminalOutcome.MERGED
+        assert merged.event_id == created.event_id
+        assert topic_calls == 1
+        counts = await smart_update_funnel_counts(db)
+        assert counts["MERGED"] == 1
+        assert counts["FAILED_TECHNICAL"] == 0
+        assert counts["attempt_unresolved"] == 0
+    finally:
+        await db.close()
