@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed: official-source exact ticket URLs already attached to the same Event
+  now remain authoritative when the canonical presentation title adds a
+  prefix such as `Концерт`. The parser no longer re-enters extraction and
+  reports false `no drafts` failures for those occurrences; legacy
+  `RETRY_SCHEDULED` result shapes are exposed as terminal
+  `FAILED_TECHNICAL`, never as background retry work.
+
 - Fixed: Smart Update теперь закрывает заведомо прошедшие автоматические VK/TG/parser candidates как `REJECTED_PRODUCT_POLICY/past_event` до occurrence/anchor/location LLM-review, вместо ошибочного `FAILED_TECHNICAL` на шумном историческом тексте.
 
 - Fixed: Telegram force rows no longer remain hidden forever when their exact

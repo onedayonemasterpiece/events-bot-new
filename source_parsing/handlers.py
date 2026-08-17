@@ -578,13 +578,29 @@ async def attach_parser_source_to_exact_existing(
                 )
             ).scalars()
         )
+        existing_by_url = next(
+            (
+                row
+                for row in rows
+                if _normalize_source_url_for_match(row.source_url) == normalized_url
+            ),
+            None,
+        )
+        existing_by_url_is_owned_occurrence = bool(
+            existing_by_url is not None
+            and str(existing_by_url.source_role or "").strip() == "identity_bearing"
+            and (
+                str(existing_by_url.candidate_key or "").strip()
+                or str(existing_by_url.occurrence_key or "").strip()
+            )
+        )
         # A source row may point at a shared performance/festival page.  Only
         # the canonical ticket URL has the same-slot identity strength used by
         # Smart Update's deterministic_specific_ticket_same_slot match.
         exact_url_identity = (
             _normalize_source_url_for_match(stored.ticket_link) == normalized_url
         )
-        if not title_matches:
+        if not title_matches and not existing_by_url_is_owned_occurrence:
             # Smart Update may legitimately turn a terse official title into a
             # presentation title.  Replaying that same occurrence must not pay
             # for the full semantic merge again.  Keep this deterministic
@@ -599,14 +615,6 @@ async def attach_parser_source_to_exact_existing(
                 or stored_time != candidate_time
             ):
                 return False
-        existing_by_url = next(
-            (
-                row
-                for row in rows
-                if _normalize_source_url_for_match(row.source_url) == normalized_url
-            ),
-            None,
-        )
         canonical_source_url = canonicalize_identity_url(source_url)
         if not canonical_source_url:
             return False
@@ -737,6 +745,10 @@ def unpack_add_event_result(
     if len(raw) >= 3:
         event_id, was_added, outcome = raw[0], bool(raw[1]), raw[2]
         if isinstance(outcome, SmartUpdateTerminalOutcome):
+            if outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
+                # Parser intake is linear: compatibility-shaped retry results
+                # are visible technical terminals and never background work.
+                outcome = SmartUpdateTerminalOutcome.FAILED_TECHNICAL
             return event_id, was_added, outcome
         if was_added:
             return event_id, was_added, SmartUpdateTerminalOutcome.CREATED
@@ -1535,7 +1547,7 @@ async def add_new_event_via_queue(
                 PARSE_EVENT_TIMEOUT_SECONDS,
                 theatre_event.title[:50],
             )
-            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            return None, False, SmartUpdateTerminalOutcome.FAILED_TECHNICAL
         if diag_enabled:
             logger.info(
                 "source_parsing: diag LLM done title=%s drafts=%d duration=%.2fs",
@@ -1549,7 +1561,7 @@ async def add_new_event_via_queue(
                 "source_parsing: no drafts returned title=%s",
                 theatre_event.title,
             )
-            return None, False, SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+            return None, False, SmartUpdateTerminalOutcome.FAILED_TECHNICAL
         
         draft = drafts[0]
         

@@ -193,6 +193,14 @@ time может завершиться без Smart Update: существующ
 прикрепляется как `context_only`. Не-exact случаи по-прежнему идут в Smart
 Update identity gate для создания или разделения occurrence.
 
+Если exact ticket URL уже прикреплён к выбранному Event как его собственный
+`EventSource`, эта сохранённая identity является достаточным read-back
+доказательством при тех же точных date/time, даже когда presentation title
+получил префикс вроде `Концерт`. Такой повтор не возвращается в extraction и
+не может закончиться ложным `no drafts` terminal. Любой compatibility-shaped
+`RETRY_SCHEDULED` от parser/Smart границы отображается как видимый
+`FAILED_TECHNICAL`; durable parser retry при этом не создаётся.
+
 Day guard запускает все источники, если изменилась хотя бы одна сигнатура,
 даже при due recovery request. Режим `only_sources=recovery_sources` допустим
 только при неизменившихся сигнатурах, поэтому одна проблемная площадка не

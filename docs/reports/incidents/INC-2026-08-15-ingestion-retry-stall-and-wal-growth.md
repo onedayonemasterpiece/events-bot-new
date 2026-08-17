@@ -93,6 +93,13 @@ reader is not exposed.
   retry. The adapter now preserves the producer evidence and reports a
   separate `confirmed_no_active_schedule` terminal; unknown missing dates
   remain fail-closed.
+- 2026-08-17 05:07–05:35 UTC — the post-deploy all-source qualification run
+  6184 processes 231 occurrences from all eight official sources. Seven
+  sources are terminally clean, but two Sobor rows re-enter extraction and
+  return an empty draft. Both exact ticket URLs were already attached to the
+  correct same-date/same-time Events; the canonical titles had only gained the
+  presentation prefix `Концерт`. This is a false technical result, not missing
+  source evidence, so the incident remains open.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
@@ -232,6 +239,12 @@ reader is not exposed.
     source name. The handler could therefore see only a missing date and
     created a recovery request for a catalogue item already proven to have no
     active occurrence.
+14. The official-parser exact-source fast path checked presentation-title
+    equality before honoring an already attached, identity-bearing exact
+    ticket URL. A harmless `Концерт` prefix therefore sent two known Sobor
+    occurrences back through extraction; an empty draft was then surfaced
+    under the obsolete `RETRY_SCHEDULED` compatibility label even though no
+    durable retry was created.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -460,6 +473,13 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - [ ] merge/deploy that Telegram correction from exact main, re-drive the two
   exact children through the Telegram consumer, and require accepted/product
   terminals with no technical/deferred state.
+- [x] make an already attached identity-bearing exact ticket URL authoritative
+  for the same explicit date/time even when the canonical presentation title
+  has gained a format prefix; normalize parser compatibility retry shapes to
+  visible `FAILED_TECHNICAL` terminals.
+- [ ] merge/deploy that official-parser correction, reconcile duplicate Sobor
+  cards 7636/7637 into canonical 7299/7322, and rerun the exact two sources
+  with zero failed/retry outcomes.
 
 ## Follow-up Actions
 
@@ -784,6 +804,14 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   review, and requires `REJECTED_PRODUCT_POLICY/past_event`, no Event or
   EventSource, no retry and no LLM review. Merge/deploy and exact inbox 15296
   replay remain pending.
+- all-source qualification ops 6184 processed 231 rows across all eight
+  official sources: 223 unchanged, five updated, one confirmed no-event, zero
+  newly created, zero durable retry and zero run-level errors. It is still
+  `partial` because `(Нео)Органика 3.0` and `Духовное восхождение` returned
+  false extraction terminals despite their exact URLs already being attached
+  to canonical Events 7299/7322. Duplicate cards 7636/7637 are separately
+  visible and require bounded canonical repair; this run is failure evidence,
+  not the final parser gate.
 - remaining prevention deployed SHA: pending;
 - parser ops 6167 failure evidence: seven item-level technical failures, one
   open Smart state (`7805`, `attempt_started`) and a failed Tretyakov
