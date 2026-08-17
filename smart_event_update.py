@@ -20314,7 +20314,18 @@ async def _smart_event_update_impl(
                 exc_info=True,
             )
 
-        await _classify_topics(db, new_event.id)
+        try:
+            await _classify_topics(db, new_event.id)
+        except Exception:
+            # The Event and its accepted EventSource were committed above.
+            # Topic assignment is a derived observer and must never downgrade
+            # that durable product success to FAILED_TECHNICAL (for example
+            # when another SQLite writer temporarily owns the write lock).
+            logger.warning(
+                "smart_update: post-create topic classification failed event_id=%s",
+                new_event.id,
+                exc_info=True,
+            )
 
         linked_refresh_ids: list[int] = []
         try:
@@ -21940,7 +21951,16 @@ async def _smart_event_update_impl(
 
     await _persist_pending_festival_queue()
     if (updated_fields or added_posters or (added_sources and not same_source)) and not skip_topic_reclassify:
-        await _classify_topics(db, existing.id)
+        try:
+            await _classify_topics(db, existing.id)
+        except Exception:
+            # Merge/source writes are already committed. Topic assignment is
+            # best-effort derived work and cannot invalidate that acceptance.
+            logger.warning(
+                "smart_update: post-merge topic classification failed event_id=%s",
+                existing.id,
+                exc_info=True,
+            )
 
     holiday_changed = False
     try:

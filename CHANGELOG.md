@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: a committed Smart Update create/merge can no longer be reported as
+  `FAILED_TECHNICAL` merely because the later best-effort topic-classification
+  observer loses a concurrent SQLite write race. The accepted Event and
+  EventSource remain the authoritative result; observer failure is logged
+  without changing the carrier's product outcome.
+
 - Fixed: Smart Update treats an LLM-selected occurrence block with no exact
   start date, including the provider's concise `missing_date` synonym, as the
   typed product terminal `missing_date` instead of `FAILED_TECHNICAL`. This
