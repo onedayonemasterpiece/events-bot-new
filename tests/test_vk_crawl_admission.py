@@ -578,6 +578,12 @@ async def test_unresolved_posts_are_checked_in_one_bounded_batch(tmp_path, monke
     assert stats["admission_rejected"] == 3
     assert len(client.calls) == 1
     assert '"posts":[' in client.calls[0]["prompt"]
+    assert client.calls[0]["generation_config"]["response_mime_type"] == "application/json"
+    assert (
+        client.calls[0]["generation_config"]["response_json_schema"]["properties"]
+        ["decisions"]["items"]["properties"]["outcome"]["enum"]
+        == ["ADMIT", "PAST_ONLY", "NON_EVENT", "UNCERTAIN"]
+    )
 
 
 def test_bare_nominative_concert_is_a_deterministic_keyword():

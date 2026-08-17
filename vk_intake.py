@@ -1245,7 +1245,46 @@ async def _call_vk_crawl_admission_llm(
         client.generate_content_async(
             model=VK_CRAWL_ADMISSION_MODEL,
             prompt=prompt,
-            generation_config={"temperature": 0},
+            generation_config={
+                "temperature": 0,
+                "response_mime_type": "application/json",
+                "response_json_schema": {
+                    "type": "object",
+                    "properties": {
+                        "decisions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "outcome": {
+                                        "type": "string",
+                                        "enum": [
+                                            "ADMIT",
+                                            "PAST_ONLY",
+                                            "NON_EVENT",
+                                            "UNCERTAIN",
+                                        ],
+                                    },
+                                    "confidence": {"type": "number"},
+                                    "evidence_quote": {"type": "string"},
+                                    "reason": {"type": "string"},
+                                },
+                                "required": [
+                                    "id",
+                                    "outcome",
+                                    "confidence",
+                                    "evidence_quote",
+                                    "reason",
+                                ],
+                                "additionalProperties": False,
+                            },
+                        }
+                    },
+                    "required": ["decisions"],
+                    "additionalProperties": False,
+                },
+            },
             max_output_tokens=max(500, 180 * len(candidates)),
             use_provider_count_tokens=True,
             prompt_version=VK_CRAWL_ADMISSION_PROMPT_VERSION,
