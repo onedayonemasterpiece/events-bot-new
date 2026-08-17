@@ -17,6 +17,8 @@ async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
 async def test_smart_update_recovers_source_own_name_for_generic_category_title(tmp_path, monkeypatch):
     """Replay INC-2026-06-30 title-loss shape through Smart Update create boundary."""
 
+    # Keep the fixed 2026 fixture focused on title recovery as wall time moves.
+    monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     try:

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fixed: Smart Update теперь закрывает заведомо прошедшие автоматические VK/TG/parser candidates как `REJECTED_PRODUCT_POLICY/past_event` до occurrence/anchor/location LLM-review, вместо ошибочного `FAILED_TECHNICAL` на шумном историческом тексте.
+
 - Fixed: Telegram force rows no longer remain hidden forever when their exact
   source message was deleted. A successful source scan now closes the absent
   message as a visible `source_message_unavailable_after_successful_scan`

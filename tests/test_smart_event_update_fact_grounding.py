@@ -13,6 +13,9 @@ async def _no_topics(*_args, **_kwargs):  # noqa: ANN001 - test helper
 
 @pytest.mark.asyncio
 async def test_merge_filters_ungrounded_sensitive_facts_from_linked_source(tmp_path, monkeypatch):
+    # This fixture audits fact grounding on a fixed historical date, not the
+    # independent automated-ingestion past-event policy.
+    monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
     try:
