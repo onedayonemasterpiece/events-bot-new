@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from contextlib import redirect_stdout
+import importlib
 import json
 import os
 import sys
@@ -23,8 +25,11 @@ if str(ROOT) not in sys.path:
 
 # ``vk_intake`` deliberately resolves shared provider/timezone state from the
 # already-running ``main`` module instead of importing it implicitly.  This
-# standalone operator entrypoint therefore owns the explicit bootstrap.
-import main as _runtime_main  # noqa: F401,E402
+# standalone operator entrypoint therefore owns the explicit bootstrap. Some
+# optional SDKs print setup guidance while ``main`` imports; keep stdout a
+# single machine-readable JSON receipt by routing that chatter to stderr.
+with redirect_stdout(sys.stderr):
+    _runtime_main = importlib.import_module("main")  # noqa: F841
 from db import Database
 from vk_intake import requalify_vk_inbox_admission
 
