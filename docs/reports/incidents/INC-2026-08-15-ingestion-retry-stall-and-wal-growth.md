@@ -752,6 +752,38 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   WAL. Receipt:
   `artifacts/codex/INC-2026-08-15-tg-terminal-completeness/prod-shadow-boundary-replay.json`
   (local ignored evidence; production catch-up is still pending).
+- PR #533 merged as
+  `578c528009342f2128e7350c50cfec851e4f67f3` and was deployed from clean exact
+  main as Fly v2001. It isolates file-backed `Database.raw_conn()` calls and
+  makes the official parser's `no_dates` result terminal. Exact Telegram
+  boundary recovery ops 6170/6172/6173 created one and merged six lost event
+  children with zero errors. Official Sobor+Tretyakov catch-up ops 6176 then
+  completed `success`: 30 processed, three created, four updated/merged,
+  22 unchanged, one confirmed no-event and zero retry/errors.
+- Scheduled VK qualification ops 6178 processed 15/15 rows to finite receipts:
+  four events created (7779-7782), two updated, nine product/no-event outcomes,
+  zero deferred/unresolved and one `FAILED_TECHNICAL`. The sole technical row
+  is historical inbox 15296 / `wall-216003600_20`: source publication and
+  packet evidence identify a course starting 2022-11-10, but the candidate
+  reached `anchor_role_review` before the existing later `past_event` guard and
+  failed `llm_evidence_not_verbatim`. State 7828 is closed and not retrying,
+  but this is not an acceptable ingestion result because the deterministic
+  product exclusion was already knowable.
+- PR #534 merged as
+  `6506fa847c2459471c94867103a22fcd1e1e560d` (deployment pending together with
+  the next prevention patch). It closes a separate Telegram force-row leak:
+  after a proven successful source scan, a forced message absent from the
+  returned carrier set becomes visible terminal
+  `source_message_unavailable_after_successful_scan`; a failed/unproven scan
+  retains the row. This preserves evidence instead of silently discarding or
+  looping deleted source messages.
+- current prevention moves the unequivocal fully-past guard before
+  occurrence/anchor/location semantic review and retains the later repeated
+  guard after semantic narrowing. The production-shaped regression uses exact
+  source `wall-216003600_20`, proves it would otherwise enter anchor-role
+  review, and requires `REJECTED_PRODUCT_POLICY/past_event`, no Event or
+  EventSource, no retry and no LLM review. Merge/deploy and exact inbox 15296
+  replay remain pending.
 - remaining prevention deployed SHA: pending;
 - parser ops 6167 failure evidence: seven item-level technical failures, one
   open Smart state (`7805`, `attempt_started`) and a failed Tretyakov

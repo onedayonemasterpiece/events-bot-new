@@ -17527,6 +17527,26 @@ async def _smart_event_update_impl(
         int(bool(candidate.festival_source)) if candidate.festival_source is not None else None,
         _clip_title(candidate.festival_series, 80),
     )
+    # A fully elapsed occurrence is already a closed product decision. Make
+    # that decision before occurrence/anchor/location LLM review: those stages
+    # can fail technically on noisy historical copy even though no semantic
+    # ambiguity can make the occurrence current again. The later identical
+    # guard remains necessary because reviews may narrow a mixed packet to a
+    # different occurrence/date range.
+    if _should_skip_past_smart_update_candidate(candidate):
+        logger.info(
+            "smart_update.product_exclusion reason=past_event stage=pre_semantic_review source_type=%s source_url=%s title=%s date=%s end_date=%s",
+            candidate.source_type,
+            candidate.source_url,
+            _clip_title(candidate.title),
+            candidate.date,
+            candidate.end_date,
+        )
+        return SmartUpdateResult(
+            outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+            reason=ProductExclusionReason.PAST_EVENT.value,
+            product_exclusion_reason=ProductExclusionReason.PAST_EVENT,
+        )
     upstream_source_disposition = str(candidate.source_disposition or "").strip().upper()
     upstream_positive_child = upstream_source_disposition in {
         "EVENTS_FOUND",

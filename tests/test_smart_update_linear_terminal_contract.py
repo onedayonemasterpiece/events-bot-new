@@ -238,6 +238,53 @@ async def test_automated_past_event_is_terminal_product_exclusion(tmp_path, monk
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_automated_past_event_stops_before_semantic_review(tmp_path, monkeypatch):
+    """Historical backlog rows must not become technical LLM failures first."""
+
+    monkeypatch.setenv("DB_INIT_MINIMAL", "1")
+    monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "1")
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+
+    async def _unexpected_review(*args, **kwargs):
+        raise AssertionError("past candidate reached semantic review")
+
+    monkeypatch.setattr(seu, "_llm_scope_candidate_occurrence", _unexpected_review)
+    monkeypatch.setattr(seu, "_llm_review_candidate_anchor_roles", _unexpected_review)
+    monkeypatch.setattr(seu, "_llm_review_candidate_location_grounding", _unexpected_review)
+
+    db = Database(str(tmp_path / "past-before-review.sqlite"))
+    await db.init()
+    candidate = seu.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-216003600_20",
+        source_text=(
+            "Курс школы арт-критики стартует 10 ноября 2022 года. "
+            "Научиться разбираться в искусстве за два месяца — возможно. "
+            "Льготная цена действует до 1 ноября."
+        ),
+        title="Школа арт-критики",
+        date="2022-11-10",
+        time=None,
+        location_name="Калининград",
+        city="Калининград",
+    )
+    assert seu._candidate_needs_llm_anchor_role_review(candidate)[0] is True
+
+    result = await seu.smart_event_update(db, candidate, schedule_tasks=False)
+
+    assert result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+    assert result.product_exclusion_reason is ProductExclusionReason.PAST_EVENT
+    assert result.reason == ProductExclusionReason.PAST_EVENT.value
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM event").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM event_source").fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT current_outcome,reason,next_retry_at FROM smart_update_candidate_state"
+        ).fetchone() == ("REJECTED_PRODUCT_POLICY", "past_event", None)
+    await db.close()
+
+
 @pytest.mark.parametrize(
     "reason",
     [
