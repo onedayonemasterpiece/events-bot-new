@@ -140,6 +140,18 @@ reader is not exposed.
   but six message-level terminal errors keep the acceptance gate open. Exact
   child-state audit reduces real unexplained positive-child loss to
   `tretyakovka_kaliningrad/3618` and `kozia_gorka/1556`.
+- 2026-08-17 02:13–02:15 UTC — after PR #531 / Fly v2000, exact bounded
+  Telegram recovery imports create events 7773 and 7774 for those two positive
+  children. Both ops 6164/6165 are successful with one create, zero merges and
+  zero terminal errors; their exact scan ledgers are complete.
+- 2026-08-17 02:23–02:45 UTC — a product-outcome audit (not a terminal-status
+  audit) finds seven additional current/future Telegram children incorrectly
+  rejected as `missing_location`: six films from `kldevents/3319,3321` at
+  `Заря, Мира 41-43` and `№13` from `dramteatr39/4542`. The producer discarded
+  the four-letter venue because its name-only token check ignored the exact
+  address; it also treated two names resolving to the same maintained Drama
+  Theatre row as conflicting. Production-shaped red tests reproduce both
+  losses before the bounded producer fix.
 
 ## Root Cause
 
@@ -185,6 +197,13 @@ reader is not exposed.
     replay of child N therefore became child zero and could reuse a sibling's
     candidate identity. This was reproduced at the full consumer/Smart/SQLite
     boundary and corrected to preserve the producer ordinal.
+11. Telegram's final known-venue gate checked only significant name tokens.
+    A short exact venue such as `Заря` produced no tokens and was dropped even
+    with exact address `Мира 41-43` in the same carrier. Separately, the
+    extractor's official long Drama Theatre name and its configured shorter
+    name were compared as raw strings, despite both resolving to the same
+    curated venue. Seven positive children therefore reached a product
+    `missing_location` rejection instead of create/merge.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.

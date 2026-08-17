@@ -150,6 +150,93 @@ def test_tg_build_candidate_never_uses_a_sibling_title_as_venue() -> None:
     assert candidate.location_address == "Мира 41-43"
 
 
+def test_tg_build_candidate_keeps_short_known_venue_with_exact_address() -> None:
+    """Production replay for the six lost cinema children in kldevents/3319,3321.
+
+    ``Заря`` is only four letters, so the old name-only grounding helper
+    produced no support tokens and discarded it even though the exact address
+    was present in the same source line.
+    """
+
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location=None,
+        default_ticket_link=None,
+        trust_level=None,
+        festival_source=False,
+        festival_series=None,
+    )
+    message = {
+        "source_username": "kldevents",
+        "message_id": 3321,
+        "source_link": "https://t.me/kldevents/3321",
+        "text": (
+            "🎬 Большое кино\n"
+            "🎟 18 августа 19:00\n"
+            "📍 Заря, Мира 41-43, #Калининград\n"
+            "В программе: «Волк с Уолл-стрит», «1+1», «Леон»."
+        ),
+        "events": [
+            {
+                "title": "1+1",
+                "date": "2026-08-18",
+                "time": "19:00",
+                "location_name": "Заря",
+                "location_address": "Мира 41-43",
+                "city": "Калининград",
+                "raw_excerpt": "18 августа - «1+1». Все сеансы в 19:00.",
+            }
+        ],
+    }
+
+    candidate = _build_candidate(src, message, message["events"][0])
+
+    assert candidate.location_name == "Заря"
+    assert candidate.location_address == "Мира 41-43"
+    assert candidate.city == "Калининград"
+
+
+def test_tg_build_candidate_treats_configured_venue_alias_as_same_place() -> None:
+    """Production replay for the lost ``№13`` child in dramteatr39/4542."""
+
+    from source_parsing.telegram.handlers import _build_candidate
+
+    src = SimpleNamespace(
+        default_location="Драматический театр, Мира 4, Калининград",
+        default_ticket_link=None,
+        trust_level="high",
+        festival_source=False,
+        festival_series=None,
+    )
+    message = {
+        "source_username": "dramteatr39",
+        "message_id": 4542,
+        "source_link": "https://t.me/dramteatr39/4542",
+        "text": (
+            "Этот спектакль как антидепрессант.\n\n"
+            "30.08 | №13\n\n🎫 Билеты в продаже"
+        ),
+        "events": [
+            {
+                "title": "№13",
+                "date": "2026-08-30",
+                "time": "",
+                "location_name": "Калининградский драматический театр",
+                "location_address": "Мира 4",
+                "city": "Калининград",
+                "raw_excerpt": "30.08 | №13",
+            }
+        ],
+    }
+
+    candidate = _build_candidate(src, message, message["events"][0])
+
+    assert candidate.location_name == "Драматический театр"
+    assert candidate.location_address == "Мира 4"
+    assert candidate.city == "Калининград"
+
+
 @pytest.mark.asyncio
 async def test_tg_build_candidate_drops_prose_location_and_uses_address_reference():
     from source_parsing.telegram.handlers import _build_candidate

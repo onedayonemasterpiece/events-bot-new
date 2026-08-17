@@ -272,6 +272,65 @@ async def test_explicit_venue_opposite_control_crosses_same_boundary_without_pro
         await db.close()
 
 
+@pytest.mark.parametrize(
+    ("label", "expected_name", "expected_address"),
+    [
+        ("kldevents_short_venue", "Заря", "Мира 41-43"),
+        (
+            "dramteatr_profile_alias",
+            "Драматический театр",
+            "Мира 4",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_missing_location_children_cross_telegram_smart_db_boundary(
+    tmp_path,
+    monkeypatch,
+    _linear_smart_stubs,
+    label: str,
+    expected_name: str,
+    expected_address: str,
+) -> None:
+    """Exact Aug-17 product-loss shapes must create, not merely terminalize."""
+
+    candidate = _fixture_child(label)
+    result_path = tmp_path / f"{label}-results.json"
+    result_path.write_text(
+        json.dumps(
+            _result_payload(candidate, run_id=f"inc-20260815-{label}-replay"),
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    async def unexpected_location_review(*_args, **_kwargs):
+        raise AssertionError("source/profile-grounded venue must not be discarded")
+
+    monkeypatch.setattr(su, "_ask_gemma_json", unexpected_location_review)
+
+    db = Database(str(tmp_path / f"{label}-shadow.sqlite"))
+    await db.init()
+    try:
+        await _seed_source(db, candidate)
+        report = await tg_handlers.process_telegram_results(result_path, db)
+
+        assert report.events_created == 1
+        assert report.events_merged == 0
+        assert report.messages_terminal_errors == 0
+        async with db.get_session() as session:
+            saved = (
+                await session.execute(
+                    select(Event).where(Event.source_post_url == candidate["source_url"])
+                )
+            ).scalar_one()
+        assert saved.location_name == expected_name
+        assert saved.location_address == expected_address
+        assert saved.city == "Калининград"
+    finally:
+        await db.close()
+
+
 @pytest.mark.asyncio
 async def test_kozia_yoga_child_gets_typed_distinct_decision_and_is_created(
     tmp_path,

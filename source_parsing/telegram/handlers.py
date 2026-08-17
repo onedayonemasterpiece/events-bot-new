@@ -3262,6 +3262,44 @@ def _location_payload_grounded_in_text(
     )
 
 
+def _location_payloads_share_known_venue(
+    *,
+    left_name: str | None,
+    left_address: str | None,
+    left_city: str | None,
+    right_name: str | None,
+    right_address: str | None,
+    right_city: str | None,
+) -> bool:
+    """Compare two venue spellings through the curated canonical reference.
+
+    Telegram producers can spell a configured venue with its official long
+    name while the source profile uses a shorter canonical name.  Treating
+    those strings as a conflict discards valid source-owned events before
+    Smart Update can make a product decision.  This helper is deliberately
+    exact: both payloads must independently resolve to the same maintained
+    venue row.
+    """
+
+    left = {
+        "location_name": left_name,
+        "location_address": left_address,
+        "city": left_city,
+    }
+    right = {
+        "location_name": right_name,
+        "location_address": right_address,
+        "city": right_city,
+    }
+    left_venue = normalise_event_location_from_reference(left)
+    right_venue = normalise_event_location_from_reference(right)
+    return bool(
+        left_venue is not None
+        and right_venue is not None
+        and left_venue.canonical_line == right_venue.canonical_line
+    )
+
+
 def _event_local_location_candidate_ok(location_name: str | None, location_address: str | None) -> bool:
     raw = str(location_name or "").strip()
     if not raw:
@@ -4759,8 +4797,30 @@ def _build_candidate(
                 location_name,
             )
 
-    if extracted_location and source.default_location and not _location_matches(
-        extracted_location, source.default_location
+    configured_name, configured_address, configured_city = (
+        _split_default_location_line(source.default_location)
+        if source.default_location
+        else (None, None, None)
+    )
+    extracted_matches_configured_venue = bool(
+        extracted_location
+        and source.default_location
+        and (
+            _location_matches(extracted_location, source.default_location)
+            or _location_payloads_share_known_venue(
+                left_name=extracted_location,
+                left_address=extracted_location_address,
+                left_city=extracted_city,
+                right_name=configured_name,
+                right_address=configured_address,
+                right_city=configured_city or default_city,
+            )
+        )
+    )
+    if (
+        extracted_location
+        and source.default_location
+        and not extracted_matches_configured_venue
     ):
         logger.warning(
             "telegram: location mismatch for @%s msg=%s extracted=%s default=%s",
@@ -5053,7 +5113,11 @@ def _build_candidate(
         if str(raw_excerpt or "").strip():
             grounding_parts.append(str(raw_excerpt).strip())
         grounding_text = "\n".join(part for part in grounding_parts if part).strip()
-        if grounding_text and not _location_is_grounded_in_text(location_name, grounding_text):
+        if grounding_text and not _location_payload_grounded_in_text(
+            location_name=location_name,
+            location_address=location_address,
+            text=grounding_text,
+        ):
             logger.warning(
                 "telegram: dropping ungrounded known venue source=%s message_id=%s title=%r location=%r address=%r",
                 username,
