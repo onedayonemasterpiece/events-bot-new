@@ -199,6 +199,79 @@ async def test_daily_activity_without_grounded_start_date_is_product_decision(mo
 
 
 @pytest.mark.asyncio
+async def test_anchor_review_accepts_provider_missing_date_alias(monkeypatch) -> None:
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-9118984_24806",
+        source_text="Выставка работает до 30 августа. Экскурсии ежедневно в 17:00.",
+        title="Экскурсия по выставке",
+        date="2026-08-16",
+        end_date="2026-08-30",
+        time="17:00",
+        location_name="Музей Изобразительных искусств",
+        city="Калининград",
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        # Live provider evidence returned this concise synonym despite the
+        # schema enum. It is an explicit product verdict, not uncertainty.
+        return {
+            "decision": "missing_date",
+            "confidence": 0.99,
+            "date": None,
+            "end_date": "2026-08-30",
+            "time": "17:00",
+            "evidence_quotes": ["Выставка работает до 30 августа"],
+            "reason_short": "No exact start date is present.",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_review_candidate_anchor_roles(
+        candidate, trigger_reason="explicit_range"
+    ) == (False, "llm_reject_missing_date")
+
+
+@pytest.mark.asyncio
+async def test_occurrence_scope_without_target_start_date_is_product_decision(
+    monkeypatch,
+) -> None:
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-9118984_24806",
+        source_text=(
+            "Выставка работает до 30 августа. Ежедневные экскурсии по выставке "
+            "проходят в 12:00 и 17:00."
+        ),
+        title="Экскурсия по выставке",
+        date="2026-08-16",
+        end_date="2026-08-30",
+        time="12:00",
+        location_name="Музей Изобразительных искусств",
+        city="Калининград",
+        source_disposition="EVENTS_FOUND",
+        source_evidence_complete=True,
+    )
+
+    async def fake_ask(prompt, schema, *_args, **_kwargs):
+        assert "reject_missing_date" in prompt
+        assert "reject_missing_date" in schema["properties"]["decision"]["enum"]
+        return {
+            "decision": "scoped",
+            "confidence": 0.99,
+            "selected_excerpts": [
+                "Ежедневные экскурсии по выставке проходят в 12:00 и 17:00"
+            ],
+            "reason_short": "This is the excursion block.",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    assert await su._llm_scope_candidate_occurrence(candidate) == (
+        False,
+        "llm_reject_missing_date",
+    )
+
+
+@pytest.mark.asyncio
 async def test_explicit_unknown_activity_start_is_llm_repaired_to_null(monkeypatch) -> None:
     candidate = su.EventCandidate(
         source_type="telegram",

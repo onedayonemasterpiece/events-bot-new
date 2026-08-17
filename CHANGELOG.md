@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: Smart Update treats an LLM-selected occurrence block with no exact
+  start date, including the provider's concise `missing_date` synonym, as the
+  typed product terminal `missing_date` instead of `FAILED_TECHNICAL`. This
+  closes the remaining museum-excursion child found by the live VK replay.
+
 - Fixed: VK/Smart Update no longer loses a source-grounded event when the
   location reviewer returns `keep` with a non-verbatim citation but the exact
   candidate address is present in the source. Online events may recover one

@@ -115,6 +115,18 @@ reader is not exposed.
   observed roughly 69 fresh carriers/day. This is a throughput deficit, not a
   safe queue reserve; production batch capacity is raised to 25 while exact
   catch-up remains a required live gate.
+- 2026-08-17 06:53 UTC — PR #537 is deployed from clean exact merged main
+  `2ed3713a18b19df17041ba1379185bda3a9d2461` as Fly v2004. Three health probes
+  are HTTP 200 ready/db/disk ok, Fly is 1/1, `quick_check=ok`, WAL is empty,
+  `/data` has about 1.01 GiB available, and production reads
+  `VK_AUTO_IMPORT_LIMIT=25`.
+- 2026-08-17 06:54–06:56 UTC — exact postdeploy replay ops 6195 resolves the
+  grounded library carrier into existing event 7767 and correctly classifies
+  the online-only municipal stream under the documented product exclusion.
+  The museum exhibition binds and updates event 7690, but one excursion child
+  still becomes technical because the occurrence-scope reviewer, before the
+  already-fixed anchor reviewer, selected a block with no exact start date.
+  This is a new exact residual; it is not accepted as a successful gate.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
@@ -513,6 +525,9 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   18129/18815/18911 and current-day pending carriers, and require zero
   technical/deferred/locked outcomes plus verified created/merged EventSource
   receipts.
+- [ ] deploy the follow-up occurrence-scope terminal mapping, re-drive exact VK
+  row 18911, and require the existing exhibition binding plus both date-less
+  excursion children to finish without any technical/deferred/locked outcome.
 - [ ] confirm the production 25-row cadence keeps fresh pending age bounded
   while the historical lane decreases; do not call the 4,818-carrier debt
   resolved merely because fresh items are prioritized.

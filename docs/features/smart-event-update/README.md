@@ -806,6 +806,14 @@ Smart Update may restore a region place from the selected source only when it
 contains exactly one maintained Kaliningrad Oblast place; multiple places stay
 fail-closed.
 
+The preceding multi-occurrence scope reviewer follows the same closure rule.
+After it selects the correct child block, absence of the candidate's exact
+start date is `reject_missing_date`; a grounded selected excerpt that fails the
+mechanical target-date check closes identically. The provider synonym
+`missing_date` is accepted only as that same explicit product verdict. Provider
+absence, malformed output and ambiguous scope remain visible technical
+failures and are never converted into a guessed no-event.
+
 Historical anniversary/interview prose with several explicit old years is likewise only routed, never classified, by the deterministic layer. The LLM eventness reviewer must reject museum chronology (opening, acquisition, employment or memoir dates) unless the source separately announces a future attendee-facing programme; a real future anniversary lecture remains valid when its date and venue are explicit.
 
 ### 2026-07-12 occurrence-role and roundup scope gates
