@@ -2525,7 +2525,10 @@ LOCATION_GROUNDING_REVIEW_SCHEMA = {
 OCCURRENCE_SCOPE_REVIEW_SCHEMA = {
     "type": "object",
     "properties": {
-        "decision": {"type": "string", "enum": ["scoped", "single_event", "uncertain"]},
+        "decision": {
+            "type": "string",
+            "enum": ["scoped", "single_event", "reject_missing_date", "uncertain"],
+        },
         "confidence": {"type": "number"},
         "selected_excerpts": {"type": "array", "items": {"type": "string"}},
         "reason_short": {"type": "string"},
@@ -6764,6 +6767,8 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
         "если отдельные карточки/блоки называют разные соревнования, даты, города или площадки: "
         "такой aggregate/envelope target верни uncertain, а конкретный target — scoped. "
         "В selected_excerpts сохрани общую строку города/региона, когда она явно относится ко всем карточкам. "
+        "Если правильный блок target найден, но в нём нет точной даты начала target, верни "
+        "reject_missing_date: это финальное продуктовое решение, не uncertain и не техническая ошибка. "
         "Только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -6783,6 +6788,8 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
     if decision == "single_event" and confidence >= 0.9:
         candidate.occurrence_scope_text = corpus
         return True, "llm_single_event"
+    if decision in {"reject_missing_date", "missing_date"} and confidence >= 0.85:
+        return False, "llm_reject_missing_date"
     if decision != "scoped" or confidence < 0.8:
         if _apply_grounded_occurrence_scope_fallback(candidate):
             return True, "grounded_producer_excerpt"
@@ -6810,7 +6817,10 @@ async def _llm_scope_candidate_occurrence(candidate: "EventCandidate") -> tuple[
             return True, "grounded_producer_excerpt"
         if _apply_source_anchored_occurrence_scope_fallback(candidate):
             return True, "grounded_source_anchor"
-        return False, "llm_scope_missing_target_date"
+        # The LLM selected the child scope, and the grounding rail proved that
+        # this exact scope contains no start date for the candidate. This is a
+        # closed product decision, not provider uncertainty.
+        return False, "llm_reject_missing_date"
     # Narrow grounding rail: when the full multi-occurrence source explicitly
     # contains the candidate city, the selected occurrence must preserve it.
     # This catches a date from one city being paired with a venue from another;
@@ -6995,7 +7005,7 @@ async def _llm_review_candidate_anchor_roles(
         if explicit_unknown_start and _valid_hhmm_or_none(candidate.time):
             return False, "llm_time_conflicts_explicit_unknown"
         return True, "llm_keep"
-    if decision == "reject_missing_date" and confidence >= 0.85:
+    if decision in {"reject_missing_date", "missing_date"} and confidence >= 0.85:
         return False, "llm_reject_missing_date"
     if decision != "repair" or confidence < 0.85:
         return False, f"llm_{decision or 'uncertain'}"
@@ -17723,6 +17733,12 @@ async def _smart_event_update_impl(
             _clip_title(candidate.title),
         )
         if not scope_ok:
+            if scope_result == "llm_reject_missing_date":
+                return SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                    reason=ProductExclusionReason.MISSING_DATE.value,
+                    product_exclusion_reason=ProductExclusionReason.MISSING_DATE,
+                )
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"occurrence_scope_review:{scope_result}",

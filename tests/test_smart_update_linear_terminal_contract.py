@@ -285,6 +285,52 @@ async def test_automated_past_event_stops_before_semantic_review(tmp_path, monke
     await db.close()
 
 
+@pytest.mark.asyncio
+async def test_occurrence_scope_missing_date_persists_product_terminal(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_INIT_MINIMAL", "1")
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(
+        seu,
+        "_candidate_needs_llm_occurrence_scope_review",
+        lambda _candidate: True,
+    )
+
+    async def _missing_date(*_args, **_kwargs):
+        return False, "llm_reject_missing_date"
+
+    monkeypatch.setattr(seu, "_llm_scope_candidate_occurrence", _missing_date)
+    db = Database(str(tmp_path / "scope-missing-date.sqlite"))
+    await db.init()
+    candidate = seu.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-9118984_24806",
+        source_text="Выставка до 30 августа; экскурсии ежедневно в 12:00.",
+        title="Экскурсия по выставке",
+        date="2026-08-18",
+        end_date="2026-08-30",
+        time="12:00",
+        location_name="Музей Изобразительных искусств",
+        city="Калининград",
+    )
+
+    result = await seu.smart_event_update(db, candidate, schedule_tasks=False)
+
+    assert result.outcome is SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY
+    assert result.product_exclusion_reason is ProductExclusionReason.MISSING_DATE
+    assert result.reason == ProductExclusionReason.MISSING_DATE.value
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM event").fetchone()[0] == 0
+        assert conn.execute(
+            "SELECT current_outcome,reason,next_retry_at,claimed_by "
+            "FROM smart_update_candidate_state"
+        ).fetchone() == ("REJECTED_PRODUCT_POLICY", "missing_date", None, None)
+        assert conn.execute(
+            "SELECT terminal_outcome,reason,finished_at IS NOT NULL "
+            "FROM smart_update_attempt"
+        ).fetchone() == ("REJECTED_PRODUCT_POLICY", "missing_date", 1)
+    await db.close()
+
+
 @pytest.mark.parametrize(
     "reason",
     [
