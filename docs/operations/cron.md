@@ -106,7 +106,7 @@ Defaults were adjusted to reduce overlaps between the most common heavy jobs:
   `NIGHTLY_PAGE_SYNC_TZ=Europe/Kaliningrad`), то есть отдельный 00:30 UTC slot,
   а не прежняя коллизия с parser в 02:30 UTC.
 - `/3di` morning run: `THREEDI_TIMES_LOCAL=07:15,15:15,17:15` (was `05:30,15:15,17:15`; older default `03:15,15:15,17:15`)
-- VK auto-import: `VK_AUTO_IMPORT_TIMES_LOCAL=06:15,10:15,12:00,15:30,18:30` with `VK_AUTO_IMPORT_LIMIT=15` by default, so queue draining relies on cadence instead of oversized single runs, picks up fresh daytime `pending` items after the `13:15` VK crawl, avoids the `/3di` `15:15` slot, and stays away from the `08:00` daily announcement window and late-evening monitoring.
+- VK auto-import: `VK_AUTO_IMPORT_TIMES_LOCAL=06:15,10:15,12:00,15:30,18:30` with `VK_AUTO_IMPORT_LIMIT=25` in production. With the durable four-fresh/one-history interleave this gives up to 100 fresh and 25 historical carrier decisions per day: above the incident's observed roughly 69 fresh carriers/day while still making bounded progress on historical debt. Queue draining relies on cadence instead of an unbounded single run, picks up fresh daytime `pending` items after the `13:15` VK crawl, avoids the `/3di` `15:15` slot, and stays away from the `08:00` daily announcement window and late-evening monitoring.
 
 If you see skip notifications in admin chat often, spread the schedules further instead of switching to “wait”: skipping is a safety net, not a planning tool. Оба scheduled source-parser entrypoint являются исключением и принудительно используют heavy guard `wait`, поэтому официальный каталог не теряет слот как `heavy_busy`.
 
@@ -405,7 +405,7 @@ For admin-facing scheduled reports, the bot now resolves the target chat from th
 - `ENABLE_VK_AUTO_IMPORT` – enable VK typed auto-import job. It is default-on in
   production `fly.toml`; local/dev remains explicit opt-in.
 - `VK_AUTO_IMPORT_TIMES_LOCAL` / `VK_AUTO_IMPORT_TZ` – VK auto-import schedule times in local time zone.
-- `VK_AUTO_IMPORT_LIMIT` – max number of VK inbox rows to process per scheduled run (default `15`).
+- `VK_AUTO_IMPORT_LIMIT` – max number of VK inbox rows to process per scheduled run (application default `15`; production `25`).
 - `VK_AUTO_IMPORT_ROW_TIMEOUT_SEC` – max seconds per VK carrier attempt before
   auto-import records a typed timeout and releases it to durable due retry
   (default `1800`; set `<=0` to disable). Timeout is not a terminal `failed` or

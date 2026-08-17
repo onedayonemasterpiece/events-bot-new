@@ -100,6 +100,21 @@ reader is not exposed.
   correct same-date/same-time Events; the canonical titles had only gained the
   presentation prefix `Концерт`. This is a false technical result, not missing
   source evidence, so the incident remains open.
+- 2026-08-17 06:19–06:25 UTC — exact recovery ops 6193 re-drives all 17 VK
+  rows that were previously `FAILED_TECHNICAL`. All 17 leave the queue with
+  no lock, due retry or deferral; one real 18 August event is created as 7787,
+  13 rows receive source-grounded product/no-event terminals, and three remain
+  visible technical outcomes. The residuals are exact and reproducible: a
+  grounded library address plus a non-verbatim reviewer citation, an online
+  Chernyakhovsk stream whose city was omitted, and a three-child museum source
+  whose accepted exhibition binding plus two date-less daily-excursion
+  children were re-adjudicated by the anchor reviewer.
+- 2026-08-17 — production inventory shows 4,818 pending VK carriers, including
+  485 published in the last seven days. Five batches of 15 with the 4:1
+  fresh/history selector provide only 60 fresh decisions/day, below the
+  observed roughly 69 fresh carriers/day. This is a throughput deficit, not a
+  safe queue reserve; production batch capacity is raised to 25 while exact
+  catch-up remains a required live gate.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
@@ -245,6 +260,16 @@ reader is not exposed.
     occurrences back through extraction; an empty draft was then surfaced
     under the obsolete `RETRY_SCHEDULED` compatibility label even though no
     durable retry was created.
+15. Location review tied a semantic LLM `keep` to the formatting quality of
+    `evidence_quote` even when the candidate's exact address was already
+    mechanically present in source evidence. The online region repair ignored
+    full selected source text, so `#черняховск` could not restore a missing
+    city for a VK livestream.
+16. Anchor-role review had no closed `reject_missing_date` product action and
+    could re-litigate date/range/time anchors already owned by the exact
+    accepted occurrence binding. Separately, the production VK batch cap was
+    lower than the measured fresh-carrier arrival rate after applying the
+    required history fairness ratio.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -477,9 +502,20 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   for the same explicit date/time even when the canonical presentation title
   has gained a format prefix; normalize parser compatibility retry shapes to
   visible `FAILED_TECHNICAL` terminals.
-- [ ] merge/deploy that official-parser correction, reconcile duplicate Sobor
-  cards 7636/7637 into canonical 7299/7322, and rerun the exact two sources
-  with zero failed/retry outcomes.
+- [x] merge/deploy the official-parser exact-source correction as PR #536 /
+  Fly v2003, reconcile duplicate Sobor events 7636/7637 into canonical
+  7299/7322, and qualify Sobor ops 6191 with 22 processed, two updated, 20
+  unchanged and zero failed/retry/errors.
+- [x] reproduce the remaining exact VK failures in ops 6193 and implement
+  source-grounded KEEP citation recovery, single-place online city recovery,
+  accepted-anchor replay stability and typed `reject_missing_date`.
+- [ ] merge/deploy the final-decision correction, re-drive exact VK rows
+  18129/18815/18911 and current-day pending carriers, and require zero
+  technical/deferred/locked outcomes plus verified created/merged EventSource
+  receipts.
+- [ ] confirm the production 25-row cadence keeps fresh pending age bounded
+  while the historical lane decreases; do not call the 4,818-carrier debt
+  resolved merely because fresh items are prioritized.
 
 ## Follow-up Actions
 
@@ -492,6 +528,18 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   open or recently closed regression contracts.
 
 ## Release And Closure Evidence
+
+- PR #536 merged as `ea5ed9815ba07a7586c095af0cb909870a311994` and was
+  deployed through `scripts/deploy_fly_main.sh` as Fly v2003 from a clean
+  exact-main worktree. Postdeploy health returned HTTP 200 three times, Fly was
+  1/1, `quick_check=ok`, WAL was empty at the initial read and `/data` had
+  about 1.04 GiB available. Sobor qualification ops 6191 then processed all 22
+  rows with zero failed/retry/errors.
+- exact VK failed-row replay ops 6193 processed 17/17 terminal rows with zero
+  deferred/unresolved/locked rows, created event 7787, produced 13 valid
+  product/no-event terminals and isolated three exact technical residuals.
+  This is the pre-fix failure receipt for the final-decision patch, not a
+  successful ingestion gate.
 
 - mitigation deployed SHA: `c655156664edcfe91da11a4b9405d4fa59573f20`,
   PR #506, Fly v1975, clean exact `origin/main` via

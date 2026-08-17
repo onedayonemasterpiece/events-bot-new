@@ -317,7 +317,8 @@ Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
 - `VK_AUTO_IMPORT_TIMES_LOCAL` (default
   `06:15,10:15,12:00,15:30,18:30`);
 - `VK_AUTO_IMPORT_TZ` (default `Europe/Kaliningrad`);
-- `VK_AUTO_IMPORT_LIMIT` (default `15`);
+- `VK_AUTO_IMPORT_LIMIT` (application default `15`, production `25` so the
+  four-fresh/one-history selector has measured headroom above fresh arrivals);
 - `VK_AUTO_IMPORT_PARSE_GEMMA_MODEL` — существующий scoped model route;
 - `VK_AUTO_IMPORT_PREFETCH=0` по умолчанию; даже при включении semantic parse
   принадлежит main worker;

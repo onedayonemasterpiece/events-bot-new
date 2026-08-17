@@ -371,6 +371,94 @@ def test_source_grounded_allowlist_place_recovers_missing_city() -> None:
     assert geo_region.is_allowlisted_kaliningrad_place("Ушаково") is True
 
 
+def test_online_event_recovers_one_explicit_allowlisted_place_from_source() -> None:
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-152679358_26898",
+        source_text=(
+            "18 августа в 9:00 проведём прямой эфир с главой Черняховского "
+            "муниципального округа. #калининградскаяобласть #черняховск #цур39"
+        ),
+        title="Прямой эфир с главой Черняховского муниципального округа",
+        date="2026-08-18",
+        time="09:00",
+        location_name="VK",
+    )
+
+    assert su._source_grounded_region_place_hint(candidate) == "Черняховск"
+
+
+def test_online_event_does_not_guess_between_two_source_places() -> None:
+    candidate = EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-1_1",
+        source_text="Общий эфир про Калининград и Черняховск.",
+        title="Общий областной эфир",
+        date="2026-08-18",
+        time="09:00",
+        location_name="Онлайн",
+    )
+
+    assert su._source_grounded_region_place_hint(candidate) is None
+
+
+@pytest.mark.asyncio
+async def test_accepted_occurrence_binding_closes_anchor_replay_before_llm(tmp_path) -> None:
+    db = Database(str(tmp_path / "accepted-anchor-replay.sqlite"))
+    await db.init()
+    try:
+        candidate = EventCandidate(
+            source_type="vk",
+            source_url="https://vk.com/wall-9118984_24806",
+            source_text=(
+                "Выставка работает до 30 августа. Ежедневные экскурсии проходят "
+                "в 12:00 и 17:00."
+            ),
+            title="Выставка «Секретный код Альбрехта Дюрера»",
+            date="2026-08-16",
+            end_date="2026-08-30",
+            time="",
+            location_name="Музей Изобразительных искусств",
+            city="Калининград",
+            producer_ordinal=0,
+        )
+        candidate.candidate_key, candidate.occurrence_key = su.stable_candidate_identity(
+            candidate
+        )
+        async with db.get_session() as session:
+            event = Event(
+                title=candidate.title,
+                description="Выставка работает до конца августа.",
+                source_text=candidate.source_text,
+                date=candidate.date,
+                end_date=candidate.end_date,
+                time=candidate.time,
+                location_name=candidate.location_name,
+                city=candidate.city,
+            )
+            session.add(event)
+            await session.flush()
+            session.add(
+                EventSource(
+                    event_id=int(event.id),
+                    source_type="vk",
+                    source_url=candidate.source_url,
+                    canonical_source_url=candidate.source_url,
+                    source_role="identity_bearing",
+                    candidate_key=candidate.candidate_key,
+                    occurrence_key=candidate.occurrence_key,
+                )
+            )
+            await session.commit()
+            event_id = int(event.id)
+
+        assert await su._accepted_occurrence_anchor_event_id(db, candidate) == event_id
+        candidate.time = "12:00"
+        assert await su._accepted_occurrence_anchor_event_id(db, candidate) is None
+    finally:
+        await db.close()
+
+
 @pytest.mark.asyncio
 async def test_invalid_bundle_review_drops_generated_prose_without_losing_event(
     monkeypatch,
