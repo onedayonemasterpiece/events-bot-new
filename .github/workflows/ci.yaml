@@ -38,6 +38,7 @@ jobs:
           main_part2.py
           scheduling.py
           scripts/ops/smart_update_loss_census.py
+          scripts/ops/requalify_vk_inbox_admission.py
           scripts/ops/recover_smart_update_identity_losses.py
           scripts/ops/rehearse_smart_update_migration.py
           scripts/ops/smart_update_prod_audit.py
@@ -58,6 +59,7 @@ jobs:
           tests/test_add_events_from_text_logging.py
           tests/test_add_events_from_text_source_decision.py
           tests/test_vk_source_envelope.py
+          tests/test_vk_crawl_admission.py
           tests/test_vk_raw_first_llm_contract.py
           tests/test_vk_crawl_continuation.py
           tests/test_vk_auto_queue_import.py
