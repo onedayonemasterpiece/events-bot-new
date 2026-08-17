@@ -2,12 +2,19 @@
 
 ## [Unreleased]
 
+- Fixed: grounded high-confidence VK admission decisions now remain effective
+  when an otherwise dispositive source text also has ordinary media. The LLM
+  prompt, rather than a blanket attachment veto, preserves recall by requiring
+  `UNCERTAIN` whenever an uninspected poster could change the verdict; rollout
+  sampling showed that the veto admitted every tested legacy row and therefore
+  did not remove queue noise.
+
 - Fixed: VK source collection no longer sends every raw fetched post directly
   into the bounded auto-import queue. The crawler still durably preserves every
   immutable packet, admits clear deterministic future positives, and uses one
   small batched LLM gate only for unresolved posts. Only grounded,
-  high-confidence `PAST_ONLY`/`NON_EVENT` without unseen visual evidence stays
-  out of `vk_inbox`; uncertainty or provider/schema failure fails open. Crawl
+  high-confidence `PAST_ONLY`/`NON_EVENT` stays out of `vk_inbox`; uncertainty
+  about uninspected visual evidence or provider/schema failure fails open. Crawl
   and later scheduled auto-import remain separate stages, continuation pages
   use the same admission contract, bare `концерт` is recognized, and a bounded
   operator command can requalify the legacy pending backlog without creating

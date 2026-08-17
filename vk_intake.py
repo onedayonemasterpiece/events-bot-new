@@ -1316,9 +1316,13 @@ async def _call_vk_crawl_admission_llm(
         reason = re.sub(r"[^a-z0-9_:-]+", "_", reason).strip("_")[:80]
         if outcome in {"PAST_ONLY", "NON_EVENT"}:
             grounded = _vk_admission_quote_is_grounded(quote, candidate.text)
-            # The gate has not inspected visual bytes.  It may reject only when
-            # the source has no unseen visual evidence; otherwise preserve recall.
-            if confidence >= 0.90 and grounded and candidate.visual_evidence_count == 0:
+            # The prompt requires UNCERTAIN whenever an uninspected attachment
+            # could change the verdict.  Do not override a grounded, high-
+            # confidence text verdict merely because the post also has media:
+            # that blanket override kept almost every ordinary VK photo post in
+            # the expensive queue.  Ambiguous visual carriers still fail open
+            # because the model must return UNCERTAIN for them.
+            if confidence >= 0.90 and grounded:
                 resolved[key] = VKCrawlAdmissionDecision(
                     admitted=False,
                     outcome=outcome,
@@ -1332,12 +1336,9 @@ async def _call_vk_crawl_admission_llm(
                     model=VK_CRAWL_ADMISSION_MODEL,
                 )
             else:
-                fallback_reason = (
-                    "unseen_visual_evidence"
-                    if candidate.visual_evidence_count
-                    else "ungrounded_or_low_confidence"
+                resolved[key] = _vk_admission_fail_open(
+                    "ungrounded_or_low_confidence"
                 )
-                resolved[key] = _vk_admission_fail_open(fallback_reason)
         elif outcome == "ADMIT":
             resolved[key] = VKCrawlAdmissionDecision(
                 admitted=True,

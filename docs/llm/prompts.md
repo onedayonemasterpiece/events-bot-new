@@ -21,11 +21,12 @@ attachments that have not been inspected yet.
 
 The closed output for every source id is `ADMIT | PAST_ONLY | NON_EVENT |
 UNCERTAIN`. `PAST_ONLY` and `NON_EVENT` remove a post from the expensive queue
-only when confidence is at least `0.90`, `evidence_quote` is an exact quote from
-the supplied source text, and there is no unseen visual evidence. Missing
-items, malformed JSON, provider/timeout errors, low confidence, an ungrounded
-quote or an uninspected poster all become fail-open `UNCERTAIN` and enter
-`vk_inbox`. A recap containing a new future invitation, a future cancellation
+only when confidence is at least `0.90` and `evidence_quote` is an exact quote
+from the supplied source text. An attachment does not nullify a dispositive,
+grounded text verdict; instead, the model must return `UNCERTAIN` whenever the
+uninspected visual could change that verdict. Missing items, malformed JSON,
+provider/timeout errors, low confidence, an ungrounded quote or genuinely
+ambiguous visual evidence fail open and enter `vk_inbox`. A recap containing a new future invitation, a future cancellation
 or reschedule, and a continuing exhibition with a future closing date are
 `ADMIT`; geography and product scope remain decisions of the full parser.
 
