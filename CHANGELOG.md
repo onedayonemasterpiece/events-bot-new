@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: Telegram force rows no longer remain hidden forever when their exact
+  source message was deleted. A successful source scan now closes the absent
+  message as a visible `source_message_unavailable_after_successful_scan`
+  terminal error and removes the force row; failed source scans keep it for a
+  later controlled retry.
+
 - Fixed: file-backed `Database.raw_conn()` calls now own separate short SQLite
   connections instead of sharing one transaction across asyncio workers. This
   prevents parser/Smart Update acknowledgements and recovery-ledger writes

@@ -257,6 +257,14 @@ force replay закрывается тем же вызовом и удаляет
 payload без children не может. Старые сообщения, прочитанные только для метрик после уже успешного exact
 revision, не вызывают LLM повторно.
 
+Если point-replay был запрошен, но сообщение уже удалено из Telegram, успешный
+scan самого source (`sources_meta` присутствует) является fail-closed
+доказательством недоступности именно этого id. Consumer записывает
+`terminal_error/source_message_unavailable_after_successful_scan`, удаляет
+force-row и показывает terminal receipt оператору. Если source scan упал и
+`sources_meta` нет, force-row сохраняется: отсутствие message в неполном output
+не считается доказательством удаления.
+
 Operator report и `ops_run.metrics_json` раздельно показывают
 `messages_new_raw`, `messages_forced_replay`, `messages_metrics_only` и
 `messages_typed_candidates`; первые три — взаимоисключающие carrier buckets,

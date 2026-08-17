@@ -279,6 +279,130 @@ async def test_album_force_child_marks_carrier_forced_and_clears_every_member(tm
 
 
 @pytest.mark.asyncio
+async def test_successful_source_scan_terminalizes_missing_forced_message(tmp_path) -> None:
+    db = Database(str(tmp_path / "telegram-missing-force.sqlite"))
+    await db.init()
+    try:
+        async with db.raw_conn() as conn:
+            source_row = await (
+                await conn.execute(
+                    "SELECT id FROM telegram_source WHERE username='ecodvor39'"
+                )
+            ).fetchone()
+            source_id = int(source_row[0])
+            await conn.execute(
+                "INSERT INTO telegram_source_force_message(source_id,message_id) VALUES(?,?)",
+                (source_id, 79999),
+            )
+            await conn.execute(
+                """
+                INSERT INTO telegram_scanned_message(
+                    source_id,message_id,message_date,status,
+                    events_extracted,events_imported,error
+                ) VALUES(?,?,?,'retry_scheduled',0,0,'source_evidence_incomplete')
+                """,
+                (source_id, 79999, "2026-08-12T08:00:00+00:00"),
+            )
+            await conn.commit()
+
+        path = tmp_path / "telegram-results.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "run_id": "missing-force-successful-source-scan",
+                    "sources_meta": [
+                        {"username": "ecodvor39", "title": "ЭкоДвор"}
+                    ],
+                    "stats": {"sources_total": 1, "messages_scanned": 0},
+                    "messages": [],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        report = await process_telegram_results(path, db)
+
+        async with db.raw_conn() as conn:
+            force_row = await (
+                await conn.execute(
+                    "SELECT 1 FROM telegram_source_force_message "
+                    "WHERE source_id=? AND message_id=79999",
+                    (source_id,),
+                )
+            ).fetchone()
+            scan_row = await (
+                await conn.execute(
+                    "SELECT status,error FROM telegram_scanned_message "
+                    "WHERE source_id=? AND message_id=79999",
+                    (source_id,),
+                )
+            ).fetchone()
+
+        assert force_row is None
+        assert scan_row == (
+            "terminal_error",
+            "source_message_unavailable_after_successful_scan",
+        )
+        assert report.messages_scanned == 1
+        assert report.messages_forced_replay == 1
+        assert report.messages_terminal_errors == 1
+        assert report.skipped_posts[-1].source_link == "https://t.me/ecodvor39/79999"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_source_scan_keeps_missing_forced_message(tmp_path) -> None:
+    db = Database(str(tmp_path / "telegram-missing-force-failed-scan.sqlite"))
+    await db.init()
+    try:
+        async with db.raw_conn() as conn:
+            source_row = await (
+                await conn.execute(
+                    "SELECT id FROM telegram_source WHERE username='ecodvor39'"
+                )
+            ).fetchone()
+            source_id = int(source_row[0])
+            await conn.execute(
+                "INSERT INTO telegram_source_force_message(source_id,message_id) VALUES(?,?)",
+                (source_id, 79998),
+            )
+            await conn.commit()
+
+        path = tmp_path / "telegram-results.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "run_id": "missing-force-failed-source-scan",
+                    # A failed Kaggle scan emits no source metadata.  Absence
+                    # from messages is therefore not proof of deletion.
+                    "sources_meta": [],
+                    "stats": {"sources_total": 1, "messages_scanned": 0},
+                    "messages": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        report = await process_telegram_results(path, db)
+
+        async with db.raw_conn() as conn:
+            force_row = await (
+                await conn.execute(
+                    "SELECT 1 FROM telegram_source_force_message "
+                    "WHERE source_id=? AND message_id=79998",
+                    (source_id,),
+                )
+            ).fetchone()
+        assert force_row is not None
+        assert report.messages_forced_replay == 0
+        assert report.messages_terminal_errors == 0
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_complete_typed_no_event_advances_telegram_cursor(tmp_path) -> None:
     db = Database(str(tmp_path / "telegram-no-event.sqlite"))
     await db.init()

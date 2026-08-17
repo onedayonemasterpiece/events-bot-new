@@ -5778,6 +5778,91 @@ async def _single_event_id_for_source_url(db: Database, source_url: str | None) 
     return None
 
 
+async def _terminalize_missing_forced_messages(
+    db: Database,
+    *,
+    successful_source_usernames: set[str],
+    returned_message_ids: dict[str, set[int]],
+) -> list[TelegramMonitorSkippedPostInfo]:
+    """Close force rows that a successful source scan proves unavailable.
+
+    Kaggle can successfully open a channel while a previously forced message
+    has since been deleted (or an album child no longer exists).  Such a row is
+    absent from ``messages`` and historically remained ``retry_scheduled``
+    forever because the normal per-message finalizer never saw it.  Source
+    metadata is emitted only after ``scan_source`` succeeds, so it is the
+    fail-closed proof that makes an absent forced id terminal.  A source scan
+    that failed emits no metadata and therefore keeps its force rows intact.
+    """
+
+    usernames = {
+        normalize_tg_username(value)
+        for value in successful_source_usernames
+        if normalize_tg_username(value)
+    }
+    if not usernames:
+        return []
+
+    placeholders = ",".join("?" for _ in usernames)
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            f"""
+            SELECT f.source_id, f.message_id, s.username, s.title,
+                   m.message_date
+            FROM telegram_source_force_message AS f
+            JOIN telegram_source AS s ON s.id=f.source_id
+            LEFT JOIN telegram_scanned_message AS m
+              ON m.source_id=f.source_id AND m.message_id=f.message_id
+            WHERE lower(s.username) IN ({placeholders})
+            ORDER BY f.source_id, f.message_id
+            """,
+            tuple(sorted(usernames)),
+        )
+        rows = await cur.fetchall()
+
+    terminal: list[TelegramMonitorSkippedPostInfo] = []
+    for source_id, message_id, raw_username, source_title, message_date in rows:
+        username = normalize_tg_username(raw_username)
+        if not username or int(message_id) in returned_message_ids.get(username, set()):
+            continue
+        reason = "source_message_unavailable_after_successful_scan"
+        await _mark_message_scanned(
+            db,
+            source_id=int(source_id),
+            message_id=int(message_id),
+            message_date=_parse_datetime(message_date),
+            status="terminal_error",
+            events_extracted=0,
+            events_imported=0,
+            error=reason,
+        )
+        await _clear_force_message(
+            db,
+            source_id=int(source_id),
+            message_id=int(message_id),
+        )
+        source_link = f"https://t.me/{username}/{int(message_id)}"
+        terminal.append(
+            TelegramMonitorSkippedPostInfo(
+                source_username=username,
+                source_title=str(source_title or "").strip() or None,
+                message_id=int(message_id),
+                source_link=source_link,
+                status="terminal_error",
+                reason=reason,
+                events_extracted=0,
+                events_imported=0,
+            )
+        )
+        logger.warning(
+            "tg_monitor.force_message terminal source=%s message_id=%s reason=%s",
+            username,
+            message_id,
+            reason,
+        )
+    return terminal
+
+
 async def process_telegram_results(
     results_path: str | Path,
     db: Database,
@@ -5836,12 +5921,20 @@ async def process_telegram_results(
     raw_messages = data.get("messages") or []
     messages = _order_messages_chronologically(raw_messages)
     total_messages = len(messages)
+    returned_message_ids: dict[str, set[int]] = defaultdict(set)
     linked_message_index: dict[str, dict[str, Any]] = {}
     linked_posters_cache: dict[str, list[PosterCandidate]] = {}
     linked_text_cache: dict[str, str] = {}
     for msg in raw_messages:
         if not isinstance(msg, dict):
             continue
+        returned_username = normalize_tg_username(msg.get("source_username"))
+        returned_ids = _carrier_source_message_ids(
+            msg,
+            int(_to_int(msg.get("message_id")) or 0),
+        )
+        if returned_username:
+            returned_message_ids[returned_username].update(returned_ids)
         source_link = _clean_url(msg.get("source_link"))
         canonical = _canonical_tg_post_url(source_link)
         if not canonical:
@@ -7351,6 +7444,19 @@ async def process_telegram_results(
                     poster_bridge.pop(username, None)
         except Exception:
             pass
+
+    missing_forced = await _terminalize_missing_forced_messages(
+        db,
+        successful_source_usernames=set(source_meta_map),
+        returned_message_ids=returned_message_ids,
+    )
+    if missing_forced:
+        count = len(missing_forced)
+        report.messages_scanned += count
+        report.messages_forced += count
+        report.messages_forced_replay += count
+        report.messages_terminal_errors += count
+        report.skipped_posts.extend(missing_forced)
 
     if _global_vk_reconcile_enabled():
         try:
