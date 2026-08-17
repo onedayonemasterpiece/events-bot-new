@@ -1121,6 +1121,7 @@ async def _load_existing_vk_crawl_admissions(
     candidates: Sequence[VKCrawlAdmissionCandidate],
     *,
     reclassify_legacy_pending: bool = False,
+    reclassify_transient_fail_open: bool = False,
 ) -> dict[str, VKCrawlAdmissionDecision]:
     result: dict[str, VKCrawlAdmissionDecision] = {}
     if not candidates:
@@ -1146,7 +1147,14 @@ async def _load_existing_vk_crawl_admissions(
             if not row:
                 continue
             admission_status = str(row[0] or "")
+            admission_reason = str(row[1] or "")
             inbox_status = str(row[3] or "")
+            if (
+                reclassify_transient_fail_open
+                and admission_status == "admitted"
+                and admission_reason == "fail_open_provider_or_schema_failure"
+            ):
+                continue
             if admission_status not in {"admitted", "rejected"}:
                 if inbox_status == "pending" and not reclassify_legacy_pending:
                     result[candidate.key] = VKCrawlAdmissionDecision(
@@ -1363,11 +1371,13 @@ async def _resolve_vk_crawl_admissions(
     *,
     tz: timezone,
     reclassify_legacy_pending: bool = False,
+    reclassify_transient_fail_open: bool = False,
 ) -> dict[str, VKCrawlAdmissionDecision]:
     decisions = await _load_existing_vk_crawl_admissions(
         db,
         candidates,
         reclassify_legacy_pending=reclassify_legacy_pending,
+        reclassify_transient_fail_open=reclassify_transient_fail_open,
     )
     pending: list[VKCrawlAdmissionCandidate] = []
     for candidate in candidates:
@@ -1403,6 +1413,7 @@ async def requalify_vk_inbox_admission(
     limit: int = 100,
     newest_first: bool = True,
     dry_run: bool = False,
+    retry_transient_fail_open: bool = False,
 ) -> dict[str, Any]:
     """Apply the crawl admission contract to legacy selectable inbox rows.
 
@@ -1418,6 +1429,13 @@ async def requalify_vk_inbox_admission(
     local_tz = require_main_attr("LOCAL_TZ")
     order = "DESC" if newest_first else "ASC"
     async with db.raw_conn() as conn:
+        target_clause = (
+            "packet.admission_status='admitted' AND "
+            "packet.admission_reason='fail_open_provider_or_schema_failure'"
+            if retry_transient_fail_open
+            else "COALESCE(packet.admission_status,'legacy_unclassified')="
+            "'legacy_unclassified'"
+        )
         rows = await (await conn.execute(
             f"""
             SELECT inbox.id,inbox.group_id,inbox.owner_type,inbox.source_packet_id,
@@ -1427,7 +1445,7 @@ async def requalify_vk_inbox_admission(
             LEFT JOIN vk_source AS source ON source.group_id=inbox.group_id
             WHERE inbox.status='pending'
               AND inbox.locked_by IS NULL
-              AND COALESCE(packet.admission_status,'legacy_unclassified')='legacy_unclassified'
+              AND {target_clause}
             ORDER BY inbox.date {order},inbox.id {order}
             LIMIT ?
             """,
@@ -1468,6 +1486,7 @@ async def requalify_vk_inbox_admission(
         candidates,
         tz=local_tz,
         reclassify_legacy_pending=True,
+        reclassify_transient_fail_open=retry_transient_fail_open,
     )
     stats: dict[str, Any] = {
         "selected": len(rows),
@@ -1479,6 +1498,7 @@ async def requalify_vk_inbox_admission(
         "invalid_source_packets": invalid_rows,
         "dry_run": bool(dry_run),
         "remaining_legacy_pending": 0,
+        "remaining_transient_fail_open": 0,
     }
     for prepared_row, candidate in zip(prepared, candidates):
         _inbox_id, group_id, owner_type, _packet_id, post, _default_time = prepared_row
@@ -1516,6 +1536,20 @@ async def requalify_vk_inbox_admission(
             """
         )).fetchone()
     stats["remaining_legacy_pending"] = int((remaining[0] if remaining else 0) or 0)
+    async with db.raw_conn() as conn:
+        remaining_transient = await (await conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM vk_inbox AS inbox
+            JOIN vk_source_packet AS packet ON packet.id=inbox.source_packet_id
+            WHERE inbox.status='pending'
+              AND packet.admission_status='admitted'
+              AND packet.admission_reason='fail_open_provider_or_schema_failure'
+            """
+        )).fetchone()
+    stats["remaining_transient_fail_open"] = int(
+        (remaining_transient[0] if remaining_transient else 0) or 0
+    )
     return stats
 
 

@@ -100,9 +100,10 @@ async def test_requalification_operator_bootstraps_runtime_main(tmp_path):
         "fail_open": 0,
         "invalid_source_packets": [],
         "llm_checked": 0,
-        "rejected": 0,
-        "remaining_legacy_pending": 0,
-        "selected": 0,
+            "rejected": 0,
+            "remaining_legacy_pending": 0,
+            "remaining_transient_fail_open": 0,
+            "selected": 0,
     }
 
 
@@ -741,7 +742,61 @@ async def test_legacy_pending_backlog_is_requalified_without_running_auto_import
         "invalid_source_packets": [],
         "dry_run": False,
         "remaining_legacy_pending": 0,
+        "remaining_transient_fail_open": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_requalifier_can_retry_only_transient_fail_open_rows(tmp_path, monkeypatch):
+    db = await _db(tmp_path)
+    post = {
+        "date": int(time.time()),
+        "post_id": 71,
+        "text": "Опубликован отчёт о завершённом ремонте здания.",
+        "photos": [],
+    }
+    packet_id, _ = await vk_intake._persist_vk_source_packet(
+        db,
+        group_id=1,
+        owner_type="group",
+        post=post,
+        source_url="https://vk.com/wall-1_71",
+        keyword_hints=(),
+        date_hints=(),
+        event_ts_hint=None,
+        admission_decision=vk_intake._vk_admission_fail_open(
+            "provider_or_schema_failure"
+        ),
+        apply_admission_gate=True,
+    )
+    client = _AdmissionClient({"decisions": [{
+        "id": "1:71",
+        "outcome": "NON_EVENT",
+        "confidence": 0.99,
+        "evidence_quote": "отчёт о завершённом ремонте",
+        "reason": "administrative_news",
+    }]})
+    monkeypatch.setattr(vk_intake, "_get_vk_crawl_admission_client", lambda: client)
+
+    stats = await vk_intake.requalify_vk_inbox_admission(
+        db,
+        limit=10,
+        retry_transient_fail_open=True,
+    )
+
+    async with db.raw_conn() as conn:
+        inbox = await (await conn.execute(
+            "SELECT status FROM vk_inbox WHERE source_packet_id=?", (packet_id,)
+        )).fetchone()
+        packet = await (await conn.execute(
+            "SELECT admission_status,admission_reason FROM vk_source_packet WHERE id=?",
+            (packet_id,),
+        )).fetchone()
+    assert inbox == ("rejected",)
+    assert packet == ("rejected", "llm_non_event")
+    assert stats["selected"] == 1
+    assert stats["rejected"] == 1
+    assert stats["remaining_transient_fail_open"] == 0
 
 
 @pytest.mark.asyncio

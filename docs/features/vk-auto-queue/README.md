@@ -387,6 +387,11 @@ python scripts/ops/requalify_vk_inbox_admission.py --db /data/db.sqlite --limit 
 # explicit bounded apply after reviewing dry-run counters
 python scripts/ops/requalify_vk_inbox_admission.py \
   --db /data/db.sqlite --limit 100 --apply
+
+# after a provider cooldown, re-evaluate only fail-open provider/schema rows;
+# keep chunks small so recovery does not consume the live crawl quota
+python scripts/ops/requalify_vk_inbox_admission.py \
+  --db /data/db.sqlite --limit 100 --retry-transient-fail-open --apply
 ```
 
 Команда меняет только admission receipt и связанный `vk_inbox.status`.
