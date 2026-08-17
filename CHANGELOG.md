@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Fixed: VK/Smart Update no longer loses a source-grounded event when the
+  location reviewer returns `keep` with a non-verbatim citation but the exact
+  candidate address is present in the source. Online events may recover one
+  unambiguous maintained municipality from their selected source, accepted
+  occurrence bindings do not re-litigate unchanged structural anchors, and an
+  LLM-confirmed missing start date closes as a typed product exclusion instead
+  of `FAILED_TECHNICAL`.
+- Changed: production VK auto-import batches now process 25 carriers at each of
+  the five daily slots. The existing durable 4:1 fresh/history interleave gives
+  capacity above the incident's measured fresh-arrival rate without an
+  unbounded single run.
+
 - Fixed: official-source exact ticket URLs already attached to the same Event
   now remain authoritative when the canonical presentation title adds a
   prefix such as `Концерт`. The parser no longer re-enters extraction and

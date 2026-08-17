@@ -2537,7 +2537,10 @@ OCCURRENCE_SCOPE_REVIEW_SCHEMA = {
 ANCHOR_ROLE_REVIEW_SCHEMA = {
     "type": "object",
     "properties": {
-        "decision": {"type": "string", "enum": ["keep", "repair", "uncertain"]},
+        "decision": {
+            "type": "string",
+            "enum": ["keep", "repair", "reject_missing_date"],
+        },
         "confidence": {"type": "number"},
         "date": {"type": ["string", "null"]},
         "end_date": {"type": ["string", "null"]},
@@ -6700,6 +6703,28 @@ def _source_grounded_region_place_hint(candidate: "EventCandidate") -> str | Non
         matches = find_allowlisted_kaliningrad_places(evidence)
         if matches:
             return matches[0]
+    # Online events have no attendee-facing physical venue from which to infer
+    # a city. In that narrow case the selected child source may still name the
+    # one municipality whose official stream is being announced. Accept it
+    # only when the complete selected evidence contains exactly one maintained
+    # place; two different places stay unresolved rather than being guessed.
+    online_location = normalize_venue_key(candidate.location_name) in {
+        "vk",
+        "telegram",
+        "online",
+        "онлайн",
+    }
+    if online_location:
+        source_matches: list[str] = []
+        for evidence in (
+            candidate.occurrence_scope_text,
+            candidate.source_text,
+        ):
+            for match in find_allowlisted_kaliningrad_places(evidence):
+                if match not in source_matches:
+                    source_matches.append(match)
+        if len(source_matches) == 1:
+            return source_matches[0]
     return None
 
 
@@ -6920,7 +6945,9 @@ async def _llm_review_candidate_anchor_roles(
         "Если title означает саму выставку, выбирай полный период; если title явно означает "
         "открытие/вернисаж, выбирай только дату и время открытия. Не схлопывай выставку к дате закрытия. "
         "Если evidence однозначно поддерживает candidate — keep. Если однозначно даёт другие "
-        "date/end_date/time — repair. Иначе uncertain. date/end_date только YYYY-MM-DD, time "
+        "date/end_date/time — repair. Если источник не подтверждает точную дату начала, выбери "
+        "reject_missing_date: это финальное продуктовое решение, не техническая ошибка. "
+        "Не возвращай uncertain. date/end_date только YYYY-MM-DD, time "
         "только HH:MM; null означает, что поле не подтверждено. evidence_quotes должны быть "
         "короткими ДОСЛОВНЫМИ фрагментами source_and_ocr. Не додумывай период. Только JSON.\n"
         f"INPUT:\n{json.dumps(payload, ensure_ascii=False)}"
@@ -6931,9 +6958,10 @@ async def _llm_review_candidate_anchor_roles(
         if review_attempt:
             review_prompt = (
                 f"{prompt}\n\n"
-                "PREVIOUS ANSWER FAILED VALIDATION. Return the final keep/repair/uncertain "
-                "decision again, but every evidence_quotes item must be copied verbatim "
-                "from source_and_ocr. Do not paraphrase a quote."
+                "PREVIOUS ANSWER FAILED VALIDATION. Return the final "
+                "keep/repair/reject_missing_date decision again. If an exact start date "
+                "is not supported, choose reject_missing_date. Every evidence_quotes item "
+                "must be copied verbatim from source_and_ocr. Do not paraphrase a quote."
             )
         candidate_data = await _ask_gemma_json(
             review_prompt,
@@ -6967,6 +6995,8 @@ async def _llm_review_candidate_anchor_roles(
         if explicit_unknown_start and _valid_hhmm_or_none(candidate.time):
             return False, "llm_time_conflicts_explicit_unknown"
         return True, "llm_keep"
+    if decision == "reject_missing_date" and confidence >= 0.85:
+        return False, "llm_reject_missing_date"
     if decision != "repair" or confidence < 0.85:
         return False, f"llm_{decision or 'uncertain'}"
     repaired_date = str(data.get("date") or "").strip() or None
@@ -7313,12 +7343,17 @@ async def _llm_review_candidate_location_grounding(
             )
 
             if decision == "keep":
+                # The LLM owns the semantic KEEP decision. A malformed
+                # citation string must not discard the event when the current
+                # candidate venue/address itself is mechanically present in
+                # the authoritative source bundle. This is narrower than
+                # trusting the quote: an unsupported venue still fails closed.
+                if (
+                    _source_supports_location_value(corpus, candidate.location_name)
+                    or _source_supports_location_value(corpus, candidate.location_address)
+                ):
+                    return True, "llm_keep"
                 if quote_grounded:
-                    if (
-                        _source_supports_location_value(corpus, candidate.location_name)
-                        or _source_supports_location_value(corpus, candidate.location_address)
-                    ):
-                        return True, "llm_keep"
                     if profile_location_grounded and trigger_reason in {
                         "canonical_location_not_in_source",
                         "canonical_location_name_not_in_source",
@@ -17178,6 +17213,70 @@ async def _exact_input_noop_event_id(
         return None, True
 
 
+async def _accepted_occurrence_anchor_event_id(
+    db: Database,
+    candidate: "EventCandidate",
+) -> int | None:
+    """Return the one canonical owner of already-accepted structural anchors.
+
+    A source edit may change the packet fingerprint while retaining the exact
+    source-native/structured occurrence identity. The edit must still reach
+    eventness, location and merge processing, but it must not ask an LLM to
+    re-decide date/range/time values that are byte-for-byte the anchors of the
+    already accepted EventSource binding. This prevents an unstable reviewer
+    response from turning an accepted occurrence back into a technical final.
+    """
+
+    canonical_source_url = canonicalize_identity_url(candidate.source_url)
+    candidate_key = str(candidate.candidate_key or "").strip()
+    occurrence_key = str(candidate.occurrence_key or "").strip()
+    if not canonical_source_url or not candidate_key or not occurrence_key:
+        return None
+    try:
+        async with db.raw_conn() as conn:
+            cursor = await conn.execute(
+                """
+                SELECT s.event_id,e.date,COALESCE(e.end_date,''),COALESCE(e.time,'')
+                FROM event_source AS s
+                JOIN event AS e ON e.id=s.event_id
+                WHERE s.canonical_source_url=?
+                  AND s.source_type=?
+                  AND s.source_role='identity_bearing'
+                  AND s.candidate_key=?
+                  AND COALESCE(s.occurrence_key,'')=?
+                  AND e.identity_status='canonical'
+                  AND e.lifecycle_status='active'
+                ORDER BY s.event_id
+                LIMIT 2
+                """,
+                (
+                    canonical_source_url,
+                    str(candidate.source_type or ""),
+                    candidate_key,
+                    occurrence_key,
+                ),
+            )
+            rows = await cursor.fetchall()
+            await cursor.close()
+    except Exception:
+        logger.warning(
+            "smart_update: accepted occurrence anchor lookup failed",
+            exc_info=True,
+        )
+        return None
+    if len(rows) != 1:
+        return None
+    row = rows[0]
+    same_date = str(row[1] or "").strip() == str(candidate.date or "").strip()
+    same_end = str(row[2] or "").strip() == str(candidate.end_date or "").strip()
+    same_time = _normalize_time_for_match(row[3]) == _normalize_time_for_match(
+        candidate.time
+    )
+    if not (same_date and same_end and same_time):
+        return None
+    return int(row[0]) if row[0] is not None else None
+
+
 async def _apply_holiday_festival_mapping(db: Database, event_id: int) -> bool:
     """Ensure pseudo-festivals from docs/reference/holidays.md are applied universally.
 
@@ -17630,6 +17729,19 @@ async def _smart_event_update_impl(
                 retry_reason=RetryReason.SOURCE_VERIFICATION_REQUIRED,
             )
     anchor_review_needed, anchor_review_trigger = _candidate_needs_llm_anchor_role_review(candidate)
+    accepted_anchor_event_id: int | None = None
+    if anchor_review_needed:
+        accepted_anchor_event_id = await _accepted_occurrence_anchor_event_id(db, candidate)
+        if accepted_anchor_event_id is not None:
+            logger.info(
+                "smart_update.anchor_role_review result=accepted_occurrence_binding "
+                "event_id=%s source_type=%s source_url=%s candidate_key=%s",
+                accepted_anchor_event_id,
+                candidate.source_type,
+                candidate.source_url,
+                str(candidate.candidate_key or "")[:16],
+            )
+            anchor_review_needed = False
     if anchor_review_needed and not SMART_UPDATE_LLM_DISABLED:
         anchor_ok, anchor_result = await _llm_review_candidate_anchor_roles(
             candidate,
@@ -17648,6 +17760,12 @@ async def _smart_event_update_impl(
             candidate.time,
         )
         if not anchor_ok:
+            if anchor_result == "llm_reject_missing_date":
+                return SmartUpdateResult(
+                    outcome=SmartUpdateTerminalOutcome.REJECTED_PRODUCT_POLICY,
+                    reason=ProductExclusionReason.MISSING_DATE.value,
+                    product_exclusion_reason=ProductExclusionReason.MISSING_DATE,
+                )
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 reason=f"anchor_role_review:{anchor_result}",

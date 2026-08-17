@@ -289,6 +289,44 @@ def test_wall_32547811_11187_low_confidence_keep_is_terminal_positive(monkeypatc
     ) == (True, "llm_keep")
 
 
+def test_wall_32547811_11187_keep_survives_nonverbatim_quote_when_address_is_grounded(
+    monkeypatch,
+) -> None:
+    """The review verdict is semantic; a bad citation must not lose a grounded event."""
+
+    fixture = json.loads(
+        (
+            Path(__file__).parent
+            / "replays"
+            / "INC-2026-08-15-ingestion-retry-stall-and-wal-growth"
+            / "vk_location_grounding.json"
+        ).read_text(encoding="utf-8")
+    )["positive"]
+    fixture.pop("provider_result")
+    candidate = seu.EventCandidate(**fixture)
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "keep",
+            "confidence": 0.99,
+            "location_name": "Библиотека Чехова",
+            "location_address": "Московский проспект, 39",
+            "city": "Калининград",
+            "evidence_quote": "Библиотека Чехова, Московский проспект, 39",
+            "reason_short": "The exact address supports the venue.",
+        }
+
+    monkeypatch.setattr(seu, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(seu, "_ask_gemma_json", fake_ask)
+
+    assert asyncio.run(
+        seu._llm_review_candidate_location_grounding(
+            candidate,
+            trigger_reason="canonical_location_name_not_in_source",
+        )
+    ) == (True, "llm_keep")
+
+
 def test_llm_location_review_applies_only_source_grounded_repair(monkeypatch) -> None:
     candidate = _candidate(
         "Остров Канта",

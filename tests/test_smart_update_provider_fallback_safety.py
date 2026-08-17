@@ -161,6 +161,44 @@ async def test_collapsed_exhibition_range_is_llm_repaired(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_daily_activity_without_grounded_start_date_is_product_decision(monkeypatch) -> None:
+    candidate = su.EventCandidate(
+        source_type="vk",
+        source_url="https://vk.com/wall-9118984_24806",
+        source_text=(
+            "Выставка работает до 30 августа. Ежедневные экскурсии проходят "
+            "в 12:00 и 17:00."
+        ),
+        title="Экскурсия по выставке",
+        date="2026-08-16",
+        end_date="2026-08-30",
+        time="12:00",
+        location_name="Музей Изобразительных искусств",
+        city="Калининград",
+    )
+
+    async def fake_ask(prompt, schema, *_args, **_kwargs):
+        assert "reject_missing_date" in prompt
+        assert "reject_missing_date" in schema["properties"]["decision"]["enum"]
+        return {
+            "decision": "reject_missing_date",
+            "confidence": 0.99,
+            "date": None,
+            "end_date": "2026-08-30",
+            "time": "12:00",
+            "evidence_quotes": ["Выставка работает до 30 августа"],
+            "reason_short": "The source gives an end date but no start date.",
+        }
+
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+    needed, trigger = su._candidate_needs_llm_anchor_role_review(candidate)
+    assert (needed, trigger) == (True, "explicit_range")
+    assert await su._llm_review_candidate_anchor_roles(
+        candidate, trigger_reason=trigger
+    ) == (False, "llm_reject_missing_date")
+
+
+@pytest.mark.asyncio
 async def test_explicit_unknown_activity_start_is_llm_repaired_to_null(monkeypatch) -> None:
     candidate = su.EventCandidate(
         source_type="telegram",
