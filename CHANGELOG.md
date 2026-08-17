@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: the bounded VK admission requalifier no longer mistakes a stale
+  `review_batch` marker on an unlocked `pending` row for an active claim. This
+  made the final legacy cohort invisible to recovery even though scheduled
+  auto-import could still select it; only actual locked rows remain excluded.
+
 - Fixed: grounded high-confidence VK admission decisions now remain effective
   when an otherwise dispositive source text also has ordinary media. The LLM
   prompt, rather than a blanket attachment veto, preserves recall by requiring

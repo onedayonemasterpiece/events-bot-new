@@ -601,6 +601,15 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   grounded LLM decisions whenever any visual attachment existed (24/40 rows
   failed open for this reason/uncertainty). Keep the incident open and remove
   that blanket veto before continuing the backlog drain.
+- [x] deploy grounded visual-safe admission as Fly v2009 at exact main
+  `c4af46d5964db6a900ed5707db29fb267b7997c1`. A real separate scheduled crawl
+  scanned 162 revisions, rejected 37 before queueing and admitted 35 new inbox
+  rows; 29 uncertain rows failed open. Bounded legacy recovery then reduced
+  selectable unclassified pending rows from 4,692 to zero and rejected 1,840
+  grounded past/non-event rows, but exposed 955 additional unlocked `pending`
+  rows carrying stale `review_batch` markers that the recovery selector alone
+  skipped. Align the operator selector with auto-import: only an actual lock,
+  not a stale batch label, protects a row.
 - [ ] merge/deploy the VK admission gate from exact main, requalify the legacy
   pending cohort in bounded batches, then prove on a real crawl and subsequent
   separate scheduled auto-import that queue size/no-event share fall while all

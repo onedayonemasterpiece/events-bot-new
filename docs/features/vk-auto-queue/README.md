@@ -393,9 +393,12 @@ python scripts/ops/requalify_vk_inbox_admission.py \
 Grounded past/non-event становится `rejected`; admitted/fail-open остаётся
 `pending` для отдельного расписания auto-import. Плохой provider/schema не
 паркует пост в новой retry-очереди и не удаляет его — он fail-open. Строки,
-уже claimed текущим auto-import batch (`locked_by`/`review_batch`), команда не
-трогает; обычный crawler также не запускает скрытую массовую переклассификацию
-старого backlog — для неё используется только этот bounded entrypoint.
+уже claimed текущим auto-import (`status=locked`/`locked_by`), команда не
+трогает. Старый `review_batch` на строке, которая снова `pending` и не имеет
+lock, не считается активным claim: auto-import сам выбирает такие строки, и
+requalifier также обязан их классифицировать. Обычный crawler не запускает
+скрытую массовую переклассификацию старого backlog — для неё используется
+только этот bounded entrypoint.
 
 Read-only inventory/census:
 

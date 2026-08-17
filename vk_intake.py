@@ -1427,7 +1427,6 @@ async def requalify_vk_inbox_admission(
             LEFT JOIN vk_source AS source ON source.group_id=inbox.group_id
             WHERE inbox.status='pending'
               AND inbox.locked_by IS NULL
-              AND inbox.review_batch IS NULL
               AND COALESCE(packet.admission_status,'legacy_unclassified')='legacy_unclassified'
             ORDER BY inbox.date {order},inbox.id {order}
             LIMIT ?
