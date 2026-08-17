@@ -7249,6 +7249,13 @@ async def _llm_review_candidate_location_grounding(
     if SMART_UPDATE_LLM_DISABLED:
         return False, "llm_disabled"
     corpus = _candidate_location_grounding_corpus(candidate)
+    profile_location_grounded = _telegram_profile_supports_location(candidate)
+    metrics = candidate.metrics if isinstance(candidate.metrics, dict) else {}
+    configured_profile_location = (
+        str(metrics.get("tg_default_location") or "").strip()
+        if profile_location_grounded
+        else ""
+    )
     payload = {
         "candidate": {
             "title": candidate.title,
@@ -7259,6 +7266,7 @@ async def _llm_review_candidate_location_grounding(
             "city": candidate.city,
             "source_url": candidate.source_url,
         },
+        "configured_source_profile_location": configured_profile_location or None,
         "retrieval_trigger": trigger_reason,
         "source_and_poster_evidence": _clip(corpus, 4200),
     }
@@ -7273,6 +7281,9 @@ async def _llm_review_candidate_location_grounding(
         "Название программы или сообщества не является venue только потому, что оно дословно есть в посте. Event context вроде "
         "«День города в Янтарном» не является названием venue. "
         "Если источник явно называет более конкретное место, выбери его. "
+        "configured_source_profile_location — поддерживаемая площадка этого Telegram-источника; "
+        "она является допустимым доказательством места, когда текущий пост не называет другую "
+        "attendee-facing площадку. Явное место из текущего поста всегда приоритетнее профиля. "
         "Если candidate уже подтверждён источником — выбери keep. Если источник явно "
         "называет другое attendee-facing место — repair. Если источник подтверждает только "
         "город/посёлок, название события/фестиваля или программу, но не площадку, выбери "
@@ -7302,11 +7313,17 @@ async def _llm_review_candidate_location_grounding(
             )
 
             if decision == "keep":
-                if quote_grounded and (
-                    _source_supports_location_value(corpus, candidate.location_name)
-                    or _source_supports_location_value(corpus, candidate.location_address)
-                ):
-                    return True, "llm_keep"
+                if quote_grounded:
+                    if (
+                        _source_supports_location_value(corpus, candidate.location_name)
+                        or _source_supports_location_value(corpus, candidate.location_address)
+                    ):
+                        return True, "llm_keep"
+                    if profile_location_grounded and trigger_reason in {
+                        "canonical_location_not_in_source",
+                        "canonical_location_name_not_in_source",
+                    }:
+                        return True, "llm_keep_profile"
                 last_reason = (
                     "llm_keep_not_grounded" if quote_grounded else "llm_keep_quote_invalid"
                 )
@@ -17379,18 +17396,19 @@ def _should_run_widened_dedup_adjudicator(
 ) -> bool:
     """Return whether the create-path identity adjudicator owns this decision.
 
-    Canonical parser sources normally avoid the broad widened-recall pass.  If
-    the identity gate has already vetoed CREATE with a concrete event owner,
-    however, skipping the adjudicator leaves a guaranteed technical terminal.
-    In that narrow case the same typed same/distinct adjudicator must run for a
-    parser source too.
+    Canonical parser sources and source-anchored candidates normally avoid the
+    broad widened-recall pass.  If the identity gate has already vetoed CREATE
+    with a concrete event owner, however, skipping the adjudicator leaves a
+    guaranteed technical terminal.  In that narrow case the same typed
+    same/distinct adjudicator must run regardless of source type or an earlier
+    source anchor.
     """
 
     return bool(
         SMART_UPDATE_DEDUP_ADJUDICATOR
         and match_event is None
         and not candidate.force_create_distinct
-        and not anchor_forced
+        and (not anchor_forced or identity_gate_match is not None)
         and (not is_canonical_site or identity_gate_match is not None)
         and not SMART_UPDATE_LLM_DISABLED
         and (

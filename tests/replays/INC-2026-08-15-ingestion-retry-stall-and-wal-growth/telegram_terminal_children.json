@@ -1,0 +1,142 @@
+{
+  "schema_version": "inc-2026-08-15.telegram-terminal-children.v1",
+  "captured_at_utc": "2026-08-17T01:30:00Z",
+  "children": [
+    {
+      "label": "tretyakovka_festival",
+      "production_state_id": 7639,
+      "historical_outcome": "FAILED_TECHNICAL",
+      "historical_reason": "location_grounding_review:llm_keep_not_grounded",
+      "candidate": {
+        "source_type": "telegram",
+        "source_url": "https://t.me/tretyakovka_kaliningrad/3618",
+        "source_text": "Третьяковская галерея Калининграда приглашает в кино!🎞📽\n \nС 19 по 22 августа в кинозале музея пройдут показы XIV Международного фестиваля короткометражного и дебютного кино «Короче».\n \nЗрителей ждут истории взросления и свободы выбора, криминальные драмы, фильмы о любви, семейных отношениях, утрате и надежде, комедии и анимация.\n\nВ четверг, 20 августа, будут показаны фильмы внеконкурсных программ фестиваля. Свои авторские подборки представят отборщики короткого метра Надежда Королева и Вадим Рутковский.\n \n📍Вход на кинопоказы свободный. Регистрация откроется 17 августа в 12:00 на нашем официальном сайте. Обращаем ваше внимание, что количество мест ограничено. \n \nДо встречи!🎬",
+        "raw_excerpt": "С 19 по 22 августа в кинозале музея пройдут показы XIV Международного фестиваля короткометражного и дебютного кино «Короче».",
+        "title": "XIV Международный фестиваль короткометражного и дебютного кино «Короче»",
+        "date": "2026-08-19",
+        "time": "12:00",
+        "time_is_default": false,
+        "end_date": "2026-08-22",
+        "festival": "Короче",
+        "location_name": "Филиал Третьяковской галереи",
+        "location_address": "Парадная наб. 3",
+        "city": "Калининград",
+        "ticket_link": null,
+        "event_type": "фестиваль",
+        "is_free": true,
+        "source_chat_username": "tretyakovka_kaliningrad",
+        "source_message_id": 3618,
+        "trust_level": "high",
+        "metrics": {
+          "channel_median_likes": 12,
+          "channel_median_views": 517,
+          "comments": 0,
+          "likes": 18,
+          "tg_city_overridden_by_default": false,
+          "tg_default_city": "Калининград",
+          "tg_default_location": "Филиал Третьяковской галереи, Парадная наб. 3, Калининград",
+          "tg_extracted_city": "Калининград",
+          "tg_extracted_location_address": "Парадная наб. 3",
+          "tg_extracted_location_name": "Филиал Третьяковской галереи",
+          "tg_location_kept_extracted": false,
+          "tg_location_overridden_by_default": false,
+          "tg_location_temporal_rejected": false,
+          "tg_ticket_link_from_post_author": false,
+          "tg_time_explicitly_unknown": false,
+          "tg_time_is_default": false,
+          "views": 669
+        },
+        "producer_ordinal": 0,
+        "occurrence_key": "structured:42303c63cca5c9ea67214f56d3bf54ef629dadef072b1319eb17505ccc8e9a3e:ordinal:0",
+        "candidate_key": "1a0218614c40a107c7077e2e48cd7b77ee0c102e969afdc718d40205f4d27669",
+        "posters": [
+          {
+            "sha256": "8c2dac14ab0bfcb75d40817bdf15c58c0468a28cc9044a772274f16ad181ad25",
+            "raw_sha256": "47f3eb3adec95afeaa12f7a2cb81677bbf9c005d48e1b44f35648dee5f42cbb2",
+            "ocr_title": "КОРОЧЕ",
+            "ocr_text": "Третьяковская галерея Калининград МЕЖДУНАРОДНЫЙ ФЕСТИВАЛЬ КОРОТКОМЕТРАЖНОГО и ДЕБЮТНОГО КИНО 19-22 АВГУСТА"
+          }
+        ]
+      }
+    },
+    {
+      "label": "kozia_yoga",
+      "production_state_id": 7765,
+      "historical_outcome": "FAILED_TECHNICAL",
+      "historical_reason": "identity_gate_adjudicator_unavailable:deterministic_same_ticket_slot",
+      "candidate": {
+        "source_type": "telegram",
+        "source_url": "https://t.me/kozia_gorka/1556",
+        "source_text": "ЯБЛОЧНЫЙ СПАС НА ЭКОФЕРМЕ «КОЗЬЯ ГОРКА»!🍎\n\n22 августа\n12:00-16:00 \nПриглашаем вас на большой летний праздник — Праздник сыра и сидра!\n\nБудет вкусно, красиво и очень по-фермерски ❤️\n🌻 В программе:\n🧘‍♀️ 12:00 — йога с козами на фоне подсолнухов 🎨 13:00 — мастер-класс «Полёт фантазии» — роспись воздушных змеев и запуск в небо 🌾 14:00 — мастер-класс «Куколка из сена (лыка)» 🌿 15:00 — мастер-класс «Венок из полевых трав и цветов»\n📸 Фотозона с сеном и яблоками\n\n🧀 Специальное сырное меню:\n🍎 блины со страчателлой и томлёными яблоками 🍏 штрудель с йогуртовым мороженым 🍓 буррата с яблоком и свежей ягодой 🌿 лепёшки ротти с сыром и зеленью\n🍎 Наши специальные гости — «Хутор Долины Шарлотты» со своей фермерской продукцией:\n🍺яблочный сидр, овощи ,🍯 сиропы и варенье, морсы\nА ещё — атмосфера фермы, наши козы, свежий воздух, подсолнухи и целый день для семейного отдыха! 🐐🌻\n🎉 Вход бесплатный!\n🏡п. Горьковское, Светлогорское шоссе, 13а 8 (914) 156-55-82\nСохраняйте дату и приезжайте встречать Яблочный Спас на «Козьей горке»! 🍎🧀🍏",
+        "raw_excerpt": "12:00 — йога с козами на фоне подсолнухов",
+        "title": "Йога с козами на фоне подсолнухов",
+        "date": "2026-08-22",
+        "time": "12:00",
+        "time_is_default": false,
+        "end_date": null,
+        "festival": "Праздник сыра и сидра",
+        "location_name": "Экоферма Козья горка",
+        "location_address": "Светлогорское шоссе 13а",
+        "city": "Светлогорск",
+        "ticket_link": "tel:+79141565582",
+        "event_type": "мастер-класс",
+        "is_free": true,
+        "source_chat_username": "kozia_gorka",
+        "source_message_id": 1556,
+        "trust_level": "high",
+        "metrics": {
+          "channel_median_likes": 10,
+          "channel_median_views": 197,
+          "comments": 0,
+          "likes": 10,
+          "tg_city_overridden_by_default": false,
+          "tg_default_city": "Светлогорск",
+          "tg_default_location": "Козья горка, пос. Горьковское, Светлогорское шоссе 13а, Светлогорск",
+          "tg_extracted_city": "Светлогорск",
+          "tg_extracted_location_address": "Светлогорское шоссе, 13а",
+          "tg_extracted_location_name": "Экоферма Козья горка",
+          "tg_location_kept_extracted": true,
+          "tg_location_overridden_by_default": false,
+          "tg_location_temporal_rejected": false,
+          "tg_ticket_link_from_post_author": false,
+          "tg_time_explicitly_unknown": false,
+          "tg_time_is_default": false,
+          "views": 197
+        },
+        "producer_ordinal": 1,
+        "occurrence_key": "structured:c1e980f45db475f47294856226c37e343a2c66e8e8b1666d4318f40ec14693de:ordinal:1",
+        "candidate_key": "6d67cf2df63844ff60c9ea15cbc181f8ce5235f880767abd6efdb66fa129b387",
+        "posters": [
+          {
+            "sha256": "cda0b0bac32e5c20e8e54caf07ab02d4335e025b62c476171d764d8c0515367c",
+            "raw_sha256": "7ac2378f650ed76734ef43df791789455cde30d510267a6a0a87f4bb68f61f11",
+            "ocr_title": "ЯБЛОЧНЫЙ СПАС",
+            "ocr_text": "КОЗЬЯ ГОРКА\nЯБЛОЧНЫЙ СПАС\nПраздник сыра и сидра\n22 АВГУСТА\n12:00 - 16:00\n\nПРОГРАММА:\n12:00 Йога с козами на фоне подсолнухов\n13:00 мастер класс «полет фантазии» роспись воздушных змеев и запуск в небо\n14:00 мастер класс куколка из сена (лыка)\n15:00 мастер класс «венок из полевых трав и цветов»\n\nФОТОЗОНА: СЕНО И ЯБЛОКИ\n\nСЫРНОЕ МЕНЮ:\n- Блины со страчателлой и томлеными яблоками\n- Штрудель с йогуртовым мороженым\n- Буррата с яблоком и свежей ягодой\n- Лепешки ротти с сыром и зеленью\n\nПРИГЛАШЁННЫЕ ГОСТИ:\n«ХУТОР ДОЛИНЫ ШАРЛОТТЫ» со своей фермерской продукцией:\n- Яблочный сидр\n- Овощи, сиропы, варенье, морсы\n\nВХОД БЕСПЛАТНЫЙ!\n\nпос. Горьковское, Светлогорское шоссе 13а\n8 (914) 156-55-82"
+          }
+        ]
+      }
+    }
+  ],
+  "opposite_control": {
+    "label": "explicit_conflicting_venue_must_not_use_profile",
+    "candidate": {
+      "source_type": "telegram",
+      "source_url": "https://t.me/fixture/explicit-venue",
+      "source_text": "Концерт 22 августа. 📍Другой зал, Другая 5",
+      "raw_excerpt": "Концерт 22 августа в Другом зале",
+      "title": "Концерт",
+      "date": "2026-08-22",
+      "location_name": "Музей",
+      "location_address": "Музейная 1",
+      "city": "Калининград",
+      "trust_level": "high",
+      "metrics": {
+        "tg_default_location": "Музей, Музейная 1, Калининград",
+        "tg_extracted_location_name": "Музей",
+        "tg_extracted_location_address": "Музейная 1",
+        "tg_extracted_city": "Калининград"
+      }
+    },
+    "expected": "profile_must_not_override_explicit_source_venue"
+  }
+}

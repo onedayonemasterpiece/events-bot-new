@@ -129,6 +129,17 @@ reader is not exposed.
   impossible admission, not a transient quota window. VK's explicit default
   model spelling had accidentally disabled the already-supported large-post
   Flash-Lite route.
+- 2026-08-16 23:26 UTC — PR #530 is deployed from clean exact
+  `origin/main@8ca032631ed0193abb25fd959c221f1fa6679832` as Fly v1999. The
+  impossible historical VK range repair then closes inbox 15300 as typed
+  `past_event`; a fresh five-row VK qualification closes all five rows with
+  zero technical/deferred/unresolved outcomes.
+- 2026-08-17 00:26–01:01 UTC — the one regular S22 Telegram result is adopted
+  after deploy without a second Kaggle launch. Ops 6158 scans all 57 sources
+  and imports 117 messages: 17 events created, 27 merged, no transport errors,
+  but six message-level terminal errors keep the acceptance gate open. Exact
+  child-state audit reduces real unexplained positive-child loss to
+  `tretyakovka_kaliningrad/3618` and `kozia_gorka/1556`.
 
 ## Root Cause
 
@@ -159,6 +170,21 @@ reader is not exposed.
    terminalized carriers which had never reached OCR/LLM. Separately, blank
    successful OCR was counted as missing because only non-empty text blocks
    were retained, and a merged album cleared only its anchor force id.
+8. Telegram source-profile restoration and location verification disagreed on
+   evidence ownership. The producer restored the configured Tretyakovka venue,
+   but the validator accepted LLM `keep` only when the full venue/address was
+   repeated in the individual post; a valid museum-cinema announcement became
+   `FAILED_TECHNICAL` despite the maintained high-trust source profile.
+9. A shared source anchor set `anchor_forced` before the create identity gate.
+   When the gate then named a concrete same-ticket/same-slot owner, the code
+   suppressed the only typed same/distinct adjudicator. A separate yoga child
+   in the same festival post therefore ended technical instead of receiving an
+   LLM `create` decision.
+10. The Telegram consumer calculated original producer indexes but then replaced
+    `producer_ordinal` with the transformed local list position. A filtered
+    replay of child N therefore became child zero and could reuse a sibling's
+    candidate identity. This was reproduced at the full consumer/Smart/SQLite
+    boundary and corrected to preserve the producer ordinal.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -362,6 +388,18 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - [ ] static-site projection canary remains open but is explicitly deferred by
   the operator; it must not block the ingestion deployment and must not be
   silently marked complete.
+- [x] audit the regular 16/17 August S22 run by child outcome rather than raw
+  message denominator: 17 creates and 27 merges are durable, while two real
+  positive children remain technical and therefore keep ingestion unhealthy.
+- [x] implement exact prevention for both remaining Telegram children: a
+  configured source-profile venue can ground an LLM `keep` only when the post
+  names no conflicting place, and a concrete identity-gate owner must reach
+  the typed same/distinct adjudicator even under a source anchor. Filtered
+  replays also preserve the producer child ordinal rather than rebinding it as
+  child zero.
+- [ ] merge/deploy that Telegram correction from exact main, re-drive the two
+  exact children through the Telegram consumer, and require accepted/product
+  terminals with no technical/deferred state.
 
 ## Follow-up Actions
 
@@ -628,6 +666,32 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   same typed `past_event` product exclusion. The Telegram scheduled slot must
   not be interrupted by another deploy; merge/deploy/replay continues after
   that exact-once run is safely handed off.
+- PR #530 merged as
+  `8ca032631ed0193abb25fd959c221f1fa6679832` and was deployed from clean exact
+  main as Fly v1999. Three health probes returned HTTP 200, Fly was 1/1,
+  `quick_check=ok`, WAL was about 280 KiB and `/data` had about 1.02 GiB
+  available. Exact inbox 15300 replay closed both old children as typed
+  `past_event`; fresh bounded VK ops 6157 closed five of five without technical,
+  deferred or unresolved results.
+- regular S22 Telegram recovery-import ops 6158 completed after the remote run
+  scanned all 57 sources. Of 117 messages, 113 were new raw and four metrics-only;
+  61 had typed candidates. The run created 17 events, merged 27 and reported no
+  transport errors. Six message terminals were audited individually: the only
+  two unexplained positive-child losses are state 7639
+  (`tretyakovka_kaliningrad/3618`, configured venue rejected as absent from the
+  post) and state 7765 (`kozia_gorka/1556`, distinct yoga child blocked by the
+  festival owner's shared ticket/slot). This is failure localization, not an
+  ingestion-health claim.
+- predeploy production-shadow replay at 2026-08-17 01:55 UTC used a read-only
+  online backup of `/data/db.sqlite` under `/tmp` and loaded the patched
+  Telegram consumer/Smart code from an isolated overlay. Both exact failed
+  children crossed Telegram result -> Smart Update -> SQLite and became two
+  new events (`created=2`, `merged=0`, `terminal_errors=0`), event count moved
+  7363 -> 7365 and `quick_check=ok`. The shadow and overlay were removed;
+  production remained HTTP 200/Fly 1/1 with 1028 MiB available and an 11.4 MiB
+  WAL. Receipt:
+  `artifacts/codex/INC-2026-08-15-tg-terminal-completeness/prod-shadow-boundary-replay.json`
+  (local ignored evidence; production catch-up is still pending).
 - remaining prevention deployed SHA: pending;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
