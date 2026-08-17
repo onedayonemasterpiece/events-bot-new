@@ -6,7 +6,7 @@ Service: configured-source ingestion, Smart Update, Fly SQLite, StaticSiteBuilde
 Opened: 2026-08-15
 Closed: —
 Owners: events-bot production / ingestion / Smart Update / static-site pipeline
-Related incidents: `INC-2026-08-10-smart-update-identity-terminal-loss`, `INC-2026-08-12-data-volume-ingestion`, `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility`
+Related incidents: `INC-2026-07-27-future-event-source-coverage-drop`, `INC-2026-08-10-smart-update-identity-terminal-loss`, `INC-2026-08-12-data-volume-ingestion`, `INC-2026-08-14-cherryflash-terminal-lock-and-smart-update-visibility`
 Related docs: `docs/features/telegram-monitoring/README.md`, `docs/features/vk-auto-queue/README.md`, `docs/features/smart-event-update/README.md`, `docs/operations/cron.md`, `docs/operations/kaggle-static-site-builder.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
 
 ## Summary
@@ -79,6 +79,13 @@ reader is not exposed.
   retry among the visible rows.
 - 2026-08-15 — incident workflow is reopened as a distinct recurrence rather
   than rewriting the August 10 or August 12 incident history.
+- 2026-08-17 02:50–02:58 UTC — all-source parser ops 6167 processes all eight
+  configured sources, but one accepted Sobor merge cannot acknowledge its
+  Smart Update attempt (`candidate_state_ack_failed`, diagnostic event 7635).
+  Six later Sobor/Tretyakov candidates fail registration as
+  `candidate_state_unavailable`, and the Tretyakov missing-date recovery write
+  also fails. Runtime mirror traces show `database is locked` only on the
+  cached raw connection while ordinary ORM parser writes continue.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
@@ -204,6 +211,15 @@ reader is not exposed.
     name were compared as raw strings, despite both resolving to the same
     curated venue. Seven positive children therefore reached a product
     `missing_location` rejection instead of create/merge.
+12. `Database.raw_conn()` returned one cached `aiosqlite.Connection` to every
+    asyncio worker. Transaction ownership is connection-scoped, so concurrent
+    `BEGIN IMMEDIATE`/commit sequences from Smart Update state, VK continuation,
+    parser recovery and outbox work could interleave. Ops 6167 reproduced the
+    failure: the accepted domain merge committed, but its separate state
+    acknowledgement and six following candidate registrations used the
+    contended shared connection and failed immediately. This is the same
+    transaction-ownership class recorded by the July 27 parser incident, but
+    the unsafe primitive remained available globally.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
 No keyword/regex shortcut is accepted as a remedy for this incident.
@@ -340,6 +356,15 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   with a bounded immutable static-only projection and ephemeral Fly staging;
 - [ ] merge/deploy the remaining exact-main prevention and complete bounded
   Telegram, VK, parser, Smart legacy-drain and static canary recovery.
+- [x] reproduce cached raw-connection transaction aliasing with two concurrent
+  `BEGIN IMMEDIATE` owners and implement per-context connections for every
+  file-backed `Database.raw_conn()` call; focused DB/Smart/parser regression
+  tests cover both generic transaction isolation and accepted-state
+  acknowledgement waiting behind an unrelated writer.
+- [ ] deploy the raw-connection isolation from exact main, reconcile the open
+  ops-6167 attempt, and replay all seven Sobor/Tretyakov technical outcomes to
+  accepted create/merge/no-op or an evidence-backed product exclusion with no
+  open attempt/recovery row.
 - [x] identify the post-deploy Telegram false-skip boundary from exact run 5941
   logs/output and implement pre-send inline quota wait, blank-OCR evidence
   cardinality and all-member album force settlement with focused tests;
@@ -712,6 +737,11 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
   `artifacts/codex/INC-2026-08-15-tg-terminal-completeness/prod-shadow-boundary-replay.json`
   (local ignored evidence; production catch-up is still pending).
 - remaining prevention deployed SHA: pending;
+- parser ops 6167 failure evidence: seven item-level technical failures, one
+  open Smart state (`7805`, `attempt_started`) and a failed Tretyakov
+  missing-date recovery write; runtime mirror stack traces point to
+  `BEGIN IMMEDIATE` on the shared cached raw connection. Prevention is local
+  and tested but not yet deployed, so none of these rows is recovery evidence;
 - catch-up and backlog terminal receipts: pending;
 - WAL bounded-write-window evidence: pending;
 - exact-main static canary: pending.

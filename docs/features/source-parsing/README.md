@@ -138,6 +138,14 @@ run-config пишет status ledger через отдельное коротко
 теряет один или несколько источников с `cannot start a transaction within a
 transaction`.
 
+Тот же contract действует для server-side import, Smart Update state,
+recovery-ledger и фоновых workers: file-backed `Database.raw_conn()` выдаёт
+отдельное соединение на каждый context. Поэтому `BEGIN`/`commit` одного worker
+не могут стать частью транзакции другого worker. В частности, длительный
+parser merge больше не оставляет подтверждение accepted Smart Update и
+следующие parser candidates на общем connection в `database is locked` /
+`candidate_state_unavailable`.
+
 Основные parser kernels не зависят от создаваемого на каждый запуск Kaggle
 status-dataset. Kaggle Dataset API — только вспомогательный transport для
 callback telemetry; отказ `dataset_create_new`/upload token не должен блокировать

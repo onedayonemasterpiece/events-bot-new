@@ -1,3 +1,4 @@
+import asyncio
 import sqlite3
 
 import pytest
@@ -12,6 +13,70 @@ from smart_update_state import (
     smart_update_funnel_counts,
     terminalize_claimed_candidate_technical,
 )
+
+
+@pytest.mark.asyncio
+async def test_candidate_terminal_ack_waits_for_unrelated_raw_writer(
+    tmp_path,
+    monkeypatch,
+):
+    """An unrelated raw transaction must not own Smart Update's connection."""
+
+    monkeypatch.setenv("DB_INIT_MINIMAL", "1")
+    monkeypatch.setenv("DB_TIMEOUT_SEC", "2")
+    db = Database(str(tmp_path / "candidate-ack-contention.sqlite"))
+    await db.init()
+    receipt = await begin_candidate_attempt(
+        db,
+        candidate_key="candidate-ack-contention",
+        occurrence_key="ordinal:17",
+        canonical_source_url="https://tickets.example/event/17",
+        source_type="parser:test",
+        intent="UPSERT_EVENT",
+        source_fingerprint="fp-contention",
+        candidate_payload={"source_type": "parser:test"},
+        lease_owner="source-parser",
+    )
+
+    blocker_entered = asyncio.Event()
+    release_blocker = asyncio.Event()
+
+    async def unrelated_writer() -> None:
+        async with db.raw_conn() as conn:
+            await conn.execute("BEGIN IMMEDIATE")
+            await conn.execute(
+                "INSERT INTO setting(key, value) VALUES('ack-blocker', 'held')"
+            )
+            blocker_entered.set()
+            await release_blocker.wait()
+            await conn.commit()
+
+    blocker = asyncio.create_task(unrelated_writer())
+    await asyncio.wait_for(blocker_entered.wait(), timeout=1)
+    acknowledgement = asyncio.create_task(
+        finish_candidate_attempt(
+            db,
+            receipt,
+            outcome=SmartUpdateTerminalOutcome.FAILED_TECHNICAL,
+            reason="explicit_terminal",
+        )
+    )
+    await asyncio.sleep(0.05)
+    assert not acknowledgement.done()
+
+    release_blocker.set()
+    await asyncio.wait_for(asyncio.gather(blocker, acknowledgement), timeout=2)
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute(
+            "SELECT current_outcome,reason,claimed_by FROM smart_update_candidate_state "
+            "WHERE candidate_key='candidate-ack-contention'"
+        ).fetchone() == ("FAILED_TECHNICAL", "explicit_terminal", None)
+        assert conn.execute(
+            "SELECT terminal_outcome,reason,finished_at IS NOT NULL "
+            "FROM smart_update_attempt WHERE candidate_state_id=? AND attempt_no=?",
+            (receipt.candidate_state_id, receipt.attempt_no),
+        ).fetchone() == ("FAILED_TECHNICAL", "explicit_terminal", 1)
+    await db.close()
 
 
 @pytest.mark.asyncio

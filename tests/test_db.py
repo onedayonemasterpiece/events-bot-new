@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 
@@ -10,6 +11,65 @@ from sqlalchemy import text
 
 from main import Database
 from models import Event
+
+
+@pytest.mark.asyncio
+async def test_raw_conn_uses_isolated_file_connections_for_concurrent_transactions(
+    tmp_path,
+):
+    """Concurrent raw transactions must not share SQLite transaction ownership."""
+
+    db_path = tmp_path / "raw-isolation.sqlite"
+    db = Database(str(db_path))
+    await db.init()
+
+    first_entered = asyncio.Event()
+    release_first = asyncio.Event()
+    second_entered = asyncio.Event()
+    connection_ids: list[int] = []
+
+    async def first_writer() -> None:
+        async with db.raw_conn() as conn:
+            connection_ids.append(id(conn))
+            await conn.execute("BEGIN IMMEDIATE")
+            await conn.execute(
+                "INSERT INTO setting(key, value) VALUES('raw-owner-1', 'ok')"
+            )
+            first_entered.set()
+            await release_first.wait()
+            await conn.commit()
+
+    async def second_writer() -> None:
+        await first_entered.wait()
+        async with db.raw_conn() as conn:
+            connection_ids.append(id(conn))
+            second_entered.set()
+            await conn.execute("BEGIN IMMEDIATE")
+            await conn.execute(
+                "INSERT INTO setting(key, value) VALUES('raw-owner-2', 'ok')"
+            )
+            await conn.commit()
+
+    first_task = asyncio.create_task(first_writer())
+    second_task = asyncio.create_task(second_writer())
+    await asyncio.wait_for(first_entered.wait(), timeout=1)
+    await asyncio.wait_for(second_entered.wait(), timeout=1)
+    await asyncio.sleep(0.05)
+    assert not second_task.done()
+
+    release_first.set()
+    await asyncio.wait_for(asyncio.gather(first_task, second_task), timeout=2)
+
+    assert len(connection_ids) == 2
+    assert connection_ids[0] != connection_ids[1]
+    async with db.raw_conn() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT COUNT(*) FROM setting WHERE key LIKE 'raw-owner-%'"
+            )
+        ).fetchone()
+    assert row == (2,)
+    await db.close()
 
 
 @pytest.mark.asyncio
