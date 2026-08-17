@@ -710,6 +710,13 @@ async def test_legacy_pending_backlog_is_requalified_without_running_auto_import
         "build_event_drafts",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("auto-import ran")),
     )
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            "UPDATE vk_inbox SET review_batch='auto:stale-terminal-batch' "
+            "WHERE source_packet_id=?",
+            (packet_id,),
+        )
+        await conn.commit()
 
     stats = await vk_intake.requalify_vk_inbox_admission(db, limit=10)
 
