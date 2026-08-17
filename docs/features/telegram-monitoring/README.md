@@ -622,6 +622,17 @@ Live E2E multi-source (VK+TG): `tests/e2e/features/multi_source_vk_tg.feature` (
   очищает все member rows после единственного terminal carrier receipt.
 - `schema_version=1` (legacy): только fail-closed reader для диагностики/replay ранее сохранённых `messages[]` без `sources_meta`; positive children можно адаптировать, zero-event/technical result не подтверждается и cursor не продвигается.
 
+Каждый extracted child проходит Smart Update до одного явного результата. Для
+настроенного Telegram source его `default_location` является поддерживаемым
+source-profile evidence, когда producer извлёк ту же площадку, а текущий пост не
+называет другую площадку; явная attendee-facing локация поста всегда приоритетнее.
+Если общий programme post уже привязан к sibling event, конкретный child всё равно
+получает LLM-решение `same event` или `create distinct`: source anchor не может
+завершить его технической ошибкой без семантического решения.
+При bounded/filtered replay consumer сохраняет producer
+`_telegram_result_index` как `producer_ordinal`; локальная позиция отфильтрованного
+элемента не может превратить child N в child 0 и привязать его к соседнему событию.
+
 - Producer (Kaggle): `kaggle/TelegramMonitor/telegram_monitor.py` -> sync в `telegram_monitor.ipynb`
 - Consumer (server): `source_parsing/telegram/handlers.py`
 

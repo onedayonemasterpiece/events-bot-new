@@ -6747,7 +6747,13 @@ async def process_telegram_results(
                     )
                     continue
                 candidate = _build_candidate(source, message, event_data)
-                candidate.producer_ordinal = transformed_event_index
+                # Preserve the producer's original child identity even when a
+                # bounded replay contains only one filtered child or the local
+                # transform/dedup pass changes list positions.  Replacing this
+                # with ``transformed_event_index`` aliases child N to child 0,
+                # which can bind it to a sibling EventSource and silently merge
+                # or skip a real programme item.
+                candidate.producer_ordinal = int(original_event_indexes[0])
                 if candidate.title:
                     event_titles.append(str(candidate.title).strip())
                 # Linked-source enrichment: when parser provides `linked_source_urls`,

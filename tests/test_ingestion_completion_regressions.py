@@ -192,6 +192,144 @@ def test_inflected_source_venue_name_is_still_grounded() -> None:
     ) is True
 
 
+@pytest.mark.asyncio
+async def test_configured_tretyakovka_profile_can_ground_llm_keep(
+    monkeypatch,
+) -> None:
+    """The maintained source venue is evidence even when one post omits it.
+
+    Regression for ``tretyakovka_kaliningrad/3618``: the producer restored the
+    configured gallery venue, the LLM selected KEEP from the event-local text,
+    but the old validator required the venue string to be repeated in that
+    individual post and terminalized a real festival child as technical.
+    """
+
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/tretyakovka_kaliningrad/3618",
+        source_text=(
+            "Третьяковская галерея Калининграда приглашает в кино!\n"
+            "С 19 по 22 августа в кинозале музея пройдут показы фестиваля «Короче».\n"
+            "📍Вход на кинопоказы свободный."
+        ),
+        raw_excerpt=(
+            "С 19 по 22 августа в кинозале музея пройдут показы "
+            "XIV фестиваля «Короче»."
+        ),
+        title="XIV Международный фестиваль кино «Короче»",
+        date="2026-08-19",
+        end_date="2026-08-22",
+        location_name="Филиал Третьяковской галереи",
+        location_address="Парадная наб. 3",
+        city="Калининград",
+        metrics={
+            "tg_default_location": (
+                "Филиал Третьяковской галереи, "
+                "Парадная наб. 3, Калининград"
+            ),
+            "tg_extracted_location_name": "Филиал Третьяковской галереи",
+            "tg_extracted_location_address": "Парадная наб. 3",
+            "tg_extracted_city": "Калининград",
+        },
+    )
+
+    async def fake_ask(prompt, *_args, **_kwargs):
+        assert "configured_source_profile_location" in prompt
+        return {
+            "decision": "keep",
+            "confidence": 0.99,
+            "location_name": None,
+            "location_address": None,
+            "city": "Калининград",
+            "evidence_quote": "в кинозале музея пройдут показы",
+            "reason_short": "the configured museum source owns this cinema",
+        }
+
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+
+    assert await su._llm_review_candidate_location_grounding(
+        candidate,
+        trigger_reason="canonical_location_not_in_source",
+    ) == (True, "llm_keep_profile")
+
+
+@pytest.mark.asyncio
+async def test_configured_profile_does_not_override_explicit_conflicting_venue(
+    monkeypatch,
+) -> None:
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/venue/1",
+        source_text="📍Другой зал, Другая 5",
+        title="Концерт",
+        date="2026-08-22",
+        location_name="Музей",
+        location_address="Музейная 1",
+        city="Калининград",
+        metrics={
+            "tg_default_location": "Музей, Музейная 1, Калининград",
+            "tg_extracted_location_name": "Музей",
+        },
+    )
+
+    async def fake_ask(*_args, **_kwargs):
+        return {
+            "decision": "keep",
+            "confidence": 0.99,
+            "location_name": None,
+            "location_address": None,
+            "city": "Калининград",
+            "evidence_quote": "Другой зал",
+            "reason_short": "synthetic wrong keep",
+        }
+
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
+    monkeypatch.setattr(su, "_ask_gemma_json", fake_ask)
+
+    ok, reason = await su._llm_review_candidate_location_grounding(
+        candidate,
+        trigger_reason="explicit_location_role_conflicts_candidate",
+    )
+    assert ok is False
+    assert reason == "llm_keep_not_grounded"
+
+
+def test_concrete_identity_owner_runs_adjudicator_even_for_forced_anchor() -> None:
+    """Regression for the separate yoga child in ``kozia_gorka/1556``."""
+
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/kozia_gorka/1556",
+        source_text=(
+            "22 августа: 12:00 — йога с козами; "
+            "13:00 — мастер-класс «Полёт фантазии»."
+        ),
+        raw_excerpt="12:00 — йога с козами на фоне подсолнухов",
+        title="Йога с козами на фоне подсолнухов",
+        date="2026-08-22",
+        time="12:00",
+        location_name="Экоферма Козья горка",
+        ticket_link="tel:+79141565582",
+    )
+    owner = Event(
+        id=7768,
+        title="Праздник сыра и сидра",
+        date="2026-08-22",
+        time="12:00",
+        location_name="Экоферма Козья горка",
+        ticket_link="tel:+79141565582",
+    )
+
+    assert su._should_run_widened_dedup_adjudicator(
+        candidate=candidate,
+        match_event=None,
+        identity_gate_match=owner,
+        anchor_forced=True,
+        is_canonical_site=False,
+    ) is True
+
+
 def test_exact_symbolic_film_title_is_not_recovered_to_programme_name() -> None:
     """Production replay must keep film ``1+1``, not rename it ``Большое кино``."""
 
