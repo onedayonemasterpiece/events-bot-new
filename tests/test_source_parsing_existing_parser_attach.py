@@ -80,6 +80,64 @@ async def test_exact_attach_prefers_same_event_canonical_row_over_legacy_duplica
 
 
 @pytest.mark.asyncio
+async def test_exact_attached_ticket_url_survives_presentation_title_prefix(tmp_path):
+    """An authoritative same-event URL must not fall back to another LLM pass.
+
+    Production Sobor rows already owned the exact ticket URL, date and time,
+    while the canonical title had gained the presentation prefix ``Концерт``.
+    Rejecting that row as a title mismatch made the parser re-enter extraction,
+    where an empty draft became a false technical terminal.
+    """
+
+    db = Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    event_date = (date.today() + timedelta(days=7)).isoformat()
+    source_url = "https://tickets.sobor-kaliningrad.ru/scheme/EXACT-SLOT"
+    async with db.get_session() as session:
+        stored = Event(
+            title="Концерт «(Нео)Органика 3.0»",
+            description="Описание",
+            source_text="Источник",
+            date=event_date,
+            time="20:00",
+            location_name="Кафедральный собор",
+            ticket_link="https://sobor39.ru/events/concerts/night/",
+        )
+        session.add(stored)
+        await session.commit()
+        await session.refresh(stored)
+        event_id = int(stored.id)
+        session.add(
+            EventSource(
+                event_id=event_id,
+                source_type="parser:sobor",
+                source_url=source_url,
+                canonical_source_url=source_url,
+                source_role="identity_bearing",
+                candidate_key="sobor-owned-child",
+                occurrence_key="parser-slot:sobor-owned-child",
+                trust_level="high",
+            )
+        )
+        await session.commit()
+
+    candidate = TheatreEvent(
+        title="(Нео)Органика 3.0",
+        date_raw=f"{event_date} 20:00",
+        parsed_date=event_date,
+        parsed_time="20:00",
+        ticket_status="available",
+        url=source_url,
+        source_type="sobor",
+    )
+
+    assert await handlers.attach_parser_source_to_exact_existing(
+        db, event_id, "sobor", candidate
+    )
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_exact_shared_catalogue_url_attaches_supporting_terminal_noop(tmp_path):
     db = Database(str(tmp_path / "events.sqlite"))
     await db.init()
@@ -192,7 +250,7 @@ async def test_parser_smart_retry_is_visible_terminal_not_durable_recovery(
     assert stats.failed == 1
     assert stats.retry_scheduled == 0
     assert stats.terminal_errors == [
-        "Решение требует оператора:RETRY_SCHEDULED"
+        "Решение требует оператора:FAILED_TECHNICAL"
     ]
     await db.close()
 
