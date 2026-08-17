@@ -2381,6 +2381,9 @@ class VKSourcePacket(SQLModel, table=True):
     envelope_version: Optional[int] = None
     capture_complete: bool = False
     evidence_replayability: str = "replayable_legacy_incomplete"
+    admission_status: str = "legacy_unclassified"
+    admission_reason: Optional[str] = None
+    admission_receipt_json: Optional[str] = None
     payload_hash: str
     source_revision_hash: str
     discovery_keyword_hints_json: str = "[]"

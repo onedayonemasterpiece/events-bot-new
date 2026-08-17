@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 import time
 from pathlib import Path
@@ -129,6 +130,50 @@ async def test_continuation_persists_same_v1_envelope_contract_as_primary_crawl(
     assert result["added"] == 1
     assert '"schema":"vk_source_envelope"' in row[0]
     assert row[1:] == (1, 1, "replayable_lossless")
+
+
+@pytest.mark.asyncio
+async def test_continuation_applies_same_llm_admission_before_queueing(
+    tmp_path, monkeypatch
+):
+    db = await _db(tmp_path / "admission.sqlite")
+    await _schedule(db, page_size=1)
+    post = {
+        "post_id": 88,
+        "date": int(time.time()),
+        "text": "Отчёт о завершённом ремонте здания.",
+        "photos": [],
+    }
+
+    async def wall(*_args, **_kwargs):
+        return [post]
+
+    class Client:
+        async def generate_content_async(self, **_kwargs):
+            return json.dumps({"decisions": [{
+                "id": "1:88",
+                "outcome": "NON_EVENT",
+                "confidence": 0.99,
+                "evidence_quote": "Отчёт о завершённом ремонте",
+                "reason": "administrative_news",
+            }]}), object()
+
+    monkeypatch.setattr(main, "vk_wall_since", wall)
+    monkeypatch.setattr(vk_intake, "_get_vk_crawl_admission_client", Client)
+    result = await vk_intake.process_vk_crawl_continuations(
+        db, max_jobs=1, max_pages_per_job=1, worker_id="admission", run_id="r"
+    )
+    async with db.raw_conn() as conn:
+        inbox_count = await (await conn.execute(
+            "SELECT COUNT(*) FROM vk_inbox WHERE post_id=88"
+        )).fetchone()
+        packet = await (await conn.execute(
+            "SELECT admission_status,status FROM vk_source_packet WHERE post_id=88"
+        )).fetchone()
+    assert result["added"] == 0
+    assert result["admission_rejected"] == 1
+    assert inbox_count == (0,)
+    assert packet == ("rejected", "completed")
 
 
 @pytest.mark.asyncio

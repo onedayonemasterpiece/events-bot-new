@@ -10,6 +10,30 @@ Smart Update (merge/match/rewrite/facts) uses **Gemma via Google AI** with 4o as
 Important: `parse_event_via_llm` reads only the fenced `MASTER-PROMPT` block below for event parsing.
 The other sections in this file document separate prompts/workflows and must not be appended to the event-parse system prompt.
 
+## VK crawl queue-admission prompt (`vk-crawl-admission-v1`)
+
+This is a separate, deliberately small prompt used **while collecting** VK
+posts. It does not parse or create Events and never runs the later
+`vk_auto_import` stage. The deterministic layer may directly admit only an
+obvious future positive; every unresolved post is sent in a bounded batch with
+its source text, publication time, date/keyword hints and the count of visual
+attachments that have not been inspected yet.
+
+The closed output for every source id is `ADMIT | PAST_ONLY | NON_EVENT |
+UNCERTAIN`. `PAST_ONLY` and `NON_EVENT` remove a post from the expensive queue
+only when confidence is at least `0.90`, `evidence_quote` is an exact quote from
+the supplied source text, and there is no unseen visual evidence. Missing
+items, malformed JSON, provider/timeout errors, low confidence, an ungrounded
+quote or an uninspected poster all become fail-open `UNCERTAIN` and enter
+`vk_inbox`. A recap containing a new future invitation, a future cancellation
+or reschedule, and a continuing exhibition with a future closing date are
+`ADMIT`; geography and product scope remain decisions of the full parser.
+
+This admission receipt is revision-bound and reusable. The immutable raw
+packet is committed before the provider call; the crawl cursor advances only
+after every fetched revision has either a persisted admission decision or an
+explicit fail-open queue projection.
+
 ```
 MASTER-PROMPT for Codex ― Telegram Event Bot
 You receive long multi-line text describing one **or several** events.

@@ -2869,6 +2869,9 @@ class Database:
                     envelope_version INTEGER,
                     capture_complete INTEGER NOT NULL DEFAULT 0,
                     evidence_replayability TEXT NOT NULL DEFAULT 'replayable_legacy_incomplete',
+                    admission_status TEXT NOT NULL DEFAULT 'legacy_unclassified',
+                    admission_reason TEXT,
+                    admission_receipt_json TEXT,
                     payload_hash TEXT NOT NULL,
                     source_revision_hash TEXT NOT NULL,
                     discovery_keyword_hints_json TEXT NOT NULL DEFAULT '[]',
@@ -2912,6 +2915,13 @@ class Database:
                 "vk_source_packet",
                 "evidence_replayability TEXT NOT NULL DEFAULT 'replayable_legacy_incomplete'",
             )
+            await _add_column(
+                conn,
+                "vk_source_packet",
+                "admission_status TEXT NOT NULL DEFAULT 'legacy_unclassified'",
+            )
+            await _add_column(conn, "vk_source_packet", "admission_reason TEXT")
+            await _add_column(conn, "vk_source_packet", "admission_receipt_json TEXT")
 
             await conn.execute(
                 """

@@ -12,7 +12,7 @@ import shutil
 import time
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Any, List, Sequence
+from typing import Any, List, Mapping, Sequence
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
@@ -60,6 +60,11 @@ VK_CRAWL_BACKFILL_OVERRIDE_MAX_DAYS = int(
 )
 VK_CRAWL_MIN_FREE_MB = int(os.getenv("VK_CRAWL_MIN_FREE_MB", "512"))
 VK_USE_PYMORPHY = os.getenv("VK_USE_PYMORPHY", "false").lower() == "true"
+
+VK_CRAWL_ADMISSION_PROMPT_VERSION = "vk-crawl-admission-v1"
+VK_CRAWL_ADMISSION_MODEL = (
+    os.getenv("VK_CRAWL_ADMISSION_MODEL", "gemini-3.1-flash-lite") or ""
+).strip() or "gemini-3.1-flash-lite"
 
 # Sentinel used to flag posts awaiting poster OCR before keyword/date checks.
 OCR_PENDING_SENTINEL = "__ocr_pending__"
@@ -124,6 +129,11 @@ def _read_int_env(name: str, default: int) -> int:
         return int(raw)
     except Exception:
         return default
+
+
+VK_CRAWL_ADMISSION_BATCH_SIZE = max(
+    1, min(_read_int_env("VK_CRAWL_ADMISSION_BATCH_SIZE", 8), 20)
+)
 
 
 def _require_vk_crawl_storage_headroom(db: Any) -> None:
@@ -341,7 +351,7 @@ GROUP_CONTEXT_PATTERN = r"групп[аы]\s+[\"«'][^\"»']+[\"»']"
 KEYWORD_PATTERNS = [
     r"лекци(я|и|й|е|ю|ями|ях)",
     r"спектакл(ь|я|ю|ем|е|и|ей|ям|ями|ях)",
-    r"концерт(ы|а|у|е|ом|ов|ам|ами|ах)",
+    r"концерт(?:ы|а|у|е|ом|ов|ам|ами|ах)?",
     r"фестивал(ь|я|ю|е|ем|и|ей|ям|ями|ях)|festival",
     r"ф[её]ст(а|у|ом|е|ы|ов|ам|ами|ах)?",
     r"fest",
@@ -890,6 +900,623 @@ def _vk_should_rescue_to_llm_without_ts_hint(text: str) -> bool:
     if not _VK_LLM_RESCUE_PLACE_RE.search(clean):
         return False
     return True
+
+
+@dataclass(frozen=True)
+class VKCrawlAdmissionCandidate:
+    group_id: int
+    post_id: int
+    source_url: str
+    published_at: int
+    text: str
+    keyword_hints: tuple[str, ...]
+    date_hints: tuple[str, ...]
+    event_ts_hint: int | None
+    visual_evidence_count: int
+    source_revision_hash: str
+
+    @property
+    def key(self) -> str:
+        return f"{self.group_id}:{self.post_id}"
+
+
+@dataclass(frozen=True)
+class VKCrawlAdmissionDecision:
+    admitted: bool
+    outcome: str
+    reason: str
+    route: str
+    confidence: float | None = None
+    evidence_quote: str | None = None
+    prompt_version: str | None = None
+    model: str | None = None
+
+    def receipt(self) -> dict[str, Any]:
+        return {
+            "schema": VK_CRAWL_ADMISSION_PROMPT_VERSION,
+            "admitted": bool(self.admitted),
+            "outcome": self.outcome,
+            "reason": self.reason,
+            "route": self.route,
+            "confidence": self.confidence,
+            "evidence_quote": self.evidence_quote,
+            "prompt_version": self.prompt_version,
+            "model": self.model,
+        }
+
+
+def _vk_source_revision_hash_for_post(post: Mapping[str, Any]) -> str:
+    from vk_source_envelope import is_vk_source_envelope, vk_source_packet_hashes
+
+    if is_vk_source_envelope(post):
+        return vk_source_packet_hashes(post)[1]
+    canonical = _vk_packet_json(_vk_source_revision_payload(dict(post)))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _vk_visual_evidence_count(post: Mapping[str, Any]) -> int:
+    counts = post.get("counts")
+    if isinstance(counts, Mapping):
+        try:
+            return max(0, int(counts.get("visual_candidate_count") or 0))
+        except (TypeError, ValueError):
+            pass
+    photos = post.get("photos")
+    if isinstance(photos, Sequence) and not isinstance(
+        photos, (str, bytes, bytearray)
+    ):
+        return len(photos)
+    return 0
+
+
+def _vk_crawl_admission_candidate(
+    *,
+    group_id: int,
+    owner_type: str,
+    post: Mapping[str, Any],
+    default_time: str | None,
+    tz: timezone,
+) -> VKCrawlAdmissionCandidate:
+    from vk_owner import vk_wall_url
+
+    post_id = int(post["post_id"])
+    published_at = int(post["date"])
+    text = str(post.get("text") or "")
+    source_url = str(
+        post.get("url") or vk_wall_url(group_id, post_id, owner_type)
+    )
+    history_hit = detect_historical_context(text)
+    kw_ok, keywords = match_keywords(text)
+    has_date = detect_date(text)
+    keyword_hints = list(dict.fromkeys(str(item) for item in keywords if item))
+    if history_hit:
+        keyword_hints.append(HISTORY_MATCHED_KEYWORD)
+    if not kw_ok:
+        keyword_hints.append("hint:no_keywords")
+    if not has_date:
+        keyword_hints.append("hint:no_date")
+    if not text.strip() and _vk_visual_evidence_count(post):
+        keyword_hints.append(OCR_PENDING_SENTINEL)
+    date_hints = [
+        match.group(0)
+        for pattern in (DATE_RANGE_RE, NUM_DATE_RE, MONTH_NAME_RE)
+        for match in pattern.finditer(text)
+    ]
+    event_ts_hint = extract_event_ts_hint(
+        text,
+        default_time,
+        publish_ts=published_at,
+        tz=tz,
+    )
+    now_priority = int(time.time())
+    if event_ts_hint is None and has_date:
+        past_probe = extract_event_ts_hint(
+            text,
+            default_time,
+            publish_ts=published_at,
+            allow_past=True,
+            tz=tz,
+        )
+        if past_probe is not None and past_probe < now_priority + 2 * 3600:
+            keyword_hints.append("hint:past_event")
+    if event_ts_hint is not None and event_ts_hint < now_priority + 2 * 3600:
+        keyword_hints.append("hint:past_event")
+    if event_ts_hint is not None and event_ts_hint > now_priority + 2 * 365 * 86400:
+        keyword_hints.append("hint:too_far")
+    return VKCrawlAdmissionCandidate(
+        group_id=int(group_id),
+        post_id=post_id,
+        source_url=source_url,
+        published_at=published_at,
+        text=text,
+        keyword_hints=tuple(dict.fromkeys(keyword_hints)),
+        date_hints=tuple(dict.fromkeys(date_hints)),
+        event_ts_hint=event_ts_hint,
+        visual_evidence_count=_vk_visual_evidence_count(post),
+        source_revision_hash=_vk_source_revision_hash_for_post(post),
+    )
+
+
+def _vk_crawl_deterministic_admission(
+    candidate: VKCrawlAdmissionCandidate,
+) -> VKCrawlAdmissionDecision | None:
+    """Admit only high-recall deterministic positives; never reject semantics.
+
+    A failed/ambiguous deterministic probe is deliberately returned as ``None``
+    and must be adjudicated by the small LLM gate.  This keeps crawl and the
+    later bounded auto-import as separate stages while preventing obvious
+    non-events from entering the expensive queue.
+    """
+
+    hints = set(candidate.keyword_hints)
+    if not candidate.text.strip() and candidate.visual_evidence_count:
+        return VKCrawlAdmissionDecision(
+            admitted=True,
+            outcome="ADMIT",
+            reason="visual_evidence_requires_ocr",
+            route="deterministic",
+        )
+    has_keyword = "hint:no_keywords" not in hints
+    has_date = "hint:no_date" not in hints
+    future_hint = candidate.event_ts_hint
+    now_priority = int(time.time())
+    if (
+        has_keyword
+        and has_date
+        and future_hint is not None
+        and future_hint >= now_priority + 2 * 3600
+        and future_hint <= now_priority + 2 * 365 * 86400
+    ):
+        return VKCrawlAdmissionDecision(
+            admitted=True,
+            outcome="ADMIT",
+            reason="deterministic_future_event",
+            route="deterministic",
+        )
+    return None
+
+
+def _get_vk_crawl_admission_client() -> Any | None:
+    try:
+        return require_main_attr("_get_event_parse_gemma_client")()
+    except Exception:
+        logger.warning("vk.crawl.admission client unavailable", exc_info=True)
+        return None
+
+
+def _vk_admission_compact_text(text: str, limit: int = 3600) -> str:
+    clean = unicodedata.normalize("NFKC", str(text or "")).strip()
+    if len(clean) <= limit:
+        return clean
+    head = max(1, int(limit * 0.7))
+    tail = max(1, limit - head)
+    return f"{clean[:head]}\n[…середина сокращена…]\n{clean[-tail:]}"
+
+
+def _vk_admission_quote_is_grounded(quote: str, text: str) -> bool:
+    def norm(value: str) -> str:
+        return re.sub(
+            r"\s+",
+            " ",
+            unicodedata.normalize("NFKC", str(value or "")).casefold(),
+        ).strip(" \t\r\n.,;:!?—–-«»\"'")
+
+    normalized_quote = norm(quote)
+    return len(normalized_quote) >= 8 and normalized_quote in norm(text)
+
+
+def _vk_admission_fail_open(reason: str) -> VKCrawlAdmissionDecision:
+    return VKCrawlAdmissionDecision(
+        admitted=True,
+        outcome="UNCERTAIN",
+        reason=f"fail_open_{reason}",
+        route="fail_open",
+        prompt_version=VK_CRAWL_ADMISSION_PROMPT_VERSION,
+        model=VK_CRAWL_ADMISSION_MODEL,
+    )
+
+
+async def _load_existing_vk_crawl_admissions(
+    db: Database,
+    candidates: Sequence[VKCrawlAdmissionCandidate],
+    *,
+    reclassify_legacy_pending: bool = False,
+) -> dict[str, VKCrawlAdmissionDecision]:
+    result: dict[str, VKCrawlAdmissionDecision] = {}
+    if not candidates:
+        return result
+    async with db.raw_conn() as conn:
+        for candidate in candidates:
+            row = await (await conn.execute(
+                """
+                SELECT packet.admission_status,packet.admission_reason,
+                       packet.admission_receipt_json,inbox.status
+                FROM vk_source_packet AS packet
+                LEFT JOIN vk_inbox AS inbox ON inbox.source_packet_id=packet.id
+                WHERE packet.source_type='vk' AND packet.owner_id=? AND packet.post_id=?
+                  AND packet.source_revision_hash=?
+                LIMIT 1
+                """,
+                (
+                    candidate.group_id,
+                    candidate.post_id,
+                    candidate.source_revision_hash,
+                ),
+            )).fetchone()
+            if not row:
+                continue
+            admission_status = str(row[0] or "")
+            inbox_status = str(row[3] or "")
+            if admission_status not in {"admitted", "rejected"}:
+                if inbox_status == "pending" and not reclassify_legacy_pending:
+                    result[candidate.key] = VKCrawlAdmissionDecision(
+                        admitted=True,
+                        outcome="ADMIT",
+                        reason="legacy_pending_preserved",
+                        route="existing_receipt",
+                    )
+                    continue
+                if inbox_status in {"imported", "rejected", "failed"}:
+                    rejected = inbox_status in {"rejected", "failed"}
+                    result[candidate.key] = VKCrawlAdmissionDecision(
+                        admitted=not rejected,
+                        outcome="NON_EVENT" if rejected else "ADMIT",
+                        reason="legacy_terminal_preserved",
+                        route="existing_receipt",
+                    )
+                continue
+            try:
+                receipt = json.loads(str(row[2] or "{}"))
+            except Exception:
+                continue
+            if not isinstance(receipt, dict):
+                continue
+            result[candidate.key] = VKCrawlAdmissionDecision(
+                admitted=str(row[0]) == "admitted",
+                outcome=str(receipt.get("outcome") or "UNCERTAIN"),
+                reason=str(row[1] or receipt.get("reason") or "existing_receipt"),
+                route="existing_receipt",
+                confidence=(
+                    float(receipt["confidence"])
+                    if receipt.get("confidence") is not None
+                    else None
+                ),
+                evidence_quote=(
+                    str(receipt["evidence_quote"])
+                    if receipt.get("evidence_quote")
+                    else None
+                ),
+                prompt_version=str(receipt.get("prompt_version") or "") or None,
+                model=str(receipt.get("model") or "") or None,
+            )
+    return result
+
+
+async def _call_vk_crawl_admission_llm(
+    candidates: Sequence[VKCrawlAdmissionCandidate],
+    *,
+    tz: timezone,
+) -> dict[str, VKCrawlAdmissionDecision]:
+    if not candidates:
+        return {}
+    client = _get_vk_crawl_admission_client()
+    if client is None:
+        raise RuntimeError("admission_client_unavailable")
+    payload = {
+        "now": datetime.now(tz).isoformat(),
+        "timezone": str(tz),
+        "posts": [
+            {
+                "id": item.key,
+                "published_at": datetime.fromtimestamp(
+                    item.published_at, tz
+                ).isoformat(),
+                "text": _vk_admission_compact_text(item.text),
+                "deterministic_hints": list(item.keyword_hints),
+                "date_hints": list(item.date_hints),
+                "event_ts_hint": item.event_ts_hint,
+                "visual_attachments_not_inspected": item.visual_evidence_count,
+            }
+            for item in candidates
+        ],
+    }
+    prompt = (
+        "Ты выполняешь ТОЛЬКО первичный admission VK-постов перед очередью разбора. "
+        "Не извлекай события и не создавай их. Для каждого posts.id выбери ровно один outcome:\n"
+        "ADMIT — пост содержит или обновляет/отменяет хотя бы одно посещаемое будущее либо "
+        "продолжающееся событие; ONGOING выставки с будущей датой закрытия тоже ADMIT.\n"
+        "PAST_ONLY — все конкретные посещаемые события уже закончились и будущего приглашения нет.\n"
+        "NON_EVENT — это точно не анонс/обновление посещаемого события.\n"
+        "UNCERTAIN — данных недостаточно. Если visual_attachments_not_inspected > 0 и текст сам "
+        "не доказывает решение, обязательно UNCERTAIN: содержимое афиши тебе не показано. "
+        "Онлайн/другой регион сами по себе не повод отклонять: продуктовый scope решит поздний parser. "
+        "Рекап с отдельным будущим приглашением — ADMIT. Сообщение об отмене/переносе будущего "
+        "события — ADMIT. Для PAST_ONLY/NON_EVENT дай дословную evidence_quote из text и confidence; "
+        "не выдумывай цитату. Верни только JSON: "
+        '{"decisions":[{"id":"1:2","outcome":"ADMIT|PAST_ONLY|NON_EVENT|UNCERTAIN",'
+        '"confidence":0.0,"evidence_quote":"...","reason":"short_code"}]}.\n'
+        f"INPUT:\n{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
+    )
+    try:
+        timeout = float(os.getenv("VK_CRAWL_ADMISSION_TIMEOUT_SEC", "75") or "75")
+    except (TypeError, ValueError):
+        timeout = 75.0
+    raw, _usage = await asyncio.wait_for(
+        client.generate_content_async(
+            model=VK_CRAWL_ADMISSION_MODEL,
+            prompt=prompt,
+            generation_config={
+                "temperature": 0,
+                "response_mime_type": "application/json",
+                "response_json_schema": {
+                    "type": "object",
+                    "properties": {
+                        "decisions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "outcome": {
+                                        "type": "string",
+                                        "enum": [
+                                            "ADMIT",
+                                            "PAST_ONLY",
+                                            "NON_EVENT",
+                                            "UNCERTAIN",
+                                        ],
+                                    },
+                                    "confidence": {"type": "number"},
+                                    "evidence_quote": {"type": "string"},
+                                    "reason": {"type": "string"},
+                                },
+                                "required": [
+                                    "id",
+                                    "outcome",
+                                    "confidence",
+                                    "evidence_quote",
+                                    "reason",
+                                ],
+                                "additionalProperties": False,
+                            },
+                        }
+                    },
+                    "required": ["decisions"],
+                    "additionalProperties": False,
+                },
+            },
+            max_output_tokens=max(500, 180 * len(candidates)),
+            use_provider_count_tokens=True,
+            prompt_version=VK_CRAWL_ADMISSION_PROMPT_VERSION,
+            max_provider_attempts=1,
+            allow_model_fallback=False,
+        ),
+        timeout=max(10.0, min(timeout, 180.0)),
+    )
+    extract_json = require_main_attr("_event_parse_extract_json")
+    decoded = extract_json(str(raw or ""))
+    if not isinstance(decoded, dict) or not isinstance(decoded.get("decisions"), list):
+        raise ValueError("admission_schema_invalid")
+    by_key = {item.key: item for item in candidates}
+    resolved: dict[str, VKCrawlAdmissionDecision] = {}
+    for raw_item in decoded["decisions"]:
+        if not isinstance(raw_item, Mapping):
+            continue
+        key = str(raw_item.get("id") or "")
+        candidate = by_key.get(key)
+        if candidate is None or key in resolved:
+            continue
+        outcome = str(raw_item.get("outcome") or "").strip().upper()
+        try:
+            confidence = float(raw_item.get("confidence"))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        quote = str(raw_item.get("evidence_quote") or "").strip()
+        reason = str(raw_item.get("reason") or "").strip().casefold()
+        reason = re.sub(r"[^a-z0-9_:-]+", "_", reason).strip("_")[:80]
+        if outcome in {"PAST_ONLY", "NON_EVENT"}:
+            grounded = _vk_admission_quote_is_grounded(quote, candidate.text)
+            # The gate has not inspected visual bytes.  It may reject only when
+            # the source has no unseen visual evidence; otherwise preserve recall.
+            if confidence >= 0.90 and grounded and candidate.visual_evidence_count == 0:
+                resolved[key] = VKCrawlAdmissionDecision(
+                    admitted=False,
+                    outcome=outcome,
+                    reason=(
+                        "llm_past_only" if outcome == "PAST_ONLY" else "llm_non_event"
+                    ),
+                    route="llm",
+                    confidence=confidence,
+                    evidence_quote=quote,
+                    prompt_version=VK_CRAWL_ADMISSION_PROMPT_VERSION,
+                    model=VK_CRAWL_ADMISSION_MODEL,
+                )
+            else:
+                fallback_reason = (
+                    "unseen_visual_evidence"
+                    if candidate.visual_evidence_count
+                    else "ungrounded_or_low_confidence"
+                )
+                resolved[key] = _vk_admission_fail_open(fallback_reason)
+        elif outcome == "ADMIT":
+            resolved[key] = VKCrawlAdmissionDecision(
+                admitted=True,
+                outcome="ADMIT",
+                reason="llm_future_or_ongoing_event",
+                route="llm",
+                confidence=confidence,
+                evidence_quote=quote or None,
+                prompt_version=VK_CRAWL_ADMISSION_PROMPT_VERSION,
+                model=VK_CRAWL_ADMISSION_MODEL,
+            )
+        elif outcome == "UNCERTAIN":
+            resolved[key] = _vk_admission_fail_open("llm_uncertain")
+        else:
+            resolved[key] = _vk_admission_fail_open("invalid_outcome")
+    return resolved
+
+
+async def _resolve_vk_crawl_admissions(
+    db: Database,
+    candidates: Sequence[VKCrawlAdmissionCandidate],
+    *,
+    tz: timezone,
+    reclassify_legacy_pending: bool = False,
+) -> dict[str, VKCrawlAdmissionDecision]:
+    decisions = await _load_existing_vk_crawl_admissions(
+        db,
+        candidates,
+        reclassify_legacy_pending=reclassify_legacy_pending,
+    )
+    pending: list[VKCrawlAdmissionCandidate] = []
+    for candidate in candidates:
+        if candidate.key in decisions:
+            continue
+        deterministic = _vk_crawl_deterministic_admission(candidate)
+        if deterministic is not None:
+            decisions[candidate.key] = deterministic
+        else:
+            pending.append(candidate)
+    for offset in range(0, len(pending), VK_CRAWL_ADMISSION_BATCH_SIZE):
+        chunk = pending[offset : offset + VK_CRAWL_ADMISSION_BATCH_SIZE]
+        try:
+            resolved = await _call_vk_crawl_admission_llm(chunk, tz=tz)
+        except Exception as exc:
+            logger.warning(
+                "vk.crawl.admission fail_open posts=%s error=%s",
+                [item.key for item in chunk],
+                type(exc).__name__,
+                exc_info=True,
+            )
+            resolved = {}
+        for candidate in chunk:
+            decisions[candidate.key] = resolved.get(candidate.key) or _vk_admission_fail_open(
+                "provider_or_schema_failure"
+            )
+    return decisions
+
+
+async def requalify_vk_inbox_admission(
+    db: Database,
+    *,
+    limit: int = 100,
+    newest_first: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Apply the crawl admission contract to legacy selectable inbox rows.
+
+    This is a bounded one-off recovery entrypoint for the August raw-first
+    backlog.  It does not parse or create events.  Admitted/fail-open rows stay
+    ``pending`` for the separately scheduled auto-import; only grounded LLM
+    PAST_ONLY/NON_EVENT rows leave that queue as ``rejected``.
+    """
+
+    bounded_limit = max(1, min(int(limit), 500))
+    get_tz_offset = require_main_attr("get_tz_offset")
+    await get_tz_offset(db)
+    local_tz = require_main_attr("LOCAL_TZ")
+    order = "DESC" if newest_first else "ASC"
+    async with db.raw_conn() as conn:
+        rows = await (await conn.execute(
+            f"""
+            SELECT inbox.id,inbox.group_id,inbox.owner_type,inbox.source_packet_id,
+                   packet.raw_payload_json,source.default_time
+            FROM vk_inbox AS inbox
+            JOIN vk_source_packet AS packet ON packet.id=inbox.source_packet_id
+            LEFT JOIN vk_source AS source ON source.group_id=inbox.group_id
+            WHERE inbox.status='pending'
+              AND inbox.locked_by IS NULL
+              AND inbox.review_batch IS NULL
+              AND COALESCE(packet.admission_status,'legacy_unclassified')='legacy_unclassified'
+            ORDER BY inbox.date {order},inbox.id {order}
+            LIMIT ?
+            """,
+            (bounded_limit,),
+        )).fetchall()
+    prepared: list[tuple[int, int, str, int, dict[str, Any], str | None]] = []
+    invalid_rows: list[int] = []
+    for inbox_id, group_id, owner_type, packet_id, raw_payload_json, default_time in rows:
+        try:
+            post = json.loads(str(raw_payload_json or ""))
+        except Exception:
+            post = None
+        if not isinstance(post, dict):
+            invalid_rows.append(int(inbox_id))
+            continue
+        prepared.append(
+            (
+                int(inbox_id),
+                int(group_id),
+                str(owner_type or "group"),
+                int(packet_id),
+                post,
+                str(default_time) if default_time else None,
+            )
+        )
+    candidates = [
+        _vk_crawl_admission_candidate(
+            group_id=group_id,
+            owner_type=owner_type,
+            post=post,
+            default_time=default_time,
+            tz=local_tz,
+        )
+        for _inbox_id, group_id, owner_type, _packet_id, post, default_time in prepared
+    ]
+    decisions = await _resolve_vk_crawl_admissions(
+        db,
+        candidates,
+        tz=local_tz,
+        reclassify_legacy_pending=True,
+    )
+    stats: dict[str, Any] = {
+        "selected": len(rows),
+        "classified": len(candidates),
+        "admitted": 0,
+        "rejected": 0,
+        "llm_checked": 0,
+        "fail_open": 0,
+        "invalid_source_packets": invalid_rows,
+        "dry_run": bool(dry_run),
+        "remaining_legacy_pending": 0,
+    }
+    for prepared_row, candidate in zip(prepared, candidates):
+        _inbox_id, group_id, owner_type, _packet_id, post, _default_time = prepared_row
+        decision = decisions[candidate.key]
+        if decision.admitted:
+            stats["admitted"] += 1
+        else:
+            stats["rejected"] += 1
+        if decision.route in {"llm", "fail_open"}:
+            stats["llm_checked"] += 1
+        if decision.route == "fail_open":
+            stats["fail_open"] += 1
+        if dry_run:
+            continue
+        await _persist_vk_source_packet(
+            db,
+            group_id=group_id,
+            owner_type=owner_type,
+            post=post,
+            source_url=candidate.source_url,
+            keyword_hints=candidate.keyword_hints,
+            date_hints=candidate.date_hints,
+            event_ts_hint=candidate.event_ts_hint,
+            admission_decision=decision,
+            apply_admission_gate=True,
+        )
+    async with db.raw_conn() as conn:
+        remaining = await (await conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM vk_inbox AS inbox
+            JOIN vk_source_packet AS packet ON packet.id=inbox.source_packet_id
+            WHERE inbox.status='pending'
+              AND COALESCE(packet.admission_status,'legacy_unclassified')='legacy_unclassified'
+            """
+        )).fetchone()
+    stats["remaining_legacy_pending"] = int((remaining[0] if remaining else 0) or 0)
+    return stats
 
 
 def normalize_phone_candidates(text: str) -> str:
@@ -4536,6 +5163,8 @@ async def _persist_vk_source_packet(
     keyword_hints: Sequence[str],
     date_hints: Sequence[str],
     event_ts_hint: int | None,
+    admission_decision: VKCrawlAdmissionDecision | None = None,
+    apply_admission_gate: bool = False,
 ) -> tuple[int, bool]:
     """Durably append one fetched revision and point the inbox at it.
 
@@ -4640,9 +5269,85 @@ async def _persist_vk_source_packet(
         else:
             packet_id = int(row[0])
 
-        # A changed revision must re-enter automatic parsing. Exact replay keeps
-        # the current queue terminal/due state and therefore cannot duplicate a
-        # successful provider call.
+        if apply_admission_gate and admission_decision is None:
+            # Exact legacy revisions may predate this gate. Preserve their
+            # existing inbox/terminal state instead of silently re-enqueuing.
+            await conn.commit()
+            return packet_id, is_new
+
+        if apply_admission_gate and admission_decision is not None:
+            if admission_decision.reason == "legacy_pending_preserved":
+                # Normal crawling must neither trigger an unbounded historical
+                # LLM drain nor make the row ineligible for the explicit
+                # bounded requalification command.
+                await conn.commit()
+                return packet_id, is_new
+            receipt_json = _vk_packet_json(admission_decision.receipt())
+            typed_reason = f"VK_ADMISSION_{admission_decision.outcome}"
+            await conn.execute(
+                """
+                UPDATE vk_source_packet
+                SET admission_status=?,admission_reason=?,admission_receipt_json=?,
+                    status=CASE
+                        WHEN ?=1 AND ?=1 THEN 'pending'
+                        WHEN ?=0 THEN 'completed'
+                        ELSE status END,
+                    last_typed_reason=CASE
+                        WHEN ?=0 THEN ? ELSE last_typed_reason END,
+                    terminal_carrier_outcome=CASE
+                        WHEN ?=0 THEN 'ADMISSION_REJECTED'
+                        WHEN ?=1 AND ?=1 THEN NULL
+                        ELSE terminal_carrier_outcome END,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+                """,
+                (
+                    "admitted" if admission_decision.admitted else "rejected",
+                    admission_decision.reason,
+                    receipt_json,
+                    1 if admission_decision.admitted else 0,
+                    1 if is_new else 0,
+                    1 if admission_decision.admitted else 0,
+                    1 if admission_decision.admitted else 0,
+                    typed_reason,
+                    1 if admission_decision.admitted else 0,
+                    1 if admission_decision.admitted else 0,
+                    1 if is_new else 0,
+                    packet_id,
+                ),
+            )
+            if not admission_decision.admitted:
+                # A changed revision that is confidently past/non-event must
+                # also leave the selectable queue. New rejected packets need no
+                # inbox row at all; the immutable packet is the terminal receipt.
+                await conn.execute(
+                    """
+                    UPDATE vk_inbox
+                    SET date=?,text=?,matched_kw=?,has_date=?,event_ts_hint=?,
+                        owner_type=?,source_packet_id=?,status='rejected',
+                        next_attempt_at=NULL,locked_by=NULL,locked_at=NULL,
+                        review_batch=NULL,last_typed_reason=?
+                    WHERE group_id=? AND post_id=?
+                    """,
+                    (
+                        published_at,
+                        raw_text,
+                        inbox_matched_kw,
+                        1 if date_hints else 0,
+                        event_ts_hint,
+                        owner_type,
+                        packet_id,
+                        typed_reason,
+                        int(group_id),
+                        post_id,
+                    ),
+                )
+                await conn.commit()
+                return packet_id, is_new
+
+        # A changed admitted revision must re-enter automatic parsing. Exact
+        # replay keeps the current queue terminal/due state and therefore
+        # cannot duplicate a successful provider call.
         await conn.execute(
             """
             INSERT INTO vk_inbox(
@@ -5095,35 +5800,82 @@ async def _persist_vk_continuation_page(
     page: Sequence[dict[str, Any]],
     *,
     lease_seconds: int,
-) -> tuple[int, int]:
+) -> tuple[int, int, int]:
     """Persist the whole fetched page before any durable offset movement."""
 
-    added = duplicates = 0
-    from vk_owner import vk_wall_url
+    added = duplicates = rejected = 0
+    get_tz_offset = require_main_attr("get_tz_offset")
+    await get_tz_offset(db)
+    local_tz = require_main_attr("LOCAL_TZ")
+    async with db.raw_conn() as conn:
+        source_row = await (await conn.execute(
+            "SELECT default_time FROM vk_source WHERE group_id=? LIMIT 1",
+            (claim.owner_id,),
+        )).fetchone()
+    default_time = source_row[0] if source_row else None
+    candidates = [
+        _vk_crawl_admission_candidate(
+            group_id=claim.owner_id,
+            owner_type=claim.owner_type,
+            post=post,
+            default_time=default_time,
+            tz=local_tz,
+        )
+        for post in page
+    ]
 
-    for post in page:
+    # Preserve the raw-first contract before any provider call.  Admission can
+    # take seconds or fail ambiguously; the fetched page must already be
+    # durable while its continuation offset is still unchanged.
+    raw_results: list[tuple[int, bool]] = []
+    for post, candidate in zip(page, candidates):
         await _renew_vk_crawl_continuation_lease(
             db, claim, lease_seconds=lease_seconds
         )
-        post_id = int(post["post_id"])
-        source_url = str(post.get("url") or vk_wall_url(
-            claim.owner_id, post_id, claim.owner_type
-        ))
-        _packet_id, is_new = await _persist_vk_source_packet(
+        raw_results.append(await _persist_vk_source_packet(
             db,
             group_id=claim.owner_id,
             owner_type=claim.owner_type,
             post=post,
-            source_url=source_url,
-            keyword_hints=(),
-            date_hints=(),
-            event_ts_hint=None,
+            source_url=candidate.source_url,
+            keyword_hints=candidate.keyword_hints,
+            date_hints=candidate.date_hints,
+            event_ts_hint=candidate.event_ts_hint,
+            admission_decision=None,
+            apply_admission_gate=True,
+        ))
+    unique_candidates = list({candidate.key: candidate for candidate in candidates}.values())
+    decisions = await _resolve_vk_crawl_admissions(db, unique_candidates, tz=local_tz)
+    candidates_by_key = {candidate.key: candidate for candidate in candidates}
+
+    for index, post in enumerate(page):
+        await _renew_vk_crawl_continuation_lease(
+            db, claim, lease_seconds=lease_seconds
         )
+        post_id = int(post["post_id"])
+        candidate = candidates_by_key[f"{claim.owner_id}:{post_id}"]
+        admission = decisions[candidate.key]
+        await _persist_vk_source_packet(
+            db,
+            group_id=claim.owner_id,
+            owner_type=claim.owner_type,
+            post=post,
+            source_url=candidate.source_url,
+            keyword_hints=candidate.keyword_hints,
+            date_hints=candidate.date_hints,
+            event_ts_hint=candidate.event_ts_hint,
+            admission_decision=admission,
+            apply_admission_gate=True,
+        )
+        _packet_id, is_new = raw_results[index]
         if is_new:
-            added += 1
+            if admission.admitted:
+                added += 1
+            else:
+                rejected += 1
         else:
             duplicates += 1
-    return added, duplicates
+    return added, duplicates, rejected
 
 
 async def process_vk_crawl_continuations(
@@ -5150,6 +5902,7 @@ async def process_vk_crawl_continuations(
     result = {
         "claimed": 0, "pages": 0, "posts": 0, "added": 0,
         "duplicates": 0, "completed": 0, "retried": 0,
+        "admission_rejected": 0,
         "stale_recovered": 0, "lease_lost": 0, "rebased": 0,
     }
     processed_ids: list[int] = []
@@ -5208,7 +5961,7 @@ async def process_vk_crawl_continuations(
             page = list(page or ())
             fingerprint = _vk_continuation_page_fingerprint(page)
             try:
-                added, duplicates = await _persist_vk_continuation_page(
+                added, duplicates, admission_rejected = await _persist_vk_continuation_page(
                     db, claim, page, lease_seconds=lease_seconds
                 )
             except VKCrawlContinuationLeaseLost:
@@ -5227,6 +5980,7 @@ async def process_vk_crawl_continuations(
             result["posts"] += len(page)
             result["added"] += added
             result["duplicates"] += duplicates
+            result["admission_rejected"] += admission_rejected
 
             dates = [int(post["date"]) for post in page]
             page_deepest = _vk_continuation_deepest_boundary(page)
@@ -5380,9 +6134,12 @@ async def crawl_once(
 
     The function scans groups listed in ``vk_source`` and uses cursors from
     ``vk_crawl_cursor`` to fetch in-horizon posts. Every fetched post is first
-    persisted as an immutable ``vk_source_packet`` revision and projected into
-    the due inbox; keyword/date/history checks are hints only. Basic statistics
-    are returned for reporting purposes.
+    persisted as an immutable ``vk_source_packet`` revision. High-recall
+    deterministic positives enter ``vk_inbox``; deterministic failures are
+    checked by a small semantic LLM admission gate first. Only grounded,
+    high-confidence PAST_ONLY/NON_EVENT results stay out of the auto-import
+    queue; uncertainty/provider failure fails open into it. Crawl collection
+    never executes the later bounded auto-import stage.
 
     If ``broadcast`` is True and ``bot`` is supplied, a crawl summary is sent
     to the admin chat specified by ``ADMIN_CHAT_ID`` environment variable.
@@ -5412,6 +6169,11 @@ async def crawl_once(
         "matches": 0,
         "duplicates": 0,
         "added": 0,
+        "packets_added": 0,
+        "admission_rejected": 0,
+        "admission_llm_checked": 0,
+        "admission_llm_admitted": 0,
+        "admission_fail_open": 0,
         "errors": 0,
         "inbox_total": 0,
         "queue": {},
@@ -5673,7 +6435,52 @@ async def crawl_once(
 
             max_ts, max_pid = last_seen_ts, last_post_id
 
-            for post in posts:
+            admission_candidates = [
+                _vk_crawl_admission_candidate(
+                    group_id=int(gid),
+                    owner_type=owner_type,
+                    post=post,
+                    default_time=default_time,
+                    tz=local_tz,
+                )
+                for post in posts
+            ]
+
+            # Commit every fetched revision before invoking the admission LLM.
+            # A provider timeout therefore cannot lose the raw source; the
+            # canonical crawl cursor still remains blocked until each packet is
+            # classified or explicitly failed open into the later queue.
+            raw_results: list[tuple[int, bool]] = []
+            for post, candidate in zip(posts, admission_candidates):
+                _require_vk_crawl_storage_headroom(db)
+                raw_results.append(await _persist_vk_source_packet(
+                    db,
+                    group_id=int(gid),
+                    owner_type=owner_type,
+                    post=post,
+                    source_url=candidate.source_url,
+                    keyword_hints=candidate.keyword_hints,
+                    date_hints=candidate.date_hints,
+                    event_ts_hint=candidate.event_ts_hint,
+                    admission_decision=None,
+                    apply_admission_gate=True,
+                ))
+            unique_admission_candidates = list(
+                {
+                    candidate.key: candidate
+                    for candidate in admission_candidates
+                }.values()
+            )
+            admission_decisions = await _resolve_vk_crawl_admissions(
+                db,
+                unique_admission_candidates,
+                tz=local_tz,
+            )
+            admission_candidates_by_key = {
+                candidate.key: candidate for candidate in admission_candidates
+            }
+
+            for post_index, post in enumerate(posts):
                 _require_vk_crawl_storage_headroom(db)
                 ts = int(post["date"])
                 pid = int(post["post_id"])
@@ -5687,61 +6494,31 @@ async def crawl_once(
                 stats["posts_scanned"] += 1
                 group_posts += 1
 
-                post_text = str(post.get("text") or "")
-                photos = list(post.get("photos") or ())
-                post_url = post.get("url")
-                if post_url:
-                    source_url = str(post_url)
+                candidate_key = f"{int(gid)}:{pid}"
+                candidate = admission_candidates_by_key[candidate_key]
+                admission = admission_decisions[candidate_key]
+                post_text = candidate.text
+                source_url = candidate.source_url
+                matched_kw_list = list(candidate.keyword_hints)
+                date_hints = list(candidate.date_hints)
+                event_ts_hint = candidate.event_ts_hint
+                history_hit = HISTORY_MATCHED_KEYWORD in matched_kw_list
+
+                if admission.admitted:
+                    stats["matches"] += 1
+                    group_matches += 1
                 else:
-                    from vk_owner import vk_wall_url as _vk_wall_url
-                    source_url = _vk_wall_url(gid, pid, owner_type)
-
-                history_hit = detect_historical_context(post_text)
-                kw_ok, kws = match_keywords(post_text)
-                has_date = detect_date(post_text)
-                matched_kw_list = list(dict.fromkeys(str(kw) for kw in kws if kw))
-                if history_hit:
-                    matched_kw_list.append(HISTORY_MATCHED_KEYWORD)
-                if not kw_ok:
-                    matched_kw_list.append("hint:no_keywords")
-                if not has_date:
-                    matched_kw_list.append("hint:no_date")
-                if not post_text.strip():
-                    matched_kw_list.append(OCR_PENDING_SENTINEL)
-                matched_kw_list = list(dict.fromkeys(matched_kw_list))
-
-                date_hints = [
-                    match.group(0)
-                    for pattern in (DATE_RANGE_RE, NUM_DATE_RE, MONTH_NAME_RE)
-                    for match in pattern.finditer(post_text)
-                ]
-                event_ts_hint = extract_event_ts_hint(
-                    post_text,
-                    default_time,
-                    publish_ts=ts,
-                    tz=local_tz,
-                )
-                now_priority = int(time.time())
-                if event_ts_hint is None and has_date:
-                    past_probe = extract_event_ts_hint(
-                        post_text,
-                        default_time,
-                        publish_ts=ts,
-                        allow_past=True,
-                        tz=local_tz,
-                    )
-                    if past_probe is not None and past_probe < now_priority + 2 * 3600:
-                        matched_kw_list.append("hint:past_event")
-                if event_ts_hint is not None and event_ts_hint < now_priority + 2 * 3600:
-                    matched_kw_list.append("hint:past_event")
-                if event_ts_hint is not None and event_ts_hint > now_priority + 2 * 365 * 86400:
-                    matched_kw_list.append("hint:too_far")
-
-                stats["matches"] += 1
-                group_matches += 1
+                    stats["admission_rejected"] += 1
+                if admission.route == "llm":
+                    stats["admission_llm_checked"] += 1
+                    if admission.admitted:
+                        stats["admission_llm_admitted"] += 1
+                elif admission.route == "fail_open":
+                    stats["admission_llm_checked"] += 1
+                    stats["admission_fail_open"] += 1
                 if history_hit:
                     group_history_matches += 1
-                if not post_text.strip() and photos:
+                if not post_text.strip() and candidate.visual_evidence_count:
                     group_blank_single_photo_matches += 1
 
                 # Popularity metrics are optional. Raw packet persistence below
@@ -5777,7 +6554,7 @@ async def crawl_once(
                     )
 
                 try:
-                    _packet_id, packet_is_new = await _persist_vk_source_packet(
+                    await _persist_vk_source_packet(
                         db,
                         group_id=int(gid),
                         owner_type=owner_type,
@@ -5786,7 +6563,10 @@ async def crawl_once(
                         keyword_hints=matched_kw_list,
                         date_hints=date_hints,
                         event_ts_hint=event_ts_hint,
+                        admission_decision=admission,
+                        apply_admission_gate=True,
                     )
+                    _packet_id, packet_is_new = raw_results[post_index]
                 except Exception:
                     stats["errors"] += 1
                     group_errors += 1
@@ -5798,9 +6578,11 @@ async def crawl_once(
                     raise
 
                 if packet_is_new:
-                    stats["added"] += 1
-                    group_added += 1
+                    stats["packets_added"] += 1
                     has_new_posts = True
+                    if admission.admitted:
+                        stats["added"] += 1
+                        group_added += 1
                 else:
                     stats["duplicates"] += 1
                     group_duplicates += 1
@@ -5946,10 +6728,14 @@ async def crawl_once(
 
     took_ms = int((time.perf_counter() - start) * 1000)
     logging.info(
-        "vk.crawl.finish groups=%s posts_scanned=%s matches=%s dups=%s added=%s inbox_total=%s pages=%s overlap=%s took_ms=%s",
+        "vk.crawl.finish groups=%s posts_scanned=%s matches=%s rejected=%s llm_checked=%s fail_open=%s packets_added=%s dups=%s added=%s inbox_total=%s pages=%s overlap=%s took_ms=%s",
         stats["groups_checked"],
         stats["posts_scanned"],
         stats["matches"],
+        stats["admission_rejected"],
+        stats["admission_llm_checked"],
+        stats["admission_fail_open"],
+        stats["packets_added"],
         stats["duplicates"],
         stats["added"],
         stats["inbox_total"],
@@ -5975,7 +6761,10 @@ async def crawl_once(
             msg = (
                 f"Проверено {stats['groups_checked']} сообществ, "
                 f"просмотрено {stats['posts_scanned']} постов, "
-                f"совпало {stats['matches']}, "
+                f"допущено в очередь {stats['matches']}, "
+                f"отсечено admission {stats['admission_rejected']}, "
+                f"LLM-проверок {stats['admission_llm_checked']} "
+                f"(fail-open: {stats['admission_fail_open']}), "
                 f"дубликатов {stats['duplicates']}, "
                 f"добавлено {stats['added']}, "
                 f"теперь в очереди {stats['inbox_total']} "
