@@ -85,6 +85,15 @@ evidence to identify the active reader/writer; never delete WAL/SHM or replace
 the live DB file. Opt-in full `VACUUM` produces one `db_full_vacuum result=...`
 receipt containing capacity, DB/WAL sizes, duration, and both checkpoints.
 
+File-backed `Database.raw_conn()` contexts are transaction-isolated: each
+context owns a short SQLite connection and closes it on exit. Never cache or
+share one raw connection between asyncio workers. Otherwise an unrelated
+`BEGIN`/`commit` can take ownership of another worker's transaction, producing
+immediate `cannot start a transaction within a transaction` or a cascading
+`database is locked` even while ORM writes still succeed. In-memory/SQLite URI
+fixtures retain their persistent connection because separate connections may
+address a different database.
+
 Before cleanup, compare durable DB growth by table as well as top-level paths.
 For raw-first VK, compare `dbstat` bytes for `vk_source_packet` with the
 predeploy DB snapshot and count packets per crawl hour. Full JSON and attachment

@@ -82,6 +82,14 @@ ordinal — только tie-breaker. Поэтому перестановка si
 Update semantic/identity/provider результат является видимой terminal failure
 текущего run и не создаёт новый durable Smart retry loop.
 
+Единственный missing-date product terminal для official parser требует
+явного producer evidence. Для Третьяковки `source_disposition=no_dates`
+означает, что билетный календарь и detail page оба проверены и
+не содержат активной даты. Только тогда item терминализируется
+как `confirmed_no_active_schedule`; missing date без этой диспозиции остаётся
+технической ошибкой. `ops_run` и Telegram-отчёт показывают этот
+счётчик отдельно от created/merged/failed.
+
 ### Каноничность сайта (/parse) при конфликтах
 
 Источник сайта/парсера считается **каноническим** (trust high):
@@ -137,6 +145,14 @@ run-config пишет status ledger через отдельное коротко
 начинать несколько `BEGIN IMMEDIATE` на общем cached `Database.raw_conn()`: это
 теряет один или несколько источников с `cannot start a transaction within a
 transaction`.
+
+Тот же contract действует для server-side import, Smart Update state,
+recovery-ledger и фоновых workers: file-backed `Database.raw_conn()` выдаёт
+отдельное соединение на каждый context. Поэтому `BEGIN`/`commit` одного worker
+не могут стать частью транзакции другого worker. В частности, длительный
+parser merge больше не оставляет подтверждение accepted Smart Update и
+следующие parser candidates на общем connection в `database is locked` /
+`candidate_state_unavailable`.
 
 Основные parser kernels не зависят от создаваемого на каждый запуск Kaggle
 status-dataset. Kaggle Dataset API — только вспомогательный transport для

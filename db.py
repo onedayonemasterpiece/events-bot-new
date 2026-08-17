@@ -3886,8 +3886,26 @@ class Database:
 
     @asynccontextmanager
     async def raw_conn(self):
-        conn = await self._ensure_conn()
-        yield conn
+        # A SQLite transaction belongs to one connection, not to one asyncio
+        # task.  Sharing the historical singleton connection let unrelated
+        # workers interleave ``BEGIN``/``commit`` calls: one task could commit
+        # another task's transaction or make its next ``BEGIN IMMEDIATE`` fail
+        # immediately.  File-backed production databases therefore get one
+        # connection per context, just like the ORM's NullPool sessions.
+        #
+        # In-memory/URI databases keep the singleton because a new connection
+        # would otherwise address a different database (or break existing
+        # shared-memory test fixtures).
+        if self.path == ":memory:" or self.path.startswith("file:"):
+            conn = await self._ensure_conn()
+            yield conn
+            return
+        async with aiosqlite.connect(
+            self.path,
+            timeout=self._sqlite_timeout_sec(),
+        ) as conn:
+            await self._apply_sqlite_pragmas(conn)
+            yield conn
 
     @asynccontextmanager
     async def get_session(self):

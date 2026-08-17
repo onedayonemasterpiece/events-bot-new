@@ -72,6 +72,7 @@ def test_ops_metrics_use_authoritative_source_stats_without_ui_lists():
                 new_added=2,
                 ticket_updated=1,
                 already_exists=1,
+                confirmed_no_event=1,
             ),
             "qtickets": SourceParsingStats(
                 source="qtickets",
@@ -89,6 +90,79 @@ def test_ops_metrics_use_authoritative_source_stats_without_ui_lists():
     assert metrics["events_created"] == 2
     assert metrics["events_updated"] == 4
     assert metrics["events_unchanged"] == 1
+    assert metrics["events_confirmed_no_event"] == 1
+
+
+@pytest.mark.asyncio
+async def test_tretyakov_explicit_no_dates_is_terminal_not_scheduled_product_outcome(
+    monkeypatch,
+):
+    recovery_calls = []
+
+    async def record_recovery(*_args, **kwargs):
+        recovery_calls.append(kwargs)
+
+    monkeypatch.setattr(
+        handlers,
+        "_schedule_source_parser_recovery_request",
+        record_recovery,
+    )
+    event = handlers.TheatreEvent(
+        title="Россия — пути времени",
+        date_raw="",
+        ticket_status="available",
+        url="https://ticketstret.gallery/event/example",
+        source_type="tretyakov",
+        source_disposition="no_dates",
+    )
+
+    stats, _ = await handlers.process_source_events(
+        object(),
+        None,
+        [event],
+        source="tretyakov",
+        start_index=0,
+        total_count=1,
+    )
+
+    assert stats.confirmed_no_event == 1
+    assert stats.retry_scheduled == 0
+    assert stats.failed == 0
+    assert recovery_calls == []
+
+
+@pytest.mark.asyncio
+async def test_missing_date_without_explicit_no_dates_remains_fail_closed(monkeypatch):
+    recovery_calls = []
+
+    async def record_recovery(*_args, **kwargs):
+        recovery_calls.append(kwargs)
+
+    monkeypatch.setattr(
+        handlers,
+        "_schedule_source_parser_recovery_request",
+        record_recovery,
+    )
+    event = handlers.TheatreEvent(
+        title="Unknown schedule state",
+        date_raw="",
+        ticket_status="available",
+        url="https://example.com/unknown",
+        source_type="tretyakov",
+    )
+
+    stats, _ = await handlers.process_source_events(
+        object(),
+        None,
+        [event],
+        source="tretyakov",
+        start_index=0,
+        total_count=1,
+    )
+
+    assert stats.confirmed_no_event == 0
+    assert stats.retry_scheduled == 1
+    assert len(recovery_calls) == 1
 
 
 def test_smart_update_retries_transient_sqlite_writer_lock():
