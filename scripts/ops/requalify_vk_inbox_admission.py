@@ -21,6 +21,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# ``vk_intake`` deliberately resolves shared provider/timezone state from the
+# already-running ``main`` module instead of importing it implicitly.  This
+# standalone operator entrypoint therefore owns the explicit bootstrap.
+import main as _runtime_main  # noqa: F401,E402
 from db import Database
 from vk_intake import requalify_vk_inbox_admission
 

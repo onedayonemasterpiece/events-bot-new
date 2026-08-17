@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import subprocess
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -62,6 +65,45 @@ async def test_admission_schema_init_is_idempotent(tmp_path):
         quick = await (await conn.execute("PRAGMA quick_check")).fetchone()
     assert {"admission_status", "admission_reason", "admission_receipt_json"} <= columns
     assert quick == ("ok",)
+
+
+@pytest.mark.asyncio
+async def test_requalification_operator_bootstraps_runtime_main(tmp_path):
+    path = tmp_path / "operator.sqlite"
+    db = Database(str(path))
+    await db.init()
+    await db.close()
+
+    completed = await asyncio.to_thread(
+        subprocess.run,
+        [
+            sys.executable,
+            str(
+                Path(__file__).parents[1]
+                / "scripts/ops/requalify_vk_inbox_admission.py"
+            ),
+            "--db",
+            str(path),
+            "--limit",
+            "1",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {
+        "admitted": 0,
+        "classified": 0,
+        "dry_run": True,
+        "fail_open": 0,
+        "invalid_source_packets": [],
+        "llm_checked": 0,
+        "rejected": 0,
+        "remaining_legacy_pending": 0,
+        "selected": 0,
+    }
 
 
 async def _crawl(db: Database, monkeypatch, posts: list[dict]) -> dict:
