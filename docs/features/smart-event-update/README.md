@@ -25,6 +25,12 @@ non-verbatim review полностью отбрасывается, а source-gro
 названию из поддерживаемого списка области в title/raw_excerpt/location.
 Canonical parser URL может terminal-match occurrence внутри явно заданного
 recurring date range, но другой time/session по-прежнему не схлопывается.
+Telegram producer перед этой границей проверяет venue как цельный
+`name+address+city` payload. Точный source-grounded address не позволяет
+отбросить короткое имя известной площадки, а две разные подписи одной
+maintained reference-площадки не становятся ложным конфликтом. Поэтому
+положительный child доходит до LLM-first create/merge решения, а не получает
+ложный `missing_location` product terminal.
 
 Публичный результат закрыт структурно:
 

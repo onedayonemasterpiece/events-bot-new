@@ -91,6 +91,14 @@
   exact grounded region-place hints, and terminal-matches recurring canonical
   parser URLs without collapsing another session. Official parser ops metrics
   now report real creates/updates from authoritative source stats.
+- **Telegram venue completeness:** fixed two producer-boundary false
+  `missing_location` classes that discarded real event children. A short known
+  venue is now grounded by its exact address (`Заря`, `Мира 41-43`), and an
+  extracted/configured name pair is treated as the same venue only when both
+  resolve to the exact same maintained reference row (`Калининградский
+  драматический театр` / `Драматический театр`). Exact Telegram-result ->
+  Smart Update -> SQLite replays cover both positive shapes; explicit offsite
+  venue controls remain authoritative.
 - **Fixed — ChatGPT audio MCP runtime discovery:** the app-settings Refresh
   successfully scanned all 30 private MCP tools, but conversations materialized
   only an older bounded subset because the three audio tools were appended at

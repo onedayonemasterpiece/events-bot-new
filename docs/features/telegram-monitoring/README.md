@@ -150,6 +150,13 @@ Positive children сохраняются, а исчерпанная inline verif
   - русские падежные формы одного многословного venue (например `музей` /
     `музее`) считаются source-grounded только при совпадении всех значимых
     токенов; одного общего слова для этого недостаточно;
+  - короткое известное имя площадки не отбрасывается, если тот же event block
+    содержит её точный адрес: например `Заря` + `Мира 41-43` является одним
+    grounded venue payload, хотя четырёхбуквенное имя само по себе не даёт
+    достаточно токенов. Извлечённое длинное имя и `default_location` также не
+    считаются конфликтом, когда оба независимо резолвятся в одну строку
+    `docs/reference/locations.md` (например `Калининградский драматический
+    театр` и `Драматический театр, Мира 4`);
   - если extractor отдал venue, которого нет в тексте/OCR, а в том же посте явно виден другой venue, сервер подменяет extractor guess на подтверждённый venue;
   - если producer уже пометил venue как подозрительный и LLM-review оставил поле пустым, сервер может восстановить площадку из `default_location`, `docs/reference/locations.md` / `docs/reference/location-aliases.md`, адреса или OCR/text fallback; это reference/grounding layer, а не semantic phrase dictionary.
   - если extractor разложил соседнюю прозу между `location_name` и `location_address`, сервер отбрасывает prose-like address-фрагмент и восстанавливает структурные `location_name/location_address/city` из единственной известной площадки в исходном тексте/алиасах.
