@@ -31,19 +31,38 @@ LLM source decision. `VK_VIDEO_EVIDENCE_MAX_BYTES` ограничен 19 MiB har
 
 ## Граница покрытия
 
-В обработку попадает каждый пост, который crawler фактически получил из
-настроенного `vk_source` внутри технического crawl/backfill horizon. До
-семантического LLM-решения разрешены только source allowlist, pagination,
-horizon, raw persistence, загрузка вложений, OCR, exact replay и quota
-admission. `no_keywords`, `no_date`, `past_event`, `too_far`, historical/admin,
-`event_ts_hint` и cancellation regex — только hints/verification evidence.
+Каждый пост, который crawler фактически получил из настроенного `vk_source`
+внутри технического crawl/backfill horizon, сначала без потерь сохраняется как
+immutable `vk_source_packet`. Но в дорогую очередь `vk_inbox` попадает только
+пост, прошедший отдельный **collection-time admission**:
+
+1. Детерминистика пропускает только уверенный high-recall positive — есть
+   event keyword, дата и будущий `event_ts_hint`; blank/photo-only также
+   пропускается, потому что его смысл ещё скрыт в афише.
+2. Если детерминистика не смогла уверенно подтвердить пост, небольшой LLM batch
+   решает только `ADMIT | PAST_ONLY | NON_EVENT | UNCERTAIN`.
+3. Только grounded `PAST_ONLY/NON_EVENT` с confidence `>=0.90` и дословной
+   цитатой, при отсутствии нерассмотренных visual attachments, получает
+   terminal admission receipt и **не входит** в `vk_inbox`.
+4. `ADMIT`, `UNCERTAIN`, invalid schema, timeout/provider failure или unseen
+   visual evidence fail-open в `vk_inbox`, чтобы admission не мог потерять
+   реальное событие.
+
+Это не авторазбор: crawler лишь собирает, проверяет допуск и формирует очередь.
+Отдельный scheduled `vk_auto_import` позднее берёт bounded batch из `vk_inbox`,
+загружает media/OCR и выполняет полный source parse + Smart Update. Семантическое
+решение остаётся LLM-first: keyword/date слой умеет только пропустить очевидный
+positive, но не имеет права самостоятельно отклонить пост.
 
 Инвариант одного revision:
 
 ```text
 VK API fetch
   -> vk_source_packet (commit)
-  -> vk_inbox due state
+  -> deterministic positive OR LLM admission for unresolved post
+       -> grounded PAST_ONLY/NON_EVENT: packet terminal, no vk_inbox row
+       -> ADMIT/UNCERTAIN/technical: vk_inbox pending
+  -> later scheduled bounded vk_auto_import
   -> attachments/OCR + bounded inline short-video evidence + EvidenceManifest
   -> SourceParseDecision
   -> one bounded sub-minute provider Retry-After inside the same claim
@@ -63,11 +82,13 @@ VK API fetch
 Повтор возможен только как явно
 наблюдаемое операторское re-drive, а не как фоновый вечный цикл.
 
-Cursor не продвигается, пока не сохранены все полученные in-horizon packets.
+Cursor не продвигается, пока не сохранены все полученные in-horizon packets и
+для каждого нового revision не записан admission receipt / fail-open enqueue.
 Page/hard cap создаёт `vk_crawl_continuation`. Неизменившийся revision с тем же
 payload/revision hash использует exact successful receipt без provider-вызова;
 изменившийся пост получает новый immutable revision и снова становится due.
-Blank/photo-only packets также сохраняются и идут через OCR и LLM.
+Blank/photo-only packets также сохраняются и fail-open идут через поздние OCR и
+full source LLM: текстовый admission не имеет права угадывать содержимое афиши.
 
 `VK_AUTO_IMPORT_RATE_LIMIT_MAX_WAIT_SEC` (default `60`, hard max `180`) задаёт
 общий wall-clock budget для одного явного provider `Retry-After` внутри
@@ -332,6 +353,12 @@ Scheduled entrypoint: `vk_auto_queue.vk_auto_import_scheduler`.
   backlog выбирается самый старый carrier (default `5`);
 - `VK_CRAWL_MIN_FREE_MB` — production-volume admission floor перед VK fetch и
   packet persistence (default `512` MiB);
+- `VK_CRAWL_ADMISSION_MODEL` — маленькая модель только для collection-time
+  классификации deterministic failures (default `gemini-3.1-flash-lite`);
+- `VK_CRAWL_ADMISSION_BATCH_SIZE` — число unresolved posts в одном bounded LLM
+  запросе (default `8`, hard max `20`);
+- `VK_CRAWL_ADMISSION_TIMEOUT_SEC` — wall-clock cap одного admission batch
+  (default `75`, hard range `10..180` seconds);
 - `VK_AUTO_IMPORT_INLINE_JOBS` / `VK_AUTO_IMPORT_INLINE_INCLUDE_ICS` управляют
   только ожиданием downstream receipts после accepted result.
 
@@ -347,6 +374,26 @@ negative outcome запрещён; строка завершается `FAILED_T
 ждёт operator verdict и не обязан пройти manual terminal transition.
 
 ## Recovery и observability
+
+Legacy pending rows, созданные raw-first crawler до collection-time gate, можно
+проверить тем же контрактом, не запуская auto-import и не создавая Events:
+
+```bash
+# default is read-only dry-run; newest rows first
+python scripts/ops/requalify_vk_inbox_admission.py --db /data/db.sqlite --limit 100
+
+# explicit bounded apply after reviewing dry-run counters
+python scripts/ops/requalify_vk_inbox_admission.py \
+  --db /data/db.sqlite --limit 100 --apply
+```
+
+Команда меняет только admission receipt и связанный `vk_inbox.status`.
+Grounded past/non-event становится `rejected`; admitted/fail-open остаётся
+`pending` для отдельного расписания auto-import. Плохой provider/schema не
+паркует пост в новой retry-очереди и не удаляет его — он fail-open. Строки,
+уже claimed текущим auto-import batch (`locked_by`/`review_batch`), команда не
+трогает; обычный crawler также не запускает скрытую массовую переклассификацию
+старого backlog — для неё используется только этот bounded entrypoint.
 
 Read-only inventory/census:
 

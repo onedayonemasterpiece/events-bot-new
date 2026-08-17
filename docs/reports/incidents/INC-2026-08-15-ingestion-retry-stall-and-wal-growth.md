@@ -140,6 +140,15 @@ reader is not exposed.
   SQLite write race. The outer facade discarded the accepted `event_id` and
   marked inbox 19775 `smart_update_processing_error`; this is an accounting
   and replay defect after a real accepted write, not a missing event parse.
+- 2026-08-17 — queue-quality audit identifies a separate admission regression
+  introduced by the August 11 raw-first change: the crawler continued to
+  preserve every immutable source packet (correct), but also projected every
+  fetched revision into `vk_inbox` (incorrect). Post-August-11 auto-import
+  conversion consequently fell from the historical high-yield shape while
+  obvious administrative, retrospective and past-only posts consumed the
+  bounded 15/25-row product batch. Historical code confirms the former
+  keyword+date gate; replaying the actual recent positive cohort shows nine of
+  ten still pass it, while bare nominative `концерт` is the one regex miss.
 - 2026-08-15 08:50 UTC — PR #506 merges as
   `c655156664edcfe91da11a4b9405d4fa59573f20` with all required CI checks green.
 - 2026-08-15 08:54 UTC — Fly v1975 deploys exact merged main; startup records
@@ -300,9 +309,20 @@ reader is not exposed.
     An ordinary concurrent SQLite writer made the topics commit time out; the
     facade then converted an already durable accepted event into a technical
     terminal with no accepted `event_id` in the VK batch receipt.
+18. The August 11 raw-first migration coupled two different guarantees. It
+    correctly persisted every fetched VK revision in `vk_source_packet`, but
+    it also unconditionally upserted every revision into the expensive
+    `vk_inbox` auto-import queue. Deterministic keyword/date/history fields were
+    reduced to hints with no collection-time semantic fallback, so obvious
+    non-events and past-only posts consumed the same bounded slots as likely
+    future events. The historical keyword expression also omitted bare
+    nominative `концерт`, proving that restoring the old regex as a rejection
+    gate would create a recall loss.
 
 Semantic eventness, venue, identity and merge/create decisions remain LLM-first.
-No keyword/regex shortcut is accepted as a remedy for this incident.
+Keyword/date logic may admit an obvious high-recall positive, but no
+keyword/regex shortcut may reject a post: unresolved cases require the bounded
+LLM admission decision and uncertainty must fail open.
 
 ## Contributing Factors
 
@@ -555,6 +575,20 @@ and a small WAL. No DB/WAL/snapshot or unknown artifact was deleted. Keep
 - [ ] merge/deploy that observer isolation from exact main, replay inbox 19775
   through the supported VK boundary and require the existing event 7788 to
   settle as accepted exact replay with no failed/deferred/unresolved row.
+- [x] localize the VK queue-quality regression to unconditional
+  `vk_source_packet -> vk_inbox` projection and confirm against the June code
+  and the actual recently accepted production cohort; fix bare `концерт` in
+  the positive regex without using deterministic semantics for rejection.
+- [x] implement collection-time hybrid admission while preserving the two
+  schedules: raw packet first; deterministic future positive direct to queue;
+  small batched LLM only for unresolved posts; grounded high-confidence
+  `PAST_ONLY/NON_EVENT` outside the queue; all uncertainty/visual/provider/schema
+  cases fail-open. The continuation path uses the same gate, and a bounded
+  operator entrypoint requalifies legacy pending rows without parsing Events.
+- [ ] merge/deploy the VK admission gate from exact main, requalify the legacy
+  pending cohort in bounded batches, then prove on a real crawl and subsequent
+  separate scheduled auto-import that queue size/no-event share fall while all
+  known recent positive controls still reach created/merged receipts.
 
 ## Follow-up Actions
 

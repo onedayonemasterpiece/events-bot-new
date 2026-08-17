@@ -27,6 +27,14 @@ To avoid parallel long-running operations (especially **manual** starts overlapp
 
 VK crawling runs six times per day by default at `05:15`, `09:15`, `13:15`, `17:15`, `21:15` and `22:45` Europe/Kaliningrad time (`VK_CRAWL_TIMES_LOCAL` / `VK_CRAWL_TZ`).
 
+Crawler и auto-import остаются разными scheduled stages. Crawler сначала
+сохраняет immutable packet, затем кладёт в `vk_inbox` deterministic future
+positives; только unresolved/failed deterministic cases получает небольшой
+collection-time LLM admission batch. Grounded high-confidence past/non-event
+остаётся terminal вне очереди, uncertainty/provider failure fail-open. Сам
+crawler никогда не запускает full parse/Smart Update; bounded auto-import
+работает позже по своему расписанию.
+
 Production keeps automatic VK typed ingestion **default-on** through
 `ENABLE_VK_AUTO_IMPORT=1` in `fly.toml`; local/test environments remain explicit
 opt-in. The scheduled consumer does not wait for accept/reject UI. It processes

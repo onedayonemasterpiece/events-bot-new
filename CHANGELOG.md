@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Fixed: VK source collection no longer sends every raw fetched post directly
+  into the bounded auto-import queue. The crawler still durably preserves every
+  immutable packet, admits clear deterministic future positives, and uses one
+  small batched LLM gate only for unresolved posts. Only grounded,
+  high-confidence `PAST_ONLY`/`NON_EVENT` without unseen visual evidence stays
+  out of `vk_inbox`; uncertainty or provider/schema failure fails open. Crawl
+  and later scheduled auto-import remain separate stages, continuation pages
+  use the same admission contract, bare `концерт` is recognized, and a bounded
+  operator command can requalify the legacy pending backlog without creating
+  Events.
+
 - Fixed: a committed Smart Update create/merge can no longer be reported as
   `FAILED_TECHNICAL` merely because the later best-effort topic-classification
   observer loses a concurrent SQLite write race. The accepted Event and
