@@ -54,6 +54,17 @@
   candidate, проходит three-way conformance и публикуется как immutable noindex
   preview с exact Git/package SHA для отдельного phone/desktop review. Preview
   не является production promotion.
+- Для каждого page archetype обязателен visual-parity gate из канонического
+  `lovekgd-design-system/docs/ui-source-of-truth-roundtrip.md`: зафиксировать
+  exact Astro SHA/route/fixture/viewport/DPR/browser/fonts/state, снять
+  детерминированный screenshot, поместить его в Penpot как locked source
+  evidence, рядом собрать тот же экран только из linked components, экспортировать
+  reconstruction в том же размере и отсмотреть side-by-side, 50% overlay/blink
+  и diff. Необъяснённое отличие возвращает работу к SoT/component gate; raster
+  и archetype-local patch не становятся источником истины.
+- При обратной интеграции isolated Astro candidate повторно снимается на тех же
+  fixtures и сравнивается с accepted Penpot reconstruction до phone/desktop
+  review. Без этой сверки production generation запрещена.
 - Production generation/deploy разрешены только после явного owner approval
   browser/device результата, полной миграции consumers, всех design-system и
   release gates и post-deploy conformance. Penpot acceptance, resolved comment

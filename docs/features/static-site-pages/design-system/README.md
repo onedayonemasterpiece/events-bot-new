@@ -40,6 +40,32 @@ owner browser approval → promotion/migration/release gates
 → production generation/deploy → post-deploy conformance
 ```
 
+### Archetype capture and comparison obligation
+
+Этот репозиторий владеет воспроизводимым Astro evidence для обязательного
+archetype visual-parity gate, а не отдельным вариантом самого процесса. Для
+каждого route/state/viewport нужно:
+
+1. зафиксировать exact commit, route, fixture/data, viewport, DPR, browser,
+   загруженные fonts, locale/timezone, theme, auth/personalization/consent и
+   interaction state;
+2. снять детерминированный current-Astro screenshot и сохранить manifest/hash;
+3. передать его в Resource Graph как locked source evidence, не как component
+   или insertable resource;
+4. потребовать рядом Penpot reconstruction только из linked design-system
+   instances и тот же pixel size;
+5. проверить экспорт/import глазами side-by-side и в 50% overlay/blink, а при
+   наличии — pixel diff; каждое необъяснённое отличие привязать к component/slot;
+6. после Penpot acceptance снять isolated Astro candidate на тех же fixtures и
+   сравнить его уже с accepted reconstruction до device review и production.
+
+Если компоненты не воспроизводят pinned Astro evidence, сборка archetype
+останавливается: сначала исправляются Git SoT/component contracts и все их
+consumers. Screenshot не является SoT, а локальная подгонка archetype не может
+скрывать системную ошибку. Нормативная подробная процедура находится в
+`lovekgd-design-system/docs/ui-source-of-truth-roundtrip.md`, section
+`Mandatory archetype visual-parity gate`.
+
 Критические границы:
 
 - Penpot comment не является прямым заданием на изменение Astro;
