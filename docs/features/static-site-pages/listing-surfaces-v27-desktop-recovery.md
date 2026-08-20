@@ -6,6 +6,14 @@ regression contract, not a redesign target.
 
 ## Product contract
 
+Very tall, explicitly classified OCR media now shares the bounded-document
+framing already used by compact related cards. A known source below width/height
+`4/5` may spend at most 20% crop while retaining at least 80% vertically to gain useful row width;
+unclassified/error media remains natural `contain`. The card exposes treatment,
+fit, crop and reason data attributes so browser geometry can verify this without
+an event-specific rule. The exact 906×1280 acceptance oracle resolves to
+ratio `0.884765625`, `coverCrop=0.2` and `verticalRetention=0.8`.
+
 - The real site header remains visible at the top of desktop listing pages.
 - The discovery rail sticks immediately below the 57px global header; neither
   layer may cover the other or listing content.

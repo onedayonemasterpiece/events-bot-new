@@ -1,11 +1,12 @@
 import { resolveEventImageCrop } from './imageCrop.mjs';
 import listingMediaOverrides from '../data/listingMediaOverrides.json' with { type:'json' };
+import { compactDocumentFramingContract, resolveBoundedDocumentFrame } from './compactMediaFraming.mjs';
 
 // CSS aspect ratios are width / height. The compact default is therefore the
 // horizontal 5:4 counterpart of the product's "4:5 by height" rule.
 const PREFERRED_VISUAL_RATIO = 5 / 4;
-const VERY_TALL_DOCUMENT_RATIO = 4 / 5;
-const MAX_DOCUMENT_CROP = 0.2;
+const VERY_TALL_DOCUMENT_RATIO = compactDocumentFramingContract.veryTallRatio;
+const MAX_DOCUMENT_CROP = compactDocumentFramingContract.maxCrop;
 // The desktop recommendation column is about 360px wide at the acceptance
 // viewport. Chrome is intrinsic per row, so the optimizer models the bounded
 // title/meta/place line budget instead of reserving one global fixed height.
@@ -168,43 +169,20 @@ export function resolveRelatedCardMediaTreatment(item, targetAspect, geometry = 
   const mediaRatio = finiteRatio(geometry?.ratio, geometry?.documentMedia ? VERY_TALL_DOCUMENT_RATIO : PREFERRED_VISUAL_RATIO);
   const potentialCoverCrop = cropFraction(mediaRatio, targetAspect);
   if (geometry?.documentMedia) {
-    // Unknown classification and explicit classifier errors have no positive
-    // crop evidence. Even known pixel dimensions cannot turn them into the
-    // bounded-cover OCR exception: they remain whole on every EventCard.
-    if (geometry?.imageTextMode === 'unknown' || geometry?.semanticStatus === 'error') {
-      return {
-        mediaKind:'document',
-        mediaTreatment:'document-contain',
-        fit:'contain',
-        objectPosition:'50% 50%',
-        cropReason:geometry?.semanticStatus === 'error' ? 'semantic_error_fail_closed' : 'unknown_media_fail_closed',
-        potentialCoverCrop:null,
-        coverCrop:null,
-      };
-    }
-    // A fallback aspect ratio is useful for reserving layout space but is not
-    // evidence that an OCR/document image fits the 20% crop budget. Unknown
-    // intrinsic geometry therefore stays contained and exposes no numeric crop
-    // claim for analytics or browser gates to mistake for a measured value.
-    if (geometry?.dimensionsKnown === false) {
-      return {
-        mediaKind:'document',
-        mediaTreatment:'document-contain',
-        fit:'contain',
-        objectPosition:'50% 50%',
-        cropReason:'document_dimensions_unknown',
-        potentialCoverCrop:null,
-        coverCrop:null,
-      };
-    }
+    const frame = resolveBoundedDocumentFrame({
+      ratio: mediaRatio,
+      imageTextMode: geometry?.imageTextMode,
+      semanticStatus: geometry?.semanticStatus,
+      dimensionsKnown: geometry?.dimensionsKnown,
+    });
     return {
       mediaKind:'document',
-      mediaTreatment:'document-safe-cover',
-      fit:'cover',
+      mediaTreatment:frame.mediaTreatment,
+      fit:frame.fit,
       objectPosition:'50% 50%',
-      cropReason:potentialCoverCrop <= EPSILON ? 'document_uncropped' : 'document_bounded_cover',
-      potentialCoverCrop,
-      coverCrop:potentialCoverCrop,
+      cropReason:frame.cropReason,
+      potentialCoverCrop:frame.coverCrop,
+      coverCrop:frame.coverCrop,
     };
   }
   const crop = resolveEventImageCrop(geometry?.asset || relatedCardPrimaryImageAsset(item), targetAspect);
@@ -272,8 +250,13 @@ export function resolveMobileEventCardMedia(item, options = {}) {
 function documentTargetInterval(entry) {
   // Ordinary OCR posters stay uncropped. Only an unusually tall document may
   // spend up to the explicit 20% area budget to keep its whole row compact.
-  if (entry.ratio >= VERY_TALL_DOCUMENT_RATIO - EPSILON) return [entry.ratio, entry.ratio];
-  return [entry.ratio, entry.ratio / (1 - MAX_DOCUMENT_CROP)];
+  const frame = resolveBoundedDocumentFrame({
+    ratio: entry.ratio,
+    imageTextMode: entry.imageTextMode,
+    semanticStatus: entry.semanticStatus,
+    dimensionsKnown: entry.dimensionsKnown,
+  });
+  return [entry.ratio, frame.targetRatio];
 }
 
 function rowTarget(row) {

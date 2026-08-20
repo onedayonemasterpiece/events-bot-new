@@ -1,5 +1,6 @@
 import type { EventImageAsset, PreviewEvent } from './types';
 import listingMediaOverrides from '../data/listingMediaOverrides.json';
+import { resolveBoundedDocumentFrame } from './compactMediaFraming.mjs';
 export { chronologicalListingEvents } from './listingChronology';
 
 export type ListingDaypart = 'morning' | 'day' | 'evening' | 'night' | 'untimed';
@@ -32,6 +33,10 @@ export interface ListingImagePresentation {
   adaptiveCrop: boolean;
   objectPosition: string;
   verticalRetention: number;
+  fit: 'cover' | 'contain';
+  mediaTreatment: 'document-safe-cover' | 'document-contain' | 'visual-cover' | 'visual-contain';
+  cropReason: string;
+  coverCrop: number | null;
 }
 
 export function exactListingTime(event: Pick<PreviewEvent, 'start_time' | 'display_time'>): string | null {
@@ -447,9 +452,14 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
       ? visualCropRatio
       : rawRatio)
     : visualCropRatio;
-  const outputRatio = isVisualOnly
-    ? visualRatio
-    : Math.max(0.2, Math.min(3.2, rawRatio || 0.8));
+  const documentFrame = resolveBoundedDocumentFrame({
+    ratio: Math.max(0.2, Math.min(3.2, rawRatio || 0.8)),
+    imageTextMode: asset?.image_text_mode || event.image_text_mode || 'unknown',
+    semanticStatus: asset?.media_semantic_status || 'unknown',
+    dimensionsKnown: Boolean(asset && asset.width > 0 && asset.height > 0),
+  });
+  const outputRatio = isVisualOnly ? visualRatio : documentFrame.targetRatio;
+  const visualFit = visualCanCrop && !useNatural ? 'cover' : 'contain';
   return {
     asset,
     src,
@@ -463,7 +473,19 @@ export function selectListingImage(event: PreviewEvent, visualCropRatio = 1.5): 
           : 'unknown-natural',
     adaptiveCrop: visualCanCrop && !useNatural,
     objectPosition: asset?.recommended_object_position || event.image_object_position || '50% 50%',
-    verticalRetention: rawRatio > 0 && outputRatio > rawRatio ? Math.min(1, rawRatio / outputRatio) : 1,
+    verticalRetention: isVisualOnly
+      ? (rawRatio > 0 && outputRatio > rawRatio ? Math.min(1, rawRatio / outputRatio) : 1)
+      : documentFrame.verticalRetention,
+    fit: isVisualOnly ? visualFit : documentFrame.fit,
+    mediaTreatment: isVisualOnly
+      ? (visualFit === 'cover' ? 'visual-cover' : 'visual-contain')
+      : documentFrame.mediaTreatment,
+    cropReason: isVisualOnly
+      ? (visualFit === 'cover' ? 'visual_crop_evidence' : 'visual_natural')
+      : documentFrame.cropReason,
+    coverCrop: isVisualOnly && visualFit === 'cover'
+      ? Math.max(0, 1 - Math.min(rawRatio / outputRatio, outputRatio / rawRatio))
+      : documentFrame.coverCrop,
   };
 }
 

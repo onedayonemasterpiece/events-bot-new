@@ -863,6 +863,10 @@
   background: var(--ke-color-canvas-soft);
 }
 .ke-listing-card__media img { width: 100%; height: 100%; }
+.ke-listing-card[data-listing-media-treatment="document-safe-cover"][data-listing-fit="cover"] .ke-listing-card__media img {
+  object-fit: cover;
+  object-position: var(--ke-listing-object-position);
+}
 .ke-listing-card__copy { padding-top: 10px; }
 .ke-listing-card__title { font-size: 1.25rem; line-height: 1.18; }
 .ke-listing-card__copy p { font-size: 1.02rem; }

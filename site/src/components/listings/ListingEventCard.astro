@@ -98,6 +98,10 @@ const socialProofLabel = [
   data-listing-city={cityKey(event.city)}
   data-listing-event-type={cityKey(event.event_type || 'other')}
   data-listing-image-mode={image.mode}
+  data-listing-media-treatment={image.mediaTreatment}
+  data-listing-fit={image.fit}
+  data-listing-cover-crop={image.coverCrop === null ? undefined : image.coverCrop.toFixed(5)}
+  data-listing-crop-reason={image.cropReason}
   data-listing-crop-adaptive={image.adaptiveCrop ? 'true' : 'false'}
   data-listing-crop-evidence={image.asset?.listing_crop_evidence}
   data-listing-source-width={image.asset?.width}

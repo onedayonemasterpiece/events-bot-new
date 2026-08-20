@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed: event listings now reuse the universal 20%-bounded document frame for
+  very tall, explicitly classified OCR media instead of collapsing it into a
+  narrow natural-width strip; unknown/error media still fails closed to
+  `contain`. Exhibition photo decks also normalize the deck/frame radius to
+  8px with clipping, removing the parasitic square corner while preserving the
+  shared icon geometry and behavior.
+
 - Added: VK admission recovery can re-evaluate only pending rows that failed
   open on a transient provider/schema error. The mode is explicit and bounded,
   so operators can wait for provider capacity and retry small chunks instead
