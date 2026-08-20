@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Changed: static-site UI work now has an explicit fail-closed cross-repository
+  round trip: current Astro/runtime is reconstructed into the versioned design-
+  system Git SoT and native Penpot; Penpot feedback updates Git SoT before
+  reconciliation; Astro candidate integration starts only after owner Penpot
+  acceptance; production requires a second owner phone/desktop approval plus
+  promotion, migration, release, and post-deploy conformance gates.
+
 - Changed: owner-approved medallion sizing now uses one design-system contract:
   compact 44px for exhibitions/mobile Popular, standard 60px for desktop
   listing overlays and rails, and feature 88px for event detail/mobile rails.

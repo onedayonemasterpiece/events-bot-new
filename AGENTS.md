@@ -31,6 +31,38 @@
 - Изменение не завершено, пока все production consumers не переведены на новую версию, либо временное сосуществование не оформлено feature flag, списком consumers, owner и сроком удаления. Тихая смесь версий блокирует release.
 - В том же commit обновляются runtime-компонент, `/lab/design-system/`, version/migration contract checks, каноническая документация, test scenarios, release evidence и `CHANGELOG.md`.
 
+### Cross-repository UI round trip (critical)
+
+- Полный authority/lifecycle-контракт находится в
+  `onedayonemasterpiece/lovekgd-design-system`, документ
+  `docs/ui-source-of-truth-roundtrip.md`. Локальный bridge —
+  `docs/features/static-site-pages/design-system/README.md`. Не создавай второй
+  независимый вариант этого процесса в `events-bot-new`.
+- До promotion конкретного family этот репозиторий и exact generated runtime
+  остаются источником факта о текущем AS-IS UI, но не нормализованной дизайн-
+  системой. После promotion компонент должен приходить из pinned versioned
+  design-system package; локально редактируемый fork запрещён.
+- Первичная реконструкция идёт только как `exact Astro/runtime → Git SoT UI в
+  lovekgd-design-system → native Penpot candidate → owner review`.
+- Комментарии Penpot не реализуются напрямую в Astro. Обязательная цепочка:
+  `file-scoped comment ingestion/dedupe → owner disposition → Git SoT first →
+  Penpot reconciliation/read-back → owner Penpot acceptance`.
+- Фактическая интеграция изменения в `events-bot-new` разрешена только после
+  явного owner acceptance ограниченного Penpot candidate и фиксации точного
+  contract version/hash в Git SoT.
+- После Penpot acceptance изменение реализуется в isolated branch/package
+  candidate, проходит three-way conformance и публикуется как immutable noindex
+  preview с exact Git/package SHA для отдельного phone/desktop review. Preview
+  не является production promotion.
+- Production generation/deploy разрешены только после явного owner approval
+  browser/device результата, полной миграции consumers, всех design-system и
+  release gates и post-deploy conformance. Penpot acceptance, resolved comment
+  или green preview сами по себе production не разрешают.
+- Срочный production incident допускает только reversible mitigation по
+  incident/release governance. Он не становится новым design baseline и обязан
+  породить последующую сверку `runtime evidence → Git SoT → Penpot → owner
+  disposition` до окончательного закрытия.
+
 ## Incident Mode (critical)
 
 - Упоминание конкретного incident ID (`INC-*`) само по себе достаточно, чтобы агент перешёл в incident workflow.

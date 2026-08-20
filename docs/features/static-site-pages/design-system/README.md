@@ -1,20 +1,56 @@
 # Static-site design-system integration
 
-## Current status
+## Runtime status source
 
-```text
-Resource Graph TO-BE structure: PASS
-Penpot file_id: 3be9e5e1-190f-8090-8008-713c0fbe6260
-native design-system components: 0
-source-first decoder: not started
-promoted component families: 0
-```
+Не фиксируй здесь изменяемые counts или глобальный этап. Актуальные lifecycle
+state, native candidate resources, review status, promotion flags и exact SHA
+берутся из versioned contracts/receipts затронутого family в
+`onedayonemasterpiece/lovekgd-design-system` и подтверждаются Penpot read-back.
+На момент этого контракта ни одно family нельзя считать promoted без отдельного
+promotion receipt; наличие native Penpot candidate этого не меняет.
 
-Принятой компонентной дизайн-системы ранее не существовало. Предыдущие Penpot generations 003–005 являются technical experiments and historical evidence. Активный Resource Graph очищен и содержит только пустую TO-BE структуру.
+Penpot generations 003–005 остаются technical experiments and historical
+evidence и не являются текущим Resource Graph или UI authority.
 
 ## Authority during reconstruction
 
 До promotion каждого resource family текущий Astro source в этом репозитории является executable source of fact о существующей реализации. Его нельзя автоматически считать нормализованной дизайн-системой: decoder должен обнаружить component families, inline/CSS patterns, one-to-many/many-to-one relationships, states, consumers, local overrides и unresolved fragmentation.
+
+## Mandatory UI round trip
+
+Полный нормативный процесс принадлежит
+`onedayonemasterpiece/lovekgd-design-system`, документу
+`docs/ui-source-of-truth-roundtrip.md`. Этот репозиторий хранит только
+consumer/release boundary и не должен дублировать или переопределять lifecycle.
+
+```text
+initial reconstruction:
+exact Astro/runtime → Git SoT UI → native Penpot → owner review
+
+comment correction:
+Penpot comments → Git SoT first → Penpot reconciliation → owner re-review
+
+accepted implementation:
+owner Penpot acceptance → exact Git contract version/hash
+→ isolated Astro candidate → three-way conformance
+→ immutable noindex phone/desktop preview → owner browser approval
+
+production:
+owner browser approval → promotion/migration/release gates
+→ production generation/deploy → post-deploy conformance
+```
+
+Критические границы:
+
+- Penpot comment не является прямым заданием на изменение Astro;
+- Penpot mutation не может быть единственным местом изменения — сначала
+  обновляется Git SoT;
+- до owner Penpot acceptance фактический backport в consumer Astro запрещён;
+- preview и production — два разных owner gates;
+- Penpot acceptance, resolved thread или зелёный preview не дают разрешения на
+  production;
+- incident mitigation остаётся reversible runtime hotfix и требует последующей
+  сверки с Git SoT/Penpot, а не становится новым baseline автоматически.
 
 ## Target authority after promotion
 
@@ -48,9 +84,9 @@ This repository
   integration, release and runtime evidence
 ```
 
-## Next bounded stage
+## Per-family entry stage
 
-Source-first decoder:
+Для ещё не реконструированного family входом остаётся source-first decoder:
 
 ```text
 Astro source/generators
@@ -61,12 +97,16 @@ Astro source/generators
 → STOP before Penpot materialization/refactor
 ```
 
-Decoder must not match current Astro against removed/test Penpot components and must not change production UI.
+Decoder must not match current Astro against removed/test Penpot components and
+must not change production UI. Для уже начатого family продолжай только с
+текущего доказанного lifecycle state из его contract/receipt; не сбрасывай его к
+decoder и не перепрыгивай следующий owner gate.
 
 ## Canonical documentation
 
 The normative design-system architecture lives in `onedayonemasterpiece/lovekgd-design-system`:
 
+- `docs/ui-source-of-truth-roundtrip.md`;
 - `docs/resource-graph-004.md`;
 - `docs/component-contract-authority.md`;
 - `docs/source-first-component-decoder.md`;
