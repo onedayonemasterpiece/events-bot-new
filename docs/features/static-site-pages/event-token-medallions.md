@@ -190,16 +190,26 @@ Audience/price pills remain ordinary compact facts.
 
 ### Sizes
 
-Runtime event-page medallions are intentionally larger than ordinary chips: they are a visual trust/recognition layer under the hero, not small metadata labels. Organizer medallions should prefer SVG `avatarUrl` assets. If the source is not SVG/vector-safe, use WebP as the primary browser asset and keep PNG only as QA/fallback.
+Owner decision #30 replaces the former responsive spread with three shared,
+named identity tiers. The tokens live in `design-system.css`; a consumer may not
+invent an intermediate diameter to make one fixture fit. Organizer medallions
+should prefer SVG `avatarUrl` assets. If the source is not SVG/vector-safe, use
+WebP as the primary browser asset and keep PNG only as QA/fallback.
 
-| Surface | Desktop | Tablet | Mobile |
+| Tier | Token | Diameter | Production consumers |
 | --- | --- | --- | --- |
-| Detail circle/avatar | `clamp(88px, 23vw, 112px)` | same responsive token | `clamp(84px, 23vw, 92px)`, about `89.7px` on a 390px viewport |
-| Pushkin-card medallion | visual black circle uses the same `--token-size` as organizer circles; the wordmark may protrude to the right inside one composite image | same responsive token | same circle diameter as organizer medallions; composite width is larger only because of the original wordmark |
-| Detail pill height | 56px | 48px | 44px minimum hit/scan area |
-| Gap | 12px | 10px | 8px |
-| V15 listing external circle | `52…60px`, max 3 | desktop acceptance only | deferred |
-| V15 listing overlay circle | `60px`, max 1 | desktop acceptance only | deferred |
+| compact | `--ke-medallion-size-compact` | `44px` | exhibition seal; mobile Popular overlay and side rail |
+| standard | `--ke-medallion-size-standard` | `60px` | desktop listing overlay and side rail, including multiple/split layouts |
+| feature | `--ke-medallion-size-feature` | `88px` | event-detail identity medallions and mobile listing-rail artwork |
+
+The mobile listing-rail placement slot remains `94×112px`; only its linked art
+changes from 86 to feature 88. The Pushkin composite may be wider because of its
+source wordmark, but its black circle follows feature 88. Detail pills keep their
+existing text/hit-area contract because they are not identity artwork.
+
+`EventTokenMedallions@2` is the production default. `@1` retains the old
+responsive 72–128 px spread only in `/lab/design-system/` as a deprecated,
+side-by-side comparison. All production callers use `@2`.
 
 On mobile event detail, `Main` / `Secondary` remains a semantic placement and
 priority distinction, not a size distinction. Organizer, venue, program,

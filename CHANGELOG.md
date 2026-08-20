@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Changed: owner-approved medallion sizing now uses one design-system contract:
+  compact 44px for exhibitions/mobile Popular, standard 60px for desktop
+  listing overlays and rails, and feature 88px for event detail/mobile rails.
+  `EventTokenMedallions@2` is the production default; deprecated v1 remains
+  visible only beside v2 in the design-system catalog for review.
+
 - Fixed: event listings now reuse the universal 20%-bounded document frame for
   very tall, explicitly classified OCR media instead of collapsing it into a
   narrow natural-width strip; unknown/error media still fails closed to

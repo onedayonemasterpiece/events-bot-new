@@ -19,6 +19,7 @@ interface Props {
   event: PreviewEvent;
   layout?: 'inline' | 'desktop-slots';
   allowTopSlot?: boolean;
+  sizeContract?: 'legacy' | 'normalized';
 }
 
 type Token = {
@@ -40,7 +41,7 @@ type Token = {
   layoutRole?: 'main' | 'secondary';
 };
 
-const { event, layout = 'inline', allowTopSlot = true } = Astro.props;
+const { event, layout = 'inline', allowTopSlot = true, sizeContract = 'normalized' } = Astro.props;
 
 function normalize(value: unknown): string {
   return String(value || '').toLowerCase().replace(/<[^>]*>/gu, ' ').replace(/[«»"'`´’‘.,!?()[\]{}:;—–-]+/gu, ' ').replace(/\s+/gu, ' ').trim();
@@ -242,7 +243,11 @@ function primaryImageSrc(imageUrl: string, fallbackImageUrl?: string): string {
 {tokenGroups.length > 0 && (
   <div
     class:list={['event-token-layout', `event-token-layout--${layout}`]}
+    data-ds-component="EventTokenMedallions"
+    data-ds-version={sizeContract === 'normalized' ? '2' : '1'}
     data-medallion-layout={layout}
+    data-medallion-size-contract={sizeContract}
+    data-medallion-tier={sizeContract === 'normalized' ? 'feature' : 'legacy-responsive'}
     data-main-medallion-slug={resolvedMainToken?.slug}
     data-top-slot-enabled={allowTopSlot ? 'true' : 'false'}
   >

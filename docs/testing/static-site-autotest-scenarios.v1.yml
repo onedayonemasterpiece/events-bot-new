@@ -160,12 +160,14 @@ scenarios:
   event.venue_source_medallions:
     title: Venue and source medallions are present, grounded and non-conflicting
     status: partial
+    contract: docs/features/static-site-pages/event-token-medallions.md
     layers: [L0, L1]
     platforms: [browser]
     trigger_tags: [static-data, static-route, visual-layout]
     cost: low
     side_effects: none
-    evidence: positive_negative_specimens
+    geometry_status: implemented_44_60_88
+    evidence: positive_negative_specimens_and_44_60_88_geometry
     blocking:
       pull_request: affected_scope
       release: true_for_public_medallion_changes

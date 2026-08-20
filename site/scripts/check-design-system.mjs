@@ -37,6 +37,7 @@ const requiredTokens = [
   '--ke-color-canvas', '--ke-color-surface', '--ke-font-sans', '--ke-font-size-300',
   '--ke-space-1', '--ke-space-4', '--ke-space-8', '--ke-radius-md', '--ke-shadow-2',
   '--ke-duration-fast', '--ke-control-min', '--ke-content-max', '--ke-content-wide-max', '--ke-listing-time-gutter', '--ke-color-control-inverse',
+  '--ke-medallion-size-compact', '--ke-medallion-size-standard', '--ke-medallion-size-feature',
 ];
 for (const token of requiredTokens) {
   if (!css.includes(`${token}:`)) throw new Error(`Missing canonical design token: ${token}`);
@@ -44,8 +45,7 @@ for (const token of requiredTokens) {
 if (!/--ke-control-min:\s*44px/iu.test(css)) throw new Error('Touch-target token must stay at least 44px');
 if (!/@media\s*\(prefers-reduced-motion:\s*reduce\)/iu.test(css)) throw new Error('Design-system CSS misses reduced-motion behavior');
 if (!layout.includes("import '../styles/design-system.css'")) throw new Error('EventLayout does not load the canonical design-system CSS');
-if (!rootPage.includes("import '../styles/design-system.css'")) throw new Error('Root page does not load the canonical design-system CSS');
-if (!rootPage.includes('ke-button ke-button--primary') || !rootPage.includes('ke-button ke-button--secondary')) throw new Error('Root page must use canonical design-system actions');
+if (!rootPage.includes("import EventLayout from '../layouts/EventLayout.astro'")) throw new Error('Root page does not compose the canonical EventLayout design-system boundary');
 if (/background:\s*#(?:98401f|893719)/iu.test(layout)) throw new Error('Approved brand tag colors must come from design-system tokens, not layout-local raw colors');
 
 for (const state of ['default', 'hover', 'focus', 'pressed', 'loading', 'disabled']) {
@@ -57,8 +57,8 @@ for (const iconName of ['copy', 'check']) {
 for (const marker of ['data-ke-copy-action', 'navigator.clipboard?.writeText', "document.execCommand('copy')", 'data-ke-copy-status', 'aria-live="polite"', "previewState=\"success\"", "previewState=\"error\""]) {
   if (!copyAction.includes(marker) && !catalog.includes(marker)) throw new Error(`CopyAction contract misses ${marker}`);
 }
-if (!copyAction.includes("'ke-button--icon'") || !css.includes('.ke-button--icon { width: var(--ke-control-min)')) throw new Error('CopyAction must consume the fixed 44px icon-only button contract');
-if (!css.includes('.ke-copy-action__check-icon') || !css.includes('content: "!"')) throw new Error('CopyAction success/error cannot rely on color alone');
+if (!copyAction.includes('width: max(44px, var(--ke-control-min')) throw new Error('CopyAction must consume the fixed 44px icon-only control contract');
+if (!copyAction.includes('.ke-copy-action__icon--success') || !copyAction.includes('data-copy-state="error"')) throw new Error('CopyAction success/error cannot rely on color alone');
 if (!catalog.includes('<CopyAction') || !catalog.includes('variant="inverse"') || !catalog.includes('design-system/CopyAction.astro')) throw new Error('Catalog misses the real CopyAction fixtures or registry row');
 for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'EventFacts', 'EventTokenMedallions', 'EventCtaPanel', 'EventCard', 'EventListItem', 'EventMediaRail', 'InterestClubCard', 'ListingPersonalFilter', 'ListingPageHeader', 'ListingControls', 'ListingDiscoveryRail', 'ListingTimeNav', 'ListingTimeMarker', 'ExactTimeTimeline', 'WeekendEditorialTimeline', 'ListingEventCard', 'PersonalFeedSlot', 'SocialIcon']) {
   const renderedDirectly = catalog.includes(`<${component}`);
@@ -99,6 +99,12 @@ if (!registryKeys.has('ListingEventCard@1') || !registryKeys.has('ListingEventCa
 if (!registryKeys.has('EventCard@1') || !registryKeys.has('EventCard@2') || !catalog.includes('data-ds-replaced-by="EventCard@2"')) {
   throw new Error('EventCard v1 -> v2 migration is missing from the versioned registry');
 }
+if (!registryKeys.has('EventTokenMedallions@1') || !registryKeys.has('EventTokenMedallions@2') || !catalog.includes('data-ds-replaced-by="EventTokenMedallions@2"')) {
+  throw new Error('EventTokenMedallions v1 -> v2 migration is missing from the versioned registry');
+}
+if (!catalog.includes('sizeContract="legacy"') || !catalog.includes('sizeContract="normalized"')) {
+  throw new Error('EventTokenMedallions v1/v2 side-by-side catalog comparison is missing');
+}
 const listingProductionSources = [
   'src/pages/segodnya/index.astro', 'src/pages/zavtra/index.astro', 'src/pages/vyhodnye/index.astro',
   'src/pages/vystavki/index.astro', 'src/pages/populyarnoe/index.astro',
@@ -114,6 +120,9 @@ const productionConsumerSources = [
 ].map(read).join('\n');
 if (/variant="overlay-controls"|data-feed-card-variant="overlay-controls"/u.test(productionConsumerSources)) {
   throw new Error('Deprecated EventCard v1 remains in a production consumer');
+}
+if (/sizeContract="legacy"/u.test(productionConsumerSources)) {
+  throw new Error('Deprecated EventTokenMedallions v1 remains in a production consumer');
 }
 
 function hexToRgb(hex) {

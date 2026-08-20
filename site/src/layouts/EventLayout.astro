@@ -565,7 +565,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
       .authorized-search--standalone .authorized-search__submit::before {
         /* Accepted mobile donor: the button itself is the progress surface. */
-        background: #98401f;
+        background: var(--ke-color-brand-tag);
       }
       .authorized-search__submit.is-progress-indeterminate::before {
         width: 36%;
@@ -1583,7 +1583,7 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
         align-items: center;
       }
       .event-token {
-        --token-size: clamp(108px, 26vw, 128px);
+        --token-size: var(--ke-medallion-size-feature);
         width: var(--token-size);
         min-height: var(--token-size);
         display: inline-flex;
@@ -1612,6 +1612,12 @@ const drawerCurrent = headerCurrent || (mobileSection === 'search' ? 'search' : 
       }
       .event-token__circle img { object-fit: cover; }
       .event-token--badge {
+        --token-size:var(--ke-medallion-size-feature);
+      }
+      .event-token-layout[data-medallion-size-contract="legacy"] .event-token {
+        --token-size:clamp(108px,26vw,128px);
+      }
+      .event-token-layout[data-medallion-size-contract="legacy"] .event-token--badge {
         --token-size:clamp(88px,23vw,104px);
       }
       .event-token--badge .event-token__circle {
