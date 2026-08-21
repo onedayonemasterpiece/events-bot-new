@@ -186,3 +186,39 @@ production Favorites resolver. Home, Popular, Unusual, Search, personal feed and
 Related remain explicit corpus-declared gaps until their immutable full-catalog,
 manifest, query/persona or anchor inputs exist; the adapter reports rather than
 fabricates them.
+
+## Golden EventCard parent-archetype specimen
+
+Resolved v2 render cases may additionally bind an exact, controlled parent
+context for `event.card`. `scripts/ui_conformance/materialize-case.mjs` then
+mounts the production `OptimizedEventCardGrid.astro` in the existing disposable
+specimen harness. It does not reproduce the grid in harness CSS and does not
+modify `site/src`.
+
+The parent contract is fail-closed: it must name `OptimizedEventCardGrid`, use
+the `controlled-layout-only` placement claim, bind an exact permutation of the
+same Golden fixture IDs before and after `packRelatedCardRows`, and carry the
+viewport, container, grid and selected-card placement facts. The adapter never
+supplies route placement or ranking. For the desktop-1280 reference context the
+contracted container is 1180px with three 380px columns and 20px gaps.
+
+`scripts/ui_conformance/capture-case.mjs` preserves the existing selected-card
+capture as `astro.png` and also writes `astro-archetype.png`. Browser evidence in
+`astro-facts.json` records the parent rect, computed CSS grid columns/gaps,
+rendered event order, every card rect, media state, and the production
+`data-lab-row-*` placement/row-ratio markers. Capture fails when the selected
+card is not 380px wide, its placement or row contract drifts, or first-row peers
+do not share height and row ratio. Both screenshot hashes and the validation
+result flow into the actual tuple.
+
+Portable adapter tests:
+
+```bash
+node --test tests/ui-conformance-archetype-specimen.test.mjs
+```
+
+The real build/capture uses the same `materialize-case.mjs` and
+`capture-case.mjs` commands as a single-card case, with a v2 resolved render
+case as `--resolved`. It additionally requires every declared sibling fixture
+and asset to be present in the immutable corpus. Generated harnesses and PNGs
+remain disposable evidence and are not committed to this repository.

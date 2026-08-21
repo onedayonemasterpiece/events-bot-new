@@ -14,6 +14,7 @@ function componentImport(renderer) {
     rail: 'components/EventTransportSchedule.astro', kaup: 'components/KaupTransportSchedule.astro',
     medallions: 'components/EventTokenMedallions.astro', 'event-hero': 'components/EventHero.astro',
     'event-media-rail': 'components/EventMediaRail.astro', 'event-card': 'components/EventCard.astro',
+    'optimized-event-card-grid': 'components/OptimizedEventCardGrid.astro',
   })[renderer];
 }
 function renderExpression(row) {
@@ -26,14 +27,17 @@ function renderExpression(row) {
   if (row.renderer === 'medallions') return `<Component event={event} layout=${safeJson(props.layout)} allowTopSlot={${Boolean(props.allowTopSlot)}} />`;
   if (row.renderer === 'event-media-rail') return `<Component assets={event.image_assets || []} galleryId="controlled-event-media" eventTitle={event.title} maxVisible={${Number(props.maxVisible)}} />`;
   if (row.renderer === 'event-card') return `<Component event={event} variant=${safeJson(props.variant || 'split-actions')} desktopRelatedCrop={${Boolean(props.desktopRelatedCrop)}} mobileFlowMedia={${Boolean(props.mobileFlowMedia)}} />`;
+  if (row.renderer === 'optimized-event-card-grid') return `<Component events={events} limit={${Number(props.limit)}} rowSize={${Number(props.rowSize)}} mediaTreatment=${safeJson(props.mediaTreatment || 'hybrid')} surface=${safeJson(props.surface || 'event_detail_related')} />`;
   return '<Component event={event} />';
 }
 
 export function renderSpecimenPage(row, fixture = null) {
   const source = componentImport(row.renderer);
   if (!source) throw new Error(`Unsupported specimen renderer: ${row.renderer}`);
-  const eventLine = fixture ? `const event = ${safeJson(fixture.event)};` : '';
-  if (row.renderer === 'event-card') return `---
+  const eventLine = fixture?.events
+    ? `const events = ${safeJson(fixture.events)};\nconst event = events.find((item) => item.id === ${Number(fixture.selectedEventId)}) || events[0];`
+    : fixture ? `const event = ${safeJson(fixture.event)};` : '';
+  if (row.renderer === 'event-card' || row.renderer === 'optimized-event-card-grid') return `---
 import Layout from '../../../upstream/layouts/EventLayout.astro';
 import Component from '../../../upstream/${source}';
 ${eventLine}

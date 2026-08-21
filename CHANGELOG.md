@@ -6,6 +6,12 @@
   exact-fixture EventCard Astro capture pipeline for Astro ↔ Penpot conformance;
   production UI source and deployment behavior are unchanged.
 
+- Added: the disposable conformance harness can now mount the real
+  `OptimizedEventCardGrid` around an exact Golden EventCard fixture set, capture
+  both the parent grid and selected card, and fail closed on 3-column/380px,
+  placement, shared row-ratio or equal-height drift without claiming production
+  route placement or ranking.
+
 - Changed: static-site UI work now has an explicit fail-closed cross-repository
   round trip: current Astro/runtime is reconstructed into the versioned design-
   system Git SoT and native Penpot; Penpot feedback updates Git SoT before

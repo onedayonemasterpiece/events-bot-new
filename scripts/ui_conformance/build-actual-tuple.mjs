@@ -45,6 +45,9 @@ const tuple = {
   penpot_asset_manifest_sha256: penpotReceipt?.asset_manifest_sha256 ?? null,
   penpot_export_sha256: penpotPath && existsSync(penpotPath) ? sha(readFileSync(penpotPath)) : null,
   astro_screenshot_sha256: astroReceipt.screenshot_sha256,
+  astro_selected_card_screenshot_sha256: astroReceipt.selected_card_screenshot_sha256 ?? astroReceipt.screenshot_sha256,
+  astro_parent_archetype_screenshot_sha256: astroReceipt.parent_archetype_screenshot_sha256 ?? null,
+  archetype_validation: astroReceipt.archetype_validation ?? null,
   resolved_render_case_sha256: resolvedCase.resolved_render_case_sha256,
   evidence: {
     font_preflight: `${captureDir}/font-preflight.json`,
