@@ -1,0 +1,489 @@
+{
+  "schema_version": "ui_surface_placement_receipt_v1",
+  "status": "PASS",
+  "corpus_id": "ui-reference-events.v1",
+  "corpus_sha256": "9ca2960fb8d723f95b19c012b50f8abb5e4503eedcf673fe178ed0f4afd46320",
+  "frozen_clock": {
+    "current_date": "2026-08-21",
+    "reference_iso": "2026-08-21T09:00:00+02:00",
+    "timezone": "Europe/Kaliningrad"
+  },
+  "astro_repository_sha": "a2a1acacfbbcfb955fb914548d7f5655f7de27b9",
+  "implemented_surfaces": [
+    "event-detail",
+    "date-listing",
+    "today",
+    "tomorrow",
+    "weekend",
+    "favorites"
+  ],
+  "declared_gap_surfaces": [
+    "home",
+    "popular",
+    "unusual",
+    "search",
+    "personal-feed",
+    "related"
+  ],
+  "production_source_mutated": false,
+  "build": {
+    "ok": true,
+    "status": 0,
+    "stdout_tail": "d/index.html (+37ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v6/visual-free/index.html (+23ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v6/ocr-poster/index.html (+14ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v7/photo-paid/index.html (+18ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v7/visual-free/index.html (+16ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v7/ocr-poster/index.html (+21ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v8/photo-paid/index.html (+16ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v8/visual-free/index.html (+14ms) \n15:38:23   ├─ /lab/event-mobile/examples/accepted-v8/ocr-poster/index.html (+15ms) \n15:38:23   ├─ /lab/event-mobile/index.html (+9ms) \n15:38:23   ├─ /lab/event-participants/index.html (+14ms) \n15:38:23   ├─ /lab/exhibitions-personal/index.html (+25ms) \n15:38:23   ├─ /lab/hero/review/5878-poster-billboard/index.html (+3ms) \n15:38:23   ├─ /lab/hero/review/5878-poster-attached-card/index.html (+1ms) \n15:38:23   ├─ /lab/hero/review/5878-compact-ticketing/index.html (+3ms) \n15:38:23   ├─ /lab/hero/review/6322-photo-cinematic-sheet/index.html (+1ms) \n15:38:23   ├─ /lab/hero/review/6322-photo-parallax-sheet/index.html (+1ms) \n15:38:23   ├─ /lab/hero/review/6322-compact-ticketing/index.html (+1ms) \n15:38:23   ├─ /lab/hero/review/4913-photo-cinematic-sheet/index.html (+1ms) \n15:38:23   ├─ /lab/hero/review/4913-poster-attached-card/index.html (+1ms) \n15:38:23   ├─ /lab/hero/review/index.html (+7ms) \n15:38:23   ├─ /lab/hero/index.html (+39ms) \n15:38:23   ├─ /lab/medallions/index.html (+11ms) \n15:38:23   ├─ /lab/occurrences/index.html (+10ms) \n15:38:23   ├─ /lab/question-cta/index.html (+7ms) \n15:38:23   ├─ /lab/unusual-unread/baseline/index.html (+2ms) \n15:38:23   ├─ /lab/unusual-unread/new-core/index.html (+1ms) \n15:38:23   ├─ /lab/unusual-unread/adjacent/index.html (+1ms) \n15:38:23   ├─ /lab/unusual-unread/migration/index.html (+1ms) \n15:38:23   ├─ /lab/unusual-unread/failure/index.html (+1ms) \n15:38:23   ├─ /lab/unusual-unread/same-series/index.html (+2ms) \n15:38:23   ├─ /manifest.webmanifest (+2ms) \n15:38:23   ├─ /neobychnoe/index.html (+6ms) \n15:38:23   ├─ /partners/index.html (+8ms) \n15:38:23   ├─ /partnerstvo/index.html (+10ms) \n15:38:23   ├─ /podborki/gastronomiya/index.html (+19ms) \n15:38:23   ├─ /podborki/besplatnye-sobytiya/index.html (+18ms) \n15:38:23   ├─ /podborki/dzhaz-na-vyhodnyh/index.html (+7ms) \n15:38:24   ├─ /podborki/besplatno-s-detmi/index.html (+8ms) \n15:38:24   ├─ /podborki/stendap-na-etoy-nedele/index.html (+8ms) \n15:38:24   ├─ /podborki/index.html (+16ms) \n15:38:24   ├─ /poisk/index.html (+8ms) \n15:38:24   ├─ /populyarnoe/index.html (+46ms) \n15:38:24   ├─ /pwa-sw.js (+2ms) \n15:38:24   ├─ /robots.txt (+2ms) \n15:38:24   ├─ /segodnya/index.html (+32ms) \n15:38:24   ├─ /sitemap.xml (+3ms) \n15:38:24   ├─ /sobytiya/otdyha-ne-znali-iz-ruin-podnyali-kaliningrad-4327/event.ics/ (+4ms) \n15:38:24   ├─ /sobytiya/togda-kaliningrad-6628/event.ics/ (+2ms) \n15:38:24   ├─ /sobytiya/vystavka-moy-gorod-svetlogorsk-8156/event.ics/ (+2ms) \n15:38:24   ├─ /sobytiya/otkrytie-vystavki-more-vnutri-svetlogorsk-7888/event.ics/ (+2ms) \n15:38:24   ├─ /sobytiya/prazdnichnaya-programma-ko-dnyu-gosudarstvennogo-flaga-rossiyskoy-federats-kaliningrad-7807/event.ics/ (+2ms) \n15:38:24   ├─ /sobytiya/kontsert-otkroveniya-veny-druzhba-7906/event.ics/ (+2ms) \n15:38:24   ├─ /sobytiya/kryli-solnyy-kontsert-kaliningrad-3132/event.ics/ (+2ms) \n15:38:24   ├─ /sobytiya/eva-lilit-poeticheskiy-kontsert-marii-mezhennoy-kaliningrad-6399/event.ics/ (+2ms) \n15:38:24   ├─ /sobytiya/otdyha-ne-znali-iz-ruin-podnyali-kaliningrad-4327/index.html (+29ms) \n15:38:24   ├─ /sobytiya/togda-kaliningrad-6628/index.html (+24ms) \n15:38:24   ├─ /sobytiya/vystavka-moy-gorod-svetlogorsk-8156/index.html (+36ms) \n15:38:24   ├─ /sobytiya/otkrytie-vystavki-more-vnutri-svetlogorsk-7888/index.html (+32ms) \n15:38:24   ├─ /sobytiya/prazdnichnaya-programma-ko-dnyu-gosudarstvennogo-flaga-rossiyskoy-federats-kaliningrad-7807/index.html (+23ms) \n15:38:24   ├─ /sobytiya/kontsert-otkroveniya-veny-druzhba-7906/index.html (+23ms) \n15:38:24   ├─ /sobytiya/kryli-solnyy-kontsert-kaliningrad-3132/index.html (+21ms) \n15:38:24   ├─ /sobytiya/eva-lilit-poeticheskiy-kontsert-marii-mezhennoy-kaliningrad-6399/index.html (+27ms) \n15:38:24   ├─ /vyhodnye/2026-08-22/index.html (+41ms) \n15:38:24   ├─ /vyhodnye/2026-10-17/index.html (+39ms) \n15:38:24   ├─ /vyhodnye/index.html (+60ms) \n15:38:24   ├─ /vystavki/index.html (+39ms) \n15:38:24   ├─ /zakrytaya-afisha/index.html (+12ms) \n15:38:24   ├─ /zavtra/index.html (+85ms) \n15:38:24   ├─ /date-2026-08-22/index.html (+107ms) \n15:38:24   ├─ /date-2026-10-17/index.html (+99ms) \n15:38:24   ├─ /date-2026-10-21/index.html (+55ms) \n15:38:24   ├─ /__preview/index.html (+14ms) \n15:38:24   ├─ /index.html (+23ms) \n15:38:24 ✓ Completed in 4.39s.\n\n15:38:24 [build] ✓ Completed in 20.40s.\n15:38:24 [build] 119 page(s) built in 20.82s\n15:38:24 [build] Complete!\n",
+    "stderr_tail": ""
+  },
+  "route_checks": [
+    {
+      "route": "/date-2026-08-21/",
+      "surface_id": "date-listing",
+      "expected_ordered_event_ids": [],
+      "actual_desktop_ordered_event_ids": [],
+      "actual_mobile_ordered_event_ids": [],
+      "status": "PASS"
+    },
+    {
+      "route": "/date-2026-08-22/",
+      "surface_id": "date-listing",
+      "expected_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "actual_desktop_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "actual_mobile_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "status": "PASS"
+    },
+    {
+      "route": "/date-2026-10-21/",
+      "surface_id": "date-listing",
+      "expected_ordered_event_ids": [
+        6399
+      ],
+      "actual_desktop_ordered_event_ids": [
+        6399
+      ],
+      "actual_mobile_ordered_event_ids": [
+        6399
+      ],
+      "status": "PASS"
+    },
+    {
+      "route": "/date-2026-04-10/",
+      "surface_id": "date-listing",
+      "expected_ordered_event_ids": [],
+      "actual_desktop_ordered_event_ids": [],
+      "actual_mobile_ordered_event_ids": [],
+      "status": "PASS"
+    },
+    {
+      "route": "/date-2026-10-17/",
+      "surface_id": "date-listing",
+      "expected_ordered_event_ids": [
+        3132
+      ],
+      "actual_desktop_ordered_event_ids": [
+        3132
+      ],
+      "actual_mobile_ordered_event_ids": [
+        3132
+      ],
+      "status": "PASS"
+    },
+    {
+      "route": "/date-2026-07-10/",
+      "surface_id": "date-listing",
+      "expected_ordered_event_ids": [],
+      "actual_desktop_ordered_event_ids": [],
+      "actual_mobile_ordered_event_ids": [],
+      "status": "PASS"
+    },
+    {
+      "route": "/zavtra/",
+      "surface_id": "tomorrow",
+      "expected_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "actual_desktop_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "actual_mobile_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "status": "PASS"
+    },
+    {
+      "route": "/vyhodnye/",
+      "surface_id": "weekend",
+      "expected_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "actual_desktop_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "actual_mobile_ordered_event_ids": [
+        7807,
+        7906
+      ],
+      "status": "PASS"
+    },
+    {
+      "route": "/segodnya/",
+      "surface_id": "today",
+      "expected_ordered_event_ids": [],
+      "actual_desktop_ordered_event_ids": [],
+      "actual_mobile_ordered_event_ids": [],
+      "status": "PASS"
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "v1.e8156.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/vystavka-moy-gorod-svetlogorsk-8156/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 8156,
+        "component": "event.detail",
+        "state": "surface=production;family=split"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e8156.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-08-21/",
+      "expected_presence": "absent",
+      "expected_component": null,
+      "expected_state_key": null,
+      "actual_marker": null,
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7906.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/kontsert-otkroveniya-veny-druzhba-7906/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7906,
+        "component": "event.detail",
+        "state": "surface=production;family=editorial"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7906.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-08-22/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7906,
+        "component": "listing.event-card",
+        "state": "density=regular;media=visual-contain"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e6399.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/eva-lilit-poeticheskiy-kontsert-marii-mezhennoy-kaliningrad-6399/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 6399,
+        "component": "event.detail",
+        "state": "surface=production;family=split"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e6399.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-10-21/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 6399,
+        "component": "listing.event-card",
+        "state": "density=regular;media=document-safe-cover"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e4327.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/otdyha-ne-znali-iz-ruin-podnyali-kaliningrad-4327/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 4327,
+        "component": "event.detail",
+        "state": "surface=production;family=split"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e4327.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-04-10/",
+      "expected_presence": "absent",
+      "expected_component": null,
+      "expected_state_key": null,
+      "actual_marker": null,
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7888.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/otkrytie-vystavki-more-vnutri-svetlogorsk-7888/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7888,
+        "component": "event.detail",
+        "state": "surface=production;family=split"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7888.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-08-22/",
+      "expected_presence": "absent",
+      "expected_component": null,
+      "expected_state_key": null,
+      "actual_marker": null,
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7807.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/prazdnichnaya-programma-ko-dnyu-gosudarstvennogo-flaga-rossiyskoy-federats-kaliningrad-7807/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7807,
+        "component": "event.detail",
+        "state": "surface=production;family=editorial"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7807.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-08-22/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7807,
+        "component": "listing.event-card",
+        "state": "density=regular;media=visual-cover"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e3132.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/kryli-solnyy-kontsert-kaliningrad-3132/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 3132,
+        "component": "event.detail",
+        "state": "surface=production;family=split"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e3132.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-10-17/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 3132,
+        "component": "listing.event-card",
+        "state": "density=regular;media=document-safe-cover"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e6628.event-detail",
+      "surface_id": "event-detail",
+      "route": "/sobytiya/togda-kaliningrad-6628/",
+      "expected_presence": "present",
+      "expected_component": "event.detail",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 6628,
+        "component": "event.detail",
+        "state": "surface=production;family=split"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e6628.date-listing",
+      "surface_id": "date-listing",
+      "route": "/date-2026-07-10/",
+      "expected_presence": "absent",
+      "expected_component": null,
+      "expected_state_key": null,
+      "actual_marker": null,
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7906.tomorrow",
+      "surface_id": "tomorrow",
+      "route": "/zavtra/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7906,
+        "component": "listing.event-card",
+        "state": "density=regular;media=visual-contain"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7906.weekend",
+      "surface_id": "weekend",
+      "route": "/vyhodnye/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7906,
+        "component": "listing.event-card",
+        "state": "density=weekend;media=visual-contain"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7807.tomorrow",
+      "surface_id": "tomorrow",
+      "route": "/zavtra/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7807,
+        "component": "listing.event-card",
+        "state": "density=regular;media=visual-cover"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7807.weekend",
+      "surface_id": "weekend",
+      "route": "/vyhodnye/",
+      "expected_presence": "present",
+      "expected_component": "listing.event-card",
+      "expected_state_key": null,
+      "actual_marker": {
+        "id": 7807,
+        "component": "listing.event-card",
+        "state": "density=weekend;media=visual-cover"
+      },
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7888.tomorrow",
+      "surface_id": "tomorrow",
+      "route": "/zavtra/",
+      "expected_presence": "absent",
+      "expected_component": null,
+      "expected_state_key": null,
+      "actual_marker": null,
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e8156.today",
+      "surface_id": "today",
+      "route": "/segodnya/",
+      "expected_presence": "absent",
+      "expected_component": null,
+      "expected_state_key": null,
+      "actual_marker": null,
+      "status": "PASS"
+    },
+    {
+      "scenario_id": "v1.e7906.home",
+      "surface_id": "home",
+      "status": "SKIPPED_DECLARED_GAP",
+      "reason": "Home requires the full frozen public catalog and the real popularity/cold-start resolver; not part of the Large pilot placement L0."
+    },
+    {
+      "scenario_id": "v1.e7906.popular",
+      "surface_id": "popular",
+      "status": "SKIPPED_DECLARED_GAP",
+      "reason": "Popular placement requires the full frozen catalog and popularity family collapse."
+    },
+    {
+      "scenario_id": "v1.e7906.unusual",
+      "surface_id": "unusual",
+      "status": "SKIPPED_DECLARED_GAP",
+      "reason": "Unusual placement requires an approved immutable unusual manifest."
+    },
+    {
+      "scenario_id": "v1.e7906.search",
+      "surface_id": "search",
+      "status": "SKIPPED_DECLARED_GAP",
+      "reason": "Search requires a fixed query plus a recorded RPC/NDJSON response; none is fabricated in v1."
+    },
+    {
+      "scenario_id": "v1.e7906.personal-feed",
+      "surface_id": "personal-feed",
+      "status": "SKIPPED_DECLARED_GAP",
+      "reason": "A fixed compatible persona and scorer context are not implemented in the EventCard Large pilot."
+    },
+    {
+      "scenario_id": "v1.e7906.related",
+      "surface_id": "related",
+      "status": "SKIPPED_DECLARED_GAP",
+      "reason": "Related placement requires an anchor-bound immutable related manifest."
+    },
+    {
+      "scenario_id": "v1.e7906.favorites",
+      "surface_id": "favorites",
+      "route": "/izbrannoe/",
+      "expected_presence": "present",
+      "expected_component": "event.card",
+      "expected_state_key": "surface=favorites;layout=split-actions",
+      "actual_marker": {
+        "id": 7906,
+        "component": "event.card",
+        "state": "surface=favorites;layout=split-actions;source=calendar"
+      },
+      "status": "PASS"
+    }
+  ],
+  "summary": {
+    "pass": 23,
+    "failed": 0,
+    "declared_gaps": 6
+  }
+}

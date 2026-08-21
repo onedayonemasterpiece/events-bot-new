@@ -157,3 +157,32 @@ The normative design-system architecture lives in `onedayonemasterpiece/lovekgd-
 - `receipts/penpot/resource-graph-to-be-structure-v1.json`.
 
 The integrated Product Atlas/UI Exploration vision in this repository must reference these documents rather than duplicate the Resource Graph page schema or component authority rules.
+
+## Golden Corpus L0 surface-placement gate
+
+The read-only L0 adapter is `scripts/ui_conformance/verify-surface-placement.mjs`.
+It copies the exact candidate `site/src` into a disposable Astro harness, replaces
+only the copied preview catalog with immutable Golden Corpus v1 events, freezes the
+public clock, builds the real routes, and reads component/state markers from the
+generated HTML. It never changes production Astro and never supplies ranking.
+
+Run the portable unit gate:
+
+```bash
+node --test tests/ui-surface-placement.test.mjs
+```
+
+Run the real cross-repository gate by providing the immutable corpus and the
+candidate lockfile-compatible installed dependencies:
+
+```bash
+UI_REFERENCE_CORPUS_ROOT=/path/to/catalog/fixtures/ui-reference-events/v1 \
+UI_REFERENCE_NODE_MODULES=/path/to/events-bot-new/site/node_modules \
+node --test tests/ui-surface-placement.test.mjs
+```
+
+Implemented v1 surfaces are detail, date, today, tomorrow, weekend and the pure
+production Favorites resolver. Home, Popular, Unusual, Search, personal feed and
+Related remain explicit corpus-declared gaps until their immutable full-catalog,
+manifest, query/persona or anchor inputs exist; the adapter reports rather than
+fabricates them.
