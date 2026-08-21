@@ -1768,7 +1768,7 @@ const descriptionHtml = (event.description_html || '')
     justify-content:center;
     padding:0;
   }
-  .desktop-prototype__medallions :global(.event-token-section[data-medallion-slot="top"] .event-token) {
+  .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token-section[data-medallion-slot="top"] .event-token) {
     --token-size:clamp(88px,7.4vw,108px);
   }
   .desktop-prototype__medallions :global(.event-token-section[data-medallion-slot="top"] .event-token__circle) {
@@ -1780,12 +1780,12 @@ const descriptionHtml = (event.description_html || '')
   .desktop-prototype__medallions :global(.event-token-section[data-medallion-slot="inline"]) {
     position:relative;
   }
-  .desktop-prototype__medallions :global(.event-token--organizer),
-  .desktop-prototype__medallions :global(.event-token--festival),
-  .desktop-prototype__medallions :global(.event-token--source),
-  .desktop-prototype__medallions :global(.event-token--program),
-  .desktop-prototype__medallions :global(.event-token--pushkin),
-  .desktop-prototype__medallions :global(.event-token--badge) { --token-size:clamp(72px,7vw,94px); }
+  .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--organizer),
+  .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--festival),
+  .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--source),
+  .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--program),
+  .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--pushkin),
+  .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--badge) { --token-size:clamp(72px,7vw,94px); }
   .desktop-prototype__action { z-index:3; display:grid; align-content:start; gap:clamp(.65rem,1.6vh,1rem); padding:clamp(1rem,2.2vw,1.4rem); color:#fffaf2; background:#292521; }
   .desktop-prototype__action>p { display:grid; gap:.06rem; margin:0; }
   .desktop-prototype__action>p span { color:#d7c9bc; font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
@@ -1911,12 +1911,12 @@ const descriptionHtml = (event.description_html || '')
     .desktop-prototype__stage { --stage-height:calc(100svh - 72px); min-height:520px; }
     .desktop-prototype__info { gap:.5rem; }
     .desktop-prototype__info h1 { font-size:clamp(1.75rem,min(3vw,5.45vh),3.5rem); }
-    .desktop-prototype__medallions :global(.event-token--organizer),
-    .desktop-prototype__medallions :global(.event-token--festival),
-    .desktop-prototype__medallions :global(.event-token--source),
-    .desktop-prototype__medallions :global(.event-token--program),
-    .desktop-prototype__medallions :global(.event-token--pushkin),
-    .desktop-prototype__medallions :global(.event-token--badge) { --token-size:72px; }
+    .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--organizer),
+    .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--festival),
+    .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--source),
+    .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--program),
+    .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--pushkin),
+    .desktop-prototype__medallions :global(.event-token-layout[data-medallion-size-contract="legacy"] .event-token--badge) { --token-size:72px; }
     .desktop-prototype__medallions :global(.event-token__pill) { display:none; }
     .desktop-prototype__action { gap:.5rem; padding:.85rem; }
     :global(.desktop-prototype__primary-action) { min-height:50px; }

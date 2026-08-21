@@ -6,6 +6,8 @@
 
 - Машиночитаемая карта: `docs/routes.yml`
 - Статический сайт: `docs/features/static-site-pages/README.md`
+  - обязательный UI round trip и design-system consumer boundary:
+    `docs/features/static-site-pages/design-system/README.md`;
   - reviewed Current UI Decoder v1 и immutable design-system handoff:
     `docs/features/static-site-pages/current-ui-resource-graph.md`;
   - аналитика и продуктовая статистика: `analytics/README.md`;

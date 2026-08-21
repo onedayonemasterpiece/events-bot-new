@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+- Changed: static-site UI work now has an explicit fail-closed cross-repository
+  round trip: current Astro/runtime is reconstructed into the versioned design-
+  system Git SoT and native Penpot; Penpot feedback updates Git SoT before
+  reconciliation; Astro candidate integration starts only after owner Penpot
+  acceptance; production requires a second owner phone/desktop approval plus
+  promotion, migration, release, and post-deploy conformance gates.
+
+- Changed: owner-approved medallion sizing now uses one design-system contract:
+  compact 44px for exhibitions/mobile Popular, standard 60px for desktop
+  listing overlays and rails, and feature 88px for event detail/mobile rails.
+  `EventTokenMedallions@2` is the production default; deprecated v1 remains
+  visible only beside v2 in the design-system catalog for review.
+
+- Fixed: event listings now reuse the universal 20%-bounded document frame for
+  very tall, explicitly classified OCR media instead of collapsing it into a
+  narrow natural-width strip; unknown/error media still fails closed to
+  `contain`. Exhibition photo decks also normalize the deck/frame radius to
+  8px with clipping, removing the parasitic square corner while preserving the
+  shared icon geometry and behavior.
+
 - Added: VK admission recovery can re-evaluate only pending rows that failed
   open on a transient provider/schema error. The mode is explicit and bounded,
   so operators can wait for provider capacity and retry small chunks instead

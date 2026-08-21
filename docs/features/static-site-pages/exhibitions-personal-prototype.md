@@ -446,6 +446,14 @@ long-running tail по `↓`, неизменное состояние при `�
 дублирует footer service-v1 assertions secret-candidate gate, а canonical
 компонент всё ещё носит legacy CSS-имена `site-footer-prototype__*`.
 
+## Нормализация медиа-углов
+
+Media deck and frame use the same 8 px radius and both layers clip their
+descendants. This prevents a square image corner from leaking through the
+rounded exhibition-row presentation during static, stacked and animated deck
+phases. Action wrappers and shared `Icon` glyph sizes remain unchanged:
+share/comment 14 px, like 19 px, reject 18 px inside 46 px controls.
+
 ## Проверка
 
 ```bash

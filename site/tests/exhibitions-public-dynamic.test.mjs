@@ -141,6 +141,8 @@ test('public route keeps the donor CSS/interaction contract while replacing fixt
   const scriptBlock = (source) => source.slice(source.indexOf('<script is:inline>'), source.lastIndexOf('</script>') + '</script>'.length);
 
   assert.equal(cssBlock(surfaceSource), cssBlock(donorSource), 'accepted responsive/mobile presentation must stay exact');
+  assert.match(surfaceSource, /\.ex-deck\s*\{[\s\S]*?border-radius:8px;/u);
+  assert.match(surfaceSource, /\.ex-deck__frame\s*\{[\s\S]*?overflow:hidden;[\s\S]*?border-radius:8px;/u);
   assert.equal(scriptBlock(surfaceSource), scriptBlock(donorSource), 'accepted keyboard/gallery/personalization behavior must stay exact');
   assert.match(publicSource, /projectExhibitionsPersonal\(getOngoingExhibitionEvents\(\), currentDate\)/u);
   assert.match(publicSource, /ExhibitionsPersonalSurface/u);

@@ -281,8 +281,11 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           </article>
 
           <article class="ds-component-block">
-            <div class="ds-component-block__head"><div><h3>Факты и медальоны</h3><p>Короткое решение до длинного описания.</p></div><Badge tone="success">Approved</Badge></div>
-            <div class="ds-component-stage"><EventFacts event={medallionEvent} /><EventTokenMedallions event={medallionEvent} /></div>
+            <div class="ds-component-block__head"><div><h3>Факты и медальоны</h3><p>v2 нормализует identity-геометрию до feature 88 px; v1 сохранён только для сравнения.</p></div><Badge tone="success">Approved v2</Badge></div>
+            <div class="ds-card-comparison" data-medallion-version-comparison>
+              <div><Badge tone="danger">v1 · deprecated</Badge><EventFacts event={medallionEvent} /><EventTokenMedallions event={medallionEvent} sizeContract="legacy" /></div>
+              <div><Badge tone="success">v2 · 88 px feature</Badge><EventFacts event={medallionEvent} /><EventTokenMedallions event={medallionEvent} sizeContract="normalized" /></div>
+            </div>
           </article>
 
           <article class="ds-component-block">
@@ -429,7 +432,8 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="EventCtaPanel" data-ds-version="1"><td>EventCtaPanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCtaPanel.astro</code></td><td>paid/free/sold out</td></tr>
                 <tr data-ds-component="CalendarLink" data-ds-version="1"><td>CalendarLink</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/CalendarLink.astro</code></td><td>eligible/ineligible via event contract</td></tr>
                 <tr data-ds-component="EventFacts" data-ds-version="1"><td>EventFacts</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventFacts.astro</code></td><td>date/place/admission/festival</td></tr>
-                <tr data-ds-component="EventTokenMedallions" data-ds-version="1"><td>EventTokenMedallions</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>organizer/source/program/semantic pills</td></tr>
+                <tr data-ds-component="EventTokenMedallions" data-ds-version="2"><td>EventTokenMedallions · normalized identity sizes</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>production default; feature 88 px, shared with Page 48 contract</td></tr>
+                <tr data-ds-component="EventTokenMedallions" data-ds-version="1" data-ds-replaced-by="EventTokenMedallions@2"><td>EventTokenMedallions · responsive spread</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventTokenMedallions.astro</code></td><td>catalog-only comparison; replaced by normalized 44/60/88 contract</td></tr>
                 <tr data-ds-component="EventMediaRail" data-ds-version="1"><td>EventMediaRail</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventMediaRail.astro</code></td><td>multi-image/overflow</td></tr>
                 <tr data-ds-component="InterestClubCard" data-ds-version="1"><td>InterestClubCard</td><td><code>v1</code></td><td><Badge tone="accent">feature-gated</Badge></td><td><code>components/InterestClubCard.astro</code></td><td>current fixture + responsive</td></tr>
                 <tr data-ds-component="ListingPersonalFilter" data-ds-version="3"><td>ListingPersonalFilter · optional floating mode</td><td><code>v3</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/ListingPersonalFilter.astro</code></td><td>quiet bottom-center research prototype; yields to the footer and stays separate from discovery navigation</td></tr>

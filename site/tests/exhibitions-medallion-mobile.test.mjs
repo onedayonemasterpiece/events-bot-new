@@ -5,6 +5,7 @@ import test from 'node:test';
 const sourceUrl = new URL('../src/components/ExhibitionsPersonalSurface.astro', import.meta.url);
 const labUrl = new URL('../src/pages/lab/exhibitions-personal/index.astro', import.meta.url);
 const rowUrl = new URL('../src/components/ExhibitionPrototypeRow.astro', import.meta.url);
+const designSystemUrl = new URL('../src/styles/design-system.css', import.meta.url);
 
 function cssFrom(source) {
   const start = source.indexOf('<style is:global>');
@@ -28,10 +29,12 @@ function declarations(css, selector, from = 0) {
 }
 
 test('public and lab exhibition surfaces preserve the integrated readable 44px seal geometry', async () => {
-  const [surfaceSource, labSource] = await Promise.all([
+  const [surfaceSource, labSource, designSystemSource] = await Promise.all([
     readFile(sourceUrl, 'utf8'),
     readFile(labUrl, 'utf8'),
+    readFile(designSystemUrl, 'utf8'),
   ]);
+  assert.match(designSystemSource, /--ke-medallion-size-compact:\s*44px/u);
 
   for (const [name, css] of [
     ['public', cssFrom(surfaceSource)],
@@ -40,8 +43,8 @@ test('public and lab exhibition surfaces preserve the integrated readable 44px s
     const desktop = declarations(css, '.ex-deck__medallion {');
     assert.match(desktop.body, /\btop:\s*8px\s*;/u, `${name}: desktop seal must retain the donor offset`);
     assert.match(desktop.body, /\bleft:\s*8px\s*;/u, `${name}: desktop seal must retain the donor offset`);
-    assert.match(desktop.body, /\bwidth:\s*44px\s*;/u, `${name}: desktop seal must remain 44px`);
-    assert.match(desktop.body, /\bheight:\s*44px\s*;/u, `${name}: desktop seal must remain 44px`);
+    assert.match(desktop.body, /\bwidth:\s*var\(--ke-medallion-size-compact\)\s*;/u, `${name}: desktop seal must consume compact 44px`);
+    assert.match(desktop.body, /\bheight:\s*var\(--ke-medallion-size-compact\)\s*;/u, `${name}: desktop seal must consume compact 44px`);
     assert.match(desktop.body, /\bz-index:\s*260\s*;/u, `${name}: seal must remain below the photo counter`);
 
     const mobileMedia = css.indexOf('@media (max-width:820px)');
@@ -49,8 +52,8 @@ test('public and lab exhibition surfaces preserve the integrated readable 44px s
     const mobile = declarations(css, '.ex-deck__medallion {', mobileMedia);
     assert.match(mobile.body, /\btop:\s*7px\s*;/u, `${name}: mobile seal must retain the donor offset`);
     assert.match(mobile.body, /\bleft:\s*7px\s*;/u, `${name}: mobile seal must retain the donor offset`);
-    assert.match(mobile.body, /\bwidth:\s*44px\s*;/u, `${name}: mobile seal must use the integrated readable 44px`);
-    assert.match(mobile.body, /\bheight:\s*44px\s*;/u, `${name}: mobile seal must remain square`);
+    assert.match(mobile.body, /\bwidth:\s*var\(--ke-medallion-size-compact\)\s*;/u, `${name}: mobile seal must use compact 44px`);
+    assert.match(mobile.body, /\bheight:\s*var\(--ke-medallion-size-compact\)\s*;/u, `${name}: mobile seal must remain square`);
 
     const mobileDeck = declarations(css, '.ex-deck {', mobileMedia);
     assert.match(mobileDeck.body, /\binline-size:\s*100%\s*;/u, `${name}: seal sizing must not narrow the mobile deck`);

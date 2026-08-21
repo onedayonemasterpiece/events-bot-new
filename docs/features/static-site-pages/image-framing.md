@@ -18,6 +18,12 @@
 - A normal OCR/document card defines an exact feasible row ratio and is not
   cropped. Only a very tall document (source width/height below `4/5`) may widen
   that interval, and no more than `20%` of its source area may be cropped.
+- `ListingEventCard` uses that same universal exception instead of keeping a
+  very tall OCR poster in an unnecessarily narrow natural-width strip. With
+  known dimensions and explicit `ocr_text`, its target ratio is
+  `sourceRatio / 0.8`, treatment is `document-safe-cover`, and vertical
+  retention is at least `0.8`. Unknown/error media remains natural `contain`;
+  there is no event-id or asset-URL exception.
 - Cards in a row have one media height and one total card height. Cards may be
   reordered between rows; input order is not an acceptance requirement.
 - A non-final row is always full. The optimizer may emit one incomplete row

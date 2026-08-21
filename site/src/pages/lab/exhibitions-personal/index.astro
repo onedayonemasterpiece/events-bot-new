@@ -389,7 +389,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     isolation:isolate;
     padding:0;
     border:0;
-    border-radius:6px;
+    border-radius:8px;
     background:transparent;
     box-shadow:none;
     cursor:pointer;
@@ -411,7 +411,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     inline-size:calc(114px * var(--media-ratio));
     overflow:hidden;
     border:1px solid rgba(220,229,236,.62);
-    border-radius:4px;
+    border-radius:8px;
     background:#0b0d0e;
     box-shadow:inset -1px 0 0 rgba(255,255,255,.14),4px 0 12px -3px rgba(0,0,0,.82),0 6px 18px rgba(0,0,0,.3);
     transition:border-color var(--ex-motion-base) var(--ex-ease-cinematic),box-shadow var(--ex-motion-base) var(--ex-ease-cinematic);
@@ -459,8 +459,8 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     z-index:260;
     top:8px;
     left:8px;
-    width:44px;
-    height:44px;
+    width:var(--ke-medallion-size-compact);
+    height:var(--ke-medallion-size-compact);
     overflow:hidden;
     border:1px solid var(--medallion-ring,#697178);
     border-radius:50%;
@@ -616,7 +616,7 @@ const tailItems = items.filter((item) => item.bucket === 'tail');
     .ex-row__rail span:last-child { text-align:right; }
     .ex-row__media { grid-area:deck; }
     .ex-deck { inline-size:100%; max-inline-size:100%; block-size:clamp(160px,48vw,228px); cursor:pointer; }
-    .ex-deck__medallion { top:7px; left:7px; width:44px; height:44px; }
+    .ex-deck__medallion { top:7px; left:7px; width:var(--ke-medallion-size-compact); height:var(--ke-medallion-size-compact); }
     .ex-deck__count { left:0; }
     .ex-row__body { grid-area:body; }
     .ex-row__aside { grid-area:aside; align-content:start; }

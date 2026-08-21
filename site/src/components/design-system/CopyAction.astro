@@ -117,19 +117,19 @@ const {
     padding: 0;
     border: 1px solid var(--ke-copy-action-border, rgba(55, 38, 27, .18));
     border-radius: var(--ke-radius-control, 12px);
-    color: var(--ke-copy-action-color, #8e3d1e);
+    color: var(--ke-copy-action-color, var(--ke-color-copy-action));
     background: var(--ke-copy-action-background, rgba(255, 255, 255, .72));
     font: inherit;
     cursor: pointer;
   }
   .ke-copy-action--inverse {
     --ke-copy-action-border: rgba(255, 255, 255, .2);
-    --ke-copy-action-color: #fffaf2;
+    --ke-copy-action-color: var(--ke-color-copy-action-inverse);
     --ke-copy-action-background: rgba(255, 255, 255, .09);
   }
-  .ke-copy-action:focus-visible { outline: 3px solid var(--ke-focus-ring, #f1ae79); outline-offset: 3px; }
-  .ke-copy-action[data-copy-state="success"] { --ke-copy-action-background: #2d6f58; --ke-copy-action-border: #70bb9d; }
-  .ke-copy-action[data-copy-state="error"] { --ke-copy-action-border: #f28c76; box-shadow: 0 0 0 2px rgba(242, 140, 118, .2); }
+  .ke-copy-action:focus-visible { outline: 3px solid var(--ke-focus-ring, var(--ke-color-focus-ring-warm)); outline-offset: 3px; }
+  .ke-copy-action[data-copy-state="success"] { --ke-copy-action-background: var(--ke-color-success-action); --ke-copy-action-border: var(--ke-color-success-action-line); }
+  .ke-copy-action[data-copy-state="error"] { --ke-copy-action-border: var(--ke-color-error-action-line); box-shadow: 0 0 0 2px rgba(242, 140, 118, .2); }
   .ke-copy-action__icon { grid-area: 1 / 1; display: inline-grid; place-items: center; }
   .ke-copy-action__icon :global(.icon) { width: 1.35rem; height: 1.35rem; }
   .ke-copy-action__icon--success { opacity: 0; transform: scale(.8); }

@@ -63,7 +63,7 @@ const totalIdentityCount = visibleIdentityCount + (overlayMedallion ? 1 : 0);
 const hasRailProof = hasSocialProof && !proofInside;
 const hasSideRail = visibleIdentityCount > 0 || hasRailProof;
 const splitIdentityProofRail = hasRailProof && visibleIdentityCount === 3 && density !== 'regular';
-const tailWidth = splitIdentityProofRail ? 96 : hasSideRail ? (visibleIdentityCount === 0 ? 40 : 64) : 0;
+const tailWidth = splitIdentityProofRail ? 100 : hasSideRail ? (visibleIdentityCount === 0 ? 40 : 64) : 0;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
 const style = [
   `--ke-listing-image-ratio:${image.ratio.toFixed(5)}`,
@@ -88,6 +88,8 @@ const socialProofLabel = [
   style={style}
   data-ds-component="ListingEventCard"
   data-ds-version="9"
+  data-medallion-size-contract="normalized-v2"
+  data-listing-medallion-tier="standard-desktop-compact-mobile"
   data-feedback-scope
   data-listing-item
   data-listing-supplemental={supplemental ? 'true' : undefined}
@@ -98,6 +100,10 @@ const socialProofLabel = [
   data-listing-city={cityKey(event.city)}
   data-listing-event-type={cityKey(event.event_type || 'other')}
   data-listing-image-mode={image.mode}
+  data-listing-media-treatment={image.mediaTreatment}
+  data-listing-fit={image.fit}
+  data-listing-cover-crop={image.coverCrop === null ? undefined : image.coverCrop.toFixed(5)}
+  data-listing-crop-reason={image.cropReason}
   data-listing-crop-adaptive={image.adaptiveCrop ? 'true' : 'false'}
   data-listing-crop-evidence={image.asset?.listing_crop_evidence}
   data-listing-source-width={image.asset?.width}
