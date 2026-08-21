@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fixed: the grounded Telegram event public writer now enforces one through
+  three `sentences[].text + evidence_quote` items in the provider JSON schema
+  and uses 768 ordinary / 1024 promo output-token ceilings for both Gemini Lite
+  and the strict 4o fallback. This prevents the `MAX_TOKENS` retry wave recorded
+  by `INC-2026-08-21-tg-event-public-writer-max-tokens` without weakening exact
+  source grounding or increasing the persisted 4o daily request cap.
+
 - Added: VK admission recovery can re-evaluate only pending rows that failed
   open on a transient provider/schema error. The mode is explicit and bounded,
   so operators can wait for provider capacity and retry small chunks instead

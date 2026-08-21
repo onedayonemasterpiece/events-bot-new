@@ -506,6 +506,7 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
         async def generate_content_async(self, **kwargs):
             prompt = kwargs["prompt"]
             assert kwargs["model"] == "gemini-3.1-flash-lite"
+            assert kwargs["max_output_tokens"] == 768
             assert "Вопрос не обязателен" in prompt
             assert "какую пользу это даёт" in prompt
             assert "Любое обещание посетителю" in prompt
@@ -545,8 +546,23 @@ async def test_tg_event_hook_rewrite_keeps_useful_non_question(monkeypatch):
     assert "Что здесь стоит увидеть?" not in hook
 
 
+def test_tg_event_hook_schema_bounds_grounded_sentence_array() -> None:
+    sentences = main._TG_EVENT_HOOK_RESPONSE_SCHEMA["properties"]["sentences"]
+
+    assert sentences["minItems"] == 1
+    assert sentences["maxItems"] == 3
+
+
 @pytest.mark.asyncio
-async def test_tg_event_hook_lite_failure_uses_strict_budgeted_4o(monkeypatch):
+@pytest.mark.parametrize(
+    ("promo_highlight", "expected_max_tokens"),
+    [(False, 768), (True, 1024)],
+)
+async def test_tg_event_hook_lite_failure_uses_strict_budgeted_4o(
+    monkeypatch,
+    promo_highlight,
+    expected_max_tokens,
+):
     import google_ai
 
     source = "Музыканты исполнят редкую камерную программу."
@@ -589,12 +605,18 @@ async def test_tg_event_hook_lite_failure_uses_strict_budgeted_4o(monkeypatch):
     monkeypatch.setattr(main, "_reserve_tg_event_4o_fallback", fake_reserve)
     monkeypatch.setattr(main, "ask_4o", fake_ask_4o)
 
-    hook = await main.build_tg_event_hook_text(event, source, db="db")
+    hook = await main.build_tg_event_hook_text(
+        event,
+        source,
+        db="db",
+        promo_highlight=promo_highlight,
+    )
 
     assert hook.startswith("Музыканты исполнят")
     assert len(calls) == 1
     assert calls[0][1]["model"] == "gpt-4o"
     assert calls[0][1]["allow_model_fallback"] is False
+    assert calls[0][1]["max_tokens"] == expected_max_tokens
     assert calls[0][1]["meta"]["consumer"] == "tg_event_publish_fallback"
     assert calls[0][1]["meta"]["daily_request_no"] == 7
 
@@ -662,7 +684,7 @@ async def test_tg_event_promo_rewrite_uses_richer_prompt(monkeypatch):
             assert "до 500 символов" in prompt
             assert "Это промо-событие" in prompt
             assert "2-3 самые сильные конкретные причины" in prompt
-            assert kwargs["max_output_tokens"] == 360
+            assert kwargs["max_output_tokens"] == 1024
             return (
                 json.dumps(
                     {
