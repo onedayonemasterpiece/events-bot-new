@@ -170,7 +170,7 @@ publishing deterministic or ungrounded copy.
 ## Release And Closure Evidence
 
 - branch: `incident/INC-2026-08-21-tg-event-public-writer-max-tokens`
-- Draft PR: pending
+- Draft PR: <https://github.com/onedayonemasterpiece/events-bot-new/pull/548>
 - deployed SHA: pending
 - deploy path: pending review/merge to `origin/main`
 - regression checks:
