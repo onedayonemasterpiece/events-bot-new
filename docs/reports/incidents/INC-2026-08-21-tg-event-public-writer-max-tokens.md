@@ -23,6 +23,13 @@ wave until its persisted 100-request UTC-day budget was exhausted at 15:34 UTC.
 Affected publication/edit jobs then failed closed and entered retry rather than
 publishing deterministic or ungrounded copy.
 
+The failure continued because the remediation existed only in Draft PR #548
+and production was still running Fly machine version 2011, deployed on
+17 August. Between 20:33 and 22:11 local time (18:33–20:11 UTC), operators
+received another 15 `MAX_TOKENS` alerts. Three `503 UNAVAILABLE` high-demand
+alerts in the same interval are a separate transient provider-availability
+condition, not evidence against the token/schema root cause.
+
 ## User / Business Impact
 
 - The 24 confirmed `MAX_TOKENS` calls affected 24 event rows. At the production
@@ -31,6 +38,10 @@ publishing deterministic or ungrounded copy.
 - Six affected events had no Telegram post URL at that snapshot: `7804`,
   `7805`, `7884`, `7985`, `8129`, and `8131`. The other failed jobs were mostly
   edits/reconciliations whose previously published post remained visible.
+- By 20:14 UTC, the wider retry backlog contained 62 `tg_event_publish` jobs
+  whose latest error was public-writer unavailability; 22 had no public post
+  URL/result. This broader count includes invalid Lite/provider failures beyond
+  the original 24-call cohort and must not be read as 62 `MAX_TOKENS` calls.
 - The fallback wave consumed the full 100-request daily emergency budget, so
   unrelated invalid Lite outputs could no longer be recovered that UTC day.
 - The system failed closed as designed: no deterministic narrative or
@@ -47,6 +58,12 @@ publishing deterministic or ungrounded copy.
   calls, first at `15:16:38.281Z` and last at `15:39:49.812Z`.
 - Production SQLite `quick_check` returned `ok`; `joboutbox`, event public URLs,
   and `llm_daily_request_budget` supplied the impact snapshot.
+- A second runtime-mirror check through 20:14 UTC matched all 18 attached
+  operator alerts: 15 `MAX_TOKENS` and 3 `503`. The same interval also logged
+  seven provider `429` responses that were handled by key rotation before the
+  terminal call; this explains alerts showing `attempt=2/1` (`max_retries=1`
+  counts local retries, while provider-key rotation advances the request's
+  provider attempt cursor).
 
 ## Timeline
 
@@ -62,6 +79,11 @@ publishing deterministic or ungrounded copy.
   exact failure distribution and impact evidence captured.
 - 2026-08-21 18:24Z — regression tests reproduced the missing schema bounds
   and undersized ceilings before the code fix.
+- 2026-08-21 18:33–20:11Z (20:33–22:11 local) — production, still on the
+  pre-fix image, emits 15 more `MAX_TOKENS` and three separate `503` alerts.
+- 2026-08-21 20:14Z — refreshed DB snapshot shows 62 active public-writer
+  unavailable jobs, including 22 without a public post/result; fallback budget
+  remains `100/100`.
 
 ## Root Cause
 
@@ -91,6 +113,8 @@ publishing deterministic or ungrounded copy.
   assert that the structured schema itself bounded array cardinality.
 - Retry/edit work for already visible posts competed with unpublished event
   announcements after the emergency fallback budget was depleted.
+- The fix was intentionally held in a Draft PR for review, so hourly retries on
+  the unchanged production image continued to reproduce the incident.
 
 ## Automation Contract
 
@@ -163,7 +187,8 @@ publishing deterministic or ungrounded copy.
 - [ ] Merge the reviewed fix to `main`, deploy the exact reachable SHA, and
   attach release evidence here.
 - [ ] Run a controlled Lite-only retry/catch-up for the 24-event cohort, with
-  the six unpublished rows first; record public URLs or exclusions.
+  the unpublished rows first, then reconcile the expanded backlog; record
+  public URLs or exclusions.
 - [ ] Confirm the next normal publication window has no recurrence of this
   `consumer/model/code` tuple before moving the incident to `closed`.
 
@@ -181,6 +206,10 @@ publishing deterministic or ungrounded copy.
     caused by June/July fixtures now being in the past on 2026-08-21;
   - google-genai `2.12.1` config serialization preserved `minItems=1`,
     `maxItems=3`, and `maxOutputTokens=768`;
+  - unrelated `smart-update-identity-state-machine` CI failure was traced to a
+    fixed 18 August fixture becoming a past event on 21 August; the identity
+    regression now explicitly disables the independently tested past-event
+    policy (`14 passed` for its source-identity contract file);
   - `py_compile` and `git diff --check`: passed.
 - post-deploy verification: pending
 
