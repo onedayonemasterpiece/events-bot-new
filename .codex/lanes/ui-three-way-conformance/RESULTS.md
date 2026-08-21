@@ -43,3 +43,6 @@ font blockers must be cleared before any visual parity verdict.
 ## Merge notes
 The linked design-system Draft PR owns the full canonical skill. This repository
 contains only consumer adapters and routing.
+
+Linked design-system CI/tooling head:
+`bd7f232b45291a7443c5b6b6f80b17e4b2d81d5f`.
