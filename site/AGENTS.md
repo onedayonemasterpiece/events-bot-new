@@ -17,8 +17,15 @@ connectivity, forms, responsive behavior or browser tests, use the project skill
 Classify the change with registry trigger tags and run only the risk-relevant
 scenarios. Do not default to the full catalog or both mobile simulators.
 
+For every material visual change, route the exact affected component/state to
+the canonical `lovekgd-design-system` skill `ui-three-way-conformance` as the L1
+visual/conformance scenario. The change is incomplete without its case or an
+explicit `not_applicable` reason. Do not duplicate that skill in this repo.
+
 - L0 artifact/data contracts first.
 - L1 Playwright for affected routes, runtime and layout.
+- L1 UI conformance compares the same resolved fixture in bounded Penpot and
+  isolated Astro before any later real-consumer blocking stage.
 - Android Emulator/iOS Simulator only for mobile-system behavior or selected
   high-risk page-family specimens.
 - A desktop mobile viewport or Playwright WebKit never substitutes for required
