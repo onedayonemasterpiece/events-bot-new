@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
   cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync,
@@ -24,6 +25,7 @@ function parseArgs(argv) {
 }
 
 const json = (path) => JSON.parse(readFileSync(path, 'utf8'));
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const pad = (value) => String(value).padStart(2, '0');
 const isoDate = (date) => `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 const addDays = (value, count) => { const date = new Date(`${value}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + count); return isoDate(date); };
@@ -171,7 +173,12 @@ export async function runPlacementVerification({ corpusRoot, site, harness, outp
   const before = spawnSync('git', ['status', '--porcelain', '--', 'site/src'], { cwd: resolve(site, '..'), encoding: 'utf8' }).stdout;
   const sourceSha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: resolve(site, '..'), encoding: 'utf8' }).stdout.trim();
   const { corpus, expectations, events } = verifyCorpus(corpusRoot);
-  materializeHarness(site, harness, events, corpus.reference_clock, nodeModules);
+  const resolvedModules = resolve(nodeModules || join(site, 'node_modules'));
+  const candidateLock = readFileSync(join(site, 'package-lock.json'));
+  const dependencyLockPath = join(dirname(resolvedModules), 'package-lock.json');
+  if (!existsSync(dependencyLockPath) || !candidateLock.equals(readFileSync(dependencyLockPath))) throw new Error('Installed dependency tree is not bound to the exact candidate package-lock.json');
+  const dependencyLockSha256 = sha256(candidateLock);
+  materializeHarness(site, harness, events, corpus.reference_clock, resolvedModules);
   const build = buildHarness(site, harness, corpus.reference_clock, nodeModules);
   const scenarios = [];
   const routeChecks = new Map();
@@ -203,7 +210,7 @@ export async function runPlacementVerification({ corpusRoot, site, harness, outp
   for (const check of routeChecks.values()) check.status = JSON.stringify(check.actual_desktop_ordered_event_ids) === JSON.stringify(check.expected_ordered_event_ids) && JSON.stringify(check.actual_mobile_ordered_event_ids) === JSON.stringify(check.expected_ordered_event_ids) ? 'PASS' : 'FAIL';
   const after = spawnSync('git', ['status', '--porcelain', '--', 'site/src'], { cwd: resolve(site, '..'), encoding: 'utf8' }).stdout;
   const failed = scenarios.filter((row) => row.status === 'FAIL').length + [...routeChecks.values()].filter((row) => row.status === 'FAIL').length;
-  const report = { schema_version: 'ui_surface_placement_receipt_v1', status: build.ok && failed === 0 && before === after ? 'PASS' : 'FAIL', corpus_id: corpus.corpus_id, corpus_sha256: corpus.corpus_sha256, frozen_clock: corpus.reference_clock, astro_repository_sha: sourceSha, implemented_surfaces: [...IMPLEMENTED], declared_gap_surfaces: expectations.surface_classes.filter((surface) => !IMPLEMENTED.has(surface)), production_source_mutated: before !== after, build, route_checks: [...routeChecks.values()], scenarios, summary: { pass: scenarios.filter((row) => row.status === 'PASS').length, failed, declared_gaps: scenarios.filter((row) => row.status === 'SKIPPED_DECLARED_GAP').length } };
+  const report = { schema_version: 'ui_surface_placement_receipt_v1', status: build.ok && failed === 0 && before === after ? 'PASS' : 'FAIL', corpus_id: corpus.corpus_id, corpus_sha256: corpus.corpus_sha256, frozen_clock: corpus.reference_clock, astro_repository_sha: sourceSha, dependency_lock_sha256: dependencyLockSha256, dependency_lock_matches: true, implemented_surfaces: [...IMPLEMENTED], declared_gap_surfaces: expectations.surface_classes.filter((surface) => !IMPLEMENTED.has(surface)), production_source_mutated: before !== after, build, route_checks: [...routeChecks.values()], scenarios, summary: { pass: scenarios.filter((row) => row.status === 'PASS').length, failed, declared_gaps: scenarios.filter((row) => row.status === 'SKIPPED_DECLARED_GAP').length } };
   if (output) { mkdirSync(dirname(resolve(output)), { recursive: true }); writeFileSync(resolve(output), `${JSON.stringify(report, null, 2)}\n`); }
   return report;
 }
