@@ -68,8 +68,8 @@ export function resolveEventCardArchetypeContext(resolvedCase) {
   if (layout.grid.align_items !== 'stretch'
     || layout.row_policy?.equal_height_policy !== 'equal-height-within-row'
     || layout.row_policy?.shared_media_ratio_within_row !== true
-    || peerFixtureIds.length !== columns
-    || unique(peerFixtureIds).length !== columns
+    || peerFixtureIds.length !== selectedRowFixtures.length
+    || unique(peerFixtureIds).length !== selectedRowFixtures.length
     || !peerFixtureIds.includes(resolvedCase.event_fixture_id)
     || peerFixtureIds.some((fixtureId) => !outputFixtureIds.includes(fixtureId))
     || JSON.stringify([...peerFixtureIds].sort()) !== JSON.stringify([...selectedRowFixtures].sort())

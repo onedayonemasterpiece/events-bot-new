@@ -35,6 +35,19 @@ test('v2 consumer layout resolves a controlled, non-ranking OptimizedEventCardGr
   assert.equal(context.selected_card_selector,'[data-event-card][data-event-id="8156"]');
 });
 
+test('v2 consumer layout accepts an exact partial final row', () => {
+  const row = resolvedCase({ event_fixture_id:'event.real.4327' });
+  row.consumer_layout_resolution.packing.placement = {
+    fixture_id:'event.real.4327', row_index:1, column_index:0,
+    row_ratio:1.5, row_mode:'document-led-uncropped',
+  };
+  row.consumer_layout_resolution.row_policy.peer_fixture_ids = ['event.real.4327'];
+  const context = resolveEventCardArchetypeContext(row);
+  assert.deepEqual(context.peer_fixture_ids, ['event.real.4327']);
+  assert.equal(context.selected_placement.row_index, 1);
+  assert.equal(context.selected_placement.column_index, 0);
+});
+
 test('archetype resolver rejects a fabricated route/ranking placement claim and incomplete fixture binding', () => {
   const routeClaim=resolvedCase(); routeClaim.consumer_layout_resolution.surface.placement_claim='production-observed';
   assert.throws(()=>resolveEventCardArchetypeContext(routeClaim),/controlled-layout-only/u);
