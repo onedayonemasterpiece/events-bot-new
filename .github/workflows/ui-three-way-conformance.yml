@@ -1,0 +1,32 @@
+name: UI conformance changed scope
+
+on:
+  pull_request:
+    paths:
+      - 'site/src/components/**'
+      - 'site/src/layouts/**'
+      - 'site/src/styles/**'
+      - 'site/src/data/preview-events.json'
+      - 'scripts/current_ui_resource_graph/v1/specimens/**'
+      - 'scripts/ui_conformance/**'
+      - '.codex/skills/static-site-design-system/**'
+      - '.codex/skills/static-site-autotest/**'
+      - '.codex/skills/static-listing-visual-lab/**'
+      - '.github/workflows/ui-three-way-conformance.yml'
+  workflow_dispatch:
+    inputs:
+      publish_telegram:
+        description: Explicitly request protected Telegram review publication
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  conformance:
+    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@feature/ui-golden-event-corpus-v1-20260821
+    with:
+      design_ref: feature/ui-golden-event-corpus-v1-20260821
+      events_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      publish_telegram: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_telegram }}
+      trusted_source: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'onedayonemasterpiece/events-bot-new' }}
+    secrets: inherit

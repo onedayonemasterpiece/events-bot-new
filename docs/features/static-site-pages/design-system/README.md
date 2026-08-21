@@ -12,6 +12,22 @@ promotion receipt; наличие native Penpot candidate этого не мен
 Penpot generations 003–005 остаются technical experiments and historical
 evidence и не являются текущим Resource Graph или UI authority.
 
+## Exact three-way visual conformance
+
+Material component/foundation/archetype changes route through the canonical
+`ui-three-way-conformance` skill and contracts in
+`onedayonemasterpiece/lovekgd-design-system`. The consumer-side adapter only
+extracts the exact public `PreviewEvent`, builds a disposable Astro specimen,
+freezes the corpus clock and verifies local media/font bytes. It must not keep a
+second editable corpus, change production Astro, or compare a different event
+with a visually similar Penpot instance.
+
+For archetype reconstruction, capture the exact Astro route/fixture first, put
+that locked evidence next to a reconstruction made only from linked Penpot
+components, then inspect same-size side-by-side, 50% overlay and diff exports.
+Unexplained drift returns to the owning shared component/SoT boundary before
+page work continues.
+
 ## Authority during reconstruction
 
 До promotion каждого resource family текущий Astro source в этом репозитории является executable source of fact о существующей реализации. Его нельзя автоматически считать нормализованной дизайн-системой: decoder должен обнаружить component families, inline/CSS patterns, one-to-many/many-to-one relationships, states, consumers, local overrides и unresolved fragmentation.

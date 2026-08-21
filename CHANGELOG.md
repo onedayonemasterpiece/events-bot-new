@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Added: a read-only Golden Event Corpus extraction adapter and disposable
+  exact-fixture EventCard Astro capture pipeline for Astro ↔ Penpot conformance;
+  production UI source and deployment behavior are unchanged.
+
 - Changed: static-site UI work now has an explicit fail-closed cross-repository
   round trip: current Astro/runtime is reconstructed into the versioned design-
   system Git SoT and native Penpot; Penpot feedback updates Git SoT before
