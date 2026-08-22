@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Fixed: the existing Smart Update **merge-path** identity gate now closes
+  through the same typed `FINAL_MATCH` / source-grounded `FINAL_DISTINCT` /
+  durable `FINAL_RETRY` contract as the widened create-path adjudicator.
+  `unsafe_to_merge`, a merge blocker, abstention, or invalid/provider output can
+  no longer be reinterpreted as permission to create a second Event. Explicit
+  distinct results must carry exact source evidence and concrete conflicts in
+  the existing LLM response. Overlapping long-running cards with the same
+  title and exact ticket identity fail closed when repost-profile date/location
+  defaults drift, covering the rollout `7907/8280` and post-deploy
+  `3216/8284` recurrences without another LLM call.
+
 - Fixed: Smart Update no longer falls through to ordinary Event creation after
   vector/identity recall found an owner or `VETO_CREATE`. The existing dedup
   adjudicator now closes that concern as typed `FINAL_MATCH`, source-grounded

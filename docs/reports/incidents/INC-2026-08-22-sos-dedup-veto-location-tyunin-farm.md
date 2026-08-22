@@ -63,6 +63,11 @@ checkpoint matrix and control-flow diff localized the first bad commit.
 - `2026-08-22 01:51:58Z` — ordinary create commits event `8242`.
 - `2026-08-22 13:54:39Z` — pre-fix vector reconciliation `ops_run=6937`
   finishes successfully.
+- `2026-08-22 16:49:52Z` — during rollout, four minutes before the first
+  prevention exact-main deploy, the existing merge identity LLM correctly
+  calls `7907/8280` a `source_update`, but a date conflict rewrites the
+  intermediate relation to `unsafe_to_merge`; legacy merge-path application
+  then creates `8280`.
 - `2026-08-22 16:53:55Z` — prevention PR #554 merges to `origin/main` as
   `c0103be2c7ddc760486bd79e19825a69ceae4165` and deploys as Fly version
   `2016` / image digest
@@ -73,6 +78,10 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   `poster_hash` values represented identical raw bytes. SQLite rolls the
   transaction back; `quick_check=ok`, receipt count stays zero and none of the
   selected Events is marked merged.
+- `2026-08-22 17:25:11Z` — a repost-profile venue default makes the merge LLM
+  misclassify reminder `8284` against owner `3216` as
+  `related_but_distinct`; legacy merge-path application creates it. The
+  post-repair census detects both recurrences, so the incident remains open.
 
 ## Root Cause
 
@@ -84,6 +93,11 @@ checkpoint matrix and control-flow diff localized the first bad commit.
 3. The later fail-closed guard ran only when the boolean was false.
 4. Ordinary CREATE therefore remained reachable after an owner and enforced
    create veto.
+5. The first prevention patch closed the widened create-path adjudicator but
+   left an older merge-path terminal mapping unchanged: every non-null
+   `identity_distinct_reason`, including synthetic `unsafe_to_merge`, still
+   invoked `_create_from_prepared_candidate`. A merge veto was therefore still
+   conflated with positive distinct proof.
 
 | checkpoint | unresolved owner/veto result |
 | --- | --- |
@@ -269,6 +283,9 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 - [x] Preserve exact occurrence/fingerprint no-op and avoid
   `UNIQUE(source_url)`.
 - [x] Preserve small vector top-k in one widened RPC without extra calls.
+- [x] Apply the typed final verdict to `merge_identity_gate`; exact source
+  evidence is mandatory for distinct, `unsafe_to_merge` retries, and
+  overlapping same-title/same-ticket long-event repost drift fails closed.
 - [x] Deploy prevention from exact `origin/main`; verify health and SQLite.
 - [ ] Deploy raw-byte-safe repair hotfix, apply reviewed true duplicates and
   rebuild projections.

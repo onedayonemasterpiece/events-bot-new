@@ -203,6 +203,7 @@ def test_merge_gate_enforce_skips_llm_distinct_sibling() -> None:
             "confidence": 0.91,
             "reason_code": "festival_sibling_not_same_event",
             "reason": "выставка и лекция связаны контекстом, но это разные события",
+            "source_grounded_evidence": ["выставка", "лекция"],
             "blocking_conflicts": ["event_type"],
             "allowed_fields": [],
         },
@@ -211,6 +212,45 @@ def test_merge_gate_enforce_skips_llm_distinct_sibling() -> None:
     assert verdict.action is MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
     assert verdict.relation is MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING
     assert verdict.should_skip_side_effects
+
+
+def test_long_event_same_title_ticket_refresh_cannot_be_declared_distinct_from_anchor_drift() -> None:
+    """Production 3216/8284: repost profile defaults are not distinct proof."""
+
+    verdict = build_merge_identity_gate_verdict(
+        _Obj(
+            title="Выставка «Великие учителя»",
+            date="2026-08-22",
+            end_date="2026-09-06",
+            location_name="Музей изобразительных искусств",
+            ticket_link="https://vk.cc/cVA765",
+            event_type="выставка",
+        ),
+        _Obj(
+            id=3216,
+            title="Великие учителя",
+            date="2026-04-09",
+            end_date="2026-09-27",
+            location_name="Филиал Третьяковской галереи",
+            ticket_link="https://vk.cc/cVA765",
+            event_type="выставка",
+        ),
+        mode=IdentityGateMode.ENFORCE,
+        llm_data={
+            "action": "skip_merge_side_effects",
+            "relation": "related_but_distinct",
+            "confidence": 1.0,
+            "reason_code": "festival_sibling_not_same_event",
+            "reason": "модель приняла профиль репостера за отдельную площадку",
+            "source_grounded_evidence": ["Выставка «Великие учителя»"],
+            "blocking_conflicts": ["date", "end_date", "location_name"],
+            "allowed_fields": [],
+        },
+    )
+
+    assert verdict.action is MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
+    assert verdict.identity_distinct_reason is None
+    assert verdict.reason_code == "shared_long_event_anchor_requires_retry"
 
 
 def test_merge_gate_shadow_reports_skip_without_enforcing() -> None:
@@ -502,6 +542,10 @@ async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_pa
                 "confidence": 0.93,
                 "reason_code": "festival_sibling_not_same_event",
                 "reason": "выставка и лекция связаны одной площадкой, но это разные события",
+                "source_grounded_evidence": [
+                    "Открытие выставки «Калининградская область. История любви»",
+                    "Лекция Андрея Бойко",
+                ],
                 "blocking_conflicts": ["event_type", "end_date"],
                 "allowed_fields": [],
             }
@@ -545,9 +589,10 @@ async def test_boyko_exhibition_regression_merge_gate_blocks_side_effects(tmp_pa
         assert posters_count == 0
         assert logs
         assert logs[-1].event_id == 5077
-        assert logs[-1].decision == "skip_merge_side_effects"
-        assert logs[-1].decision_payload["stage"] == "merge_identity_gate"
-        assert logs[-1].decision_payload["would_skip_side_effects"] is True
+        assert logs[-1].decision == "FINAL_DISTINCT"
+        assert logs[-1].decision_payload["stage"] == "final_merge_identity_gate"
+        assert logs[-2].decision == "skip_merge_side_effects"
+        assert logs[-2].decision_payload["would_skip_side_effects"] is True
 
         async with db.get_session() as session:
             assert int(
@@ -589,8 +634,8 @@ async def test_merge_gate_internal_error_enforce_is_zero_side_effect_fail_closed
         assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         assert result.event_id is None
         assert result.diagnostic_event_id == 5077
-        assert result.reason == "merge_identity_gate_error"
-        assert result.retry_reason is su.RetryReason.IDENTITY_TECHNICAL_FAILURE
+        assert result.reason == "identity_final_retry:merge_identity_gate_error"
+        assert result.retry_reason is su.RetryReason.IDENTITY_FINAL_RETRY
         assert result.created is False and result.merged is False
 
         async with db.get_session() as session:
@@ -600,8 +645,10 @@ async def test_merge_gate_internal_error_enforce_is_zero_side_effect_fail_closed
             for model in (EventSource, EventSourceFact, EventPoster, FestivalQueueItem, JobOutbox):
                 assert int(await session.scalar(select(func.count()).select_from(model))) == 0
             decisions = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
-            assert len(decisions) == 1
+            assert len(decisions) == 2
             assert decisions[0].decision_payload["fail_safe"] is True
+            assert decisions[1].decision == "FINAL_RETRY"
+            assert decisions[1].decision_payload["stage"] == "final_merge_identity_gate"
     finally:
         await db.close()
 
@@ -644,6 +691,10 @@ async def test_theatre_tour_performance_incident_replay_requires_enforce(
                 "confidence": 0.99,
                 "reason_code": "theatre_tour_vs_performance_slot_conflict",
                 "reason": "14:30 theatre tour and 18:00 performance are separate occurrences",
+                "source_grounded_evidence": [
+                    "экскурсия по сцене и закулисным помещениям театра",
+                    "спектакль «Женитьба»",
+                ],
                 "blocking_conflicts": ["title", "time", "event_type", "ticket_link"],
                 "allowed_fields": [],
             }
@@ -679,9 +730,13 @@ async def test_theatre_tour_performance_incident_replay_requires_enforce(
         assert event is not None
         assert source_count == expected_source_delta
         assert logs
-        assert logs[-1].decision == "skip_merge_side_effects"
-        assert logs[-1].decision_payload["mode"] == mode.value
-        assert logs[-1].decision_payload["would_skip_side_effects"] is True
+        assert logs[-1].decision == (
+            "FINAL_DISTINCT" if mode is IdentityGateMode.ENFORCE else "FINAL_MATCH"
+        )
+        assert logs[-1].decision_payload["stage"] == "final_merge_identity_gate"
+        assert logs[-2].decision == "skip_merge_side_effects"
+        assert logs[-2].decision_payload["mode"] == mode.value
+        assert logs[-2].decision_payload["would_skip_side_effects"] is True
         if mode is IdentityGateMode.ENFORCE:
             assert event.title == "Женитьба"
             assert event.event_type == "спектакль"
@@ -739,8 +794,10 @@ async def test_theatre_same_performance_source_update_survives_enforce(tmp_path,
             )
             logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
         assert source_count == 1
-        assert logs[-1].decision == "allow_merge"
-        assert logs[-1].decision_payload["mode"] == "enforce"
+        assert logs[-1].decision == "FINAL_MATCH"
+        assert logs[-1].decision_payload["stage"] == "final_merge_identity_gate"
+        assert logs[-2].decision == "allow_merge"
+        assert logs[-2].decision_payload["mode"] == "enforce"
     finally:
         await db.close()
 
@@ -788,6 +845,8 @@ async def test_merge_gate_allows_same_event_source_update(tmp_path, monkeypatch)
         async with db.get_session() as session:
             logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
         assert logs
-        assert logs[-1].decision == "allow_merge"
+        assert logs[-1].decision == "FINAL_MATCH"
+        assert logs[-1].decision_payload["stage"] == "final_merge_identity_gate"
+        assert logs[-2].decision == "allow_merge"
     finally:
         await db.close()
