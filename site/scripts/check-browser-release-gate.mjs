@@ -23,6 +23,18 @@ function invariant(condition, message) {
   if (!condition) throw new Error(`Browser release gate failed: ${message}`);
 }
 
+export function currentEventPrimaryKeyboardContract(enabledCount, disabledCount) {
+  invariant(
+    Number.isSafeInteger(enabledCount)
+      && Number.isSafeInteger(disabledCount)
+      && enabledCount >= 0
+      && disabledCount >= 0
+      && enabledCount + disabledCount === 1,
+    'current event must have exactly one rendered primary action',
+  );
+  return enabledCount === 1 ? 'activate' : 'unavailable';
+}
+
 export function expectedObjectFitForTreatment(treatment) {
   return String(treatment || '').endsWith('-contain') ? 'contain' : 'cover';
 }
@@ -669,6 +681,10 @@ async function assertColdAndPointerKeyboard(page, origin, route, { expectMultipl
 
   await page.reload({ waitUntil:'domcontentloaded' });
   await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
+  const primaryKeyboardContract = await page.locator('[data-keyboard-event-surface]').evaluate((surface) => ({
+    enabled:surface.querySelectorAll('.desktop-prototype__primary-action:not(.is-disabled)').length,
+    disabled:surface.querySelectorAll('.desktop-prototype__primary-action.is-disabled').length,
+  })).then(({ enabled, disabled }) => currentEventPrimaryKeyboardContract(enabled, disabled));
   await page.evaluate(() => {
     window.__releaseGateEventActions = { like:0, calendar:0, primary:0 };
     const surface = document.querySelector('[data-keyboard-event-surface]');
@@ -693,7 +709,20 @@ async function assertColdAndPointerKeyboard(page, origin, route, { expectMultipl
   await page.waitForFunction((count) => window.__releaseGateClipboard.text.length === count + 1, textWrites, { timeout:8_000 });
   invariant((await page.evaluate(() => window.__releaseGateClipboard.text.at(-1)))?.includes('/sobytiya/'), 'current-event KeyS copied the wrong payload');
   await dispatchPhysicalKey(page, 'Enter', 'Enter');
-  invariant(await page.evaluate(() => window.__releaseGateEventActions.primary) === 1, 'inert click + Enter did not reach current-event CTA');
+  if (primaryKeyboardContract === 'activate') {
+    invariant(
+      await page.evaluate(() => window.__releaseGateEventActions.primary) === 1,
+      `inert click + Enter did not reach current-event CTA on ${route}`,
+    );
+  } else {
+    invariant(
+      await page.evaluate(() => window.__releaseGateEventActions.primary) === 0,
+      `disabled current-event CTA unexpectedly activated on ${route}`,
+    );
+    await page.waitForFunction(
+      () => document.querySelector('[data-keyboard-prototype-status]')?.textContent === 'Основное действие недоступно для выбранного события.',
+    );
+  }
 
   // Unrelated pointer provenance must revoke BODY recovery.
   await page.reload({ waitUntil:'domcontentloaded' });
@@ -734,6 +763,7 @@ async function assertColdAndPointerKeyboard(page, origin, route, { expectMultipl
   return {
     coldHeroChanged:after !== before,
     imageCount:actualImageCount,
+    primaryKeyboardContract,
     inertPointer:pointer,
     headerPointer,
     dialogPointer,
@@ -964,6 +994,10 @@ async function runBrowserGate({ root, basePath, manifest, origin, browser, artif
     const singleRoute = singleImageSpecimen(root, basePath, routes);
     invariant(singleRoute, 'generated release has no single-image negative keyboard specimen');
     keyboardReports.push({ route:singleRoute, ...await assertColdAndPointerKeyboard(page, origin, singleRoute, { expectMultipleImages:false }) });
+    invariant(
+      keyboardReports.some((report) => report.primaryKeyboardContract === 'activate'),
+      'keyboard release specimens include no enabled current-event CTA',
+    );
     checks.cold_and_pointer_keyboard = 'ok';
     console.log('[browser-release-gate] cold_and_pointer_keyboard=ok');
     await assertGalleryCrossDocument(page, origin, specimen.route);

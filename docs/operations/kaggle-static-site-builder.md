@@ -374,10 +374,16 @@ silently pair new runtime code with an old static-site source revision.
 The blocking Chromium gate waits for lazy recommendation images to decode,
 asserts that a loaded `contain` image hides the semantic failure fallback,
 checks cold/reload and real mouse→Russian-layout keyboard paths, and only then
-writes `browser_visual=ok`. For compatibility investigation the same executable
-accepts `--browser firefox` and `--browser webkit`; the host must have the
-official Playwright system dependencies, and WebKit automation does not replace
-the native Safari root-rollout gate.
+writes `browser_visual=ok`. Its current-event `Enter` check follows the
+rendered action contract: an enabled primary CTA must receive exactly one
+activation, while an intentionally disabled primary (for example a sold-out
+event) must remain inert and announce that the action is unavailable. The
+specimen set must still contain at least one enabled primary CTA, so disabled
+data cannot silently remove positive `Enter` coverage. For compatibility
+investigation the same executable accepts `--browser firefox` and
+`--browser webkit`; the host must have the official Playwright system
+dependencies, and WebKit automation does not replace the native Safari
+root-rollout gate.
 
 The Python Fly-side publisher validates/extracts the tar safely, checks the
 production-candidate result and manifest identity, rejects a bucket that still
