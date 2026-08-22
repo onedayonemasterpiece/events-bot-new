@@ -84,6 +84,16 @@ condition, not evidence against the token/schema root cause.
 - 2026-08-21 20:14Z — refreshed DB snapshot shows 62 active public-writer
   unavailable jobs, including 22 without a public post/result; fallback budget
   remains `100/100`.
+- 2026-08-22 11:42Z — Draft PR #548 passes all required CI and is merged to
+  `origin/main` as `2c0edb85605cc9c23566aff85c34cf1747864745`.
+- 2026-08-22 11:46Z — the exact main SHA is deployed as Fly release `v2012`;
+  machine `48e419df93e078` reports one of one checks passing and `/healthz`
+  reports `ready=true`.
+- 2026-08-22 11:49Z — controlled retry of unpublished event `8131` completes
+  the Lite request with `finish_reason=STOP`, `output_tokens=485`, proving the
+  token ceiling fix, but the application rejects a paraphrased
+  `evidence_quote` as `quote_not_in_source`. The strict 4o budget is already
+  `100/100`, so catch-up is paused instead of multiplying failed retries.
 
 ## Root Cause
 
@@ -102,6 +112,18 @@ condition, not evidence against the token/schema root cause.
    defect. Invalid or truncated Lite results used the only approved emergency
    lane until its intentional 100/day cap was exhausted; subsequent jobs
    remained retryable errors.
+
+### Post-deploy secondary blocker
+
+The first controlled post-deploy call proved that the original truncation was
+fixed, but also exposed a separate semantic gap: JSON Schema guaranteed that
+`evidence_quote` was a string, not that it was copied byte-for-byte from the
+organizer corpus. Gemini returned a complete, semantically related paraphrase;
+the exact-grounding validator correctly rejected it. Because the earlier storm
+had exhausted the strict-writer budget, this otherwise recoverable invalid Lite
+response still blocked publication. The follow-up constrains `evidence_quote`
+to a per-request enum of bounded exact source fragments while retaining the
+application grounding validator.
 
 ## Contributing Factors
 
@@ -169,9 +191,10 @@ condition, not evidence against the token/schema root cause.
 - The fix branch bounds the provider array to one through three items and gives
   the grounded JSON enough completion headroom without changing the approved
   writer models or increasing the 4o daily request cap.
-- No production DB rows or fallback-budget counters were mutated during the
-  read-only investigation. Catch-up remains mandatory after the Draft PR is
-  reviewed, merged, and deployed.
+- Before the controlled retry, all 56 matching writer-error rows were copied
+  transactionally to production backup table
+  `incident_20260821_tg_writer_joboutbox_20260822_1149`; only job `64344`
+  (event `8131`) was rearmed. No fallback-budget counter was changed manually.
 
 ## Corrective Actions
 
@@ -180,12 +203,18 @@ condition, not evidence against the token/schema root cause.
   to 1024 tokens for both Gemini Lite and the strict 4o fallback.
 - Added regression assertions for the schema bounds and both mode-specific
   token budgets.
+- Added a bounded per-request `evidence_quote` enum derived only from exact
+  organizer-source substrings; both Lite and strict 4o receive the same schema.
+- Added a regression assertion that every enumerated quote is an exact
+  contiguous substring of the application evidence corpus.
 - Documented the structured-output contract and this incident regression gate.
 
 ## Follow-up Actions
 
-- [ ] Merge the reviewed fix to `main`, deploy the exact reachable SHA, and
-  attach release evidence here.
+- [x] Merge the reviewed token/schema fix to `main`, deploy the exact reachable
+  SHA, and attach release evidence here.
+- [ ] Merge and deploy the exact-quote enum follow-up, then repeat the event
+  `8131` canary before any bulk rearm.
 - [ ] Run a controlled Lite-only retry/catch-up for the 24-event cohort, with
   the unpublished rows first, then reconcile the expanded backlog; record
   public URLs or exclusions.
@@ -195,9 +224,10 @@ condition, not evidence against the token/schema root cause.
 ## Release And Closure Evidence
 
 - branch: `incident/INC-2026-08-21-tg-event-public-writer-max-tokens`
-- Draft PR: <https://github.com/onedayonemasterpiece/events-bot-new/pull/548>
-- deployed SHA: pending
-- deploy path: pending review/merge to `origin/main`
+- Draft PR (merged): <https://github.com/onedayonemasterpiece/events-bot-new/pull/548>
+- deployed SHA: `2c0edb85605cc9c23566aff85c34cf1747864745`
+- deploy path: clean exact `origin/main` checkout through
+  `scripts/deploy_fly_main.sh`; Fly release `v2012`, machine version `2012`
 - regression checks:
   - public-hook subset: `6 passed`;
   - `tests/test_llm_source_grounding.py tests/test_google_ai_client.py`:
@@ -211,7 +241,10 @@ condition, not evidence against the token/schema root cause.
     regression now explicitly disables the independently tested past-event
     policy (`14 passed` for its source-identity contract file);
   - `py_compile` and `git diff --check`: passed.
-- post-deploy verification: pending
+- post-deploy verification: `/healthz ready=true`, SQLite `quick_check=ok`;
+  controlled event `8131` Lite call ended `STOP` at 485 output tokens with no
+  `MAX_TOKENS`, then failed closed on exact quote validation. Bulk catch-up is
+  intentionally pending the quote-enum follow-up.
 
 ## Prevention
 

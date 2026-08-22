@@ -5288,6 +5288,73 @@ _TG_EVENT_HOOK_RESPONSE_SCHEMA = {
 }
 
 
+def _tg_event_evidence_quote_candidates(
+    evidence_corpus: str,
+    *,
+    max_chars: int = 240,
+    max_candidates: int = 40,
+) -> list[str]:
+    """Return bounded exact substrings suitable for a JSON-schema enum.
+
+    Structured output guarantees shape, not semantic exactness.  Giving the
+    provider a finite set of verbatim source fragments makes an invented or
+    normalized ``evidence_quote`` unrepresentable while the application-level
+    grounding check remains the final guard.
+    """
+
+    normalized = re.sub(r"\s+", " ", str(evidence_corpus or "")).strip()
+    if not normalized:
+        return []
+    rough_segments = re.split(r"(?<=[.!?])\s+", normalized)
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for rough in rough_segments:
+        remaining = rough.strip()
+        while remaining and len(candidates) < max_candidates:
+            if len(remaining) <= max_chars:
+                piece = remaining
+                remaining = ""
+            else:
+                window = remaining[: max_chars + 1]
+                punctuation_cut = max(
+                    (window.rfind(mark) for mark in (". ", "! ", "? ", "; ", ": ", ", ")),
+                    default=-1,
+                )
+                if punctuation_cut >= 48:
+                    cut = punctuation_cut + 1
+                else:
+                    space_cut = window.rfind(" ")
+                    cut = space_cut if space_cut >= 48 else max_chars
+                piece = remaining[:cut].strip()
+                remaining = remaining[cut:].strip()
+            if len(piece) < 8 or piece in seen:
+                continue
+            # ``piece`` is sliced from the whitespace-normalized corpus, which
+            # is also what the parser searches, so every enum value is an exact
+            # contiguous application-verifiable quote.
+            if piece not in normalized:
+                continue
+            seen.add(piece)
+            candidates.append(piece)
+        if len(candidates) >= max_candidates:
+            break
+    return candidates
+
+
+def _tg_event_hook_response_schema(evidence_corpus: str) -> dict[str, Any]:
+    schema = json.loads(json.dumps(_TG_EVENT_HOOK_RESPONSE_SCHEMA, ensure_ascii=False))
+    candidates = _tg_event_evidence_quote_candidates(evidence_corpus)
+    if candidates:
+        quote_schema = schema["properties"]["sentences"]["items"]["properties"][
+            "evidence_quote"
+        ]
+        quote_schema["enum"] = candidates
+        quote_schema["description"] = (
+            "Choose one exact organizer-source fragment from this enum; copy it unchanged."
+        )
+    return schema
+
+
 def _is_telegram_event_uncertain_send_error(exc: Exception) -> bool:
     text = str(exc or "").lower()
     name = exc.__class__.__name__.lower()
@@ -6145,6 +6212,7 @@ async def _build_tg_event_hook_via_4o(
     db: Database | None,
     max_chars: int,
     max_output_tokens: int,
+    response_schema: dict[str, Any],
 ) -> str:
     event_id = getattr(event, "id", None)
     reserved = await _reserve_tg_event_4o_fallback(db, event_id=event_id)
@@ -6164,7 +6232,7 @@ async def _build_tg_event_hook_via_4o(
                 "json_schema": {
                     "name": "tg_event_grounded_hook",
                     "strict": True,
-                    "schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
+                    "schema": response_schema,
                 },
             },
             meta={
@@ -6228,6 +6296,7 @@ async def build_tg_event_hook_text(
         if promo_highlight
         else TG_EVENT_REWRITE_MAX_OUTPUT_TOKENS
     )
+    response_schema = _tg_event_hook_response_schema(evidence_corpus)
     promo_instruction = ""
     if promo_highlight:
         promo_instruction = (
@@ -6240,6 +6309,8 @@ async def build_tg_event_hook_text(
         "Верни только JSON по схеме sentences[]. Каждый элемент содержит `text` и `evidence_quote`.\n"
         "`evidence_quote` — точная непрерывная цитата из блока «Организаторские источники», "
         "которая прямо подтверждает всё предложение `text`. Нельзя использовать редакционный черновик как evidence.\n"
+        "Значение `evidence_quote` выбери из enum в JSON Schema и скопируй целиком без любых изменений "
+        "регистра, орфографии и пунктуации.\n"
         "Если конкретное предложение нельзя подтвердить одной точной цитатой, не пиши его.\n"
         "Пиши близким к цитате пересказом: не объединяй факты из разных фрагментов в одно предложение. "
         "Не добавляй обращения и приглашения (`друзья`, `вас ждёт`, `приглашаем`), если именно это обращение "
@@ -6294,7 +6365,7 @@ async def build_tg_event_hook_text(
                 # JSON Schema (including additionalProperties) belongs in the
                 # google-genai JSON-schema field. The protobuf response_schema
                 # path rejects it with INVALID_ARGUMENT/additional_properties.
-                "response_json_schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
+                "response_json_schema": response_schema,
             },
             max_output_tokens=max_output_tokens,
         )
@@ -6329,6 +6400,7 @@ async def build_tg_event_hook_text(
         db=db,
         max_chars=max_chars,
         max_output_tokens=max_output_tokens,
+        response_schema=response_schema,
     )
 
 
