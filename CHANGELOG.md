@@ -17,7 +17,10 @@
   immutable-snapshot barrier now hashes the same deterministic, probe-free
   Search projection as the vector owner, so transient remote image-dimension
   results cannot strand an unchanged catalog behind
-  `vector_barrier_catalog_revision_pending`.
+  `vector_barrier_catalog_revision_pending`. Event-source URLs are also
+  ordered explicitly by source id, preserving the same catalog hash when the
+  full production DB and its allowlisted compact snapshot use different
+  SQLite query plans and indexes.
 
 - Fixed: the existing Smart Update **merge-path** identity gate now closes
   through the same typed `FINAL_MATCH` / source-grounded `FINAL_DISTINCT` /

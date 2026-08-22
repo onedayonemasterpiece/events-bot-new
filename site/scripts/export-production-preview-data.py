@@ -1732,7 +1732,10 @@ def collect_source_urls(con: sqlite3.Connection, event_id: int, row: sqlite3.Row
     add(row_get(row, "tg_event_post_url"))
     add(row_get(row, "vk_repost_url"))
     try:
-        for src in con.execute("select source_url from event_source where event_id=?", (event_id,)):
+        for src in con.execute(
+            "select source_url from event_source where event_id=? order by id asc",
+            (event_id,),
+        ):
             add(src["source_url"])
     except sqlite3.OperationalError:
         pass
