@@ -12,6 +12,11 @@
   and the schema itself stays below Gemini's complexity limit. This prevents the retry wave recorded by
   `INC-2026-08-21-tg-event-public-writer-max-tokens` without weakening exact
   source grounding or increasing the persisted 4o daily request cap.
+  Organizer line and paragraph boundaries are now preserved while building
+  that bounded enum, and adjacent lines from the same source paragraph are
+  packed before sentence splitting. This keeps dotted titles such as
+  `Дюна. Империя` together with their immediately preceding format heading,
+  without joining separate sources or weakening lexical grounding.
 
 - Added: VK admission recovery can re-evaluate only pending rows that failed
   open on a transient provider/schema error. The mode is explicit and bounded,

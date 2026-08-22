@@ -5302,13 +5302,16 @@ def _tg_event_evidence_quote_candidates(
     grounding check remains the final guard.
     """
 
-    normalized = re.sub(r"\s+", " ", str(evidence_corpus or "")).strip()
+    raw = str(evidence_corpus or "").strip()
+    normalized = re.sub(r"\s+", " ", raw).strip()
     if not normalized:
         return []
-    rough_segments = re.split(r"(?<=[.!?])\s+", normalized)
     candidates: list[str] = []
     seen: set[str] = set()
-    for rough in rough_segments:
+
+    def append_segment(rough: str) -> None:
+        if len(candidates) >= max_candidates:
+            return
         remaining = rough.strip()
         while remaining and len(candidates) < max_candidates:
             if len(remaining) <= max_chars:
@@ -5336,6 +5339,38 @@ def _tg_event_evidence_quote_candidates(
                 continue
             seen.add(piece)
             candidates.append(piece)
+
+    # Organizer posts commonly put a format heading and an event title on
+    # adjacent lines.  A period may be part of the title (for example,
+    # ``Дюна. Империя``), so sentence splitting after whitespace collapse can
+    # make one truthful claim impossible to support with one enum value.  Pack
+    # adjacent lines from the same paragraph before falling back to sentence
+    # splitting.  Never cross a blank-line/source boundary.
+    blocks = re.split(r"\n\s*\n", raw)
+    for block in blocks:
+        lines = []
+        for raw_line in block.splitlines():
+            line = re.sub(r"\s+", " ", raw_line).strip()
+            if line:
+                lines.append(line)
+        if len(lines) <= 1:
+            rough_segments = re.split(r"(?<=[.!?])\s+", " ".join(lines))
+        else:
+            rough_segments = []
+            packed = ""
+            for line in lines:
+                combined = f"{packed} {line}".strip()
+                if packed and len(combined) > max_chars:
+                    rough_segments.append(packed)
+                    packed = line
+                else:
+                    packed = combined
+            if packed:
+                rough_segments.append(packed)
+        for rough in rough_segments:
+            append_segment(rough)
+            if len(candidates) >= max_candidates:
+                break
         if len(candidates) >= max_candidates:
             break
     return candidates
@@ -6065,10 +6100,20 @@ def _tg_event_source_evidence(event: Event) -> str:
     seen: set[str] = set()
     total = 0
     for value in values:
-        clean = re.sub(r"\s+", " ", str(value or "")).strip()
+        # Preserve organizer line/paragraph boundaries for evidence-candidate
+        # segmentation.  Grounding still normalizes whitespace before checking
+        # that every candidate is an exact contiguous source substring.
+        clean_lines: list[str] = []
+        for raw_line in str(value or "").splitlines():
+            line = re.sub(r"[^\S\r\n]+", " ", raw_line).strip()
+            if line:
+                clean_lines.append(line)
+            elif clean_lines and clean_lines[-1] != "":
+                clean_lines.append("")
+        clean = "\n".join(clean_lines).strip()
         if not clean:
             continue
-        key = clean.casefold()
+        key = re.sub(r"\s+", " ", clean).casefold()
         if key in seen:
             continue
         seen.add(key)

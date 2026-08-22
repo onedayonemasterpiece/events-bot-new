@@ -103,6 +103,31 @@ condition, not evidence against the token/schema root cause.
   characters (`schema_chars=989`, `finish_reason=STOP`, exact enum quote).
   The production schema is reduced to those verified bounds before another
   publication retry.
+- 2026-08-22 12:14Z — compatibility bound PR #551 merges to `main` as
+  `709ef4127a86338e3b816fda2ba88058162edf03`; all three required CI jobs pass.
+- 2026-08-22 12:17Z — exact main SHA is deployed as Fly release `v2014`.
+- 2026-08-22 12:18Z — event `8131` canary succeeds on Lite
+  (`finish_reason=STOP`, `output_tokens=214`) and publishes Telegram post
+  `3686`; no strict fallback is used.
+- 2026-08-22 12:19Z — the remaining 20 unpublished writer-error jobs are
+  transactionally backed up and scheduled in normal ten-minute slots through
+  15:38Z, with same-day and next-day events first.
+- 2026-08-22 12:28Z — first scheduled catch-up event `8129` succeeds and
+  publishes Telegram post `3687`. Since `v2014`, the runtime mirror contains
+  two successful `tg_event_publish` Lite calls and zero provider errors,
+  `MAX_TOKENS`, or `INVALID_ARGUMENT` responses.
+- 2026-08-22 12:38Z — same-day event `8172` also completes on Lite with
+  `finish_reason=STOP` and no provider error, but fails closed on
+  `insufficient_lexical_support`. Investigation reproduces a candidate-
+  segmentation defect: whitespace collapse followed by sentence splitting
+  cuts the source title `Дюна. Империя` between two enum values and separates
+  it from the adjacent `[ТАКТИЧЕСКАЯ ИГРА-КОЛОДОСТРОЙ]` heading.
+- 2026-08-22 12:41–12:42Z — both approved Opus consultation paths are checked
+  before changing the LLM-first writer: `a-opus` requires a new Google OAuth
+  login and project Claude `Opus` reports `Not logged in`. This is recorded as
+  external-consultant blocker evidence; the implementation proceeds only with
+  the locally reproduced, deterministic source-segmentation fix and does not
+  weaken the prompt or grounding validator.
 
 ## Root Cause
 
@@ -136,6 +161,18 @@ application grounding validator. A first 12-member enum exceeded Gemini's
 opaque schema-complexity limit and returned `400 INVALID_ARGUMENT`; isolated
 probes established a provider-compatible cap of six fragments and 160
 characters per fragment before the next canary.
+
+The next controlled catch-up exposed a second, non-provider defect in how those
+bounded fragments were selected. `_tg_event_source_evidence` collapsed source
+line boundaries before `_tg_event_evidence_quote_candidates` sentence-split
+the corpus. A period inside a proper title therefore became a false sentence
+boundary, leaving no single permitted exact quote that could support the
+adjacent format heading plus full title. The writer did what the prompt asked,
+but the schema made a grounded version of that claim unrepresentable. The
+repair preserves line and paragraph boundaries, packs only adjacent lines from
+the same source paragraph up to the existing 160-character limit, and never
+packs across a blank-line/source boundary. Exact-substring and lexical checks,
+the six-value enum cap, and both token ceilings remain unchanged.
 
 ## Contributing Factors
 
@@ -207,6 +244,10 @@ characters per fragment before the next canary.
   transactionally to production backup table
   `incident_20260821_tg_writer_joboutbox_20260822_1149`; only job `64344`
   (event `8131`) was rearmed. No fallback-budget counter was changed manually.
+- Before bulk scheduling, the remaining 20 unpublished rows were copied again
+  to `incident_20260821_tg_writer_bulk_20260822_1219`; only `next_run_at` and
+  `updated_at` were changed, leaving attempts, errors, and the ordinary
+  ten-minute channel cadence intact.
 
 ## Corrective Actions
 
@@ -220,27 +261,38 @@ characters per fragment before the next canary.
   both Lite and strict 4o receive the same schema.
 - Added a regression assertion that every enumerated quote is an exact
   contiguous substring of the application evidence corpus.
+- Preserve organizer line/paragraph layout during corpus construction and pack
+  adjacent lines from only one source paragraph before sentence splitting;
+  regressions cover a dotted title plus heading and the no-cross-source rule.
 - Documented the structured-output contract and this incident regression gate.
 
 ## Follow-up Actions
 
 - [x] Merge the reviewed token/schema fix to `main`, deploy the exact reachable
   SHA, and attach release evidence here.
-- [ ] Merge and deploy the exact-quote enum follow-up, then repeat the event
+- [x] Merge and deploy the exact-quote enum follow-up, then repeat the event
   `8131` canary before any bulk rearm.
 - [ ] Run a controlled Lite-only retry/catch-up for the 24-event cohort, with
   the unpublished rows first, then reconcile the expanded backlog; record
   public URLs or exclusions.
 - [ ] Confirm the next normal publication window has no recurrence of this
   `consumer/model/code` tuple before moving the incident to `closed`.
+- [ ] Merge/deploy the evidence-segmentation follow-up and repeat event `8172`
+  before its catch-up slot is considered reconciled.
 
 ## Release And Closure Evidence
 
 - branch: `incident/INC-2026-08-21-tg-event-public-writer-max-tokens`
 - Draft PR (merged): <https://github.com/onedayonemasterpiece/events-bot-new/pull/548>
-- deployed SHA: `2c0edb85605cc9c23566aff85c34cf1747864745`
+- exact-quote follow-up PR (merged):
+  <https://github.com/onedayonemasterpiece/events-bot-new/pull/550>
+- schema-complexity follow-up PR (merged):
+  <https://github.com/onedayonemasterpiece/events-bot-new/pull/551>
+- evidence-segmentation follow-up: pending Draft PR from
+  `incident/INC-2026-08-21-tg-writer-evidence-segmentation`
+- deployed SHA: `709ef4127a86338e3b816fda2ba88058162edf03`
 - deploy path: clean exact `origin/main` checkout through
-  `scripts/deploy_fly_main.sh`; Fly release `v2012`, machine version `2012`
+  `scripts/deploy_fly_main.sh`; Fly release `v2014`, machine version `2014`
 - regression checks:
   - public-hook subset: `6 passed`;
   - `tests/test_llm_source_grounding.py tests/test_google_ai_client.py`:
@@ -254,10 +306,13 @@ characters per fragment before the next canary.
     regression now explicitly disables the independently tested past-event
     policy (`14 passed` for its source-identity contract file);
   - `py_compile` and `git diff --check`: passed.
-- post-deploy verification: `/healthz ready=true`, SQLite `quick_check=ok`;
-  controlled event `8131` Lite call ended `STOP` at 485 output tokens with no
-  `MAX_TOKENS`, then failed closed on exact quote validation. Bulk catch-up is
-  intentionally pending the quote-enum follow-up.
+- post-deploy verification: `/healthz ready=true`, machine checks `1/1`,
+  immutable image marker equals the deployed main SHA, and SQLite
+  `quick_check=ok`; controlled event `8131` and first scheduled catch-up event
+  `8129` both published through Lite (`3686`, `3687`). Runtime since `v2014`:
+  two `call_ok`, zero `call_error`, zero `MAX_TOKENS`, zero
+  `INVALID_ARGUMENT`. Nineteen unpublished rows remain durably scheduled at
+  ten-minute intervals; published-post reconciliation continues behind them.
 
 ## Prevention
 
