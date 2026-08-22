@@ -30,6 +30,11 @@ for a final batch or report completion without the corresponding Telegram
 receipt. If Penpot export is unavailable, the post is explicitly diagnostic
 and cannot be counted as visual parity.
 
+Comparison composition is aspect-ratio aware. Astro and Penpot remain at equal
+scale; choose the side-by-side or stacked canvas whose final aspect ratio is
+closer to square. Use Astro-left/Penpot-right for narrow surfaces and
+Astro-top/Penpot-bottom for wide horizontal rows and rails.
+
 For archetype reconstruction, capture the exact Astro route/fixture first, put
 that locked evidence next to a reconstruction made only from linked Penpot
 components, then inspect same-size side-by-side, 50% overlay and diff exports.

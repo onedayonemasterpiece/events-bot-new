@@ -38,6 +38,10 @@ sources in `/lab/design-system/`.
    receipt before starting the next case. Never defer ready comparisons to an
    end-of-run batch. A blocked Penpot export produces an immediate truthful
    diagnostic, not silence and not a visual `PASS`.
+   Keep comparison panels at equal scale and choose the layout whose final
+   canvas is closest to square: narrow specimens go side by side (Astro left,
+   Penpot right), while wide rows/rails stack vertically (Astro above, Penpot
+   below). Do not publish an unreadably wide two-up strip.
 8. Do not merge/deploy/generate production UI until the owner approves the
    browser/device result and promotion, migration, release, and post-deploy
    conformance gates are satisfied.
