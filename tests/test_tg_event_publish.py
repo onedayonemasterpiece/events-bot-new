@@ -584,6 +584,49 @@ def test_tg_event_quote_enum_splits_long_source_without_inventing_text() -> None
     assert all(quote in evidence for quote in candidates)
 
 
+def test_tg_event_quote_enum_keeps_multiline_heading_with_dotted_title() -> None:
+    source = (
+        "[ТАКТИЧЕСКАЯ ИГРА-КОЛОДОСТРОЙ]\n"
+        "Дюна. Империя + дополнение «Бессмертие»\n"
+        "Далёкое будущее. Человечество распространилось во Вселенной."
+    )
+    event = _event(source_text=source)
+
+    evidence = main._tg_event_source_evidence(event)
+    candidates = main._tg_event_evidence_quote_candidates(evidence)
+    expected_quote = (
+        "[ТАКТИЧЕСКАЯ ИГРА-КОЛОДОСТРОЙ] "
+        "Дюна. Империя + дополнение «Бессмертие»"
+    )
+
+    assert "\n" in evidence
+    assert any(candidate.startswith(expected_quote) for candidate in candidates)
+    verdict = main.claim_is_grounded(
+        "Тактическая игра-колодострой «Дюна. Империя» с дополнением «Бессмертие».",
+        evidence,
+        evidence_quote=next(
+            candidate for candidate in candidates if candidate.startswith(expected_quote)
+        ),
+        min_ratio=0.45,
+        min_matches=2,
+    )
+    assert verdict.ok
+    assert len(candidates) <= 6
+    assert all(len(candidate) <= 160 for candidate in candidates)
+
+
+def test_tg_event_quote_enum_never_packs_across_source_boundary() -> None:
+    evidence = "Заголовок первого источника\n\nНазвание второго источника"
+
+    candidates = main._tg_event_evidence_quote_candidates(evidence)
+
+    assert "Заголовок первого источника Название второго источника" not in candidates
+    assert candidates == [
+        "Заголовок первого источника",
+        "Название второго источника",
+    ]
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("promo_highlight", "expected_max_tokens"),
