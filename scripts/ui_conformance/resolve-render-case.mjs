@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { formatOccurrencePresentation, resolveOccurrenceFamily } from '../../site/src/lib/eventOccurrences.ts';
 import { resolveMobileEventCardMedia, resolveRelatedCardMediaTreatment } from '../../site/src/lib/relatedCardLayout.mjs';
+import { resolveEventCardSemantics } from './event-card-semantics.mjs';
 
 function parse(argv) { const out={}; for(let i=0;i<argv.length;i+=1){const key=argv[i]; if(!key.startsWith('--'))throw new Error(`Unexpected argument: ${key}`); const value=argv[i+1]; if(!value||value.startsWith('--'))throw new Error(`${key} requires a value`); out[key.slice(2)]=value;i+=1;} return out; }
 const args=parse(process.argv.slice(2));
@@ -24,13 +25,11 @@ const occurrence=formatOccurrencePresentation(resolveOccurrenceFamily(event,allE
 const months=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const dateText=(value,includeYear=false)=>{const [y,m,d]=value.split('-').map(Number);return `${d} ${months[m-1]}${includeYear?` ${y}`:''}`;};
 const displayDate=event.end_date&&event.end_date!==event.start_date?`${dateText(event.start_date,event.start_date.slice(0,4)!==corpus.reference_clock.current_date.slice(0,4))} — до ${dateText(event.end_date,event.end_date.slice(0,4)!==corpus.reference_clock.current_date.slice(0,4))}`:dateText(event.start_date,event.start_date.slice(0,4)!==corpus.reference_clock.current_date.slice(0,4));
-const status=[event.ticket?.status,event.ticket?.label,event.status_label,event.ticket?.note].filter(Boolean).join(' ').toLowerCase();
-const sold=/sold|unavailable|not[_\s-]?available|нет\s+бил|законч|распрод/u.test(status);
-let admission=sold?'Билеты закончились':event.ticket?.is_free?(/регистрац|registration|зарегистр/u.test(status)?'Бесплатно · регистрация':/запис|phone|телефон|коммент/u.test(status)?'Бесплатно · по записи':'Бесплатно · вход свободный'):event.ticket?.price_label||(/донат|пожертв/u.test(status)?'За донат':event.ticket?.kind==='phone'?'Запись по телефону':event.ticket?.kind==='ticket'?'Билеты':/билет/u.test(status)?'Билеты':event.status_label||event.ticket?.label||'Условия уточняются');
 const primary=(event.image_assets||[])[0]||null; const viewport=row.viewport_id.startsWith('mobile')?'mobile':'desktop';
 const mediaDecision=primary?(viewport==='mobile'?resolveMobileEventCardMedia(event):resolveRelatedCardMediaTreatment(event,4/5)):null;
 const assetRows=assetsManifest.assets.filter((item)=>item.fixture_id===row.fixture_id); const primaryAsset=assetRows.find((item)=>item.role==='primary')||null;
 const canCalendar=!event.end_date||event.end_date===event.start_date;
+const semantics=resolveEventCardSemantics(event,{calendarEligible:canCalendar,defaultCurrency:'RUB'});
 const frameWidth=Math.max(1,row.container_width-2);
 // The resolved case describes the frame selected by the consumer, not merely
 // the asset's intrinsic ratio. Mobile visual cards deliberately use the fixed
@@ -53,15 +52,21 @@ const resolved={
   source_database_snapshot_fingerprint:fixtureMeta.source_database_snapshot_fingerprint,
   reference_clock:corpus.reference_clock,
   asset_refs:assetRows.map((item)=>item.asset_id), asset_manifest_sha256:assetsManifest.assets_manifest_sha256,
-  resolved_content:{title:event.title,date:displayDate,time:event.display_time||null,place:[event.city,event.venue_name].filter(Boolean).join(' · ')||null,admission,counts:{likes:Number(event.likes_count||0),shares:Number(event.shares_count||0)},labels:{event_type:String(event.event_type||'').trim().toLowerCase()||null,occurrence:occurrence.compactLabel,not_interested:'Не интересно',calendar:canCalendar?'В календарь':null,share:'Поделиться'}},
+  resolved_content:{title:event.title,date:displayDate,time:event.display_time||null,place:[event.city,event.venue_name].filter(Boolean).join(' · ')||null,event_type:semantics.event_type,admission:semantics.admission,admission_cta:semantics.admission_cta,social_proof:semantics.social_proof,actions:semantics.actions,counts:{likes:semantics.social_proof.like.count,shares:semantics.social_proof.share.count},labels:{event_type:semantics.event_type.label,occurrence:occurrence.compactLabel,not_interested:semantics.actions.not_interested.label,calendar:semantics.actions.calendar.label,share:semantics.actions.share.label}},
   resolved_media:primary?{asset_id:primaryAsset?.asset_id||null,frame_role:'event-card-primary',frame_geometry:{outer_width:row.container_width,content_width:frameWidth,content_height:frameHeight,border_width:1,intrinsic_width:primary.width,intrinsic_height:primary.height},fit:mediaDecision?.fit||'contain',object_position:mediaDecision?.objectPosition||'50% 50%',crop_window:null,protected_regions:{ocr_boxes:primary.ocr_boxes||[],face_boxes:primary.face_boxes||[],valuable_region:primary.valuable_region||null},media_treatment:mediaDecision?.mediaTreatment||null,crop_reason:mediaDecision?.cropReason||null}:null,
-  resolved_visibility:{event_type:Boolean(event.event_type),place:Boolean(event.city||event.venue_name),admission:Boolean(admission),calendar:canCalendar,share:true,like:true,not_interested:true,media:Boolean(primary)},
+  resolved_visibility:{event_type:Boolean(semantics.event_type.label),place:Boolean(event.city||event.venue_name),admission:semantics.admission.visible,calendar:semantics.actions.calendar.present,share:semantics.actions.share.present,like:semantics.actions.like.present,not_interested:semantics.actions.not_interested.present,like_count:semantics.social_proof.like.visible,share_count:semantics.social_proof.share.visible,media:Boolean(primary)},
   resolved_nested_components:[
     {component_id:'event.media-frame',role:'media'}, {component_id:'event.action.not-interested',role:'negative-action'},
     ...(canCalendar?[{component_id:'event.action.calendar',role:'calendar-action'}]:[]),
-    {component_id:'event.action.share',role:'share-action'}, {component_id:'event.action.like',role:'like-action'},
-    ...(event.event_type?[{component_id:'event.meta.event-type',role:'event-type'}]:[]), {component_id:'event.meta.admission',role:'admission'}
+    {component_id:'event.action.share',role:'share-action',semantic_state:semantics.actions.share},
+    {component_id:'event.action.like',role:'like-action',semantic_state:semantics.actions.like},
+    ...(semantics.social_proof.share.visible?[{component_id:'event.social-proof.share',role:'share-proof',semantic_state:semantics.social_proof.share}]:[]),
+    ...(semantics.social_proof.like.visible?[{component_id:'event.social-proof.like',role:'like-proof',semantic_state:semantics.social_proof.like}]:[]),
+    ...(semantics.event_type.label?[{component_id:'event.meta.event-type',role:'event-type',semantic_state:semantics.event_type}]:[]),
+    ...(semantics.admission.visible?[{component_id:'event.meta.admission',role:'admission',semantic_state:semantics.admission}]:[]),
+    ...(semantics.admission_cta.present?[{component_id:'event.cta.admission',role:'admission-cta',semantic_state:semantics.admission_cta}]:[])
   ],
+  semantic_anomalies:semantics.anomalies,
   resolved_props:{variant:'split-actions',desktopRelatedCrop:viewport==='desktop',mobileFlowMedia:viewport==='mobile',presentation:'dark-shell'},
   expected_candidate_deltas:row.expected_candidate_deltas||[]
 };

@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { renderSpecimenPage } from '../current_ui_resource_graph/v1/specimens/materialize.mjs';
 import { assertImmutableCheckout } from './immutable-checkout.mjs';
+import { resolveEventCardSemantics } from './event-card-semantics.mjs';
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), 'utf8'));
@@ -121,19 +122,30 @@ function unique(values) {
 }
 
 export function summarizeInventory(rows) {
+  const semantic = (row) => row.semantic || {
+    event_type:row.event_type,
+    admission:{...row.admission,state:row.admission?.label ? 'legacy-label' : 'unspecified'},
+    actions:row.actions,
+    social_proof:{like:{count:row.actions.like.base_count},share:{count:row.actions.share.base_count}},
+    anomalies:[],
+  };
   return {
-    event_type_labels: unique(rows.map((row) => row.event_type.label).filter(Boolean)),
-    admission_labels: unique(rows.map((row) => row.admission.label).filter(Boolean)),
+    event_type_semantic_values: unique(rows.map((row) => semantic(row).event_type.semantic_value).filter(Boolean)),
+    event_type_labels: unique(rows.map((row) => semantic(row).event_type.label).filter(Boolean)),
+    admission_states: unique(rows.map((row) => semantic(row).admission.state).filter(Boolean)),
+    admission_labels: unique(rows.map((row) => semantic(row).admission.visible === false ? null : semantic(row).admission.label).filter(Boolean)),
+    source_rendered_admission_labels: unique(rows.map((row) => row.source_rendered?.admission?.label || row.admission?.label).filter(Boolean)),
     occurrence_labels: unique(rows.map((row) => row.occurrence.label).filter(Boolean)),
-    action_labels: unique(rows.flatMap((row) => Object.values(row.actions).map((action) => action.label)).filter(Boolean)),
-    like_count_values: unique(rows.map((row) => row.actions.like.base_count)),
-    share_count_values: unique(rows.map((row) => row.actions.share.base_count)),
+    action_labels: unique(rows.flatMap((row) => Object.values(semantic(row).actions).map((action) => action.label)).filter(Boolean)),
+    like_count_values: unique(rows.map((row) => semantic(row).social_proof.like.count)),
+    share_count_values: unique(rows.map((row) => semantic(row).social_proof.share.count)),
+    semantic_anomalies: unique(rows.flatMap((row) => semantic(row).anomalies)),
     branch_families: unique(rows.flatMap((row) => row.branch_families)),
   };
 }
 
 export function buildInventory(args) {
-  for (const key of ['astro-source-site', 'astro-source-sha', 'tooling-root', 'tooling-sha', 'corpus-root', 'harness', 'output']) {
+  for (const key of ['astro-source-site', 'astro-source-sha', 'tooling-root', 'tooling-sha', 'corpus-root', 'semantic-census', 'harness', 'output']) {
     if (!args[key]) throw new Error(`--${key} is required`);
   }
   const site = resolve(args['astro-source-site']);
@@ -144,6 +156,8 @@ export function buildInventory(args) {
   const astroSource = assertImmutableCheckout({ root: resolve(site, '..'), expectedSha: args['astro-source-sha'], label: 'Astro source checkout' });
   const tooling = assertImmutableCheckout({ root: toolingRoot, expectedSha: args['tooling-sha'], label: 'Conformance tooling checkout' });
   const corpus = readJson(join(corpusRoot, 'corpus.json'));
+  const semanticCensus = readJson(args['semantic-census']);
+  if (semanticCensus.schema_version !== 'event_card_large_production_semantic_census.v1' || semanticCensus.public_projection?.event_count !== 703) throw new Error('Semantic production census binding is invalid');
   if (corpus.corpus_id !== 'ui-reference-events.v1' || corpus.version !== 'v1' || corpus.fixtures.length !== 8) {
     throw new Error('Chip inventory is bounded to the exact eight-fixture Golden Event Corpus v1');
   }
@@ -158,9 +172,11 @@ export function buildInventory(args) {
   symlinkSync(nodeModules, join(harness, 'node_modules'), 'dir');
   writeFileSync(join(harness, 'package.json'), `${JSON.stringify({ name: 'event-card-chip-inventory', private: true, type: 'module', scripts: { build: 'astro build' } }, null, 2)}\n`);
   writeFileSync(join(harness, 'astro.config.mjs'), "import { defineConfig } from 'astro/config';\nexport default defineConfig({output:'static',trailingSlash:'always',vite:{server:{fs:{strict:false}}}});\n");
+  const fixtureEvents = new Map();
   for (const fixture of corpus.fixtures) {
     const wrapper = readJson(join(corpusRoot, fixture.payload_path));
     if (wrapper.preview_event_sha256 !== fixture.preview_event_sha256) throw new Error(`Fixture identity mismatch: ${fixture.fixture_id}`);
+    fixtureEvents.set(fixture.fixture_id, wrapper.preview_event);
     const row = { id: fixture.fixture_id, renderer: 'event-card', source_paths: ['src/components/EventCard.astro'], props: { variant: 'split-actions', desktopRelatedCrop: false, mobileFlowMedia: false }, container: { width: 474 } };
     writeFileSync(join(harness, 'src/pages/chip-inventory', `${fixture.fixture_id}.astro`), renderSpecimenPage(row, { event: wrapper.preview_event, trace: { corpus_id: corpus.corpus_id, fixture_id: fixture.fixture_id } }));
   }
@@ -171,11 +187,20 @@ export function buildInventory(args) {
     env: { ...process.env, TZ: corpus.reference_clock.timezone, LANG: 'ru_RU.UTF-8', PUBLIC_STATIC_SITE_CURRENT_DATE: corpus.reference_clock.current_date, PUBLIC_STATIC_SITE_REFERENCE_ISO: corpus.reference_clock.reference_iso, PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE: 'off' },
   });
   if (build.status !== 0) throw new Error(`Astro chip inventory build failed:\n${build.stderr.slice(-4000)}\n${build.stdout.slice(-4000)}`);
-  const cases = corpus.fixtures.map((fixture) => extractGeneratedChipState(readFileSync(join(harness, 'dist/chip-inventory', fixture.fixture_id, 'index.html'), 'utf8'), fixture));
+  const cases = corpus.fixtures.map((fixture) => {
+    const sourceRendered = extractGeneratedChipState(readFileSync(join(harness, 'dist/chip-inventory', fixture.fixture_id, 'index.html'), 'utf8'), fixture);
+    const semantics = resolveEventCardSemantics(fixtureEvents.get(fixture.fixture_id), { calendarEligible:sourceRendered.calendar.eligible, defaultCurrency:semanticCensus.admission.current_renderer_currency_default });
+    return {
+      ...sourceRendered,
+      source_rendered:{ event_type:sourceRendered.event_type, admission:sourceRendered.admission, actions:sourceRendered.actions },
+      semantic:semantics,
+      branch_families:unique([...sourceRendered.branch_families, `event-type-value:${semantics.event_type.semantic_value}`, `admission-state:${semantics.admission.state}`, `admission-visible:${semantics.admission.visible}`, `like-proof:${semantics.social_proof.like.visible ? 'present' : 'absent'}`, `share-proof:${semantics.social_proof.share.visible ? 'present' : 'absent'}`]),
+    };
+  });
   const componentPath = join(site, 'src/components/EventCard.astro');
   const occurrencePath = join(site, 'src/components/EventOccurrenceLabel.astro');
   const report = {
-    schema_version: 'event_card_large_chip_inventory.v1',
+    schema_version: 'event_card_large_chip_inventory.v2',
     corpus_id: corpus.corpus_id,
     corpus_sha256: corpus.corpus_sha256,
     reference_clock: corpus.reference_clock,
@@ -183,6 +208,8 @@ export function buildInventory(args) {
     conformance_tooling_repository_sha: tooling.sha,
     generation_mode: 'real-astro-static-build/exact-event-card/split-actions',
     production_source_mutated: false,
+    semantic_projection_mode: 'adapter-only/pre-penpot-acceptance',
+    production_census:{ schema_version:semanticCensus.schema_version, exact_source_artifact_sha256:semanticCensus.authoritative_exact_census.sha256, event_count:semanticCensus.public_projection.event_count, rendered_event_type_label_count:semanticCensus.event_type.rendered_label_count, rendered_price_label_count:semanticCensus.admission.rendered_price_label_count, component_variant_count:semanticCensus.event_type.component_variant_count },
     source_files: [
       { path: 'site/src/components/EventCard.astro', sha256: sha256(readFileSync(componentPath)) },
       { path: 'site/src/components/EventOccurrenceLabel.astro', sha256: sha256(readFileSync(occurrencePath)) },

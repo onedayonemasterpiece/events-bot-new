@@ -1,0 +1,221 @@
+{
+  "schema_version": "event_card_large_production_semantic_census.v1",
+  "observed_at": "2026-08-22T16:31:19.666421+00:00",
+  "selection": "exact-current-public-projection/runtime-resolver-predicate",
+  "authoritative_exact_census": {
+    "artifact_name": "event-card-semantic-exact-public-census.json",
+    "schema_version": "event_card_semantic_exact_public_census.v1",
+    "sha256": "30c8ac5adfaeff17c463191714f660b3ed5d0a00aa8799e90f2be70cb1ca9993",
+    "byte_length": 11713,
+    "aggregate_only": true,
+    "row_data_included": false,
+    "production_mutated": false,
+    "repository_head": "8ac67d6110870accf2d8b8295e0a9d83ef5ac87e",
+    "reference_date": "2026-08-22",
+    "role": "authoritative exact public-projection resolver census"
+  },
+  "supporting_raw_db_census": {
+    "path": "artifacts/codex/event-card-semantic-closure/production-census.json",
+    "sha256": "3578bee41bda0b5e32e950fd1f27a2561b1ca3714ce7ac9bdd8cc4068e36ff08",
+    "role": "supporting broad raw-DB aggregate only; not authoritative for the 703-event projection vocabulary"
+  },
+  "public_projection": {
+    "event_count": 703,
+    "source_table": "event",
+    "sql_predicate": "date GLOB '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND coalesce(nullif(trim(lifecycle_status),''),'active')='active' AND coalesce(silent,0)=0 AND (date>=:reference_date OR (end_date GLOB '20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND end_date>=:reference_date))",
+    "post_sql_gates": [
+      "identity_status=canonical",
+      "merged_into_event_id absent/zero",
+      "valid ISO start/end dates",
+      "public prompt/code leakage rejection",
+      "public prose-location leakage rejection"
+    ]
+  },
+  "event_type": {
+    "rendered_label_count": 31,
+    "component_variant_count": 1,
+    "contract": "one semantic component variant; normalized semantic value and variable rendered label are content properties",
+    "rendered_label_counts": {
+      "movie": 1,
+      "therapy": 1,
+      "акция": 2,
+      "вечеринка": 5,
+      "викторина": 1,
+      "встреча": 45,
+      "выставка": 54,
+      "дегустация": 2,
+      "день открытых дверей": 2,
+      "игра": 2,
+      "кинопоказ": 79,
+      "конференция": 1,
+      "концерт": 224,
+      "лекция": 24,
+      "мастер-класс": 40,
+      "открытие": 1,
+      "перформанс": 1,
+      "праздник": 2,
+      "представление": 1,
+      "презентация": 1,
+      "соревнование": 1,
+      "соревнования": 8,
+      "спектакль": 89,
+      "спорт": 11,
+      "стендап": 4,
+      "театр": 1,
+      "фестиваль": 23,
+      "церемония": 2,
+      "шоу": 2,
+      "экскурсия": 60,
+      "ярмарка": 13
+    },
+    "observed_raw_language_leaks": [
+      "movie",
+      "therapy"
+    ]
+  },
+  "admission": {
+    "source_state_counts": {
+      "free-entry": 141,
+      "free-registration": 20,
+      "phone": 7,
+      "priced": 233,
+      "registration-only": 16,
+      "sold-out": 9,
+      "ticketed-generic": 181,
+      "unknown": 96
+    },
+    "contract_state_mapping": {
+      "priced": "priced",
+      "ticketed-generic": "ticketed",
+      "free-entry": "free_entry",
+      "unknown": "unspecified",
+      "free-registration": "free_registration",
+      "registration-only": "registration_required",
+      "sold-out": "sold_out",
+      "phone": "phone_booking"
+    },
+    "rendered_static_output_counts": {
+      "Бесплатно · вход свободный": 141,
+      "Бесплатно · регистрация": 20,
+      "Билеты": 181,
+      "Билеты закончились": 9,
+      "Запись по телефону": 7,
+      "Регистрация": 16,
+      "Условия уточняются": 96
+    },
+    "rendered_price_label_count": 61,
+    "rendered_price_event_count": 233,
+    "rendered_price_shape_counts": {
+      "range": 50,
+      "single": 183
+    },
+    "rendered_price_label_counts": {
+      "0 ₽": 2,
+      "1000 ₽": 27,
+      "1000–1500 ₽": 1,
+      "1000–2500 ₽": 1,
+      "1090 ₽": 1,
+      "1100 ₽": 2,
+      "1200 ₽": 13,
+      "150 ₽": 1,
+      "1500 ₽": 20,
+      "1500–2000 ₽": 4,
+      "150–250 ₽": 2,
+      "150–300 ₽": 1,
+      "1600 ₽": 1,
+      "1690 ₽": 1,
+      "1700 ₽": 2,
+      "1799 ₽": 3,
+      "1800 ₽": 7,
+      "1900 ₽": 3,
+      "199 ₽": 1,
+      "1999 ₽": 1,
+      "2000 ₽": 13,
+      "200–350 ₽": 1,
+      "2100 ₽": 3,
+      "2200 ₽": 1,
+      "249 ₽": 1,
+      "250 ₽": 2,
+      "2500 ₽": 7,
+      "2600 ₽": 2,
+      "2800 ₽": 1,
+      "300 ₽": 7,
+      "3000 ₽": 1,
+      "300–1110 ₽": 1,
+      "350 ₽": 5,
+      "3500 ₽": 1,
+      "390 ₽": 1,
+      "3990 ₽": 1,
+      "400 ₽": 4,
+      "400–700 ₽": 1,
+      "4500 ₽": 10,
+      "499 ₽": 1,
+      "500 ₽": 7,
+      "5000 ₽": 1,
+      "590 ₽": 5,
+      "600 ₽": 1,
+      "600–1000 ₽": 3,
+      "600–1200 ₽": 3,
+      "600–2400 ₽": 2,
+      "600–700 ₽": 1,
+      "650–800 ₽": 3,
+      "690 ₽": 1,
+      "700 ₽": 5,
+      "700–1000 ₽": 3,
+      "700–1200 ₽": 3,
+      "750 ₽": 1,
+      "790 ₽": 4,
+      "800 ₽": 6,
+      "800–1000 ₽": 4,
+      "800–1500 ₽": 15,
+      "800–1800 ₽": 1,
+      "900 ₽": 5,
+      "990 ₽": 1
+    },
+    "currency_source_column": null,
+    "current_renderer_currency_default": "RUB",
+    "current_renderer_currency_symbol": "₽",
+    "invalid_zero_price_count": 2,
+    "obsolete_unspecified_label": "Условия уточняются",
+    "owner_decision": "unspecified and invalid price are hidden; obsolete fallback is not a valid semantic specimen"
+  },
+  "actions_and_social": {
+    "action_contract": "CTA and interaction actions are semantic actions separate from social-proof count content",
+    "fixed_card_actions": {
+      "like": "always",
+      "not_interested": "always",
+      "share": "always"
+    },
+    "ticket_action_href_domain_evidence": {
+      "absent": 238,
+      "present": 465
+    },
+    "social_proof": {
+      "like": {
+        "positive": 557,
+        "absent": 146,
+        "max": 381
+      },
+      "share": {
+        "positive": 205,
+        "absent": 498,
+        "max": 116
+      }
+    },
+    "calendar": {
+      "absent": 115,
+      "eligible": 588
+    }
+  },
+  "code_paths": {
+    "admission_render": "site/src/lib/events.ts:isTicketSoldOut,eventAdmissionLabel; site/src/components/EventCard.astro:data-card-status",
+    "calendar_render": "site/src/lib/events.ts:isCalendarEligible; site/src/components/EventCard.astro:data-calendar-action",
+    "category_projection": "site/src/lib/events.ts:EVENT_TYPE_TAGS,eventCategory",
+    "event_type_projection": "site/scripts/export-production-preview-data.py:structured_occurrence_projection,source_event_type_conflicts,infer_event_type,build_event",
+    "event_type_render": "site/src/components/EventCard.astro:eventTypeLabel,data-card-type",
+    "pricing_projection": "site/scripts/export-production-preview-data.py:price_label,ticket_info,status_label,apply_preview_overrides",
+    "public_predicate": "site/scripts/export-production-preview-data.py:event_active_where,public_projection_gate_reason",
+    "social_projection": "site/scripts/export-production-preview-data.py:collect_source_urls,source_metrics,build_event",
+    "social_render": "site/src/components/EventCard.astro:likeCountLabel,shareCountLabel,data-feedback-count,data-share-count"
+  }
+}

@@ -100,7 +100,7 @@ export function runBatch(values) {
 }
 
 const help = `run-current-v2 commands:
-  chip-inventory --astro-source-site <site> --astro-source-sha <40hex> --tooling-root <repo> --tooling-sha <40hex> --corpus-root <v1> --node-modules <dir> --harness <dir> --output <json>
+  chip-inventory --astro-source-site <site> --astro-source-sha <40hex> --tooling-root <repo> --tooling-sha <40hex> --corpus-root <v1> --semantic-census <json> --node-modules <dir> --harness <dir> --output <json>
   run-case --case <json> --resolved <json> --design-cli <ui-conformance.mjs> --design-sha <40hex> --astro-source-site <site> --astro-sha <40hex> --tooling-root <repo> --tooling-sha <40hex> --corpus-root <v1> --font-manifest <json> --node-modules <dir> --workspace-root <dir> --artifacts-root <dir> --penpot <png> --penpot-receipt <json> --penpot-facts <json> --agent-review <json>
   run-batch --batch-manifest <seven-case-json> plus the shared run-case checkout/tooling/workspace arguments
 `;
