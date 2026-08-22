@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -94,3 +95,53 @@ def test_receipt_is_one_frozen_post_snapshot_read(
     removed = delete_immutable_snapshot(snapshot, tmp_path / "snapshot.manifest.json")
     assert removed > 0
     assert not frozen.exists()
+
+
+def test_snapshot_catalog_revision_uses_vector_probe_free_projection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    snapshot = tmp_path / "snapshot.sqlite"
+    sqlite3.connect(snapshot).close()
+
+    class FakeExporter:
+        SKIP_IMAGE_PROBES = False
+
+        @staticmethod
+        def split_current_datetime(_value: str, current_date: str) -> tuple[str, str]:
+            return current_date, "12:00"
+
+        @staticmethod
+        def fetch_rows(*_args, **_kwargs) -> list[dict[str, int]]:
+            return [{"id": 42}]
+
+        @staticmethod
+        def event_participants_for_events(*_args, **_kwargs) -> dict[int, list]:
+            return {42: []}
+
+        @staticmethod
+        def event_video_assets_for_events(*_args, **_kwargs) -> dict[int, list]:
+            return {42: []}
+
+        def build_event(self, *_args, **_kwargs) -> dict[str, int]:
+            assert self.SKIP_IMAGE_PROBES is True
+            return {"id": 42}
+
+        @staticmethod
+        def normalize_linked_occurrences(_events: list[dict[str, int]]) -> None:
+            return None
+
+        @staticmethod
+        def exported_search_catalog_revision(_events: list[dict[str, int]]) -> str:
+            return "a" * 64
+
+    exporter = FakeExporter()
+    monkeypatch.setattr(search_snapshot, "_load_exporter", lambda: exporter)
+
+    revision = search_snapshot.snapshot_search_catalog_revision(
+        snapshot,
+        current_date="2026-08-22",
+        current_datetime="2026-08-22T12:00:00+02:00",
+    )
+
+    assert revision == "a" * 64
+    assert exporter.SKIP_IMAGE_PROBES is False

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+- Fixed: completed the production repair for the August Smart Update
+  deduplication regression. Three reviewed, hash/CAS-guarded manifest
+  generations merged 55 obsolete Event shells while preserving source, fact,
+  poster and audit history; every verify passed and every second apply was a
+  no-op. Obsolete Telegram/VK/Telegraph/ICS projections were cleaned without
+  deleting canonical shared posts, contaminated programme sources were
+  removed from canonicals `7915/8083`, Event `8285` was restored as the
+  source-grounded distinct 16:00 action, and the corrected Event `3216` VK
+  projection was reconciled from postponed id `10005` to live id `10007`.
+  Final vector convergence covers 100% of eligible `related_v1` and
+  `search_v3` documents with zero provider calls on the no-op pass; the
+  untruncated production census has no unresolved hard duplicates. The static
+  immutable-snapshot barrier now hashes the same deterministic, probe-free
+  Search projection as the vector owner, so transient remote image-dimension
+  results cannot strand an unchanged catalog behind
+  `vector_barrier_catalog_revision_pending`.
+
 - Fixed: the existing Smart Update **merge-path** identity gate now closes
   through the same typed `FINAL_MATCH` / source-grounded `FINAL_DISTINCT` /
   durable `FINAL_RETRY` contract as the widened create-path adjudicator.

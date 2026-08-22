@@ -8,6 +8,7 @@ import json
 import os
 import sqlite3
 import sys
+import threading
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
@@ -20,6 +21,7 @@ from static_site_release import (
 )
 
 MAX_RECEIPT_BYTES = 2_097_152
+_EXPORTER_PROJECTION_LOCK = threading.Lock()
 
 
 @lru_cache(maxsize=1)
@@ -53,33 +55,46 @@ def snapshot_search_catalog_revision(
     )
     connection.row_factory = sqlite3.Row
     try:
-        effective_date, effective_time = exporter.split_current_datetime(
-            current_datetime, current_date
-        )
-        rows = exporter.fetch_rows(
-            connection,
-            None,
-            effective_date,
-            [],
-            current_time=effective_time,
-            focus_date_from="",
-            focus_date_to="",
-        )
-        event_ids = [int(row["id"]) for row in rows]
-        participants = exporter.event_participants_for_events(connection, event_ids)
-        videos = exporter.event_video_assets_for_events(connection, event_ids)
-        events = [
-            exporter.build_event(
-                connection,
-                row,
-                effective_date,
-                participants=participants.get(int(row["id"]), []),
-                video_assets=videos.get(int(row["id"]), []),
-            )
-            for row in rows
-        ]
-        exporter.normalize_linked_occurrences(events)
-        return str(exporter.exported_search_catalog_revision(events))
+        # The durable vector owner deliberately uses the exporter's
+        # --skip-image-probes fast path. The snapshot barrier must hash that
+        # same deterministic Search projection rather than a network-enriched
+        # media variant, otherwise transient image probe results can keep an
+        # unchanged catalog permanently behind the barrier.
+        with _EXPORTER_PROJECTION_LOCK:
+            previous_skip_image_probes = exporter.SKIP_IMAGE_PROBES
+            exporter.SKIP_IMAGE_PROBES = True
+            try:
+                effective_date, effective_time = exporter.split_current_datetime(
+                    current_datetime, current_date
+                )
+                rows = exporter.fetch_rows(
+                    connection,
+                    None,
+                    effective_date,
+                    [],
+                    current_time=effective_time,
+                    focus_date_from="",
+                    focus_date_to="",
+                )
+                event_ids = [int(row["id"]) for row in rows]
+                participants = exporter.event_participants_for_events(
+                    connection, event_ids
+                )
+                videos = exporter.event_video_assets_for_events(connection, event_ids)
+                events = [
+                    exporter.build_event(
+                        connection,
+                        row,
+                        effective_date,
+                        participants=participants.get(int(row["id"]), []),
+                        video_assets=videos.get(int(row["id"]), []),
+                    )
+                    for row in rows
+                ]
+                exporter.normalize_linked_occurrences(events)
+                return str(exporter.exported_search_catalog_revision(events))
+            finally:
+                exporter.SKIP_IMAGE_PROBES = previous_skip_image_probes
     finally:
         connection.close()
 
