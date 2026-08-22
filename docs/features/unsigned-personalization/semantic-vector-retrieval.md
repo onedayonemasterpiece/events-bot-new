@@ -356,6 +356,11 @@ rows, fails/retries on an incomplete provider-call cap, and persists structured
 counts/errors in `ops_run(kind='event_vector_sync')`. The vector-only export
 skips remote image-dimension probes; it reuses canonical media URLs/card facts
 without turning a semantic projection into a slow media-quality crawl.
+The Fly-side immutable-snapshot barrier hashes that same probe-free projection.
+Remote dimension probes are presentation enrichment and must not make an
+otherwise unchanged Search receipt drift according to network availability;
+the comparator temporarily enables the exporter's probe-free mode under a
+process lock and restores the previous exporter setting afterward.
 
 StaticSiteBuilder remains a build consumer. A manual canary/backfill may
 explicitly refresh vectors, but production keeps

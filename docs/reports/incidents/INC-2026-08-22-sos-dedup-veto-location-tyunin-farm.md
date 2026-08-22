@@ -82,6 +82,30 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   misclassify reminder `8284` against owner `3216` as
   `related_but_distinct`; legacy merge-path application creates it. The
   post-repair census detects both recurrences, so the incident remains open.
+- `2026-08-22 18:19:42Z` — PR #556 is deployed from exact
+  `origin/main@2c2a10c1688f1b1a58521da44898dbe0905f0936` as Fly version
+  `2018`. The older merge path now uses the same terminal
+  `FINAL_MATCH / FINAL_DISTINCT / FINAL_RETRY` contract.
+- `2026-08-22 18:44:36Z` — final census manifest v4 freezes 13 true
+  duplicate clusters / 18 obsolete Events and five reviewed
+  `KEEP_DISTINCT` pairs. Apply succeeds, verify is clean and the second
+  apply is a zero-change no-op.
+- `2026-08-22 19:14:25Z` — the final untruncated census contains 661
+  active/upcoming canonical Events. Its only three hard-signal pairs are
+  source-reviewed legitimate occurrences; unresolved hard duplicates are
+  zero.
+- `2026-08-22 19:12..19:14Z` — post-fix backend ingestion proves both
+  terminal safety directions: `FINAL_MATCH` updates owner `7895` with no
+  create, `FINAL_RETRY` creates nothing, and a separate product rejection
+  creates nothing.
+- `2026-08-22 19:24..19:38Z` — the final static catch-up repeatedly stops
+  before Kaggle with `vector_barrier_catalog_revision_pending`. A read-only
+  production comparison proves all Event public revisions are unchanged, but
+  the barrier's in-process exporter performs best-effort remote image probes
+  while the canonical vector owner intentionally uses `--skip-image-probes`.
+  The same immutable catalog therefore hashes differently according to media
+  probe results. The comparator is corrected to use the vector owner's
+  deterministic probe-free projection; the barrier itself remains mandatory.
 
 ## Root Cause
 
@@ -218,6 +242,54 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 `prod-active-upcoming-census-candidates.json`, and
 `strong-cluster-source-evidence.md`.
 
+### Final post-repair census
+
+The final source-complete snapshot was captured at
+`2026-08-22T19:14:25.650403Z`, has SHA-256
+`5e083181783bc37670329ef7a5c1bfc359f7dc8686c5e512c66c5d034846cecf`,
+and passed `PRAGMA quick_check=ok`.
+
+| measure | final result |
+| --- | ---: |
+| active/upcoming canonical Events | 661 |
+| attached sources / facts / posters | 1,805 / 15,209 / 4,381 |
+| recall-biased candidate pairs | 1,313 |
+| hard-duplicate signal pairs | 3 |
+| unresolved hard duplicates | **0** |
+
+The three hard-signal pairs are all reviewed `KEEP_DISTINCT` occurrence
+families: `7020/7021` (programme range versus 27 August performance),
+`7764/7765` (series versus 29 August occurrence), and `7793/7794`
+(series versus 26 August occurrence). Additional source-grounded negatives
+include different exhibitions `6995/7488` and the 12:00 versus 16:00
+Flag Day actions `8149/8285`. Event `8285` was repaired in place to the
+source-grounded title `Акция «Три цвета Родины»` and 16:00 start.
+
+The applied repair generations were:
+
+- manifest v2: 21 merge clusters / 35 obsolete Events / three
+  `KEEP_DISTINCT`;
+- manifest v3 SHA-256
+  `9af991ca89f864475c2388b75f7a567e0ea32a5bd9a16097bfd9608979e7bf6f`:
+  rollout recurrences `8280 → 7907` and `8284 → 3216`;
+- manifest v4 SHA-256
+  `9a637f36271e0a75424a00270c5ec9ae37c2197946ceaeb3c2fc84473076d34e`:
+  13 merge clusters / 18 obsolete Events / five `KEEP_DISTINCT`.
+
+Every generation used the incident-safe manifest/hash/CAS flow, preserved
+Event shells, sources, facts, poster audit and identity decisions, cancelled
+obsolete pending work, kept the pre-existing foreign-key baseline at
+`195 → 195`, passed `quick_check`, verified separately, and produced a
+zero-change second apply.
+
+Cause classification for the repaired clusters was dominated by the two
+control-flow defects: original owner/veto fall-through and the older
+merge-path unsafe/distinct conflation. The remainder comprised reminder
+updates, recurring/rolling occurrence refreshes, self-publication replays and
+programme-carrier contamination. Shared-source/shared-poster false positives
+were retained as legitimate multi-child or occurrence pairs rather than bulk
+merged.
+
 ## Automation Contract
 
 ### Treat as regression guard when
@@ -261,17 +333,31 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 - backup/hash, apply/verify/second-apply, projection and social receipts;
 - exact-main SHA/image, health, quick-check and two ingestion run IDs.
 
-## Immediate Mitigation
+## Mitigation And Production Repair
 
-- Evidence collection was read-only; no heuristic bulk merge was run.
-- Event `8242` and its pending publication work were marked as repair risks.
-- Prevention is deployed from exact `origin/main` at Fly version `2016`.
-- The first manifest apply failed on the production raw-byte poster uniqueness
-  index and fully rolled back. Repair is blocked until the tool's poster move
-  contract recognizes both `poster_hash` and non-empty `raw_sha256`; a
-  disagreement between those keys must fail closed rather than choose a row.
-- The generic duplicate utility is prohibited: it deletes rows and can erase
-  facts/poster history or repoint historical jobs.
+- No heuristic bulk merge or generic row-deleting duplicate utility was used.
+- The first manifest attempt hit the production raw-byte poster uniqueness
+  index and fully rolled back. PR #555
+  (`b662a4bef81efa431ae4642ceb62caa80e07973c`, Fly version `2017`)
+  made the repair tool honor both derived `poster_hash` and non-empty
+  `raw_sha256` identities.
+- PR #556
+  (`2c2a10c1688f1b1a58521da44898dbe0905f0936`, Fly version `2018`)
+  closed the remaining legacy merge-path create reachability. No additional
+  normal-path LLM operation was added.
+- The combined repair merged 55 obsolete Event shells across the reviewed
+  manifests. Social cleanup archived/redirected their Telegraph pages, cleared
+  ICS projections, removed only unique obsolete managed VK/Telegram posts and
+  preserved public references shared with a canonical owner.
+- Event `3216` was restored from official exhibition evidence (including the
+  6 September end date), its Telegram projection was edited in place, and its
+  corrected VK post published with ten attachments. VK changed postponed id
+  `10005` to live id `10007`; the Event and publication ledger were
+  reconciled to `wall-231920894_10007`.
+- Programme-carrier contamination was removed from canonicals `7915` and
+  `8083` with an audited backup. Event `8285` was repaired as a distinct
+  source-grounded 16:00 action. The operation removed 18 unrelated source
+  bindings and 79 facts without increasing the foreign-key baseline.
 
 ## Corrective Actions
 
@@ -287,7 +373,7 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
   evidence is mandatory for distinct, `unsafe_to_merge` retries, and
   overlapping same-title/same-ticket long-event repost drift fails closed.
 - [x] Deploy prevention from exact `origin/main`; verify health and SQLite.
-- [ ] Deploy raw-byte-safe repair hotfix, apply reviewed true duplicates and
+- [x] Deploy raw-byte-safe repair hotfix, apply reviewed true duplicates and
   rebuild projections.
 
 ## Acceptance Criteria
@@ -303,18 +389,40 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 
 ## Release And Closure Evidence
 
-- prevention implementation/tests: PR #554, exact-main SHA
-  `c0103be2c7ddc760486bd79e19825a69ceae4165`
-- prevention deploy: Fly version `2016`, exact remote SHA `c0103be2...`, healthy
-  `/healthz`, `PRAGMA quick_check=ok`
-- first repair apply: transaction rolled back on
-  `UNIQUE(eventposter.event_id,eventposter.raw_sha256)`; receipt count `0`,
-  selected merged-row count `0`
-- production repair/projections/social cleanup: blocked until the
-  raw-byte-safe repair hotfix is on exact `origin/main`
-- repair-hotfix deploy and final `/healthz`: pending
-- two ingestion iterations: pending
-- closure: open until every acceptance gate has evidence
+- prevention implementation: PR #554
+  (`c0103be2c7ddc760486bd79e19825a69ceae4165`, Fly `2016`) and
+  PR #556 (`2c2a10c1688f1b1a58521da44898dbe0905f0936`, Fly `2018`);
+- repair safety: PR #555
+  (`b662a4bef81efa431ae4642ceb62caa80e07973c`, Fly `2017`);
+- tests: 121 focused merge-path tests pass, including exact production-shaped
+  `3216/8284` and `7907/8280`; the full named positive/negative corpus,
+  replay ×2 and two-worker replay pass with no added normal-path call;
+- Fly deployment `2018` runs exact `origin/main@2c2a10c16`; machine
+  `48e419df93e078`, image
+  `deployment-01M0NB137BFTE9NSBK769YDA9S`; `/healthz` is ready and SQLite
+  `quick_check=ok`;
+- manifest v4 apply/verify/second-apply: `applied / verified / noop`;
+  candidate/source/poster violations all zero, foreign-key baseline
+  `195 → 195`;
+- social cleanup v4: 18/18 merged, 18/18 ICS cleared and 18/18 Telegraph
+  redirects verified; three unique VK posts were deleted and four were already
+  absent; five older Telegram posts were removed through the approved local
+  E2E human session and verified absent;
+- vector/search: `ops_run=6986` removed 18 stale Events and embedded two
+  changed documents; `6987`, `6988`, `6995` and `6997` completed with
+  660/660 documents in each kind, 1,320 unchanged embeddings and zero provider
+  calls on the convergence passes. Final coverage is 100% for
+  `related_v1` and `search_v3`;
+- final backend ingestion: `ops_run=6992` reached `FINAL_MATCH` and updated
+  existing owner `7895` with zero creates; `ops_run=6993` completed a
+  product rejection with zero creates. The adjacent `ops_run=6991` exercised
+  `FINAL_RETRY/distinct_not_grounded` and also created nothing;
+- final production census SHA-256
+  `5e083181783bc37670329ef7a5c1bfc359f7dc8686c5e512c66c5d034846cecf`
+  has zero unresolved hard duplicates.
+
+Static-site completion evidence is recorded below when the final vector
+barrier-protected operator build completes.
 
 ## Prevention
 
