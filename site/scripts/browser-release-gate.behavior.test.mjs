@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -8,6 +8,7 @@ import {
   BROWSER_GATE_NAVIGATION_TIMEOUT_MS,
   assertRecommendationGeometry,
   assertRequiredPreviewBrowserJourney,
+  currentEventPrimaryKeyboardContract,
   expectedObjectFitForTreatment,
   festivalCalendarExpectedCount,
   localReleaseAssetPath,
@@ -17,6 +18,56 @@ import {
   staticSpecimenCandidates,
   startReleaseServer,
 } from './check-browser-release-gate.mjs';
+
+test('mixed-input current-event Enter accepts both enabled and intentionally disabled primary actions', () => {
+  assert.equal(currentEventPrimaryKeyboardContract(1, 0), 'activate');
+  assert.equal(currentEventPrimaryKeyboardContract(0, 1), 'unavailable');
+  assert.throws(() => currentEventPrimaryKeyboardContract(0, 0), /exactly one rendered primary action/u);
+  assert.throws(() => currentEventPrimaryKeyboardContract(1, 1), /exactly one rendered primary action/u);
+});
+
+test('sold-out current-event Enter stays inert and announces unavailability', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'static-browser-disabled-primary-'));
+  mkdirSync(join(root, 'src'), { recursive:true });
+  copyFileSync(
+    new URL('../src/lib/keyboardEventNavigation.mjs', import.meta.url),
+    join(root, 'src', 'keyboardEventNavigation.mjs'),
+  );
+  writeFileSync(join(root, 'index.html'), `<!doctype html>
+    <style>body{margin:0}.site-header{height:40px}.event{min-height:600px}.panel{height:100px}.description{width:600px;height:160px}</style>
+    <header class="site-header">KenigEvents</header>
+    <main class="event" data-desktop-clean-event>
+      <section class="panel" data-desktop-action-panel>
+        <span class="desktop-prototype__primary-action is-disabled" aria-disabled="true">Билеты закончились</span>
+        <button data-calendar-action>Календарь</button>
+        <button data-native-share data-share-url="https://kenigevents.ru/sobytiya/test/" data-share-event-title="Тест">Поделиться</button>
+        <button data-feedback-action="like" data-event-id="1" data-event-title="Тест">Лайк</button>
+      </section>
+      <div class="desktop-clean-description description">Описание</div>
+    </main>
+    <p data-keyboard-prototype-status></p>
+    <script type="module">
+      import { initKeyboardEventNavigation } from '/src/keyboardEventNavigation.mjs';
+      window.KenigEventsKeyboardNavigation = initKeyboardEventNavigation();
+    </script>`);
+  const { chromium } = await import('playwright');
+  const server = await startReleaseServer(root);
+  const browser = await chromium.launch({ headless:true });
+  try {
+    const page = await browser.newPage({ viewport:{ width:1280, height:900 } });
+    await page.goto(server.origin, { waitUntil:'domcontentloaded' });
+    await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
+    await page.locator('.desktop-clean-description').click({ position:{ x:20, y:20 } });
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(
+      () => document.querySelector('[data-keyboard-prototype-status]')?.textContent === 'Основное действие недоступно для выбранного события.',
+    );
+    assert.equal(await page.locator('.desktop-prototype__primary-action').getAttribute('aria-disabled'), 'true');
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+});
 
 test('festival browser gate binds the rendered active subset to the release manifest', () => {
   assert.equal(festivalCalendarExpectedCount(null), 21);

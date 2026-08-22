@@ -25,7 +25,11 @@
   `event_source.source_text` evidence field required by collection-product
   validation; operational identity fields remain excluded. This closes the
   production Kaggle failure that previously reached the immutable build only
-  to fail with `no such column: source_text`.
+  to fail with `no such column: source_text`. The blocking browser release
+  gate also now accepts the existing disabled-primary keyboard contract for
+  sold-out events: `Enter` must announce that the action is unavailable rather
+  than activate the disabled control, while the same run must retain a separate
+  enabled-CTA specimen for positive activation coverage.
 
 - Fixed: the existing Smart Update **merge-path** identity gate now closes
   through the same typed `FINAL_MATCH` / source-grounded `FINAL_DISTINCT` /

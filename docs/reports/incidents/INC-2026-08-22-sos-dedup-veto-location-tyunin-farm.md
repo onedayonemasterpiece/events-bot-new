@@ -376,6 +376,17 @@ merged.
   The projection now includes that required evidence field while continuing
   to exclude source fingerprints, candidate/occurrence keys and Smart Update
   operational state, with a production-shaped query regression test.
+- The next exact-main run
+  (`static-site:production-secret-20260822T225650-016410b3:7be35bb504ca`)
+  passed the compact projection, collection-product query and vector revision
+  barrier, then failed closed in the browser release gate. The immutable input
+  proves required keyboard specimen Event `6408` had become `sold_out`, so its
+  rendered primary action was intentionally disabled; the gate nevertheless
+  required an enabled-primary click on every route. The gate now verifies the
+  existing runtime contract for both states: enabled primaries activate once,
+  disabled primaries remain inert and announce unavailability, and at least
+  one enabled specimen remains mandatory. No candidate/public root mutation
+  occurred in the failed run.
 
 ## Corrective Actions
 
