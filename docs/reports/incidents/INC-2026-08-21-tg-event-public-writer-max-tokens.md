@@ -128,6 +128,25 @@ condition, not evidence against the token/schema root cause.
   external-consultant blocker evidence; the implementation proceeds only with
   the locally reproduced, deterministic source-segmentation fix and does not
   weaken the prompt or grounding validator.
+- 2026-08-22 12:48Z — next-day event `7817` publishes successfully as Telegram
+  post `3690`; the catch-up remains on the ordinary channel-spacing cadence.
+- 2026-08-22 12:51Z — evidence-segmentation Draft PR #552 passes all three
+  required CI jobs and merges to `main` as
+  `3ef8eb1839fa80954b0fdd4ee07cca1f1ddfae47`.
+- 2026-08-22 12:55Z — exact main SHA deploys as Fly release `v2015`; machine
+  checks are `1/1`, `/healthz` is ready, and the immutable image marker matches.
+- 2026-08-22 12:58Z — the first `8172` canary on `v2015` again completes with
+  `STOP` but is invalid at the application layer. A diagnostic Lite-only probe
+  using the same deployed schema then returns valid grounded JSON with the
+  combined exact heading/title quote, proving the segmentation repair works
+  without fallback. By the next durable retry at 13:01Z the 15:00 local event
+  has already started, so the job closes `done/nochange` under the existing
+  `already-started` product policy; no late announcement is published.
+- 2026-08-22 13:01Z — runtime mirror since `v2014` contains 38 successful Lite
+  calls, all `finish_reason=STOP`, and zero provider `call_error`,
+  `MAX_TOKENS`, or `INVALID_ARGUMENT`. Cohort reconciliation is 3 done (two
+  published, one documented already-started exclusion) and 17 future/past
+  rows still on the controlled schedule.
 
 ## Root Cause
 
@@ -277,8 +296,9 @@ the six-value enum cap, and both token ceilings remain unchanged.
   public URLs or exclusions.
 - [ ] Confirm the next normal publication window has no recurrence of this
   `consumer/model/code` tuple before moving the incident to `closed`.
-- [ ] Merge/deploy the evidence-segmentation follow-up and repeat event `8172`
-  before its catch-up slot is considered reconciled.
+- [x] Merge/deploy the evidence-segmentation follow-up and repeat event `8172`;
+  record the `already-started` product-policy exclusion after the retry crossed
+  its 15:00 local start boundary.
 
 ## Release And Closure Evidence
 
@@ -288,11 +308,11 @@ the six-value enum cap, and both token ceilings remain unchanged.
   <https://github.com/onedayonemasterpiece/events-bot-new/pull/550>
 - schema-complexity follow-up PR (merged):
   <https://github.com/onedayonemasterpiece/events-bot-new/pull/551>
-- evidence-segmentation follow-up: pending Draft PR from
-  `incident/INC-2026-08-21-tg-writer-evidence-segmentation`
-- deployed SHA: `709ef4127a86338e3b816fda2ba88058162edf03`
+- evidence-segmentation follow-up PR (merged):
+  <https://github.com/onedayonemasterpiece/events-bot-new/pull/552>
+- deployed SHA: `3ef8eb1839fa80954b0fdd4ee07cca1f1ddfae47`
 - deploy path: clean exact `origin/main` checkout through
-  `scripts/deploy_fly_main.sh`; Fly release `v2014`, machine version `2014`
+  `scripts/deploy_fly_main.sh`; Fly release `v2015`, machine version `2015`
 - regression checks:
   - public-hook subset: `6 passed`;
   - `tests/test_llm_source_grounding.py tests/test_google_ai_client.py`:
@@ -308,11 +328,14 @@ the six-value enum cap, and both token ceilings remain unchanged.
   - `py_compile` and `git diff --check`: passed.
 - post-deploy verification: `/healthz ready=true`, machine checks `1/1`,
   immutable image marker equals the deployed main SHA, and SQLite
-  `quick_check=ok`; controlled event `8131` and first scheduled catch-up event
-  `8129` both published through Lite (`3686`, `3687`). Runtime since `v2014`:
-  two `call_ok`, zero `call_error`, zero `MAX_TOKENS`, zero
-  `INVALID_ARGUMENT`. Nineteen unpublished rows remain durably scheduled at
-  ten-minute intervals; published-post reconciliation continues behind them.
+  `quick_check=ok`; controlled event `8131` and scheduled catch-up events
+  `8129`/`7817` published through Lite (`3686`, `3687`, `3690`). Event `8172`
+  has a valid deployed-schema diagnostic response but crossed its start time
+  before the durable retry and closed as an explicit `already-started`
+  exclusion. Runtime since `v2014`: 38 `call_ok`, all `STOP`, zero
+  `call_error`, zero `MAX_TOKENS`, zero `INVALID_ARGUMENT`. Seventeen cohort
+  rows remain durably scheduled at ten-minute intervals; reconciliation
+  continues with the incident open.
 
 ## Prevention
 
