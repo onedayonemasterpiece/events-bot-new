@@ -1,0 +1,545 @@
+{
+  "schema_version": "event_card_large_chip_inventory.v1",
+  "corpus_id": "ui-reference-events.v1",
+  "corpus_sha256": "9ca2960fb8d723f95b19c012b50f8abb5e4503eedcf673fe178ed0f4afd46320",
+  "reference_clock": {
+    "current_date": "2026-08-21",
+    "reference_iso": "2026-08-21T09:00:00+02:00",
+    "timezone": "Europe/Kaliningrad"
+  },
+  "astro_source_repository_sha": "22ebe3c5e92b13684cca32c14357ef7b91834977",
+  "conformance_tooling_repository_sha": "54aea7a03cbbe5948aa60c40f12677483c6bcc09",
+  "generation_mode": "real-astro-static-build/exact-event-card/split-actions",
+  "production_source_mutated": false,
+  "source_files": [
+    {
+      "path": "site/src/components/EventCard.astro",
+      "sha256": "92b2ec6e7d07d31d0e5e6e02a233e450e5961acf946e04231885ee86633693ee"
+    },
+    {
+      "path": "site/src/components/EventOccurrenceLabel.astro",
+      "sha256": "6bb7fe978360dec278d10c776de8204acb46269d32ed39479622e40ade7d2de1"
+    }
+  ],
+  "fixture_count": 8,
+  "cases": [
+    {
+      "fixture_id": "event.real.8156",
+      "event_id": 8156,
+      "fixture_payload_sha256": "c2c4eaf7e9e88c89de7e4f510143237668073faf6dd07a36df65afa344b0518a",
+      "event_type": {
+        "present": true,
+        "label": "выставка"
+      },
+      "admission": {
+        "present": true,
+        "label": "Запись по телефону"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "21 августа",
+        "aria_label": "21 августа",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": false,
+        "present": false,
+        "label": null
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": false,
+          "label": null
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: Выставка «Мой город»",
+          "base_count": 0,
+          "count_label": "",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: Выставка «Мой город». Сейчас 6",
+          "base_count": 6,
+          "count_label": "6"
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:Запись по телефону",
+        "occurrence:simple",
+        "calendar:absent",
+        "like-count:nonzero",
+        "share-count:zero",
+        "actions:split-actions"
+      ]
+    },
+    {
+      "fixture_id": "event.real.7906",
+      "event_id": 7906,
+      "fixture_payload_sha256": "2052001842c42ac5aeaac6295cfc87a20010f6394cc16941d3386aef64579318",
+      "event_type": {
+        "present": true,
+        "label": "концерт"
+      },
+      "admission": {
+        "present": true,
+        "label": "1000 ₽"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "22 августа 18:00",
+        "aria_label": "22 августа в 18:00",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": true,
+        "present": true,
+        "label": "В календарь"
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": true,
+          "label": "В календарь"
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: Концерт «Откровения Вены»",
+          "base_count": 0,
+          "count_label": "",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: Концерт «Откровения Вены». Сейчас 37",
+          "base_count": 37,
+          "count_label": "37"
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:1000 ₽",
+        "occurrence:simple",
+        "calendar:present",
+        "like-count:nonzero",
+        "share-count:zero",
+        "actions:split-actions"
+      ]
+    },
+    {
+      "fixture_id": "event.real.6399",
+      "event_id": 6399,
+      "fixture_payload_sha256": "4348e205747229c9bbf56d4c751e6401d58a32e837957dfdeaf0b0ae6cfbfcad",
+      "event_type": {
+        "present": true,
+        "label": "концерт"
+      },
+      "admission": {
+        "present": true,
+        "label": "1000 ₽"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "21 октября 20:00",
+        "aria_label": "21 октября в 20:00",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": true,
+        "present": true,
+        "label": "В календарь"
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": true,
+          "label": "В календарь"
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: Ева & Лилит: поэтический концерт Марии Меженной",
+          "base_count": 0,
+          "count_label": "",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: Ева & Лилит: поэтический концерт Марии Меженной. Сейчас 2",
+          "base_count": 2,
+          "count_label": "2"
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:1000 ₽",
+        "occurrence:simple",
+        "calendar:present",
+        "like-count:nonzero",
+        "share-count:zero",
+        "actions:split-actions"
+      ]
+    },
+    {
+      "fixture_id": "event.real.4327",
+      "event_id": 4327,
+      "fixture_payload_sha256": "c032e42d5fa020e587c3909e11396e1f0aafb37d28da433324bdd33c796a2734",
+      "event_type": {
+        "present": true,
+        "label": "выставка"
+      },
+      "admission": {
+        "present": true,
+        "label": "Бесплатно · вход свободный"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "10 апреля",
+        "aria_label": "10 апреля",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": false,
+        "present": false,
+        "label": null
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": false,
+          "label": null
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: Отдыха не знали, Из руин подняли",
+          "base_count": 0,
+          "count_label": "",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: Отдыха не знали, Из руин подняли",
+          "base_count": 0,
+          "count_label": ""
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:Бесплатно · вход свободный",
+        "occurrence:simple",
+        "calendar:absent",
+        "like-count:zero",
+        "share-count:zero",
+        "actions:split-actions"
+      ]
+    },
+    {
+      "fixture_id": "event.real.7888",
+      "event_id": 7888,
+      "fixture_payload_sha256": "33f66954a29394894f72d869a2a77238313f57bded7b94bb6651764d5be0fd29",
+      "event_type": {
+        "present": true,
+        "label": "выставка"
+      },
+      "admission": {
+        "present": true,
+        "label": "Условия уточняются"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "22 августа",
+        "aria_label": "22 августа",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": false,
+        "present": false,
+        "label": null
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": false,
+          "label": null
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: Открытие выставки «Море внутри»",
+          "base_count": 5,
+          "count_label": "5",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: Открытие выставки «Море внутри». Сейчас 53",
+          "base_count": 53,
+          "count_label": "53"
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:Условия уточняются",
+        "occurrence:simple",
+        "calendar:absent",
+        "like-count:nonzero",
+        "share-count:nonzero",
+        "actions:split-actions"
+      ]
+    },
+    {
+      "fixture_id": "event.real.7807",
+      "event_id": 7807,
+      "fixture_payload_sha256": "ff0010eb67230f68f9c8c1d31dcdd04aeb734e04ac4287fa333afab1de2b6841",
+      "event_type": {
+        "present": true,
+        "label": "лекция"
+      },
+      "admission": {
+        "present": true,
+        "label": "Бесплатно · регистрация"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "22 августа 12:00",
+        "aria_label": "22 августа в 12:00",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": true,
+        "present": true,
+        "label": "В календарь"
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": true,
+          "label": "В календарь"
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: Праздничная программа ко Дню Государственного флага Российской Федерации",
+          "base_count": 0,
+          "count_label": "",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: Праздничная программа ко Дню Государственного флага Российской Федерации. Сейчас 10",
+          "base_count": 10,
+          "count_label": "10"
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:Бесплатно · регистрация",
+        "occurrence:simple",
+        "calendar:present",
+        "like-count:nonzero",
+        "share-count:zero",
+        "actions:split-actions"
+      ]
+    },
+    {
+      "fixture_id": "event.real.3132",
+      "event_id": 3132,
+      "fixture_payload_sha256": "3b722cf9514969274be612bb6341db52d0b83d2d93f322b1c9e992aeb2596818",
+      "event_type": {
+        "present": true,
+        "label": "концерт"
+      },
+      "admission": {
+        "present": true,
+        "label": "1500 ₽"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "17 октября 20:00",
+        "aria_label": "17 октября в 20:00",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": true,
+        "present": true,
+        "label": "В календарь"
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": true,
+          "label": "В календарь"
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: Крыли — Сольный концерт",
+          "base_count": 0,
+          "count_label": "",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: Крыли — Сольный концерт. Сейчас 2",
+          "base_count": 2,
+          "count_label": "2"
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:1500 ₽",
+        "occurrence:simple",
+        "calendar:present",
+        "like-count:nonzero",
+        "share-count:zero",
+        "actions:split-actions"
+      ]
+    },
+    {
+      "fixture_id": "event.real.6628",
+      "event_id": 6628,
+      "fixture_payload_sha256": "3e8a3f3ffa0200933f5189cf5d8c38a509eaf156580e65a6fd01676ace499e5a",
+      "event_type": {
+        "present": true,
+        "label": "выставка"
+      },
+      "admission": {
+        "present": true,
+        "label": "Билеты"
+      },
+      "occurrence": {
+        "present": true,
+        "label": "10 июля 19:00",
+        "aria_label": "10 июля в 19:00",
+        "variant": "inline",
+        "complex": false
+      },
+      "calendar": {
+        "eligible": false,
+        "present": false,
+        "label": null
+      },
+      "actions": {
+        "not_interested": {
+          "present": true,
+          "label": "Не интересно"
+        },
+        "calendar": {
+          "present": false,
+          "label": null
+        },
+        "share": {
+          "present": true,
+          "aria_label": "Поделиться событием: ТОГДА",
+          "base_count": 0,
+          "count_label": "",
+          "label": "Поделиться"
+        },
+        "like": {
+          "present": true,
+          "aria_label": "Поставить лайк: ТОГДА. Сейчас 5",
+          "base_count": 5,
+          "count_label": "5"
+        }
+      },
+      "branch_families": [
+        "event-type:present",
+        "admission:label:Билеты",
+        "occurrence:simple",
+        "calendar:absent",
+        "like-count:nonzero",
+        "share-count:zero",
+        "actions:split-actions"
+      ]
+    }
+  ],
+  "summary": {
+    "event_type_labels": [
+      "выставка",
+      "концерт",
+      "лекция"
+    ],
+    "admission_labels": [
+      "1000 ₽",
+      "1500 ₽",
+      "Бесплатно · вход свободный",
+      "Бесплатно · регистрация",
+      "Билеты",
+      "Запись по телефону",
+      "Условия уточняются"
+    ],
+    "occurrence_labels": [
+      "10 апреля",
+      "10 июля 19:00",
+      "17 октября 20:00",
+      "21 августа",
+      "21 октября 20:00",
+      "22 августа",
+      "22 августа 12:00",
+      "22 августа 18:00"
+    ],
+    "action_labels": [
+      "В календарь",
+      "Не интересно",
+      "Поделиться"
+    ],
+    "like_count_values": [
+      0,
+      10,
+      2,
+      37,
+      5,
+      53,
+      6
+    ],
+    "share_count_values": [
+      0,
+      5
+    ],
+    "branch_families": [
+      "actions:split-actions",
+      "admission:label:1000 ₽",
+      "admission:label:1500 ₽",
+      "admission:label:Бесплатно · вход свободный",
+      "admission:label:Бесплатно · регистрация",
+      "admission:label:Билеты",
+      "admission:label:Запись по телефону",
+      "admission:label:Условия уточняются",
+      "calendar:absent",
+      "calendar:present",
+      "event-type:present",
+      "like-count:nonzero",
+      "like-count:zero",
+      "occurrence:simple",
+      "share-count:nonzero",
+      "share-count:zero"
+    ]
+  }
+}

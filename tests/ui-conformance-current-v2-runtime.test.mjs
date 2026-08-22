@@ -54,3 +54,36 @@ test('inventory summary preserves every rendered label and count branch', () => 
   assert.deepEqual(summarizeInventory(rows).share_count_values, [0, 5]);
   assert.deepEqual(summarizeInventory(rows).branch_families, ['calendar:absent', 'calendar:present']);
 });
+
+test('checked inventory is the exact eight-fixture Astro-generated output', () => {
+  const inventory = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/ui-conformance/event-card-large-chip-inventory.v1.json'), 'utf8'));
+  assert.equal(inventory.fixture_count, 8);
+  assert.equal(inventory.astro_source_repository_sha, '22ebe3c5e92b13684cca32c14357ef7b91834977');
+  assert.equal(inventory.conformance_tooling_repository_sha, '54aea7a03cbbe5948aa60c40f12677483c6bcc09');
+  assert.equal(inventory.generation_mode, 'real-astro-static-build/exact-event-card/split-actions');
+  assert.equal(inventory.production_source_mutated, false);
+  assert.deepEqual(inventory.cases.map((row) => row.fixture_id), [
+    'event.real.8156', 'event.real.7906', 'event.real.6399', 'event.real.4327',
+    'event.real.7888', 'event.real.7807', 'event.real.3132', 'event.real.6628',
+  ]);
+  assert.deepEqual(inventory.summary.event_type_labels, ['выставка', 'концерт', 'лекция']);
+  assert.deepEqual(inventory.summary.admission_labels, [
+    '1000 ₽', '1500 ₽', 'Бесплатно · вход свободный', 'Бесплатно · регистрация',
+    'Билеты', 'Запись по телефону', 'Условия уточняются',
+  ]);
+  assert(inventory.summary.branch_families.includes('calendar:absent'));
+  assert(inventory.summary.branch_families.includes('calendar:present'));
+  assert.deepEqual(inventory.summary.share_count_values, [0, 5]);
+});
+
+test('caller uses only immutable conformance pins and the bounded batch name', () => {
+  const workflow = readFileSync(resolve(root, '.github/workflows/ui-three-way-conformance.yml'), 'utf8');
+  assert(workflow.includes('@0882917a1328607c498d82e4c2a652bbd3df946d'));
+  assert(workflow.includes('design_sha: 0882917a1328607c498d82e4c2a652bbd3df946d'));
+  assert(workflow.includes('astro_sha: 22ebe3c5e92b13684cca32c14357ef7b91834977'));
+  assert(workflow.includes('events_tooling_sha:'));
+  assert(workflow.includes('event-card-large-current-v2'));
+  assert(!workflow.includes('@feature/'));
+  assert(!workflow.includes('design_ref:'));
+  assert(!workflow.includes('events_ref:'));
+});

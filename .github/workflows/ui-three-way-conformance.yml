@@ -15,6 +15,11 @@ on:
       - '.github/workflows/ui-three-way-conformance.yml'
   workflow_dispatch:
     inputs:
+      batch:
+        description: Exact bounded conformance batch (empty means changed scope only)
+        required: false
+        type: string
+        default: event-card-large-current-v2
       publish_telegram:
         description: Explicitly request protected Telegram review publication
         required: true
@@ -23,10 +28,14 @@ on:
 
 jobs:
   conformance:
-    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@feature/ui-golden-event-corpus-v1-20260821
+    # REPIN_AFTER_DESIGN_COMMIT_A: both this reusable-workflow ref and the
+    # design_sha input must move together to the immutable integration SHA.
+    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@0882917a1328607c498d82e4c2a652bbd3df946d
     with:
-      design_ref: feature/ui-golden-event-corpus-v1-20260821
-      events_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      design_sha: 0882917a1328607c498d82e4c2a652bbd3df946d
+      events_tooling_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      astro_sha: 22ebe3c5e92b13684cca32c14357ef7b91834977
+      batch: ${{ github.event_name == 'workflow_dispatch' && inputs.batch || '' }}
       publish_telegram: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_telegram }}
       trusted_source: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'onedayonemasterpiece/events-bot-new' }}
     secrets: inherit
