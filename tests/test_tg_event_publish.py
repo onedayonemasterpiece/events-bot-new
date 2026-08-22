@@ -553,6 +553,34 @@ def test_tg_event_hook_schema_bounds_grounded_sentence_array() -> None:
     assert sentences["maxItems"] == 3
 
 
+def test_tg_event_hook_schema_constrains_quotes_to_exact_source_fragments() -> None:
+    evidence = (
+        "Первая точная фраза организатора о программе. "
+        "Вторая точная фраза организатора о дегустации и маршруте."
+    )
+
+    schema = main._tg_event_hook_response_schema(evidence)
+    quote_schema = schema["properties"]["sentences"]["items"]["properties"][
+        "evidence_quote"
+    ]
+
+    assert quote_schema["enum"] == [
+        "Первая точная фраза организатора о программе.",
+        "Вторая точная фраза организатора о дегустации и маршруте.",
+    ]
+    assert all(quote in evidence for quote in quote_schema["enum"])
+
+
+def test_tg_event_quote_enum_splits_long_source_without_inventing_text() -> None:
+    evidence = " ".join(["дословный фрагмент организатора"] * 30)
+
+    candidates = main._tg_event_evidence_quote_candidates(evidence)
+
+    assert 1 < len(candidates) <= 40
+    assert all(8 <= len(quote) <= 240 for quote in candidates)
+    assert all(quote in evidence for quote in candidates)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("promo_highlight", "expected_max_tokens"),
