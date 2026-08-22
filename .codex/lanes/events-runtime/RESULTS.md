@@ -3,126 +3,97 @@
 ## Scope
 
 - Lane ID: `events-runtime`
-- Requirements: R01, R04-caller, R08-runtime
-- Base SHA: `1587a70b74d29e70308334f709f0f9f8fb6cf659`
-- Executable implementation SHA: `54aea7a03cbbe5948aa60c40f12677483c6bcc09`
-- Evidence/caller head before this receipt-only commit: `766127f7ad97ec8ca63af7b33a3d1908a8d3c835`
+- Requirements: `R01`, `R02`, `R03`
+- Base SHA: `8ac67d6110870accf2d8b8295e0a9d83ef5ac87e`
+- Implementation head before this results receipt: `1b30de8d93b9a120a2cdb3ef0cccc54eea357655`
+- Writable boundary used: UI conformance adapters, checked aggregate fixtures, scoped tests, design-system consumer documentation, and `CHANGELOG.md`.
+- Forbidden boundary respected: no production `site/src` UI behavior, deployment, Penpot, comments, or Telegram publication was changed.
 
 ## Delivered
 
-- Real Astro static-build chip inventory for all eight exact Golden Event Corpus
-  v1 fixtures through pinned `EventCard.astro` at
-  `22ebe3c5e92b13684cca32c14357ef7b91834977`.
-- Deterministic checked report at
-  `tests/fixtures/ui-conformance/event-card-large-chip-inventory.v1.json`.
-- Separate immutable Astro-source/tooling checkout assertions in materialization.
-- Strong fail-closed joins across case, resolved case, materialization, capture,
-  Penpot receipt/export and design/Astro/tooling identities.
-- Stable `run-current-v2.mjs` entrypoint with `chip-inventory`, `run-case` and
-  exact seven-case `run-batch` orchestration.
-- Caller interface: `design_sha`, `events_tooling_sha`, `astro_sha`, `batch`,
-  `publish_telegram`, `trusted_source`; no mutable branch refs.
-- No production `site/src` mutation, deploy, promotion, Penpot/comment write or
-  Telegram publication.
+1. Added `event-card-semantics.mjs`, a conformance-only semantic resolver:
+   - one `event.meta.event-type` component variant with normalized semantic value and variable label;
+   - semantic admission states with positive integer single/range amounts and explicit/default three-letter currency;
+   - `0 ₽` and all other non-positive prices fail closed;
+   - unknown admission is hidden and `Условия уточняются` is retained only as an observed legacy-source anomaly;
+   - `event.cta.admission`, interaction actions, and like/share social-proof counts are separate semantic axes with explicit component IDs.
+2. Added durable exact-census fixture
+   `tests/fixtures/ui-conformance/event-card-large-production-semantic-census.v1.json`:
+   - exact resolver artifact SHA-256: `30c8ac5adfaeff17c463191714f660b3ed5d0a00aa8799e90f2be70cb1ca9993`;
+   - exact artifact size: `11713` bytes;
+   - compact fixture SHA-256: `be5e177238d1e54ac65d0777b97c295c47b2d3e2f6914df9ea50fb5990a06a23`;
+   - 703 current public-projection events, 31 exact rendered type labels, eight admission state groups, 61 exact price labels, social-proof and calendar aggregates;
+   - broad raw-DB SHA `3578bee4…` is labeled supporting-only, not vocabulary authority.
+3. Updated the render-case adapter and chip inventory to emit semantic component identities while preserving actual Astro output under `source_rendered`.
+4. Regenerated the checked eight-fixture inventory by building the real pinned Astro `EventCard.astro` from SHA `22ebe3c5e92b13684cca32c14357ef7b91834977` in a disposable harness. Checked inventory SHA-256: `9ee97a8b83caeab6fa50fc7fa433b1c57a54b9c36a4b0a248bb36a4d0b31ac48`; generator tooling SHA: `28e5261bf24f88d724d4121a53d62d4dbae0ec76`.
+5. Documented the pre-Penpot-acceptance semantic boundary and added changelog coverage.
 
-## Astro-generated inventory evidence
+## Evidence and commands
 
-Command executed with the exact historical Astro checkout, Golden v1 corpus,
-lockfile-compatible installed dependencies and executable tooling SHA:
+Exact census provenance recheck:
+
+```text
+sha256sum /tmp/event-card-semantic-exact-public-census.json
+30c8ac5adfaeff17c463191714f660b3ed5d0a00aa8799e90f2be70cb1ca9993
+wc -c /tmp/event-card-semantic-exact-public-census.json
+11713
+```
+
+Real Astro inventory generation (PASS, 8 fixtures):
 
 ```text
 node scripts/ui_conformance/run-current-v2.mjs chip-inventory \
-  --astro-source-site <events@22ebe...>/site \
+  --astro-source-site /home/dev/.codex/worktrees/events-bot-new/event-card-penpot-backport-20260820/site \
   --astro-source-sha 22ebe3c5e92b13684cca32c14357ef7b91834977 \
-  --tooling-root <events-tooling@54aea...> \
-  --tooling-sha 54aea7a03cbbe5948aa60c40f12677483c6bcc09 \
-  --corpus-root <design>/catalog/fixtures/ui-reference-events/v1 \
-  --node-modules <lockfile-compatible-node_modules> \
-  --harness <disposable-path> \
+  --tooling-root /home/dev/.codex/worktrees/events-bot-new/event-card-semantic-runtime \
+  --tooling-sha 28e5261bf24f88d724d4121a53d62d4dbae0ec76 \
+  --corpus-root /home/dev/.codex/worktrees/lovekgd-design-system/golden-event-corpus-v1/catalog/fixtures/ui-reference-events/v1 \
+  --semantic-census tests/fixtures/ui-conformance/event-card-large-production-semantic-census.v1.json \
+  --node-modules /home/dev/.codex/worktrees/events-bot-new/golden-event-corpus-v1/site/node_modules \
+  --harness /tmp/event-card-semantic-inventory-28e5261b \
   --output tests/fixtures/ui-conformance/event-card-large-chip-inventory.v1.json
 ```
 
-Result: PASS, 8/8 fixtures, report SHA-256
-`74ec329cba6b1885ba36e56f74a2eb50536243f489da60f3155a112d115b2446`.
-Observed event types: `выставка`, `концерт`, `лекция`. Observed admission
-labels: `1000 ₽`, `1500 ₽`, `Бесплатно · вход свободный`,
-`Бесплатно · регистрация`, `Билеты`, `Запись по телефону`,
-`Условия уточняются`. Both calendar present/absent and like/share zero/nonzero
-branches were generated.
+Result: fixture count `8`; report hash `9ee97a8b83caeab6fa50fc7fa433b1c57a54b9c36a4b0a248bb36a4d0b31ac48`. Valid semantic admission labels exclude `Условия уточняются`; the exact Astro-rendered legacy string remains under `source_rendered`; anomaly is `obsolete-unspecified-label-hidden`.
 
-## Tests
+Scoped test suite (PASS, 20/20):
 
 ```text
-node --test tests/ui-conformance-current-v2-runtime.test.mjs \
+node --test \
+  tests/ui-conformance-event-card-semantics.test.mjs \
+  tests/ui-conformance-current-v2-runtime.test.mjs \
   tests/ui-conformance-routing.test.mjs \
   tests/ui-conformance-archetype-specimen.test.mjs
 ```
 
-PASS: 13 tests, 0 failed.
+Syntax and scope checks (PASS):
 
-Additional checks:
+```text
+node --check scripts/ui_conformance/event-card-semantics.mjs
+node --check scripts/ui_conformance/inventory-event-card-chips.mjs
+node --check scripts/ui_conformance/resolve-render-case.mjs
+node --check scripts/ui_conformance/run-current-v2.mjs
+git diff --check
+test -z "$(git diff --name-only 8ac67d6110870accf2d8b8295e0a9d83ef5ac87e -- site/src)"
+```
 
-- `node --check` on every changed runtime script: PASS.
-- YAML parse of `.github/workflows/ui-three-way-conformance.yml`: PASS.
-- `git diff --check`: PASS.
-- `git diff --name-only 22ebe3c5e92b13684cca32c14357ef7b91834977 -- site/src`: empty.
+## Risks and handoff
+
+- Production Astro still renders the two invalid `0 ₽` observations and 96 unknown-admission fallbacks under its historical source contract. This lane deliberately does not mutate production UI before Penpot acceptance; semantic evidence fails closed and exposes the drift.
+- `movie` and `therapy` are preserved as exact observed rendered labels and identified as source-language anomalies. The adapter does not invent a translation or conflate them with another type.
+- The exact full census collector artifact was ephemeral/read-only; the durable aggregate fixture binds it by hash, size, schema and repository head and contains no rows/secrets.
+- Integration must pin this lane's final commit in any cross-repository workflow/receipt that consumes the semantic adapter. The design contract integration reported by the parent (`849c3c…`) is not rewritten here.
 
 ## Changed files
 
-- `.github/workflows/ui-three-way-conformance.yml`
+- `.codex/lanes/events-runtime/RESULTS.md`
 - `CHANGELOG.md`
 - `docs/features/static-site-pages/design-system/README.md`
-- `scripts/ui_conformance/build-actual-tuple.mjs`
-- `scripts/ui_conformance/immutable-checkout.mjs`
+- `scripts/ui_conformance/event-card-semantics.mjs`
 - `scripts/ui_conformance/inventory-event-card-chips.mjs`
-- `scripts/ui_conformance/materialize-case.mjs`
+- `scripts/ui_conformance/resolve-render-case.mjs`
 - `scripts/ui_conformance/run-current-v2.mjs`
 - `tests/fixtures/ui-conformance/event-card-large-chip-inventory.v1.json`
+- `tests/fixtures/ui-conformance/event-card-large-production-semantic-census.v1.json`
 - `tests/ui-conformance-current-v2-runtime.test.mjs`
-- `.codex/lanes/events-runtime/RESULTS.md`
-
-## Remaining integration pin / risks
-
-The caller deliberately uses the required temporary design SHA
-`0882917a1328607c498d82e4c2a652bbd3df946d`. After design commit A exists, the
-root integrator must repin **both** locations marked
-`REPIN_AFTER_DESIGN_COMMIT_A` in
-`.github/workflows/ui-three-way-conformance.yml`: the reusable-workflow `uses`
-SHA and `design_sha`. Until that cross-repository pin is updated, the base
-reusable workflow does not yet expose the new input contract, so a remote run is
-not claimed here. The seven-case batch was not fabricated or claimed in this
-lane; it must run after the design batch manifest/evidence paths and immutable
-workflow SHA are integrated.
-
-## Root integration closure
-
-The reusable workflow is now pinned to design tooling/catalog commit
-`a6b4042342ae70557bc9206d5709b1f039e2e449`, while the separate materialized
-Penpot design identity remains `0882917a1328607c498d82e4c2a652bbd3df946d`.
-The runtime checkout remains the immutable executable tooling SHA
-`713a035a8aaa9ecfdcdd5fbd817fe504160df2f5`; no caller branch or mutable ref is
-used. A real local one-case run and exact seven-case batch passed. The earlier
-`REPIN_AFTER_DESIGN_COMMIT_A` blocker is resolved.
-
-Remote run `32582038238` proved the real workflow selected seven cases and reached
-browser capture, then failed fail-closed because GitHub's clean runner had no
-Playwright Chromium binary. Design workflow commit
-`1de19acf0c07bac87b437cff8845006f47fae1b0` adds the explicit pinned-runtime
-`playwright install --with-deps chromium` step; the caller was repinned to it.
-
-Remote run `32582230761` passed browser installation/capture and failed next at
-raster comparison because Ubuntu 24.04 did not provide `identify`. Targeted
-research against the GitHub runner image inventory and Ubuntu Noble package
-catalog confirmed ImageMagick is not a guaranteed runner binary and Noble ships
-ImageMagick 6 command names. Design workflow commit
-`204acdf76dcc964222534e649a2972c59e8025fd` now installs Ubuntu's `imagemagick`
-package and the pixel digest supports both ImageMagick 7 (`magick`) and 6
-(`convert`).
-
-Remote run `32582604760` then proved all seven source Astro/Penpot images match
-the reviewed canonical decoded pixels. Only ImageMagick 6 versus 7 rounding in
-the derived overlay/diff differed. Design commit
-`7a26772828a5d74a9683c08e7e6774ff15ac61a5` keeps fail-closed source-image
-review binding and permits the declared portable blend/difference transform to
-be regenerated; each run's actual derivative hashes remain bound in its final
-receipt.
+- `tests/ui-conformance-event-card-semantics.test.mjs`
