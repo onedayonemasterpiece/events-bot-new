@@ -22,6 +22,14 @@ freezes the corpus clock and verifies local media/font bytes. It must not keep a
 second editable corpus, change production Astro, or compare a different event
 with a visually similar Penpot instance.
 
+For an owner-authorized interactive run, the upstream conformance workflow also
+owns a fail-closed live progress gate: each completed or blocked exact case is
+published individually to the verified review topic and read back before the
+next case begins. Consumer tooling must not buffer several ready comparisons
+for a final batch or report completion without the corresponding Telegram
+receipt. If Penpot export is unavailable, the post is explicitly diagnostic
+and cannot be counted as visual parity.
+
 For archetype reconstruction, capture the exact Astro route/fixture first, put
 that locked evidence next to a reconstruction made only from linked Penpot
 components, then inspect same-size side-by-side, 50% overlay and diff exports.

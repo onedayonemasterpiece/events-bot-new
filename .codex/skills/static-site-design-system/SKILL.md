@@ -32,6 +32,12 @@ sources in `/lab/design-system/`.
    and bind the same component ID, contract version/hash, state key, fixture,
    viewport, and candidate package SHA used by Penpot. Publish an immutable
    noindex preview for a separate owner phone/desktop review.
+   During an owner-authorized interactive Astro ↔ Penpot conformance run, each
+   exact case must also pass the upstream live-publication gate: publish that
+   case to the verified Telegram review topic and persist its exact read-back
+   receipt before starting the next case. Never defer ready comparisons to an
+   end-of-run batch. A blocked Penpot export produces an immediate truthful
+   diagnostic, not silence and not a visual `PASS`.
 8. Do not merge/deploy/generate production UI until the owner approves the
    browser/device result and promotion, migration, release, and post-deploy
    conformance gates are satisfied.
