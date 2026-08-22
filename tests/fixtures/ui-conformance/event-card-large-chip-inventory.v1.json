@@ -1,5 +1,5 @@
 {
-  "schema_version": "event_card_large_chip_inventory.v1",
+  "schema_version": "event_card_large_chip_inventory.v2",
   "corpus_id": "ui-reference-events.v1",
   "corpus_sha256": "9ca2960fb8d723f95b19c012b50f8abb5e4503eedcf673fe178ed0f4afd46320",
   "reference_clock": {
@@ -8,9 +8,18 @@
     "timezone": "Europe/Kaliningrad"
   },
   "astro_source_repository_sha": "22ebe3c5e92b13684cca32c14357ef7b91834977",
-  "conformance_tooling_repository_sha": "54aea7a03cbbe5948aa60c40f12677483c6bcc09",
+  "conformance_tooling_repository_sha": "28e5261bf24f88d724d4121a53d62d4dbae0ec76",
   "generation_mode": "real-astro-static-build/exact-event-card/split-actions",
   "production_source_mutated": false,
+  "semantic_projection_mode": "adapter-only/pre-penpot-acceptance",
+  "production_census": {
+    "schema_version": "event_card_large_production_semantic_census.v1",
+    "exact_source_artifact_sha256": "30c8ac5adfaeff17c463191714f660b3ed5d0a00aa8799e90f2be70cb1ca9993",
+    "event_count": 703,
+    "rendered_event_type_label_count": 31,
+    "rendered_price_label_count": 61,
+    "component_variant_count": 1
+  },
   "source_files": [
     {
       "path": "site/src/components/EventCard.astro",
@@ -27,14 +36,6 @@
       "fixture_id": "event.real.8156",
       "event_id": 8156,
       "fixture_payload_sha256": "c2c4eaf7e9e88c89de7e4f510143237668073faf6dd07a36df65afa344b0518a",
-      "event_type": {
-        "present": true,
-        "label": "выставка"
-      },
-      "admission": {
-        "present": true,
-        "label": "Запись по телефону"
-      },
       "occurrence": {
         "present": true,
         "label": "21 августа",
@@ -47,51 +48,133 @@
         "present": false,
         "label": null
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:phone_booking",
+        "admission-visible:true",
+        "admission:label:Запись по телефону",
+        "calendar:absent",
+        "event-type-value:выставка",
+        "event-type:present",
+        "like-count:nonzero",
+        "like-proof:present",
+        "occurrence:simple",
+        "share-count:zero",
+        "share-proof:absent"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "выставка",
+        "raw_value": "выставка",
+        "label": "выставка",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "phone_booking",
+        "visible": true,
+        "label": "Запись по телефону",
+        "price": null,
+        "anomaly": null,
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "call",
+        "present": true,
+        "enabled": true,
+        "label": "Позвонить организатору",
+        "href": "tel:+740153221166",
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": false,
-          "label": null
+          "label": null,
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: Выставка «Мой город»",
-          "base_count": 0,
-          "count_label": "",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: Выставка «Мой город». Сейчас 6",
-          "base_count": 6,
-          "count_label": "6"
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:Запись по телефону",
-        "occurrence:simple",
-        "calendar:absent",
-        "like-count:nonzero",
-        "share-count:zero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 6,
+          "visible": true,
+          "count_label": "6",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "выставка"
+        },
+        "admission": {
+          "present": true,
+          "label": "Запись по телефону"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": false,
+            "label": null
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: Выставка «Мой город»",
+            "base_count": 0,
+            "count_label": "",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: Выставка «Мой город». Сейчас 6",
+            "base_count": 6,
+            "count_label": "6"
+          }
+        }
+      }
     },
     {
       "fixture_id": "event.real.7906",
       "event_id": 7906,
       "fixture_payload_sha256": "2052001842c42ac5aeaac6295cfc87a20010f6394cc16941d3386aef64579318",
-      "event_type": {
-        "present": true,
-        "label": "концерт"
-      },
-      "admission": {
-        "present": true,
-        "label": "1000 ₽"
-      },
       "occurrence": {
         "present": true,
         "label": "22 августа 18:00",
@@ -104,51 +187,142 @@
         "present": true,
         "label": "В календарь"
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:priced",
+        "admission-visible:true",
+        "admission:label:1000 ₽",
+        "calendar:present",
+        "event-type-value:концерт",
+        "event-type:present",
+        "like-count:nonzero",
+        "like-proof:present",
+        "occurrence:simple",
+        "share-count:zero",
+        "share-proof:absent"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "концерт",
+        "raw_value": "концерт",
+        "label": "концерт",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "priced",
+        "visible": true,
+        "label": "1000 ₽",
+        "price": {
+          "valid": true,
+          "reason": null,
+          "label": "1000 ₽",
+          "amount_min": 1000,
+          "amount_max": 1000,
+          "currency": "RUB",
+          "currency_source": "label",
+          "amount_kind": "single"
+        },
+        "anomaly": null,
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "purchase",
+        "present": true,
+        "enabled": true,
+        "label": "Купить билет",
+        "href": "https://allenburg.ru/kontsert-klassicheskoy-muzyki-otkroveniya-veny-22-avgusta-2026-gotika-holl",
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": true,
-          "label": "В календарь"
+          "label": "В календарь",
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: Концерт «Откровения Вены»",
-          "base_count": 0,
-          "count_label": "",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: Концерт «Откровения Вены». Сейчас 37",
-          "base_count": 37,
-          "count_label": "37"
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:1000 ₽",
-        "occurrence:simple",
-        "calendar:present",
-        "like-count:nonzero",
-        "share-count:zero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 37,
+          "visible": true,
+          "count_label": "37",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "концерт"
+        },
+        "admission": {
+          "present": true,
+          "label": "1000 ₽"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": true,
+            "label": "В календарь"
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: Концерт «Откровения Вены»",
+            "base_count": 0,
+            "count_label": "",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: Концерт «Откровения Вены». Сейчас 37",
+            "base_count": 37,
+            "count_label": "37"
+          }
+        }
+      }
     },
     {
       "fixture_id": "event.real.6399",
       "event_id": 6399,
       "fixture_payload_sha256": "4348e205747229c9bbf56d4c751e6401d58a32e837957dfdeaf0b0ae6cfbfcad",
-      "event_type": {
-        "present": true,
-        "label": "концерт"
-      },
-      "admission": {
-        "present": true,
-        "label": "1000 ₽"
-      },
       "occurrence": {
         "present": true,
         "label": "21 октября 20:00",
@@ -161,51 +335,142 @@
         "present": true,
         "label": "В календарь"
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:priced",
+        "admission-visible:true",
+        "admission:label:1000 ₽",
+        "calendar:present",
+        "event-type-value:концерт",
+        "event-type:present",
+        "like-count:nonzero",
+        "like-proof:present",
+        "occurrence:simple",
+        "share-count:zero",
+        "share-proof:absent"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "концерт",
+        "raw_value": "концерт",
+        "label": "концерт",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "priced",
+        "visible": true,
+        "label": "1000 ₽",
+        "price": {
+          "valid": true,
+          "reason": null,
+          "label": "1000 ₽",
+          "amount_min": 1000,
+          "amount_max": 1000,
+          "currency": "RUB",
+          "currency_source": "label",
+          "amount_kind": "single"
+        },
+        "anomaly": null,
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "purchase",
+        "present": true,
+        "enabled": true,
+        "label": "Купить билет",
+        "href": "https://kaliningrad.qtickets.events/242439-poeticheskiy-kontsert-marii-mezhennoy",
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": true,
-          "label": "В календарь"
+          "label": "В календарь",
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: Ева & Лилит: поэтический концерт Марии Меженной",
-          "base_count": 0,
-          "count_label": "",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: Ева & Лилит: поэтический концерт Марии Меженной. Сейчас 2",
-          "base_count": 2,
-          "count_label": "2"
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:1000 ₽",
-        "occurrence:simple",
-        "calendar:present",
-        "like-count:nonzero",
-        "share-count:zero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 2,
+          "visible": true,
+          "count_label": "2",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "концерт"
+        },
+        "admission": {
+          "present": true,
+          "label": "1000 ₽"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": true,
+            "label": "В календарь"
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: Ева & Лилит: поэтический концерт Марии Меженной",
+            "base_count": 0,
+            "count_label": "",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: Ева & Лилит: поэтический концерт Марии Меженной. Сейчас 2",
+            "base_count": 2,
+            "count_label": "2"
+          }
+        }
+      }
     },
     {
       "fixture_id": "event.real.4327",
       "event_id": 4327,
       "fixture_payload_sha256": "c032e42d5fa020e587c3909e11396e1f0aafb37d28da433324bdd33c796a2734",
-      "event_type": {
-        "present": true,
-        "label": "выставка"
-      },
-      "admission": {
-        "present": true,
-        "label": "Бесплатно · вход свободный"
-      },
       "occurrence": {
         "present": true,
         "label": "10 апреля",
@@ -218,51 +483,133 @@
         "present": false,
         "label": null
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:free_entry",
+        "admission-visible:true",
+        "admission:label:Бесплатно · вход свободный",
+        "calendar:absent",
+        "event-type-value:выставка",
+        "event-type:present",
+        "like-count:zero",
+        "like-proof:absent",
+        "occurrence:simple",
+        "share-count:zero",
+        "share-proof:absent"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "выставка",
+        "raw_value": "выставка",
+        "label": "выставка",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "free_entry",
+        "visible": true,
+        "label": "Бесплатно · вход свободный",
+        "price": null,
+        "anomaly": null,
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "none",
+        "present": false,
+        "enabled": false,
+        "label": null,
+        "href": null,
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": false,
-          "label": null
+          "label": null,
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: Отдыха не знали, Из руин подняли",
-          "base_count": 0,
-          "count_label": "",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: Отдыха не знали, Из руин подняли",
-          "base_count": 0,
-          "count_label": ""
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:Бесплатно · вход свободный",
-        "occurrence:simple",
-        "calendar:absent",
-        "like-count:zero",
-        "share-count:zero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "выставка"
+        },
+        "admission": {
+          "present": true,
+          "label": "Бесплатно · вход свободный"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": false,
+            "label": null
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: Отдыха не знали, Из руин подняли",
+            "base_count": 0,
+            "count_label": "",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: Отдыха не знали, Из руин подняли",
+            "base_count": 0,
+            "count_label": ""
+          }
+        }
+      }
     },
     {
       "fixture_id": "event.real.7888",
       "event_id": 7888,
       "fixture_payload_sha256": "33f66954a29394894f72d869a2a77238313f57bded7b94bb6651764d5be0fd29",
-      "event_type": {
-        "present": true,
-        "label": "выставка"
-      },
-      "admission": {
-        "present": true,
-        "label": "Условия уточняются"
-      },
       "occurrence": {
         "present": true,
         "label": "22 августа",
@@ -275,51 +622,135 @@
         "present": false,
         "label": null
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:unspecified",
+        "admission-visible:false",
+        "admission:label:Условия уточняются",
+        "calendar:absent",
+        "event-type-value:выставка",
+        "event-type:present",
+        "like-count:nonzero",
+        "like-proof:present",
+        "occurrence:simple",
+        "share-count:nonzero",
+        "share-proof:present"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "выставка",
+        "raw_value": "выставка",
+        "label": "выставка",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "unspecified",
+        "visible": false,
+        "label": null,
+        "price": null,
+        "anomaly": "obsolete-unspecified-label-hidden",
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "none",
+        "present": false,
+        "enabled": false,
+        "label": null,
+        "href": null,
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": false,
-          "label": null
+          "label": null,
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: Открытие выставки «Море внутри»",
-          "base_count": 5,
-          "count_label": "5",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: Открытие выставки «Море внутри». Сейчас 53",
-          "base_count": 53,
-          "count_label": "53"
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:Условия уточняются",
-        "occurrence:simple",
-        "calendar:absent",
-        "like-count:nonzero",
-        "share-count:nonzero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 53,
+          "visible": true,
+          "count_label": "53",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 5,
+          "visible": true,
+          "count_label": "5",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [
+        "obsolete-unspecified-label-hidden"
+      ],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "выставка"
+        },
+        "admission": {
+          "present": true,
+          "label": "Условия уточняются"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": false,
+            "label": null
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: Открытие выставки «Море внутри»",
+            "base_count": 5,
+            "count_label": "5",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: Открытие выставки «Море внутри». Сейчас 53",
+            "base_count": 53,
+            "count_label": "53"
+          }
+        }
+      }
     },
     {
       "fixture_id": "event.real.7807",
       "event_id": 7807,
       "fixture_payload_sha256": "ff0010eb67230f68f9c8c1d31dcdd04aeb734e04ac4287fa333afab1de2b6841",
-      "event_type": {
-        "present": true,
-        "label": "лекция"
-      },
-      "admission": {
-        "present": true,
-        "label": "Бесплатно · регистрация"
-      },
       "occurrence": {
         "present": true,
         "label": "22 августа 12:00",
@@ -332,51 +763,133 @@
         "present": true,
         "label": "В календарь"
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:free_registration",
+        "admission-visible:true",
+        "admission:label:Бесплатно · регистрация",
+        "calendar:present",
+        "event-type-value:лекция",
+        "event-type:present",
+        "like-count:nonzero",
+        "like-proof:present",
+        "occurrence:simple",
+        "share-count:zero",
+        "share-proof:absent"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "лекция",
+        "raw_value": "лекция",
+        "label": "лекция",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "free_registration",
+        "visible": true,
+        "label": "Бесплатно · регистрация",
+        "price": null,
+        "anomaly": null,
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "register",
+        "present": true,
+        "enabled": true,
+        "label": "Зарегистрироваться",
+        "href": "https://kaliningradlib.ru/node/20736",
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": true,
-          "label": "В календарь"
+          "label": "В календарь",
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: Праздничная программа ко Дню Государственного флага Российской Федерации",
-          "base_count": 0,
-          "count_label": "",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: Праздничная программа ко Дню Государственного флага Российской Федерации. Сейчас 10",
-          "base_count": 10,
-          "count_label": "10"
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:Бесплатно · регистрация",
-        "occurrence:simple",
-        "calendar:present",
-        "like-count:nonzero",
-        "share-count:zero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 10,
+          "visible": true,
+          "count_label": "10",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "лекция"
+        },
+        "admission": {
+          "present": true,
+          "label": "Бесплатно · регистрация"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": true,
+            "label": "В календарь"
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: Праздничная программа ко Дню Государственного флага Российской Федерации",
+            "base_count": 0,
+            "count_label": "",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: Праздничная программа ко Дню Государственного флага Российской Федерации. Сейчас 10",
+            "base_count": 10,
+            "count_label": "10"
+          }
+        }
+      }
     },
     {
       "fixture_id": "event.real.3132",
       "event_id": 3132,
       "fixture_payload_sha256": "3b722cf9514969274be612bb6341db52d0b83d2d93f322b1c9e992aeb2596818",
-      "event_type": {
-        "present": true,
-        "label": "концерт"
-      },
-      "admission": {
-        "present": true,
-        "label": "1500 ₽"
-      },
       "occurrence": {
         "present": true,
         "label": "17 октября 20:00",
@@ -389,51 +902,142 @@
         "present": true,
         "label": "В календарь"
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:priced",
+        "admission-visible:true",
+        "admission:label:1500 ₽",
+        "calendar:present",
+        "event-type-value:концерт",
+        "event-type:present",
+        "like-count:nonzero",
+        "like-proof:present",
+        "occurrence:simple",
+        "share-count:zero",
+        "share-proof:absent"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "концерт",
+        "raw_value": "концерт",
+        "label": "концерт",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "priced",
+        "visible": true,
+        "label": "1500 ₽",
+        "price": {
+          "valid": true,
+          "reason": null,
+          "label": "1500 ₽",
+          "amount_min": 1500,
+          "amount_max": 1500,
+          "currency": "RUB",
+          "currency_source": "label",
+          "amount_kind": "single"
+        },
+        "anomaly": null,
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "purchase",
+        "present": true,
+        "enabled": true,
+        "label": "Купить билет",
+        "href": "https://kaliningrad.qtickets.events/223339-kryli-solnyy-kontsert",
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": true,
-          "label": "В календарь"
+          "label": "В календарь",
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: Крыли — Сольный концерт",
-          "base_count": 0,
-          "count_label": "",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: Крыли — Сольный концерт. Сейчас 2",
-          "base_count": 2,
-          "count_label": "2"
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:1500 ₽",
-        "occurrence:simple",
-        "calendar:present",
-        "like-count:nonzero",
-        "share-count:zero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 2,
+          "visible": true,
+          "count_label": "2",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "концерт"
+        },
+        "admission": {
+          "present": true,
+          "label": "1500 ₽"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": true,
+            "label": "В календарь"
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: Крыли — Сольный концерт",
+            "base_count": 0,
+            "count_label": "",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: Крыли — Сольный концерт. Сейчас 2",
+            "base_count": 2,
+            "count_label": "2"
+          }
+        }
+      }
     },
     {
       "fixture_id": "event.real.6628",
       "event_id": 6628,
       "fixture_payload_sha256": "3e8a3f3ffa0200933f5189cf5d8c38a509eaf156580e65a6fd01676ace499e5a",
-      "event_type": {
-        "present": true,
-        "label": "выставка"
-      },
-      "admission": {
-        "present": true,
-        "label": "Билеты"
-      },
       "occurrence": {
         "present": true,
         "label": "10 июля 19:00",
@@ -446,47 +1050,158 @@
         "present": false,
         "label": null
       },
+      "branch_families": [
+        "actions:split-actions",
+        "admission-state:ticketed",
+        "admission-visible:true",
+        "admission:label:Билеты",
+        "calendar:absent",
+        "event-type-value:выставка",
+        "event-type:present",
+        "like-count:nonzero",
+        "like-proof:present",
+        "occurrence:simple",
+        "share-count:zero",
+        "share-proof:absent"
+      ],
+      "event_type": {
+        "component_id": "event.meta.event-type",
+        "semantic_value": "выставка",
+        "raw_value": "выставка",
+        "label": "выставка",
+        "label_source": "normalized-source",
+        "component_variant": "default"
+      },
+      "admission": {
+        "component_id": "event.meta.admission",
+        "state": "ticketed",
+        "visible": true,
+        "label": "Билеты",
+        "price": null,
+        "anomaly": null,
+        "component_variant": "default"
+      },
+      "admission_cta": {
+        "component_id": "event.cta.admission",
+        "semantic_action": "purchase",
+        "present": true,
+        "enabled": true,
+        "label": "Купить билет",
+        "href": "https://barnkaliningrad.ru/back_then",
+        "component_variant": "default"
+      },
       "actions": {
         "not_interested": {
+          "component_id": "event.action.not-interested",
+          "semantic_action": "dismiss_recommendation",
           "present": true,
-          "label": "Не интересно"
+          "label": "Не интересно",
+          "component_variant": "default"
         },
         "calendar": {
+          "component_id": "event.action.calendar",
+          "semantic_action": "calendar_add",
           "present": false,
-          "label": null
+          "label": null,
+          "component_variant": "default"
         },
         "share": {
+          "component_id": "event.action.share",
+          "semantic_action": "share",
           "present": true,
-          "aria_label": "Поделиться событием: ТОГДА",
-          "base_count": 0,
-          "count_label": "",
-          "label": "Поделиться"
+          "label": "Поделиться",
+          "component_variant": "default"
         },
         "like": {
+          "component_id": "event.action.like",
+          "semantic_action": "like",
           "present": true,
-          "aria_label": "Поставить лайк: ТОГДА. Сейчас 5",
-          "base_count": 5,
-          "count_label": "5"
+          "label": null,
+          "component_variant": "default"
         }
       },
-      "branch_families": [
-        "event-type:present",
-        "admission:label:Билеты",
-        "occurrence:simple",
-        "calendar:absent",
-        "like-count:nonzero",
-        "share-count:zero",
-        "actions:split-actions"
-      ]
+      "social_proof": {
+        "like": {
+          "component_id": "event.social-proof.like",
+          "metric": "like",
+          "count": 5,
+          "visible": true,
+          "count_label": "5",
+          "component_variant": "default"
+        },
+        "share": {
+          "component_id": "event.social-proof.share",
+          "metric": "share",
+          "count": 0,
+          "visible": false,
+          "count_label": "",
+          "component_variant": "default"
+        }
+      },
+      "semantic_anomalies": [],
+      "source_rendered": {
+        "event_type": {
+          "present": true,
+          "label": "выставка"
+        },
+        "admission": {
+          "present": true,
+          "label": "Билеты"
+        },
+        "actions": {
+          "not_interested": {
+            "present": true,
+            "label": "Не интересно"
+          },
+          "calendar": {
+            "present": false,
+            "label": null
+          },
+          "share": {
+            "present": true,
+            "aria_label": "Поделиться событием: ТОГДА",
+            "base_count": 0,
+            "count_label": "",
+            "label": "Поделиться"
+          },
+          "like": {
+            "present": true,
+            "aria_label": "Поставить лайк: ТОГДА. Сейчас 5",
+            "base_count": 5,
+            "count_label": "5"
+          }
+        }
+      }
     }
   ],
   "summary": {
+    "event_type_semantic_values": [
+      "выставка",
+      "концерт",
+      "лекция"
+    ],
     "event_type_labels": [
       "выставка",
       "концерт",
       "лекция"
     ],
+    "admission_states": [
+      "free_entry",
+      "free_registration",
+      "phone_booking",
+      "priced",
+      "ticketed",
+      "unspecified"
+    ],
     "admission_labels": [
+      "1000 ₽",
+      "1500 ₽",
+      "Бесплатно · вход свободный",
+      "Бесплатно · регистрация",
+      "Билеты",
+      "Запись по телефону"
+    ],
+    "source_rendered_admission_labels": [
       "1000 ₽",
       "1500 ₽",
       "Бесплатно · вход свободный",
@@ -523,8 +1238,19 @@
       0,
       5
     ],
+    "semantic_anomalies": [
+      "obsolete-unspecified-label-hidden"
+    ],
     "branch_families": [
       "actions:split-actions",
+      "admission-state:free_entry",
+      "admission-state:free_registration",
+      "admission-state:phone_booking",
+      "admission-state:priced",
+      "admission-state:ticketed",
+      "admission-state:unspecified",
+      "admission-visible:false",
+      "admission-visible:true",
       "admission:label:1000 ₽",
       "admission:label:1500 ₽",
       "admission:label:Бесплатно · вход свободный",
@@ -534,12 +1260,19 @@
       "admission:label:Условия уточняются",
       "calendar:absent",
       "calendar:present",
+      "event-type-value:выставка",
+      "event-type-value:концерт",
+      "event-type-value:лекция",
       "event-type:present",
       "like-count:nonzero",
       "like-count:zero",
+      "like-proof:absent",
+      "like-proof:present",
       "occurrence:simple",
       "share-count:nonzero",
-      "share-count:zero"
+      "share-count:zero",
+      "share-proof:absent",
+      "share-proof:present"
     ]
   }
 }

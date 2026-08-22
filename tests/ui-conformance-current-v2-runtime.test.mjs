@@ -60,7 +60,7 @@ test('checked inventory is the exact eight-fixture Astro-generated output', () =
   assert.equal(inventory.schema_version, 'event_card_large_chip_inventory.v2');
   assert.equal(inventory.fixture_count, 8);
   assert.equal(inventory.astro_source_repository_sha, '22ebe3c5e92b13684cca32c14357ef7b91834977');
-  assert.equal(inventory.conformance_tooling_repository_sha, 'c7b3f766b00cf5969f71dbbe03e88f18ad7f6a26');
+  assert.equal(inventory.conformance_tooling_repository_sha, '28e5261bf24f88d724d4121a53d62d4dbae0ec76');
   assert.equal(inventory.generation_mode, 'real-astro-static-build/exact-event-card/split-actions');
   assert.equal(inventory.production_source_mutated, false);
   assert.equal(inventory.semantic_projection_mode, 'adapter-only/pre-penpot-acceptance');
@@ -79,6 +79,15 @@ test('checked inventory is the exact eight-fixture Astro-generated output', () =
   ]);
   assert(inventory.summary.source_rendered_admission_labels.includes('Условия уточняются'));
   assert.deepEqual(inventory.summary.semantic_anomalies, ['obsolete-unspecified-label-hidden']);
+  const unspecified = inventory.cases.find((row) => row.fixture_id === 'event.real.7888');
+  assert.equal(unspecified.admission.component_id, 'event.meta.admission');
+  assert.equal(unspecified.admission.state, 'unspecified');
+  assert.equal(unspecified.admission.visible, false);
+  assert.equal(unspecified.admission.label, null);
+  assert.equal(unspecified.source_rendered.admission.label, 'Условия уточняются');
+  assert.equal(unspecified.actions.like.component_id, 'event.action.like');
+  assert.equal(unspecified.social_proof.like.component_id, 'event.social-proof.like');
+  assert.equal(unspecified.social_proof.like.count, 53);
   assert(inventory.summary.branch_families.includes('calendar:absent'));
   assert(inventory.summary.branch_families.includes('calendar:present'));
   assert.deepEqual(inventory.summary.share_count_values, [0, 5]);
