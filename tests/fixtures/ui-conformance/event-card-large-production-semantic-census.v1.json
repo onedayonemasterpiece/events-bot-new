@@ -85,14 +85,14 @@
       "unknown": 96
     },
     "contract_state_mapping": {
-      "priced": "priced",
-      "ticketed-generic": "ticketed",
-      "free-entry": "free_entry",
-      "unknown": "unspecified",
-      "free-registration": "free_registration",
-      "registration-only": "registration_required",
-      "sold-out": "sold_out",
-      "phone": "phone_booking"
+      "priced": "price",
+      "ticketed-generic": "ticket",
+      "free-entry": "free-entry",
+      "unknown": "absent",
+      "free-registration": "free-registration",
+      "registration-only": "registration-only",
+      "sold-out": "sold-out",
+      "phone": "phone"
     },
     "rendered_static_output_counts": {
       "Бесплатно · вход свободный": 141,
@@ -177,7 +177,17 @@
     "current_renderer_currency_symbol": "₽",
     "invalid_zero_price_count": 2,
     "obsolete_unspecified_label": "Условия уточняются",
-    "owner_decision": "unspecified and invalid price are hidden; obsolete fallback is not a valid semantic specimen"
+    "contract_states": [
+      "ticket",
+      "free-entry",
+      "free-registration",
+      "registration-only",
+      "sold-out",
+      "phone",
+      "price",
+      "absent"
+    ],
+    "owner_decision": "unknown and invalid price resolve to absent and are hidden; obsolete fallback is not a valid semantic specimen"
   },
   "actions_and_social": {
     "action_contract": "CTA and interaction actions are semantic actions separate from social-proof count content",

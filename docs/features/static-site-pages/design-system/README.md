@@ -270,8 +270,10 @@ different label.
 Admission is another semantic axis. `event.meta.admission` owns state and
 visibility; price owns a positive integer amount or range plus an explicit
 three-letter currency, with `RUB` only as the current compatibility default.
+Its exact SoT state vocabulary is `ticket`, `free-entry`, `free-registration`,
+`registration-only`, `sold-out`, `phone`, `price`, and `absent`.
 The exact resolver census contains 61 current price labels. Both observed
-`0 ₽` rows fail closed, while unknown admission is hidden. The historical
+`0 ₽` rows and unknown admission resolve to hidden `absent`. The historical
 Astro string `Условия уточняются` remains only in `source_rendered`
 evidence and is not a valid semantic specimen.
 
@@ -279,8 +281,9 @@ Interaction actions and social proof are deliberately separate. The action
 components (`event.action.like`, `event.action.share`, calendar and dismiss)
 describe behavior/labels. `event.social-proof.like` and
 `event.social-proof.share` own the numeric metric content and visibility. The
-admission CTA is independently modeled as `event.cta.admission`; price labels
-must never be encoded as CTA or component variants.
+EventCard Large contract has no admission CTA component. Ticket-href presence
+is retained only as non-component domain evidence; price labels must never be
+encoded as CTA or component variants.
 
 This adapter is pre-Penpot-acceptance normalization only. It does not change
 production `site/src`; a production backport still requires owner acceptance

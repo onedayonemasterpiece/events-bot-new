@@ -87,34 +87,22 @@ function eventStatusText(event) {
 export function resolveAdmissionSemantic(event, { defaultCurrency = 'RUB' } = {}) {
   const ticket = event.ticket || {}; const statusText = eventStatusText(event); const rawLabel = String(ticket.price_label || event.status_label || ticket.label || '').trim() || null;
   const componentId = 'event.meta.admission';
-  if (SOLD_PATTERN.test(statusText)) return { component_id:componentId, state:'sold_out', visible:true, label:'Билеты закончились', price:null, anomaly:null, component_variant:'default' };
+  if (SOLD_PATTERN.test(statusText)) return { component_id:componentId, state:'sold-out', visible:true, label:'Билеты закончились', price:null, anomaly:null, component_variant:'default' };
   const structuredPrice = structuredAdmissionPrice(ticket, { defaultCurrency });
   if (structuredPrice || ticket.price_label) {
     const price = structuredPrice || parseAdmissionPrice(ticket.price_label, { defaultCurrency:ticket.currency || defaultCurrency });
-    if (!price.valid) return { component_id:componentId, state:'invalid_price', visible:false, label:null, price, anomaly:price.reason, component_variant:'default' };
-    return { component_id:componentId, state:'priced', visible:true, label:price.label, price, anomaly:null, component_variant:'default' };
+    if (!price.valid) return { component_id:componentId, state:'absent', visible:false, label:null, price, anomaly:price.reason, component_variant:'default' };
+    return { component_id:componentId, state:'price', visible:true, label:price.label, price, anomaly:null, component_variant:'default' };
   }
   if (ticket.is_free) {
-    if (REGISTRATION_PATTERN.test(statusText)) return { component_id:componentId, state:'free_registration', visible:true, label:'Бесплатно · регистрация', price:null, anomaly:null, component_variant:'default' };
-    if (BOOKING_PATTERN.test(statusText)) return { component_id:componentId, state:'free_booking', visible:true, label:'Бесплатно · по записи', price:null, anomaly:null, component_variant:'default' };
-    return { component_id:componentId, state:'free_entry', visible:true, label:'Бесплатно · вход свободный', price:null, anomaly:null, component_variant:'default' };
+    if (REGISTRATION_PATTERN.test(statusText)) return { component_id:componentId, state:'free-registration', visible:true, label:'Бесплатно · регистрация', price:null, anomaly:null, component_variant:'default' };
+    return { component_id:componentId, state:'free-entry', visible:true, label:'Бесплатно · вход свободный', price:null, anomaly:null, component_variant:'default' };
   }
-  if (ticket.kind === 'phone' || BOOKING_PATTERN.test(statusText)) return { component_id:componentId, state:'phone_booking', visible:true, label:'Запись по телефону', price:null, anomaly:null, component_variant:'default' };
-  if (ticket.kind === 'registration' || REGISTRATION_PATTERN.test(statusText)) return { component_id:componentId, state:'registration_required', visible:true, label:'Регистрация', price:null, anomaly:null, component_variant:'default' };
-  if (ticket.kind === 'ticket' || TICKET_PATTERN.test(statusText)) return { component_id:componentId, state:'ticketed', visible:true, label:'Билеты', price:null, anomaly:null, component_variant:'default' };
+  if (ticket.kind === 'phone' || BOOKING_PATTERN.test(statusText)) return { component_id:componentId, state:'phone', visible:true, label:'Запись по телефону', price:null, anomaly:null, component_variant:'default' };
+  if (ticket.kind === 'registration' || REGISTRATION_PATTERN.test(statusText)) return { component_id:componentId, state:'registration-only', visible:true, label:'Регистрация', price:null, anomaly:null, component_variant:'default' };
+  if (ticket.kind === 'ticket' || TICKET_PATTERN.test(statusText)) return { component_id:componentId, state:'ticket', visible:true, label:'Билеты', price:null, anomaly:null, component_variant:'default' };
   const obsolete = OBSOLETE_ADMISSION_LABELS.has(normalizedText(rawLabel));
-  return { component_id:componentId, state:'unspecified', visible:false, label:null, price:null, anomaly:obsolete ? 'obsolete-unspecified-label-hidden' : 'unspecified-admission-hidden', component_variant:'default' };
-}
-
-export function resolveAdmissionCta(event, admission) {
-  const ticket = event.ticket || {}; const href = String(ticket.href || '').trim() || null;
-  const componentId = 'event.cta.admission';
-  if (admission.state === 'sold_out') return { component_id:componentId, semantic_action:'purchase', present:true, enabled:false, label:'Билеты закончились', href:null, component_variant:'default' };
-  if (ticket.kind === 'phone') return { component_id:componentId, semantic_action:'call', present:Boolean(href), enabled:Boolean(href), label:'Позвонить организатору', href, component_variant:'default' };
-  if (ticket.kind === 'registration') return { component_id:componentId, semantic_action:'register', present:Boolean(href), enabled:Boolean(href), label:'Зарегистрироваться', href, component_variant:'default' };
-  if (ticket.kind === 'source') return { component_id:componentId, semantic_action:'open_source', present:Boolean(href), enabled:Boolean(href), label:'Открыть пост организатора', href, component_variant:'default' };
-  if (ticket.kind === 'ticket' && href) return { component_id:componentId, semantic_action:'purchase', present:true, enabled:true, label:'Купить билет', href, component_variant:'default' };
-  return { component_id:componentId, semantic_action:'none', present:false, enabled:false, label:null, href:null, component_variant:'default' };
+  return { component_id:componentId, state:'absent', visible:false, label:null, price:null, anomaly:obsolete ? 'obsolete-unspecified-label-hidden' : 'unspecified-admission-hidden', component_variant:'default' };
 }
 
 function nonNegativeCount(value) {
@@ -145,7 +133,7 @@ export function resolveEventCardSemantics(event, options = {}) {
   return {
     event_type: eventType,
     admission,
-    admission_cta: resolveAdmissionCta(event, admission),
+    domain_evidence: { ticket_href_present:Boolean(String(event.ticket?.href || '').trim()), admission_cta_component:'not_applicable' },
     actions: resolveEventCardActions(event, { calendarEligible:Boolean(options.calendarEligible) }),
     social_proof: resolveSocialProof(event),
     anomalies: [admission.anomaly].filter(Boolean),

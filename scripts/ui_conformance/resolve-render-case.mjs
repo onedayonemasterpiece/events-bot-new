@@ -52,7 +52,7 @@ const resolved={
   source_database_snapshot_fingerprint:fixtureMeta.source_database_snapshot_fingerprint,
   reference_clock:corpus.reference_clock,
   asset_refs:assetRows.map((item)=>item.asset_id), asset_manifest_sha256:assetsManifest.assets_manifest_sha256,
-  resolved_content:{title:event.title,date:displayDate,time:event.display_time||null,place:[event.city,event.venue_name].filter(Boolean).join(' · ')||null,event_type:semantics.event_type,admission:semantics.admission,admission_cta:semantics.admission_cta,social_proof:semantics.social_proof,actions:semantics.actions,counts:{likes:semantics.social_proof.like.count,shares:semantics.social_proof.share.count},labels:{event_type:semantics.event_type.label,occurrence:occurrence.compactLabel,not_interested:semantics.actions.not_interested.label,calendar:semantics.actions.calendar.label,share:semantics.actions.share.label}},
+  resolved_content:{title:event.title,date:displayDate,time:event.display_time||null,place:[event.city,event.venue_name].filter(Boolean).join(' · ')||null,event_type:semantics.event_type,admission:semantics.admission,domain_evidence:semantics.domain_evidence,social_proof:semantics.social_proof,actions:semantics.actions,counts:{likes:semantics.social_proof.like.count,shares:semantics.social_proof.share.count},labels:{event_type:semantics.event_type.label,occurrence:occurrence.compactLabel,not_interested:semantics.actions.not_interested.label,calendar:semantics.actions.calendar.label,share:semantics.actions.share.label}},
   resolved_media:primary?{asset_id:primaryAsset?.asset_id||null,frame_role:'event-card-primary',frame_geometry:{outer_width:row.container_width,content_width:frameWidth,content_height:frameHeight,border_width:1,intrinsic_width:primary.width,intrinsic_height:primary.height},fit:mediaDecision?.fit||'contain',object_position:mediaDecision?.objectPosition||'50% 50%',crop_window:null,protected_regions:{ocr_boxes:primary.ocr_boxes||[],face_boxes:primary.face_boxes||[],valuable_region:primary.valuable_region||null},media_treatment:mediaDecision?.mediaTreatment||null,crop_reason:mediaDecision?.cropReason||null}:null,
   resolved_visibility:{event_type:Boolean(semantics.event_type.label),place:Boolean(event.city||event.venue_name),admission:semantics.admission.visible,calendar:semantics.actions.calendar.present,share:semantics.actions.share.present,like:semantics.actions.like.present,not_interested:semantics.actions.not_interested.present,like_count:semantics.social_proof.like.visible,share_count:semantics.social_proof.share.visible,media:Boolean(primary)},
   resolved_nested_components:[
@@ -63,8 +63,7 @@ const resolved={
     ...(semantics.social_proof.share.visible?[{component_id:'event.social-proof.share',role:'share-proof',semantic_state:semantics.social_proof.share}]:[]),
     ...(semantics.social_proof.like.visible?[{component_id:'event.social-proof.like',role:'like-proof',semantic_state:semantics.social_proof.like}]:[]),
     ...(semantics.event_type.label?[{component_id:'event.meta.event-type',role:'event-type',semantic_state:semantics.event_type}]:[]),
-    ...(semantics.admission.visible?[{component_id:'event.meta.admission',role:'admission',semantic_state:semantics.admission}]:[]),
-    ...(semantics.admission_cta.present?[{component_id:'event.cta.admission',role:'admission-cta',semantic_state:semantics.admission_cta}]:[])
+    ...(semantics.admission.visible?[{component_id:'event.meta.admission',role:'admission',semantic_state:semantics.admission}]:[])
   ],
   semantic_anomalies:semantics.anomalies,
   resolved_props:{variant:'split-actions',desktopRelatedCrop:viewport==='desktop',mobileFlowMedia:viewport==='mobile',presentation:'dark-shell'},

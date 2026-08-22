@@ -5,8 +5,10 @@
 - Added: an exact-resolver-bound EventCard semantic census adapter. All 31
   observed event-type labels now flow through one semantic chip contract; all
   61 current price labels are checked as amount/range plus currency; unknown
-  admission and the two invalid `0 ₽` observations fail closed. CTA/action
-  behavior and like/share proof counts remain separate semantic components.
+  admission and the two invalid `0 ₽` observations resolve to hidden `absent`.
+  The adapter uses the exact eight-state SoT vocabulary and does not invent an
+  admission CTA component; interaction actions and like/share proof counts
+  remain separate semantic components.
   This is conformance-only and does not change production `site/src`.
 
 - Added: a source-hash-bound Astro-generated inventory of every EventCard Large

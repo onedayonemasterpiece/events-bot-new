@@ -130,7 +130,7 @@ export function summarizeInventory(rows) {
     anomalies:row.semantic_anomalies || [],
   } : {
     event_type:row.event_type,
-    admission:{...row.admission,state:row.admission?.label ? 'legacy-label' : 'unspecified'},
+    admission:{...row.admission,state:row.admission?.label ? 'legacy-label' : 'absent'},
     actions:row.actions,
     social_proof:{like:{count:row.actions.like.base_count},share:{count:row.actions.share.base_count}},
     anomalies:[],
@@ -201,7 +201,7 @@ export function buildInventory(args) {
       ...generatedFacts,
       event_type:semantics.event_type,
       admission:semantics.admission,
-      admission_cta:semantics.admission_cta,
+      domain_evidence:semantics.domain_evidence,
       actions:semantics.actions,
       social_proof:semantics.social_proof,
       semantic_anomalies:semantics.anomalies,
