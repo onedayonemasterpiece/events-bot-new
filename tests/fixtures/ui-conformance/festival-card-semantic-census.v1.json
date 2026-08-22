@@ -1,0 +1,661 @@
+{
+  "schema_version": "festival_card_semantic_census.v1",
+  "evidence_mode": "actual-astro-renderer-source-plus-generated-projection-data",
+  "source_files": [
+    {
+      "path": "site/src/pages/festivali/index.astro",
+      "sha256": "df702bc98d0ba65d08de639df2b83cbd02958232fd8869308084532f560bded1"
+    },
+    {
+      "path": "site/src/data/festival-timeline.json",
+      "sha256": "1710e886d7ca8fb9b8e3e163c15add795cb35ae1716ca14336f4cac93675f6e8"
+    },
+    {
+      "path": "site/src/data/preview-events.json",
+      "sha256": "b9ff7eb0357ad603b9621391810355319e299500ac76f9c9d967a72b26a79d85"
+    }
+  ],
+  "production_source_mutated": false,
+  "festival_count": 21,
+  "category_count": 16,
+  "joined_event_count": 4,
+  "source_facts": {
+    "theme_model": "one-label/one-or-two-category-icons",
+    "responsive_secondary_icon": "hidden-at-820px-through-1000px",
+    "renderer_like_model": "festival-local-favorite/no-aggregate-count"
+  },
+  "target_model": {
+    "owner_override": "shared-like-action/aggregate-social-proof",
+    "reverse_integration_state": "pre-acceptance/no-production-mutation"
+  },
+  "component_contract": {
+    "theme": {
+      "component_id": "festival.meta.theme",
+      "component_variant": "default",
+      "label_role": "content",
+      "icon_slots": [
+        "primary",
+        "secondary"
+      ],
+      "secondary_icon_presence": "optional"
+    },
+    "like": {
+      "action_component_id": "event.action.like",
+      "proof_component_id": "event.social-proof.like",
+      "local_selection_state": "behavior-only",
+      "festival_specific_component": false
+    }
+  },
+  "categories": [
+    {
+      "label": "Авторская песня",
+      "semantic_value": "авторская-песня",
+      "occurrence_count": 1,
+      "icons": [
+        "mic",
+        "music"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Вино и гастрономия",
+      "semantic_value": "вино-и-гастрономия",
+      "occurrence_count": 1,
+      "icons": [
+        "carrot"
+      ],
+      "icon_slot_count": 1
+    },
+    {
+      "label": "Гастрономия",
+      "semantic_value": "гастрономия",
+      "occurrence_count": 2,
+      "icons": [
+        "carrot",
+        "users"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Джаз",
+      "semantic_value": "джаз",
+      "occurrence_count": 2,
+      "icons": [
+        "saxophone",
+        "music"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "История и реконструкция",
+      "semantic_value": "история-и-реконструкция",
+      "occurrence_count": 1,
+      "icons": [
+        "history",
+        "map-pin"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Кино",
+      "semantic_value": "кино",
+      "occurrence_count": 1,
+      "icons": [
+        "camera",
+        "ticket"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Классическая музыка",
+      "semantic_value": "классическая-музыка",
+      "occurrence_count": 2,
+      "icons": [
+        "music"
+      ],
+      "icon_slot_count": 1
+    },
+    {
+      "label": "Косплей",
+      "semantic_value": "косплей",
+      "occurrence_count": 1,
+      "icons": [
+        "palette",
+        "star"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Культура народов",
+      "semantic_value": "культура-народов",
+      "occurrence_count": 2,
+      "icons": [
+        "users",
+        "palette"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Литература",
+      "semantic_value": "литература",
+      "occurrence_count": 1,
+      "icons": [
+        "book-open"
+      ],
+      "icon_slot_count": 1
+    },
+    {
+      "label": "Море и техника",
+      "semantic_value": "море-и-техника",
+      "occurrence_count": 1,
+      "icons": [
+        "anchor",
+        "history"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Музыка",
+      "semantic_value": "музыка",
+      "occurrence_count": 1,
+      "icons": [
+        "music"
+      ],
+      "icon_slot_count": 1
+    },
+    {
+      "label": "Путешествия",
+      "semantic_value": "путешествия",
+      "occurrence_count": 1,
+      "icons": [
+        "map-pin",
+        "history"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Семейный фестиваль",
+      "semantic_value": "семейный-фестиваль",
+      "occurrence_count": 1,
+      "icons": [
+        "star",
+        "carrot"
+      ],
+      "icon_slot_count": 2
+    },
+    {
+      "label": "Современное искусство",
+      "semantic_value": "современное-искусство",
+      "occurrence_count": 1,
+      "icons": [
+        "palette"
+      ],
+      "icon_slot_count": 1
+    },
+    {
+      "label": "Театр",
+      "semantic_value": "театр",
+      "occurrence_count": 2,
+      "icons": [
+        "theatre-masks"
+      ],
+      "icon_slot_count": 1
+    }
+  ],
+  "festivals": [
+    {
+      "slug": "city-jazz",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "джаз",
+        "label": "джаз",
+        "icons": [
+          "saxophone",
+          "music"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "sosedi",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "гастрономия",
+        "label": "гастрономия",
+        "icons": [
+          "carrot",
+          "users"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "grozd",
+      "internal_event_id": 6994,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "вино-и-гастрономия",
+        "label": "вино и гастрономия",
+        "icons": [
+          "carrot"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 7,
+        "count_label": "7",
+        "proof_present": true
+      }
+    },
+    {
+      "slug": "more-vnutri",
+      "internal_event_id": 4211,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "современное-искусство",
+        "label": "современное искусство",
+        "icons": [
+          "palette"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 84,
+        "count_label": "84",
+        "proof_present": true
+      }
+    },
+    {
+      "slug": "bolshoy-kaup",
+      "internal_event_id": 6191,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "история-и-реконструкция",
+        "label": "история и реконструкция",
+        "icons": [
+          "history",
+          "map-pin"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 198,
+        "count_label": "198",
+        "proof_present": true
+      }
+    },
+    {
+      "slug": "koroche",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "кино",
+        "label": "кино",
+        "icons": [
+          "camera",
+          "ticket"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "mimikriya",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "косплей",
+        "label": "косплей",
+        "icons": [
+          "palette",
+          "star"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "territoriya-mira",
+      "internal_event_id": 2863,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "музыка",
+        "label": "музыка",
+        "icons": [
+          "music"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 3,
+        "count_label": "3",
+        "proof_present": true
+      }
+    },
+    {
+      "slug": "street-food",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "гастрономия",
+        "label": "гастрономия",
+        "icons": [
+          "carrot",
+          "users"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "zhili-byli",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "театр",
+        "label": "театр",
+        "icons": [
+          "theatre-masks"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "narodov-mnogo",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "культура-народов",
+        "label": "культура народов",
+        "icons": [
+          "users",
+          "palette"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "vitaliki",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "авторская-песня",
+        "label": "авторская песня",
+        "icons": [
+          "mic",
+          "music"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "vodnaya-assambleya",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "море-и-техника",
+        "label": "море и техника",
+        "icons": [
+          "anchor",
+          "history"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "shedevry",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "классическая-музыка",
+        "label": "классическая музыка",
+        "icons": [
+          "music"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "dni-literatury",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "литература",
+        "label": "литература",
+        "icons": [
+          "book-open"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "tykvennyi-pir",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "семейный-фестиваль",
+        "label": "семейный фестиваль",
+        "icons": [
+          "star",
+          "carrot"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "ostrova",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "театр",
+        "label": "театр",
+        "icons": [
+          "theatre-masks"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "klub-puteshestvennikov",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "путешествия",
+        "label": "путешествия",
+        "icons": [
+          "map-pin",
+          "history"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "v-edinstve",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "культура-народов",
+        "label": "культура народов",
+        "icons": [
+          "users",
+          "palette"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "jazz-v-filarmonii",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "джаз",
+        "label": "джаз",
+        "icons": [
+          "saxophone",
+          "music"
+        ],
+        "secondary_icon_present": true
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    },
+    {
+      "slug": "dekabristskie-vechera",
+      "internal_event_id": null,
+      "theme": {
+        "component_id": "festival.meta.theme",
+        "component_variant": "default",
+        "semantic_value": "классическая-музыка",
+        "label": "классическая музыка",
+        "icons": [
+          "music"
+        ],
+        "secondary_icon_present": false
+      },
+      "like": {
+        "action_component_id": "event.action.like",
+        "proof_component_id": "event.social-proof.like",
+        "base_count": 0,
+        "count_label": "",
+        "proof_present": false
+      }
+    }
+  ]
+}
