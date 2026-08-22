@@ -438,6 +438,52 @@ def test_projection_preserves_exporter_visible_rows_and_media(tmp_path: Path) ->
         ) == exporter.collect_images(live, 1, "[]", "Текущий концерт")
 
 
+def test_projection_preserves_source_order_across_different_query_plans(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.sqlite"
+    _source_database(source)
+    with sqlite3.connect(source) as con:
+        con.executemany(
+            """
+            insert into event_source(
+                id,event_id,source_type,source_url,source_chat_username,
+                source_chat_id,source_message_id,trust_level,imported_at
+            ) values(?,1,'telegram',?,'source',1,?,'trusted','2026-08-15T00:00:00Z')
+            """,
+            [
+                (2, "https://t.me/source/z-last-by-url", 2),
+                (3, "https://t.me/source/a-first-by-url", 3),
+            ],
+        )
+        # The production database and compact projection intentionally do not
+        # share indexes. The public source order must therefore be explicit,
+        # not an accidental consequence of either query plan.
+        con.execute(
+            "create index event_source_event_url_idx "
+            "on event_source(event_id, source_url)"
+        )
+    snapshot, _manifest, _metadata = _build_projection(
+        source, tmp_path / "projection"
+    )
+    exporter = _load_exporter()
+
+    with sqlite3.connect(source) as live, sqlite3.connect(snapshot) as projected:
+        live.row_factory = sqlite3.Row
+        projected.row_factory = sqlite3.Row
+        live_event = live.execute("select * from event where id=1").fetchone()
+        projected_event = projected.execute(
+            "select * from event where id=1"
+        ).fetchone()
+        expected = [
+            "https://t.me/source/1",
+            "https://t.me/source/z-last-by-url",
+            "https://t.me/source/a-first-by-url",
+        ]
+        assert exporter.collect_source_urls(live, 1, live_event) == expected
+        assert exporter.collect_source_urls(projected, 1, projected_event) == expected
+
+
 def test_projection_parity_covers_full_exporter_products_and_optional_relations(
     tmp_path: Path,
 ) -> None:

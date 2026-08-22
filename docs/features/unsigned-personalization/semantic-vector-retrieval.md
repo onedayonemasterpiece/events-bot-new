@@ -361,6 +361,10 @@ Remote dimension probes are presentation enrichment and must not make an
 otherwise unchanged Search receipt drift according to network availability;
 the comparator temporarily enables the exporter's probe-free mode under a
 process lock and restores the previous exporter setting afterward.
+The shared exporter orders `event_source` rows by their durable source id.
+The compact Kaggle projection intentionally drops production indexes, so an
+unordered scan could otherwise permute `source_urls` while preserving every
+row and still produce a different exact-catalog revision.
 
 StaticSiteBuilder remains a build consumer. A manual canary/backfill may
 explicitly refresh vectors, but production keeps

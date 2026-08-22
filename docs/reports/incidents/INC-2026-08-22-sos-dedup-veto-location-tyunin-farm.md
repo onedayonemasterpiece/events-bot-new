@@ -106,6 +106,14 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   The same immutable catalog therefore hashes differently according to media
   probe results. The comparator is corrected to use the vector owner's
   deterministic probe-free projection; the barrier itself remains mandatory.
+- `2026-08-22 20:00..20:10Z` — a captured vector snapshot proves its receipt,
+  captured snapshot and live full-DB catalog revisions are identical. The
+  next compact-snapshot attempt still drifts. Full-versus-compact payload
+  comparison localizes all 270 differing Events to `source_urls` ordering:
+  the production DB and allowlisted projection have different indexes, while
+  `collect_source_urls` used an unordered `event_source` scan. Ordering by the
+  durable source id restores byte-identical payloads without suppressing the
+  catalog barrier or changing event identity.
 
 ## Root Cause
 
