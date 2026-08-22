@@ -57,6 +57,32 @@ class MergeIdentityRelation(str, Enum):
     UNKNOWN = "unknown"
 
 
+class IdentityFinalAction(str, Enum):
+    """The only three outcomes after an identity concern is adjudicated."""
+
+    FINAL_MATCH = "FINAL_MATCH"
+    FINAL_DISTINCT = "FINAL_DISTINCT"
+    FINAL_RETRY = "FINAL_RETRY"
+
+
+class IdentityFinalRelation(str, Enum):
+    SAME_EVENT = "same_event"
+    DISTINCT_EVENT = "distinct_event"
+    DISTINCT_OCCURRENCE = "distinct_occurrence"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityFinalResult:
+    action: IdentityFinalAction
+    relation: IdentityFinalRelation = IdentityFinalRelation.UNKNOWN
+    owner_event_id: int | None = None
+    confidence: float = 0.0
+    reason_code: str = ""
+    evidence: tuple[str, ...] = ()
+    blocking_conflicts: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class IdentitySourceFlags:
     """Normalized source/type flags carried into the identity policy."""
@@ -92,6 +118,15 @@ class IdentitySubject:
 
 
 @dataclass(frozen=True, slots=True)
+class IdentityVectorCandidate:
+    event_id: int
+    score: float
+    rank: int
+    doc_kind: str | None = None
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class IdentityVectorEvidence:
     """Optional vector-lane evidence.  Safe to omit until vector RPC/schema lands."""
 
@@ -100,6 +135,8 @@ class IdentityVectorEvidence:
     score: float | None = None
     reason: str | None = None
     error: str | None = None
+    candidates: tuple[IdentityVectorCandidate, ...] = ()
+    filter_fallback_used: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -716,28 +753,35 @@ def _vector_supported_identity_match(
     existing: Sequence[IdentitySubject],
     vector_evidence: IdentityVectorEvidence | None,
 ) -> tuple[IdentitySubject, str] | None:
-    if (
-        not vector_evidence
-        or not vector_evidence.available
-        or vector_evidence.nearest_event_id is None
-        or vector_evidence.score is None
-    ):
+    if not vector_evidence or not vector_evidence.available:
         return None
-    ev = next((item for item in existing if item.event_id == vector_evidence.nearest_event_id), None)
-    if ev is None:
-        return None
-    if not _date_overlaps(candidate, ev):
-        return None
-    if _is_long_running(candidate) or _is_long_running(ev):
-        if vector_evidence.score < 0.86:
-            return None
-        if _locations_related(candidate, ev) or _titles_related(candidate.title, ev.title) or _strong_shared_anchor(candidate, ev):
-            return ev, vector_evidence.reason or "high-confidence vector identity for overlapping long-running event"
-        return None
-    if vector_evidence.score < 0.94:
-        return None
-    if _same_known_time(candidate, ev) and (_titles_related(candidate.title, ev.title) or _locations_related(candidate, ev) or _strong_shared_anchor(candidate, ev)):
-        return ev, vector_evidence.reason or "high-confidence vector identity for same dated slot"
+    ranked = vector_evidence.candidates
+    if not ranked and vector_evidence.nearest_event_id is not None and vector_evidence.score is not None:
+        ranked = (
+            IdentityVectorCandidate(
+                event_id=vector_evidence.nearest_event_id,
+                score=vector_evidence.score,
+                rank=1,
+                reason=vector_evidence.reason,
+            ),
+        )
+    existing_by_id = {item.event_id: item for item in existing if item.event_id is not None}
+    for vector_candidate in ranked:
+        ev = existing_by_id.get(vector_candidate.event_id)
+        if ev is None or not _date_overlaps(candidate, ev):
+            continue
+        score = float(vector_candidate.score)
+        reason = vector_candidate.reason or vector_evidence.reason
+        if _is_long_running(candidate) or _is_long_running(ev):
+            if score < 0.86:
+                continue
+            if _locations_related(candidate, ev) or _titles_related(candidate.title, ev.title) or _strong_shared_anchor(candidate, ev):
+                return ev, reason or "high-confidence vector identity for overlapping long-running event"
+            continue
+        if score < 0.94:
+            continue
+        if _same_known_time(candidate, ev) and (_titles_related(candidate.title, ev.title) or _locations_related(candidate, ev) or _strong_shared_anchor(candidate, ev)):
+            return ev, reason or "high-confidence vector identity for same dated slot"
     return None
 
 
@@ -944,12 +988,35 @@ def _clean_str(value: Any) -> str | None:
 def _coerce_vector_evidence(value: IdentityVectorEvidence | Mapping[str, Any] | None) -> IdentityVectorEvidence | None:
     if value is None or isinstance(value, IdentityVectorEvidence):
         return value
+    raw_candidates = value.get("candidates") or ()
+    candidates: list[IdentityVectorCandidate] = []
+    for rank, raw in enumerate(raw_candidates, start=1):
+        if isinstance(raw, IdentityVectorCandidate):
+            candidates.append(raw)
+            continue
+        if not isinstance(raw, Mapping):
+            continue
+        event_id = _coerce_int(raw.get("event_id") or raw.get("id"))
+        score = _coerce_float(raw.get("score") or raw.get("similarity"))
+        if event_id is None or score is None:
+            continue
+        candidates.append(
+            IdentityVectorCandidate(
+                event_id=event_id,
+                score=score,
+                rank=_coerce_int(raw.get("rank")) or rank,
+                doc_kind=_clean_str(raw.get("doc_kind") or raw.get("embedding_doc_kind")),
+                reason=_clean_str(raw.get("reason")),
+            )
+        )
     return IdentityVectorEvidence(
         available=bool(value.get("available", True)),
         nearest_event_id=_coerce_int(value.get("nearest_event_id") or value.get("event_id")),
         score=_coerce_float(value.get("score")),
         reason=_clean_str(value.get("reason")),
         error=_clean_str(value.get("error")),
+        candidates=tuple(candidates),
+        filter_fallback_used=bool(value.get("filter_fallback_used", False)),
     )
 
 

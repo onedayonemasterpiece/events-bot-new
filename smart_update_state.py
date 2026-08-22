@@ -82,6 +82,7 @@ class RetryReason(str, Enum):
     IDENTITY_MATCH_DISAPPEARED = "identity_gate_match_disappeared"
     IDENTITY_TECHNICAL_FAILURE = "identity_technical_failure"
     IDENTITY_SEMANTIC_UNKNOWN = "identity_semantic_unknown"
+    IDENTITY_FINAL_RETRY = "identity_final_retry"
     DEDUP_ADJUDICATOR_TECHNICAL_FAILURE = "dedup_adjudicator_technical_failure"
     PRODUCT_REASON_UNTYPED = "product_reason_untyped"
     SOURCE_DECISION_INVALID = "source_decision_invalid"
@@ -312,11 +313,11 @@ async def finish_candidate_attempt(
     lifecycle_reason: LifecycleReason | None = None,
     retry_delay_seconds: int = 300,
 ) -> None:
-    """Atomically close one attempt; never create background retry work.
+    """Atomically close one attempt.
 
-    ``RETRY_SCHEDULED`` remains readable for legacy rows and old callers, but a
-    completed invocation is projected as the visible ``FAILED_TECHNICAL``
-    terminal. The delay argument is retained for caller compatibility only.
+    Ordinary retry-shaped results remain visible technical terminals. The
+    narrowly typed identity retry classes stay durably retryable and can be
+    claimed by the existing worker/operator path without becoming distinct.
     """
 
     if not isinstance(outcome, SmartUpdateTerminalOutcome):
@@ -328,10 +329,23 @@ async def finish_candidate_attempt(
             reason = retry_reason.value
         else:
             reason = product_exclusion_reason.value
-    elif outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
-        outcome = SmartUpdateTerminalOutcome.FAILED_TECHNICAL
-        if isinstance(retry_reason, RetryReason):
+    durable_identity_retry = bool(
+        outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        and retry_reason
+        in {
+            RetryReason.IDENTITY_FINAL_RETRY,
+            RetryReason.IDENTITY_TECHNICAL_FAILURE,
+            RetryReason.IDENTITY_SEMANTIC_UNKNOWN,
+            RetryReason.DEDUP_ADJUDICATOR_TECHNICAL_FAILURE,
+        }
+    )
+    if outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
+        if durable_identity_retry:
             reason = retry_reason.value
+        else:
+            outcome = SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+            if isinstance(retry_reason, RetryReason):
+                reason = retry_reason.value
     elif isinstance(identity_distinct_reason, IdentityDistinctReason):
         reason = identity_distinct_reason.value
     elif isinstance(lifecycle_reason, LifecycleReason):
@@ -344,7 +358,7 @@ async def finish_candidate_attempt(
     }
     accepted_event_id = int(event_id) if accepted and event_id is not None else None
     diagnostic_id = int(diagnostic_event_id) if diagnostic_event_id is not None else None
-    del retry_delay_seconds
+    retry_delay_seconds = max(1, min(int(retry_delay_seconds), 86400))
     async with db.raw_conn() as conn:
         await conn.execute("BEGIN IMMEDIATE")
         try:
@@ -369,15 +383,25 @@ async def finish_candidate_attempt(
             await cursor.close()
             failed_technical = outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
             retry_exhausted = 1 if failed_technical else 0
-            retry_counter = receipt.attempt if failed_technical else 0
+            retry_counter = (
+                receipt.attempt
+                if failed_technical or durable_identity_retry
+                else 0
+            )
+            next_retry_sql = (
+                f"datetime(CURRENT_TIMESTAMP, '+{retry_delay_seconds} seconds')"
+                if durable_identity_retry
+                else "NULL"
+            )
+            completed_at_sql = "NULL" if durable_identity_retry else "CURRENT_TIMESTAMP"
             await conn.execute(
-                """
+                f"""
                 UPDATE smart_update_candidate_state
                 SET current_outcome=?, accepted_event_id=?, diagnostic_event_id=?, reason=?,
-                    next_retry_at=NULL, updated_at=CURRENT_TIMESTAMP,
+                    next_retry_at={next_retry_sql}, updated_at=CURRENT_TIMESTAMP,
                     retry_attempts=?,
                     retry_exhausted=?, claimed_by=NULL, claim_expires_at=NULL,
-                    completed_at=CURRENT_TIMESTAMP
+                    completed_at={completed_at_sql}
                 WHERE id=?
                 """,
                 (

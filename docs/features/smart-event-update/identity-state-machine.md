@@ -1,16 +1,16 @@
 # Smart Update identity state machine
 
 This is the canonical automatic-ingestion contract for Smart Update. The
-product has no Event-review operator. The 2026-08-15 owner decision supersedes
-the background-retry part of the 2026-08-10 contract: one invocation now makes
-the LLM-first semantic decision and closes it. Identity uncertainty resolves
-inline to a distinct Event; infrastructure uncertainty becomes a visible
-technical terminal rather than invisible queued work.
+product has no Event-review operator. `INC-2026-08-22` restores the fail-closed
+identity boundary: explicit grounded distinct evidence may close inline, but
+identity abstention/provider/schema uncertainty stays durably retryable and can
+never authorize an Event CREATE.
 
 Related regression contracts:
 
 - `INC-2026-08-04-smart-update-identity-source-replay-corruption`;
 - `INC-2026-08-10-smart-update-identity-terminal-loss`.
+- `INC-2026-08-22-sos-dedup-veto-location-tyunin-farm`.
 
 ## Public result type
 
@@ -21,6 +21,7 @@ Every submitted candidate receives exactly one public result per attempt:
 | `CREATED` | required | a distinct canonical Event was inserted |
 | `MERGED` | required | the packet was accepted against an existing Event |
 | `NOOP_EXACT_REPLAY` | required | the same candidate key and packet fingerprint were already accepted |
+| `RETRY_SCHEDULED` | forbidden | identity resolution is fail-closed and durably due for a bounded re-drive |
 | `REJECTED_PRODUCT_POLICY` | forbidden | a confirmed permanent product exclusion, with an explicit reason |
 | `FAILED_TECHNICAL` | forbidden | provider/schema/storage failure exhausted the current invocation and needs an explicit re-drive/incident action |
 
@@ -29,11 +30,11 @@ Callers must never treat it as persisted success. Free-form
 `review_required`, `skipped_identity_gate`, `skipped_context_only`, or terminal
 generic `failed` are not public outcomes.
 
-The identity-uncertainty budget is inline: one normal adjudication followed by
-at most one distinct-create resolution in the same facade call. Provider and
-storage failures are never relabelled as product rejection, but they also never
-enter an automatic background queue. `RETRY_SCHEDULED` is retained in SQLite
-only as a provisional/legacy recovery value and is not a new public result.
+The normal path invokes the existing adjudicator at most once. A retry adds no
+Event/domain/publication side effect and retains its replayable packet, owner
+diagnostic and next retry time in SQLite. The worker is bounded and
+operationally gated; durable does not mean an always-on global reconciler.
+Non-identity technical failures keep the ordinary `FAILED_TECHNICAL` boundary.
 
 ## Intents
 
@@ -63,17 +64,23 @@ keywords or regexes.
 
 | semantic/evidence result | automatic action |
 | --- | --- |
-| `SAME_EVENT` / `SOURCE_UPDATE` | merge and return `MERGED` |
-| `RELATED_BUT_DISTINCT` | create distinct |
-| `FESTIVAL_CONTEXT_SIBLING` | create distinct |
-| `UNSAFE_TO_MERGE` or blocking structural conflict | create distinct |
-| different explicit same-vendor occurrence IDs | create distinct |
-| semantic uncertain/unknown identity result | run the distinct-create resolution once inline |
-| LLM unavailable/invalid schema/vector/gate/DB exception | `FAILED_TECHNICAL`; explicit re-drive only |
+| accepted `SAME_EVENT` / source update | `FINAL_MATCH`; merge owner |
+| explicit source-grounded `DISTINCT_EVENT` | `FINAL_DISTINCT`; create distinct |
+| explicit source-grounded `DISTINCT_OCCURRENCE` | `FINAL_DISTINCT`; create distinct |
+| `no_merge`/`no_candidate_match` without concrete distinct proof | `FINAL_RETRY` |
+| semantic abstention or invalid identity provider/schema response | `FINAL_RETRY` |
+| unrelated DB/storage exception | `FAILED_TECHNICAL` |
 
 When the create gate finds a matched Event, that pair is passed through the
-existing adjudication operation: same merges, distinct creates, and transient
-failure closes visibly as technical. `VETO_CREATE` has no terminal product meaning.
+existing adjudication operation. `VETO_CREATE` means CREATE now requires an
+explicit grounded distinct verdict; it does not force a merge. Final application
+has only `FINAL_MATCH`, `FINAL_DISTINCT`, or `FINAL_RETRY`, replacing the
+ambiguous adjudicated boolean. Ordinary CREATE is unreachable after an identity
+concern unless the result is `FINAL_DISTINCT`.
+
+The existing decision log persists candidate-state/attempt number, owner, final
+action/relation/confidence, exact grounded evidence and blocking conflicts. No
+new LLM call or identity table is introduced.
 
 The final duplicate/race probe reloads and revalidates the authoritative Event
 inside the same facade operation. A confirmed duplicate attaches the keyed
@@ -120,16 +127,15 @@ SQLite owns the cross-process authority:
   occurrence/source identity, replayable payload/locator, current terminal,
   accepted versus diagnostic IDs, bounded retry/lease fields, and timestamps;
 - `smart_update_attempt` is append-only and unique by candidate plus attempt
-number. Each started attempt finishes with exactly one of the five public
-outcomes.
+  number. Each started attempt finishes with exactly one public outcome,
+  including narrow durable identity retry.
 
 Internal claim states may be pending/running, but they are not public
-terminals. Candidate registration still uses the legacy `RETRY_SCHEDULED`
-value provisionally so a crash cannot erase the payload. An expired interrupted
-row is selected by the bounded post-deploy legacy drain exactly once and ends
-accepted, product-rejected, or `FAILED_TECHNICAL`; normal runtime does not poll
-it forever. A process-local lock is only an optimization; DB claims and unique
-indexes are the authority.
+terminals. Candidate registration also uses `RETRY_SCHEDULED` provisionally so
+a crash cannot erase the payload. Narrow identity retry reasons remain due and
+non-exhausted after the configured ordinary-attempt budget. The existing
+bounded claim/re-drive path owns them when explicitly enabled; a process-local
+lock is only an optimization and DB claims/unique indexes are authoritative.
 
 The Event/EventSource domain transaction never spans an LLM await. If a process
 loses the short attempt acknowledgement after an accepted domain commit, the
@@ -142,7 +148,7 @@ The structured funnel reports both current candidates and attempts. Its
 candidate balance is:
 
 ```text
-candidates = created + merged + exact_noop + product_rejected + failed_technical + legacy_retry_scheduled
+candidates = created + merged + exact_noop + product_rejected + failed_technical + retry_scheduled
 terminal_unresolved = 0
 ```
 
@@ -153,8 +159,8 @@ ID contract violations, attempt starts/terminals/unresolved, and orphaned
 attempts separately.
 
 Runtime controls retain `SMART_UPDATE_MAX_ATTEMPTS` only for compatibility.
-`SMART_UPDATE_RETRY_WORKER_ENABLED` is default off and may be enabled only for
-the controlled one-time legacy drain;
+`SMART_UPDATE_RETRY_WORKER_ENABLED` remains default off and is enabled only for
+a controlled bounded identity/legacy drain;
 `SMART_UPDATE_RETRY_INTERVAL_SECONDS` (default 60), and
 `SMART_UPDATE_RETRY_BATCH_SIZE` (default 25). Disabling the worker is an
 explicit operational override, not a terminal-state fallback.
@@ -163,9 +169,9 @@ explicit operational override, not a terminal-state fallback.
 
 | old boundary result | automatic result now |
 | --- | --- |
-| `review_required` / diagnostic `event_id` | inline semantic resolution; known distinct evidence converges to `CREATED`, technical uncertainty to `FAILED_TECHNICAL` |
-| create-gate `VETO_CREATE` / `skipped_identity_gate` | existing dedup adjudication in the same operation: `MERGED`, `CREATED`, or `FAILED_TECHNICAL` |
-| merge `skip_merge_side_effects` for a known sibling/conflict | distinct `CREATED` in the same facade attempt; no worker/delay dependency |
+| `review_required` / diagnostic `event_id` | grounded distinct creates; identity uncertainty becomes durable `RETRY_SCHEDULED` |
+| create-gate `VETO_CREATE` / `skipped_identity_gate` | final match, grounded distinct or durable retry; never ordinary fall-through CREATE |
+| merge `skip_merge_side_effects` for a known sibling/conflict | grounded distinct creates; unknown/abstention remains durable retry |
 | `skipped_context_only` | explicit `UPSERT_EVENT` or target-bound `ATTACH_CONTEXT` |
 | generic Smart Update `error`/caller `failed` | visible `FAILED_TECHNICAL` |
 | no-change/status aliases | `NOOP_EXACT_REPLAY` only for identical key plus fingerprint; accepted same-event no-change is `MERGED` |
@@ -183,8 +189,10 @@ The frozen AST inventory and migration gate are maintained in
 
 - `CREATED`, `MERGED`, and `NOOP_EXACT_REPLAY` resolve a queue item
   successfully;
-- `FAILED_TECHNICAL` records an observable non-product failure and requires an
-  explicit bounded re-drive; it is not selected by an automatic worker;
+- `RETRY_SCHEDULED` records narrow fail-closed identity uncertainty and resolves
+  no queue item as accepted; the bounded worker/operator path may reclaim it;
+- `FAILED_TECHNICAL` records other observable non-product failure and requires
+  explicit bounded re-drive;
 - `REJECTED_PRODUCT_POLICY` records its explicit permanent reason;
 - retry/reject results produce no Event publication, Telegraph, ICS, poster,
   festival-activity, notification, or outbox side effect.
@@ -253,13 +261,16 @@ The required automated suite covers:
 5. related-but-distinct;
 6. festival-context sibling;
 7. unsafe/structural conflict;
-8. provider/schema/vector/DB technical terminal and inline distinct resolution;
+8. final match, grounded distinct and durable identity retry, plus unrelated DB
+   technical terminals;
 9. legacy null role classification/retry;
 10. multi-event source binding;
 11. diagnostic-ID isolation at every caller;
 12. ticket exact-noop completion;
 13. funnel balance;
-14. recovery idempotency.
+14. recovery idempotency;
+15. named August positive corpus, hard negatives, exact replay twice,
+    concurrent two-handle ownership and unchanged LLM-call count.
 
 The older Boyko/Pianissimo, Tretyakov occurrence, shared context, exact/edited
 Telegram/VK replay, gate failure, repair, and Event 7151 negative-control tests

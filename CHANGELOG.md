@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Fixed: Smart Update no longer falls through to ordinary Event creation after
+  vector/identity recall found an owner or `VETO_CREATE`. The existing dedup
+  adjudicator now closes that concern as typed `FINAL_MATCH`, source-grounded
+  `FINAL_DISTINCT`, or durable `FINAL_RETRY`; bare `no_merge`, abstention and
+  provider/schema uncertainty cannot create an Event. Final owner, relation,
+  confidence, evidence/conflicts and candidate attempt are recorded in the
+  existing identity ledger. Vector recall preserves a bounded top-five list and
+  omits drift-prone city/type filters in the same RPC pass without a fallback
+  RPC or extra embedding/LLM call. Exact occurrence/fingerprint replay and accepted-only fanout remain
+  unchanged. Added an incident-scoped, manifest/hash/CAS-guarded production
+  repair tool that preserves Event shells, sources, facts, posters and audit
+  history, cancels obsolete pending work and is idempotent on second apply.
+
 - Fixed: the grounded Telegram event public writer now enforces one through
   three `sentences[].text + evidence_quote` items in the provider JSON schema
   and uses 768 ordinary / 1024 promo output-token ceilings for both Gemini Lite

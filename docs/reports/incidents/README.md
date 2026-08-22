@@ -18,6 +18,19 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-22-sos-dedup-veto-location-tyunin-farm.md`
+  - Scope: systemic August Smart Update vector + LLM identity regression,
+    final match/distinct/retry application, occurrence-scoped replay and safe
+    production duplicate repair.
+  - Must not regress: an owner or `VETO_CREATE` may never fall through to
+    ordinary CREATE; only source-grounded distinct evidence permits CREATE,
+    uncertainty is durable retry, vectors remain recall-only, exact replay is a
+    no-op and accepted-only side effects remain intact.
+- `INC-2026-08-22-tyunin-farm-location-drift.md`
+  - Scope: separate Tyunin Farm canonical venue/address reference defect for
+    event `7717`; it is not the cause of the systemic dedup regression.
+  - Must not regress: maintained venue/address data requires authoritative
+    evidence plus prose/hashtag resolver fixtures; never invent an address.
 - `INC-2026-08-21-tg-event-public-writer-max-tokens.md`
   - Scope: Telegram `tg_event_publish` grounded structured writer, Gemini Lite/strict 4o output budgets, `sentences[].text + evidence_quote` JSON schema cardinality, fallback budget, and publication catch-up.
   - Must not regress: provider schema must enforce one through three sentences, ordinary/promo completion budgets must cover grounded JSON rather than only visible intro text, and closure requires controlled retries plus public verification for the affected cohort, prioritizing events without a Telegram post URL.
@@ -67,6 +80,12 @@
 - `INC-2026-07-29-mtproto-proxy-desktop-disconnect.md`
   - Scope: host-level `vpn-server` MTProto container, TCP `1443`, Telegram DC connectivity, persistent application-log mount and bounded retention.
   - Must not regress: current-day proxy logs must survive container recreation; old rotations must stay bounded; closure requires a live listener, fresh Telegram DC handshake evidence, downstream connections and disk-usage evidence.
+- `INC-2026-07-11-event-vector-sidecar-sync-stalled.md`
+  - Scope: `related_v1`/`search_v3` projection ownership, post-Smart-Update
+    coalescing, three-hour reconciliation and eligible-catalog freshness.
+  - Must not regress: both document kinds must cover the eligible public
+    catalogue with current hashes; vectors remain recall evidence, not merge
+    authority.
 - `INC-2026-07-08-prod-root-overlay-disk-full.md`
   - Scope: Fly production root writable overlay `/.fly-upper-layer`, `/tmp` Kaggle output directories, CherryFlash partner output downloads, guide/source parser temp directories, and runtime logging env drift.
   - Must not regress: production `/tmp` must not fill the Fly root overlay with `videoannounce-*` / `guide-excursions-*` bundles; `Errno 28` must trigger both `/data` and root-overlay disk evidence, `/tmp` write verification, runtime logging env verification, and same-day scheduled-job catch-up review.

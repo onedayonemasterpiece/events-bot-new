@@ -8,9 +8,11 @@ child-resolution boundary, а не второй eventness classifier. Для к�
 детекторы могут только добавить evidence или инициировать LLM verification; они
 не удаляют child, не ставят `silent` и не создают product terminal. Legacy
 caller без typed source decision проходит существующий LLM eventness verifier.
-Решение владельца от 2026-08-15 заменяет automatic durable retry линейным
-контрактом: semantic verdict завершается в том же вызове, а provider/schema/DB/
-vector failure получает видимый `FAILED_TECHNICAL` и требует явного re-drive.
+`INC-2026-08-22` восстанавливает fail-closed identity retry: explicit
+grounded distinct может завершиться в том же вызове, но identity
+abstention/provider/schema uncertainty остаётся durable `RETRY_SCHEDULED`
+и никогда не разрешает ordinary CREATE. Это не always-on reconciler:
+существующий worker остаётся ограниченным и выключенным по умолчанию.
 Source-grounded compact symbolic/numbered titles (например `1+1`) являются
 identity-bearing названиями child, а не weak placeholder: title recovery не
 может заменять их названием окружающего дайджеста, фестиваля или программы.
@@ -39,18 +41,19 @@ maintained reference-площадки не становятся ложным к�
 - product terminal: `REJECTED_PRODUCT_POLICY` только вместе с
   `ProductExclusionReason`; free-form/unknown reason превращается в
   `FAILED_TECHNICAL`;
-- technical terminal: `FAILED_TECHNICAL` + typed diagnostic reason, без
-  фоновой очереди; `RETRY_SCHEDULED` остаётся только provisional/legacy value
-  для одноразового post-deploy drain;
+- identity retry: `RETRY_SCHEDULED` только для закрытого набора
+  identity reason; без `event_id` и downstream side effects;
+- technical terminal: `FAILED_TECHNICAL` + typed diagnostic reason для
+  остальных provider/DB/storage failures;
 - distinct create: `IdentityDistinctReason` (`RELATED_BUT_DISTINCT`,
   `FESTIVAL_CONTEXT_SIBLING`, `UNSAFE_TO_MERGE`, explicit occurrence conflict,
-  incoherent merge rollback или semantic unknown after bounded adjudication);
+  incoherent merge rollback); semantic unknown не является distinct proof;
 - provenance action: `LifecycleReason` для `ATTACH_CONTEXT`.
 
-`diagnostic_event_id` никогда не является accepted ID. Incoherent merge
-откатывается и создаёт подготовленный distinct Event. Provider/DB/vector failure
-заканчивается видимым technical terminal; semantic identity unknown делает один
-inline distinct-create pass. Occurrence identity выбирается в порядке
+`diagnostic_event_id` никогда не является accepted ID. После identity
+concern конечное применение имеет только `FINAL_MATCH`,
+`FINAL_DISTINCT`, `FINAL_RETRY`; semantic unknown выбирает retry, а не
+inline CREATE. Occurrence identity выбирается в порядке
 source-native ID → vendor/ticket ID → structured schedule anchor → ordinal
 только как tie-breaker; разные explicit occurrence IDs являются hard distinct
 rail.
@@ -247,10 +250,10 @@ must re-render the calendar line even when the event body itself is unchanged.
 - `SMART_UPDATE_IDENTITY_GATE=off|shadow|enforce` and
   `SMART_UPDATE_MERGE_IDENTITY_GATE=off|shadow|enforce` keep their existing
   create/merge semantic evidence stages. In `enforce`, a same/source decision
-  merges, a distinct/sibling/unsafe or explicit occurrence conflict creates a
-  distinct Event, and provider/schema/vector/DB uncertainty closes visibly as
-  `FAILED_TECHNICAL` without a background retry. There is no hidden terminal
-  veto or human-review queue. Production runs
+  merges, only explicit source-grounded distinct occurrence/event evidence
+  creates, and identity abstention/provider/schema uncertainty becomes durable
+  `RETRY_SCHEDULED`. Ordinary CREATE cannot follow a recalled owner or veto.
+  There is no human-review queue. Production runs
   both gates in `enforce`. Vector recall remains controlled by
   `SMART_UPDATE_IDENTITY_VECTOR_RECALL`, `SMART_UPDATE_IDENTITY_VECTOR_TOP_K`,
   `SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY`,
@@ -262,7 +265,7 @@ must re-render the calendar line even when the event body itself is unchanged.
 
 ### Canonical source identity and automatic terminals
 
-The canonical five-terminal result, `UPSERT_EVENT` / `ATTACH_CONTEXT` intents,
+The canonical typed terminal result, `UPSERT_EVENT` / `ATTACH_CONTEXT` intents,
 stable producer-child and occurrence keys, candidate-key/occurrence-scoped
 EventSource uniqueness, durable attempt ledger, retry rules, caller/queue
 contract, funnel balance, recovery, migration, and rollback are specified in
@@ -364,7 +367,7 @@ weak title, date/OCR conflict, collapsed occurrences или incomplete evidence
     - если LLM с высокой уверенностью (`confidence >= 0.95`) нашёл совпадение и жёсткие якоря не конфликтуют (дата, площадка, явное время), deterministic title guard не имеет права отменять merge только по `unrelated_titles`; детерминированный слой остаётся safety rail для фактических конфликтов, но не semantic owner для harmless title drift / русских падежей (`Валерия` vs `Концерт Валерии`).
   - Telegram Monitoring помечает extracted time как `time_is_default=true`, если это время не поддержано текстом поста, linked source text или OCR. Такой кандидат может смержиться с уже существующей карточкой по дате/площадке/смыслу, не создавая дубль только из-за неподтверждённого времени.
   - rescue‑match на create‑пути: если LLM на шаге `match_or_create` выбрал `create`, но вернул осмысленный `bundle.title`, Smart Update делает дополнительную детерминированную попытку матчинга по shortlist через `bundle.title`, чтобы не создавать дубль при слабом/плохом `candidate.title`.
-  - **LLM dedup adjudicator (widened recall, create-path only — INC‑2026‑05‑30 opt 1).** Самый последний рубеж: когда все детерминированные матчеры, `match_or_create` bundle, rescue‑match и `_pre_create_duplicate_probe` сказали «нет совпадения», настоящий дубль мог просто не попасть в anchor‑gated shortlist (дрейф строки площадки или времени doors/start). Поэтому Smart Update делает **отдельный широкий recall** (дата ±1 день + soft‑city, БЕЗ фильтра по точной площадке/времени), сужает его дешёвым blocking‑ключом (`_titles_look_related` OR совпадение площадки OR паритет `ticket_link` OR пересечение poster‑hash, топ‑8) и спрашивает LLM (`_llm_dedup_adjudicator`, decision‑only JSON: `action/match_event_id/confidence/reason_code/reason`) — это дубль или отдельное событие. Промпт явно: doors‑vs‑start и алиас/касса/билетный‑оператор площадки — НЕ признак различия; два разных вендора билетов на один слот — это всё ещё один ивент; но несколько сеансов из одного поста, утренник+вечер, разные шоу и `allow_parallel` площадки — РАЗНЫЕ события. Решение проходит детерминированный guard‑ladder `_dedup_adjudicator_accept_merge` (порог `confidence ≥ 0.80`, для `allow_parallel` `≥ 0.90`; veto по конфликту времени кроме `doors_start_skew ≤ 90 мин`; unrelated‑title overrule кроме `junk_location_same_venue`; `generic_ticket_false_friend`; и **жёсткий инвариант**: один и тот же `source_url` + конфликт времени ⇒ всегда create — это легитимный multi‑session split вроде `5426/5427` из `t.me/gusmuseum/4509`). Адъюдикатор работает ТОЛЬКО на create‑пути (никогда не переопределяет уже найденный match), обычно не запускается для `parser:*` и не работает под обычным `anchor_forced`. Узкое исключение обязательно для любого source type: если identity gate уже veto‑нул CREATE и назвал конкретный event-owner, этот же typed adjudicator обязан принять `same_event` или `create`; наличие ранее найденного source anchor не может подавить решение. Иначе отдельный child из общего Telegram/VK programme поста гарантированно завершался бы technical. Флаг — `SMART_UPDATE_DEDUP_ADJUDICATOR` (default ON).
+  - **LLM dedup adjudicator (widened recall, create-path only — INC‑2026‑05‑30 / INC-2026-08-22).** Последний рубеж сохраняет существующие widened recall, blocking и один decision-only LLM call. Схема теперь несёт `relation`, точные `source_grounded_evidence` и `blocking_conflicts`. Accepted `same_event` проходит прежний deterministic false-merge guard; `distinct_event|distinct_occurrence` разрешает CREATE только при confidence `>=0.80`, дословно заземлённом evidence и конкретном конфликте. `no_candidate_match`, abstention, invalid schema/provider result и отклонённый match дают `FINAL_RETRY`. Если create gate уже назвал owner/`VETO_CREATE`, обычный CREATE больше недостижим: тот же adjudicator должен завершить `FINAL_MATCH`, grounded `FINAL_DISTINCT` или durable `FINAL_RETRY`. Многосеансовые посты, recurring dates, festival parent/child и разные выставки сохраняются раздельными только через тот же grounded distinct contract. Флаг — `SMART_UPDATE_DEDUP_ADJUDICATOR` (default ON).
   - **Vector identity gate evidence.**
     `event_identity.py` defines the `identity_candidate_v1` compact candidate
     document format for embedding recall. It uses provenance-labelled canonical
@@ -373,8 +376,10 @@ weak title, date/OCR conflict, collapsed occurrences или incomplete evidence
     Smart Update create-path gate can generate an ephemeral Gemini embedding
     (not stored), call the service-role-only Supabase RPC
     `event_identity_candidates_by_embedding_v1` over existing `related_v1` and
-    `search_v3` vectors, hydrate the nearest SQLite event by id, and feed that
-    vector evidence into deterministic create-veto checks. The ephemeral
+    `search_v3` vectors, preserve a merged top-five owner list, hydrate those
+    SQLite events by id, and feed that evidence into create-veto checks. The
+    bounded query omits drift-prone city/type presentation filters in that same
+    RPC pass; it adds neither a fallback RPC nor an embedding/LLM call. The ephemeral
     embedding provider call must go through `GoogleAIClient.embed_content_async()`
     and `google_ai_reserve`/`google_ai_finalize`; direct `embedContent` calls are
     disabled unless an explicit local/debug bypass is set. Raw source excerpts,
@@ -875,14 +880,16 @@ batch with the exact child outcomes and a visible `FAILED_TECHNICAL` reason for
 any unresolved child. The row receives no `next_attempt_at` and is not silently
 reprocessed by a later batch; committed child links are never discarded.
 
-### Legacy retry drain visibility
+### Bounded identity/legacy retry drain visibility
 
-The old `smart_update_retry_worker` is disabled by default and is permitted only
-as a controlled one-time drain of pre-existing `RETRY_SCHEDULED` rows. After a replay has durably reached
+The `smart_update_retry_worker` remains disabled by default and is permitted
+only as a controlled bounded drain of fail-closed identity and legacy
+`RETRY_SCHEDULED` rows. After a replay has durably reached
 `CREATED` or `MERGED`, the worker sends one bounded, HTML-escaped batch report
 to the resolved superadmin chat with event ids, safe titles, and create/update
-counts. Every claimed legacy row must finish accepted, product-rejected or
-`FAILED_TECHNICAL`; no new scheduled retry is produced.
+counts. An identity abstention may remain durably scheduled without creating an
+Event; other claimed legacy rows finish accepted, product-rejected or
+`FAILED_TECHNICAL`.
 
 The report is observability only: a Telegram notification failure is logged but
 must never roll back, reclassify, or replay the already accepted Smart Update

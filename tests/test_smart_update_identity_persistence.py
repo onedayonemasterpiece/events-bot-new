@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 import smart_event_update as su
 from db import Database
@@ -67,6 +68,43 @@ async def test_identity_gate_decision_is_persisted(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_final_identity_log_correlates_candidate_and_attempt(tmp_path):
+    db = Database(str(tmp_path / "attempt-log.sqlite"))
+    await db.init()
+    candidate = EventCandidate(
+        source_type="telegram",
+        source_url="https://t.me/example/final",
+        source_text="22 августа событие",
+        title="Событие",
+        date="2026-08-22",
+        smart_update_candidate_id=42,
+        smart_update_attempt_no=3,
+    )
+
+    await su._record_identity_gate_decision(
+        db,
+        candidate,
+        decision="FINAL_RETRY",
+        reason="distinct_not_grounded",
+        confidence=0.8,
+        event_id=None,
+        payload={
+            "stage": "final_identity_adjudicator",
+            "action": "FINAL_RETRY",
+            "relation": "unknown",
+            "evidence": [],
+            "blocking_conflicts": [],
+        },
+    )
+
+    async with db.get_session() as session:
+        row = (await session.execute(select(EventIdentityDecisionLog))).scalar_one()
+    assert row.decision == "FINAL_RETRY"
+    assert row.decision_payload["candidate_state_id"] == 42
+    assert row.decision_payload["attempt_no"] == 3
+
+
+@pytest.mark.asyncio
 async def test_created_event_populates_date_provenance_fields(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()
@@ -102,7 +140,7 @@ async def test_created_event_populates_date_provenance_fields(tmp_path, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_identity_gate_exception_records_single_fail_safe_row(tmp_path, monkeypatch):
+async def test_identity_gate_exception_records_gate_and_final_retry(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     try:
         await db.init()
@@ -135,18 +173,20 @@ async def test_identity_gate_exception_records_single_fail_safe_row(tmp_path, mo
 
         result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.outcome is su.SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         assert result.event_id is None
         assert result.reason == "identity_gate_uncertain:identity_gate_error"
         async with db.get_session() as session:
             rows = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
-        assert len(rows) == 1
+        assert len(rows) == 2
         row = rows[0]
         assert row.decision == "veto_create"
         assert row.decision_reason == "identity_gate_error"
         assert row.decision_payload["mode"] == "enforce"
         assert row.decision_payload["fail_safe"] is True
         assert "gate boom" in row.decision_payload["reasons"][0]
+        assert rows[-1].decision == "FINAL_RETRY"
+        assert rows[-1].decision_payload["attempt_no"] == 1
     finally:
         await db.close()
 
@@ -187,17 +227,112 @@ async def test_vector_error_is_technical_terminal_and_is_persisted_for_rollout_m
 
         result = await su.smart_event_update(db, candidate, check_source_url=False, schedule_tasks=False)
 
-        assert result.outcome is su.SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         assert result.event_id is None
         assert result.reason == "identity_gate_uncertain:identity_gate_error"
         async with db.get_session() as session:
             rows = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
-        assert len(rows) == 1
+        assert len(rows) == 2
         payload = rows[0].decision_payload
         assert rows[0].decision == "veto_create"
         assert payload["fail_safe"] is True
         assert payload["vector"]["error"].startswith("vector_recall_error")
         rollout = build_rollout_payload(db.path, current=date.today(), since_days=14)
         assert rollout["identity_gate_vector_error_count"] == 1
+        assert rows[-1].decision == "FINAL_RETRY"
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_identity_final_retry_remains_retryable_past_attempt_budget(
+    tmp_path,
+    monkeypatch,
+):
+    db = Database(str(tmp_path / "durable-final-retry.sqlite"))
+    await db.init()
+    monkeypatch.setenv("SMART_UPDATE_MAX_ATTEMPTS", "1")
+
+    async def _semantic_unknown(*_args, **_kwargs):
+        return su.SmartUpdateResult(
+            outcome=su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+            reason="semantic_abstention",
+            retry_reason=su.RetryReason.IDENTITY_SEMANTIC_UNKNOWN,
+        )
+
+    monkeypatch.setattr(su, "_smart_event_update_impl", _semantic_unknown)
+
+    def _candidate() -> EventCandidate:
+        return EventCandidate(
+            source_type="telegram",
+            source_url="https://t.me/example/durable-final-retry",
+            source_text="22 августа отдельное событие",
+            title="Отдельное событие",
+            date="2026-08-22",
+        )
+
+    first = await su.smart_event_update(db, _candidate(), schedule_tasks=False)
+    second = await su.smart_event_update(db, _candidate(), schedule_tasks=False)
+
+    assert first.outcome is second.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+    async with db.raw_conn() as conn:
+        state = await (
+            await conn.execute(
+                "SELECT current_outcome,retry_attempts,retry_exhausted,"
+                "next_retry_at IS NOT NULL FROM smart_update_candidate_state"
+            )
+        ).fetchone()
+        event_count = await (await conn.execute("SELECT COUNT(*) FROM event")).fetchone()
+    assert state == ("RETRY_SCHEDULED", 2, 0, 1)
+    assert event_count == (0,)
+
+
+@pytest.mark.asyncio
+async def test_two_database_handles_same_candidate_create_one_owner(
+    tmp_path,
+    monkeypatch,
+):
+    path = str(tmp_path / "concurrent-owner.sqlite")
+    first_db = Database(path)
+    second_db = Database(path)
+    await first_db.init()
+    monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+    monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+    monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", su.IdentityGateMode.OFF)
+
+    async def _no_topics(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(su, "_classify_topics", _no_topics)
+    values = dict(
+        source_type="telegram",
+        source_url="https://t.me/example/concurrent-owner",
+        source_text="10 сентября 2099 года концерт в 19:00.",
+        title="Концерт",
+        date="2099-09-10",
+        time="19:00",
+        location_name="Дом искусств",
+        city="Калининград",
+        event_type="концерт",
+    )
+
+    results = await asyncio.gather(
+        su.smart_event_update(
+            first_db,
+            EventCandidate(**values),
+            check_source_url=False,
+            schedule_tasks=False,
+            _lease_owner="worker-a",
+        ),
+        su.smart_event_update(
+            second_db,
+            EventCandidate(**values),
+            check_source_url=False,
+            schedule_tasks=False,
+            _lease_owner="worker-b",
+        ),
+    )
+
+    assert sum(result.outcome is su.SmartUpdateTerminalOutcome.CREATED for result in results) == 1
+    async with first_db.get_session() as session:
+        assert await session.scalar(select(func.count()).select_from(Event)) == 1

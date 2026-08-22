@@ -53,7 +53,11 @@ from models import (
 from sections import MONTHS_RU
 from telegram_sources import canonicalize_tg_url
 from smart_update_identity import (
+    IdentityFinalAction,
+    IdentityFinalRelation,
+    IdentityFinalResult,
     IdentityGateMode,
+    IdentityVectorCandidate,
     IdentityVectorEvidence,
     MergeIdentityRelation,
     build_merge_identity_gate_verdict,
@@ -602,6 +606,9 @@ class EventCandidate:
     occurrence_key: str | None = None
     candidate_key: str | None = None
     smart_update_candidate_id: int | None = None
+    # Append-only attempt number used to correlate identity-decision payloads
+    # with the existing SmartUpdateAttempt ledger; it is not a new DB field.
+    smart_update_attempt_no: int | None = None
     # Internal retry-state instruction. It is set only after an existing
     # identity decision classified the candidate as distinct or uncertainty
     # exhausted its bounded attempts.
@@ -1921,14 +1928,23 @@ def _linear_product_exclusion_reason(result: SmartUpdateResult) -> ProductExclus
 
 
 def _terminalize_linear_result(result: SmartUpdateResult) -> SmartUpdateResult:
-    """Close legacy retry-shaped results inside the current invocation.
+    """Close ordinary retry-shaped results inside the current invocation.
 
     Semantic uncertainty on complete evidence becomes a typed product decision;
-    provider/schema/storage uncertainty becomes a visible technical terminal.
-    No caller receives a newly scheduled background retry.
+    provider/schema/storage uncertainty becomes a visible technical terminal,
+    except the explicit fail-closed identity retry classes.
     """
 
     if result.outcome is not SmartUpdateTerminalOutcome.RETRY_SCHEDULED:
+        return result
+    if result.retry_reason in {
+        RetryReason.IDENTITY_FINAL_RETRY,
+        RetryReason.IDENTITY_TECHNICAL_FAILURE,
+        RetryReason.IDENTITY_SEMANTIC_UNKNOWN,
+        RetryReason.DEDUP_ADJUDICATOR_TECHNICAL_FAILURE,
+    }:
+        # Identity uncertainty is a fail-closed durable class. It must remain
+        # retryable regardless of attempt count and can never authorize CREATE.
         return result
     exclusion = _linear_product_exclusion_reason(result)
     if exclusion is not None:
@@ -2671,8 +2687,36 @@ DEDUP_ADJUDICATOR_RESPONSE_FORMAT = {
                     ),
                 },
                 "reason": {"type": "string"},
+                "relation": {
+                    "type": "string",
+                    "enum": [
+                        "same_event",
+                        "distinct_event",
+                        "distinct_occurrence",
+                        "unknown",
+                    ],
+                },
+                "source_grounded_evidence": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 4,
+                },
+                "blocking_conflicts": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 4,
+                },
             },
-            "required": ["action", "match_event_id", "confidence", "reason_code", "reason"],
+            "required": [
+                "action",
+                "match_event_id",
+                "confidence",
+                "reason_code",
+                "reason",
+                "relation",
+                "source_grounded_evidence",
+                "blocking_conflicts",
+            ],
             "additionalProperties": False,
         },
     },
@@ -11395,6 +11439,11 @@ async def _record_identity_gate_decision(
     payload: dict[str, Any] | None = None,
 ) -> None:
     try:
+        decision_payload = dict(payload or {})
+        decision_payload.setdefault(
+            "candidate_state_id", candidate.smart_update_candidate_id
+        )
+        decision_payload.setdefault("attempt_no", candidate.smart_update_attempt_no)
         async with db.get_session() as session:
             session.add(
                 EventIdentityDecisionLog(
@@ -11406,7 +11455,7 @@ async def _record_identity_gate_decision(
                     decision_reason=reason,
                     confidence=confidence,
                     decided_by="smart_update.identity_gate",
-                    decision_payload=payload or {},
+                    decision_payload=decision_payload,
                 )
             )
             await session.commit()
@@ -11801,38 +11850,64 @@ async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> I
                 supabase_key,
                 timeout_seconds=SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS,
             )
+            config = EventIdentityRecallConfig(
+                top_k=SMART_UPDATE_IDENTITY_VECTOR_TOP_K,
+                min_similarity=SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY,
+                timeout_seconds=SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS,
+                embedding_model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
+                embedding_dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
+            )
             recall = recall_identity_candidates_across_doc_kinds(
                 client,
                 embedding.embedding,
-                city=candidate.city,
-                event_type=candidate.event_type,
-                config=EventIdentityRecallConfig(
-                    top_k=SMART_UPDATE_IDENTITY_VECTOR_TOP_K,
-                    min_similarity=SMART_UPDATE_IDENTITY_VECTOR_MIN_SIMILARITY,
-                    timeout_seconds=SMART_UPDATE_IDENTITY_VECTOR_TIMEOUT_SECONDS,
-                    embedding_model=SMART_UPDATE_IDENTITY_EMBEDDING_MODEL,
-                    embedding_dim=SMART_UPDATE_IDENTITY_EMBEDDING_DIM,
-                ),
+                # Identity recall is wider than presentation metadata because
+                # a duplicate may already carry drifted city/type fields. Keep
+                # one bounded RPC pass; SQLite/LLM still decide semantics.
+                city=None,
+                event_type=None,
+                config=config,
             )
             if not recall.ok:
                 return IdentityVectorEvidence(
                     available=False,
                     error=f"rpc_failed:{recall.error_type}:{recall.error_message}",
                 )
+            fallback_used = False
             if not recall.candidates:
                 return IdentityVectorEvidence(
                     available=True,
                     reason=f"no_vector_candidates doc={doc.sha256[:12]}",
                 )
-            top = recall.candidates[0]
+            ranked: list[IdentityVectorCandidate] = []
+            for rank, item in enumerate(recall.candidates[:5], start=1):
+                if item.event_id is None or item.similarity is None:
+                    continue
+                ranked.append(
+                    IdentityVectorCandidate(
+                        event_id=int(item.event_id),
+                        score=float(item.similarity),
+                        rank=rank,
+                        doc_kind=item.embedding_doc_kind,
+                        reason=(
+                            f"vector_recall doc={doc.sha256[:12]} "
+                            f"kind={item.embedding_doc_kind or ''} title={item.title or ''}"
+                        ).strip(),
+                    )
+                )
+            if not ranked:
+                return IdentityVectorEvidence(
+                    available=True,
+                    reason=f"no_valid_vector_candidates doc={doc.sha256[:12]}",
+                    filter_fallback_used=fallback_used,
+                )
+            top = ranked[0]
             return IdentityVectorEvidence(
                 available=True,
                 nearest_event_id=top.event_id,
-                score=top.similarity,
-                reason=(
-                    f"vector_recall doc={doc.sha256[:12]} kind={top.embedding_doc_kind} "
-                    f"title={top.title or ''}"
-                ).strip(),
+                score=top.score,
+                reason=top.reason,
+                candidates=tuple(ranked),
+                filter_fallback_used=fallback_used,
             )
 
         return await asyncio.to_thread(_recall_sync)
@@ -13353,13 +13428,19 @@ async def _llm_dedup_adjudicator(
         "- Не выдумывай совпадение. Ставь `action=match` только если в данных есть КОНКРЕТНОЕ "
         "доказательство тождества (та же программа/состав/афиша/ссылка/название одного показа), "
         "а не просто «похожая тема и тот же день».\n"
-        "- Если сомневаешься между match и create — выбирай create (лучше дубль, который "
-        "поймает следующий проход, чем ошибочно слитые разные события).\n"
+        "- Если сомневаешься между match и create — не разрешай ни merge, ни "
+        "отдельную карточку: верни relation=unknown и no_candidate_match.\n"
         "- `match_event_id` обязан быть одним из `events[].id`. Если ни один не подходит — "
         "`action=create`, `match_event_id=null`.\n\n"
         "Верни: `action` (match|create); `match_event_id` (id из events при match, иначе null); "
         "`confidence` (0..1); `reason_code` (один код из закрытого списка схемы); "
-        "`reason` (1 короткая фраза по-русски, без выдумок).\n\n"
+        "`reason` (1 короткая фраза по-русски, без выдумок); `relation` "
+        "(same_event|distinct_event|distinct_occurrence|unknown); "
+        "`source_grounded_evidence` (до 4 коротких точных цитат/фактов из переданных "
+        "source_text/poster полей); `blocking_conflicts` (до 4 конкретных различий). "
+        "Для create разрешение отдельной карточки возможно только с relation="
+        "distinct_event или distinct_occurrence, непустыми evidence и blocking_conflicts. "
+        "Если таких доказательств нет, верни relation=unknown и no_candidate_match.\n\n"
         f"{SMART_UPDATE_YO_RULE}\n\n"
         f"Данные:\n{json.dumps(payload, ensure_ascii=False)}"
     )
@@ -13367,7 +13448,7 @@ async def _llm_dedup_adjudicator(
     data = await _ask_gemma_json(
         prompt,
         DEDUP_ADJUDICATOR_SCHEMA,
-        max_tokens=400,
+        max_tokens=650,
         label="dedup_adjudicator",
     )
     if not isinstance(data, dict):
@@ -13385,13 +13466,166 @@ async def _llm_dedup_adjudicator(
         match_id = int(match_id) if match_id is not None else None
     except Exception:
         match_id = None
+    relation = str(data.get("relation") or "").strip().lower()
+    if relation not in {item.value for item in IdentityFinalRelation}:
+        return None
+    evidence_raw = data.get("source_grounded_evidence")
+    conflicts_raw = data.get("blocking_conflicts")
+    if not isinstance(evidence_raw, list) or not isinstance(conflicts_raw, list):
+        return None
+    evidence = [str(item).strip() for item in evidence_raw if str(item).strip()][:4]
+    conflicts = [str(item).strip() for item in conflicts_raw if str(item).strip()][:4]
     return {
         "action": action,
         "match_event_id": match_id,
         "confidence": confidence,
         "reason_code": reason_code,
         "reason": (data.get("reason") or "").strip(),
+        "relation": relation,
+        "source_grounded_evidence": evidence,
+        "blocking_conflicts": conflicts,
     }
+
+
+def _dedup_adjudicator_final_result(
+    candidate: EventCandidate,
+    events: Sequence[Event],
+    decision: dict[str, Any] | None,
+) -> IdentityFinalResult:
+    """Close the existing adjudicator into one fail-closed typed result."""
+
+    if not isinstance(decision, dict):
+        return IdentityFinalResult(
+            action=IdentityFinalAction.FINAL_RETRY,
+            reason_code="adjudicator_unavailable",
+        )
+    action = str(decision.get("action") or "").strip().lower()
+    try:
+        relation = IdentityFinalRelation(str(decision.get("relation") or "").strip().lower())
+    except ValueError:
+        relation = IdentityFinalRelation.UNKNOWN
+    try:
+        confidence = max(0.0, min(1.0, float(decision.get("confidence") or 0.0)))
+    except Exception:
+        confidence = 0.0
+    raw_evidence = tuple(
+        str(item).strip()
+        for item in (decision.get("source_grounded_evidence") or [])
+        if str(item).strip()
+    )[:4]
+    grounding_corpus = [
+        getattr(candidate, "source_text", None),
+        getattr(candidate, "raw_excerpt", None),
+        getattr(candidate, "occurrence_scope_text", None),
+        getattr(candidate, "title", None),
+    ]
+    grounding_corpus.extend(
+        value
+        for event in events
+        for value in (
+            getattr(event, "source_text", None),
+            getattr(event, "description", None),
+            getattr(event, "title", None),
+        )
+    )
+    normalized_corpus = "\n".join(
+        re.sub(r"\s+", " ", str(value)).strip().casefold()
+        for value in grounding_corpus
+        if str(value or "").strip()
+    )
+    evidence = tuple(
+        item
+        for item in raw_evidence
+        if len(re.sub(r"\s+", " ", item).strip()) >= 3
+        and re.sub(r"\s+", " ", item).strip().casefold() in normalized_corpus
+    )
+    conflicts = tuple(
+        str(item).strip()
+        for item in (decision.get("blocking_conflicts") or [])
+        if str(item).strip()
+    )[:4]
+    reason_code = str(decision.get("reason_code") or "").strip()
+    match_id = decision.get("match_event_id")
+    try:
+        match_id = int(match_id) if match_id is not None else None
+    except Exception:
+        match_id = None
+    owner = next((event for event in events if getattr(event, "id", None) == match_id), None)
+    owner_id = int(owner.id) if owner is not None and getattr(owner, "id", None) else None
+
+    if action == "match":
+        if relation is not IdentityFinalRelation.SAME_EVENT or not evidence:
+            return IdentityFinalResult(
+                action=IdentityFinalAction.FINAL_RETRY,
+                relation=relation,
+                owner_event_id=owner_id,
+                confidence=confidence,
+                reason_code="match_not_grounded",
+                evidence=evidence,
+                blocking_conflicts=conflicts,
+            )
+        allow_parallel = _allow_parallel_events(candidate.location_name) or (
+            _allow_parallel_events(getattr(owner, "location_name", None))
+            if owner is not None
+            else False
+        )
+        accepted, guard_code = _dedup_adjudicator_accept_merge(
+            candidate,
+            owner,
+            decision=decision,
+            allow_parallel=allow_parallel,
+        )
+        if accepted and owner is not None:
+            return IdentityFinalResult(
+                action=IdentityFinalAction.FINAL_MATCH,
+                relation=relation,
+                owner_event_id=int(owner.id),
+                confidence=confidence,
+                reason_code=guard_code,
+                evidence=evidence,
+                blocking_conflicts=conflicts,
+            )
+        return IdentityFinalResult(
+            action=IdentityFinalAction.FINAL_RETRY,
+            relation=relation,
+            owner_event_id=owner_id,
+            confidence=confidence,
+            reason_code=f"match_rejected:{guard_code}",
+            evidence=evidence,
+            blocking_conflicts=conflicts,
+        )
+
+    grounded_distinct = bool(
+        action == "create"
+        and relation
+        in {
+            IdentityFinalRelation.DISTINCT_EVENT,
+            IdentityFinalRelation.DISTINCT_OCCURRENCE,
+        }
+        and reason_code in (_DEDUP_ADJUDICATOR_KEEP_CODES - {"no_candidate_match"})
+        and confidence >= 0.8
+        and evidence
+        and conflicts
+        and match_id is None
+    )
+    if grounded_distinct:
+        return IdentityFinalResult(
+            action=IdentityFinalAction.FINAL_DISTINCT,
+            relation=relation,
+            confidence=confidence,
+            reason_code=reason_code,
+            evidence=evidence,
+            blocking_conflicts=conflicts,
+        )
+    return IdentityFinalResult(
+        action=IdentityFinalAction.FINAL_RETRY,
+        relation=relation,
+        owner_event_id=owner_id,
+        confidence=confidence,
+        reason_code="distinct_not_grounded",
+        evidence=evidence,
+        blocking_conflicts=conflicts,
+    )
 
 
 def _dedup_adjudicator_accept_merge(
@@ -16799,17 +17033,11 @@ async def smart_event_update(
             ),
         )
         candidate.smart_update_candidate_id = receipt.candidate_state_id
-        # Only a typed semantic UNKNOWN may spend the bounded identity budget.
-        # Provider/schema/DB/vector failures are technical and remain retries
-        # forever (with the durable counter clamped by smart_update_state).
-        candidate.force_create_distinct = bool(
-            receipt.attempt >= receipt.max_attempts
-            and receipt.previous_retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
-        )
-        if candidate.force_create_distinct:
-            candidate.force_create_distinct_reason = (
-                IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION
-            )
+        candidate.smart_update_attempt_no = receipt.attempt_no
+        # Attempt exhaustion is never semantic evidence. Only the final typed
+        # adjudicator may authorize a distinct CREATE in the current attempt.
+        candidate.force_create_distinct = False
+        candidate.force_create_distinct_reason = None
         candidate.force_match_event_id = None
     except CandidateAttemptInProgress:
         return SmartUpdateResult(
@@ -16834,24 +17062,6 @@ async def smart_event_update(
                     schedule_tasks=schedule_tasks,
                     schedule_kwargs=schedule_kwargs,
                 )
-                if (
-                    result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-                    and result.retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
-                ):
-                    # Identity ambiguity is a semantic decision, not recovery
-                    # work. Resolve it once, inline, through the existing
-                    # LLM-first distinct-create path.
-                    candidate.force_create_distinct = True
-                    candidate.force_create_distinct_reason = (
-                        IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION
-                    )
-                    result = await _smart_event_update_impl(
-                        db,
-                        candidate,
-                        check_source_url=check_source_url,
-                        schedule_tasks=schedule_tasks,
-                        schedule_kwargs=schedule_kwargs,
-                    )
         except SourceBindingConflict as exc:
             result = SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
@@ -19181,10 +19391,10 @@ async def _smart_event_update_impl(
         match_event = retry_match
         match_reason = "identity_gate_adjudicated_same_event"
 
-    identity_gate_candidates: list[Event] = []
+    identity_vector_events: list[Event] = []
     identity_gate_match: Event | None = None
     identity_gate_reason: str | None = None
-    identity_gate_adjudicated = False
+    identity_final_result: IdentityFinalResult | None = None
 
     # Evaluate the create gate before the existing widened dedup stage. If the
     # gate finds a concrete Event, that Event is folded into the *same* dedup
@@ -19204,17 +19414,26 @@ async def _smart_event_update_impl(
                     + str(vector_evidence.reason or vector_evidence.error)
                 )
             gate_existing_events = list(shortlist)
-            if vector_evidence and vector_evidence.nearest_event_id is not None:
+            if vector_evidence:
+                vector_ids = [item.event_id for item in vector_evidence.candidates]
+                if not vector_ids and vector_evidence.nearest_event_id is not None:
+                    vector_ids = [vector_evidence.nearest_event_id]
                 known_ids = {getattr(ev, "id", None) for ev in gate_existing_events}
-                if vector_evidence.nearest_event_id not in known_ids:
+                missing_ids = [event_id for event_id in vector_ids if event_id not in known_ids]
+                if missing_ids:
                     async with db.get_session() as session:
-                        vector_event = await session.get(
-                            Event,
-                            vector_evidence.nearest_event_id,
-                        )
-                    if vector_event is not None:
-                        gate_existing_events.append(vector_event)
-            identity_gate_candidates = gate_existing_events
+                        fetched = (
+                            await session.execute(
+                                select(Event).where(Event.id.in_(missing_ids))
+                            )
+                        ).scalars().all()
+                    gate_existing_events.extend(fetched)
+                vector_id_set = set(vector_ids)
+                identity_vector_events = [
+                    event
+                    for event in gate_existing_events
+                    if getattr(event, "id", None) in vector_id_set
+                ]
             identity_verdict = build_identity_gate_verdict(
                 candidate,
                 gate_existing_events,
@@ -19255,6 +19474,16 @@ async def _smart_event_update_impl(
                         "score": vector_evidence.score,
                         "reason": vector_evidence.reason,
                         "error": vector_evidence.error,
+                        "candidates": [
+                            {
+                                "event_id": item.event_id,
+                                "score": item.score,
+                                "rank": item.rank,
+                                "doc_kind": item.doc_kind,
+                            }
+                            for item in vector_evidence.candidates
+                        ],
+                        "filter_fallback_used": vector_evidence.filter_fallback_used,
                     }
                     if vector_evidence is not None
                     else None,
@@ -19267,6 +19496,23 @@ async def _smart_event_update_impl(
                     async with db.get_session() as session:
                         identity_gate_match = await session.get(Event, int(matched_id))
                 if identity_gate_match is None:
+                    await _record_identity_gate_decision(
+                        db,
+                        candidate,
+                        decision=IdentityFinalAction.FINAL_RETRY.value,
+                        reason="identity_gate_owner_missing",
+                        confidence=identity_verdict.confidence,
+                        event_id=None,
+                        payload={
+                            "stage": "final_identity_adjudicator",
+                            "owner_event_id": matched_id,
+                            "action": IdentityFinalAction.FINAL_RETRY.value,
+                            "relation": IdentityFinalRelation.UNKNOWN.value,
+                            "evidence": [],
+                            "blocking_conflicts": [],
+                            "identity_gate_reason": identity_verdict.reason_code,
+                        },
+                    )
                     return SmartUpdateResult(
                         outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                         diagnostic_event_id=matched_id,
@@ -19298,9 +19544,37 @@ async def _smart_event_update_impl(
                         "score": vector_evidence.score,
                         "reason": vector_evidence.reason,
                         "error": vector_evidence.error,
+                        "candidates": [
+                            {
+                                "event_id": item.event_id,
+                                "score": item.score,
+                                "rank": item.rank,
+                                "doc_kind": item.doc_kind,
+                            }
+                            for item in vector_evidence.candidates
+                        ],
+                        "filter_fallback_used": vector_evidence.filter_fallback_used,
                     }
                     if vector_evidence is not None
                     else None,
+                },
+            )
+            await _record_identity_gate_decision(
+                db,
+                candidate,
+                decision=IdentityFinalAction.FINAL_RETRY.value,
+                reason="identity_gate_error",
+                confidence=0.0,
+                event_id=identity_verdict.matched_event_id,
+                payload={
+                    "stage": "final_identity_adjudicator",
+                    "owner_event_id": identity_verdict.matched_event_id,
+                    "action": IdentityFinalAction.FINAL_RETRY.value,
+                    "relation": IdentityFinalRelation.UNKNOWN.value,
+                    "evidence": [],
+                    "blocking_conflicts": [],
+                    "identity_gate_reason": identity_verdict.reason_code,
+                    "error": f"{type(exc).__name__}:{exc}",
                 },
             )
             return SmartUpdateResult(
@@ -19324,6 +19598,8 @@ async def _smart_event_update_impl(
         anchor_forced=anchor_forced,
         is_canonical_site=is_canonical_site,
     ):
+        blocked: list[Event] = []
+        decision: dict[str, Any] | None = None
         try:
             from datetime import timedelta
 
@@ -19343,6 +19619,12 @@ async def _smart_event_update_impl(
                 wide_stmt = _apply_soft_city_filter(wide_stmt, candidate.city)
                 wide_res = await session.execute(wide_stmt)
                 wide_pool = list(wide_res.scalars().all())
+            wide_ids = {getattr(event, "id", None) for event in wide_pool}
+            wide_pool.extend(
+                event
+                for event in identity_vector_events
+                if getattr(event, "id", None) not in wide_ids
+            )
             wide_posters = await _fetch_event_posters_map(
                 db, [ev.id for ev in wide_pool if ev.id]
             )
@@ -19359,92 +19641,165 @@ async def _smart_event_update_impl(
                             [int(identity_gate_match.id)],
                         )
                     )
-            identity_gate_candidates = blocked or wide_pool[:10]
             if blocked:
                 decision = await _llm_dedup_adjudicator(
                     candidate, blocked, posters_map=wide_posters
                 )
-                if decision is None:
-                    # The widened stage ran because deterministic evidence found
-                    # plausible identity neighbours.  Provider/schema abstention
-                    # cannot silently authorize CREATE: keep the candidate in the
-                    # durable bounded retry path and create distinct only after
-                    # identity uncertainty exhausts its configured attempts.
-                    return SmartUpdateResult(
-                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
-                        diagnostic_event_id=(
-                            int(identity_gate_match.id)
-                            if identity_gate_match is not None
-                            and identity_gate_match.id
-                            else None
+                identity_final_result = _dedup_adjudicator_final_result(
+                    candidate,
+                    blocked,
+                    decision,
+                )
+                final_owner_id = identity_final_result.owner_event_id or (
+                    int(identity_gate_match.id)
+                    if identity_gate_match is not None and identity_gate_match.id
+                    else None
+                )
+                await _record_identity_gate_decision(
+                    db,
+                    candidate,
+                    decision=identity_final_result.action.value,
+                    reason=identity_final_result.reason_code,
+                    confidence=identity_final_result.confidence,
+                    event_id=final_owner_id,
+                    payload={
+                        "stage": "final_identity_adjudicator",
+                        "owner_event_id": final_owner_id,
+                        "action": identity_final_result.action.value,
+                        "relation": identity_final_result.relation.value,
+                        "evidence": list(identity_final_result.evidence),
+                        "blocking_conflicts": list(
+                            identity_final_result.blocking_conflicts
                         ),
-                        reason="dedup_adjudicator_unavailable", retry_reason=RetryReason.DEDUP_ADJUDICATOR_TECHNICAL_FAILURE,
+                        "identity_gate_reason": identity_gate_reason,
+                        "raw_action": decision.get("action") if decision else None,
+                        "raw_reason_code": (
+                            decision.get("reason_code") if decision else None
+                        ),
+                    },
+                )
+                if identity_final_result.action is IdentityFinalAction.FINAL_MATCH:
+                    match_event = next(
+                        (
+                            event
+                            for event in blocked
+                            if getattr(event, "id", None)
+                            == identity_final_result.owner_event_id
+                        ),
+                        None,
                     )
-                if decision:
-                    if identity_gate_match is not None:
-                        identity_gate_adjudicated = True
-                    adj_id = decision.get("match_event_id")
-                    adj_event = (
-                        next((ev for ev in blocked if ev.id == adj_id), None) if adj_id else None
-                    )
-                    allow_parallel_adj = _allow_parallel_events(candidate.location_name) or (
-                        _allow_parallel_events(getattr(adj_event, "location_name", None))
-                        if adj_event is not None
-                        else False
-                    )
-                    accept, code = _dedup_adjudicator_accept_merge(
-                        candidate,
-                        adj_event,
-                        decision=decision,
-                        allow_parallel=allow_parallel_adj,
-                    )
-                    if accept and adj_event is not None:
-                        match_event = adj_event
-                        match_reason = f"dedup_adjudicator:{code}"
+                    if match_event is None:
+                        identity_final_result = IdentityFinalResult(
+                            action=IdentityFinalAction.FINAL_RETRY,
+                            relation=identity_final_result.relation,
+                            owner_event_id=identity_final_result.owner_event_id,
+                            confidence=identity_final_result.confidence,
+                            reason_code="final_match_owner_missing",
+                            evidence=identity_final_result.evidence,
+                            blocking_conflicts=identity_final_result.blocking_conflicts,
+                        )
+                    else:
+                        match_reason = (
+                            "dedup_adjudicator:"
+                            f"{identity_final_result.reason_code}"
+                        )
                         note = "Матчинг: предотвращён дубль (LLM dedup adjudicator)"
                         if note not in text_filter_facts:
                             text_filter_facts.append(note)
                         logger.info(
-                            "smart_update.match type=dedup_adjudicator code=%s conf=%.2f event_id=%s candidate_title=%s existing_title=%s",
-                            code,
-                            float(decision.get("confidence") or 0.0),
+                            "smart_update.match type=dedup_adjudicator code=%s "
+                            "conf=%.2f event_id=%s candidate_title=%s existing_title=%s",
+                            identity_final_result.reason_code,
+                            identity_final_result.confidence,
                             getattr(match_event, "id", None),
                             _clip_title(candidate.title),
                             _clip_title(getattr(match_event, "title", None)),
                         )
-                    else:
-                        logger.info(
-                            "smart_update.dedup_adjudicator no_merge code=%s action=%s conf=%.2f candidate_title=%s",
-                            code,
-                            decision.get("action"),
-                            float(decision.get("confidence") or 0.0),
-                            _clip_title(candidate.title),
-                        )
-        except Exception:
+                if identity_final_result.action is IdentityFinalAction.FINAL_DISTINCT:
+                    candidate.force_create_distinct = True
+                    candidate.force_create_distinct_reason = (
+                        IdentityDistinctReason.SPECIFIC_TICKET_OCCURRENCE_CONFLICT
+                        if identity_final_result.relation
+                        is IdentityFinalRelation.DISTINCT_OCCURRENCE
+                        else IdentityDistinctReason.RELATED_BUT_DISTINCT
+                    )
+                elif identity_final_result.action is IdentityFinalAction.FINAL_RETRY:
+                    return SmartUpdateResult(
+                        outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
+                        diagnostic_event_id=final_owner_id,
+                        reason=f"identity_final_retry:{identity_final_result.reason_code}",
+                        retry_reason=RetryReason.IDENTITY_FINAL_RETRY,
+                    )
+        except Exception as exc:
             logger.warning(
                 "smart_update: dedup adjudicator failed; scheduling retry", exc_info=True
             )
+            final_owner_id = (
+                int(identity_gate_match.id)
+                if identity_gate_match is not None and identity_gate_match.id
+                else None
+            )
+            identity_final_result = IdentityFinalResult(
+                action=IdentityFinalAction.FINAL_RETRY,
+                owner_event_id=final_owner_id,
+                reason_code="adjudicator_exception",
+            )
+            await _record_identity_gate_decision(
+                db,
+                candidate,
+                decision=identity_final_result.action.value,
+                reason=identity_final_result.reason_code,
+                event_id=final_owner_id,
+                payload={
+                    "stage": "final_identity_adjudicator",
+                    "owner_event_id": final_owner_id,
+                    "action": identity_final_result.action.value,
+                    "relation": identity_final_result.relation.value,
+                    "evidence": [],
+                    "blocking_conflicts": [],
+                    "error": f"{type(exc).__name__}:{exc}",
+                },
+            )
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
-                diagnostic_event_id=(
-                    int(identity_gate_match.id)
-                    if identity_gate_match is not None and identity_gate_match.id
-                    else None
-                ),
-                reason="dedup_adjudicator_unavailable", retry_reason=RetryReason.DEDUP_ADJUDICATOR_TECHNICAL_FAILURE,
+                diagnostic_event_id=final_owner_id,
+                reason="identity_final_retry:adjudicator_exception",
+                retry_reason=RetryReason.IDENTITY_FINAL_RETRY,
             )
 
     if (
         identity_gate_match is not None
         and match_event is None
-        and not identity_gate_adjudicated
+        and identity_final_result is None
     ):
         # The gate found a concrete owner, but the existing adjudicator could
         # not produce a typed same/distinct decision in this attempt.
+        identity_final_result = IdentityFinalResult(
+            action=IdentityFinalAction.FINAL_RETRY,
+            owner_event_id=int(identity_gate_match.id),
+            reason_code="adjudicator_not_run",
+        )
+        await _record_identity_gate_decision(
+            db,
+            candidate,
+            decision=identity_final_result.action.value,
+            reason=identity_final_result.reason_code,
+            event_id=identity_final_result.owner_event_id,
+            payload={
+                "stage": "final_identity_adjudicator",
+                "owner_event_id": identity_final_result.owner_event_id,
+                "action": identity_final_result.action.value,
+                "relation": identity_final_result.relation.value,
+                "evidence": [],
+                "blocking_conflicts": [],
+                "identity_gate_reason": identity_gate_reason,
+            },
+        )
         return SmartUpdateResult(
             outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
             diagnostic_event_id=int(identity_gate_match.id),
             reason=f"identity_gate_adjudicator_unavailable:{identity_gate_reason or 'veto'}",
+            retry_reason=RetryReason.IDENTITY_FINAL_RETRY,
         )
 
     # The compact semantics stage is explicitly candidate-routed, but it runs

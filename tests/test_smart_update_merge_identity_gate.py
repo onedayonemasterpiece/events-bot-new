@@ -586,10 +586,11 @@ async def test_merge_gate_internal_error_enforce_is_zero_side_effect_fail_closed
         result = await smart_event_update(
             db, _boyko_exhibition_candidate(), check_source_url=False, schedule_tasks=True
         )
-        assert result.outcome is su.SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         assert result.event_id is None
         assert result.diagnostic_event_id == 5077
         assert result.reason == "merge_identity_gate_error"
+        assert result.retry_reason is su.RetryReason.IDENTITY_TECHNICAL_FAILURE
         assert result.created is False and result.merged is False
 
         async with db.get_session() as session:

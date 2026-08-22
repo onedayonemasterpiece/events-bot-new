@@ -2,15 +2,19 @@
 
 ## P0 release/deploy/recovery runbook
 
-This section has precedence for
-`INC-2026-08-10-smart-update-identity-terminal-loss`. The current implementation
-task explicitly forbids merge, deploy, production writes and recovery apply;
-therefore only phase A may run now.
+This section remains the regression checklist for
+`INC-2026-08-10-smart-update-identity-terminal-loss`. PR #494 was merged as
+`69ec40342`; the historical Draft-only restriction no longer applies. Any
+current incident must follow its own mutation authorization and the repository
+release-governance contract. For
+`INC-2026-08-22-sos-dedup-veto-location-tyunin-farm`, prevention deploy must
+precede census repair, and repair must use its reviewed manifest rather than
+the generic duplicate utility.
 
 ### A. Review-ready, no production mutation
 
-1. `git fetch origin --prune`; require a clean worktree, the exact Draft PR #494
-   branch and no lost newer commits. Record final HEAD and `origin/main`.
+1. `git fetch origin --prune`; require a clean worktree based on the intended
+   review head with no lost newer commits. Record final HEAD and `origin/main`.
 2. Run T01–T76 targeted/static receipts, the full relevant suite,
    `python3 scripts/inspect/audit_google_ai_provider_paths.py`, compile and
    `git diff --check`. No unapproved provider path is allowed.
@@ -26,8 +30,8 @@ therefore only phase A may run now.
    occurrence recovery counts may remain unavailable when raw evidence is
    missing; report carriers, occurrences and lifecycle actions separately and
    do not substitute carrier/source counts.
-5. Keep PR draft/unmerged and incident open. Update the PR summary with exact
-   receipts and every Partial/Blocked gate. Green CI alone is not readiness.
+5. Keep the incident open while any required receipt is Partial/Blocked. Green
+   CI alone is not production readiness.
 
 ### B. Future merge/deploy gate (separate approval required)
 

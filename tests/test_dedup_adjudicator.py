@@ -14,7 +14,9 @@ from dataclasses import dataclass, field
 from smart_event_update import (
     _dedup_adjudicator_accept_merge,
     _dedup_adjudicator_block_candidates,
+    _dedup_adjudicator_final_result,
 )
+from smart_update_identity import IdentityFinalAction, IdentityFinalRelation
 
 
 @dataclass
@@ -64,6 +66,148 @@ def _decide(action, code, conf, match_id=1):
         "reason_code": code,
         "reason": "test",
     }
+
+
+def _typed_decide(
+    action,
+    code,
+    conf,
+    *,
+    match_id=1,
+    relation="same_event",
+    evidence=None,
+    conflicts=None,
+):
+    decision = _decide(action, code, conf, match_id=match_id)
+    decision.update(
+        {
+            "relation": relation,
+            "source_grounded_evidence": list(evidence or []),
+            "blocking_conflicts": list(conflicts or []),
+        }
+    )
+    return decision
+
+
+def test_final_result_accepts_only_guarded_explicit_match():
+    cand = _Cand(
+        title="SOS — легендарная вечеринка",
+        date="2026-08-22",
+        time="21:00",
+        location_name="Барн",
+        ticket_link="https://barn.timepad.ru/event/4147114",
+    )
+    owner = _Event(
+        id=8117,
+        title="Тройной день рождения: Барн, Chipi Clo и SOS",
+        date="2026-08-22",
+        time="21:00",
+        location_name="Барн",
+        ticket_link="https://barn.timepad.ru/event/4147114",
+    )
+
+    result = _dedup_adjudicator_final_result(
+        cand,
+        [owner],
+        _typed_decide(
+            "match",
+            "identical_anchors_dup",
+            0.99,
+            match_id=8117,
+            evidence=["SOS"],
+        ),
+    )
+
+    assert result.action is IdentityFinalAction.FINAL_MATCH
+    assert result.relation is IdentityFinalRelation.SAME_EVENT
+    assert result.owner_event_id == 8117
+
+
+def test_final_result_create_without_grounded_distinct_is_retry():
+    result = _dedup_adjudicator_final_result(
+        _Cand(title="Праздничный SOS", date="2026-08-22"),
+        [],
+        _typed_decide(
+            "create",
+            "no_candidate_match",
+            0.99,
+            match_id=None,
+            relation="unknown",
+        ),
+    )
+
+    assert result.action is IdentityFinalAction.FINAL_RETRY
+    assert result.reason_code == "distinct_not_grounded"
+
+
+def test_final_result_explicit_grounded_occurrence_difference_is_distinct():
+    owner = _Event(
+        id=5426,
+        title="Кураторская экскурсия",
+        date="2026-08-22",
+        time="12:00",
+        location_name="Музей",
+    )
+    result = _dedup_adjudicator_final_result(
+        _Cand(
+            title="Кураторская экскурсия",
+            date="2026-08-22",
+            time="15:00",
+            location_name="Музей",
+        ),
+        [owner],
+        _typed_decide(
+            "create",
+            "session_split_keep",
+            0.99,
+            match_id=None,
+            relation="distinct_occurrence",
+            evidence=["Кураторская экскурсия"],
+            conflicts=["event 5426 starts at 12:00"],
+        ),
+    )
+
+    assert result.action is IdentityFinalAction.FINAL_DISTINCT
+    assert result.relation is IdentityFinalRelation.DISTINCT_OCCURRENCE
+
+
+def test_final_result_rejected_or_low_confidence_match_is_retry():
+    owner = _Event(
+        id=1,
+        title="Выставка",
+        date="2026-08-22",
+        time="12:00",
+        location_name="Музей",
+    )
+    result = _dedup_adjudicator_final_result(
+        _Cand(
+            title="Экскурсия по выставке",
+            date="2026-08-22",
+            time="12:00",
+            location_name="Музей",
+        ),
+        [owner],
+        _typed_decide(
+            "match",
+            "venue_variant",
+            0.2,
+            evidence=["Выставка"],
+        ),
+    )
+
+    assert result.action is IdentityFinalAction.FINAL_RETRY
+    assert result.reason_code.startswith("match_rejected:")
+
+
+def test_final_result_provider_or_schema_abstention_is_retry():
+    result = _dedup_adjudicator_final_result(
+        _Cand(title="Событие", date="2026-08-22"),
+        [],
+        None,
+    )
+
+    assert result.action is IdentityFinalAction.FINAL_RETRY
+    assert result.reason_code == "adjudicator_unavailable"
 
 
 # --- merge cases (action=match, expected accept=True) ---------------------------
