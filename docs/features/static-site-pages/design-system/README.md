@@ -254,6 +254,38 @@ event-type/admission/occurrence/action label, counter value, calendar state and
 the reached branch families. It is not a documentation-derived enum and it does
 not mutate `site/src`.
 
+### EventCard semantic census boundary
+
+The durable aggregate-only census is
+`tests/fixtures/ui-conformance/event-card-large-production-semantic-census.v1.json`.
+It is bound to exact public-projection resolver evidence by SHA-256, contains no
+production rows or secrets, and keeps the broader raw-DB aggregate explicitly as
+supporting evidence only. The observed 703 current events produce 31 rendered
+event-type labels. Those labels are **content**, not 31 Penpot variants:
+`event.meta.event-type` has one component variant, a normalized semantic value,
+and a variable rendered label. This also preserves `movie` and `therapy` as
+observed source anomalies rather than silently claiming that Astro rendered a
+different label.
+
+Admission is another semantic axis. `event.meta.admission` owns state and
+visibility; price owns a positive integer amount or range plus an explicit
+three-letter currency, with `RUB` only as the current compatibility default.
+The exact resolver census contains 61 current price labels. Both observed
+`0 ₽` rows fail closed, while unknown admission is hidden. The historical
+Astro string `Условия уточняются` remains only in `source_rendered`
+evidence and is not a valid semantic specimen.
+
+Interaction actions and social proof are deliberately separate. The action
+components (`event.action.like`, `event.action.share`, calendar and dismiss)
+describe behavior/labels. `event.social-proof.like` and
+`event.social-proof.share` own the numeric metric content and visibility. The
+admission CTA is independently modeled as `event.cta.admission`; price labels
+must never be encoded as CTA or component variants.
+
+This adapter is pre-Penpot-acceptance normalization only. It does not change
+production `site/src`; a production backport still requires owner acceptance
+and the normal round-trip gates above.
+
 The same entrypoint exposes fail-closed `run-case` and exact seven-case
 `run-batch` commands. They assert all three 40-hex SHAs, materialize from the
 separate Astro checkout, capture browser evidence, build the identity tuple,

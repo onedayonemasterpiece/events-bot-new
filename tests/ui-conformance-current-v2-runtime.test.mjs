@@ -57,11 +57,17 @@ test('inventory summary preserves every rendered label and count branch', () => 
 
 test('checked inventory is the exact eight-fixture Astro-generated output', () => {
   const inventory = JSON.parse(readFileSync(resolve(root, 'tests/fixtures/ui-conformance/event-card-large-chip-inventory.v1.json'), 'utf8'));
+  assert.equal(inventory.schema_version, 'event_card_large_chip_inventory.v2');
   assert.equal(inventory.fixture_count, 8);
   assert.equal(inventory.astro_source_repository_sha, '22ebe3c5e92b13684cca32c14357ef7b91834977');
-  assert.equal(inventory.conformance_tooling_repository_sha, '54aea7a03cbbe5948aa60c40f12677483c6bcc09');
+  assert.equal(inventory.conformance_tooling_repository_sha, 'c7b3f766b00cf5969f71dbbe03e88f18ad7f6a26');
   assert.equal(inventory.generation_mode, 'real-astro-static-build/exact-event-card/split-actions');
   assert.equal(inventory.production_source_mutated, false);
+  assert.equal(inventory.semantic_projection_mode, 'adapter-only/pre-penpot-acceptance');
+  assert.equal(inventory.production_census.exact_source_artifact_sha256, '30c8ac5adfaeff17c463191714f660b3ed5d0a00aa8799e90f2be70cb1ca9993');
+  assert.equal(inventory.production_census.event_count, 703);
+  assert.equal(inventory.production_census.rendered_event_type_label_count, 31);
+  assert.equal(inventory.production_census.rendered_price_label_count, 61);
   assert.deepEqual(inventory.cases.map((row) => row.fixture_id), [
     'event.real.8156', 'event.real.7906', 'event.real.6399', 'event.real.4327',
     'event.real.7888', 'event.real.7807', 'event.real.3132', 'event.real.6628',
@@ -69,8 +75,10 @@ test('checked inventory is the exact eight-fixture Astro-generated output', () =
   assert.deepEqual(inventory.summary.event_type_labels, ['выставка', 'концерт', 'лекция']);
   assert.deepEqual(inventory.summary.admission_labels, [
     '1000 ₽', '1500 ₽', 'Бесплатно · вход свободный', 'Бесплатно · регистрация',
-    'Билеты', 'Запись по телефону', 'Условия уточняются',
+    'Билеты', 'Запись по телефону',
   ]);
+  assert(inventory.summary.source_rendered_admission_labels.includes('Условия уточняются'));
+  assert.deepEqual(inventory.summary.semantic_anomalies, ['obsolete-unspecified-label-hidden']);
   assert(inventory.summary.branch_families.includes('calendar:absent'));
   assert(inventory.summary.branch_families.includes('calendar:present'));
   assert.deepEqual(inventory.summary.share_count_values, [0, 5]);

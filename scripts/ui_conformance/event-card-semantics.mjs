@@ -19,8 +19,9 @@ function semanticToken(value) {
 /** Event-type vocabulary is content, never a Penpot component-variant axis. */
 export function resolveEventTypeSemantic(rawValue, { labelOverride = null } = {}) {
   const raw = normalizedText(rawValue);
-  if (!raw) return { semantic_value:'event', raw_value:null, label:labelOverride || 'событие', label_source:labelOverride ? 'explicit-override' : 'fallback', component_variant:'default' };
+  if (!raw) return { component_id:'event.meta.event-type', semantic_value:'event', raw_value:null, label:labelOverride || 'событие', label_source:labelOverride ? 'explicit-override' : 'fallback', component_variant:'default' };
   return {
+    component_id: 'event.meta.event-type',
     semantic_value: semanticToken(raw),
     raw_value: raw,
     label: labelOverride || raw,
@@ -85,33 +86,35 @@ function eventStatusText(event) {
 
 export function resolveAdmissionSemantic(event, { defaultCurrency = 'RUB' } = {}) {
   const ticket = event.ticket || {}; const statusText = eventStatusText(event); const rawLabel = String(ticket.price_label || event.status_label || ticket.label || '').trim() || null;
-  if (SOLD_PATTERN.test(statusText)) return { state:'sold_out', visible:true, label:'Билеты закончились', price:null, anomaly:null, component_variant:'default' };
+  const componentId = 'event.meta.admission';
+  if (SOLD_PATTERN.test(statusText)) return { component_id:componentId, state:'sold_out', visible:true, label:'Билеты закончились', price:null, anomaly:null, component_variant:'default' };
   const structuredPrice = structuredAdmissionPrice(ticket, { defaultCurrency });
   if (structuredPrice || ticket.price_label) {
     const price = structuredPrice || parseAdmissionPrice(ticket.price_label, { defaultCurrency:ticket.currency || defaultCurrency });
-    if (!price.valid) return { state:'invalid_price', visible:false, label:null, price, anomaly:price.reason, component_variant:'default' };
-    return { state:'priced', visible:true, label:price.label, price, anomaly:null, component_variant:'default' };
+    if (!price.valid) return { component_id:componentId, state:'invalid_price', visible:false, label:null, price, anomaly:price.reason, component_variant:'default' };
+    return { component_id:componentId, state:'priced', visible:true, label:price.label, price, anomaly:null, component_variant:'default' };
   }
   if (ticket.is_free) {
-    if (REGISTRATION_PATTERN.test(statusText)) return { state:'free_registration', visible:true, label:'Бесплатно · регистрация', price:null, anomaly:null, component_variant:'default' };
-    if (BOOKING_PATTERN.test(statusText)) return { state:'free_booking', visible:true, label:'Бесплатно · по записи', price:null, anomaly:null, component_variant:'default' };
-    return { state:'free_entry', visible:true, label:'Бесплатно · вход свободный', price:null, anomaly:null, component_variant:'default' };
+    if (REGISTRATION_PATTERN.test(statusText)) return { component_id:componentId, state:'free_registration', visible:true, label:'Бесплатно · регистрация', price:null, anomaly:null, component_variant:'default' };
+    if (BOOKING_PATTERN.test(statusText)) return { component_id:componentId, state:'free_booking', visible:true, label:'Бесплатно · по записи', price:null, anomaly:null, component_variant:'default' };
+    return { component_id:componentId, state:'free_entry', visible:true, label:'Бесплатно · вход свободный', price:null, anomaly:null, component_variant:'default' };
   }
-  if (ticket.kind === 'phone' || BOOKING_PATTERN.test(statusText)) return { state:'phone_booking', visible:true, label:'Запись по телефону', price:null, anomaly:null, component_variant:'default' };
-  if (ticket.kind === 'registration' || REGISTRATION_PATTERN.test(statusText)) return { state:'registration_required', visible:true, label:'Регистрация', price:null, anomaly:null, component_variant:'default' };
-  if (ticket.kind === 'ticket' || TICKET_PATTERN.test(statusText)) return { state:'ticketed', visible:true, label:'Билеты', price:null, anomaly:null, component_variant:'default' };
+  if (ticket.kind === 'phone' || BOOKING_PATTERN.test(statusText)) return { component_id:componentId, state:'phone_booking', visible:true, label:'Запись по телефону', price:null, anomaly:null, component_variant:'default' };
+  if (ticket.kind === 'registration' || REGISTRATION_PATTERN.test(statusText)) return { component_id:componentId, state:'registration_required', visible:true, label:'Регистрация', price:null, anomaly:null, component_variant:'default' };
+  if (ticket.kind === 'ticket' || TICKET_PATTERN.test(statusText)) return { component_id:componentId, state:'ticketed', visible:true, label:'Билеты', price:null, anomaly:null, component_variant:'default' };
   const obsolete = OBSOLETE_ADMISSION_LABELS.has(normalizedText(rawLabel));
-  return { state:'unspecified', visible:false, label:null, price:null, anomaly:obsolete ? 'obsolete-unspecified-label-hidden' : 'unspecified-admission-hidden', component_variant:'default' };
+  return { component_id:componentId, state:'unspecified', visible:false, label:null, price:null, anomaly:obsolete ? 'obsolete-unspecified-label-hidden' : 'unspecified-admission-hidden', component_variant:'default' };
 }
 
 export function resolveAdmissionCta(event, admission) {
   const ticket = event.ticket || {}; const href = String(ticket.href || '').trim() || null;
-  if (admission.state === 'sold_out') return { semantic_action:'purchase', present:true, enabled:false, label:'Билеты закончились', href:null, component_variant:'default' };
-  if (ticket.kind === 'phone') return { semantic_action:'call', present:Boolean(href), enabled:Boolean(href), label:'Позвонить организатору', href, component_variant:'default' };
-  if (ticket.kind === 'registration') return { semantic_action:'register', present:Boolean(href), enabled:Boolean(href), label:'Зарегистрироваться', href, component_variant:'default' };
-  if (ticket.kind === 'source') return { semantic_action:'open_source', present:Boolean(href), enabled:Boolean(href), label:'Открыть пост организатора', href, component_variant:'default' };
-  if (ticket.kind === 'ticket' && href) return { semantic_action:'purchase', present:true, enabled:true, label:'Купить билет', href, component_variant:'default' };
-  return { semantic_action:'none', present:false, enabled:false, label:null, href:null, component_variant:'default' };
+  const componentId = 'event.cta.admission';
+  if (admission.state === 'sold_out') return { component_id:componentId, semantic_action:'purchase', present:true, enabled:false, label:'Билеты закончились', href:null, component_variant:'default' };
+  if (ticket.kind === 'phone') return { component_id:componentId, semantic_action:'call', present:Boolean(href), enabled:Boolean(href), label:'Позвонить организатору', href, component_variant:'default' };
+  if (ticket.kind === 'registration') return { component_id:componentId, semantic_action:'register', present:Boolean(href), enabled:Boolean(href), label:'Зарегистрироваться', href, component_variant:'default' };
+  if (ticket.kind === 'source') return { component_id:componentId, semantic_action:'open_source', present:Boolean(href), enabled:Boolean(href), label:'Открыть пост организатора', href, component_variant:'default' };
+  if (ticket.kind === 'ticket' && href) return { component_id:componentId, semantic_action:'purchase', present:true, enabled:true, label:'Купить билет', href, component_variant:'default' };
+  return { component_id:componentId, semantic_action:'none', present:false, enabled:false, label:null, href:null, component_variant:'default' };
 }
 
 function nonNegativeCount(value) {
@@ -129,10 +132,10 @@ export function resolveSocialProof(event) {
 
 export function resolveEventCardActions(event, { calendarEligible = false } = {}) {
   return {
-    not_interested: { semantic_action:'dismiss_recommendation', present:true, label:'Не интересно', component_variant:'default' },
-    calendar: { semantic_action:'calendar_add', present:Boolean(calendarEligible), label:calendarEligible ? 'В календарь' : null, component_variant:'default' },
-    share: { semantic_action:'share', present:true, label:'Поделиться', component_variant:'default' },
-    like: { semantic_action:'like', present:true, label:null, component_variant:'default' },
+    not_interested: { component_id:'event.action.not-interested', semantic_action:'dismiss_recommendation', present:true, label:'Не интересно', component_variant:'default' },
+    calendar: { component_id:'event.action.calendar', semantic_action:'calendar_add', present:Boolean(calendarEligible), label:calendarEligible ? 'В календарь' : null, component_variant:'default' },
+    share: { component_id:'event.action.share', semantic_action:'share', present:true, label:'Поделиться', component_variant:'default' },
+    like: { component_id:'event.action.like', semantic_action:'like', present:true, label:null, component_variant:'default' },
   };
 }
 

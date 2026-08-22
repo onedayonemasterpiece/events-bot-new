@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added: an exact-resolver-bound EventCard semantic census adapter. All 31
+  observed event-type labels now flow through one semantic chip contract; all
+  61 current price labels are checked as amount/range plus currency; unknown
+  admission and the two invalid `0 ₽` observations fail closed. CTA/action
+  behavior and like/share proof counts remain separate semantic components.
+  This is conformance-only and does not change production `site/src`.
+
 - Added: a source-hash-bound Astro-generated inventory of every EventCard Large
   chip/action label and counter state reached by all eight Golden Event Corpus
   v1 fixtures, plus a fail-closed current-v2 case/batch runner. Conformance now

@@ -122,13 +122,19 @@ function unique(values) {
 }
 
 export function summarizeInventory(rows) {
-  const semantic = (row) => row.semantic || {
+  const semantic = (row) => row.semantic || (row.event_type?.semantic_value ? {
+    event_type:row.event_type,
+    admission:row.admission,
+    actions:row.actions,
+    social_proof:row.social_proof,
+    anomalies:row.semantic_anomalies || [],
+  } : {
     event_type:row.event_type,
     admission:{...row.admission,state:row.admission?.label ? 'legacy-label' : 'unspecified'},
     actions:row.actions,
     social_proof:{like:{count:row.actions.like.base_count},share:{count:row.actions.share.base_count}},
     anomalies:[],
-  };
+  });
   return {
     event_type_semantic_values: unique(rows.map((row) => semantic(row).event_type.semantic_value).filter(Boolean)),
     event_type_labels: unique(rows.map((row) => semantic(row).event_type.label).filter(Boolean)),
@@ -190,10 +196,16 @@ export function buildInventory(args) {
   const cases = corpus.fixtures.map((fixture) => {
     const sourceRendered = extractGeneratedChipState(readFileSync(join(harness, 'dist/chip-inventory', fixture.fixture_id, 'index.html'), 'utf8'), fixture);
     const semantics = resolveEventCardSemantics(fixtureEvents.get(fixture.fixture_id), { calendarEligible:sourceRendered.calendar.eligible, defaultCurrency:semanticCensus.admission.current_renderer_currency_default });
+    const { event_type:sourceEventType, admission:sourceAdmission, actions:sourceActions, ...generatedFacts } = sourceRendered;
     return {
-      ...sourceRendered,
-      source_rendered:{ event_type:sourceRendered.event_type, admission:sourceRendered.admission, actions:sourceRendered.actions },
-      semantic:semantics,
+      ...generatedFacts,
+      event_type:semantics.event_type,
+      admission:semantics.admission,
+      admission_cta:semantics.admission_cta,
+      actions:semantics.actions,
+      social_proof:semantics.social_proof,
+      semantic_anomalies:semantics.anomalies,
+      source_rendered:{ event_type:sourceEventType, admission:sourceAdmission, actions:sourceActions },
       branch_families:unique([...sourceRendered.branch_families, `event-type-value:${semantics.event_type.semantic_value}`, `admission-state:${semantics.admission.state}`, `admission-visible:${semantics.admission.visible}`, `like-proof:${semantics.social_proof.like.visible ? 'present' : 'absent'}`, `share-proof:${semantics.social_proof.share.visible ? 'present' : 'absent'}`]),
     };
   });
