@@ -49,10 +49,11 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   eligible documents projected. Post-Smart-Update enqueue and an independent
   three-hour reconciliation restore `334/334` for both kinds.
 - `2026-07-31` — late-July replay remains fail-closed after unresolved veto.
-- `2026-08-07` — `12e4e7c36c25ac250e9cd5c03972420c782dced7` first
+- `2026-08-10 23:42:36Z` (committed `2026-08-11 19:35:52Z`) —
+  `12e4e7c36c25ac250e9cd5c03972420c782dced7` first
   leaves CREATE reachable. Parent `04823317c8cafd438db01bb519cbf96d63f7bf00`
   is last good.
-- `2026-08-10` — PR #494 merge `69ec40342` brings the regression to `main`
+- `2026-08-12 08:05:42Z` — PR #494 merge `69ec40342` brings the regression to `main`
   alongside the required occurrence-scoped candidate/attempt work.
 - `2026-08-22 01:51:35Z` — runtime records owner `8117`, `VETO_CREATE`
   (`deterministic_same_ticket_slot`, confidence `0.92`) and one existing dedup
@@ -124,8 +125,8 @@ date is malformed.
 A stored-vector proxy over seven positive families used no provider call. The
 true owner was top-1 for 2/7 and top-5 for 5/7; three owners ranked 2–3. Exact
 type/city filtering removed SOS and Baltic Odyssey. Prevention must therefore
-preserve a small top-k and bounded relaxed-filter fallback in the same existing
-RPC/embedding pass, without an extra LLM call.
+preserve a small top-k and omit drift-prone city/type filters in the same
+existing RPC/embedding pass, without a fallback RPC or extra LLM call.
 
 ## Regression Corpus
 
@@ -153,6 +154,16 @@ RPC/embedding pass, without an extra LLM call.
 
 The gate also requires exact replay twice, genuine concurrent two-worker
 replay, zero hard-negative false merges and unchanged normal-path LLM counters.
+
+The prevention branch executes all 14 sanitized named cases through Smart
+Update: positives reuse one owner and all seven hard negatives create a separate
+Event (`14/14`, 100%). Exact Telegram/VK packet replay is invoked twice after
+the initial owner and adds zero Events/provider calls. Two SQLite handles run
+the same candidate concurrently and leave one Event. Provider counters remain
+at the historical budget: zero adjudicator calls when deterministic SOS proof
+already resolves the owner, otherwise exactly one existing adjudicator call;
+the widened vector test records one embedding and one recall pass. These tests
+do not substitute for the post-deploy live top-1/top-5 measurement.
 
 ## Production Census And Cause Classification
 
@@ -235,14 +246,14 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 
 ## Corrective Actions
 
-- [ ] Replace the boolean with `FINAL_MATCH`, `FINAL_DISTINCT`, `FINAL_RETRY`.
-- [ ] Require grounded distinct proof for CREATE after identity concern; bare
+- [x] Replace the boolean with `FINAL_MATCH`, `FINAL_DISTINCT`, `FINAL_RETRY`.
+- [x] Require grounded distinct proof for CREATE after identity concern; bare
   `no_merge`, abstention, provider/schema errors become durable retry.
-- [ ] Persist owner, action, relation, confidence, evidence/conflicts and
+- [x] Persist owner, action, relation, confidence, evidence/conflicts and
   attempt ID in the existing ledger.
-- [ ] Preserve exact occurrence/fingerprint no-op and avoid
+- [x] Preserve exact occurrence/fingerprint no-op and avoid
   `UNIQUE(source_url)`.
-- [ ] Preserve small vector top-k/relaxed fallback without extra LLM calls.
+- [x] Preserve small vector top-k in one widened RPC without extra calls.
 - [ ] Deploy prevention, repair reviewed true duplicates, rebuild projections.
 
 ## Acceptance Criteria
@@ -258,7 +269,7 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 
 ## Release And Closure Evidence
 
-- prevention SHA/tests: pending integration
+- prevention implementation/tests: PR #554 (exact-main SHA pending merge)
 - production repair/projections/social cleanup: blocked until prevention deploy
 - deploy and `/healthz`: pending
 - two ingestion iterations: pending

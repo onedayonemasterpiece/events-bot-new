@@ -85,7 +85,7 @@ def test_rank_two_vector_owner_participates_in_identity_gate():
 
 
 @pytest.mark.asyncio
-async def test_vector_filter_drift_fallback_reuses_one_embedding(monkeypatch):
+async def test_vector_filter_drift_uses_one_widened_rpc_and_one_embedding(monkeypatch):
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("PERSONALIZATION_SUPABASE_SERVICE_ROLE_KEY", "test-secret")
     monkeypatch.setenv(su.SMART_UPDATE_IDENTITY_GOOGLE_KEY_ENV, "test-google")
@@ -98,8 +98,7 @@ async def test_vector_filter_drift_fallback_reuses_one_embedding(monkeypatch):
 
     def _recall(_client, _embedding, *, city, event_type, **_kwargs):
         calls["recall"].append((city, event_type))
-        if city is not None or event_type is not None:
-            return event_identity.EventIdentityRecallResult(ok=True, candidates=())
+        assert city is None and event_type is None
         return event_identity.EventIdentityRecallResult(
             ok=True,
             candidates=(
@@ -133,12 +132,9 @@ async def test_vector_filter_drift_fallback_reuses_one_embedding(monkeypatch):
     assert evidence.nearest_event_id == 8055
     assert [item.event_id for item in evidence.candidates] == [8055, 8108, 8117]
     assert [item.rank for item in evidence.candidates] == [1, 2, 3]
-    assert evidence.filter_fallback_used is True
+    assert evidence.filter_fallback_used is False
     assert calls["embedding"] == 1
-    assert calls["recall"] == [
-        ("Калининград", "вечеринка"),
-        (None, None),
-    ]
+    assert calls["recall"] == [(None, None)]
 
 
 def test_vector_handoff_does_not_define_a_second_final_action():

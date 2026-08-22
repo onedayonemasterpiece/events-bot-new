@@ -377,9 +377,9 @@ weak title, date/OCR conflict, collapsed occurrences или incomplete evidence
     (not stored), call the service-role-only Supabase RPC
     `event_identity_candidates_by_embedding_v1` over existing `related_v1` and
     `search_v3` vectors, preserve a merged top-five owner list, hydrate those
-    SQLite events by id, and feed that evidence into create-veto checks. If an
-    exact city/type query is empty, one bounded relaxed-filter recall reuses the
-    same ephemeral embedding; it adds no embedding or LLM call. The ephemeral
+    SQLite events by id, and feed that evidence into create-veto checks. The
+    bounded query omits drift-prone city/type presentation filters in that same
+    RPC pass; it adds neither a fallback RPC nor an embedding/LLM call. The ephemeral
     embedding provider call must go through `GoogleAIClient.embed_content_async()`
     and `google_ai_reserve`/`google_ai_finalize`; direct `embedContent` calls are
     disabled unless an explicit local/debug bypass is set. Raw source excerpts,

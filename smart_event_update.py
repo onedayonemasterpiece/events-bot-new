@@ -11860,8 +11860,11 @@ async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> I
             recall = recall_identity_candidates_across_doc_kinds(
                 client,
                 embedding.embedding,
-                city=candidate.city,
-                event_type=candidate.event_type,
+                # Identity recall is wider than presentation metadata because
+                # a duplicate may already carry drifted city/type fields. Keep
+                # one bounded RPC pass; SQLite/LLM still decide semantics.
+                city=None,
+                event_type=None,
                 config=config,
             )
             if not recall.ok:
@@ -11870,20 +11873,6 @@ async def _smart_update_identity_vector_evidence(candidate: EventCandidate) -> I
                     error=f"rpc_failed:{recall.error_type}:{recall.error_message}",
                 )
             fallback_used = False
-            # Exact city/type metadata may drift while the source text still
-            # identifies the owner. Reuse the same ephemeral embedding and the
-            # same bounded RPC only when the filtered query returned no rows.
-            if not recall.candidates and (candidate.city or candidate.event_type):
-                relaxed = recall_identity_candidates_across_doc_kinds(
-                    client,
-                    embedding.embedding,
-                    city=None,
-                    event_type=None,
-                    config=config,
-                )
-                if relaxed.ok and relaxed.candidates:
-                    recall = relaxed
-                    fallback_used = True
             if not recall.candidates:
                 return IdentityVectorEvidence(
                     available=True,

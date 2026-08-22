@@ -9,8 +9,8 @@
   provider/schema uncertainty cannot create an Event. Final owner, relation,
   confidence, evidence/conflicts and candidate attempt are recorded in the
   existing identity ledger. Vector recall preserves a bounded top-five list and
-  reuses one embedding for the strict-filter miss fallback without adding LLM
-  calls. Exact occurrence/fingerprint replay and accepted-only fanout remain
+  omits drift-prone city/type filters in the same RPC pass without a fallback
+  RPC or extra embedding/LLM call. Exact occurrence/fingerprint replay and accepted-only fanout remain
   unchanged. Added an incident-scoped, manifest/hash/CAS-guarded production
   repair tool that preserves Event shells, sources, facts, posters and audit
   history, cancels obsolete pending work and is idempotent on second apply.
