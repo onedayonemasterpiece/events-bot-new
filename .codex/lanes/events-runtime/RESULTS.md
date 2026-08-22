@@ -103,3 +103,9 @@ The runtime checkout remains the immutable executable tooling SHA
 `713a035a8aaa9ecfdcdd5fbd817fe504160df2f5`; no caller branch or mutable ref is
 used. A real local one-case run and exact seven-case batch passed. The earlier
 `REPIN_AFTER_DESIGN_COMMIT_A` blocker is resolved.
+
+Remote run `32582038238` proved the real workflow selected seven cases and reached
+browser capture, then failed fail-closed because GitHub's clean runner had no
+Playwright Chromium binary. Design workflow commit
+`1de19acf0c07bac87b437cff8845006f47fae1b0` adds the explicit pinned-runtime
+`playwright install --with-deps chromium` step; the caller was repinned to it.
