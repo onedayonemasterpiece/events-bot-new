@@ -68,9 +68,11 @@ STATIC_SITE_COUNT_KEYS = (
 # adding a new exporter query requires changing this contract and its parity
 # tests instead of silently shipping the whole production database to Kaggle.
 # This is a column allowlist, not merely a table allowlist.  In particular the
-# exporter needs three partner-CTA fields from ``user`` and a small public
-# provenance subset from ``event_source``; copying either complete row would
-# disclose unrelated account state or raw Smart Update intake text to Kaggle.
+# exporter needs three partner-CTA fields from ``user`` and a bounded evidence
+# subset from ``event_source``.  Collection-product validation requires the
+# exact source text behind its persisted evidence quotes, but candidate keys,
+# fingerprints and the rest of Smart Update state remain excluded; copying
+# either complete row would disclose unrelated operational state to Kaggle.
 STATIC_SITE_PROJECTION_COLUMNS: dict[str, tuple[str, ...]] = {
     "artist_registry_entity": (
         "artist_id", "entity_type", "display_name", "verification_status",
@@ -107,7 +109,7 @@ STATIC_SITE_PROJECTION_COLUMNS: dict[str, tuple[str, ...]] = {
     "event_source": (
         "id", "event_id", "source_type", "source_url",
         "source_chat_username", "source_chat_id", "source_message_id",
-        "imported_at", "trust_level",
+        "imported_at", "trust_level", "source_text",
     ),
     "event_video_link": (
         "event_id", "video_asset_id", "event_relevance_score", "ranking_score",
@@ -176,7 +178,7 @@ STATIC_SITE_FORBIDDEN_PROJECTION_COLUMNS: dict[str, frozenset[str]] = {
     ),
     "event_source": frozenset(
         {
-            "source_text", "source_fingerprint", "candidate_key", "occurrence_key",
+            "source_fingerprint", "candidate_key", "occurrence_key",
             "smart_update_candidate_id", "canonical_source_url", "source_role",
         }
     ),

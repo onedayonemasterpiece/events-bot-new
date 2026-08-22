@@ -35,6 +35,22 @@ def _load_exporter():
     return module
 
 
+def _load_collection_product_snapshot():
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "site"
+        / "scripts"
+        / "static_collection_product_snapshot.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "static_collection_product_snapshot_projection_test", path
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _source_database(path: Path, *, large_operational_payload: int = 0) -> None:
     con = sqlite3.connect(path)
     con.executescript(
@@ -163,7 +179,7 @@ def _source_database(path: Path, *, large_operational_payload: int = 0) -> None:
             canonical_source_url,source_role
         ) values(1,1,'telegram',?,'source',1,1,'trusted',?,?,?,?,?,?,?)""",
         (
-            "https://t.me/source/1", "2026-08-15T00:00:00Z", "private raw",
+            "https://t.me/source/1", "2026-08-15T00:00:00Z", "exact source evidence",
             "private fingerprint", "private candidate", "private occurrence",
             "https://t.me/source/1", "identity",
         ),
@@ -395,9 +411,19 @@ def test_projection_is_compact_and_excludes_operational_tables(tmp_path: Path) -
     assert projected_columns["event_source"] == [
         "id", "event_id", "source_type", "source_url", "source_chat_username",
         "source_chat_id", "source_message_id", "imported_at", "trust_level",
+        "source_text",
     ]
     assert metadata.table_columns["user"] == projected_columns["user"]
-    assert "source_text" not in metadata.table_columns["event_source"]
+    assert "source_fingerprint" not in metadata.table_columns["event_source"]
+    with sqlite3.connect(snapshot) as con:
+        source_text = con.execute(
+            "select source_text from event_source where id=1"
+        ).fetchone()[0]
+        source_records = _load_collection_product_snapshot().load_source_records(
+            con, event_ids=[1]
+        )
+    assert source_text == "exact source evidence"
+    assert source_records[1][0]["source_text"] == "exact source evidence"
 
 
 def test_projection_preserves_exporter_visible_rows_and_media(tmp_path: Path) -> None:

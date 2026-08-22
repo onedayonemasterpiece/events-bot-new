@@ -404,8 +404,11 @@ table **and column** allowlist into a compact, index-free SQLite read model,
 commits exact row and ordered-column manifests, closes the live source
 connection, then performs `quick_check`, size cap and SHA-256 binding. The
 `user` projection contains only `user_id,is_partner,organization`; the
-`event_source` projection contains only public provenance/CTA fields and never
-raw source text, candidate identity, fingerprints or Smart Update state.
+`event_source` projection contains only the provenance/CTA fields plus exact
+`source_text` required to validate already-persisted collection-product
+evidence quotes. Candidate identity, fingerprints and the rest of Smart Update
+state remain structurally excluded; the complete `event_source` row is never
+copied.
 Operational relations such as `vk_source_packet`, `vk_inbox`, `joboutbox`,
 `ops_run` and Kaggle ledgers are structurally excluded. The manifest table,
 column and row-count inventory is revalidated by the runner and kernel. A
