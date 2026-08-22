@@ -95,7 +95,7 @@ test('zero price and unspecified legacy copy resolve to absent and fail closed',
   assert.equal(unspecified.anomaly, 'obsolete-unspecified-label-hidden');
 });
 
-test('admission state, CTA actions and social-proof content remain separate semantic axes', () => {
+test('admission state, interaction actions and social-proof content remain separate semantic axes', () => {
   const semantics = resolveEventCardSemantics(event({likes_count:381,shares_count:116}), {calendarEligible:true});
   assert.equal(semantics.admission.state, 'ticket');
   assert.equal(semantics.event_type.component_id, 'event.meta.event-type');

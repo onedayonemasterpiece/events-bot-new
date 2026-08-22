@@ -8,7 +8,7 @@
     "timezone": "Europe/Kaliningrad"
   },
   "astro_source_repository_sha": "22ebe3c5e92b13684cca32c14357ef7b91834977",
-  "conformance_tooling_repository_sha": "28e5261bf24f88d724d4121a53d62d4dbae0ec76",
+  "conformance_tooling_repository_sha": "c4d9dca3e3a77c94e66df6a228f31fccb3871527",
   "generation_mode": "real-astro-static-build/exact-event-card/split-actions",
   "production_source_mutated": false,
   "semantic_projection_mode": "adapter-only/pre-penpot-acceptance",
@@ -50,7 +50,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:phone_booking",
+        "admission-state:phone",
         "admission-visible:true",
         "admission:label:Запись по телефону",
         "calendar:absent",
@@ -72,21 +72,16 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "phone_booking",
+        "state": "phone",
         "visible": true,
         "label": "Запись по телефону",
         "price": null,
         "anomaly": null,
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "call",
-        "present": true,
-        "enabled": true,
-        "label": "Позвонить организатору",
-        "href": "tel:+740153221166",
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": true,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -189,7 +184,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:priced",
+        "admission-state:price",
         "admission-visible:true",
         "admission:label:1000 ₽",
         "calendar:present",
@@ -211,7 +206,7 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "priced",
+        "state": "price",
         "visible": true,
         "label": "1000 ₽",
         "price": {
@@ -227,14 +222,9 @@
         "anomaly": null,
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "purchase",
-        "present": true,
-        "enabled": true,
-        "label": "Купить билет",
-        "href": "https://allenburg.ru/kontsert-klassicheskoy-muzyki-otkroveniya-veny-22-avgusta-2026-gotika-holl",
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": true,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -337,7 +327,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:priced",
+        "admission-state:price",
         "admission-visible:true",
         "admission:label:1000 ₽",
         "calendar:present",
@@ -359,7 +349,7 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "priced",
+        "state": "price",
         "visible": true,
         "label": "1000 ₽",
         "price": {
@@ -375,14 +365,9 @@
         "anomaly": null,
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "purchase",
-        "present": true,
-        "enabled": true,
-        "label": "Купить билет",
-        "href": "https://kaliningrad.qtickets.events/242439-poeticheskiy-kontsert-marii-mezhennoy",
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": true,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -485,7 +470,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:free_entry",
+        "admission-state:free-entry",
         "admission-visible:true",
         "admission:label:Бесплатно · вход свободный",
         "calendar:absent",
@@ -507,21 +492,16 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "free_entry",
+        "state": "free-entry",
         "visible": true,
         "label": "Бесплатно · вход свободный",
         "price": null,
         "anomaly": null,
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "none",
-        "present": false,
-        "enabled": false,
-        "label": null,
-        "href": null,
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": false,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -624,7 +604,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:unspecified",
+        "admission-state:absent",
         "admission-visible:false",
         "admission:label:Условия уточняются",
         "calendar:absent",
@@ -646,21 +626,16 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "unspecified",
+        "state": "absent",
         "visible": false,
         "label": null,
         "price": null,
         "anomaly": "obsolete-unspecified-label-hidden",
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "none",
-        "present": false,
-        "enabled": false,
-        "label": null,
-        "href": null,
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": false,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -765,7 +740,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:free_registration",
+        "admission-state:free-registration",
         "admission-visible:true",
         "admission:label:Бесплатно · регистрация",
         "calendar:present",
@@ -787,21 +762,16 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "free_registration",
+        "state": "free-registration",
         "visible": true,
         "label": "Бесплатно · регистрация",
         "price": null,
         "anomaly": null,
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "register",
-        "present": true,
-        "enabled": true,
-        "label": "Зарегистрироваться",
-        "href": "https://kaliningradlib.ru/node/20736",
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": true,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -904,7 +874,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:priced",
+        "admission-state:price",
         "admission-visible:true",
         "admission:label:1500 ₽",
         "calendar:present",
@@ -926,7 +896,7 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "priced",
+        "state": "price",
         "visible": true,
         "label": "1500 ₽",
         "price": {
@@ -942,14 +912,9 @@
         "anomaly": null,
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "purchase",
-        "present": true,
-        "enabled": true,
-        "label": "Купить билет",
-        "href": "https://kaliningrad.qtickets.events/223339-kryli-solnyy-kontsert",
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": true,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -1052,7 +1017,7 @@
       },
       "branch_families": [
         "actions:split-actions",
-        "admission-state:ticketed",
+        "admission-state:ticket",
         "admission-visible:true",
         "admission:label:Билеты",
         "calendar:absent",
@@ -1074,21 +1039,16 @@
       },
       "admission": {
         "component_id": "event.meta.admission",
-        "state": "ticketed",
+        "state": "ticket",
         "visible": true,
         "label": "Билеты",
         "price": null,
         "anomaly": null,
         "component_variant": "default"
       },
-      "admission_cta": {
-        "component_id": "event.cta.admission",
-        "semantic_action": "purchase",
-        "present": true,
-        "enabled": true,
-        "label": "Купить билет",
-        "href": "https://barnkaliningrad.ru/back_then",
-        "component_variant": "default"
+      "domain_evidence": {
+        "ticket_href_present": true,
+        "admission_cta_component": "not_applicable"
       },
       "actions": {
         "not_interested": {
@@ -1186,12 +1146,12 @@
       "лекция"
     ],
     "admission_states": [
-      "free_entry",
-      "free_registration",
-      "phone_booking",
-      "priced",
-      "ticketed",
-      "unspecified"
+      "absent",
+      "free-entry",
+      "free-registration",
+      "phone",
+      "price",
+      "ticket"
     ],
     "admission_labels": [
       "1000 ₽",
@@ -1243,12 +1203,12 @@
     ],
     "branch_families": [
       "actions:split-actions",
-      "admission-state:free_entry",
-      "admission-state:free_registration",
-      "admission-state:phone_booking",
-      "admission-state:priced",
-      "admission-state:ticketed",
-      "admission-state:unspecified",
+      "admission-state:absent",
+      "admission-state:free-entry",
+      "admission-state:free-registration",
+      "admission-state:phone",
+      "admission-state:price",
+      "admission-state:ticket",
       "admission-visible:false",
       "admission-visible:true",
       "admission:label:1000 ₽",
