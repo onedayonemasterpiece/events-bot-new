@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 
 import smart_event_update as su
 from db import Database
-from models import Event, EventSource
+from models import Event, EventIdentityDecisionLog, EventSource
 from smart_event_update import EventCandidate, SmartUpdateTerminalOutcome
 from smart_update_identity import IdentityGateMode
 from smart_update_state import (
@@ -265,9 +265,9 @@ async def test_sanitized_carrier_replay_covers_exact_edited_and_child_identity(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "relation",
-    ["related_but_distinct", "festival_context_sibling", "unsafe_to_merge"],
+    ["related_but_distinct", "festival_context_sibling"],
 )
-async def test_known_nonmerge_identity_relations_create_distinct_automatically(
+async def test_grounded_explicit_distinct_relations_create_distinct_automatically(
     tmp_path,
     monkeypatch,
     relation: str,
@@ -291,6 +291,10 @@ async def test_known_nonmerge_identity_relations_create_distinct_automatically(
                 "confidence": 0.99,
                 "reason_code": f"test_{relation}",
                 "reason": "known separate event",
+                "source_grounded_evidence": [
+                    "Каноническое событие",
+                    "Новая подтвержденная деталь программы",
+                ],
                 "blocking_conflicts": ["identity"],
                 "allowed_fields": [],
             }
@@ -339,6 +343,179 @@ async def test_known_nonmerge_identity_relations_create_distinct_automatically(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("llm_action", "llm_relation"),
+    [
+        ("allow_merge", "source_update"),
+        ("skip_merge_side_effects", "unsafe_to_merge"),
+    ],
+)
+async def test_merge_identity_uncertainty_never_falls_through_to_create(
+    tmp_path,
+    monkeypatch,
+    llm_action: str,
+    llm_relation: str,
+) -> None:
+    """Production 7907/8280: a merge blocker is not proof of distinctness."""
+
+    db = Database(str(tmp_path / f"merge-final-retry-{llm_relation}.sqlite"))
+    await db.init()
+    try:
+        existing_id = await _seed_event(db)
+
+        async def _anchor(db_arg, _candidate_value):
+            async with db_arg.get_session() as session:
+                return await session.get(Event, existing_id)
+
+        async def _gate(*_args, **_kwargs):
+            return {
+                "action": llm_action,
+                "relation": llm_relation,
+                "confidence": 1.0,
+                "reason_code": "same_event_update",
+                "reason": "same exhibition reminder with a conflicting extracted date",
+                "source_grounded_evidence": ["Каноническое событие"],
+                "blocking_conflicts": ["date"],
+                "allowed_fields": ["source_text"],
+            }
+
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su,
+            "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE",
+            IdentityGateMode.ENFORCE,
+        )
+        monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", _anchor)
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", _gate)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        result = await su.smart_event_update(
+            db,
+            _candidate(),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.event_id is None
+        assert result.diagnostic_event_id == existing_id
+        assert result.retry_reason is RetryReason.IDENTITY_FINAL_RETRY
+        async with db.get_session() as session:
+            assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
+            decisions = (
+                await session.execute(
+                    select(EventIdentityDecisionLog).order_by(EventIdentityDecisionLog.id)
+                )
+            ).scalars().all()
+        assert decisions[-1].decision == "FINAL_RETRY"
+        assert decisions[-1].decision_payload["stage"] == "final_merge_identity_gate"
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_great_teachers_repost_profile_drift_is_final_retry_not_create(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Production 3216/8284 replay after the first prevention deploy."""
+
+    db = Database(str(tmp_path / "great-teachers-8284.sqlite"))
+    await db.init()
+    try:
+        async with db.get_session() as session:
+            owner = Event(
+                id=3216,
+                title="Великие учителя",
+                description="Выставка произведений мастеров XX века.",
+                source_text=(
+                    "Выставка «Великие учителя» открыта с 9 апреля "
+                    "в филиале Третьяковской галереи."
+                ),
+                date="2026-04-09",
+                end_date="2026-09-27",
+                time="",
+                location_name="Филиал Третьяковской галереи",
+                location_address="Парадная наб. 3",
+                city="Калининград",
+                event_type="выставка",
+                ticket_link="https://vk.cc/cVA765",
+            )
+            session.add(owner)
+            await session.commit()
+
+        async def _anchor(db_arg, _candidate_value):
+            async with db_arg.get_session() as session:
+                return await session.get(Event, 3216)
+
+        async def _bad_distinct(*_args, **_kwargs):
+            return {
+                "action": "skip_merge_side_effects",
+                "relation": "related_but_distinct",
+                "confidence": 1.0,
+                "reason_code": "festival_sibling_not_same_event",
+                "reason": "wrongly treats the repost profile venue as a sibling",
+                "source_grounded_evidence": ["выставки «Великие учителя»"],
+                "blocking_conflicts": ["date", "end_date", "location_name"],
+                "allowed_fields": [],
+            }
+
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
+        monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+        monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
+        monkeypatch.setattr(
+            su,
+            "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE",
+            IdentityGateMode.ENFORCE,
+        )
+        monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", _anchor)
+        monkeypatch.setattr(su, "_llm_merge_identity_gate", _bad_distinct)
+        monkeypatch.setattr(su, "_llm_review_candidate_eventness", _eventness)
+        monkeypatch.setattr(su, "_classify_topics", _no_topics)
+
+        result = await su.smart_event_update(
+            db,
+            EventCandidate(
+                source_type="vk",
+                source_url="https://vk.com/wall-194467353_9263",
+                source_text=(
+                    "До завершения выставки «Великие учителя» осталось чуть "
+                    "больше двух недель. Выставка работает до 6 сентября."
+                ),
+                title="Выставка «Великие учителя»",
+                date="2026-08-22",
+                end_date="2026-09-06",
+                time="",
+                location_name="Музей Изобразительных искусств",
+                location_address="Ленинский проспект 83",
+                city="Калининград",
+                event_type="выставка",
+                ticket_link="https://vk.cc/cVA765",
+            ),
+            check_source_url=False,
+            schedule_tasks=False,
+        )
+
+        assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert result.diagnostic_event_id == 3216
+        assert result.reason == (
+            "identity_final_retry:shared_long_event_anchor_requires_retry"
+        )
+        async with db.get_session() as session:
+            assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
+            decisions = (
+                await session.execute(
+                    select(EventIdentityDecisionLog).order_by(EventIdentityDecisionLog.id)
+                )
+            ).scalars().all()
+        assert decisions[-1].decision == "FINAL_RETRY"
+        assert decisions[-1].decision_payload["owner_event_id"] == 3216
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
 async def test_specific_ticket_occurrence_conflict_creates_distinct(tmp_path, monkeypatch) -> None:
     db = Database(str(tmp_path / "ticket-occurrence.sqlite"))
     await db.init()
@@ -357,15 +534,16 @@ async def test_specific_ticket_occurrence_conflict_creates_distinct(tmp_path, mo
             async with db_arg.get_session() as session:
                 return await session.get(Event, existing_id)
 
-        async def _false_same(*_args, **_kwargs):
+        async def _explicit_occurrence_distinct(*_args, **_kwargs):
             return {
-                "action": "allow_merge",
-                "relation": "same_event",
+                "action": "skip_merge_side_effects",
+                "relation": "related_but_distinct",
                 "confidence": 0.99,
-                "reason_code": "same_event_update",
-                "reason": "synthetic false same",
-                "blocking_conflicts": [],
-                "allowed_fields": ["source"],
+                "reason_code": "different_ticket_occurrence",
+                "reason": "different explicit ticket occurrence identities",
+                "source_grounded_evidence": [candidate_ticket, existing_ticket],
+                "blocking_conflicts": ["ticket_link"],
+                "allowed_fields": [],
             }
 
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
@@ -376,7 +554,9 @@ async def test_specific_ticket_occurrence_conflict_creates_distinct(tmp_path, mo
             IdentityGateMode.ENFORCE,
         )
         monkeypatch.setattr(su, "_match_existing_event_by_source_anchor", _anchor)
-        monkeypatch.setattr(su, "_llm_merge_identity_gate", _false_same)
+        monkeypatch.setattr(
+            su, "_llm_merge_identity_gate", _explicit_occurrence_distinct
+        )
         monkeypatch.setattr(su, "_classify_topics", _no_topics)
         monkeypatch.setattr(su, "_llm_review_candidate_eventness", _eventness)
 
@@ -492,8 +672,8 @@ async def test_identity_llm_unavailable_is_durable_retry(
             schedule_tasks=False,
         )
         assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-        assert first.reason == "merge_identity_llm_unavailable"
-        assert first.retry_reason is RetryReason.IDENTITY_TECHNICAL_FAILURE
+        assert first.reason == "identity_final_retry:merge_identity_llm_unavailable"
+        assert first.retry_reason is RetryReason.IDENTITY_FINAL_RETRY
         assert (await _make_due(db))["claimed"] == 1
         async with db.get_session() as session:
             assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
@@ -543,7 +723,7 @@ async def test_typed_semantic_unknown_is_durable_retry(
             db, _candidate(), check_source_url=False, schedule_tasks=False
         )
         assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
-        assert first.retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
+        assert first.retry_reason is RetryReason.IDENTITY_FINAL_RETRY
         assert (await _make_due(db))["claimed"] == 1
         assert calls == 2
         async with db.get_session() as session:
@@ -554,7 +734,7 @@ async def test_typed_semantic_unknown_is_durable_retry(
                     "SELECT reason FROM smart_update_candidate_state ORDER BY id DESC LIMIT 1"
                 )
             ).fetchone()
-        assert row == (RetryReason.IDENTITY_SEMANTIC_UNKNOWN.value,)
+        assert row == (RetryReason.IDENTITY_FINAL_RETRY.value,)
     finally:
         await db.close()
 

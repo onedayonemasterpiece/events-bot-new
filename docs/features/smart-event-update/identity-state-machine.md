@@ -78,6 +78,24 @@ has only `FINAL_MATCH`, `FINAL_DISTINCT`, or `FINAL_RETRY`, replacing the
 ambiguous adjudicated boolean. Ordinary CREATE is unreachable after an identity
 concern unless the result is `FINAL_DISTINCT`.
 
+The same final application owns the older merge-path identity gate. A
+`skip_merge_side_effects`/`unsafe_to_merge` result proves only that the recalled
+owner must not be mutated; it does **not** prove that a second Event may be
+created. `related_but_distinct` or `festival_context_sibling` becomes
+`FINAL_DISTINCT` only when the same existing LLM response has confidence at
+least `0.80`, concrete blocking conflicts, and exact quotes retained by the
+source-grounding validator. Extracted date/location values absent from source
+text/OCR are not distinct evidence. Otherwise the result is `FINAL_RETRY`.
+
+One narrow consistency rail covers long-running reminder/repost drift: when
+overlapping long-event cards have related titles and the same exact ticket
+identity, a contrary distinct response cannot terminalize from changed
+profile-derived date/location anchors alone. The rail does not merge the rows;
+it schedules retry. This is the regression contract for production
+`3216/8284`. The same typed retry prevents the `7907/8280` path where the LLM
+said `source_update` but deterministic anchor conflicts had rewritten the
+intermediate relation to `unsafe_to_merge`.
+
 The existing decision log persists candidate-state/attempt number, owner, final
 action/relation/confidence, exact grounded evidence and blocking conflicts. No
 new LLM call or identity table is introduced.
@@ -171,7 +189,7 @@ explicit operational override, not a terminal-state fallback.
 | --- | --- |
 | `review_required` / diagnostic `event_id` | grounded distinct creates; identity uncertainty becomes durable `RETRY_SCHEDULED` |
 | create-gate `VETO_CREATE` / `skipped_identity_gate` | final match, grounded distinct or durable retry; never ordinary fall-through CREATE |
-| merge `skip_merge_side_effects` for a known sibling/conflict | grounded distinct creates; unknown/abstention remains durable retry |
+| merge `skip_merge_side_effects` for a known sibling/conflict | only explicit source-grounded distinct creates; `unsafe_to_merge`, blockers, unknown and abstention remain durable retry |
 | `skipped_context_only` | explicit `UPSERT_EVENT` or target-bound `ATTACH_CONTEXT` |
 | generic Smart Update `error`/caller `failed` | visible `FAILED_TECHNICAL` |
 | no-change/status aliases | `NOOP_EXACT_REPLAY` only for identical key plus fingerprint; accepted same-event no-change is `MERGED` |

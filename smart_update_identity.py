@@ -186,6 +186,7 @@ class MergeIdentityGateVerdict:
     candidate: IdentitySubject | None = None
     existing_event_id: int | None = None
     confidence: float = 0.0
+    source_grounded_evidence: tuple[str, ...] = ()
     blocking_conflicts: tuple[str, ...] = ()
     allowed_fields: tuple[str, ...] = ()
     deterministic: bool = False
@@ -540,6 +541,16 @@ def build_merge_identity_gate_verdict(
     raw_reasons = llm.get("reasons")
     reason_items = raw_reasons if isinstance(raw_reasons, Sequence) and not isinstance(raw_reasons, (str, bytes)) else []
     reasons = tuple(s for s in (_clean_str(llm.get("reason")), *[_clean_str(v) for v in reason_items]) if s)
+    raw_evidence = llm.get("source_grounded_evidence")
+    evidence_items = (
+        raw_evidence
+        if isinstance(raw_evidence, Sequence)
+        and not isinstance(raw_evidence, (str, bytes))
+        else []
+    )
+    source_grounded_evidence = tuple(
+        dict.fromkeys(str(v).strip() for v in evidence_items if str(v or "").strip())
+    )[:4]
     raw_llm_conflicts = llm.get("blocking_conflicts")
     llm_conflict_items = (
         raw_llm_conflicts
@@ -622,6 +633,55 @@ def build_merge_identity_gate_verdict(
             relation = MergeIdentityRelation.UNSAFE_TO_MERGE
             reason_code = reason_code or "merge_identity_blocking_conflict"
 
+    # A non-merge is not itself proof that CREATE is safe.  Only the two
+    # explicit distinct relations may terminalize as distinct, and only when
+    # the existing LLM response supplies grounded evidence plus a concrete
+    # conflict.  UNSAFE_TO_MERGE remains uncertainty and therefore retries.
+    if relation in {
+        MergeIdentityRelation.RELATED_BUT_DISTINCT,
+        MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING,
+    } and not (
+        llm_contract_valid
+        and confidence >= 0.8
+        and source_grounded_evidence
+        and conflicts
+    ):
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
+        relation = MergeIdentityRelation.UNKNOWN
+        reason_code = "merge_distinct_not_grounded"
+        reasons = tuple(
+            dict.fromkeys((*reasons, "explicit distinct verdict lacks grounded evidence"))
+        )
+
+    # Production 3216/8284: a repost profile supplied a different default
+    # venue/date for the same overlapping exhibition.  Exact title + ticket
+    # identity across overlapping long-running cards is a refresh-risk rail:
+    # it does not force a merge, but anchor drift alone cannot authorize CREATE.
+    same_long_event_refresh_risk = bool(
+        relation
+        in {
+            MergeIdentityRelation.RELATED_BUT_DISTINCT,
+            MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING,
+        }
+        and _is_long_running(candidate_subject)
+        and _is_long_running(existing_subject)
+        and _date_overlaps(candidate_subject, existing_subject)
+        and _titles_related(candidate_subject.title, existing_subject.title)
+        and candidate_subject.ticket_link
+        and existing_subject.ticket_link
+        and _normalize_url(candidate_subject.ticket_link)
+        == _normalize_url(existing_subject.ticket_link)
+    )
+    if same_long_event_refresh_risk:
+        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
+        relation = MergeIdentityRelation.UNKNOWN
+        reason_code = "shared_long_event_anchor_requires_retry"
+        reasons = tuple(
+            dict.fromkeys(
+                (*reasons, "overlapping long event shares title and exact ticket identity")
+            )
+        )
+
     deterministic_code = _deterministic_merge_identity_veto_reason(candidate_subject, existing_subject)
     deterministic = False
     has_strong_shared_anchor = _strong_shared_anchor(candidate_subject, existing_subject)
@@ -669,8 +729,24 @@ def build_merge_identity_gate_verdict(
             f"{existing_ticket_identity[0]}:{existing_ticket_identity[1]}:"
             f"{existing_ticket_identity[2]}:{existing_ticket_identity[3]}"
         )
-        action = MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
-        relation = MergeIdentityRelation.UNSAFE_TO_MERGE
+        explicit_grounded_distinct = bool(
+            llm_contract_valid
+            and relation
+            in {
+                MergeIdentityRelation.RELATED_BUT_DISTINCT,
+                MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING,
+            }
+            and confidence >= 0.8
+            and source_grounded_evidence
+            and conflicts
+        )
+        action = (
+            MergeIdentityAction.SKIP_MERGE_SIDE_EFFECTS
+            if explicit_grounded_distinct
+            else MergeIdentityAction.AUTOMATIC_RESOLUTION_REQUIRED
+        )
+        if not explicit_grounded_distinct:
+            relation = MergeIdentityRelation.UNSAFE_TO_MERGE
         reason_code = "specific_ticket_occurrence_conflict"
         specific_ticket_conflict = True
         deterministic = True
@@ -687,7 +763,6 @@ def build_merge_identity_gate_verdict(
     identity_distinct_reason = {
         MergeIdentityRelation.RELATED_BUT_DISTINCT: IdentityDistinctReason.RELATED_BUT_DISTINCT,
         MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING: IdentityDistinctReason.FESTIVAL_CONTEXT_SIBLING,
-        MergeIdentityRelation.UNSAFE_TO_MERGE: IdentityDistinctReason.UNSAFE_TO_MERGE,
     }.get(relation)
     if specific_ticket_conflict:
         identity_distinct_reason = (
@@ -703,6 +778,7 @@ def build_merge_identity_gate_verdict(
         candidate=candidate_subject,
         existing_event_id=existing_subject.event_id,
         confidence=confidence,
+        source_grounded_evidence=source_grounded_evidence,
         blocking_conflicts=conflicts,
         allowed_fields=allowed_fields,
         deterministic=deterministic,

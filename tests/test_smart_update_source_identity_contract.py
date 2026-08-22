@@ -744,6 +744,10 @@ async def test_distinct_create_enqueues_festival_only_after_identity_acceptance(
                 "relation": "festival_context_sibling",
                 "confidence": 0.98,
                 "reason_code": "festival_sibling_not_same_event",
+                "reason": "the sources name different lectures",
+                "source_grounded_evidence": ["Лекция", "Другая лекция"],
+                "blocking_conflicts": ["title"],
+                "allowed_fields": [],
             }
 
         async def _eventness(*_args, **_kwargs):

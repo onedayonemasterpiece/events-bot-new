@@ -2470,6 +2470,10 @@ MERGE_IDENTITY_GATE_RESPONSE_FORMAT = {
                 "confidence": {"type": "number"},
                 "reason_code": {"type": "string"},
                 "reason": {"type": "string"},
+                "source_grounded_evidence": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
                 "blocking_conflicts": {"type": "array", "items": {"type": "string"}},
                 "allowed_fields": {"type": "array", "items": {"type": "string"}},
             },
@@ -2479,6 +2483,7 @@ MERGE_IDENTITY_GATE_RESPONSE_FORMAT = {
                 "confidence",
                 "reason_code",
                 "reason",
+                "source_grounded_evidence",
                 "blocking_conflicts",
                 "allowed_fields",
             ],
@@ -13628,6 +13633,62 @@ def _dedup_adjudicator_final_result(
     )
 
 
+def _merge_identity_gate_final_result(
+    verdict: Any,
+) -> IdentityFinalResult:
+    """Map the existing merge gate to the same fail-closed terminal contract.
+
+    A merge veto answers only "do not mutate this owner".  It is not permission
+    to create a second Event unless the existing LLM call explicitly proved a
+    distinct event/occurrence from source-grounded evidence.
+    """
+
+    owner_id = int(verdict.existing_event_id) if verdict.existing_event_id else None
+    evidence = tuple(verdict.source_grounded_evidence or ())[:4]
+    conflicts = tuple(verdict.blocking_conflicts or ())[:4]
+    if not verdict.should_skip_side_effects:
+        return IdentityFinalResult(
+            action=IdentityFinalAction.FINAL_MATCH,
+            relation=IdentityFinalRelation.SAME_EVENT,
+            owner_event_id=owner_id,
+            confidence=float(verdict.confidence or 0.0),
+            reason_code=str(verdict.reason_code or "merge_identity_match"),
+            evidence=evidence,
+            blocking_conflicts=conflicts,
+        )
+    if (
+        verdict.identity_distinct_reason is not None
+        and verdict.relation
+        in {
+            MergeIdentityRelation.RELATED_BUT_DISTINCT,
+            MergeIdentityRelation.FESTIVAL_CONTEXT_SIBLING,
+        }
+        and verdict.llm_contract_valid
+        and float(verdict.confidence or 0.0) >= 0.8
+        and evidence
+        and conflicts
+        and not verdict.fail_safe
+    ):
+        return IdentityFinalResult(
+            action=IdentityFinalAction.FINAL_DISTINCT,
+            relation=IdentityFinalRelation.DISTINCT_EVENT,
+            owner_event_id=owner_id,
+            confidence=float(verdict.confidence or 0.0),
+            reason_code=str(verdict.reason_code or "merge_identity_distinct"),
+            evidence=evidence,
+            blocking_conflicts=conflicts,
+        )
+    return IdentityFinalResult(
+        action=IdentityFinalAction.FINAL_RETRY,
+        relation=IdentityFinalRelation.UNKNOWN,
+        owner_event_id=owner_id,
+        confidence=float(verdict.confidence or 0.0),
+        reason_code=str(verdict.reason_code or "merge_identity_uncertain"),
+        evidence=evidence,
+        blocking_conflicts=conflicts,
+    )
+
+
 def _dedup_adjudicator_accept_merge(
     candidate: EventCandidate,
     match_event: Event | None,
@@ -13968,8 +14029,13 @@ async def _llm_merge_identity_gate(
         "билетная/источниковая ссылка, та же афиша или явно то же название/программа. Не считай смену времени "
         "коррекцией только потому, что дата и площадка совпали.\n\n"
         "Если сомневаешься — выбирай skip_merge_side_effects с relation=unknown. Автоматическая state machine "
-        "сама выполнит bounded retry и затем безопасный distinct create; human review здесь нет. Не придумывай "
+        "выполнит bounded durable retry; сомнение/unsafe/no_merge никогда не разрешает CREATE. Не придумывай "
         "фактов, опирайся только на данные.\n\n"
+        "Для related_but_distinct/festival_context_sibling заполни source_grounded_evidence точными короткими "
+        "цитатами из source_text/raw_excerpt/poster_texts, которые доказывают именно отдельное событие или "
+        "occurrence. Извлечённые date/location сами по себе не source evidence: если их нет в исходном тексте, "
+        "не используй их как доказательство distinct. У одинакового title и ticket reminder/repost считай "
+        "source_update, если источник явно не называет отдельное событие/сеанс/площадку.\n\n"
         "Коды reason_code делай короткими snake_case, например: same_event_update, same_ticket_source_update, "
         "festival_sibling_not_same_event, long_running_vs_single_slot, unrelated_title_type_conflict, "
         "insufficient_identity_evidence.\n\n"
@@ -13982,7 +14048,40 @@ async def _llm_merge_identity_gate(
         max_tokens=500,
         label="merge_identity_gate",
     )
-    return data if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+    raw_evidence = data.get("source_grounded_evidence")
+    if isinstance(raw_evidence, list):
+        grounding_corpus = [
+            candidate.source_text,
+            candidate.raw_excerpt,
+            *[
+                p.ocr_text
+                for p in candidate.posters
+                if (p.ocr_text or "").strip()
+            ],
+            *[
+                p.ocr_title
+                for p in candidate.posters
+                if (p.ocr_title or "").strip()
+            ],
+            event.source_text,
+            *(getattr(event, "source_texts", None) or []),
+            *[text for text in (poster_texts or []) if text],
+        ]
+        normalized_corpus = "\n".join(
+            re.sub(r"\s+", " ", str(value)).strip().casefold()
+            for value in grounding_corpus
+            if str(value or "").strip()
+        )
+        data["source_grounded_evidence"] = [
+            str(item).strip()
+            for item in raw_evidence
+            if str(item or "").strip()
+            and re.sub(r"\s+", " ", str(item)).strip().casefold()
+            in normalized_corpus
+        ][:4]
+    return data
 
 
 def _apply_ticket_fields(
@@ -20894,6 +20993,9 @@ async def _smart_event_update_impl(
                 "mode": merge_identity_verdict.mode.value,
                 "relation": merge_identity_verdict.relation.value,
                 "reasons": list(merge_identity_verdict.reasons),
+                "source_grounded_evidence": list(
+                    merge_identity_verdict.source_grounded_evidence
+                ),
                 "blocking_conflicts": list(merge_identity_verdict.blocking_conflicts),
                 "allowed_fields": list(merge_identity_verdict.allowed_fields),
                 "deterministic": bool(merge_identity_verdict.deterministic),
@@ -20904,42 +21006,51 @@ async def _smart_event_update_impl(
                 "error": str(gate_error) if gate_error else None,
             },
         )
-        if merge_identity_verdict.should_skip_side_effects:
+        merge_final_result = _merge_identity_gate_final_result(
+            merge_identity_verdict
+        )
+        await _record_identity_gate_decision(
+            db,
+            candidate,
+            decision=merge_final_result.action.value,
+            reason=merge_final_result.reason_code,
+            confidence=merge_final_result.confidence,
+            event_id=merge_final_result.owner_event_id,
+            payload={
+                "stage": "final_merge_identity_gate",
+                "owner_event_id": merge_final_result.owner_event_id,
+                "action": merge_final_result.action.value,
+                "relation": merge_final_result.relation.value,
+                "evidence": list(merge_final_result.evidence),
+                "blocking_conflicts": list(
+                    merge_final_result.blocking_conflicts
+                ),
+                "raw_action": merge_identity_verdict.action.value,
+                "raw_relation": merge_identity_verdict.relation.value,
+                "raw_reason_code": merge_identity_verdict.reason_code,
+            },
+        )
+        if merge_final_result.action is IdentityFinalAction.FINAL_DISTINCT:
             distinct_reason = merge_identity_verdict.identity_distinct_reason
-            if not merge_identity_verdict.fail_safe and distinct_reason is not None:
-                # A known non-identity is a positive decision, not uncertainty.
-                # Reuse the already-prepared create path inside this same
-                # durable attempt with final-probe matching disabled. Early
-                # eventness, occurrence, matching and gate calls are not
-                # repeated; no new identity/provider stage or retry-worker
-                # delay is introduced.
-                candidate.force_create_distinct = True
-                diagnostic_reason = (
-                    f"create_distinct:{merge_identity_verdict.relation.value}:"
-                    f"{merge_identity_verdict.reason_code}"
-                )
-                result = await _create_from_prepared_candidate()
-                if result.is_accepted:
-                    result.reason = diagnostic_reason
-                    result.identity_distinct_reason = distinct_reason
-                    result.diagnostic_event_id = int(existing.id or 0) or None
-                return result
-            semantic_unknown = bool(
-                merge_identity_verdict.llm_contract_valid
-                and merge_identity_verdict.relation is MergeIdentityRelation.UNKNOWN
-                and not merge_identity_verdict.fail_safe
+            candidate.force_create_distinct = True
+            diagnostic_reason = (
+                f"create_distinct:{merge_identity_verdict.relation.value}:"
+                f"{merge_identity_verdict.reason_code}"
             )
+            result = await _create_from_prepared_candidate()
+            if result.is_accepted:
+                result.reason = diagnostic_reason
+                result.identity_distinct_reason = distinct_reason
+                result.diagnostic_event_id = int(existing.id or 0) or None
+            return result
+        if merge_final_result.action is IdentityFinalAction.FINAL_RETRY:
             return SmartUpdateResult(
                 outcome=SmartUpdateTerminalOutcome.RETRY_SCHEDULED,
                 diagnostic_event_id=existing.id,
                 created=False,
                 merged=False,
-                reason=merge_identity_verdict.reason_code,
-                retry_reason=(
-                    RetryReason.IDENTITY_SEMANTIC_UNKNOWN
-                    if semantic_unknown
-                    else RetryReason.IDENTITY_TECHNICAL_FAILURE
-                ),
+                reason=f"identity_final_retry:{merge_final_result.reason_code}",
+                retry_reason=RetryReason.IDENTITY_FINAL_RETRY,
                 queue_notes=list(queue_notes or []),
             )
 
