@@ -21,6 +21,11 @@
   ordered explicitly by source id, preserving the same catalog hash when the
   full production DB and its allowlisted compact snapshot use different
   SQLite query plans and indexes.
+  The compact StaticSiteBuilder projection now also carries the existing
+  `event_source.source_text` evidence field required by collection-product
+  validation; operational identity fields remain excluded. This closes the
+  production Kaggle failure that previously reached the immutable build only
+  to fail with `no such column: source_text`.
 
 - Fixed: the existing Smart Update **merge-path** identity gate now closes
   through the same typed `FINAL_MATCH` / source-grounded `FINAL_DISTINCT` /

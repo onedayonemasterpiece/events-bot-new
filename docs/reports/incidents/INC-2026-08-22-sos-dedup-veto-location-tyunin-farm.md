@@ -366,6 +366,16 @@ merged.
   `8083` with an audited backup. Event `8285` was repaired as a distinct
   source-grounded 16:00 action. The operation removed 18 unrelated source
   bindings and 79 facts without increasing the foreign-key baseline.
+- The first barrier-clean final StaticSiteBuilder run
+  (`static-site:production-secret-20260822T222230-d3070d6e:cc5066c6221e`)
+  exposed a separate compact-projection contract omission: the existing
+  collection-product adapter selects `event_source.source_text` to validate
+  persisted exact evidence quotes, while the Kaggle allowlist omitted that
+  column. The kernel failed closed with `sqlite3.OperationalError: no such
+  column: source_text`; no review candidate or public-root mutation occurred.
+  The projection now includes that required evidence field while continuing
+  to exclude source fingerprints, candidate/occurrence keys and Smart Update
+  operational state, with a production-shaped query regression test.
 
 ## Corrective Actions
 
