@@ -1,22 +1,23 @@
 {
   "incident_id": "INC-2026-08-22-sos-dedup-veto-location-tyunin-farm",
   "sanitized": true,
+  "replay_count": 2,
   "positives": [
-    {"name": "SOS", "owner_id": 8117, "duplicate_id": 8242, "relation": "same_event"},
-    {"name": "qTickets-247858", "owner_id": 7580, "duplicate_id": 7753, "relation": "same_event"},
-    {"name": "qTickets-251796", "owner_id": 7603, "duplicate_id": 7705, "relation": "same_event"},
-    {"name": "Baltic Odyssey", "owner_id": 8055, "duplicate_id": 8108, "relation": "same_event"},
-    {"name": "Great Teachers reminder", "owner_id": 3216, "duplicate_id": 8244, "relation": "same_event"},
-    {"name": "Durer exhibition reminder", "owner_id": 5703, "duplicate_id": 7690, "relation": "same_event"},
-    {"name": "Living Thread of Traditions", "owner_id": 7609, "duplicate_id": 7749, "relation": "same_event"}
+    {"name":"SOS","owner_id":8117,"duplicate_id":8242,"expected_relation":"same_event","owner":{"title":"Тройной день рождения: Барн, Chipi Clo и SOS","date":"2026-08-22","end_date":null,"time":"21:00","event_type":"вечеринка","location":"Барн","ticket":"https://barn.timepad.ru/event/4147114"},"candidate":{"title":"Праздничный SOS","date":"2026-08-22","end_date":null,"time":"21:00","event_type":"вечеринка","location":"Барн","ticket":"https://barn.timepad.ru/event/4147114"}},
+    {"name":"qTickets-247858","owner_id":7580,"duplicate_id":7753,"expected_relation":"same_event","owner":{"title":"Коса, коты и сыр","date":"2026-08-15","end_date":"2026-10-30","time":"","event_type":"экскурсия","location":"Королевские ворота","ticket":"https://qtickets.ru/event/247858-kosa-koty-i-syr"},"candidate":{"title":"Коса, коты и сыр","date":"2026-08-18","end_date":"2026-10-30","time":"","event_type":"экскурсия","location":"Королевские ворота","ticket":"https://qtickets.ru/event/247858-kosa-koty-i-syr"}},
+    {"name":"qTickets-251796","owner_id":7603,"duplicate_id":7705,"expected_relation":"same_event","owner":{"title":"Малые средневековые города","date":"2026-08-15","end_date":"2026-10-31","time":"","event_type":"экскурсия","location":"Калининградская область","ticket":"https://qtickets.ru/event/251796-malye-srednevekovye-goroda"},"candidate":{"title":"Малые (средневековые) города","date":"2026-08-18","end_date":"2026-10-31","time":"","event_type":"экскурсия","location":"Калининградская область","ticket":"https://qtickets.ru/event/251796-malye-srednevekovye-goroda"}},
+    {"name":"Baltic Odyssey","owner_id":8055,"duplicate_id":8108,"expected_relation":"same_event","owner":{"title":"Балтийская Одиссея","date":"2025-08-22","end_date":"2026-08-24","time":"","event_type":"фестиваль","location":"Побережье","ticket":"https://balticodyssey.qtickets.ru/"},"candidate":{"title":"Балтийская Одиссея","date":"2026-08-22","end_date":"2026-08-24","time":"","event_type":"фестиваль","location":"Побережье","ticket":"https://balticodyssey.qtickets.ru/"}},
+    {"name":"Great Teachers reminder","owner_id":3216,"duplicate_id":8244,"expected_relation":"same_event","owner":{"title":"Великие учителя","date":"2026-04-09","end_date":"2026-09-27","time":"","event_type":"выставка","location":"Третьяковская галерея","ticket":null},"candidate":{"title":"Великие учителя","date":"2026-08-21","end_date":"2026-09-06","time":"","event_type":"выставка","location":"Третьяковская галерея","ticket":null}},
+    {"name":"Durer exhibition reminder","owner_id":5703,"duplicate_id":7690,"expected_relation":"same_event","owner":{"title":"Альбрехт Дюрер. Секретный код","date":"2026-06-06","end_date":"2026-08-30","time":"12:00","event_type":"выставка","location":"Музей изобразительных искусств","ticket":null},"candidate":{"title":"Выставка «Секретный код Альбрехта Дюрера»","date":"2026-08-16","end_date":"2026-08-30","time":"","event_type":"выставка","location":"Музей изобразительных искусств","ticket":null}},
+    {"name":"Living Thread of Traditions","owner_id":7609,"duplicate_id":7749,"expected_relation":"same_event","owner":{"title":"Живая нить традиций","date":"2026-08-15","end_date":"2026-09-05","time":"11:00..18:00","event_type":"выставка","location":"ОКЦ ТеплоСеть","ticket":null},"candidate":{"title":"Живая нить традиций","date":"2026-08-15","end_date":"2026-09-05","time":"11:00","event_type":"выставка","location":"ОКЦ ТеплоСеть","ticket":null}}
   ],
   "hard_negatives": [
-    "exhibition_vs_excursion",
-    "exhibition_vs_lecture_or_closing",
-    "same_day_distinct_sessions",
-    "recurring_series_distinct_dates",
-    "festival_parent_vs_independent_child",
-    "one_source_multiple_children",
-    "same_venue_distinct_exhibitions"
+    {"name":"exhibition_vs_excursion","expected_relation":"distinct_event","owner":{"title":"Великие учителя","date":"2026-08-22","end_date":"2026-09-27","time":"","event_type":"выставка","source_url":null},"candidate":{"title":"Экскурсия по выставке","date":"2026-08-22","end_date":null,"time":"15:00","event_type":"экскурсия","source_url":null}},
+    {"name":"exhibition_vs_lecture_or_closing","expected_relation":"distinct_event","owner":{"title":"Великие учителя","date":"2026-08-22","end_date":"2026-09-27","time":"","event_type":"выставка","source_url":null},"candidate":{"title":"Лекция об искусстве","date":"2026-08-22","end_date":null,"time":"18:00","event_type":"лекция","source_url":null}},
+    {"name":"same_day_distinct_sessions","expected_relation":"distinct_occurrence","hard_guard":"same_source_url_time_split","owner":{"title":"Спектакль","date":"2026-08-22","end_date":null,"time":"11:00","event_type":"спектакль","source_url":"https://t.me/gusmuseum/4509"},"candidate":{"title":"Дневной сеанс в 13:00","date":"2026-08-22","end_date":null,"time":"13:00","event_type":"спектакль","source_url":"https://t.me/gusmuseum/4509"}},
+    {"name":"recurring_series_distinct_dates","expected_relation":"distinct_occurrence","structural_anchor":"different_point_dates","owner":{"title":"Концертная серия","date":"2026-08-22","end_date":null,"time":"19:00","event_type":"концерт","source_url":null},"candidate":{"title":"Следующая дата серии","date":"2026-08-23","end_date":null,"time":"19:00","event_type":"концерт","source_url":null}},
+    {"name":"festival_parent_vs_independent_child","expected_relation":"distinct_event","owner":{"title":"Фестиваль на Козьей горке","date":"2026-08-22","end_date":"2026-08-23","time":"10:00","event_type":"фестиваль","source_url":"https://t.me/kozia_gorka/1556","role":"festival_parent"},"candidate":{"title":"Йога на фестивале","date":"2026-08-22","end_date":null,"time":"10:00","event_type":"занятие","source_url":"https://t.me/kozia_gorka/1556","role":"independent_child"}},
+    {"name":"one_source_multiple_children","expected_relation":"distinct_event","owner":{"title":"Первый самостоятельный child","date":"2026-08-22","end_date":null,"time":"17:00","event_type":"спектакль","source_url":"https://vk.com/wall-53460968_11826","occurrence_key":"child:0"},"candidate":{"title":"Второй самостоятельный child","date":"2026-08-22","end_date":null,"time":"17:00","event_type":"спектакль","source_url":"https://vk.com/wall-53460968_11826","occurrence_key":"child:1"}},
+    {"name":"same_venue_distinct_exhibitions","expected_relation":"distinct_event","owner":{"title":"Альбрехт Дюрер","date":"2026-08-01","end_date":"2026-09-30","time":"","event_type":"выставка","source_url":null},"candidate":{"title":"Другая выставка","date":"2026-08-01","end_date":"2026-09-30","time":"","event_type":"выставка","source_url":null}}
   ]
 }

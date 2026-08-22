@@ -53,6 +53,7 @@ async def _seed_event(
     event_type: str = "выставка",
     source_url: str | None = None,
     ticket_link: str | None = None,
+    festival: str | None = None,
 ) -> int:
     async with db.get_session() as session:
         ev = Event(
@@ -66,6 +67,7 @@ async def _seed_event(
             city="Калининград",
             event_type=event_type,
             ticket_link=ticket_link,
+            festival=festival,
             source_text=f"{title} {date}",
             source_post_url=source_url,
             telegraph_url=f"https://telegra.ph/event-{event_id}",
@@ -376,6 +378,17 @@ async def _run_vector_veto_adjudicator_replay(
     location_name: str = "Музей",
     ticket_link: str | None = None,
     expect_dedup: bool = True,
+    owner_type: str | None = None,
+    owner_time: str | None = None,
+    owner_end_date: str | None = "__auto__",
+    candidate_end_date: str | None = "__auto__",
+    owner_source_url: str | None = None,
+    candidate_source_url: str | None = None,
+    owner_festival: str | None = None,
+    candidate_festival: str | None = None,
+    candidate_festival_context: str | None = None,
+    candidate_occurrence_key: str | None = None,
+    replay_twice: bool = False,
 ) -> tuple[Database, su.SmartUpdateResult, int]:
     db = Database(str(tmp_path / f"typed-final-{suffix}.sqlite"))
     await db.init()
@@ -384,11 +397,17 @@ async def _run_vector_veto_adjudicator_replay(
         event_id=owner_id,
         title=owner_title,
         date=owner_date,
-        end_date="2026-08-30" if candidate_type == "выставка" else None,
-        time=candidate_time,
+        end_date=(
+            "2026-08-30"
+            if owner_end_date == "__auto__" and candidate_type == "выставка"
+            else None if owner_end_date == "__auto__" else owner_end_date
+        ),
+        time=candidate_time if owner_time is None else owner_time,
         location_name=location_name,
-        event_type=candidate_type,
+        event_type=owner_type or candidate_type,
+        source_url=owner_source_url,
         ticket_link=ticket_link,
+        festival=owner_festival,
     )
     monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(su, "SMART_UPDATE_DEDUP_ADJUDICATOR", True)
@@ -403,6 +422,24 @@ async def _run_vector_veto_adjudicator_replay(
         return None, None
 
     monkeypatch.setattr(su, "_match_existing_event_by_city_noise_rescue", _no_city_rescue)
+    async def _ordinary_bundle_no_match(*_args, **_kwargs):
+        return None
+
+    async def _ordinary_match_no_match(*_args, **_kwargs):
+        return None, 0.0, "fixture_no_match"
+
+    # These replays exercise the widened vector handoff and its one existing
+    # adjudicator call.  Never let the earlier ordinary shortlist call a live
+    # provider merely because a realistic long-running exhibition overlaps.
+    monkeypatch.setattr(su, "_llm_match_or_create_bundle", _ordinary_bundle_no_match)
+    monkeypatch.setattr(su, "_llm_match_event", _ordinary_match_no_match)
+    monkeypatch.setattr(su, "_single_candidate_auto_match_ok", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(su, "_deterministic_exact_title_match", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        su,
+        "_deterministic_related_title_anchor_match",
+        lambda *_args, **_kwargs: None,
+    )
     calls = {"dedup": 0}
 
     async def _vector_evidence(_candidate):
@@ -424,7 +461,7 @@ async def _run_vector_veto_adjudicator_replay(
     monkeypatch.setattr(su, "_llm_dedup_adjudicator", _adjudicate)
     candidate = EventCandidate(
         source_type="telegram",
-        source_url=f"https://t.me/incident_replay/{suffix}",
+        source_url=candidate_source_url or f"https://t.me/incident_replay/{suffix}",
         source_text=(
             f"{candidate_title}. Отдельное описание из источника; "
             f"время {candidate_time or 'не указано'}."
@@ -432,7 +469,11 @@ async def _run_vector_veto_adjudicator_replay(
         raw_excerpt=candidate_title,
         title=candidate_title,
         date=candidate_date,
-        end_date="2026-08-20" if candidate_type == "выставка" else None,
+        end_date=(
+            "2026-08-20"
+            if candidate_end_date == "__auto__" and candidate_type == "выставка"
+            else None if candidate_end_date == "__auto__" else candidate_end_date
+        ),
         time=candidate_time,
         location_name=location_name,
         # Deliberate metadata drift keeps the vector owner out of the ordinary
@@ -440,6 +481,9 @@ async def _run_vector_veto_adjudicator_replay(
         city="Балтийск",
         event_type=candidate_type,
         ticket_link=ticket_link,
+        festival=candidate_festival,
+        festival_context=candidate_festival_context,
+        occurrence_key=candidate_occurrence_key,
     )
     result = await smart_event_update(
         db,
@@ -448,6 +492,28 @@ async def _run_vector_veto_adjudicator_replay(
         schedule_tasks=False,
     )
     assert calls["dedup"] == (1 if expect_dedup else 0)
+    if replay_twice:
+        async with db.get_session() as session:
+            events_before = await session.scalar(select(func.count()).select_from(Event))
+        calls_before = dict(calls)
+        replay_results = []
+        for _ in range(2):
+            replay_results.append(
+                await smart_event_update(
+                    db,
+                    candidate,
+                    check_source_url=True,
+                    schedule_tasks=False,
+                )
+            )
+        async with db.get_session() as session:
+            events_after = await session.scalar(select(func.count()).select_from(Event))
+        assert events_after == events_before
+        assert calls == calls_before
+        assert all(
+            replay.outcome is not su.SmartUpdateTerminalOutcome.CREATED
+            for replay in replay_results
+        )
     return db, result, owner_id
 
 
@@ -510,9 +576,19 @@ _AUGUST_POSITIVE_CASES = [
     ("qTickets-251796", 7603, "Малые средневековые города", "Малые (средневековые) города", "2026-08-18", "", "Калининградская область", "экскурсия", "https://qtickets.ru/event/251796-malye-srednevekovye-goroda"),
     ("Baltic Odyssey", 8055, "Балтийская Одиссея", "Балтийская Одиссея", "2026-08-22", "", "Побережье", "фестиваль", "https://balticodyssey.qtickets.ru/"),
     ("Great Teachers reminder", 3216, "Великие учителя", "Великие учителя", "2026-08-21", "", "Третьяковская галерея", "выставка", None),
-    ("Durer exhibition reminder", 5703, "Альбрехт Дюрер", "Дюрер: графика", "2026-08-21", "", "Музей изобразительных искусств", "выставка", None),
-    ("Living Thread of Traditions", 7609, "Живая нить традиций", "Живая нить традиций", "2026-08-20", "", "Дом ремёсел", "выставка", None),
+    ("Durer exhibition reminder", 5703, "Альбрехт Дюрер. Секретный код", "Выставка «Секретный код Альбрехта Дюрера»", "2026-08-16", "", "Музей изобразительных искусств", "выставка", None),
+    ("Living Thread of Traditions", 7609, "Живая нить традиций", "Живая нить традиций", "2026-08-15", "11:00", "ОКЦ ТеплоСеть", "выставка", None),
 ]
+
+_POSITIVE_ANCHORS = {
+    "SOS": dict(owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date=None, candidate_end_date=None),
+    "qTickets-247858": dict(owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date="2026-10-30", candidate_end_date="2026-10-30"),
+    "qTickets-251796": dict(owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date="2026-10-31", candidate_end_date="2026-10-31"),
+    "Baltic Odyssey": dict(owner_date="2025-08-22", candidate_date="2026-08-22", owner_end_date="2026-08-24", candidate_end_date="2026-08-24"),
+    "Great Teachers reminder": dict(owner_date="2026-04-09", candidate_date="2026-08-21", owner_end_date="2026-09-27", candidate_end_date="2026-09-06"),
+    "Durer exhibition reminder": dict(owner_date="2026-06-06", candidate_date="2026-08-16", owner_end_date="2026-08-30", candidate_end_date="2026-08-30", owner_time="12:00"),
+    "Living Thread of Traditions": dict(owner_date="2026-08-15", candidate_date="2026-08-15", owner_end_date="2026-09-05", candidate_end_date="2026-09-05", owner_time="11:00..18:00"),
+}
 
 
 @pytest.mark.asyncio
@@ -524,20 +600,21 @@ async def test_named_august_positive_corpus_reuses_owner(
     tmp_path, monkeypatch, case_name, owner_id, owner_title, candidate_title,
     event_date, event_time, location, event_type, ticket,
 ):
+    anchors = _POSITIVE_ANCHORS[case_name]
     db, result, expected_owner = await _run_vector_veto_adjudicator_replay(
         tmp_path,
         monkeypatch,
         suffix=f"positive-{owner_id}",
         owner_id=owner_id,
         owner_title=owner_title,
-        owner_date=event_date,
-        candidate_date=event_date,
+        **anchors,
         candidate_title=candidate_title,
         candidate_type=event_type,
         candidate_time=event_time,
         location_name=location,
         ticket_link=ticket,
         expect_dedup=case_name != "SOS",
+        replay_twice=True,
         decision=_typed_adjudicator_decision(
             action="match",
             relation="same_event",
@@ -563,12 +640,23 @@ _AUGUST_HARD_NEGATIVES = [
     ("same_venue_distinct_exhibitions", "Другая выставка", "выставка", "", "distinct_event"),
 ]
 
+_NEGATIVE_ANCHORS = {
+    "exhibition_vs_excursion": dict(owner_title="Великие учителя", owner_type="выставка", owner_time="", owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date="2026-09-27", candidate_end_date=None),
+    "exhibition_vs_lecture_or_closing": dict(owner_title="Великие учителя", owner_type="выставка", owner_time="", owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date="2026-09-27", candidate_end_date=None),
+    "same_day_distinct_sessions": dict(owner_title="Спектакль", owner_type="спектакль", owner_time="11:00", owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date=None, candidate_end_date=None, owner_source_url="https://t.me/gusmuseum/4509", candidate_source_url="https://t.me/gusmuseum/4509"),
+    "recurring_series_distinct_dates": dict(owner_title="Концертная серия", owner_type="концерт", owner_time="19:00", owner_date="2026-08-22", candidate_date="2026-08-23", owner_end_date=None, candidate_end_date=None),
+    "festival_parent_vs_independent_child": dict(owner_title="Фестиваль на Козьей горке", owner_type="фестиваль", owner_time="10:00", owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date="2026-08-23", candidate_end_date=None, owner_source_url="https://t.me/kozia_gorka/1556", candidate_source_url="https://t.me/kozia_gorka/1556", owner_festival="Фестиваль на Козьей горке", candidate_festival="Фестиваль на Козьей горке", candidate_festival_context="independent_child"),
+    "one_source_multiple_children": dict(owner_title="Первый самостоятельный child", owner_type="спектакль", owner_time="17:00", owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date=None, candidate_end_date=None, owner_source_url="https://vk.com/wall-53460968_11826", candidate_source_url="https://vk.com/wall-53460968_11826", candidate_occurrence_key="child:1"),
+    "same_venue_distinct_exhibitions": dict(owner_title="Альбрехт Дюрер", owner_type="выставка", owner_time="", owner_date="2026-08-01", candidate_date="2026-08-01", owner_end_date="2026-09-30", candidate_end_date="2026-09-30"),
+}
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case_name,title,event_type,event_time,relation", _AUGUST_HARD_NEGATIVES)
 async def test_named_august_hard_negative_corpus_stays_distinct(
     tmp_path, monkeypatch, case_name, title, event_type, event_time, relation,
 ):
+    anchors = _NEGATIVE_ANCHORS[case_name]
     db, result, owner_id = await _run_vector_veto_adjudicator_replay(
         tmp_path,
         monkeypatch,
@@ -576,6 +664,8 @@ async def test_named_august_hard_negative_corpus_stays_distinct(
         candidate_title=title,
         candidate_type=event_type,
         candidate_time=event_time,
+        **anchors,
+        replay_twice=True,
         decision=_typed_adjudicator_decision(
             action="create",
             relation=relation,
@@ -592,12 +682,69 @@ async def test_named_august_hard_negative_corpus_stays_distinct(
         assert await session.scalar(select(func.count()).select_from(Event)) == 2
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "case_name,title,event_type,event_time,relation",
+    [
+        row
+        for row in _AUGUST_HARD_NEGATIVES
+        if row[0] in {"same_day_distinct_sessions", "recurring_series_distinct_dates"}
+    ],
+)
+async def test_structural_hard_negatives_reject_even_adversarial_match(
+    tmp_path, monkeypatch, case_name, title, event_type, event_time, relation,
+):
+    """Hard occurrence conflicts override even an erroneous model match."""
+
+    anchors = _NEGATIVE_ANCHORS[case_name]
+    db, result, owner_id = await _run_vector_veto_adjudicator_replay(
+        tmp_path,
+        monkeypatch,
+        suffix=f"negative-bad-match-{case_name}",
+        candidate_title=title,
+        candidate_type=event_type,
+        candidate_time=event_time,
+        **anchors,
+        decision=_typed_adjudicator_decision(
+            action="match",
+            relation="same_event",
+            reason_code="identical_anchors_dup",
+            confidence=0.99,
+            match_event_id=5703,
+            evidence=[title],
+        ),
+    )
+    assert result.outcome is su.SmartUpdateTerminalOutcome.RETRY_SCHEDULED, case_name
+    assert result.event_id is None
+    assert result.diagnostic_event_id == owner_id
+    async with db.get_session() as session:
+        assert await session.scalar(select(func.count()).select_from(Event)) == 1
+
+
 def test_named_corpus_manifest_and_executable_cases_are_complete():
     path = Path(__file__).parent / "replays" / "INC-2026-08-22-sos-dedup-veto-location-tyunin-farm" / "dedup_cases.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert {row[0] for row in _AUGUST_POSITIVE_CASES} == {row["name"] for row in payload["positives"]}
-    assert {row[0] for row in _AUGUST_HARD_NEGATIVES} == set(payload["hard_negatives"])
-    # 14/14 executable semantic fixtures is 100%, above both 99% gates.
+    assert {row[0] for row in _AUGUST_HARD_NEGATIVES} == {
+        row["name"] for row in payload["hard_negatives"]
+    }
+    assert payload["replay_count"] == 2
+    required_anchors = {"title", "date", "end_date", "time", "event_type"}
+    for row in payload["positives"] + payload["hard_negatives"]:
+        assert required_anchors <= set(row["owner"])
+        assert required_anchors <= set(row["candidate"])
+    negative_by_name = {row["name"]: row for row in payload["hard_negatives"]}
+    sessions = negative_by_name["same_day_distinct_sessions"]
+    assert sessions["owner"]["time"] != sessions["candidate"]["time"]
+    assert sessions["owner"]["source_url"] == sessions["candidate"]["source_url"]
+    parent_child = negative_by_name["festival_parent_vs_independent_child"]
+    assert parent_child["owner"]["role"] == "festival_parent"
+    assert parent_child["candidate"]["role"] == "independent_child"
+    siblings = negative_by_name["one_source_multiple_children"]
+    assert siblings["owner"]["source_url"] == siblings["candidate"]["source_url"]
+    assert siblings["owner"]["occurrence_key"] != siblings["candidate"]["occurrence_key"]
+    # 14/14 executable semantic fixtures is 100%, above both 99% gates; each
+    # named test also executes two post-owner exact packet replays.
     assert len(_AUGUST_POSITIVE_CASES) == len(_AUGUST_HARD_NEGATIVES) == 7
 
 
