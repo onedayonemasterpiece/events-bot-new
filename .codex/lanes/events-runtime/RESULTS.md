@@ -109,3 +109,12 @@ browser capture, then failed fail-closed because GitHub's clean runner had no
 Playwright Chromium binary. Design workflow commit
 `1de19acf0c07bac87b437cff8845006f47fae1b0` adds the explicit pinned-runtime
 `playwright install --with-deps chromium` step; the caller was repinned to it.
+
+Remote run `32582230761` passed browser installation/capture and failed next at
+raster comparison because Ubuntu 24.04 did not provide `identify`. Targeted
+research against the GitHub runner image inventory and Ubuntu Noble package
+catalog confirmed ImageMagick is not a guaranteed runner binary and Noble ships
+ImageMagick 6 command names. Design workflow commit
+`204acdf76dcc964222534e649a2972c59e8025fd` now installs Ubuntu's `imagemagick`
+package and the pixel digest supports both ImageMagick 7 (`magick`) and 6
+(`convert`).

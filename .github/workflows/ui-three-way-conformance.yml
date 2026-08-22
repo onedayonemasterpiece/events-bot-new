@@ -30,9 +30,9 @@ jobs:
   conformance:
     # The workflow implementation/catalog and the materialized Penpot design
     # identity are separate immutable commits; never replace either with a branch.
-    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@1de19acf0c07bac87b437cff8845006f47fae1b0
+    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@204acdf76dcc964222534e649a2972c59e8025fd
     with:
-      design_tooling_sha: 1de19acf0c07bac87b437cff8845006f47fae1b0
+      design_tooling_sha: 204acdf76dcc964222534e649a2972c59e8025fd
       design_sha: 0882917a1328607c498d82e4c2a652bbd3df946d
       events_tooling_sha: 713a035a8aaa9ecfdcdd5fbd817fe504160df2f5
       astro_sha: 22ebe3c5e92b13684cca32c14357ef7b91834977
