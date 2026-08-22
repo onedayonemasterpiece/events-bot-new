@@ -235,3 +235,29 @@ The real build/capture uses the same `materialize-case.mjs` and
 case as `--resolved`. It additionally requires every declared sibling fixture
 and asset to be present in the immutable corpus. Generated harnesses and PNGs
 remain disposable evidence and are not committed to this repository.
+
+## Current-v2 runtime identity and chip inventory
+
+The current-v2 runner keeps three immutable repository identities separate:
+the design candidate SHA, the historical Astro source SHA that owns the visual
+AS-IS, and the events-bot tooling SHA that executes the comparison. A tooling
+checkout must never be treated as proof that a different Astro source checkout
+was rendered.
+
+`scripts/ui_conformance/run-current-v2.mjs` is the stable consumer entrypoint.
+Its `chip-inventory` command copies the exact pinned Astro `site/src` into a
+disposable harness, mounts the real `EventCard.astro` once for every one of the
+eight Golden Event Corpus v1 fixtures, runs an Astro static build, and reads the
+rendered chip/action states from generated HTML. The deterministic report binds
+the corpus hash, Astro source SHA, tooling SHA, source-file hashes, every exact
+event-type/admission/occurrence/action label, counter value, calendar state and
+the reached branch families. It is not a documentation-derived enum and it does
+not mutate `site/src`.
+
+The same entrypoint exposes fail-closed `run-case` and exact seven-case
+`run-batch` commands. They assert all three 40-hex SHAs, materialize from the
+separate Astro checkout, capture browser evidence, build the identity tuple,
+run structural/raster comparison through the pinned design-system CLI, validate
+the supplied agent-review during finalization and retain per-case elapsed time.
+No command publishes Telegram, writes Penpot, deploys, promotes a component or
+changes the production UI.

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added: a source-hash-bound Astro-generated inventory of every EventCard Large
+  chip/action label and counter state reached by all eight Golden Event Corpus
+  v1 fixtures, plus a fail-closed current-v2 case/batch runner. Conformance now
+  records separate immutable design, historical Astro source and tooling SHAs,
+  and rejects stale case/resolved/materialization/capture/Penpot identity joins
+  without changing production `site/src`.
+
 - Added: a read-only Golden Event Corpus extraction adapter and disposable
   exact-fixture EventCard Astro capture pipeline for Astro ↔ Penpot conformance;
   production UI source and deployment behavior are unchanged.

@@ -5,13 +5,14 @@ import { dirname, join, parse, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { renderSpecimenPage } from '../current_ui_resource_graph/v1/specimens/materialize.mjs';
 import { assertEventAssetsLocalized, resolveEventCardArchetypeContext, rewriteEventAssets } from './archetype-specimen.mjs';
+import { assertImmutableCheckout, assertImmutableSha } from './immutable-checkout.mjs';
 
 function parseArgs(argv) { const out={}; for(let i=0;i<argv.length;i+=1){const key=argv[i];if(!key.startsWith('--'))throw new Error(`Unexpected argument: ${key}`);const value=argv[i+1];if(!value||value.startsWith('--'))throw new Error(`${key} requires a value`);out[key.slice(2)]=value;i+=1;}return out; }
 const sha=(value)=>createHash('sha256').update(value).digest('hex');
 const read=(path)=>JSON.parse(readFileSync(resolve(path),'utf8'));
 const args=parseArgs(process.argv.slice(2));
-for(const key of ['resolved','site','harness','corpus-root','font-manifest']) if(!args[key]) throw new Error(`--${key} is required`);
-const data=read(args.resolved); const site=resolve(args.site); const root=resolve(args.harness); const corpusRoot=resolve(args['corpus-root']);
+for(const key of ['resolved','astro-source-site','astro-source-sha','tooling-root','tooling-sha','harness','corpus-root','font-manifest']) if(!args[key]) throw new Error(`--${key} is required`);
+const data=read(args.resolved); const site=resolve(args['astro-source-site']); const root=resolve(args.harness); const corpusRoot=resolve(args['corpus-root']);
 const corpus=read(join(corpusRoot,'corpus.json')); const assets=read(join(corpusRoot,'assets-manifest.json')); const fontManifest=read(args['font-manifest']);
 if(data.corpus_id!==corpus.corpus_id||data.corpus_sha256!==corpus.corpus_sha256) throw new Error('Resolved case/corpus identity mismatch');
 if(data.asset_manifest_sha256!==assets.assets_manifest_sha256) throw new Error('Resolved case/asset manifest mismatch');
@@ -26,8 +27,10 @@ const fixtureRows=fixtureIds.map((fixtureId)=>{
   if(payload.preview_event_sha256!==metadata.preview_event_sha256)throw new Error(`Frozen sibling payload hash binding mismatch: ${fixtureId}`);
   return {metadata,payload};
 });
-const exactHead=spawnSync('git',['rev-parse','HEAD'],{cwd:resolve(site,'..'),encoding:'utf8'}).stdout.trim();
-if(exactHead!==fontManifest.astro_repository_sha) throw new Error(`Astro candidate SHA mismatch: ${exactHead}`);
+const astroSource=assertImmutableCheckout({root:resolve(site,'..'),expectedSha:args['astro-source-sha'],label:'Astro source checkout'});
+const tooling=assertImmutableCheckout({root:args['tooling-root'],expectedSha:args['tooling-sha'],label:'Conformance tooling checkout'});
+assertImmutableSha(fontManifest.astro_repository_sha,'Font manifest Astro repository SHA');
+if(astroSource.sha!==fontManifest.astro_repository_sha) throw new Error(`Astro source/font manifest mismatch: ${astroSource.sha}`);
 const rel=relative(root,site); if(root===parse(root).root||root.length<12||rel==='')throw new Error('Harness root must be a specific disposable path outside candidate source');
 rmSync(root,{recursive:true,force:true}); mkdirSync(join(root,'src/pages/specimens'),{recursive:true});
 copyTree(join(site,'src'),join(root,'upstream')); copyTree(join(site,'public'),join(root,'public'));
@@ -68,7 +71,7 @@ const fontCss=`@font-face{font-family:Inter;src:url('/__ui-fonts/${fontManifest.
 const content=renderSpecimenPage(row,archetype?{events,selectedEventId:event.id,trace}:{event,trace}).replace('<style is:global>',`<style is:global>${fontCss}`);
 const target=join(root,'src/pages/specimens',`${data.case_id}.astro`); writeFileSync(target,content);
 const astro=join(root,'node_modules/astro/bin/astro.mjs'); const build=spawnSync(process.execPath,[astro,'build'],{cwd:root,encoding:'utf8',env:{...process.env,TZ:corpus.reference_clock.timezone,LANG:'ru_RU.UTF-8',PUBLIC_STATIC_SITE_CURRENT_DATE:corpus.reference_clock.current_date,PUBLIC_STATIC_SITE_REFERENCE_ISO:corpus.reference_clock.reference_iso,PUBLIC_TRANSPORT_TIMETABLE_EXPERIMENT_MODE:'off'}});
-const receipt={schema_version:'ui_conformance_specimen_materialization_v1',case_id:data.case_id,resolved_render_case_sha256:data.resolved_render_case_sha256,corpus_id:corpus.corpus_id,event_fixture_id:fixture.fixture_id,event_payload_sha256:fixture.preview_event_sha256,event_fixture_bindings:fixtureRows.map(({metadata})=>({fixture_id:metadata.fixture_id,event_id:metadata.event_id,preview_event_sha256:metadata.preview_event_sha256})),asset_manifest_sha256:assets.assets_manifest_sha256,verified_assets:verifiedAssets,fixture_assets_localized:true,fixture_network_bound:false,font_manifest_sha256:fontManifest.font_manifest_sha256,astro_repository_sha:exactHead,frozen_clock:corpus.reference_clock,production_source_mutated:false,source_copy_mode:'exact-src-reflink-or-copy',route:`/specimens/${data.case_id}/`,root_selector:row.root_selector,selected_card_selector:archetype?.selected_card_selector||row.root_selector,archetype_context:archetype,ranking_supplied:false,production_route_placement_claimed:false,build_ok:build.status===0,stdout_tail:build.stdout.slice(-3000),stderr_tail:build.stderr.slice(-3000)};
+const receipt={schema_version:'ui_conformance_specimen_materialization_v2',case_id:data.case_id,resolved_render_case_sha256:data.resolved_render_case_sha256,contract_sha256:data.contract_sha256,corpus_id:corpus.corpus_id,corpus_sha256:corpus.corpus_sha256,event_fixture_id:fixture.fixture_id,event_payload_sha256:fixture.preview_event_sha256,event_fixture_bindings:fixtureRows.map(({metadata})=>({fixture_id:metadata.fixture_id,event_id:metadata.event_id,preview_event_sha256:metadata.preview_event_sha256})),asset_manifest_sha256:assets.assets_manifest_sha256,verified_assets:verifiedAssets,fixture_assets_localized:true,fixture_network_bound:false,font_manifest_sha256:fontManifest.font_manifest_sha256,astro_source_repository_sha:astroSource.sha,conformance_tooling_repository_sha:tooling.sha,frozen_clock:corpus.reference_clock,production_source_mutated:false,source_copy_mode:'exact-src-reflink-or-copy',route:`/specimens/${data.case_id}/`,root_selector:row.root_selector,selected_card_selector:archetype?.selected_card_selector||row.root_selector,archetype_context:archetype,ranking_supplied:false,production_route_placement_claimed:false,build_ok:build.status===0,stdout_tail:build.stdout.slice(-3000),stderr_tail:build.stderr.slice(-3000)};
 writeFileSync(join(root,'specimen-materialization-receipt.json'),`${JSON.stringify(receipt,null,2)}\n`);process.stdout.write(`${JSON.stringify(receipt,null,2)}\n`);if(build.status!==0)process.exitCode=1;
 
 function extension(mime){return mime==='image/png'?'png':mime==='image/jpeg'?'jpg':'webp';}
