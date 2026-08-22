@@ -36,6 +36,7 @@
     "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
     "test:festival-timeline-layout": "node --experimental-strip-types --test scripts/festival-timeline-layout.behavior.test.mjs",
+    "test:exhibitions-deck-authority": "node --test tests/exhibitions-deck-astro-authority.test.mjs",
     "test:date-listing-order": "node --experimental-strip-types --test tests/date-listing-order.test.mjs",
     "test:browser-release-gate": "node --test scripts/browser-release-gate.behavior.test.mjs",
     "test:static-collections-e2e": "node --test scripts/static-collections-e2e.behavior.test.mjs",
