@@ -1,0 +1,42 @@
+name: UI conformance changed scope
+
+on:
+  pull_request:
+    paths:
+      - 'site/src/components/**'
+      - 'site/src/layouts/**'
+      - 'site/src/styles/**'
+      - 'site/src/data/preview-events.json'
+      - 'scripts/current_ui_resource_graph/v1/specimens/**'
+      - 'scripts/ui_conformance/**'
+      - '.codex/skills/static-site-design-system/**'
+      - '.codex/skills/static-site-autotest/**'
+      - '.codex/skills/static-listing-visual-lab/**'
+      - '.github/workflows/ui-three-way-conformance.yml'
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: Exact bounded conformance batch (empty means changed scope only)
+        required: false
+        type: string
+        default: event-card-large-current-v2
+      publish_telegram:
+        description: Explicitly request protected Telegram review publication
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  conformance:
+    # The workflow implementation/catalog and the materialized Penpot design
+    # identity are separate immutable commits; never replace either with a branch.
+    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@7a26772828a5d74a9683c08e7e6774ff15ac61a5
+    with:
+      design_tooling_sha: 7a26772828a5d74a9683c08e7e6774ff15ac61a5
+      design_sha: 0882917a1328607c498d82e4c2a652bbd3df946d
+      events_tooling_sha: 713a035a8aaa9ecfdcdd5fbd817fe504160df2f5
+      astro_sha: 22ebe3c5e92b13684cca32c14357ef7b91834977
+      batch: ${{ github.event_name == 'workflow_dispatch' && inputs.batch || '' }}
+      publish_telegram: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_telegram }}
+      trusted_source: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'onedayonemasterpiece/events-bot-new' }}
+    secrets: inherit

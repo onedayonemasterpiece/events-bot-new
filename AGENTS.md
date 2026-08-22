@@ -23,6 +23,7 @@
 7. Если пользователь даёт ссылку на Telegram-пост/канал (`t.me/...`, `https://t.me/...`) и нужно прочитать фактическое содержимое сообщения, по умолчанию используй Telethon human session (`TELEGRAM_AUTH_BUNDLE_E2E`/`TELEGRAM_SESSION`) через project skill `telegram-link-inspection`; публичный HTML `t.me/s/...` допустим только как fallback/быстрая эвристика и должен быть явно назван fallback.
 8. Для любого production incident, user-visible regression, missed/failed publication, wrong/duplicate event data или сообщения, начинающегося с `Инцидент`, сначала используй project skill `events-bot-incident-response`; затем подключай более узкие skills (`events-bot-runtime-logs`, `fly-prod-db-access`, `telegram-link-inspection`, VK/Kaggle skills) по evidence surface.
 9. Для любого изменения интерфейса статического сайта используй project skill `static-site-design-system` и канонический каталог `/lab/design-system/`.
+10. Material visual component/foundation/archetype change → use project skill `ui-three-way-conformance`.
 
 ## Static-site design system (critical)
 
