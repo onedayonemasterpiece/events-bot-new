@@ -94,6 +94,15 @@ condition, not evidence against the token/schema root cause.
   token ceiling fix, but the application rejects a paraphrased
   `evidence_quote` as `quote_not_in_source`. The strict 4o budget is already
   `100/100`, so catch-up is paused instead of multiplying failed retries.
+- 2026-08-22 12:04Z — release `v2013` adds an exact-quote enum, but the first
+  canary is rejected by Gemini before generation with `400 INVALID_ARGUMENT`.
+  The emitted event schema had 12 enum members, 2,135 characters total; the
+  provider documents schema complexity as bounded even for supported `enum`.
+- 2026-08-22 12:08–12:09Z — isolated provider probes confirm a two-value enum
+  works and the real event corpus works with six candidates of at most 160
+  characters (`schema_chars=989`, `finish_reason=STOP`, exact enum quote).
+  The production schema is reduced to those verified bounds before another
+  publication retry.
 
 ## Root Cause
 
@@ -123,7 +132,10 @@ the exact-grounding validator correctly rejected it. Because the earlier storm
 had exhausted the strict-writer budget, this otherwise recoverable invalid Lite
 response still blocked publication. The follow-up constrains `evidence_quote`
 to a per-request enum of bounded exact source fragments while retaining the
-application grounding validator.
+application grounding validator. A first 12-member enum exceeded Gemini's
+opaque schema-complexity limit and returned `400 INVALID_ARGUMENT`; isolated
+probes established a provider-compatible cap of six fragments and 160
+characters per fragment before the next canary.
 
 ## Contributing Factors
 
@@ -204,7 +216,8 @@ application grounding validator.
 - Added regression assertions for the schema bounds and both mode-specific
   token budgets.
 - Added a bounded per-request `evidence_quote` enum derived only from exact
-  organizer-source substrings; both Lite and strict 4o receive the same schema.
+  organizer-source substrings: at most six values and 160 characters each;
+  both Lite and strict 4o receive the same schema.
 - Added a regression assertion that every enumerated quote is an exact
   contiguous substring of the application evidence corpus.
 - Documented the structured-output contract and this incident regression gate.

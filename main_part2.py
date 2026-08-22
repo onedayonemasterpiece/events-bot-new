@@ -5291,8 +5291,8 @@ _TG_EVENT_HOOK_RESPONSE_SCHEMA = {
 def _tg_event_evidence_quote_candidates(
     evidence_corpus: str,
     *,
-    max_chars: int = 240,
-    max_candidates: int = 40,
+    max_chars: int = 160,
+    max_candidates: int = 6,
 ) -> list[str]:
     """Return bounded exact substrings suitable for a JSON-schema enum.
 

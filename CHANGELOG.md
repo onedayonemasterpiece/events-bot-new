@@ -6,9 +6,10 @@
   three `sentences[].text + evidence_quote` items in the provider JSON schema
   and uses 768 ordinary / 1024 promo output-token ceilings for both Gemini Lite
   and the strict 4o fallback. The per-request schema also constrains every
-  `evidence_quote` to a bounded enum of exact organizer-source fragments, so a
-  completed Lite response cannot fail merely because the model paraphrased its
-  evidence field. This prevents the retry wave recorded by
+  `evidence_quote` to a provider-compatible bounded enum of at most six exact
+  organizer-source fragments (160 characters each), so a completed Lite
+  response cannot fail merely because the model paraphrased its evidence field
+  and the schema itself stays below Gemini's complexity limit. This prevents the retry wave recorded by
   `INC-2026-08-21-tg-event-public-writer-max-tokens` without weakening exact
   source grounding or increasing the persisted 4o daily request cap.
 

@@ -572,12 +572,15 @@ def test_tg_event_hook_schema_constrains_quotes_to_exact_source_fragments() -> N
 
 
 def test_tg_event_quote_enum_splits_long_source_without_inventing_text() -> None:
-    evidence = " ".join(["дословный фрагмент организатора"] * 30)
+    evidence = " ".join(
+        f"дословный фрагмент организатора номер {index}" for index in range(30)
+    )
 
     candidates = main._tg_event_evidence_quote_candidates(evidence)
 
-    assert 1 < len(candidates) <= 40
-    assert all(8 <= len(quote) <= 240 for quote in candidates)
+    assert 1 < len(candidates) <= 6
+    assert all(8 <= len(quote) <= 160 for quote in candidates)
+    assert sum(map(len, candidates)) <= 960
     assert all(quote in evidence for quote in candidates)
 
 
