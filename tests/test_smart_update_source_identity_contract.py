@@ -232,14 +232,21 @@ async def test_exact_input_packet_returns_noop_before_llm_or_writes(
             raise AssertionError("noop must return before LLM")
 
         monkeypatch.setattr(su, "_llm_review_candidate_eventness", _llm_must_not_run)
-        second = await su.smart_event_update(
-            db,
-            EventCandidate(**candidate_values),
-            check_source_url=False,
-            schedule_tasks=True,
-        )
-        assert second.status == "noop_exact_source_replay"
-        assert second.event_id == first.event_id
+        replays = []
+        for _ in range(2):
+            replays.append(
+                await su.smart_event_update(
+                    db,
+                    EventCandidate(**candidate_values),
+                    check_source_url=False,
+                    schedule_tasks=True,
+                )
+            )
+        assert [item.status for item in replays] == [
+            "noop_exact_source_replay",
+            "noop_exact_source_replay",
+        ]
+        assert {item.event_id for item in replays} == {first.event_id}
 
         async with db.get_session() as session:
             source = (await session.execute(select(EventSource))).scalar_one()

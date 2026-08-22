@@ -1,168 +1,272 @@
-# INC-2026-08-22 SOS dedup veto override and Tyunin Farm location drift
+# INC-2026-08-22 August Smart Update deduplication regression
 
 Status: investigating
 Severity: sev1
-Service: Telegram Monitoring / Smart Update identity / public Telegram and Telegraph projections / location reference
+Service: Smart Update identity / Telegram Monitoring / public projections
 Opened: 2026-08-22
 Closed: —
 Owners: events-bot maintainer / Codex
-Related incidents: `INC-2026-05-09-event-location-alias-free-dup-regressions`, `INC-2026-06-30-prose-location-non-event-daily-duplicate`, `INC-2026-07-07-new-event-quality-degradation`, `INC-2026-08-01-kldevents-event-quality`, `INC-2026-08-10-smart-update-identity-terminal-loss`
-Related docs: `docs/features/smart-event-update/README.md`, `docs/features/smart-event-update/identity-state-machine.md`, `docs/reference/locations.md`, `docs/reference/location-aliases.md`, `docs/operations/smart-update-prod-audit.md`
+Related incidents: `INC-2026-05-30-active-duplicate-events-recall-gate`, `INC-2026-07-11-event-vector-sidecar-sync-stalled`, `INC-2026-08-04-smart-update-identity-source-replay-corruption`, `INC-2026-08-10-smart-update-identity-terminal-loss`, `INC-2026-08-22-tyunin-farm-location-drift`
+Related docs: `docs/features/smart-event-update/README.md`, `docs/features/smart-event-update/identity-state-machine.md`, `docs/features/unsigned-personalization/semantic-vector-retrieval.md`, `docs/operations/smart-update-prod-audit.md`
 
 ## Summary
 
-Operator review of the public 22 August digest found five active/public rows covering the same 22 August 21:00 `Барн / SOS` slot:
+An August control-flow regression allowed ordinary Event creation after the
+existing identity gate found an owner and returned `VETO_CREATE`. The widened
+vector recall and existing LLM dedup adjudicator both ran, but the caller
+treated any non-empty adjudicator response as resolved. When merge acceptance
+rejected `no_merge`, retry was bypassed and ordinary CREATE stayed reachable.
 
-| Event ID | Public title | Added at | Ticket | Notes |
-| --- | --- | --- | --- | --- |
-| `8242` | `Праздничный SOS` | `2026-08-22 01:51:55` | `https://barn.timepad.ru/event/4147114` | Newly created fragment from `https://t.me/kldevents/3619`; no linked events and no identity decisions on the created row |
-| `8117` | `Тройной день рождения: Барн, Chipi Clo и SOS` | `2026-08-20 03:33:12` | same Timepad URL | Umbrella festival row; the source `https://t.me/kldevents/3619` was already attached here |
-| `8115` | `SOS — легендарная вечеринка` | `2026-08-20 03:27:53` | same Timepad URL | 21:00 party child; linked to `7881` and `7885` |
-| `7881` | `SOS — легендарная вечеринка` | `2026-08-18 01:49:58` | same Timepad URL | Exact-title 21:00 duplicate; linked to `7885` and `8115` |
-| `7885` | `Вечеринка SOS` | `2026-08-18 02:02:30` | — | 21:00 party variant; linked to `7881` and `8115` |
+The production smoking gun is the Barn/SOS packet from
+`https://t.me/kldevents/3619`: owner `8117` was found, a
+`deterministic_same_ticket_slot` veto was persisted, `no_merge` followed, and
+event `8242` was inserted about twenty seconds later. The same defect class is
+present in qTickets refreshes `7580 → 7753` and `7603 → 7705`.
 
-The decisive failure is reproducible from durable identity evidence. For candidate source `https://t.me/kldevents/3619`, Smart Update recorded an enforced deterministic `veto_create` on event `8117` at `2026-08-22 01:51:35.740895`, confidence `0.92`, reason `deterministic_same_ticket_slot`: same ticket URL, date/time slot and related title/location. About twenty seconds later the same candidate became new active event `8242`.
-
-The operator also reported a venue normalization defect for event `7717`, `Прогулка с Фонарщиком`:
-
-- original VK source: `https://vk.com/wall-96427382_6194`;
-- source text says `ждём вас в кафе Ферма у камина` and contains `#ферматюниных`;
-- stored public venue: `Ферма у камина`;
-- stored address: `NULL`;
-- expected canonical venue: `Ферма Тюниных`, Знаменск.
-
-On current `main` at repository SHA `a68c7f23c4e014c6e9f66e95f394656e9cb0f411`, root `LOCATIONS.md` is only a redirect to `docs/reference/locations.md`. The active canonical file contains neither `Ферма Тюниных` nor `Ферма у камина`; `docs/reference/location-aliases.md` contains no `ферма`/`ферматюниных` alias. Therefore the current reference layer cannot canonicalize this source even though the hashtag is a strong venue identity signal.
+This is the systemic P0/SEV-1 record. The Tyunin Farm location defect reported
+at the same time is a separate linked incident, not a root cause.
 
 ## User / Business Impact
 
-- One real 21:00 programme slot occupies five positions in a reader-facing digest and has several Telegraph pages.
-- Exact and near-exact duplicates dilute discovery, damage trust and can fan out independently to Telegram, VK, ICS, static pages, vector search and future digests.
-- A deterministic fail-closed identity decision is contradicted by the committed database state; this means the invariant cannot currently be trusted for other imports.
-- Venue identity is lost for event `7717`; the public card has a local sub-venue phrase without the canonical place/address.
-- The same source/publication can be attached to an existing event and later create another event, indicating an idempotency or re-ingestion boundary failure.
+- Duplicate active/upcoming rows can fan out to Telegram, VK, Telegraph, ICS,
+  static pages, vectors and digests.
+- A persisted veto did not describe the committed result, making the identity
+  ledger incomplete.
+- Reminder updates and vendor-range refreshes could create a new Event after
+  recalling an existing owner.
+- Broad repair is dangerous: one source can legitimately contain many children,
+  so source URL and heuristic similarity are recall signals, not merge proof.
 
 ## Detection
 
-- Detected by operator review of the 22 August public event list.
-- Canonical production evidence was read through eventsBot MCP.
-- Current repository code and reference data were inspected through GitHub.
-- No existing open GitHub issue was found for this exact SOS/Tyunin Farm case.
+Operator review found five public rows around the 22 August 21:00 Barn/SOS
+programme. Production runtime-file logs supplied the end-to-end trace. An exact
+checkpoint matrix and control-flow diff localized the first bad commit.
 
 ## Timeline
 
-- `2026-08-18 01:49–02:02` — events `7881` and `7885` are created for the SOS party/programme.
-- `2026-08-20 03:27–03:33` — events `8115` and `8117` are created.
-- `2026-08-22 01:50:03` — Smart Update records an `allow_merge` decision for the later `kldevents/3619` update path on event `8117`.
-- `2026-08-22 01:51:35` — Smart Update records enforced deterministic `veto_create`, reason `deterministic_same_ticket_slot`, matched event `8117`.
-- `2026-08-22 01:51:55` — event `8242` is nevertheless inserted as a new active event from `https://t.me/kldevents/3619`.
-- `2026-08-22` — operator reports five public SOS rows and the `Ферма у камина` location drift.
-- `2026-08-22 08:55 UTC` — operations snapshot reports the separate `exhibition_duplicate_audit` run `6878` failed while listing `89` potential duplicate pairs. This audit has a different scope and is only a signal for a broader census, not proof that all 89 pairs are genuine duplicates.
+- `2026-07-02..11` — the separate vector-sidecar incident leaves `217/334`
+  eligible documents projected. Post-Smart-Update enqueue and an independent
+  three-hour reconciliation restore `334/334` for both kinds.
+- `2026-07-31` — late-July replay remains fail-closed after unresolved veto.
+- `2026-08-07` — `12e4e7c36c25ac250e9cd5c03972420c782dced7` first
+  leaves CREATE reachable. Parent `04823317c8cafd438db01bb519cbf96d63f7bf00`
+  is last good.
+- `2026-08-10` — PR #494 merge `69ec40342` brings the regression to `main`
+  alongside the required occurrence-scoped candidate/attempt work.
+- `2026-08-22 01:51:35Z` — runtime records owner `8117`, `VETO_CREATE`
+  (`deterministic_same_ticket_slot`, confidence `0.92`) and one existing dedup
+  LLM call.
+- `2026-08-22 01:51:38Z` — adjudicator returns `no_merge/llm_create`, confidence
+  `0.90`, without source-grounded distinct proof.
+- `2026-08-22 01:51:58Z` — ordinary create commits event `8242`.
+- `2026-08-22 13:54:39Z` — pre-fix vector reconciliation `ops_run=6937`
+  finishes successfully.
 
-## Confirmed Technical Cause: create-gate verdict can be overridden
+## Root Cause
 
-Current `smart_event_update.py` evaluates the deterministic identity gate, records `veto_create`, loads the matched event, and then passes that event into the widened LLM dedup adjudicator.
+1. First-bad commit `12e4e7c36` introduced `identity_gate_adjudicated` and
+   set it for every non-null adjudicator response before establishing a merge
+   or evidence-grounded distinct result.
+2. `_dedup_adjudicator_accept_merge(...)` could reject that response and
+   continue as `no_merge`.
+3. The later fail-closed guard ran only when the boolean was false.
+4. Ordinary CREATE therefore remained reachable after an owner and enforced
+   create veto.
 
-In the adjudicator branch:
+| checkpoint | unresolved owner/veto result |
+| --- | --- |
+| late-July `6775815de` | fail-closed |
+| `5082a50` | fail-closed |
+| `86c4a62` | fail-closed |
+| last good `04823317c` | fail-closed |
+| first bad `12e4e7c36` | ordinary CREATE reachable |
+| PR #494 `69ec40342` | bad path reaches `main` |
+| pre-fix main `ddd75b741` | bad path present |
 
-1. any non-null typed decision sets `identity_gate_adjudicated = True`;
-2. `_dedup_adjudicator_accept_merge(...)` may reject merge and return `no_merge`;
-3. the code logs the rejection and continues;
-4. the later fail-closed guard runs only when `not identity_gate_adjudicated`;
-5. the create path is therefore still reachable after an enforced deterministic veto.
+Artifacts: `artifacts/codex/INC-2026-08-22-dedup-regression/first-bad-checkpoint-matrix.txt`,
+`first-bad-control-flow.diff`, `first-bad-annotated-trace.txt`,
+`runtime-sos-control-flow.txt`, and `runtime-sos-excerpts.txt`.
 
-This orchestration contradicts the create-gate contract: a strong `VETO_CREATE` currently means “ask the LLM once more”, while the durable log still presents it as an enforced veto. A model decision can authorize CREATE without a persisted final override record.
+## Contributing Factors
 
-The exact SOS sequence is consistent with this path: deterministic same-ticket-slot veto is logged against `8117`, then the candidate is created as `8242`. The final LLM distinct/no-merge response is not visible in `event_get(8242)` or the identity-decision log, which is a second observability defect.
+- `no_merge` conflated explicit distinct, abstention and provider/schema
+  uncertainty; it required no source-grounded occurrence/event difference.
+- The RPC returned a small ranked list per vector kind, but Smart Update kept
+  only rank one. Known true owners occur at ranks 2–3.
+- Exact city/type filters hide owners after canonical-field drift (SOS and
+  Baltic Odyssey probes).
+- Documentation had temporarily replaced durable retry with inline distinct
+  creation, contradicting the fail-closed contract.
+- The final adjudicator evidence/conflicts were not persisted with the attempt.
 
-## Additional Root-Cause Hypotheses To Verify
+## Vector Recall Evidence
 
-### Same-source re-ingestion / replay race
+Vectors are recall only. `related_v1` and `search_v3` widen discovery; SQLite
+ownership plus the existing LLM adjudicator decide identity. Similarity alone
+never authorizes merge.
 
-`https://t.me/kldevents/3619` is already present as identity-bearing evidence on event `8117`, but the same URL is the `source_post_url` of new event `8242`. Verify whether this was:
+| measure | fresh pre-fix production result |
+| --- | --- |
+| eligible documents | 703 |
+| `related_v1` | 703/703; zero missing/extra/stale-hash |
+| `search_v3` | 703/703; zero missing/extra/stale-hash |
+| 2026-07-15..31 | 122/122 each kind |
+| 2026-08-01..11 | 83/83 each kind |
+| 2026-08-12..22 | 431/431 each kind |
+| last reconciliation | `ops_run=6937`; 14 changed, 1392 unchanged, no cap remainder |
+| current provider/RPC failures | no terminal failures; recovered RPM waits only |
 
-- self-re-ingestion of a managed `@kldevents` publication;
-- concurrent processing of one candidate with stale shortlist state;
-- replay/retry after a successful merge without source-level idempotency;
-- or a combination of those paths.
+The post-Smart-Update coalesced enqueue and independent 180-minute owner are
+present. Event `7997` is intentionally export-ineligible because its ranged
+date is malformed.
 
-Regardless of the producer, a source URL already attached as identity-bearing evidence must not create a second event without an explicit, durable and justified split decision.
+A stored-vector proxy over seven positive families used no provider call. The
+true owner was top-1 for 2/7 and top-5 for 5/7; three owners ranked 2–3. Exact
+type/city filtering removed SOS and Baltic Odyssey. Prevention must therefore
+preserve a small top-k and bounded relaxed-filter fallback in the same existing
+RPC/embedding pass, without an extra LLM call.
 
-### Location reference data loss
+## Regression Corpus
 
-The canonical Tyunin Farm row/aliases expected by the operator are absent from current `main`. Determine whether they:
+### Required positives (`FINAL_MATCH`)
 
-- existed only in an older/local `locations.md`;
-- were lost during the redirect/migration to `docs/reference/locations.md`;
-- live in an unmerged branch;
-- or were never committed.
+| family | anchors |
+| --- | --- |
+| Barn/SOS | `8117 → 8242`, `t.me/kldevents/3619` |
+| qTickets 247858 | `7580`, `7601`, `7753` |
+| qTickets 251796 | `7603`, `7705`, `7996`, `8183` |
+| Baltic Odyssey | `8055`, `8108` |
+| «Великие учителя» reminder | `3216`, `8244` |
+| Dürer reminder | `5703`, `7690` |
+| «Живая нить традиций» | `7609`, `7749` |
 
-Do not invent the address. Recover or verify the canonical line from authoritative source/history before data repair.
+### Required hard negatives (`FINAL_DISTINCT`)
+
+- exhibition versus its excursion;
+- exhibition versus a separate lecture/activity/closing;
+- different same-day sessions;
+- different dates in a recurring series;
+- festival parent versus independently attendable child;
+- multiple child Events in one source post;
+- different exhibitions at one venue.
+
+The gate also requires exact replay twice, genuine concurrent two-worker
+replay, zero hard-negative false merges and unchanged normal-path LLM counters.
+
+## Production Census And Cause Classification
+
+The frozen read-only pre-deploy census covered all 704 active/upcoming public
+rows: 1,837 sources, 15,079 facts, 4,443 poster/audit rows, 18,813 jobs, 658
+publications and 2,071 identity decisions. `PRAGMA quick_check=ok`. The
+recall-biased all-pairs pass emitted 1,742 pairs:
+
+| overlapping signal / preliminary class | count |
+| --- | ---: |
+| shared poster | 887 |
+| shared identity source | 1,116 |
+| related title | 338 |
+| same ticket | 211 |
+| same title | 123 |
+| same-slot related | 113 |
+| legitimate/multi-child hint | 967 |
+| needs adjudication | 601 |
+| veto candidate | 130 |
+| reminder candidate | 6 |
+| hard-duplicate candidate | 38 |
+
+Signals overlap and are deliberately **not** merge decisions. Closure needs a
+post-prevention untruncated census classified as recall miss, LLM error, veto
+fall-through, legitimate occurrence, reminder update, replay race or heuristic
+false positive. No bulk heuristic merge is allowed. Artifacts include
+`prod-active-upcoming-census-raw.json.gz`,
+`prod-active-upcoming-census-candidates.json`, and
+`strong-cluster-source-evidence.md`.
+
+## Automation Contract
+
+### Treat as regression guard when
+
+- create/merge gate, adjudicator, final create, candidate/attempt, occurrence,
+  fingerprint or retry code changes;
+- vector identity RPC/filter/top-k or sync ownership changes;
+- Event merge/repair and obsolete-job handling changes;
+- a named positive or hard-negative family is touched.
+
+### Affected surfaces
+
+- `smart_event_update.py`, `smart_update_identity.py`, `smart_update_state.py`;
+- Fly SQLite identity/Event ledgers and personalization Supabase vector recall;
+- Telegram/VK intake and accepted-only public fanout;
+- incident-safe repair and separate social-cleanup handoff.
+
+### Mandatory checks before closure or deploy
+
+1. Named fixtures pass; exact replay twice adds zero Events; concurrent replay
+   leaves one owner.
+2. Owner/`VETO_CREATE` ends only as `FINAL_MATCH`, grounded
+   `FINAL_DISTINCT`, or durable `FINAL_RETRY`; ordinary CREATE is unreachable.
+3. Normal-path provider/LLM counters are unchanged.
+4. Both vector kinds have 100% eligible coverage/current hashes; top-1/top-5
+   recall is reported.
+5. Manifest repair uses row hashes, preserves sources/facts/posters/audit,
+   cancels only obsolete pending work, and second apply changes zero.
+6. Telegraph, ICS, static, vector/search and digest are rebuilt; Telegram/VK
+   cleanup uses a separate mapping.
+7. SHA is on `origin/main`; deploy is clean exact-main; `/healthz`, quick-check,
+   logs and two full ingestion iterations pass.
+
+### Required evidence
+
+- first-bad matrix/diff/runtime trace;
+- tests, replay counts, LLM counters and corpus metrics;
+- vector coverage/lag/rank/error receipts;
+- classified census and reviewed manifest;
+- backup/hash, apply/verify/second-apply, projection and social receipts;
+- exact-main SHA/image, health, quick-check and two ingestion run IDs.
 
 ## Immediate Mitigation
 
-- This incident record was committed before prevention/data mutation.
-- No production rows or public posts were deleted or merged during evidence collection.
-- Treat event `8242` and its pending/future publication jobs as suspect until the canonical cluster is resolved.
-- Do not run destructive bulk dedup solely from `exhibition_duplicate_audit`; its list contains parent/child and exhibition/excursion siblings that require typed identity review.
+- Evidence collection was read-only; no heuristic bulk merge was run.
+- Event `8242` and its pending publication work were marked as repair risks.
+- Prevention must deploy before canonical data repair.
+- The generic duplicate utility is prohibited: it deletes rows and can erase
+  facts/poster history or repoint historical jobs.
 
 ## Corrective Actions
 
-### P0 — restore the identity invariant
-
-- [ ] Make `IdentityGateAction.VETO_CREATE` in `ENFORCE` mode a hard transactional barrier: the same attempt may end only in `MERGED`, a durable `RETRY_SCHEDULED`/review outcome, or an explicit typed override with stronger contradictory identity evidence. It must never fall through to ordinary CREATE.
-- [ ] For `deterministic_same_ticket_slot`, disallow automatic `distinct/create` override when ticket URL, date, exact start time and canonical venue all agree. A genuine multi-session/sibling exception must expose a concrete blocking difference and use a separate auditable decision type.
-- [ ] Persist the final adjudicator result after a gate veto: candidate fingerprint, source URL, gate match id, action, relation, confidence, reason code, blocking conflicts, model/schema version and whether CREATE remained reachable.
-- [ ] Add a final transaction-bound source-identity check: if the normalized identity-bearing source URL is already attached to an active event, lock/re-read that owner and merge/retry instead of inserting a new row.
-- [ ] Verify candidate-attempt idempotency and concurrent-worker serialization for the same source URL/fingerprint.
-
-### P0 — exact replay and tests
-
-- [ ] Add an incident replay fixture for `https://t.me/kldevents/3619` using the pre-existing rows `7881`, `7885`, `8115`, `8117`.
-- [ ] Regression: same Timepad URL + `2026-08-22` + `21:00` + `Барн` + related SOS title produces no new event.
-- [ ] Regression: a deterministic veto followed by LLM `distinct/no_merge` cannot reach `_create_from_prepared_candidate()`.
-- [ ] Regression: the final identity outcome is durable and queryable after every gate/adjudicator path.
-- [ ] Concurrency regression: two simultaneous attempts for the same source/fingerprint result in one canonical owner.
-- [ ] Positive opposite control: two genuinely distinct same-venue events with different ticket/session identity remain separate.
-
-### P1 — public projection and data repair
-
-- [ ] Define and test the product policy for umbrella programme versus child events. For this case, the reader-facing 21:00 slot must appear once even if one umbrella row and one child row are retained internally.
-- [ ] Build an explicit remediation map for `7881`, `7885`, `8115`, `8117`, `8242`; preserve all source evidence, posters, ticket facts and publication provenance before deactivating/merging rows.
-- [ ] Rebuild Telegraph, Telegram daily/weekend, VK, ICS, static and vector projections after repair; verify that stale URLs do not remain in current lists.
-- [ ] Audit events created in the last 7 days for exact normalized ticket URL + overlapping date + exact time + canonical venue, and separately for one identity-bearing source URL attached to multiple active events.
-
-### P1 — Tyunin Farm canonicalization
-
-- [ ] Recover/verify the canonical `Ферма Тюниных` location line and address for Знаменск.
-- [ ] Add the verified canonical row to `docs/reference/locations.md`.
-- [ ] Add curated aliases at minimum for `ферма у камина`, `кафе ферма у камина`, `ферматюниных` and `#ферматюниных` normalization semantics.
-- [ ] Regression: `find_known_venue_in_text("ждём вас в кафе Ферма у камина ... #ферматюниных", city="Знаменск")` resolves one canonical venue and fills the verified address/city.
-- [ ] Repair event `7717`, preserve the original sub-venue wording as a fact when useful, and rebuild its public projections.
+- [ ] Replace the boolean with `FINAL_MATCH`, `FINAL_DISTINCT`, `FINAL_RETRY`.
+- [ ] Require grounded distinct proof for CREATE after identity concern; bare
+  `no_merge`, abstention, provider/schema errors become durable retry.
+- [ ] Persist owner, action, relation, confidence, evidence/conflicts and
+  attempt ID in the existing ledger.
+- [ ] Preserve exact occurrence/fingerprint no-op and avoid
+  `UNIQUE(source_url)`.
+- [ ] Preserve small vector top-k/relaxed fallback without extra LLM calls.
+- [ ] Deploy prevention, repair reviewed true duplicates, rebuild projections.
 
 ## Acceptance Criteria
 
-1. Replaying the exact SOS source against a production-like snapshot creates zero additional active rows.
-2. An enforced deterministic veto cannot be followed by an unlogged CREATE.
-3. The source URL `https://t.me/kldevents/3619` has one canonical identity owner after repair.
-4. The public 22 August 21:00 Barn/SOS slot is represented once according to documented umbrella/child policy.
-5. Event `7717` resolves to the verified canonical Tyunin Farm venue and address.
-6. A bounded 7-day census and pre/post repair report are attached to the incident.
-7. Targeted tests, changed-module `py_compile`, `git diff --check`, release-governance checks and post-deploy production verification pass.
-
-## Required Evidence Before Closure
-
-- Exact source/candidate replay and pre/post event/source/identity-decision snapshots.
-- Trace proving the final identity action after deterministic veto.
-- Concurrency/idempotency test output.
-- Canonical location source/history evidence for Tyunin Farm.
-- Data repair backup and row/publication mapping.
-- Final public URLs/screenshots or API checks for Telegram, Telegraph, VK and current digest.
-- Deployed SHA reachable from `origin/main`, `/healthz`, DB quick check and relevant runtime logs.
+- vector coverage both kinds 100%; critical fixtures 100%; duplicate recall
+  at least 99%; distinct preservation at least 99%; hard-negative false merges
+  zero;
+- owner/veto to ordinary CREATE zero; exact replay zero new Events; concurrent
+  replay one owner; normal-path LLM count unchanged;
+- no unresolved hard duplicates after full census/repair;
+- SHA reachable from `origin/main`; deploy, health, quick-check and two full
+  ingestion iterations pass.
 
 ## Release And Closure Evidence
 
-- prevention PR/SHA: pending
-- data repair run: pending
-- deploy path: pending
-- post-deploy verification: pending
-- closure decision: pending
+- prevention SHA/tests: pending integration
+- production repair/projections/social cleanup: blocked until prevention deploy
+- deploy and `/healthz`: pending
+- two ingestion iterations: pending
+- closure: open until every acceptance gate has evidence
+
+## Prevention
+
+Once identity concern exists, the existing adjudication operation must produce
+one explicit final outcome. Only grounded distinct authorizes CREATE; match
+uses the owner; uncertainty is durable retry. Vectors remain recall evidence
+and accepted-only side effects remain unchanged.

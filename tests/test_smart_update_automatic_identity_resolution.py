@@ -457,7 +457,7 @@ async def test_late_incoherent_merge_rolls_back_and_creates_distinct(
 
 
 @pytest.mark.asyncio
-async def test_identity_llm_unavailable_is_visible_technical_terminal(
+async def test_identity_llm_unavailable_is_durable_retry(
     tmp_path, monkeypatch
 ) -> None:
     db = Database(str(tmp_path / "llm-unavailable.sqlite"))
@@ -491,10 +491,10 @@ async def test_identity_llm_unavailable_is_visible_technical_terminal(
             check_source_url=False,
             schedule_tasks=False,
         )
-        assert first.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         assert first.reason == "merge_identity_llm_unavailable"
         assert first.retry_reason is RetryReason.IDENTITY_TECHNICAL_FAILURE
-        assert (await _make_due(db))["claimed"] == 0
+        assert (await _make_due(db))["claimed"] == 1
         async with db.get_session() as session:
             assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
     finally:
@@ -502,7 +502,7 @@ async def test_identity_llm_unavailable_is_visible_technical_terminal(
 
 
 @pytest.mark.asyncio
-async def test_typed_semantic_unknown_creates_distinct_inline(
+async def test_typed_semantic_unknown_is_durable_retry(
     tmp_path, monkeypatch
 ) -> None:
     db = Database(str(tmp_path / "semantic-unknown.sqlite"))
@@ -542,25 +542,25 @@ async def test_typed_semantic_unknown_creates_distinct_inline(
         first = await su.smart_event_update(
             db, _candidate(), check_source_url=False, schedule_tasks=False
         )
-        assert first.outcome is SmartUpdateTerminalOutcome.CREATED
-        assert first.identity_distinct_reason is IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION
-        assert (await _make_due(db))["claimed"] == 0
-        assert calls == 1
+        assert first.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
+        assert first.retry_reason is RetryReason.IDENTITY_SEMANTIC_UNKNOWN
+        assert (await _make_due(db))["claimed"] == 1
+        assert calls == 2
         async with db.get_session() as session:
-            assert int(await session.scalar(select(func.count()).select_from(Event))) == 2
+            assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
         async with db.raw_conn() as conn:
             row = await (
                 await conn.execute(
                     "SELECT reason FROM smart_update_candidate_state ORDER BY id DESC LIMIT 1"
                 )
             ).fetchone()
-        assert row == (IdentityDistinctReason.UNKNOWN_AFTER_BOUNDED_ADJUDICATION.value,)
+        assert row == (RetryReason.IDENTITY_SEMANTIC_UNKNOWN.value,)
     finally:
         await db.close()
 
 
 @pytest.mark.asyncio
-async def test_widened_dedup_invalid_schema_is_technical_terminal_not_create(
+async def test_widened_dedup_invalid_schema_is_durable_retry_not_create(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -598,13 +598,14 @@ async def test_widened_dedup_invalid_schema_is_technical_terminal_not_create(
             schedule_tasks=False,
         )
 
-        assert result.outcome is SmartUpdateTerminalOutcome.FAILED_TECHNICAL
+        assert result.outcome is SmartUpdateTerminalOutcome.RETRY_SCHEDULED
         assert result.event_id is None
-        assert result.reason == "dedup_adjudicator_unavailable"
+        assert result.reason == "identity_final_retry:adjudicator_unavailable"
+        assert result.retry_reason is RetryReason.IDENTITY_FINAL_RETRY
         async with db.get_session() as session:
             assert int(await session.scalar(select(func.count()).select_from(Event))) == 1
         counts = await smart_update_funnel_counts(db)
-        assert counts["FAILED_TECHNICAL"] == 1
+        assert counts["RETRY_SCHEDULED"] == 1
         assert counts["attempt_starts"] == counts["attempt_terminals"] == 1
         assert counts["terminal_unresolved"] == 0
         assert existing_id > 0
