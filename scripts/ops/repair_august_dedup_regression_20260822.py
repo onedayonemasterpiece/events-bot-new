@@ -73,7 +73,7 @@ def _require_schema(con: sqlite3.Connection) -> None:
         "event": {"id", "title", "date", "time", "lifecycle_status", "silent", "identity_status", "merged_into_event_id", "linked_event_ids"},
         "event_source": {"id", "event_id", "source_type", "source_url", "canonical_source_url", "candidate_key", "occurrence_key", "smart_update_candidate_id"},
         "event_source_fact": {"id", "event_id", "source_id", "fact"},
-        "eventposter": {"id", "event_id", "poster_hash", "review_status", "duplicate_of_id", "review_reason"},
+        "eventposter": {"id", "event_id", "poster_hash", "raw_sha256", "review_status", "duplicate_of_id", "review_reason"},
         "joboutbox": {"id", "event_id", "status", "last_error"},
         "smart_update_candidate_state": {"id", "occurrence_key", "current_outcome", "accepted_event_id", "diagnostic_event_id"},
         "smart_update_attempt": {"id", "candidate_state_id", "terminal_outcome", "accepted_event_id", "diagnostic_event_id"},
@@ -423,6 +423,59 @@ def _replace_links(value: Any, replacements: dict[int, int], self_id: int) -> st
     return _json(normalized)
 
 
+def _retained_poster_identity(
+    con: sqlite3.Connection,
+    *,
+    canonical_event_id: int,
+    poster: sqlite3.Row,
+    cluster_id: str,
+) -> tuple[sqlite3.Row | None, list[str]]:
+    """Resolve production poster uniqueness without discarding audit evidence.
+
+    Production has two independent identities: the derived ``poster_hash`` and
+    the non-empty raw-byte SHA-256.  A move must therefore be suppressed when
+    either identity already exists on the canonical event.  If the two keys
+    unexpectedly point at different retained rows, fail closed rather than
+    choosing an arbitrary media owner.
+    """
+
+    matches: dict[int, tuple[sqlite3.Row, set[str]]] = {}
+
+    def remember(row: sqlite3.Row | None, identity: str) -> None:
+        if row is None:
+            return
+        poster_id = int(row["id"])
+        retained, identities = matches.setdefault(poster_id, (row, set()))
+        identities.add(identity)
+        matches[poster_id] = (retained, identities)
+
+    remember(
+        con.execute(
+            "SELECT * FROM eventposter WHERE event_id=? AND poster_hash=? ORDER BY id LIMIT 1",
+            (canonical_event_id, poster["poster_hash"]),
+        ).fetchone(),
+        "poster_hash",
+    )
+    raw_sha256 = str(poster["raw_sha256"] or "").strip()
+    if raw_sha256:
+        remember(
+            con.execute(
+                "SELECT * FROM eventposter WHERE event_id=? AND raw_sha256=? ORDER BY id LIMIT 1",
+                (canonical_event_id, raw_sha256),
+            ).fetchone(),
+            "raw_sha256",
+        )
+    if len(matches) > 1:
+        retained_ids = ",".join(str(item) for item in sorted(matches))
+        raise RepairBlocked(
+            f"poster_identity_collision_ambiguous:{cluster_id}:{int(poster['id'])}:{retained_ids}"
+        )
+    if not matches:
+        return None, []
+    retained, identities = next(iter(matches.values()))
+    return retained, sorted(identities)
+
+
 def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[list[dict[str, Any]], list[int]]:
     cluster_id = str(cluster["cluster_id"])
     canonical = int(cluster["canonical_id"])
@@ -456,10 +509,12 @@ def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[li
 
         posters = con.execute("SELECT * FROM eventposter WHERE event_id=? ORDER BY id", (obsolete,)).fetchall()
         for poster in posters:
-            duplicate = con.execute(
-                "SELECT id FROM eventposter WHERE event_id=? AND poster_hash=? ORDER BY id LIMIT 1",
-                (canonical, poster["poster_hash"]),
-            ).fetchone()
+            duplicate, matching_identities = _retained_poster_identity(
+                con,
+                canonical_event_id=canonical,
+                poster=poster,
+                cluster_id=cluster_id,
+            )
             if duplicate is None:
                 con.execute("UPDATE eventposter SET event_id=? WHERE id=?", (canonical, int(poster["id"])))
                 diff.append({"table": "eventposter", "id": int(poster["id"]), "action": "move", "to_event_id": canonical})
@@ -471,7 +526,15 @@ def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[li
                     "UPDATE eventposter SET review_status='duplicate',duplicate_of_id=?,review_reason=? WHERE id=?",
                     (int(duplicate["id"]), f"{INCIDENT}:preserved_duplicate_media", int(poster["id"])),
                 )
-                diff.append({"table": "eventposter", "id": int(poster["id"]), "action": "preserve_duplicate_evidence", "duplicate_of_id": int(duplicate["id"])})
+                diff.append(
+                    {
+                        "table": "eventposter",
+                        "id": int(poster["id"]),
+                        "action": "preserve_duplicate_evidence",
+                        "duplicate_of_id": int(duplicate["id"]),
+                        "matching_identities": matching_identities,
+                    }
+                )
 
         jobs = con.execute(
             "SELECT id FROM joboutbox WHERE event_id=? AND status IN ('pending','paused') ORDER BY id",
@@ -606,6 +669,7 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
         )
     ]
     poster_orphans = 0
+    bad_poster_moves = 0
     if touched_poster_ids:
         pp = ",".join("?" for _ in touched_poster_ids)
         poster_orphans = int(
@@ -614,8 +678,38 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
                 tuple(touched_poster_ids),
             ).fetchone()[0]
         )
+        for backup in con.execute(
+            f"SELECT row_json FROM {BACKUP_TABLE} WHERE manifest_sha=? AND table_name='eventposter'",
+            (manifest_sha,),
+        ):
+            before = json.loads(str(backup["row_json"]))
+            expected_owner = canonical_by_obsolete.get(int(before["event_id"]))
+            if expected_owner is None:
+                continue
+            current = con.execute("SELECT * FROM eventposter WHERE id=?", (int(before["id"]),)).fetchone()
+            if current is None:
+                bad_poster_moves += 1
+                continue
+            if int(current["event_id"]) == expected_owner:
+                continue
+            retained = con.execute(
+                "SELECT * FROM eventposter WHERE id=? AND event_id=?",
+                (current["duplicate_of_id"], expected_owner),
+            ).fetchone()
+            same_hash = retained is not None and current["poster_hash"] == retained["poster_hash"]
+            current_raw = str(current["raw_sha256"] or "").strip()
+            same_raw = retained is not None and bool(current_raw) and current_raw == str(retained["raw_sha256"] or "").strip()
+            if (
+                int(current["event_id"]) != int(before["event_id"])
+                or current["review_status"] != "duplicate"
+                or retained is None
+                or not (same_hash or same_raw)
+            ):
+                bad_poster_moves += 1
     if poster_orphans:
         raise RepairBlocked(f"poster_graph_orphans:{poster_orphans}")
+    if bad_poster_moves:
+        raise RepairBlocked(f"poster_owner_contract:{bad_poster_moves}")
     touched_decision_ids = [
         int(row["row_id"])
         for row in con.execute(

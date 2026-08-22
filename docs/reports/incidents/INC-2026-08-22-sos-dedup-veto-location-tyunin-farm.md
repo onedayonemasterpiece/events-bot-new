@@ -63,6 +63,16 @@ checkpoint matrix and control-flow diff localized the first bad commit.
 - `2026-08-22 01:51:58Z` — ordinary create commits event `8242`.
 - `2026-08-22 13:54:39Z` — pre-fix vector reconciliation `ops_run=6937`
   finishes successfully.
+- `2026-08-22 16:53:55Z` — prevention PR #554 merges to `origin/main` as
+  `c0103be2c7ddc760486bd79e19825a69ceae4165` and deploys as Fly version
+  `2016` / image digest
+  `sha256:7a6f7cea54294a5262fae9a14344856340409d0fed909cc229c4ff4619aab8b2`.
+- `2026-08-22 17:01:50Z` — the reviewed 21-merge / 3-keep-distinct manifest
+  passes dry-run. Its first production apply reaches the `number-13` poster
+  graph and hits `ux_eventposter_event_raw_sha256`: different derived
+  `poster_hash` values represented identical raw bytes. SQLite rolls the
+  transaction back; `quick_check=ok`, receipt count stays zero and none of the
+  selected Events is marked merged.
 
 ## Root Cause
 
@@ -221,7 +231,8 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 4. Both vector kinds have 100% eligible coverage/current hashes; top-1/top-5
    recall is reported.
 5. Manifest repair uses row hashes, preserves sources/facts/posters/audit,
-   cancels only obsolete pending work, and second apply changes zero.
+   treats both derived poster hash and non-empty raw-byte SHA-256 as media
+   identity, cancels only obsolete pending work, and second apply changes zero.
 6. Telegraph, ICS, static, vector/search and digest are rebuilt; Telegram/VK
    cleanup uses a separate mapping.
 7. SHA is on `origin/main`; deploy is clean exact-main; `/healthz`, quick-check,
@@ -240,7 +251,11 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 
 - Evidence collection was read-only; no heuristic bulk merge was run.
 - Event `8242` and its pending publication work were marked as repair risks.
-- Prevention must deploy before canonical data repair.
+- Prevention is deployed from exact `origin/main` at Fly version `2016`.
+- The first manifest apply failed on the production raw-byte poster uniqueness
+  index and fully rolled back. Repair is blocked until the tool's poster move
+  contract recognizes both `poster_hash` and non-empty `raw_sha256`; a
+  disagreement between those keys must fail closed rather than choose a row.
 - The generic duplicate utility is prohibited: it deletes rows and can erase
   facts/poster history or repoint historical jobs.
 
@@ -254,7 +269,9 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 - [x] Preserve exact occurrence/fingerprint no-op and avoid
   `UNIQUE(source_url)`.
 - [x] Preserve small vector top-k in one widened RPC without extra calls.
-- [ ] Deploy prevention, repair reviewed true duplicates, rebuild projections.
+- [x] Deploy prevention from exact `origin/main`; verify health and SQLite.
+- [ ] Deploy raw-byte-safe repair hotfix, apply reviewed true duplicates and
+  rebuild projections.
 
 ## Acceptance Criteria
 
@@ -269,9 +286,16 @@ false positive. No bulk heuristic merge is allowed. Artifacts include
 
 ## Release And Closure Evidence
 
-- prevention implementation/tests: PR #554 (exact-main SHA pending merge)
-- production repair/projections/social cleanup: blocked until prevention deploy
-- deploy and `/healthz`: pending
+- prevention implementation/tests: PR #554, exact-main SHA
+  `c0103be2c7ddc760486bd79e19825a69ceae4165`
+- prevention deploy: Fly version `2016`, exact remote SHA `c0103be2...`, healthy
+  `/healthz`, `PRAGMA quick_check=ok`
+- first repair apply: transaction rolled back on
+  `UNIQUE(eventposter.event_id,eventposter.raw_sha256)`; receipt count `0`,
+  selected merged-row count `0`
+- production repair/projections/social cleanup: blocked until the
+  raw-byte-safe repair hotfix is on exact `origin/main`
+- repair-hotfix deploy and final `/healthz`: pending
 - two ingestion iterations: pending
 - closure: open until every acceptance gate has evidence
 

@@ -14,6 +14,10 @@
   unchanged. Added an incident-scoped, manifest/hash/CAS-guarded production
   repair tool that preserves Event shells, sources, facts, posters and audit
   history, cancels obsolete pending work and is idempotent on second apply.
+  Poster moves now honor both production uniqueness identities—the derived
+  `poster_hash` and non-empty raw-byte SHA-256—preserving a colliding obsolete
+  media row as duplicate audit evidence and failing closed if those identities
+  point to different canonical rows.
 
 - Fixed: the grounded Telegram event public writer now enforces one through
   three `sentences[].text + evidence_quote` items in the provider JSON schema
