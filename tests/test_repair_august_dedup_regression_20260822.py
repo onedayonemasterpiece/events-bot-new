@@ -58,10 +58,13 @@ def _make_db(path: Path) -> None:
         );
         CREATE TABLE eventposter(
           id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, poster_hash TEXT NOT NULL,
-          review_status TEXT, duplicate_of_id INTEGER, review_reason TEXT,
+          raw_sha256 TEXT, review_status TEXT, duplicate_of_id INTEGER, review_reason TEXT,
           FOREIGN KEY(event_id) REFERENCES event(id), FOREIGN KEY(duplicate_of_id) REFERENCES eventposter(id),
           UNIQUE(event_id,poster_hash)
         );
+        CREATE UNIQUE INDEX ux_eventposter_event_raw_sha256
+          ON eventposter(event_id,raw_sha256)
+          WHERE raw_sha256 IS NOT NULL AND TRIM(raw_sha256) != '';
         CREATE TABLE joboutbox(
           id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, status TEXT NOT NULL, last_error TEXT,
           FOREIGN KEY(event_id) REFERENCES event(id)
@@ -112,8 +115,16 @@ def _make_db(path: Path) -> None:
         [(500, 10, 100, "owner fact"), (501, 11, 101, "unique obsolete fact"), (502, 11, 102, "duplicate binding fact")],
     )
     con.executemany(
-        "INSERT INTO eventposter VALUES(?,?,?,?,?,?)",
-        [(200, 10, "shared", "approved", None, None), (201, 11, "unique", "approved", None, None), (202, 11, "shared", "approved", None, None)],
+        "INSERT INTO eventposter(id,event_id,poster_hash,raw_sha256,review_status,duplicate_of_id,review_reason) VALUES(?,?,?,?,?,?,?)",
+        [
+            (200, 10, "shared", "raw-shared", "approved", None, None),
+            (201, 11, "unique", "raw-unique", "approved", None, None),
+            (202, 11, "shared", "raw-shared", "approved", None, None),
+            # Production also enforces raw-byte identity.  Different derived
+            # poster hashes may still represent the same uploaded bytes.
+            (203, 10, "canonical-derived", "raw-same-bytes", "approved", None, None),
+            (204, 11, "obsolete-derived", "raw-same-bytes", "approved", None, None),
+        ],
     )
     con.executemany(
         "INSERT INTO joboutbox VALUES(?,?,?,?)",
@@ -239,6 +250,7 @@ def test_dry_run_apply_preserves_graph_cancels_jobs_and_second_apply_is_exact_no
     assert con.execute("SELECT source_id FROM event_identity_decision_log WHERE id=50").fetchone()[0] == 100
     assert con.execute("SELECT event_id FROM eventposter WHERE id=201").fetchone()[0] == 10
     assert tuple(con.execute("SELECT event_id,review_status,duplicate_of_id FROM eventposter WHERE id=202").fetchone()) == (11, "duplicate", 200)
+    assert tuple(con.execute("SELECT event_id,review_status,duplicate_of_id FROM eventposter WHERE id=204").fetchone()) == (11, "duplicate", 203)
     assert tuple(con.execute("SELECT status,last_error FROM joboutbox WHERE id=600").fetchone())[0] == "error"
     assert con.execute("SELECT status FROM joboutbox WHERE id=601").fetchone()[0] == "done"
     assert tuple(con.execute("SELECT accepted_event_id,current_outcome FROM smart_update_candidate_state WHERE id=300").fetchone()) == (10, "MERGED")
@@ -293,6 +305,34 @@ def test_running_job_blocks_all_writes(tmp_path: Path) -> None:
     assert db.read_bytes() == before
 
 
+def test_poster_hash_and_raw_identity_disagreement_fails_closed(tmp_path: Path) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    con = sqlite3.connect(db)
+    # The obsolete row's derived hash points to canonical poster 203 while its
+    # raw bytes point to canonical poster 200.  The repair must not pick one.
+    con.execute("UPDATE eventposter SET raw_sha256=NULL WHERE id=202")
+    con.execute(
+        "INSERT INTO eventposter(id,event_id,poster_hash,raw_sha256,review_status) VALUES(205,11,'canonical-derived','raw-shared','approved')"
+    )
+    con.commit()
+    con.close()
+    _manifest(db, manifest_path)
+
+    with pytest.raises(
+        repair.RepairBlocked,
+        match="poster_identity_collision_ambiguous:sos-replay:205:200,203",
+    ):
+        repair.run(db, manifest_path, "apply")
+
+    con = sqlite3.connect(db)
+    assert con.execute("SELECT event_id,review_status,duplicate_of_id FROM eventposter WHERE id=205").fetchone() == (11, "approved", None)
+    assert con.execute("SELECT COUNT(*) FROM event_identity_decision_log WHERE decision='repair_merge'").fetchone()[0] == 0
+    assert con.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    con.close()
+
+
 @pytest.mark.parametrize("surface", ["candidate", "occurrence"])
 def test_exact_candidate_and_occurrence_constraints_refuse_drift(tmp_path: Path, surface: str) -> None:
     db = tmp_path / "fixture.sqlite"
@@ -338,6 +378,7 @@ def test_rollback_restores_rows_and_refuses_post_apply_drift(tmp_path: Path) -> 
     assert con.execute("SELECT event_id,source_id FROM event_source_fact WHERE id=502").fetchone() == (11, 102)
     assert con.execute("SELECT source_id FROM event_identity_decision_log WHERE id=50").fetchone()[0] == 102
     assert con.execute("SELECT event_id,review_status,duplicate_of_id FROM eventposter WHERE id=202").fetchone() == (11, "approved", None)
+    assert con.execute("SELECT event_id,review_status,duplicate_of_id FROM eventposter WHERE id=204").fetchone() == (11, "approved", None)
     assert con.execute("SELECT status,last_error FROM joboutbox WHERE id=600").fetchone() == ("pending", None)
     assert con.execute("SELECT accepted_event_id,current_outcome FROM smart_update_candidate_state WHERE id=300").fetchone() == (11, "CREATED")
     assert con.execute("SELECT linked_event_ids FROM event WHERE id=30").fetchone()[0] == "[11]"
