@@ -32,7 +32,17 @@ const mediaDecision=primary?(viewport==='mobile'?resolveMobileEventCardMedia(eve
 const assetRows=assetsManifest.assets.filter((item)=>item.fixture_id===row.fixture_id); const primaryAsset=assetRows.find((item)=>item.role==='primary')||null;
 const canCalendar=!event.end_date||event.end_date===event.start_date;
 const frameWidth=Math.max(1,row.container_width-2);
-const frameHeight=primary?Number((frameWidth*(Number(primary.height)||1)/(Number(primary.width)||1)).toFixed(6)):null;
+// The resolved case describes the frame selected by the consumer, not merely
+// the asset's intrinsic ratio. Mobile visual cards deliberately use the fixed
+// horizontal 5:4 frame returned by resolveMobileEventCardMedia; only document
+// media with useNaturalAspect=true keeps the intrinsic ratio. The previous
+// intrinsic-only calculation reported 218.352148px for event.real.7906 even
+// though the actual 390px callsite rendered a 310.390625px 5:4 shell.
+const intrinsicRatio=primary?Math.max(Number(primary.width)||1,1)/Math.max(Number(primary.height)||1,1):null;
+const frameRatio=primary && viewport==='mobile' && !mediaDecision?.useNaturalAspect
+  ? Number(mediaDecision?.rowRatio)||intrinsicRatio
+  : intrinsicRatio;
+const frameHeight=primary?Number((frameWidth/frameRatio).toFixed(6)):null;
 const resolved={
   schema_version:'resolved-render-case.v1', case_id:row.case_id, component_id:row.component_id,
   contract_version:row.contract_version, contract_sha256:row.contract_sha256, authority_mode:row.authority_mode,
