@@ -428,6 +428,9 @@ async def test_authoritative_child_edit_repairs_exact_symbolic_title_without_mer
     db = Database(str(tmp_path / "authoritative-child-title-repair.sqlite"))
     await db.init()
     try:
+        # This fixed-date identity regression must not become a wall-clock
+        # product-policy test after the fixture date passes.
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
         monkeypatch.setattr(

@@ -5242,6 +5242,12 @@ TG_EVENT_4O_FALLBACK_BUDGET_KEY = "tg_event_public_writer_4o"
 TG_EVENT_REWRITE_PROMPT_VERSION = "tg-event-hook-v8-evidence-quoted-sentences"
 TG_EVENT_INTRO_MAX_CHARS = 330
 TG_EVENT_PROMO_INTRO_MAX_CHARS = 500
+# Structured output repeats every public sentence as an exact evidence quote.
+# Keep the provider ceiling comfortably above the plain-text hook length; the
+# response schema below bounds the array so this headroom cannot create an
+# unbounded completion.
+TG_EVENT_REWRITE_MAX_OUTPUT_TOKENS = 768
+TG_EVENT_PROMO_REWRITE_MAX_OUTPUT_TOKENS = 1024
 _TG_EVENT_REPETITIVE_OPENING_RE = re.compile(
     r"^\s*(?:хотите|готовы|что\s+здесь\s+стоит\s+увидеть)\b",
     re.IGNORECASE,
@@ -5261,6 +5267,8 @@ _TG_EVENT_HOOK_RESPONSE_SCHEMA = {
     "properties": {
         "sentences": {
             "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
             "items": {
                 "type": "object",
                 "properties": {
@@ -6215,6 +6223,11 @@ async def build_tg_event_hook_text(
             "Telegram public writer unavailable: no raw organizer source evidence"
         )
     max_chars = TG_EVENT_PROMO_INTRO_MAX_CHARS if promo_highlight else TG_EVENT_INTRO_MAX_CHARS
+    max_output_tokens = (
+        TG_EVENT_PROMO_REWRITE_MAX_OUTPUT_TOKENS
+        if promo_highlight
+        else TG_EVENT_REWRITE_MAX_OUTPUT_TOKENS
+    )
     promo_instruction = ""
     if promo_highlight:
         promo_instruction = (
@@ -6283,7 +6296,7 @@ async def build_tg_event_hook_text(
                 # path rejects it with INVALID_ARGUMENT/additional_properties.
                 "response_json_schema": _TG_EVENT_HOOK_RESPONSE_SCHEMA,
             },
-            max_output_tokens=360 if promo_highlight else 260,
+            max_output_tokens=max_output_tokens,
         )
     except Exception:
         logging.warning(
@@ -6315,7 +6328,7 @@ async def build_tg_event_hook_text(
         prompt,
         db=db,
         max_chars=max_chars,
-        max_output_tokens=360 if promo_highlight else 260,
+        max_output_tokens=max_output_tokens,
     )
 
 
