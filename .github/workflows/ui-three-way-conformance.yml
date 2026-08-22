@@ -28,12 +28,13 @@ on:
 
 jobs:
   conformance:
-    # REPIN_AFTER_DESIGN_COMMIT_A: both this reusable-workflow ref and the
-    # design_sha input must move together to the immutable integration SHA.
-    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@0882917a1328607c498d82e4c2a652bbd3df946d
+    # The workflow implementation/catalog and the materialized Penpot design
+    # identity are separate immutable commits; never replace either with a branch.
+    uses: onedayonemasterpiece/lovekgd-design-system/.github/workflows/ui-three-way-conformance.yml@a6b4042342ae70557bc9206d5709b1f039e2e449
     with:
+      design_tooling_sha: a6b4042342ae70557bc9206d5709b1f039e2e449
       design_sha: 0882917a1328607c498d82e4c2a652bbd3df946d
-      events_tooling_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      events_tooling_sha: 713a035a8aaa9ecfdcdd5fbd817fe504160df2f5
       astro_sha: 22ebe3c5e92b13684cca32c14357ef7b91834977
       batch: ${{ github.event_name == 'workflow_dispatch' && inputs.batch || '' }}
       publish_telegram: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_telegram }}

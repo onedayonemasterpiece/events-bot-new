@@ -78,10 +78,11 @@ test('checked inventory is the exact eight-fixture Astro-generated output', () =
 
 test('caller uses only immutable conformance pins and the bounded batch name', () => {
   const workflow = readFileSync(resolve(root, '.github/workflows/ui-three-way-conformance.yml'), 'utf8');
-  assert(workflow.includes('@0882917a1328607c498d82e4c2a652bbd3df946d'));
+  assert(workflow.includes('@a6b4042342ae70557bc9206d5709b1f039e2e449'));
+  assert(workflow.includes('design_tooling_sha: a6b4042342ae70557bc9206d5709b1f039e2e449'));
   assert(workflow.includes('design_sha: 0882917a1328607c498d82e4c2a652bbd3df946d'));
   assert(workflow.includes('astro_sha: 22ebe3c5e92b13684cca32c14357ef7b91834977'));
-  assert(workflow.includes('events_tooling_sha:'));
+  assert(workflow.includes('events_tooling_sha: 713a035a8aaa9ecfdcdd5fbd817fe504160df2f5'));
   assert(workflow.includes('event-card-large-current-v2'));
   assert(!workflow.includes('@feature/'));
   assert(!workflow.includes('design_ref:'));

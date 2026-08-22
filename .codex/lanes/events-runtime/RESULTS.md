@@ -93,3 +93,13 @@ reusable workflow does not yet expose the new input contract, so a remote run is
 not claimed here. The seven-case batch was not fabricated or claimed in this
 lane; it must run after the design batch manifest/evidence paths and immutable
 workflow SHA are integrated.
+
+## Root integration closure
+
+The reusable workflow is now pinned to design tooling/catalog commit
+`a6b4042342ae70557bc9206d5709b1f039e2e449`, while the separate materialized
+Penpot design identity remains `0882917a1328607c498d82e4c2a652bbd3df946d`.
+The runtime checkout remains the immutable executable tooling SHA
+`713a035a8aaa9ecfdcdd5fbd817fe504160df2f5`; no caller branch or mutable ref is
+used. A real local one-case run and exact seven-case batch passed. The earlier
+`REPIN_AFTER_DESIGN_COMMIT_A` blocker is resolved.
