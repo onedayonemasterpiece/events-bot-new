@@ -118,3 +118,11 @@ ImageMagick 6 command names. Design workflow commit
 `204acdf76dcc964222534e649a2972c59e8025fd` now installs Ubuntu's `imagemagick`
 package and the pixel digest supports both ImageMagick 7 (`magick`) and 6
 (`convert`).
+
+Remote run `32582604760` then proved all seven source Astro/Penpot images match
+the reviewed canonical decoded pixels. Only ImageMagick 6 versus 7 rounding in
+the derived overlay/diff differed. Design commit
+`7a26772828a5d74a9683c08e7e6774ff15ac61a5` keeps fail-closed source-image
+review binding and permits the declared portable blend/difference transform to
+be regenerated; each run's actual derivative hashes remain bound in its final
+receipt.
