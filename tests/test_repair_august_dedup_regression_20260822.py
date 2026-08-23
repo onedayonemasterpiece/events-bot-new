@@ -665,7 +665,23 @@ def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
     _make_db(db)
     con = sqlite3.connect(db)
     con.execute(
-        "UPDATE event SET end_date='2026-10-30',end_date_is_inferred=0 WHERE id=21"
+        "UPDATE event SET end_date='2026-10-30',end_date_is_inferred=0,"
+        "lifecycle_status='cancelled',silent=1,identity_status='merged',"
+        "merged_into_event_id=20 WHERE id=21"
+    )
+    con.execute("UPDATE event_source SET event_id=20 WHERE id=121")
+    con.execute(
+        "INSERT INTO event_source_fact(id,event_id,source_id,fact) "
+        "VALUES(503,20,121,'restored occurrence fact')"
+    )
+    con.execute(
+        "INSERT INTO eventposter(id,event_id,poster_hash,raw_sha256,review_status) "
+        "VALUES(220,20,'restored-poster','restored-raw','duplicate')"
+    )
+    con.execute(
+        "INSERT INTO smart_update_candidate_state"
+        "(id,occurrence_key,current_outcome,accepted_event_id,diagnostic_event_id,reason) "
+        "VALUES(302,'occ-restore','MERGED',20,20,'prior incident merge')"
     )
     con.commit()
     con.close()
@@ -673,9 +689,59 @@ def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
     manifest["clusters"][1]["content_updates"] = [
         {
             "event_id": 21,
-            "before": {"end_date": "2026-10-30", "end_date_is_inferred": 0},
-            "after": {"end_date": None, "end_date_is_inferred": 0},
+            "before": {
+                "end_date": "2026-10-30",
+                "end_date_is_inferred": 0,
+                "lifecycle_status": "cancelled",
+                "silent": 1,
+                "identity_status": "merged",
+                "merged_into_event_id": 20,
+            },
+            "after": {
+                "end_date": None,
+                "end_date_is_inferred": 0,
+                "lifecycle_status": "active",
+                "silent": 0,
+                "identity_status": "canonical",
+                "merged_into_event_id": None,
+            },
         }
+    ]
+    manifest["clusters"][1]["state_repairs"] = [
+        {
+            "table": "event_source",
+            "id": 121,
+            "before": {"event_id": 20},
+            "after": {"event_id": 21},
+        },
+        {
+            "table": "event_source_fact",
+            "id": 503,
+            "before": {"event_id": 20},
+            "after": {"event_id": 21},
+        },
+        {
+            "table": "eventposter",
+            "id": 220,
+            "before": {"event_id": 20, "review_status": "duplicate"},
+            "after": {"event_id": 21, "review_status": "approved"},
+        },
+        {
+            "table": "smart_update_candidate_state",
+            "id": 302,
+            "before": {
+                "accepted_event_id": 20,
+                "diagnostic_event_id": 20,
+                "current_outcome": "MERGED",
+                "reason": "prior incident merge",
+            },
+            "after": {
+                "accepted_event_id": 21,
+                "diagnostic_event_id": 20,
+                "current_outcome": "CREATED",
+                "reason": "source-grounded occurrence restoration",
+            },
+        },
     ]
     manifest["census"]["sha256"] = repair.census_hash(
         manifest["census"]["cutoff"], manifest["clusters"]
@@ -691,8 +757,13 @@ def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
     assert applied["changed"] is True
     con = sqlite3.connect(db)
     assert con.execute(
-        "SELECT end_date,end_date_is_inferred FROM event WHERE id=21"
-    ).fetchone() == (None, 0)
+        "SELECT end_date,end_date_is_inferred,lifecycle_status,silent,"
+        "identity_status,merged_into_event_id FROM event WHERE id=21"
+    ).fetchone() == (None, 0, "active", 0, "canonical", None)
+    assert con.execute("SELECT event_id FROM event_source WHERE id=121").fetchone()[0] == 21
+    assert con.execute("SELECT event_id FROM event_source_fact WHERE id=503").fetchone()[0] == 21
+    assert con.execute("SELECT event_id,review_status FROM eventposter WHERE id=220").fetchone() == (21, "approved")
+    assert con.execute("SELECT accepted_event_id,current_outcome FROM smart_update_candidate_state WHERE id=302").fetchone() == (21, "CREATED")
     con.close()
     assert repair.run(db, manifest_path, "verify")["status"] == "verified"
     noop = repair.run(db, manifest_path, "apply")
@@ -703,8 +774,13 @@ def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
     assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
     con = sqlite3.connect(db)
     assert con.execute(
-        "SELECT end_date,end_date_is_inferred FROM event WHERE id=21"
-    ).fetchone() == ("2026-10-30", 0)
+        "SELECT end_date,end_date_is_inferred,lifecycle_status,silent,"
+        "identity_status,merged_into_event_id FROM event WHERE id=21"
+    ).fetchone() == ("2026-10-30", 0, "cancelled", 1, "merged", 20)
+    assert con.execute("SELECT event_id FROM event_source WHERE id=121").fetchone()[0] == 20
+    assert con.execute("SELECT event_id FROM event_source_fact WHERE id=503").fetchone()[0] == 20
+    assert con.execute("SELECT event_id,review_status FROM eventposter WHERE id=220").fetchone() == (20, "duplicate")
+    assert con.execute("SELECT accepted_event_id,current_outcome FROM smart_update_candidate_state WHERE id=302").fetchone() == (20, "MERGED")
     con.close()
 
     drifted = copy.deepcopy(manifest)
@@ -715,6 +791,35 @@ def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
     manifest_path.write_text(json.dumps(drifted), encoding="utf-8")
     with pytest.raises(repair.RepairBlocked, match="content_update_before_mismatch"):
         repair.run(db, manifest_path)
+
+
+def test_merge_can_preserve_rejected_unrelated_poster_evidence(tmp_path: Path) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][0]["poster_exclusions"] = [
+        {"id": 201, "reason": "source_carrier_unrelated_media"}
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    con = sqlite3.connect(db)
+    row = con.execute(
+        "SELECT event_id,review_status,duplicate_of_id,review_reason "
+        "FROM eventposter WHERE id=201"
+    ).fetchone()
+    assert row[:3] == (11, "rejected", None)
+    assert "source_carrier_unrelated_media" in row[3]
+    con.close()
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    noop = repair.run(db, manifest_path, "apply")
+    assert noop["status"] == "noop"
+    assert noop["diff"] == []
 
 
 def test_manifest_cross_cluster_and_census_hash_are_fail_closed(tmp_path: Path) -> None:

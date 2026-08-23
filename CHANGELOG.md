@@ -14,7 +14,11 @@
   clusters may also carry allowlisted before/after CAS updates for
   `date`/`time`/`end_date` anchors; those corrections now share the same
   transaction, row backup, verify, rollback and exact second-apply receipt as
-  the dedup repair instead of requiring an unguarded SQL sidecar.
+  the dedup repair instead of requiring an unguarded SQL sidecar. The same
+  allowlisted state-repair contract can restore a previously merged genuine
+  occurrence's source/fact/poster/candidate ownership, and a reviewed merge may
+  retain unrelated source-carrier images as rejected evidence on the obsolete
+  shell instead of moving them into reader media.
 
 - Fixed: Qtickets URLs now remain product/series recall signals rather than
   occurrence IDs. Parser occurrence identity uses the concrete date/time, so
