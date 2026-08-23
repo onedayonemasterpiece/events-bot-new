@@ -1,0 +1,95 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import DateListingSurface from '../listings/DateListingSurface.astro';
+
+interface Props {
+  kind: 'today' | 'tomorrow' | 'date';
+  title: string;
+  date: string;
+  dateLabel: string;
+  events: PreviewEvent[];
+  state?: 'ready' | 'loading' | 'empty' | 'error';
+  generatedAt?: string | null;
+}
+
+const {
+  kind,
+  title,
+  date,
+  dateLabel,
+  events,
+  state = 'ready',
+  generatedAt = null,
+} = Astro.props;
+---
+
+<section
+  class="date-listing-candidate"
+  data-date-listing-candidate-root
+  data-date-listing-candidate-state={state}
+  aria-busy={state === 'loading' ? 'true' : undefined}
+>
+  {state === 'ready' ? (
+    <DateListingSurface kind={kind} title={title} date={date} dateLabel={dateLabel} events={events} generatedAt={generatedAt} />
+  ) : (
+    <div class="date-listing-candidate__state" role={state === 'error' ? 'alert' : 'status'}>
+      <header>
+        <small>{dateLabel}</small>
+        <h1>{title}</h1>
+      </header>
+      {state === 'loading' ? (
+        <div class="date-listing-candidate__skeleton" aria-label="Загрузка событий">
+          <span></span><span></span><span></span>
+        </div>
+      ) : state === 'empty' ? (
+        <div class="date-listing-candidate__message">
+          <strong>Событий на эту дату пока нет</strong>
+          <p>Можно выбрать соседний день или открыть календарь.</p>
+          <a href="/zavtra/">Выбрать дату</a>
+        </div>
+      ) : (
+        <div class="date-listing-candidate__message date-listing-candidate__message--error">
+          <strong>Не удалось загрузить события</strong>
+          <p>Сохранённая дата остаётся видимой. Повторите попытку.</p>
+          <button type="button" data-date-listing-retry>Повторить</button>
+        </div>
+      )}
+    </div>
+  )}
+</section>
+
+<style>
+  .date-listing-candidate { min-width:0; }
+  .date-listing-candidate__state {
+    width:min(1180px,calc(100% - 32px)); min-height:420px; margin:28px auto;
+    padding:28px; border:1px solid #e1d3c2; border-radius:28px; background:#fffdf8;
+    color:#221a14; box-shadow:0 18px 45px rgba(72,45,25,.12);
+  }
+  .date-listing-candidate__state header small { color:#6d6259; font-weight:720; }
+  .date-listing-candidate__state h1 { margin:4px 0 26px; font-size:clamp(2rem,5vw,4rem); line-height:.98; letter-spacing:-.05em; }
+  .date-listing-candidate__skeleton { display:grid; gap:16px; }
+  .date-listing-candidate__skeleton span {
+    display:block; min-height:92px; border-radius:14px;
+    background:linear-gradient(105deg,#efe3d3 8%,#fff8ed 20%,#efe3d3 34%); background-size:220% 100%;
+    animation:date-listing-candidate-pulse 1.25s ease-in-out infinite;
+  }
+  .date-listing-candidate__message { max-width:620px; padding:28px; border-radius:20px; background:#f2e7d7; }
+  .date-listing-candidate__message--error { background:#fff0ec; }
+  .date-listing-candidate__message strong { display:block; font-size:1.25rem; line-height:1.2; }
+  .date-listing-candidate__message p { margin:8px 0 18px; color:#6d6259; }
+  .date-listing-candidate__message a,
+  .date-listing-candidate__message button {
+    min-height:48px; display:inline-flex; align-items:center; padding:0 18px; border:0; border-radius:14px;
+    background:#793014; color:#fff; font:850 14px/1 Inter,system-ui,sans-serif; text-decoration:none; cursor:pointer;
+  }
+  .date-listing-candidate__message a:focus-visible,
+  .date-listing-candidate__message button:focus-visible { outline:3px solid #98401f; outline-offset:3px; }
+  @keyframes date-listing-candidate-pulse { to { background-position-x:-220%; } }
+  @media (max-width:720px) {
+    .date-listing-candidate__state { width:auto; min-height:350px; margin:12px; padding:20px 14px; border-radius:20px; }
+    .date-listing-candidate__state h1 { margin-bottom:20px; font-size:36px; }
+    .date-listing-candidate__skeleton span { min-height:112px; }
+    .date-listing-candidate__message { padding:20px 16px; border-radius:16px; }
+  }
+  @media (prefers-reduced-motion:reduce) { .date-listing-candidate__skeleton span { animation:none; } }
+</style>

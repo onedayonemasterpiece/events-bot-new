@@ -1,0 +1,72 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import DateListingCandidateSurface from '../../../components/candidate/DateListingCandidateSurface.astro';
+import projection from '../../../data/candidate/date-listing-shell-v1.generated.json';
+import type { PreviewEvent } from '../../../lib/types';
+
+export function getStaticPaths() {
+  return projection.representations.map((representation) => ({ params:{ representation:representation.id }, props:{ representation } }));
+}
+
+const { representation } = Astro.props;
+const fixtureMap = new Map(projection.fixtures.map((fixture) => [fixture.fixture_id, fixture.preview_event as PreviewEvent]));
+const events = representation.fixture_ids.map((id) => fixtureMap.get(id)).filter(Boolean) as PreviewEvent[];
+const isTomorrow = representation.date_kind === 'tomorrow';
+const isToday = representation.date_kind === 'today';
+const kind = isToday ? 'today' : isTomorrow ? 'tomorrow' : 'date';
+const title = isToday ? 'Сегодня' : isTomorrow ? 'Завтра' : new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',timeZone:'Europe/Kaliningrad'}).format(new Date(`${representation.date}T12:00:00+02:00`));
+const dateLabel = new Intl.DateTimeFormat('ru-RU',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Kaliningrad'}).format(new Date(`${representation.date}T12:00:00+02:00`));
+const isStateMatrix = representation.state === 'state-matrix';
+---
+
+<EventLayout
+  title={`${representation.id} · Date Listing + Shell v1 candidate`}
+  description="Изолированная noindex candidate-поверхность для Astro ↔ SoT ↔ Penpot сверки."
+  canonicalUrl={`https://kenigevents.ru/lab/date-listing-shell-v1/${representation.id}/`}
+  structuredData={[]}
+  headerCurrent={isToday ? 'today' : isTomorrow ? 'tomorrow' : undefined}
+  mobileSection="dates"
+  mobileBottomMode="nav"
+  noindex={true}
+>
+  <main
+    id="main"
+    class:list={["ke-listing-page","date-listing-candidate-page",isStateMatrix && "date-listing-candidate-page--states"]}
+    data-date-listing-shell-representation={representation.id}
+    data-fixture-manifest-id={projection.manifest_id}
+    data-fixture-manifest-version={projection.manifest_version}
+    data-fixture-source-sha256={projection.source_manifest_sha256}
+    data-fixture-ids={representation.fixture_ids.join(',')}
+  >
+    {isStateMatrix ? (
+      <div class="date-listing-state-matrix" data-date-listing-state-matrix>
+        {(['loading','empty','error'] as const).map((state) => (
+          <DateListingCandidateSurface kind="date" title={title} date={representation.date} dateLabel={dateLabel} events={[]} state={state} />
+        ))}
+      </div>
+    ) : (
+      <DateListingCandidateSurface kind={kind} title={title} date={representation.date} dateLabel={dateLabel} events={events} state="ready" generatedAt={projection.source_corpus.reference_clock.reference_iso} />
+    )}
+  </main>
+</EventLayout>
+
+<style is:global>
+  .date-listing-candidate-page--states { padding-block:16px 96px; }
+  .date-listing-state-matrix { width:min(1180px,calc(100% - 32px)); margin:0 auto; display:grid; gap:16px; }
+  .date-listing-state-matrix .date-listing-candidate__state { width:100%; min-height:0; margin:0; }
+  @media (min-width:760px) { .date-listing-state-matrix { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:759px) { .date-listing-state-matrix { width:auto; margin:0 12px; } .date-listing-state-matrix .date-listing-candidate__state { margin:0; } }
+</style>
+
+{representation.id === 'full-page-mobile-shell' && (
+  <script>
+    const shouldOpen = new URLSearchParams(location.search).get('menu') === 'open';
+    if (shouldOpen) {
+      const menu = document.querySelector('.mobile-discovery-menu--reference4');
+      if (menu instanceof HTMLDetailsElement) {
+        menu.open = true;
+        menu.classList.add('is-open-settled');
+      }
+    }
+  </script>
+)}
