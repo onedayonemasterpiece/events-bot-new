@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scan public/canonical exhibition rows for high-confidence duplicate cards.
+"""Recall and classify public/canonical exhibition duplicate candidates.
 
 This is an operational acceptance helper for the Smart Update Vector Identity Gate:
 after `SMART_UPDATE_IDENTITY_GATE=enforce`, the daily/static-site job can run this
@@ -17,7 +17,7 @@ import sys
 from dataclasses import dataclass, asdict
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 _TOKEN_RE = re.compile(r"[\wа-яё]+", re.IGNORECASE)
 _ISO_DATE_RE = re.compile(r"20\d{2}-\d{2}-\d{2}")
@@ -65,6 +65,158 @@ class DuplicatePair:
     venue: str | None
     left_added_at: str | None = None
     right_added_at: str | None = None
+
+
+_AUTHORITATIVE_REVIEW_STAGES = {
+    "final_identity_adjudicator",
+    "final_merge_identity_gate",
+    "manual_pair_review_v1",
+}
+_KEEP_DISTINCT_RELATIONS = {"distinct_event", "distinct_occurrence"}
+_CONFIRMED_DECISIONS = {"CONFIRMED_DUPLICATE", "FINAL_MATCH"}
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(str(value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _nonempty_strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _load_authoritative_pair_reviews(
+    conn: sqlite3.Connection,
+    pairs: Iterable[DuplicatePair],
+) -> dict[tuple[int, int], list[dict[str, Any]]]:
+    """Load only pair-correlated final/manual verdicts from the durable ledger.
+
+    Event IDs locate a candidate review; they are never sufficient evidence.
+    A verdict must also be final/manual, source-grounded, confident and correlated
+    either directly by ``candidate_event_id`` or through its candidate-state ID.
+    ``linked_event_ids`` is deliberately neither selected nor inspected.
+    """
+
+    pair_keys = {tuple(sorted((pair.left_id, pair.right_id))) for pair in pairs}
+    out: dict[tuple[int, int], list[dict[str, Any]]] = {key: [] for key in pair_keys}
+    log_cols = _columns(conn, "event_identity_decision_log")
+    if not pair_keys or not {"event_id", "decision", "decision_payload"} <= log_cols:
+        return out
+
+    state_pairs: dict[int, tuple[int, int]] = {}
+    state_cols = _columns(conn, "smart_update_candidate_state")
+    if {"id", "accepted_event_id", "diagnostic_event_id"} <= state_cols:
+        for row in conn.execute(
+            "SELECT id, accepted_event_id, diagnostic_event_id "
+            "FROM smart_update_candidate_state "
+            "WHERE accepted_event_id IS NOT NULL AND diagnostic_event_id IS NOT NULL"
+        ):
+            key = tuple(sorted((int(row[1]), int(row[2]))))
+            if key in pair_keys:
+                state_pairs[int(row[0])] = key
+
+    candidate_expr = "candidate_event_id" if "candidate_event_id" in log_cols else "NULL"
+    confidence_expr = "confidence" if "confidence" in log_cols else "NULL"
+    reason_expr = "decision_reason" if "decision_reason" in log_cols else "NULL"
+    decided_by_expr = "decided_by" if "decided_by" in log_cols else "NULL"
+    created_expr = "created_at" if "created_at" in log_cols else "NULL"
+    sql = f"""
+        SELECT id, event_id, {candidate_expr}, decision, {reason_expr},
+               {confidence_expr}, {decided_by_expr}, decision_payload, {created_expr}
+        FROM event_identity_decision_log
+        ORDER BY id
+    """
+    for row in conn.execute(sql):
+        payload = _json_object(row[7])
+        stage = str(payload.get("stage") or "")
+        if stage not in _AUTHORITATIVE_REVIEW_STAGES:
+            continue
+        key: tuple[int, int] | None = None
+        if row[1] is not None and row[2] is not None:
+            direct = tuple(sorted((int(row[1]), int(row[2]))))
+            if direct in pair_keys:
+                key = direct
+        if key is None:
+            try:
+                state_id = int(payload.get("candidate_state_id"))
+            except (TypeError, ValueError):
+                state_id = 0
+            key = state_pairs.get(state_id)
+        if key is None:
+            continue
+
+        decision = str(payload.get("action") or row[3] or "")
+        relation = str(payload.get("relation") or "")
+        evidence = _nonempty_strings(
+            payload.get("evidence") or payload.get("source_grounded_evidence")
+        )
+        conflicts = _nonempty_strings(payload.get("blocking_conflicts"))
+        try:
+            confidence = float(row[5] or payload.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+
+        disposition: str | None = None
+        if (
+            decision == "FINAL_DISTINCT"
+            and relation in _KEEP_DISTINCT_RELATIONS
+            and confidence >= 0.8
+            and evidence
+            and conflicts
+        ):
+            disposition = "KEEP_DISTINCT"
+        elif (
+            decision in _CONFIRMED_DECISIONS
+            and relation == "same_event"
+            and confidence >= 0.8
+            and evidence
+        ):
+            disposition = "CONFIRMED_DUPLICATE"
+        if disposition is None:
+            continue
+        out[key].append(
+            {
+                "disposition": disposition,
+                "ledger_id": int(row[0]),
+                "stage": stage,
+                "decision": decision,
+                "relation": relation,
+                "confidence": round(confidence, 3),
+                "reason": row[4],
+                "decided_by": row[6],
+                "created_at": row[8],
+                "evidence": evidence,
+                "blocking_conflicts": conflicts,
+            }
+        )
+    return out
+
+
+def _classify_pairs(
+    pairs: Iterable[DuplicatePair],
+    reviews: dict[tuple[int, int], list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    classified: list[dict[str, Any]] = []
+    for pair in pairs:
+        key = tuple(sorted((pair.left_id, pair.right_id)))
+        evidence = reviews.get(key) or []
+        dispositions = {item["disposition"] for item in evidence}
+        # Conflicting authoritative reviews fail closed and require a new review.
+        disposition = next(iter(dispositions)) if len(dispositions) == 1 else "UNRESOLVED"
+        row = asdict(pair)
+        row["disposition"] = disposition
+        row["verdict_evidence"] = evidence
+        classified.append(row)
+    return classified
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -226,6 +378,16 @@ def find_high_confidence_duplicates(events: Iterable[PublicExhibition]) -> list[
 def _prometheus(payload: dict) -> str:
     lines = [
         f"events_public_exhibition_rows_total {payload['public_exhibition_count']}",
+        f'events_public_exhibition_candidate_pairs_total {payload["candidate_pair_total_count"]}',
+        f'events_public_exhibition_confirmed_duplicate_pairs_total {payload["confirmed_duplicate_total_count"]}',
+        f'events_public_exhibition_keep_distinct_pairs_total {payload["keep_distinct_total_count"]}',
+        f'events_public_exhibition_unresolved_pairs_total {payload["unresolved_total_count"]}',
+        f'events_public_exhibition_candidate_pairs_since_total{{window_days="{payload["since_days"]}"}} {payload["candidate_pair_window_count"]}',
+        f'events_public_exhibition_confirmed_duplicate_pairs_since_total{{window_days="{payload["since_days"]}"}} {payload["confirmed_duplicate_window_count"]}',
+        f'events_public_exhibition_keep_distinct_pairs_since_total{{window_days="{payload["since_days"]}"}} {payload["keep_distinct_window_count"]}',
+        f'events_public_exhibition_unresolved_pairs_since_total{{window_days="{payload["since_days"]}"}} {payload["unresolved_window_count"]}',
+        # Compatibility during the metric migration: "high" now means
+        # actionable (confirmed + unresolved), not every recall candidate.
         f'events_public_exhibition_duplicate_pairs_total{{confidence="high"}} {payload["high_confidence_duplicate_total_count"]}',
         f'events_public_exhibition_duplicate_clusters_total{{confidence="high"}} {payload["high_confidence_duplicate_total_cluster_count"]}',
         f'events_public_exhibition_duplicate_pairs_since_total{{confidence="high",window_days="{payload["since_days"]}"}} {payload["high_confidence_duplicate_count"]}',
@@ -285,23 +447,80 @@ def build_audit_payload(
     conn = sqlite3.connect(f"file:{Path(db_path)}?mode=ro", uri=True)
     try:
         rows = load_public_exhibitions(conn, current)
-        all_duplicates = find_high_confidence_duplicates(rows)
+        all_candidates = find_high_confidence_duplicates(rows)
+        reviews = _load_authoritative_pair_reviews(conn, all_candidates)
+        all_classified = _classify_pairs(all_candidates, reviews)
     finally:
         conn.close()
 
-    window_duplicates = [pair for pair in all_duplicates if _pair_touches_since_window(pair, since)]
+    pair_by_key = {
+        tuple(sorted((pair.left_id, pair.right_id))): pair for pair in all_candidates
+    }
+    window_classified = [
+        item
+        for item in all_classified
+        if _pair_touches_since_window(
+            pair_by_key[tuple(sorted((int(item["left_id"]), int(item["right_id"]))))],
+            since,
+        )
+    ]
+
+    def selected(items: list[dict[str, Any]], disposition: str) -> list[dict[str, Any]]:
+        return [item for item in items if item["disposition"] == disposition]
+
+    window_confirmed = selected(window_classified, "CONFIRMED_DUPLICATE")
+    window_keep_distinct = selected(window_classified, "KEEP_DISTINCT")
+    window_unresolved = selected(window_classified, "UNRESOLVED")
+    all_confirmed = selected(all_classified, "CONFIRMED_DUPLICATE")
+    all_keep_distinct = selected(all_classified, "KEEP_DISTINCT")
+    all_unresolved = selected(all_classified, "UNRESOLVED")
+    window_actionable = window_confirmed + window_unresolved
+    all_actionable = all_confirmed + all_unresolved
+
+    assert len(window_classified) == len(window_confirmed) + len(window_keep_distinct) + len(window_unresolved)
+    assert len(all_classified) == len(all_confirmed) + len(all_keep_distinct) + len(all_unresolved)
     return {
         "current_date": current.isoformat(),
         "since_days": since_days,
         "since_date": since.isoformat(),
         "public_exhibition_count": len(rows),
-        "high_confidence_duplicate_count": len(window_duplicates),
-        "high_confidence_duplicate_cluster_count": _cluster_count(window_duplicates),
-        "high_confidence_duplicate_total_count": len(all_duplicates),
-        "high_confidence_duplicate_total_cluster_count": _cluster_count(all_duplicates),
+        # Primary acceptance counts cover the complete current public corpus.
+        "candidate_pair_count": len(all_classified),
+        "confirmed_duplicate_count": len(all_confirmed),
+        "keep_distinct_count": len(all_keep_distinct),
+        "unresolved_count": len(all_unresolved),
+        "candidate_pair_window_count": len(window_classified),
+        "confirmed_duplicate_window_count": len(window_confirmed),
+        "keep_distinct_window_count": len(window_keep_distinct),
+        "unresolved_window_count": len(window_unresolved),
+        "candidate_pair_total_count": len(all_classified),
+        "confirmed_duplicate_total_count": len(all_confirmed),
+        "keep_distinct_total_count": len(all_keep_distinct),
+        "unresolved_total_count": len(all_unresolved),
+        "high_confidence_duplicate_count": len(window_actionable),
+        "high_confidence_duplicate_cluster_count": _cluster_count(
+            [pair_by_key[tuple(sorted((int(item["left_id"]), int(item["right_id"]))))] for item in window_actionable]
+        ),
+        "high_confidence_duplicate_total_count": len(all_actionable),
+        "high_confidence_duplicate_total_cluster_count": _cluster_count(
+            [pair_by_key[tuple(sorted((int(item["left_id"]), int(item["right_id"]))))] for item in all_actionable]
+        ),
         "gate_suppressed": {},
-        "duplicates": [asdict(pair) for pair in window_duplicates],
-        "all_duplicates": [asdict(pair) for pair in all_duplicates],
+        "candidate_pairs": all_classified,
+        "confirmed_duplicates": all_confirmed,
+        "keep_distinct_pairs": all_keep_distinct,
+        "unresolved_pairs": all_unresolved,
+        "window_candidate_pairs": window_classified,
+        "window_confirmed_duplicates": window_confirmed,
+        "window_keep_distinct_pairs": window_keep_distinct,
+        "window_unresolved_pairs": window_unresolved,
+        "all_candidate_pairs": all_classified,
+        "all_confirmed_duplicates": all_confirmed,
+        "all_keep_distinct_pairs": all_keep_distinct,
+        "all_unresolved_pairs": all_unresolved,
+        # Backwards-compatible actionable aliases.
+        "duplicates": window_actionable,
+        "all_duplicates": all_actionable,
     }
 
 
@@ -320,7 +539,7 @@ def main() -> int:
         current = date.fromisoformat(args.current_date)
         since_date = date.fromisoformat(args.since_date) if args.since_date else None
         payload = build_audit_payload(args.db, current=current, since_days=args.since_days, since_date=since_date)
-        duplicates = [DuplicatePair(**pair) for pair in payload["duplicates"]]
+        candidate_pairs = list(payload["candidate_pairs"])
     except Exception as exc:
         print(f"audit_public_exhibition_duplicates failed: {exc}", file=sys.stderr)
         return 3
@@ -333,12 +552,19 @@ def main() -> int:
     if output_format == "text":
         print(
             f"public_exhibitions={payload['public_exhibition_count']} "
-            f"high_confidence_duplicates_since={payload['high_confidence_duplicate_count']} "
-            f"high_confidence_duplicates_total={payload['high_confidence_duplicate_total_count']}"
+            f"candidates={payload['candidate_pair_count']} "
+            f"confirmed={payload['confirmed_duplicate_count']} "
+            f"keep_distinct={payload['keep_distinct_count']} "
+            f"unresolved={payload['unresolved_count']} "
+            f"window_candidates={payload['candidate_pair_window_count']}"
         )
-        for pair in duplicates:
-            print(f"{pair.left_id} {pair.right_id} {pair.confidence:.3f} {pair.reason}")
-    return 2 if args.fail_on_high_confidence and duplicates else 0
+        for pair in candidate_pairs:
+            print(
+                f"{pair['left_id']} {pair['right_id']} "
+                f"{float(pair['confidence']):.3f} {pair['disposition']} {pair['reason']}"
+            )
+    actionable_count = int(payload["confirmed_duplicate_count"]) + int(payload["unresolved_count"])
+    return 2 if args.fail_on_high_confidence and actionable_count else 0
 
 
 if __name__ == "__main__":

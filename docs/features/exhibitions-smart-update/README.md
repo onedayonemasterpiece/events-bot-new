@@ -74,17 +74,28 @@ python3 scripts/inspect/audit_public_exhibition_duplicates.py \
 ```
 
 The monitor applies a schema-adaptive public gate (`identity_status=canonical`,
-`merged_into_event_id IS NULL`, active lifecycle, valid ISO dates), selects
-current/future exhibition-like rows, and reports high-confidence pairs where
-long-running exhibition ranges overlap and title/source/venue evidence indicates
-one public identity. `events_public_exhibition_duplicate_pairs_total` reports all
-currently visible high-confidence pairs; `*_since_total` is the rollout-window
-acceptance metric and, when `event.added_at` exists, includes pairs where either
+`merged_into_event_id IS NULL`, active lifecycle, valid ISO dates). Overlapping
+range/title/source/venue similarity is **recall only**. Every candidate is then
+partitioned as `CONFIRMED_DUPLICATE`, `KEEP_DISTINCT`, or `UNRESOLVED` from a
+pair-correlated final/manual identity-ledger verdict. `KEEP_DISTINCT` requires
+confidence ≥0.8, concrete source-grounded evidence and a concrete blocking
+conflict. IDs only, intermediate decisions, stale/conflicting evidence and
+`linked_event_ids` never authorize that disposition. The audit exposes
+`candidate_pair_count`, `confirmed_duplicate_count`, `keep_distinct_count` and
+`unresolved_count` for the complete current corpus, whose last three always sum
+to the first. The separate `*_window_count` fields and Prometheus
+`*_since_total` series describe the rollout window but never weaken the
+full-current success gate. When `event.added_at` exists, the window includes pairs where either
 row was added inside the explicit `since_date`/`EXHIBITION_DUPLICATE_AUDIT_SINCE_DATE` rollout start, or `current_date - since_days` when no explicit start is set. If a legacy/test schema lacks
 `added_at`, the monitor fails closed and counts the pair in the window. Rollout
-closure requires:
+success requires the full-current JSON counts and total series to be zero;
+window series remain diagnostic only:
 
-- `events_public_exhibition_duplicate_pairs_since_total{confidence="high",window_days="14"} 0`;
+- `confirmed_duplicate_count=0` and `unresolved_count=0`;
+- `events_public_exhibition_confirmed_duplicate_pairs_total 0`;
+- `events_public_exhibition_unresolved_pairs_total 0`;
+- `events_public_exhibition_confirmed_duplicate_pairs_since_total{window_days="14"} 0`;
+- `events_public_exhibition_unresolved_pairs_since_total{window_days="14"} 0`;
 - no critical false positives on recurring/multi-session controls;
 - any detected pair is treated as an incident/regression, not auto-merged by the
   monitor.
@@ -100,8 +111,9 @@ EXHIBITION_DUPLICATE_AUDIT_SINCE_DAYS=14
 ```
 
 Scheduled runs are read-only, write `ops_run(kind='exhibition_duplicate_audit')`,
-alert the superadmin/admin chat on high-confidence pairs, and by default raise a
-scheduler job error after recording `status='failed'`.
+alert the superadmin/admin chat on confirmed or unresolved pairs, and by default
+raise after recording `status='failed'`. A candidate set consisting entirely of
+grounded `KEEP_DISTINCT` verdicts records `status='success'`.
  The scheduled audit also embeds Smart Update identity-gate rollout counters from
 `event_identity_decision_log` (decision/veto/fail-safe/vector-error counts) and
 secret-safe env-readiness booleans into `ops_run.metrics_json` and

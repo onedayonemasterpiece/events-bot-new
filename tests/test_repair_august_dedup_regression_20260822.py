@@ -177,6 +177,7 @@ def _manifest(db: Path, path: Path) -> dict:
         {
             "cluster_id": "exhibition-vs-excursion",
             "relation": "KEEP_DISTINCT",
+            "distinct_relation": "distinct_event",
             "canonical_id": 20,
             "obsolete_ids": [21],
             "reason": "different_occurrence_type",
@@ -254,6 +255,16 @@ def test_dry_run_apply_preserves_graph_cancels_jobs_and_second_apply_is_exact_no
     assert tuple(con.execute("SELECT status,last_error FROM joboutbox WHERE id=600").fetchone())[0] == "error"
     assert con.execute("SELECT status FROM joboutbox WHERE id=601").fetchone()[0] == "done"
     assert tuple(con.execute("SELECT accepted_event_id,current_outcome FROM smart_update_candidate_state WHERE id=300").fetchone()) == (10, "MERGED")
+    distinct_review = con.execute(
+        "SELECT event_id,candidate_event_id,decision,decision_payload "
+        "FROM event_identity_decision_log WHERE decision='FINAL_DISTINCT'"
+    ).fetchone()
+    assert distinct_review is not None
+    assert tuple(distinct_review[:3]) == (20, 21, "FINAL_DISTINCT")
+    distinct_payload = json.loads(str(distinct_review[3]))
+    assert distinct_payload["stage"] == "manual_pair_review_v1"
+    assert distinct_payload["evidence"] == ["separate admission and time"]
+    assert distinct_payload["blocking_conflicts"] == ["event_type"]
     # Append-only attempt history and diagnostic evidence are not repointed.
     assert tuple(con.execute("SELECT accepted_event_id,terminal_outcome FROM smart_update_attempt WHERE id=400").fetchone()) == (11, "CREATED")
     assert con.execute("SELECT diagnostic_event_id FROM smart_update_candidate_state WHERE id=301").fetchone()[0] == 11
@@ -368,6 +379,20 @@ def test_rollback_restores_rows_and_refuses_post_apply_drift(tmp_path: Path) -> 
     con.close()
     with pytest.raises(repair.RepairBlocked, match="rollback_cas_mismatch"):
         repair.run(drifted, manifest_path, "rollback")
+
+    ledger_drifted = tmp_path / "ledger-drifted.sqlite"
+    ledger_drifted.write_bytes(db.read_bytes())
+    con = sqlite3.connect(ledger_drifted)
+    con.execute(
+        "UPDATE event_identity_decision_log SET decision_payload='{}' "
+        "WHERE decision='FINAL_DISTINCT'"
+    )
+    con.commit()
+    con.close()
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(ledger_drifted, manifest_path, "verify")
+    with pytest.raises(repair.RepairBlocked, match="rollback_cas_mismatch"):
+        repair.run(ledger_drifted, manifest_path, "rollback")
 
     rolled_back = repair.run(db, manifest_path, "rollback")
     assert rolled_back["status"] == "rolled_back"
