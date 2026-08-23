@@ -22,7 +22,9 @@
   shell instead of moving them into reader media. Receipt CAS now covers every
   adjudicated unit and every stable job row, including distinct-only Events and
   completed/error jobs; rollback restores stable job fields without rewinding
-  scheduler timestamps.
+  scheduler timestamps. A receipt-level stable scope-graph also pins table
+  membership and candidate-attempt history, so post-apply source/job additions
+  or attempt mutations cannot be misreported as an exact no-op.
 
 - Fixed: Qtickets URLs now remain product/series recall signals rather than
   occurrence IDs. Parser occurrence identity uses the concrete date/time, so

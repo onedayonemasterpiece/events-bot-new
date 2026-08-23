@@ -527,6 +527,40 @@ def test_post_apply_distinct_component_source_drift_is_receipt_pinned(
         repair.run(db, manifest_path, "verify")
 
 
+@pytest.mark.parametrize("kind", ["attempt_mutation", "job_insert", "source_insert"])
+def test_post_apply_scope_graph_blocks_attempt_drift_and_stable_membership_growth(
+    tmp_path: Path, kind: str
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    if kind == "attempt_mutation":
+        con.execute(
+            "UPDATE smart_update_attempt SET terminal_outcome='MERGED' WHERE id=400"
+        )
+    elif kind == "job_insert":
+        con.execute(
+            "INSERT INTO joboutbox"
+            "(id,event_id,task,status,attempts,payload,coalesce_key,updated_at,next_run_at) "
+            "VALUES(999,10,'telegraph_build','done',1,'null','telegraph:new',"
+            "'2026-08-23T12:00:00Z','2026-08-23T12:00:00Z')"
+        )
+    else:
+        con.execute(
+            "INSERT INTO event_source"
+            "(id,event_id,source_type,source_url,canonical_source_url) "
+            "VALUES(999,20,'telegram','https://t.me/source/new',"
+            "'https://t.me/source/new')"
+        )
+    con.commit()
+    con.close()
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "apply")
+
+
 def test_rollback_restores_job_stable_fields_but_preserves_scheduler_timestamps(
     tmp_path: Path,
 ) -> None:

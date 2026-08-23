@@ -940,6 +940,22 @@ def _backup_rows(
         (str(repair["table"]), "id=?", (int(repair["id"]),))
         for repair in state_repairs
     )
+    selected_candidate_ids = [
+        int(row[0])
+        for row in con.execute(
+            f"SELECT id FROM smart_update_candidate_state WHERE accepted_event_id IN ({p}) OR diagnostic_event_id IN ({p}) ORDER BY id",
+            (*touched, *touched),
+        )
+    ]
+    if selected_candidate_ids:
+        cp = ",".join("?" for _ in selected_candidate_ids)
+        selections.append(
+            (
+                "smart_update_attempt",
+                f"candidate_state_id IN ({cp})",
+                tuple(selected_candidate_ids),
+            )
+        )
     touched_source_ids = [
         int(row[0])
         for row in con.execute(f"SELECT id FROM event_source WHERE event_id IN ({p}) ORDER BY id", tuple(touched))
@@ -1353,6 +1369,8 @@ def _receipt_current_hashes(
     audit_ids: Sequence[int],
     *,
     include_created_audits: bool,
+    scope_event_ids: Sequence[int] = (),
+    include_scope_graph: bool = False,
 ) -> dict[str, str | None]:
     result = _backup_current_hashes(con, manifest_sha)
     if include_created_audits:
@@ -1362,6 +1380,8 @@ def _receipt_current_hashes(
                 (int(audit_id),),
             ).fetchone()
             result[f"created_audit:{int(audit_id)}"] = row_hash(row) if row is not None else None
+    if include_scope_graph:
+        result["scope_graph"] = cluster_graph_hash(con, scope_event_ids)
     return result
 
 
@@ -1371,6 +1391,7 @@ def _verify(
     merges: Sequence[dict[str, Any]],
     content_updates: Sequence[dict[str, Any]],
     state_repairs: Sequence[dict[str, Any]],
+    scope_event_ids: Sequence[int],
 ) -> dict[str, Any]:
     receipt = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
     if receipt is None or receipt["status"] != "applied":
@@ -1380,11 +1401,14 @@ def _verify(
     include_created_audits = any(
         str(key).startswith("created_audit:") for key in expected_after_hashes
     )
+    include_scope_graph = "scope_graph" in expected_after_hashes
     if _receipt_current_hashes(
         con,
         manifest_sha,
         receipt_audit_ids,
         include_created_audits=include_created_audits,
+        scope_event_ids=scope_event_ids,
+        include_scope_graph=include_scope_graph,
     ) != expected_after_hashes:
         raise RepairBlocked("verification_cas_mismatch")
     missing_receipt_audits = 0
@@ -1624,7 +1648,11 @@ def _restore_row(con: sqlite3.Connection, table: str, data: dict[str, Any]) -> N
         )
 
 
-def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
+def _rollback(
+    con: sqlite3.Connection,
+    manifest_sha: str,
+    scope_event_ids: Sequence[int],
+) -> dict[str, Any]:
     receipt = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
     if receipt is None or receipt["status"] != "applied":
         raise RepairBlocked("rollback_receipt_not_applied")
@@ -1633,11 +1661,14 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
     include_created_audits = any(
         str(key).startswith("created_audit:") for key in expected_after
     )
+    include_scope_graph = "scope_graph" in expected_after
     if _receipt_current_hashes(
         con,
         manifest_sha,
         audit_ids,
         include_created_audits=include_created_audits,
+        scope_event_ids=scope_event_ids,
+        include_scope_graph=include_scope_graph,
     ) != expected_after:
         raise RepairBlocked("rollback_cas_mismatch")
     if audit_ids:
@@ -1691,6 +1722,13 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         content_updates,
         state_repairs,
     ) = _validate_manifest_shape(manifest)
+    scope_event_ids = sorted(
+        {
+            event_id
+            for unit in validation_units
+            for event_id in _unit_id_and_event_ids(unit)[1]
+        }
+    )
     path = Path(db_path).expanduser().resolve()
     if not path.is_file():
         raise RepairBlocked("database_not_found")
@@ -1765,12 +1803,17 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             raise RepairBlocked("repair_receipt_table_missing")
         if mode == "verify":
             verification = _verify(
-                con, manifest_sha, merges, content_updates, state_repairs
+                con,
+                manifest_sha,
+                merges,
+                content_updates,
+                state_repairs,
+                scope_event_ids,
             )
             con.commit()
             return {"schema_version": MANIFEST_VERSION, "incident": INCIDENT, "mode": mode, "status": "verified", "changed": False, "diff": [], "manifest_sha256": manifest_sha, "verification": verification, "cleanup_mapping": _cleanup_mapping(con, merges), "social_actions_performed": False}
         if mode == "rollback":
-            rolled_back = _rollback(con, manifest_sha)
+            rolled_back = _rollback(con, manifest_sha, scope_event_ids)
             con.commit()
             return {"schema_version": MANIFEST_VERSION, "incident": INCIDENT, "mode": mode, "status": "rolled_back", "changed": True, "manifest_sha256": manifest_sha, "rollback": rolled_back, "social_actions_performed": False}
 
@@ -1779,7 +1822,12 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             existing = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
         if existing is not None and existing["status"] == "applied":
             verification = _verify(
-                con, manifest_sha, merges, content_updates, state_repairs
+                con,
+                manifest_sha,
+                merges,
+                content_updates,
+                state_repairs,
+                scope_event_ids,
             )
             observed_timestamp_drift = json.loads(
                 str(
@@ -1832,13 +1880,20 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             manifest_sha,
             audit_ids,
             include_created_audits=True,
+            scope_event_ids=scope_event_ids,
+            include_scope_graph=True,
         )
         con.execute(
             f"UPDATE {RECEIPT_TABLE} SET status='applied',after_hashes_json=?,audit_ids_json=?,diff_json=?,applied_at=? WHERE manifest_sha=?",
             (_json(after_hashes), _json(audit_ids), _json(diff), datetime.now(timezone.utc).isoformat(), manifest_sha),
         )
         verification = _verify(
-            con, manifest_sha, merges, content_updates, state_repairs
+            con,
+            manifest_sha,
+            merges,
+            content_updates,
+            state_repairs,
+            scope_event_ids,
         )
         cleanup = _cleanup_mapping(con, merges)
         con.commit()

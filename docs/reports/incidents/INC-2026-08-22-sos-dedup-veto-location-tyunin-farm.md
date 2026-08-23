@@ -404,7 +404,10 @@ The repair CAS now separates job state as follows:
   scheduler timestamp does not invalidate an otherwise identical second
   apply. The receipt includes every adjudicated unit and all stable job rows,
   including completed/error work and distinct-only Events; rollback restores
-  stable job state without rewinding `updated_at` or `next_run_at`.
+  stable job state without rewinding `updated_at` or `next_run_at`. Its stable
+  scope-graph also pins row membership and candidate-attempt history, blocking
+  post-apply job/source additions or attempt mutations while continuing to
+  ignore scheduler-only timestamps.
 
 Manifest components may now carry explicit pair-scoped verdicts. Merge edges
 form only their reviewed equivalence groups; `PARENT_CHILD` and related
