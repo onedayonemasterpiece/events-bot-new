@@ -12,7 +12,7 @@
   component, so reviewed merge groups, parent/child edges and related-but-
   distinct pairs no longer become one blanket transitive verdict. Reviewed
   clusters may also carry allowlisted before/after CAS updates for
-  `date`/`time`/`end_date` anchors; those corrections now share the same
+  date/time/range, venue/address and ticket-contact anchors; those corrections now share the same
   transaction, row backup, verify, rollback and exact second-apply receipt as
   the dedup repair instead of requiring an unguarded SQL sidecar. The same
   allowlisted state-repair contract can restore a previously merged genuine

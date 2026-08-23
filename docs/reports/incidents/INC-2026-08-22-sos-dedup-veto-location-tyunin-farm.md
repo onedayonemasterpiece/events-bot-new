@@ -419,10 +419,10 @@ or separately sold slot stays distinct. Vendor schedule end dates are source
 facts, not the `end_date` of a one-day excursion.
 
 The incident executor therefore accepts narrowly allowlisted, manifest-local
-before/after updates only for `date`, `time`, `end_date` and
-`end_date_is_inferred` plus the lifecycle/identity fields required to restore a
-genuine occurrence shell. The full Event row hash and cluster graph still pin
-the pre-state; every explicit `before` value is rechecked under
+before/after updates for the affected occurrence anchors (`date`, `time`,
+`end_date`, venue/address and ticket contact) plus the lifecycle/identity
+fields required to restore a genuine occurrence shell. The full Event row hash
+and cluster graph still pin the pre-state; every explicit `before` value is rechecked under
 `BEGIN IMMEDIATE`. A table/field allowlist also permits the same manifest to
 restore only the selected occurrence's source, fact, poster and accepted-
 candidate ownership. Updated rows are kept in the same incident backup and are
