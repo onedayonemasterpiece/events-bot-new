@@ -822,6 +822,51 @@ def test_merge_can_preserve_rejected_unrelated_poster_evidence(tmp_path: Path) -
     assert noop["diff"] == []
 
 
+def test_state_repair_cannot_move_row_outside_adjudicated_unit(tmp_path: Path) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][1]["state_repairs"] = [
+        {
+            "table": "event_source",
+            "id": 121,
+            "before": {"event_id": 21},
+            "after": {"event_id": 30},
+        }
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(repair.RepairBlocked, match="state_repair_target_outside_unit"):
+        repair.run(db, manifest_path)
+
+
+def test_content_update_cannot_reference_event_outside_adjudicated_unit(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][1]["content_updates"] = [
+        {
+            "event_id": 21,
+            "before": {"merged_into_event_id": None},
+            "after": {"merged_into_event_id": 30},
+        }
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        repair.RepairBlocked, match="content_update_target_outside_unit"
+    ):
+        repair.run(db, manifest_path)
+
+
 def test_manifest_cross_cluster_and_census_hash_are_fail_closed(tmp_path: Path) -> None:
     db = tmp_path / "fixture.sqlite"
     manifest_path = tmp_path / "manifest.json"

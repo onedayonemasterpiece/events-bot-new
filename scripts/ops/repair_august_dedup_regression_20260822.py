@@ -400,6 +400,7 @@ def _validate_manifest_shape(
             content_updates.append(
                 {
                     "cluster_id": cluster_id,
+                    "event_ids": list(event_ids),
                     "event_id": update_event_id,
                     "before": dict(before),
                     "after": dict(after),
@@ -675,6 +676,15 @@ def _validate_preconditions(
 
     for update in content_updates:
         row = _event(con, int(update["event_id"]))
+        unit_ids = {int(value) for value in update["event_ids"]}
+        for merged_target in (
+            update["before"].get("merged_into_event_id"),
+            update["after"].get("merged_into_event_id"),
+        ):
+            if merged_target is not None and int(merged_target) not in unit_ids:
+                raise RepairBlocked(
+                    f"content_update_target_outside_unit:{update['cluster_id']}:{update['event_id']}:merged_into_event_id"
+                )
         for field, expected in update["before"].items():
             if field not in row.keys() or row[field] != expected:
                 raise RepairBlocked(
@@ -691,30 +701,50 @@ def _validate_preconditions(
                 f"state_repair_row_missing:{repair['cluster_id']}:{repair['table']}:{repair['id']}"
             )
         unit_ids = {int(value) for value in repair["event_ids"]}
-        current_owner = row["event_id"] if "event_id" in row.keys() else None
-        accepted_owner = (
-            row["accepted_event_id"] if "accepted_event_id" in row.keys() else None
+        event_reference_fields = (
+            ("event_id",)
+            if repair["table"]
+            in {"event_source", "event_source_fact", "eventposter"}
+            else ("accepted_event_id", "diagnostic_event_id")
         )
-        diagnostic_owner = (
-            row["diagnostic_event_id"]
-            if "diagnostic_event_id" in row.keys()
-            else None
-        )
-        after_owner = repair["after"].get("event_id")
-        after_accepted = repair["after"].get("accepted_event_id")
-        if not any(
-            owner is not None and int(owner) in unit_ids
-            for owner in (
-                current_owner,
-                accepted_owner,
-                diagnostic_owner,
-                after_owner,
-                after_accepted,
-            )
-        ):
+        saw_event_reference = False
+        for field in event_reference_fields:
+            current = row[field] if field in row.keys() else None
+            after = repair["after"].get(field, current)
+            for value in (current, after):
+                if value is None:
+                    continue
+                saw_event_reference = True
+                if int(value) not in unit_ids:
+                    raise RepairBlocked(
+                        f"state_repair_target_outside_unit:{repair['cluster_id']}:{repair['table']}:{repair['id']}:{field}"
+                    )
+        if not saw_event_reference:
             raise RepairBlocked(
                 f"state_repair_outside_unit:{repair['cluster_id']}:{repair['table']}:{repair['id']}"
             )
+        if repair["table"] == "event_source_fact":
+            source_id = repair["after"].get("source_id", row["source_id"])
+            source = con.execute(
+                "SELECT event_id FROM event_source WHERE id=?", (int(source_id),)
+            ).fetchone()
+            if source is None or int(source["event_id"]) not in unit_ids:
+                raise RepairBlocked(
+                    f"state_repair_reference_outside_unit:{repair['cluster_id']}:event_source_fact:{repair['id']}:source_id"
+                )
+        if repair["table"] == "eventposter":
+            duplicate_of_id = repair["after"].get(
+                "duplicate_of_id", row["duplicate_of_id"]
+            )
+            if duplicate_of_id is not None:
+                duplicate = con.execute(
+                    "SELECT event_id FROM eventposter WHERE id=?",
+                    (int(duplicate_of_id),),
+                ).fetchone()
+                if duplicate is None or int(duplicate["event_id"]) not in unit_ids:
+                    raise RepairBlocked(
+                        f"state_repair_reference_outside_unit:{repair['cluster_id']}:eventposter:{repair['id']}:duplicate_of_id"
+                    )
         for field, expected in repair["before"].items():
             if field not in row.keys() or row[field] != expected:
                 raise RepairBlocked(
