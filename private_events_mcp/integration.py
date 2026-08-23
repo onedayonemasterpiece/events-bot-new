@@ -8,6 +8,7 @@ from typing import Any
 
 from aiohttp import web
 
+from .chatgpt_refresh_policy import install_chatgpt_refresh_policy
 from .config import PrivateEventsMCPConfig
 from .media_contract import AssetIngestor
 from .server import (
@@ -108,6 +109,7 @@ def attach_private_events_mcp(
         social_workspace_adapters=social_workspace_adapters,
         asset_ingestor=asset_ingestor,
     )
+    install_chatgpt_refresh_policy(server.oauth)
     # Audio transcription is an independent, default-off capability. It extends
     # only the ChatGPT/OpenCode protocol and leaves the exact-seven Codex surface
     # unchanged. Avoid importing the Kaggle/Telethon orchestration package unless
