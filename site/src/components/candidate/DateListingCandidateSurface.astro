@@ -1,6 +1,15 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
-import DateListingSurface from '../listings/DateListingSurface.astro';
+import { deduplicateListingEvents, eventCountLabel, groupListingEvents } from '../../lib/listingPresentation';
+import { chronologicalListingEvents } from '../../lib/listingChronology';
+import { getCurrentDate } from '../../lib/events';
+import ListingDiscoveryRail from '../listings/ListingDiscoveryRail.astro';
+import ListingPageHeader from '../listings/ListingPageHeader.astro';
+import ListingTimeNav from '../listings/ListingTimeNav.astro';
+import ExactTimeTimeline from '../listings/ExactTimeTimeline.astro';
+import MobileListingRailSurface from '../listings/MobileListingRailSurface.astro';
+import ListingPersonalFilter from '../ListingPersonalFilter.astro';
+import WeatherDateContext from '../WeatherDateContext.astro';
 
 interface Props {
   kind: 'today' | 'tomorrow' | 'date';
@@ -21,6 +30,18 @@ const {
   state = 'ready',
   generatedAt = null,
 } = Astro.props;
+
+const readyEvents = chronologicalListingEvents(deduplicateListingEvents(events));
+const readyGroups = groupListingEvents(readyEvents);
+const cities = [...new Set(readyEvents.map((event) => event.city || 'Калининградская область'))]
+  .map((name) => ({ name, count: readyEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
+  .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
+const idPrefix = kind === 'tomorrow' ? 'candidate-tomorrow-time' : `candidate-date-${date}-time`;
+const mobileDate = new Intl.DateTimeFormat('ru-RU', { day:'numeric', month:'long', timeZone:'Europe/Kaliningrad' })
+  .format(new Date(`${date}T12:00:00+02:00`));
+const mobileWeekday = new Intl.DateTimeFormat('ru-RU', { weekday:'long', timeZone:'Europe/Kaliningrad' })
+  .format(new Date(`${date}T12:00:00+02:00`));
+const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${readyEvents.length} ${eventCountLabel(readyEvents.length)}`;
 ---
 
 <section
@@ -30,7 +51,51 @@ const {
   aria-busy={state === 'loading' ? 'true' : undefined}
 >
   {state === 'ready' ? (
-    <DateListingSurface kind={kind} title={title} date={date} dateLabel={dateLabel} events={events} generatedAt={generatedAt} />
+    <div
+      class="ke-listing-shell"
+      data-date-listing={kind}
+      data-listing-date={date}
+      data-listing-variant="DATE-LISTING-SOT-CANDIDATE-V1"
+      data-listing-density={readyEvents.length > 0 && readyEvents.length <= 4 ? 'sparse' : 'regular'}
+      data-listing-has-time-nav="true"
+      data-candidate-composition="sot-linked-primitives"
+      data-generated-at={generatedAt || undefined}
+    >
+      <ListingPageHeader title={title} dateLabel={dateLabel} count={readyEvents.length} current={kind} />
+      <WeatherDateContext date={date} dateLabel={dateLabel} routeKind={kind} surface="desktop" />
+      <ListingDiscoveryRail
+        cities={cities}
+        total={readyEvents.length}
+        label={kind === 'tomorrow' ? 'завтра' : dateLabel}
+        dateContext={{ date: mobileDate, weekday: mobileWeekday }}
+      >
+        <ListingTimeNav groups={readyGroups} idPrefix={idPrefix} earlierCount={0} />
+      </ListingDiscoveryRail>
+
+      <MobileListingRailSurface
+        sections={[{ id:`candidate-${kind}-chronological`, events:readyEvents }]}
+        occurrenceMode="per-date"
+        title={title}
+        meta={mobileMeta}
+        feedTitle="По времени"
+        feedMeta="Фото → о событии → лайк"
+        current={kind}
+        cities={cities}
+        calendarToday={getCurrentDate()}
+        calendarDate={date}
+        weather={{ date, dateLabel, routeKind: kind }}
+      />
+
+      <div class="ke-listing-desktop-body" data-listing-representation="desktop">
+        <div data-listing-upcoming-groups>
+          <ExactTimeTimeline groups={readyGroups} idPrefix={idPrefix} date={date} />
+        </div>
+        <div class="ke-listing-empty" data-listing-no-events hidden={readyEvents.length > 0}>
+          <strong>Событий на эту дату пока нет</strong>
+        </div>
+      </div>
+      <ListingPersonalFilter total={readyEvents.length} label={kind === 'tomorrow' ? 'завтра' : dateLabel} version={2} placement="floating" />
+    </div>
   ) : (
     <div class="date-listing-candidate__state" role={state === 'error' ? 'alert' : 'status'}>
       <header>

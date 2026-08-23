@@ -22,10 +22,15 @@ for (const fixture of projection.fixtures) {
 }
 
 const route = readFileSync(resolve(repo, 'src/pages/lab/date-listing-shell-v1/[representation].astro'), 'utf8');
+const candidate = readFileSync(resolve(repo, 'src/components/candidate/DateListingCandidateSurface.astro'), 'utf8');
 assert.match(route, /noindex=\{true\}/u);
 assert.match(route, /data-fixture-source-sha256/u);
 assert.match(route, /loading','empty','error/u);
 assert.doesNotMatch(route, /getTodayPrimaryEvents|getTomorrowEvents|getDateEvents/u);
+assert.doesNotMatch(candidate, /import DateListingSurface/u);
+assert.match(candidate, /data-candidate-composition="sot-linked-primitives"/u);
+assert.match(candidate, /MobileListingRailSurface/u);
+assert.match(candidate, /ExactTimeTimeline/u);
 
 const sourceRepo = process.env.DESIGN_SYSTEM_REPO;
 if (sourceRepo) {
