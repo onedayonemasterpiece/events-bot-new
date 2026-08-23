@@ -1,5 +1,14 @@
 # Lane qtickets_occurrence Results
 
+> Integration correction: the worker result below records its original lane
+> output. Final integration removed the arbitrary 14-day cutoff. New Qtickets
+> parser dumps treat every explicit cross-date JSON-LD product boundary as
+> `vendor_schedule_end_date`, while the existing LLM may derive a genuine
+> continuous multi-day `end_date` from explicit prose without another call.
+> Legacy dumps without the marker are preserved rather than heuristically
+> reclassified. Exact-attach occurrence/source-fact and pair-correlated ledger
+> coverage were also added after this lane. See the integration report.
+
 ## Status
 
 committed
