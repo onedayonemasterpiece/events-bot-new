@@ -13634,9 +13634,15 @@ def _dedup_adjudicator_final_result(
         and match_id is None
     )
     if grounded_distinct:
+        distinct_owner_id = (
+            int(events[0].id)
+            if len(events) == 1 and getattr(events[0], "id", None) is not None
+            else None
+        )
         return IdentityFinalResult(
             action=IdentityFinalAction.FINAL_DISTINCT,
             relation=relation,
+            owner_event_id=distinct_owner_id,
             confidence=confidence,
             reason_code=reason_code,
             evidence=evidence,
@@ -13746,9 +13752,13 @@ def _dedup_adjudicator_accept_merge(
     # Qtickets URLs identify a product/series. Concrete date/time anchors own
     # its separately sold occurrences, so even an erroneous semantic SAME_EVENT
     # answer cannot turn another dated slot into an update of this one.
-    candidate_qtickets_product = _qtickets_product_url_for_match(candidate.ticket_link)
+    candidate_qtickets_product = _qtickets_product_url_for_match(
+        candidate.ticket_link or candidate.source_url
+    )
     existing_qtickets_product = _qtickets_product_url_for_match(
         getattr(match_event, "ticket_link", None)
+        or getattr(match_event, "source_post_url", None)
+        or getattr(match_event, "source_vk_post_url", None)
     )
     same_qtickets_product = bool(
         candidate_qtickets_product
@@ -19817,6 +19827,11 @@ async def _smart_event_update_impl(
                         "blocking_conflicts": list(
                             identity_final_result.blocking_conflicts
                         ),
+                        "reviewed_event_ids": sorted(
+                            int(event.id)
+                            for event in blocked
+                            if getattr(event, "id", None) is not None
+                        ),
                         "identity_gate_reason": identity_gate_reason,
                         "raw_action": decision.get("action") if decision else None,
                         "raw_reason_code": (
@@ -20919,6 +20934,12 @@ async def _smart_event_update_impl(
         result = await _create_from_prepared_candidate()
         if result.is_accepted and candidate.force_create_distinct_reason is not None:
             result.identity_distinct_reason = candidate.force_create_distinct_reason
+            if (
+                identity_final_result is not None
+                and identity_final_result.action is IdentityFinalAction.FINAL_DISTINCT
+                and identity_final_result.owner_event_id is not None
+            ):
+                result.diagnostic_event_id = identity_final_result.owner_event_id
         return result
 
     # Merge path

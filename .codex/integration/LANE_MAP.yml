@@ -1,0 +1,54 @@
+mode: worktree_worker
+repo: onedayonemasterpiece/events-bot-new
+base_ref: 0af3f0f8b4673417853a5cd2b6be13b67b21fded
+base_branch: origin/main
+integration_branch: integration/august-repair-contracts
+global_constraints:
+  - no production DB/content/social mutations
+  - no prevention architecture redesign
+  - no normal-path LLM call-count increase
+  - deploy code only after merge to exact origin/main
+verification_owner: root
+stop_conditions:
+  - unexpected overlapping worker writes
+  - migration or runtime contract ambiguity affecting production safety
+lanes:
+  - id: repair_contract
+    role: worker
+    requirement_ids: [R1, R3]
+    target: scheduler-volatile CAS plus mixed pairwise manifest components
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/august-repair-contracts/repair-contract
+    worktree: /home/dev/.codex/worktrees/events-bot-new/sol-contracts-repair
+    writable_files: [scripts/ops/repair_august_dedup_regression_20260822.py, tests/test_repair_august_dedup_regression_20260822.py, .codex/lanes/repair_contract/RESULTS.md]
+    forbidden_files: [production databases, Smart Update and Qtickets parser files, docs, CHANGELOG.md]
+    expected_output: committed guarded CAS and pairwise-component support with tests
+    verification_scope: targeted
+    status: completed_and_integrated
+  - id: qtickets_occurrence
+    role: worker
+    requirement_ids: [R2]
+    target: Qtickets product-series versus occurrence identity contract
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/august-repair-contracts/qtickets-occurrence
+    worktree: /home/dev/.codex/worktrees/events-bot-new/sol-contracts-qtickets
+    writable_files: [source_parsing/qtickets.py, kaggle/ParseQtickets/parse_qtickets.py, smart_event_update.py, smart_update_identity.py, tests, .codex/lanes/qtickets_occurrence/RESULTS.md]
+    forbidden_files: [scripts/ops/repair_august_dedup_regression_20260822.py, production databases, docs, CHANGELOG.md]
+    expected_output: committed occurrence-scoped Qtickets behavior and fixtures
+    verification_scope: targeted
+    status: completed_and_integrated
+  - id: integration_release
+    role: merge_reviewer
+    requirement_ids: [R4, R5, R6]
+    target: integration, full regression, docs/changelog, PR/merge/deploy, Terra handoff
+    depends_on: [repair_contract, qtickets_occurrence]
+    execution_mode: serial_after_dependency
+    branch: integration/august-repair-contracts
+    worktree: /home/dev/.codex/worktrees/events-bot-new/sol-contracts-integration
+    writable_files: [docs, CHANGELOG.md, .codex/integration/INTEGRATION_REPORT.md, artifacts/codex/INC-2026-08-22-dedup-followup/TERRA_HANDOFF.md]
+    forbidden_files: [production databases, production content/social state]
+    expected_output: exact-main code deploy plus updated Terra handoff
+    verification_scope: full_local
+    status: in_progress

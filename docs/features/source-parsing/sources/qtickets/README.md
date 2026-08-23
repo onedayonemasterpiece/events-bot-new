@@ -67,9 +67,15 @@ Qtickets для Калининграда: `https://kaliningrad.qtickets.events/`
 - `ticket_price_max`
 - `ticket_status`
 - `location_address` (when present in JSON-LD or visible address block)
-- `end_date` (when `endDate` exists on the ticket page)
+- cross-date JSON-LD `endDate` is exported as `vendor_schedule_end_date`, not
+  trusted directly as occurrence duration; the existing extraction LLM may set
+  `end_date` only from explicit descriptive evidence of a continuous
+  multi-day event (without an additional model call)
 
 Backend parser держит backward compatibility со старым форматом (`date/time/image_url/price_min/price_max`), но новым notebook-выгрузкам нужно придерживаться именно этого контракта.
+Старый dump без явного `vendor_schedule_end_date` не переклассифицируется по
+эвристическому числу дней: такой исторический `end_date` сохраняется как есть,
+потому что backend не может безопасно угадать его смысл.
 
 ## Особенности источника (Qtickets)
 
@@ -102,13 +108,23 @@ Backend parser держит backward compatibility со старым форма�
 | `age_restriction` | `0+|6+|12+|16+|18+` | source-native declared field; переносится в канонический `Event.age_restriction` с provenance |
 | `scene` | `str` | зал/сцена (входит в `normalize_location_name`) |
 | `location_address` | `str` | адрес из билетной страницы; передаётся в LLM/Smart Update как источник, а не восстанавливается из OCR |
-| `end_date` | `YYYY-MM-DD` | окончание диапазона из JSON-LD `endDate`; не должно теряться при многодневных билетных страницах |
+| `end_date` | `YYYY-MM-DD` | окончание только genuine multi-day occurrence; для однодневного слота `NULL` либо та же дата согласно общему контракту |
+| `vendor_schedule_end_date` | `YYYY-MM-DD` | конец расписания/продаж продукта; сохраняется в source facts, но не становится `Event.end_date` и не входит в occurrence identity |
 | `source_type` | `str` | метка источника (предлагается: `qtickets`) |
 
 ### Правило “одно событие = одна дата+время”
 
 Если у события на Qtickets есть несколько сеансов (разные даты/время), то **каждый сеанс — отдельный `TheatreEvent`**.
 Это соответствует текущей логике `source_parsing` и упрощает корректные обновления `ticket_status`.
+
+URL карточки при этом обозначает продукт/серию. Он используется для recall и
+ticket projection, но не доказывает одну occurrence. Identity конкретного
+Qtickets-слота включает `parsed_date + parsed_time`: повтор того же слота может
+обновить существующего owner, а другая дата или отдельно продаваемое время
+остаётся distinct occurrence и проходит обычное LLM-owned semantic решение.
+Exact-slot fast attach также записывает `candidate_key + occurrence_key`,
+структурированный source text и идемпотентный source fact окна расписания; он
+не вызывает дополнительную модель.
 
 ## Дедуп и обновления (как сейчас работает `source_parsing`)
 

@@ -486,6 +486,13 @@ weak title, date/OCR conflict, collapsed occurrences или incomplete evidence
   - таблица `event_source` хранит все источники события;
   - idempotency по `telegram_scanned_message`;
   - URL сам по себе не является idempotency verdict: exact replay требует совпадения stable candidate/occurrence identity и fingerprint и возвращает typed `NOOP_EXACT_REPLAY`; изменённый packet проходит update/match pipeline;
+  - для Qtickets URL обозначает билетный продукт/серию, а не одну occurrence:
+    одинаковые конкретные `date + time` могут сойтись в существующего owner,
+    другая дата или отдельно продаваемый time slot остаются distinct occurrence
+    и проходят существующее semantic LLM-решение. Конец vendor schedule/sales
+    window не записывается как `Event.end_date` однодневной экскурсии, не входит
+    в occurrence key и сохраняется только как структурированный source fact;
+    это не вводит `UNIQUE(url)` и не добавляет normal-path model call;
   - если `check_source_url=False` (переобработка разрешена), Smart Update всё равно пытается **сойтись** в уже созданное событие по якорям источника, чтобы ретраи/повторные импорты не плодили дубли:
     - Telegram: `(source_message_id + source_url)`,
     - VK: `source_vk_post_url/source_post_url`,

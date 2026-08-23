@@ -50,7 +50,6 @@ logger = logging.getLogger(__name__)
 
 # Kernel folder name
 QTICKETS_KERNEL_FOLDER = "ParseQtickets"
-MAX_QTICKETS_OCCURRENCE_SPAN_DAYS = 14
 
 
 async def run_qtickets_kaggle_kernel(
@@ -378,20 +377,16 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                 if not parsed_time:
                     parsed_time = "00:00"
 
-                # Backward-compatible host guard for older Kaggle dumps. A
-                # long Qtickets JSON-LD range is a product schedule/sales
-                # horizon; short ranges remain valid multi-day occurrences.
-                if parsed_date and end_date:
-                    try:
-                        span_days = (
-                            datetime.fromisoformat(end_date).date()
-                            - datetime.fromisoformat(parsed_date).date()
-                        ).days
-                    except ValueError:
-                        span_days = 0
-                    if span_days > MAX_QTICKETS_OCCURRENCE_SPAN_DAYS:
-                        vendor_schedule_end_date = vendor_schedule_end_date or end_date
-                        end_date = None
+                # New parser dumps classify the JSON-LD product boundary
+                # explicitly. Preserve old dumps verbatim: without this marker
+                # the host cannot safely guess whether a historical range was
+                # a real multi-day event or a vendor schedule.
+                if (
+                    vendor_schedule_end_date
+                    and end_date == vendor_schedule_end_date
+                    and parsed_date != end_date
+                ):
+                    end_date = None
 
                 location = (
                     (item.get("location") or "").strip()

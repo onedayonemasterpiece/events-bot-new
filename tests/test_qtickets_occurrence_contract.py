@@ -80,7 +80,8 @@ def test_qtickets_vendor_schedule_end_is_not_occurrence_end_date(tmp_path: Path)
                     "date_raw": "2026-08-12T09:15:00+02:00",
                     "parsed_date": "2026-08-12",
                     "parsed_time": "09:15",
-                    "end_date": "2026-10-25",
+                    "end_date": "2026-08-17",
+                    "vendor_schedule_end_date": "2026-08-17",
                     "location": "Центральная площадь",
                     "url": "https://kaliningrad.qtickets.events/251797-svetlogorsk-i-yantarnyy",
                 }
@@ -98,9 +99,9 @@ def test_qtickets_vendor_schedule_end_is_not_occurrence_end_date(tmp_path: Path)
     )
 
     assert event.end_date is None
-    assert event.vendor_schedule_end_date == "2026-10-25"
-    assert "Окно расписания/продаж Qtickets до: 2026-10-25" in source_text
-    assert "Дата окончания: 2026-10-25" not in source_text
+    assert event.vendor_schedule_end_date == "2026-08-17"
+    assert "Окно расписания/продаж Qtickets до: 2026-08-17" in source_text
+    assert "Дата окончания: 2026-08-17" not in source_text
 
 
 @pytest.mark.asyncio

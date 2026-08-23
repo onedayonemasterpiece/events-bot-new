@@ -410,6 +410,46 @@ def test_keep_distinct_requires_grounding_and_linked_ids_are_not_identity_proof(
     assert reviewed["unresolved_count"] == 0
 
 
+def test_final_distinct_correlates_owner_log_to_accepted_candidate_state(tmp_path):
+    db_path = tmp_path / "state-correlated.sqlite"
+    conn = sqlite3.connect(db_path)
+    _init(conn)
+    _init_review_tables(conn)
+    for values in (
+        (1, "Выставка одной серии", "2026-08-23", "2026-09-01", "Музей", "Калининград", "выставка", "active", "canonical", None),
+        (2, "Выставка одной серии", "2026-08-24", "2026-09-02", "Музей", "Калининград", "выставка", "active", "canonical", None),
+    ):
+        _insert(conn, *values)
+    conn.execute(
+        "insert into smart_update_candidate_state(id,accepted_event_id,diagnostic_event_id) values(7,2,NULL)"
+    )
+    conn.execute(
+        "insert into event_identity_decision_log(id,event_id,candidate_event_id,decision,decision_reason,confidence,decided_by,decision_payload,created_at) "
+        "values(1,1,NULL,'FINAL_DISTINCT','different dated occurrence',0.99,'smart_update.identity_gate',?,'2026-08-23 08:00:00')",
+        (
+            __import__("json").dumps(
+                {
+                    "stage": "final_identity_adjudicator",
+                    "action": "FINAL_DISTINCT",
+                    "relation": "distinct_occurrence",
+                    "evidence": ["source states the separately dated occurrence"],
+                    "blocking_conflicts": ["date: 2026-08-23 vs 2026-08-24"],
+                    "candidate_state_id": 7,
+                }
+            ),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    payload = _monitor.build_audit_payload(
+        db_path, current=date(2026, 8, 23), since_days=14
+    )
+    assert payload["candidate_pair_count"] == 1
+    assert payload["keep_distinct_count"] == 1
+    assert payload["unresolved_count"] == 0
+
+
 def test_production_shaped_august_duplicate_reviews_are_confirmed(tmp_path):
     db_path = tmp_path / "august-confirmed.sqlite"
     conn = sqlite3.connect(db_path)

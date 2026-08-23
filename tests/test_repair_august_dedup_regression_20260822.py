@@ -283,13 +283,7 @@ def _mixed_component_manifest(db: Path, path: Path) -> dict:
         {"left_id": 20, "right_id": 23, "relation": "MERGE", "canonical_id": 20},
         {"left_id": 21, "right_id": 24, "relation": "MERGE", "canonical_id": 21},
         {"left_id": 20, "right_id": 21, "relation": "KEEP_DISTINCT_RELATED"},
-        {"left_id": 20, "right_id": 24, "relation": "KEEP_DISTINCT_RELATED"},
-        {"left_id": 21, "right_id": 23, "relation": "KEEP_DISTINCT_RELATED"},
-        {"left_id": 23, "right_id": 24, "relation": "KEEP_DISTINCT_RELATED"},
         {"left_id": 22, "right_id": 20, "relation": "PARENT_CHILD"},
-        {"left_id": 22, "right_id": 21, "relation": "PARENT_CHILD"},
-        {"left_id": 22, "right_id": 23, "relation": "PARENT_CHILD"},
-        {"left_id": 22, "right_id": 24, "relation": "PARENT_CHILD"},
     ]
     component = {
         "component_id": "admissions_departments",
@@ -538,6 +532,34 @@ def test_event_publication_ownership_drift_blocks_apply(tmp_path: Path) -> None:
         repair.run(db, manifest_path, "apply")
 
 
+def test_event_publication_reconcile_metadata_drift_does_not_block_apply(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE event_publication SET status='verified', match_method='live', "
+        "match_confidence=0.99, resolved_at='2026-08-23T12:00:00Z' WHERE id=701"
+    )
+    con.commit()
+    con.close()
+
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    assert repair.run(db, manifest_path, "apply")["status"] == "noop"
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT status,match_method,match_confidence,resolved_at "
+        "FROM event_publication WHERE id=701"
+    ).fetchone() == ("verified", "live", 0.99, "2026-08-23T12:00:00Z")
+    con.close()
+
+
 def test_poster_hash_and_raw_identity_disagreement_fails_closed(tmp_path: Path) -> None:
     db = tmp_path / "fixture.sqlite"
     manifest_path = tmp_path / "manifest.json"
@@ -685,10 +707,12 @@ def test_mixed_component_executes_merges_and_only_explicit_pair_decisions(
         "FROM event_identity_decision_log WHERE decision='FINAL_DISTINCT' "
         "AND json_extract(decision_payload,'$.component_id')='admissions_departments'"
     ).fetchall()
-    assert len(rows) == 8
+    # Only the two explicitly reviewed non-merge edges are recorded. The
+    # component's other Cartesian pairs receive no inferred blanket verdict.
+    assert len(rows) == 2
     relations = [json.loads(row["decision_payload"])["relation"] for row in rows]
-    assert relations.count("related_but_distinct") == 4
-    assert relations.count("parent_child") == 4
+    assert relations.count("related_but_distinct") == 1
+    assert relations.count("parent_child") == 1
     assert {(row["event_id"], row["candidate_event_id"]) for row in rows}.isdisjoint(
         {(20, 23), (21, 24)}
     )
@@ -702,13 +726,13 @@ def test_mixed_component_executes_merges_and_only_explicit_pair_decisions(
 @pytest.mark.parametrize(
     ("mutation", "expected"),
     [
-        ("drop", "pair_coverage_incomplete"),
+        ("empty", "pair_verdicts_required"),
         ("reverse_duplicate", "pair_verdict_duplicate"),
         ("bad_canonical", "pair_merge_canonical_invalid"),
         ("unsafe_order", "pair_merge_execution_order_unsafe"),
     ],
 )
-def test_mixed_component_pair_contract_is_complete_unique_and_canonical(
+def test_mixed_component_pair_contract_is_explicit_unique_and_canonical(
     tmp_path: Path, mutation: str, expected: str
 ) -> None:
     db = tmp_path / "fixture.sqlite"
@@ -716,8 +740,8 @@ def test_mixed_component_pair_contract_is_complete_unique_and_canonical(
     _make_db(db)
     manifest = _mixed_component_manifest(db, manifest_path)
     pairs = manifest["clusters"][1]["pair_verdicts"]
-    if mutation == "drop":
-        pairs.pop()
+    if mutation == "empty":
+        pairs.clear()
     elif mutation == "reverse_duplicate":
         duplicate = copy.deepcopy(pairs[0])
         duplicate["left_id"], duplicate["right_id"] = (

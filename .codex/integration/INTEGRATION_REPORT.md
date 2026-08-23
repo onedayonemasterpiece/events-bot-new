@@ -172,3 +172,38 @@ research lanes changed no files.
 - Action-map producer enums match the canonical source and design consumer: `insufficient-data`, `instrument-better`.
 - `git diff --check origin/main..HEAD`: PASS.
 - No runtime, schema or deployment changes are included.
+
+---
+
+# August dedup pre-repair contract integration (2026-08-23)
+
+## Scope and base
+
+- Base: `origin/main` at `0af3f0f8b4673417853a5cd2b6be13b67b21fded`.
+- Integration branch: `integration/august-repair-contracts`.
+- Production DB/content/social mutation: **none**.
+- Constraints: preserve current vector + one-LLM identity architecture and normal model-call budget.
+
+## Lane integration
+
+| Lane | Requirements | Worker commits | Integration result |
+|---|---|---|---|
+| `repair_contract` | R1, R3 | `91c167379`, `89fd023cf` | Cherry-picked, then integrator corrected publication CAS to ownership-only, made component edges sparse/explicit, and made rollback preserve concurrent reconcile metadata. |
+| `qtickets_occurrence` | R2 | `9e3000ab7`, `85b363ca6` | Cherry-picked, then integrator removed the arbitrary 14-day semantic cutoff, covered exact-attach provenance, authoritative final-adjudicator veto, and pair-correlated FINAL_DISTINCT ledger. |
+| `integration_release` | R4–R6 | pending final SHA | Docs, regression, PR/merge, exact-main deploy, read-only release evidence and Terra handoff are integrator-owned. |
+
+## Final contract
+
+- Job CAS hashes stable semantic fields and permits only `updated_at` / `next_run_at` drift after `BEGIN IMMEDIATE`; running or semantic drift blocks. Receipt records observed timestamp drift.
+- Publication CAS hashes owner/platform/target and stored/live resource identifiers. Reconcile status/method/confidence/resolved time is operational metadata and rollback never overwrites it.
+- Mixed components accept only explicit unique pair edges. No unlisted Cartesian pair inherits a verdict. Merge groups must be disjoint and safe; parent-child/related-distinct edges only append grounded review rows.
+- Qtickets product URLs are recall/series signals. Concrete date/time owns occurrence identity, exact refresh writes the same occurrence key and schedule-window fact, and a different date/time cannot be accepted as SAME_EVENT even from an adversarial semantic answer.
+- Cross-date Qtickets JSON-LD end is retained as product schedule metadata. New dumps do not promote it directly to Event.end_date; legacy dumps without an explicit marker are not heuristically reclassified. The existing LLM may derive a genuine multi-day range from explicit prose without a new call stage.
+- FINAL_DISTINCT records the uniquely reviewed owner and candidate-state correlation; audits resolve that against the accepted Event even after later exact replay.
+
+## Verification
+
+- Consolidated targeted regression: `134 passed in 39.89s` across repair, audit, Qtickets occurrence/structured facts/exact attach, ingestion, incident identity replay, parser occurrences and terminal-call-count contracts.
+- `py_compile` for all changed Python runtime/tooling modules: PASS.
+- `git diff --check`: PASS.
+- Exact SHA, PR/CI, deploy release and read-only production checks: pending.

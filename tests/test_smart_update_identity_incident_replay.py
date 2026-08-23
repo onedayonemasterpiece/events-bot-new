@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 import smart_event_update as su
 from db import Database
-from models import Event, EventIdentityDecisionLog
+from models import Event, EventIdentityDecisionLog, SmartUpdateCandidateState
 from smart_event_update import EventCandidate, smart_event_update
 from smart_update_identity import IdentityVectorEvidence
 
@@ -388,6 +388,8 @@ async def _run_vector_veto_adjudicator_replay(
     candidate_festival: str | None = None,
     candidate_festival_context: str | None = None,
     candidate_occurrence_key: str | None = None,
+    candidate_source_type: str = "telegram",
+    expected_created_id: int | None = None,
     replay_twice: bool = False,
 ) -> tuple[Database, su.SmartUpdateResult, int]:
     db = Database(str(tmp_path / f"typed-final-{suffix}.sqlite"))
@@ -409,6 +411,13 @@ async def _run_vector_veto_adjudicator_replay(
         ticket_link=ticket_link,
         festival=owner_festival,
     )
+    if expected_created_id is not None:
+        async with db.get_session() as session:
+            await session.execute(
+                text("UPDATE sqlite_sequence SET seq=:seq WHERE name='event'"),
+                {"seq": int(expected_created_id) - 1},
+            )
+            await session.commit()
     monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", False)
     monkeypatch.setattr(su, "SMART_UPDATE_DEDUP_ADJUDICATOR", True)
     monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", su.IdentityGateMode.ENFORCE)
@@ -460,7 +469,7 @@ async def _run_vector_veto_adjudicator_replay(
     monkeypatch.setattr(su, "_smart_update_identity_vector_evidence", _vector_evidence)
     monkeypatch.setattr(su, "_llm_dedup_adjudicator", _adjudicate)
     candidate = EventCandidate(
-        source_type="telegram",
+        source_type=candidate_source_type,
         source_url=candidate_source_url or f"https://t.me/incident_replay/{suffix}",
         source_text=(
             f"{candidate_title}. Отдельное описание из источника; "
@@ -634,6 +643,9 @@ _AUGUST_HARD_NEGATIVES = [
     ("same_venue_distinct_exhibitions", "Другая выставка", "выставка", "", "distinct_event"),
     ("qTickets-247858", "Коса, коты и сыр", "экскурсия", "", "distinct_occurrence"),
     ("qTickets-251796", "Малые (средневековые) города", "экскурсия", "", "distinct_occurrence"),
+    ("qTickets-251797-7604-7707", "Светлогорск и Янтарный", "экскурсия", "09:00", "distinct_occurrence"),
+    ("qTickets-247858-7580-7833", "Коса, коты и сыр", "экскурсия", "08:00", "distinct_occurrence"),
+    ("qTickets-251834-7805-8253", "Кёнигсберг — 8 веков", "экскурсия", "10:00", "distinct_occurrence"),
     ("Baltic Odyssey", "Балтийская Одиссея", "фестиваль", "", "distinct_occurrence"),
 ]
 
@@ -647,6 +659,9 @@ _NEGATIVE_ANCHORS = {
     "same_venue_distinct_exhibitions": dict(owner_title="Альбрехт Дюрер", owner_type="выставка", owner_time="", owner_date="2026-08-01", candidate_date="2026-08-01", owner_end_date="2026-09-30", candidate_end_date="2026-09-30"),
     "qTickets-247858": dict(owner_id=7580, owner_title="Коса, коты и сыр", owner_type="экскурсия", owner_time="", owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date=None, candidate_end_date=None, ticket_link="https://qtickets.ru/event/247858-kosa-koty-i-syr"),
     "qTickets-251796": dict(owner_id=7603, owner_title="Малые средневековые города", owner_type="экскурсия", owner_time="", owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date=None, candidate_end_date=None, ticket_link="https://qtickets.ru/event/251796-malye-srednevekovye-goroda"),
+    "qTickets-251797-7604-7707": dict(owner_id=7604, expected_created_id=7707, owner_title="Светлогорск и Янтарный", owner_type="экскурсия", owner_time="09:15", owner_date="2026-08-12", candidate_date="2026-08-17", owner_end_date=None, candidate_end_date=None, ticket_link="https://kaliningrad.qtickets.events/251797-svetlogorsk-i-yantarnyy", candidate_source_url="https://kaliningrad.qtickets.events/251797-svetlogorsk-i-yantarnyy"),
+    "qTickets-247858-7580-7833": dict(owner_id=7580, expected_created_id=7833, owner_title="Коса, коты и сыр", owner_type="экскурсия", owner_time="08:00", owner_date="2026-08-16", candidate_date="2026-08-23", owner_end_date=None, candidate_end_date=None, ticket_link="https://kaliningrad.qtickets.events/247858-kosa-koty-i-syr", candidate_source_url="https://kaliningrad.qtickets.events/247858-kosa-koty-i-syr"),
+    "qTickets-251834-7805-8253": dict(owner_id=7805, expected_created_id=8253, owner_title="Кёнигсберг — 8 веков", owner_type="экскурсия", owner_time="10:00", owner_date="2026-08-19", candidate_date="2026-08-24", owner_end_date=None, candidate_end_date=None, ticket_link="https://kaliningrad.qtickets.events/251834-konigsberg-8-centuries", candidate_source_url="https://kaliningrad.qtickets.events/251834-konigsberg-8-centuries"),
     "Baltic Odyssey": dict(owner_id=8055, owner_title="Балтийская Одиссея", owner_type="фестиваль", owner_time="", owner_date="2025-08-22", candidate_date="2026-08-22", owner_end_date="2025-08-24", candidate_end_date="2026-08-24", ticket_link="https://balticodyssey.qtickets.ru/"),
 }
 
@@ -681,8 +696,34 @@ async def test_named_august_hard_negative_corpus_stays_distinct(
     )
     assert result.outcome is su.SmartUpdateTerminalOutcome.CREATED, case_name
     assert result.event_id != owner_id
+    if anchors.get("expected_created_id") is not None:
+        assert result.event_id == anchors["expected_created_id"]
     async with db.get_session() as session:
         assert await session.scalar(select(func.count()).select_from(Event)) == 2
+        logs = (await session.execute(select(EventIdentityDecisionLog))).scalars().all()
+        final_distinct_logs = [
+            row
+            for row in logs
+            if row.decision == "FINAL_DISTINCT"
+            and owner_id in row.decision_payload.get("reviewed_event_ids", [])
+            and row.decision_payload.get("relation") == relation
+        ]
+        correlated_states = [
+            await session.get(
+                SmartUpdateCandidateState,
+                int(row.decision_payload["candidate_state_id"]),
+            )
+            for row in final_distinct_logs
+            if row.decision_payload.get("candidate_state_id") is not None
+        ]
+    if anchors.get("expected_created_id") is not None:
+        assert final_distinct_logs, case_name
+        assert any(
+            state is not None
+            and state.accepted_event_id == anchors["expected_created_id"]
+            and final_distinct_logs[0].event_id == owner_id
+            for state in correlated_states
+        ), case_name
 
 
 @pytest.mark.asyncio
@@ -697,6 +738,9 @@ async def test_named_august_hard_negative_corpus_stays_distinct(
             "recurring_series_distinct_dates",
             "qTickets-247858",
             "qTickets-251796",
+            "qTickets-251797-7604-7707",
+            "qTickets-247858-7580-7833",
+            "qTickets-251834-7805-8253",
             "Baltic Odyssey",
         }
     ],
@@ -760,7 +804,7 @@ def test_named_corpus_manifest_and_executable_cases_are_complete():
     # post-owner exact packet replays. This is regression coverage, not a
     # population-level precision/recall estimate.
     assert len(_AUGUST_POSITIVE_CASES) == 4
-    assert len(_AUGUST_HARD_NEGATIVES) == 10
+    assert len(_AUGUST_HARD_NEGATIVES) == 13
 
 
 @pytest.mark.asyncio

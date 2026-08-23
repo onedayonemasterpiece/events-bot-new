@@ -1,5 +1,12 @@
 # Lane repair_contract results
 
+> Integration correction: the worker result below records its original lane
+> output. Final integration deliberately replaced complete Cartesian
+> `pair_verdicts` coverage with sparse explicit reviewed edges, and replaced
+> full `event_publication` row CAS with an ownership projection. Reconcile
+> metadata is allowed to drift and rollback does not overwrite it. See
+> `.codex/integration/INTEGRATION_REPORT.md` for final evidence.
+
 ## Scope
 
 - Lane ID: `repair_contract`

@@ -51,6 +51,16 @@ JOB_STABLE_FIELDS = (
     "depends_on",
 )
 JOB_VOLATILE_FIELDS = ("updated_at", "next_run_at")
+PUBLICATION_OWNERSHIP_FIELDS = (
+    "id",
+    "event_id",
+    "platform",
+    "target",
+    "stored_url",
+    "live_url",
+    "stored_post_id",
+    "live_post_id",
+)
 PAIR_RELATIONS = {"MERGE", "KEEP_DISTINCT_RELATED", "PARENT_CHILD"}
 
 
@@ -90,7 +100,7 @@ def _require_schema(con: sqlite3.Connection) -> None:
         "event_source_fact": {"id", "event_id", "source_id", "fact"},
         "eventposter": {"id", "event_id", "poster_hash", "raw_sha256", "review_status", "duplicate_of_id", "review_reason"},
         "joboutbox": {*JOB_STABLE_FIELDS, *JOB_VOLATILE_FIELDS},
-        "event_publication": {"id", "event_id"},
+        "event_publication": set(PUBLICATION_OWNERSHIP_FIELDS),
         "smart_update_candidate_state": {"id", "occurrence_key", "current_outcome", "accepted_event_id", "diagnostic_event_id"},
         "smart_update_attempt": {"id", "candidate_state_id", "terminal_outcome", "accepted_event_id", "diagnostic_event_id"},
         "event_identity_decision_log": {"id", "event_id", "candidate_event_id", "source_id", "decision", "decision_reason", "confidence", "decided_by", "decision_payload"},
@@ -124,6 +134,15 @@ def _job_timestamp_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, An
     return {field: item.get(field) for field in JOB_VOLATILE_FIELDS}
 
 
+def _publication_ownership_projection(
+    row: sqlite3.Row | dict[str, Any],
+) -> dict[str, Any]:
+    """Pin the event-to-publication resource binding, not reconcile metadata."""
+
+    item = dict(row)
+    return {field: item.get(field) for field in PUBLICATION_OWNERSHIP_FIELDS}
+
+
 def cluster_graph_hash(con: sqlite3.Connection, event_ids: Sequence[int]) -> str:
     """Hash every incident-relevant row attached to an adjudicated cluster."""
 
@@ -151,9 +170,10 @@ def cluster_graph_hash(con: sqlite3.Connection, event_ids: Sequence[int]) -> str
             _job_semantic_projection(row)
             for row in _rows(con, "joboutbox", f"event_id IN ({p})", ids)
         ],
-        "event_publication": _rows(
-            con, "event_publication", f"event_id IN ({p})", ids
-        ),
+        "event_publication": [
+            _publication_ownership_projection(row)
+            for row in _rows(con, "event_publication", f"event_id IN ({p})", ids)
+        ],
         "smart_update_candidate_state": candidates,
         "smart_update_attempt": [],
         "event_identity_decision_log": _rows(
@@ -298,7 +318,8 @@ def _validate_manifest_shape(
             raise RepairBlocked(f"job_constraints_required:{cluster_id}")
         expected_publications = cluster.get("expected_event_publications")
         if not isinstance(expected_publications, list) or any(
-            not isinstance(row, dict) or "id" not in row or "event_id" not in row
+            not isinstance(row, dict)
+            or not set(PUBLICATION_OWNERSHIP_FIELDS).issubset(row)
             for row in expected_publications
         ):
             raise RepairBlocked(f"publication_constraints_required:{cluster_id}")
@@ -306,9 +327,8 @@ def _validate_manifest_shape(
 
         if is_component:
             pair_verdicts = cluster.get("pair_verdicts")
-            if not isinstance(pair_verdicts, list):
+            if not isinstance(pair_verdicts, list) or not pair_verdicts:
                 raise RepairBlocked(f"pair_verdicts_required:{cluster_id}")
-            expected_pairs = {tuple(sorted(pair)) for pair in combinations(event_ids, 2)}
             seen_pairs: set[tuple[int, int]] = set()
             component_merges: list[dict[str, Any]] = []
             for verdict in pair_verdicts:
@@ -393,9 +413,6 @@ def _validate_manifest_shape(
                             **adjudication,
                         }
                     )
-            if seen_pairs != expected_pairs:
-                missing = sorted(expected_pairs - seen_pairs)
-                raise RepairBlocked(f"pair_coverage_incomplete:{cluster_id}:{len(missing)}")
             canonical_ids = {int(item["canonical_id"]) for item in component_merges}
             obsolete_ids_in_merges = {
                 int(value) for item in component_merges for value in item["obsolete_ids"]
@@ -568,11 +585,15 @@ def _validate_preconditions(
                     }
                 )
 
-        actual_publications = _rows(
-            con, "event_publication", f"event_id IN ({p})", ids
-        )
+        actual_publications = [
+            _publication_ownership_projection(row)
+            for row in _rows(con, "event_publication", f"event_id IN ({p})", ids)
+        ]
         expected_publications = sorted(
-            (dict(row) for row in cluster["expected_event_publications"]),
+            (
+                _publication_ownership_projection(row)
+                for row in cluster["expected_event_publications"]
+            ),
             key=lambda row: int(row["id"]),
         )
         if actual_publications != expected_publications:
@@ -927,6 +948,8 @@ def _backup_current_hashes(con: sqlite3.Connection, manifest_sha: str) -> dict[s
             current_hash = None
         elif str(row["table_name"]) == "joboutbox":
             current_hash = row_hash(_job_semantic_projection(current))
+        elif str(row["table_name"]) == "event_publication":
+            current_hash = row_hash(_publication_ownership_projection(current))
         else:
             current_hash = row_hash(current)
         result[f"{row['table_name']}:{int(row['row_id'])}"] = current_hash
@@ -1187,7 +1210,6 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
         "event_source_fact",
         "eventposter",
         "joboutbox",
-        "event_publication",
         "smart_update_candidate_state",
     ):
         for data in backups.get(table, []):
@@ -1195,7 +1217,13 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
     for table, rows in backups.items():
         for data in rows:
             current = con.execute(f'SELECT * FROM "{table}" WHERE id=?', (int(data["id"]),)).fetchone()
-            if current is None or row_hash(current) != _sha(_json(data)):
+            if table == "event_publication":
+                matches = current is not None and row_hash(
+                    _publication_ownership_projection(current)
+                ) == row_hash(_publication_ownership_projection(data))
+            else:
+                matches = current is not None and row_hash(current) == _sha(_json(data))
+            if not matches:
                 raise RepairBlocked(f"rollback_restore_mismatch:{table}:{data['id']}")
     quick = str(con.execute("PRAGMA quick_check").fetchone()[0])
     if quick.lower() != "ok":

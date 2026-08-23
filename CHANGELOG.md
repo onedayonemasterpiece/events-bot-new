@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+- Fixed: the August dedup repair CAS now ignores only scheduler-owned
+  `joboutbox.updated_at/next_run_at` drift after a transaction-bound stable
+  reread, while still blocking running jobs and any status, attempt, payload,
+  dependency, result or error change. Selected `event_publication` ownership is
+  part of the same fail-closed precondition; receipts record accepted timestamp
+  drift, and verify/rollback/second-apply use the same stable projection.
+  Repair manifests can express explicit mixed pair relations inside one
+  component, so reviewed merge groups, parent/child edges and related-but-
+  distinct pairs no longer become one blanket transitive verdict.
+
+- Fixed: Qtickets URLs now remain product/series recall signals rather than
+  occurrence IDs. Parser occurrence identity uses the concrete date/time, so
+  same-slot replay can converge while another date or separately sold slot
+  stays distinct without another normal-path LLM call. A one-day occurrence no
+  longer inherits the product's vendor schedule/sales-window end as
+  `Event.end_date`; that boundary is retained as structured source evidence,
+  while genuine multi-day events keep their range.
+  Exact-slot attachment now persists the same date/time occurrence key and
+  vendor-window source evidence. Final distinct ledgers correlate the reviewed
+  owner to the accepted candidate state so audits do not regress to unresolved.
+
 - Fixed: the exhibition duplicate audit now treats similarity as recall and
   reports a strict partition of candidate, confirmed duplicate,
   evidence-backed keep-distinct and unresolved pairs. Success requires both
