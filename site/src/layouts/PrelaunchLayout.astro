@@ -8,8 +8,8 @@ interface Props {
 }
 
 const {
-  title = `${SITE_NAME} — запуск 1 сентября`,
-  description = 'Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 1 сентября 2026 года.',
+  title = `${SITE_NAME} — запуск 5 сентября`,
+  description = 'Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 5 сентября 2026 года.',
 } = Astro.props;
 const canonicalUrl = `${SITE_ORIGIN}${withBase('/')}`;
 const robots = IS_PRODUCTION
@@ -62,7 +62,7 @@ const structuredData = {
       isPartOf: { '@id': websiteId },
       about: { '@id': serviceId },
       primaryImageOfPage: { '@id': imageId },
-      dateModified: '2026-08-07',
+      dateModified: '2026-08-23',
     },
     {
       '@type': 'Service',

@@ -95,6 +95,10 @@
   packed before sentence splitting. This keeps dotted titles such as
   `Дюна. Империя` together with their immediately preceding format heading,
   without joining separate sources or weakening lexical grounding.
+- Changed: the production prelaunch root now consistently announces the
+  revised 5 September 2026 launch date in visible copy, semantic markup,
+  registration confirmations and SEO/GEO metadata while preserving the
+  approved artwork and visual CSS byte-for-byte.
 
 - Added: VK admission recovery can re-evaluate only pending rows that failed
   open on a transient provider/schema error. The mode is explicit and bounded,
