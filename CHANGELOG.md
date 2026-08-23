@@ -10,7 +10,21 @@
   drift, and verify/rollback/second-apply use the same stable projection.
   Repair manifests can express explicit mixed pair relations inside one
   component, so reviewed merge groups, parent/child edges and related-but-
-  distinct pairs no longer become one blanket transitive verdict.
+  distinct or occurrence-distinct pairs no longer become one blanket
+  transitive verdict. Reviewed
+  clusters may also carry allowlisted before/after CAS updates for
+  date/time/range, venue/address and ticket-contact anchors; those corrections now share the same
+  transaction, row backup, verify, rollback and exact second-apply receipt as
+  the dedup repair instead of requiring an unguarded SQL sidecar. The same
+  allowlisted state-repair contract can restore a previously merged genuine
+  occurrence's source/fact/poster/candidate ownership, and a reviewed merge may
+  retain unrelated source-carrier images as rejected evidence on the obsolete
+  shell instead of moving them into reader media. Receipt CAS now covers every
+  adjudicated unit and every stable job row, including distinct-only Events and
+  completed/error jobs; rollback restores stable job fields without rewinding
+  scheduler timestamps. A receipt-level stable scope-graph also pins table
+  membership and candidate-attempt history, so post-apply source/job additions
+  or attempt mutations cannot be misreported as an exact no-op.
 
 - Fixed: Qtickets URLs now remain product/series recall signals rather than
   occurrence IDs. Parser occurrence identity uses the concrete date/time, so

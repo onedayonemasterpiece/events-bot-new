@@ -6,6 +6,11 @@ adjudicated clusters whose complete pre-write state is pinned by a census hash,
 row hashes, candidate-state rows, and source occurrence bindings.  Dry-run is
 the CLI default.  Apply is fail-closed and uses ``BEGIN IMMEDIATE``.
 
+The same reviewed cluster may carry narrowly allowlisted, before/after-pinned
+date-anchor corrections.  They share the merge transaction, backup, verify,
+rollback, and exact-second-apply receipt instead of using an unguarded SQL
+sidecar.
+
 No public or social API is called.  Public URLs on obsolete Event rows are
 retained and returned as a cleanup handoff mapping.
 """
@@ -61,7 +66,41 @@ PUBLICATION_OWNERSHIP_FIELDS = (
     "stored_post_id",
     "live_post_id",
 )
-PAIR_RELATIONS = {"MERGE", "KEEP_DISTINCT_RELATED", "PARENT_CHILD"}
+PAIR_RELATIONS = {
+    "MERGE",
+    "KEEP_DISTINCT_RELATED",
+    "KEEP_DISTINCT_OCCURRENCE",
+    "PARENT_CHILD",
+}
+CONTENT_UPDATE_FIELDS = {
+    "date",
+    "time",
+    "end_date",
+    "end_date_is_inferred",
+    "location_name",
+    "location_address",
+    "ticket_link",
+    "lifecycle_status",
+    "silent",
+    "identity_status",
+    "merged_into_event_id",
+}
+STATE_REPAIR_FIELDS = {
+    "event_source": {"event_id", "source_role"},
+    "event_source_fact": {"event_id", "source_id"},
+    "eventposter": {
+        "event_id",
+        "review_status",
+        "duplicate_of_id",
+        "review_reason",
+    },
+    "smart_update_candidate_state": {
+        "accepted_event_id",
+        "diagnostic_event_id",
+        "current_outcome",
+        "reason",
+    },
+}
 
 
 class RepairBlocked(RuntimeError):
@@ -232,7 +271,12 @@ def _load_manifest(path: str | Path) -> tuple[dict[str, Any], str]:
 
 def _validate_manifest_shape(
     manifest: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     if manifest.get("schema_version") != MANIFEST_VERSION:
         raise RepairBlocked("manifest_schema_version")
     if manifest.get("incident") != INCIDENT:
@@ -253,6 +297,10 @@ def _validate_manifest_shape(
     merges: list[dict[str, Any]] = []
     reviews: list[dict[str, Any]] = []
     validation_units: list[dict[str, Any]] = []
+    content_updates: list[dict[str, Any]] = []
+    content_update_ids: set[int] = set()
+    state_repairs: list[dict[str, Any]] = []
+    state_repair_keys: set[tuple[str, int]] = set()
     seen_ids: dict[int, str] = {}
     cluster_ids: set[str] = set()
     for cluster in clusters:
@@ -325,6 +373,78 @@ def _validate_manifest_shape(
             raise RepairBlocked(f"publication_constraints_required:{cluster_id}")
         validation_units.append(cluster)
 
+        unit_content_updates = cluster.get("content_updates", [])
+        if not isinstance(unit_content_updates, list):
+            raise RepairBlocked(f"content_updates_invalid:{cluster_id}")
+        for update in unit_content_updates:
+            if not isinstance(update, dict):
+                raise RepairBlocked(f"content_update_invalid:{cluster_id}")
+            try:
+                update_event_id = int(update["event_id"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RepairBlocked(f"content_update_event_id_invalid:{cluster_id}") from exc
+            before = update.get("before")
+            after = update.get("after")
+            if (
+                update_event_id not in event_ids
+                or update_event_id in content_update_ids
+                or not isinstance(before, dict)
+                or not isinstance(after, dict)
+                or not before
+                or set(before) != set(after)
+                or not set(before).issubset(CONTENT_UPDATE_FIELDS)
+                or before == after
+            ):
+                raise RepairBlocked(f"content_update_invalid:{cluster_id}:{update_event_id}")
+            content_update_ids.add(update_event_id)
+            content_updates.append(
+                {
+                    "cluster_id": cluster_id,
+                    "event_ids": list(event_ids),
+                    "event_id": update_event_id,
+                    "before": dict(before),
+                    "after": dict(after),
+                }
+            )
+
+        unit_state_repairs = cluster.get("state_repairs", [])
+        if not isinstance(unit_state_repairs, list):
+            raise RepairBlocked(f"state_repairs_invalid:{cluster_id}")
+        for repair in unit_state_repairs:
+            if not isinstance(repair, dict):
+                raise RepairBlocked(f"state_repair_invalid:{cluster_id}")
+            table = str(repair.get("table") or "")
+            try:
+                row_id = int(repair["id"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RepairBlocked(f"state_repair_id_invalid:{cluster_id}") from exc
+            before = repair.get("before")
+            after = repair.get("after")
+            key = (table, row_id)
+            if (
+                table not in STATE_REPAIR_FIELDS
+                or row_id <= 0
+                or key in state_repair_keys
+                or not isinstance(before, dict)
+                or not isinstance(after, dict)
+                or not before
+                or set(before) != set(after)
+                or not set(before).issubset(STATE_REPAIR_FIELDS[table])
+                or before == after
+            ):
+                raise RepairBlocked(f"state_repair_invalid:{cluster_id}:{table}:{row_id}")
+            state_repair_keys.add(key)
+            state_repairs.append(
+                {
+                    "cluster_id": cluster_id,
+                    "event_ids": list(event_ids),
+                    "table": table,
+                    "id": row_id,
+                    "before": dict(before),
+                    "after": dict(after),
+                }
+            )
+
         if is_component:
             pair_verdicts = cluster.get("pair_verdicts")
             if not isinstance(pair_verdicts, list) or not pair_verdicts:
@@ -382,6 +502,7 @@ def _validate_manifest_shape(
                             "conflicts": list(adjudication["conflicts"]),
                             "source_policy": cluster.get("source_policy"),
                             "poster_policy": cluster.get("poster_policy"),
+                            "poster_exclusions": [],
                             "public_mapping": {
                                 "canonical_id": pair_canonical,
                                 "obsolete_ids": [obsolete],
@@ -408,7 +529,11 @@ def _validate_manifest_shape(
                             "relation": (
                                 "related_but_distinct"
                                 if pair_relation == "KEEP_DISTINCT_RELATED"
-                                else "parent_child"
+                                else (
+                                    "distinct_occurrence"
+                                    if pair_relation == "KEEP_DISTINCT_OCCURRENCE"
+                                    else "parent_child"
+                                )
                             ),
                             **adjudication,
                         }
@@ -424,6 +549,43 @@ def _validate_manifest_shape(
                     raise RepairBlocked(f"source_policy_invalid:{cluster_id}")
                 if cluster.get("poster_policy") != "move_preserve_graph":
                     raise RepairBlocked(f"poster_policy_invalid:{cluster_id}")
+                poster_exclusions = cluster.get("poster_exclusions", [])
+                if not isinstance(poster_exclusions, list) or any(
+                    not isinstance(item, dict)
+                    or int(item.get("id") or 0) <= 0
+                    or not str(item.get("reason") or "")
+                    for item in poster_exclusions
+                ):
+                    raise RepairBlocked(f"poster_exclusions_invalid:{cluster_id}")
+                merge_obsolete_ids = {
+                    int(value)
+                    for item in component_merges
+                    for value in item["obsolete_ids"]
+                }
+                seen_exclusion_ids: set[int] = set()
+                for exclusion in poster_exclusions:
+                    poster_id = int(exclusion["id"])
+                    try:
+                        exclusion_obsolete_id = int(exclusion["obsolete_id"])
+                    except (KeyError, TypeError, ValueError) as exc:
+                        raise RepairBlocked(
+                            f"poster_exclusion_obsolete_required:{cluster_id}:{poster_id}"
+                        ) from exc
+                    if (
+                        poster_id in seen_exclusion_ids
+                        or exclusion_obsolete_id not in merge_obsolete_ids
+                    ):
+                        raise RepairBlocked(
+                            f"poster_exclusion_component_invalid:{cluster_id}:{poster_id}"
+                        )
+                    seen_exclusion_ids.add(poster_id)
+                for merge in component_merges:
+                    obsolete_id = int(merge["obsolete_ids"][0])
+                    merge["poster_exclusions"] = [
+                        dict(exclusion)
+                        for exclusion in poster_exclusions
+                        if int(exclusion["obsolete_id"]) == obsolete_id
+                    ]
                 if not isinstance(cluster.get("expected_candidate_states"), list):
                     raise RepairBlocked(f"candidate_constraints_required:{cluster_id}")
                 if not isinstance(cluster.get("expected_source_bindings"), list):
@@ -441,6 +603,14 @@ def _validate_manifest_shape(
                 raise RepairBlocked(f"source_policy_invalid:{cluster_id}")
             if cluster.get("poster_policy") != "move_preserve_graph":
                 raise RepairBlocked(f"poster_policy_invalid:{cluster_id}")
+            poster_exclusions = cluster.get("poster_exclusions", [])
+            if not isinstance(poster_exclusions, list) or any(
+                not isinstance(item, dict)
+                or int(item.get("id") or 0) <= 0
+                or not str(item.get("reason") or "")
+                for item in poster_exclusions
+            ):
+                raise RepairBlocked(f"poster_exclusions_invalid:{cluster_id}")
             if not isinstance(cluster.get("expected_candidate_states"), list):
                 raise RepairBlocked(f"candidate_constraints_required:{cluster_id}")
             if not isinstance(cluster.get("expected_source_bindings"), list):
@@ -468,7 +638,7 @@ def _validate_manifest_shape(
                 )
     if not merges:
         raise RepairBlocked("merge_cluster_required")
-    return merges, reviews, validation_units
+    return merges, reviews, validation_units, content_updates, state_repairs
 
 
 def _candidate_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -510,6 +680,8 @@ def _validate_preconditions(
     manifest: dict[str, Any],
     merges: list[dict[str, Any]],
     validation_units: list[dict[str, Any]],
+    content_updates: list[dict[str, Any]],
+    state_repairs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     _require_schema(con)
     selected_ids: set[int] = set()
@@ -527,6 +699,99 @@ def _validate_preconditions(
             for field, expected in anchor.items():
                 if field not in row.keys() or row[field] != expected:
                     raise RepairBlocked(f"event_anchor_mismatch:{cluster_id}:{event_id}:{field}")
+
+    for update in content_updates:
+        row = _event(con, int(update["event_id"]))
+        unit_ids = {int(value) for value in update["event_ids"]}
+        for merged_target in (
+            update["before"].get("merged_into_event_id"),
+            update["after"].get("merged_into_event_id"),
+        ):
+            if merged_target is not None and int(merged_target) not in unit_ids:
+                raise RepairBlocked(
+                    f"content_update_target_outside_unit:{update['cluster_id']}:{update['event_id']}:merged_into_event_id"
+                )
+        for field, expected in update["before"].items():
+            if field not in row.keys() or row[field] != expected:
+                raise RepairBlocked(
+                    f"content_update_before_mismatch:{update['cluster_id']}:{update['event_id']}:{field}"
+                )
+
+    for repair in state_repairs:
+        row = con.execute(
+            f'SELECT * FROM "{repair["table"]}" WHERE id=?',
+            (int(repair["id"]),),
+        ).fetchone()
+        if row is None:
+            raise RepairBlocked(
+                f"state_repair_row_missing:{repair['cluster_id']}:{repair['table']}:{repair['id']}"
+            )
+        unit_ids = {int(value) for value in repair["event_ids"]}
+        event_reference_fields = (
+            ("event_id",)
+            if repair["table"]
+            in {"event_source", "event_source_fact", "eventposter"}
+            else ("accepted_event_id", "diagnostic_event_id")
+        )
+        saw_event_reference = False
+        for field in event_reference_fields:
+            current = row[field] if field in row.keys() else None
+            after = repair["after"].get(field, current)
+            for value in (current, after):
+                if value is None:
+                    continue
+                saw_event_reference = True
+                if int(value) not in unit_ids:
+                    raise RepairBlocked(
+                        f"state_repair_target_outside_unit:{repair['cluster_id']}:{repair['table']}:{repair['id']}:{field}"
+                    )
+        if not saw_event_reference:
+            raise RepairBlocked(
+                f"state_repair_outside_unit:{repair['cluster_id']}:{repair['table']}:{repair['id']}"
+            )
+        if repair["table"] == "event_source_fact":
+            source_id = repair["after"].get("source_id", row["source_id"])
+            source = con.execute(
+                "SELECT event_id FROM event_source WHERE id=?", (int(source_id),)
+            ).fetchone()
+            if source is None or int(source["event_id"]) not in unit_ids:
+                raise RepairBlocked(
+                    f"state_repair_reference_outside_unit:{repair['cluster_id']}:event_source_fact:{repair['id']}:source_id"
+                )
+        if repair["table"] == "eventposter":
+            duplicate_of_id = repair["after"].get(
+                "duplicate_of_id", row["duplicate_of_id"]
+            )
+            if duplicate_of_id is not None:
+                duplicate = con.execute(
+                    "SELECT event_id FROM eventposter WHERE id=?",
+                    (int(duplicate_of_id),),
+                ).fetchone()
+                if duplicate is None or int(duplicate["event_id"]) not in unit_ids:
+                    raise RepairBlocked(
+                        f"state_repair_reference_outside_unit:{repair['cluster_id']}:eventposter:{repair['id']}:duplicate_of_id"
+                    )
+        for field, expected in repair["before"].items():
+            if field not in row.keys() or row[field] != expected:
+                raise RepairBlocked(
+                    f"state_repair_before_mismatch:{repair['cluster_id']}:{repair['table']}:{repair['id']}:{field}"
+                )
+
+    seen_excluded_posters: set[int] = set()
+    for cluster in merges:
+        obsolete_ids = {int(value) for value in cluster["obsolete_ids"]}
+        for exclusion in cluster.get("poster_exclusions", []):
+            poster_id = int(exclusion["id"])
+            if poster_id in seen_excluded_posters:
+                raise RepairBlocked(f"poster_exclusion_duplicate:{poster_id}")
+            seen_excluded_posters.add(poster_id)
+            row = con.execute(
+                "SELECT event_id FROM eventposter WHERE id=?", (poster_id,)
+            ).fetchone()
+            if row is None or int(row["event_id"]) not in obsolete_ids:
+                raise RepairBlocked(
+                    f"poster_exclusion_owner_mismatch:{cluster['cluster_id']}:{poster_id}"
+                )
 
     touched = sorted(selected_ids)
     placeholders = ",".join("?" for _ in touched)
@@ -624,7 +889,14 @@ def _cleanup_mapping(con: sqlite3.Connection, merges: Sequence[dict[str, Any]]) 
     return mapping
 
 
-def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[str, Any]]) -> tuple[int, int]:
+def _backup_rows(
+    con: sqlite3.Connection,
+    manifest_sha: str,
+    merges: Sequence[dict[str, Any]],
+    validation_units: Sequence[dict[str, Any]],
+    content_updates: Sequence[dict[str, Any]],
+    state_repairs: Sequence[dict[str, Any]],
+) -> tuple[int, int]:
     con.execute(
         f"CREATE TABLE IF NOT EXISTS {BACKUP_TABLE}(manifest_sha TEXT NOT NULL, table_name TEXT NOT NULL, row_id INTEGER NOT NULL, row_json TEXT NOT NULL, row_sha256 TEXT NOT NULL, PRIMARY KEY(manifest_sha,table_name,row_id))"
     )
@@ -636,16 +908,54 @@ def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[di
         con.execute(
             f"ALTER TABLE {RECEIPT_TABLE} ADD COLUMN observed_job_timestamp_drift_json TEXT NOT NULL DEFAULT '[]'"
         )
-    touched = sorted({int(c["canonical_id"]) for c in merges} | {int(x) for c in merges for x in c["obsolete_ids"]})
+    touched = sorted(
+        {
+            event_id
+            for unit in validation_units
+            for event_id in _unit_id_and_event_ids(unit)[1]
+        }
+        | {int(c["canonical_id"]) for c in merges}
+        | {int(x) for c in merges for x in c["obsolete_ids"]}
+        | {int(update["event_id"]) for update in content_updates}
+    )
     p = ",".join("?" for _ in touched)
     selections: list[tuple[str, str, tuple[Any, ...]]] = [
         ("event", f"id IN ({p})", tuple(touched)),
         ("event_source", f"event_id IN ({p})", tuple(touched)),
         ("eventposter", f"event_id IN ({p})", tuple(touched)),
-        ("joboutbox", f"event_id IN ({p}) AND status IN ('pending','paused')", tuple(touched)),
+        ("joboutbox", f"event_id IN ({p})", tuple(touched)),
         ("event_publication", f"event_id IN ({p})", tuple(touched)),
-        ("smart_update_candidate_state", f"accepted_event_id IN ({p})", tuple(touched)),
+        (
+            "smart_update_candidate_state",
+            f"accepted_event_id IN ({p}) OR diagnostic_event_id IN ({p})",
+            (*touched, *touched),
+        ),
+        (
+            "event_identity_decision_log",
+            f"event_id IN ({p}) OR candidate_event_id IN ({p})",
+            (*touched, *touched),
+        ),
     ]
+    selections.extend(
+        (str(repair["table"]), "id=?", (int(repair["id"]),))
+        for repair in state_repairs
+    )
+    selected_candidate_ids = [
+        int(row[0])
+        for row in con.execute(
+            f"SELECT id FROM smart_update_candidate_state WHERE accepted_event_id IN ({p}) OR diagnostic_event_id IN ({p}) ORDER BY id",
+            (*touched, *touched),
+        )
+    ]
+    if selected_candidate_ids:
+        cp = ",".join("?" for _ in selected_candidate_ids)
+        selections.append(
+            (
+                "smart_update_attempt",
+                f"candidate_state_id IN ({cp})",
+                tuple(selected_candidate_ids),
+            )
+        )
     touched_source_ids = [
         int(row[0])
         for row in con.execute(f"SELECT id FROM event_source WHERE event_id IN ({p}) ORDER BY id", tuple(touched))
@@ -683,6 +993,83 @@ def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[di
         con.execute("SELECT COUNT(*) FROM event_source_fact f LEFT JOIN event_source s ON s.id=f.source_id WHERE s.id IS NULL").fetchone()[0]
     )
     return baseline_fk, baseline_orphans
+
+
+def _apply_content_updates(
+    con: sqlite3.Connection, content_updates: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    diff: list[dict[str, Any]] = []
+    for update in content_updates:
+        event_id = int(update["event_id"])
+        before = dict(update["before"])
+        after = dict(update["after"])
+        row = _event(con, event_id)
+        for field, expected in before.items():
+            if row[field] != expected:
+                raise RepairBlocked(
+                    f"content_update_before_mismatch:{update['cluster_id']}:{event_id}:{field}"
+                )
+        fields = sorted(after)
+        con.execute(
+            f"UPDATE event SET {','.join(f'{field}=?' for field in fields)} WHERE id=?",
+            tuple(after[field] for field in fields) + (event_id,),
+        )
+        diff.append(
+            {
+                "table": "event",
+                "id": event_id,
+                "action": "content_update",
+                "fields": {field: {"before": before[field], "after": after[field]} for field in fields},
+            }
+        )
+    return diff
+
+
+def _apply_state_repairs(
+    con: sqlite3.Connection, state_repairs: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    diff: list[dict[str, Any]] = []
+    table_order = {
+        "event_source": 0,
+        "event_source_fact": 1,
+        "eventposter": 2,
+        "smart_update_candidate_state": 3,
+    }
+    for repair in sorted(
+        state_repairs,
+        key=lambda item: (table_order[str(item["table"])], int(item["id"])),
+    ):
+        table = str(repair["table"])
+        row_id = int(repair["id"])
+        row = con.execute(f'SELECT * FROM "{table}" WHERE id=?', (row_id,)).fetchone()
+        if row is None:
+            raise RepairBlocked(
+                f"state_repair_row_missing:{repair['cluster_id']}:{table}:{row_id}"
+            )
+        before = dict(repair["before"])
+        after = dict(repair["after"])
+        for field, expected in before.items():
+            if row[field] != expected:
+                raise RepairBlocked(
+                    f"state_repair_before_mismatch:{repair['cluster_id']}:{table}:{row_id}:{field}"
+                )
+        fields = sorted(after)
+        con.execute(
+            f'UPDATE "{table}" SET {",".join(f"{field}=?" for field in fields)} WHERE id=?',
+            tuple(after[field] for field in fields) + (row_id,),
+        )
+        diff.append(
+            {
+                "table": table,
+                "id": row_id,
+                "action": "state_repair",
+                "fields": {
+                    field: {"before": before[field], "after": after[field]}
+                    for field in fields
+                },
+            }
+        )
+    return diff
 
 
 def _replace_links(value: Any, replacements: dict[int, int], self_id: int) -> str:
@@ -756,6 +1143,10 @@ def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[li
     obsolete_ids = [int(x) for x in cluster["obsolete_ids"]]
     diff: list[dict[str, Any]] = []
     audit_ids: list[int] = []
+    poster_exclusions = {
+        int(item["id"]): str(item["reason"])
+        for item in cluster.get("poster_exclusions", [])
+    }
 
     for obsolete in obsolete_ids:
         sources = con.execute("SELECT * FROM event_source WHERE event_id=? ORDER BY id", (obsolete,)).fetchall()
@@ -783,6 +1174,22 @@ def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[li
 
         posters = con.execute("SELECT * FROM eventposter WHERE event_id=? ORDER BY id", (obsolete,)).fetchall()
         for poster in posters:
+            poster_id = int(poster["id"])
+            exclusion_reason = poster_exclusions.get(poster_id)
+            if exclusion_reason is not None:
+                con.execute(
+                    "UPDATE eventposter SET review_status='rejected',duplicate_of_id=NULL,review_reason=? WHERE id=?",
+                    (f"{INCIDENT}:{exclusion_reason}", poster_id),
+                )
+                diff.append(
+                    {
+                        "table": "eventposter",
+                        "id": poster_id,
+                        "action": "preserve_rejected_evidence",
+                        "event_id": obsolete,
+                    }
+                )
+                continue
             duplicate, matching_identities = _retained_poster_identity(
                 con,
                 canonical_event_id=canonical,
@@ -962,6 +1369,8 @@ def _receipt_current_hashes(
     audit_ids: Sequence[int],
     *,
     include_created_audits: bool,
+    scope_event_ids: Sequence[int] = (),
+    include_scope_graph: bool = False,
 ) -> dict[str, str | None]:
     result = _backup_current_hashes(con, manifest_sha)
     if include_created_audits:
@@ -971,10 +1380,19 @@ def _receipt_current_hashes(
                 (int(audit_id),),
             ).fetchone()
             result[f"created_audit:{int(audit_id)}"] = row_hash(row) if row is not None else None
+    if include_scope_graph:
+        result["scope_graph"] = cluster_graph_hash(con, scope_event_ids)
     return result
 
 
-def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def _verify(
+    con: sqlite3.Connection,
+    manifest_sha: str,
+    merges: Sequence[dict[str, Any]],
+    content_updates: Sequence[dict[str, Any]],
+    state_repairs: Sequence[dict[str, Any]],
+    scope_event_ids: Sequence[int],
+) -> dict[str, Any]:
     receipt = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
     if receipt is None or receipt["status"] != "applied":
         raise RepairBlocked("applied_receipt_missing")
@@ -983,11 +1401,14 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
     include_created_audits = any(
         str(key).startswith("created_audit:") for key in expected_after_hashes
     )
+    include_scope_graph = "scope_graph" in expected_after_hashes
     if _receipt_current_hashes(
         con,
         manifest_sha,
         receipt_audit_ids,
         include_created_audits=include_created_audits,
+        scope_event_ids=scope_event_ids,
+        include_scope_graph=include_scope_graph,
     ) != expected_after_hashes:
         raise RepairBlocked("verification_cas_mismatch")
     missing_receipt_audits = 0
@@ -1002,6 +1423,27 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
         missing_receipt_audits = len(receipt_audit_ids) - present
     if missing_receipt_audits:
         raise RepairBlocked(f"receipt_audit_rows_missing:{missing_receipt_audits}")
+    for update in content_updates:
+        row = _event(con, int(update["event_id"]))
+        for field, expected in update["after"].items():
+            if row[field] != expected:
+                raise RepairBlocked(
+                    f"content_update_after_mismatch:{update['cluster_id']}:{update['event_id']}:{field}"
+                )
+    for repair in state_repairs:
+        row = con.execute(
+            f'SELECT * FROM "{repair["table"]}" WHERE id=?',
+            (int(repair["id"]),),
+        ).fetchone()
+        if row is None:
+            raise RepairBlocked(
+                f"state_repair_row_missing:{repair['cluster_id']}:{repair['table']}:{repair['id']}"
+            )
+        for field, expected in repair["after"].items():
+            if row[field] != expected:
+                raise RepairBlocked(
+                    f"state_repair_after_mismatch:{repair['cluster_id']}:{repair['table']}:{repair['id']}:{field}"
+                )
     touched_obsolete = [int(x) for c in merges for x in c["obsolete_ids"]]
     for cluster in merges:
         canonical = int(cluster["canonical_id"])
@@ -1062,6 +1504,11 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
     ]
     poster_orphans = 0
     bad_poster_moves = 0
+    excluded_poster_ids = {
+        int(item["id"])
+        for cluster in merges
+        for item in cluster.get("poster_exclusions", [])
+    }
     if touched_poster_ids:
         pp = ",".join("?" for _ in touched_poster_ids)
         poster_orphans = int(
@@ -1075,6 +1522,18 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
             (manifest_sha,),
         ):
             before = json.loads(str(backup["row_json"]))
+            if int(before["id"]) in excluded_poster_ids:
+                current = con.execute(
+                    "SELECT event_id,review_status FROM eventposter WHERE id=?",
+                    (int(before["id"]),),
+                ).fetchone()
+                if (
+                    current is None
+                    or int(current["event_id"]) != int(before["event_id"])
+                    or current["review_status"] != "rejected"
+                ):
+                    bad_poster_moves += 1
+                continue
             expected_owner = canonical_by_obsolete.get(int(before["event_id"]))
             if expected_owner is None:
                 continue
@@ -1166,7 +1625,16 @@ def _restore_row(con: sqlite3.Connection, table: str, data: dict[str, Any]) -> N
     columns = list(data)
     existing = con.execute(f'SELECT 1 FROM "{table}" WHERE id=?', (int(data["id"]),)).fetchone()
     if existing:
-        update_columns = [column for column in columns if column != "id"]
+        if table == "joboutbox":
+            update_columns = [
+                column for column in JOB_STABLE_FIELDS if column != "id"
+            ]
+        elif table == "event_publication":
+            update_columns = [
+                column for column in PUBLICATION_OWNERSHIP_FIELDS if column != "id"
+            ]
+        else:
+            update_columns = [column for column in columns if column != "id"]
         assignments = ",".join('"{}"=?'.format(column) for column in update_columns)
         con.execute(
             f'UPDATE "{table}" SET {assignments} WHERE id=?',
@@ -1180,7 +1648,11 @@ def _restore_row(con: sqlite3.Connection, table: str, data: dict[str, Any]) -> N
         )
 
 
-def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
+def _rollback(
+    con: sqlite3.Connection,
+    manifest_sha: str,
+    scope_event_ids: Sequence[int],
+) -> dict[str, Any]:
     receipt = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
     if receipt is None or receipt["status"] != "applied":
         raise RepairBlocked("rollback_receipt_not_applied")
@@ -1189,11 +1661,14 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
     include_created_audits = any(
         str(key).startswith("created_audit:") for key in expected_after
     )
+    include_scope_graph = "scope_graph" in expected_after
     if _receipt_current_hashes(
         con,
         manifest_sha,
         audit_ids,
         include_created_audits=include_created_audits,
+        scope_event_ids=scope_event_ids,
+        include_scope_graph=include_scope_graph,
     ) != expected_after:
         raise RepairBlocked("rollback_cas_mismatch")
     if audit_ids:
@@ -1217,7 +1692,11 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
     for table, rows in backups.items():
         for data in rows:
             current = con.execute(f'SELECT * FROM "{table}" WHERE id=?', (int(data["id"]),)).fetchone()
-            if table == "event_publication":
+            if table == "joboutbox":
+                matches = current is not None and row_hash(
+                    _job_semantic_projection(current)
+                ) == row_hash(_job_semantic_projection(data))
+            elif table == "event_publication":
                 matches = current is not None and row_hash(
                     _publication_ownership_projection(current)
                 ) == row_hash(_publication_ownership_projection(data))
@@ -1236,7 +1715,20 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
     if mode not in {"dry-run", "apply", "verify", "rollback"}:
         raise RepairBlocked("mode_invalid")
     manifest, manifest_sha = _load_manifest(manifest_path)
-    merges, reviews, validation_units = _validate_manifest_shape(manifest)
+    (
+        merges,
+        reviews,
+        validation_units,
+        content_updates,
+        state_repairs,
+    ) = _validate_manifest_shape(manifest)
+    scope_event_ids = sorted(
+        {
+            event_id
+            for unit in validation_units
+            for event_id in _unit_id_and_event_ids(unit)[1]
+        }
+    )
     path = Path(db_path).expanduser().resolve()
     if not path.is_file():
         raise RepairBlocked("database_not_found")
@@ -1249,7 +1741,12 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         if mode == "dry-run":
             con.execute("PRAGMA query_only=ON")
             observed_timestamp_drift = _validate_preconditions(
-                con, manifest, merges, validation_units
+                con,
+                manifest,
+                merges,
+                validation_units,
+                content_updates,
+                state_repairs,
             )
             planned = [
                 {"cluster_id": c["cluster_id"], "canonical_id": int(c["canonical_id"]), "obsolete_ids": [int(x) for x in c["obsolete_ids"]], "action": "merge"}
@@ -1264,6 +1761,25 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                     "action": "record_pair_relation",
                 }
                 for review in reviews
+            )
+            planned.extend(
+                {
+                    "cluster_id": update["cluster_id"],
+                    "event_id": int(update["event_id"]),
+                    "action": "content_update",
+                    "fields": update["after"],
+                }
+                for update in content_updates
+            )
+            planned.extend(
+                {
+                    "cluster_id": repair["cluster_id"],
+                    "table": repair["table"],
+                    "id": int(repair["id"]),
+                    "action": "state_repair",
+                    "fields": repair["after"],
+                }
+                for repair in state_repairs
             )
             return {
                 "schema_version": MANIFEST_VERSION,
@@ -1286,11 +1802,18 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         if mode in {"verify", "rollback"} and RECEIPT_TABLE not in {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
             raise RepairBlocked("repair_receipt_table_missing")
         if mode == "verify":
-            verification = _verify(con, manifest_sha, merges)
+            verification = _verify(
+                con,
+                manifest_sha,
+                merges,
+                content_updates,
+                state_repairs,
+                scope_event_ids,
+            )
             con.commit()
             return {"schema_version": MANIFEST_VERSION, "incident": INCIDENT, "mode": mode, "status": "verified", "changed": False, "diff": [], "manifest_sha256": manifest_sha, "verification": verification, "cleanup_mapping": _cleanup_mapping(con, merges), "social_actions_performed": False}
         if mode == "rollback":
-            rolled_back = _rollback(con, manifest_sha)
+            rolled_back = _rollback(con, manifest_sha, scope_event_ids)
             con.commit()
             return {"schema_version": MANIFEST_VERSION, "incident": INCIDENT, "mode": mode, "status": "rolled_back", "changed": True, "manifest_sha256": manifest_sha, "rollback": rolled_back, "social_actions_performed": False}
 
@@ -1298,7 +1821,14 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         if RECEIPT_TABLE in {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
             existing = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
         if existing is not None and existing["status"] == "applied":
-            verification = _verify(con, manifest_sha, merges)
+            verification = _verify(
+                con,
+                manifest_sha,
+                merges,
+                content_updates,
+                state_repairs,
+                scope_event_ids,
+            )
             observed_timestamp_drift = json.loads(
                 str(
                     existing["observed_job_timestamp_drift_json"]
@@ -1314,15 +1844,29 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         # Therefore timestamp-only scheduler drift can be observed safely while
         # every stable semantic field and publication owner remains pinned.
         observed_timestamp_drift = _validate_preconditions(
-            con, manifest, merges, validation_units
+            con,
+            manifest,
+            merges,
+            validation_units,
+            content_updates,
+            state_repairs,
         )
-        baseline_fk, baseline_orphans = _backup_rows(con, manifest_sha, merges)
+        baseline_fk, baseline_orphans = _backup_rows(
+            con,
+            manifest_sha,
+            merges,
+            validation_units,
+            content_updates,
+            state_repairs,
+        )
         con.execute(
             f"INSERT INTO {RECEIPT_TABLE}(manifest_sha,incident,prevention_sha,census_sha,status,baseline_fk,baseline_orphans,observed_job_timestamp_drift_json) VALUES(?,?,?,?,?,?,?,?)",
             (manifest_sha, INCIDENT, manifest["prevention_sha"], manifest["census"]["sha256"], "applying", baseline_fk, baseline_orphans, _json(observed_timestamp_drift)),
         )
         diff: list[dict[str, Any]] = []
         audit_ids: list[int] = []
+        diff.extend(_apply_content_updates(con, content_updates))
+        diff.extend(_apply_state_repairs(con, state_repairs))
         for cluster in merges:
             cluster_diff, cluster_audits = _apply_cluster(con, cluster)
             diff.extend(cluster_diff)
@@ -1336,12 +1880,21 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             manifest_sha,
             audit_ids,
             include_created_audits=True,
+            scope_event_ids=scope_event_ids,
+            include_scope_graph=True,
         )
         con.execute(
             f"UPDATE {RECEIPT_TABLE} SET status='applied',after_hashes_json=?,audit_ids_json=?,diff_json=?,applied_at=? WHERE manifest_sha=?",
             (_json(after_hashes), _json(audit_ids), _json(diff), datetime.now(timezone.utc).isoformat(), manifest_sha),
         )
-        verification = _verify(con, manifest_sha, merges)
+        verification = _verify(
+            con,
+            manifest_sha,
+            merges,
+            content_updates,
+            state_repairs,
+            scope_event_ids,
+        )
         cleanup = _cleanup_mapping(con, merges)
         con.commit()
         return {

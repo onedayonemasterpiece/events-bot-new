@@ -402,21 +402,40 @@ The repair CAS now separates job state as follows:
   ownership drift;
 - receipt/verify/rollback/no-op CAS uses the same stable projection so a later
   scheduler timestamp does not invalidate an otherwise identical second
-  apply.
+  apply. The receipt includes every adjudicated unit and all stable job rows,
+  including completed/error work and distinct-only Events; rollback restores
+  stable job state without rewinding `updated_at` or `next_run_at`. Its stable
+  scope-graph also pins row membership and candidate-attempt history, blocking
+  post-apply job/source additions or attempt mutations while continuing to
+  ignore scheduler-only timestamps.
 
 Manifest components may now carry explicit pair-scoped verdicts. Merge edges
 form only their reviewed equivalence groups; `PARENT_CHILD` and related
-distinct edges never merge transitively and never generate implicit verdicts
-for every unordered pair. Evidence, conflicts and confidence belong to each
-declared pair. Audit-facing distinct rows retain `distinct_event` or
-`distinct_occurrence` while preserving the more specific semantic relation in
-their payload.
+or occurrence-distinct edges never merge transitively and never generate
+implicit verdicts for every unordered pair. Evidence, conflicts and confidence
+belong to each declared pair. Audit-facing distinct rows retain
+`distinct_event` or `distinct_occurrence` while preserving the more specific
+semantic relation in their payload.
 
 Qtickets product URLs are series/recall signals. Pairs `7604/7707`,
 `7580/7833` and `7805/8253` are different dated occurrences, not merge
 candidates. A concrete same-date/same-time replay may match; a different date
 or separately sold slot stays distinct. Vendor schedule end dates are source
 facts, not the `end_date` of a one-day excursion.
+
+The incident executor therefore accepts narrowly allowlisted, manifest-local
+before/after updates for the affected occurrence anchors (`date`, `time`,
+`end_date`, venue/address and ticket contact) plus the lifecycle/identity
+fields required to restore a genuine occurrence shell. The full Event row hash
+and cluster graph still pin the pre-state; every explicit `before` value is rechecked under
+`BEGIN IMMEDIATE`. A table/field allowlist also permits the same manifest to
+restore only the selected occurrence's source, fact, poster and accepted-
+candidate ownership. Updated rows are kept in the same incident backup and are
+covered by the same apply, verify, rollback and exact second-apply CAS receipt
+as the merge and pair-ledger operations. Reviewed source-carrier images that do
+not depict the merged occurrence may remain on the obsolete audit shell as
+rejected evidence rather than entering canonical reader media. This is an
+incident repair surface, not a new normal ingestion or prevention path.
 
 ### Required evidence
 

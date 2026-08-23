@@ -24,6 +24,7 @@ def _make_db(path: Path) -> None:
         """
         CREATE TABLE event(
           id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL, time TEXT NOT NULL,
+          end_date TEXT, end_date_is_inferred INTEGER NOT NULL DEFAULT 0,
           lifecycle_status TEXT NOT NULL DEFAULT 'active', silent INTEGER NOT NULL DEFAULT 0,
           identity_status TEXT NOT NULL DEFAULT 'canonical', merged_into_event_id INTEGER,
           linked_event_ids TEXT NOT NULL DEFAULT '[]', telegraph_url TEXT, ics_url TEXT,
@@ -282,7 +283,7 @@ def _mixed_component_manifest(db: Path, path: Path) -> dict:
     pairs = [
         {"left_id": 20, "right_id": 23, "relation": "MERGE", "canonical_id": 20},
         {"left_id": 21, "right_id": 24, "relation": "MERGE", "canonical_id": 21},
-        {"left_id": 20, "right_id": 21, "relation": "KEEP_DISTINCT_RELATED"},
+        {"left_id": 20, "right_id": 21, "relation": "KEEP_DISTINCT_OCCURRENCE"},
         {"left_id": 22, "right_id": 20, "relation": "PARENT_CHILD"},
     ]
     component = {
@@ -491,6 +492,103 @@ def test_scheduler_timestamp_only_drift_is_observed_and_apply_is_allowed(tmp_pat
     assert second["diff"] == []
 
 
+def test_post_apply_stable_job_drift_blocks_verify_and_second_apply(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    # A completed job was historically outside the backup receipt surface.
+    con.execute("UPDATE joboutbox SET last_result='operator drift' WHERE id=601")
+    con.commit()
+    con.close()
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "verify")
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "apply")
+
+
+def test_post_apply_distinct_component_source_drift_is_receipt_pinned(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    con.execute("UPDATE event_source SET event_id=30 WHERE id=120")
+    con.commit()
+    con.close()
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "verify")
+
+
+@pytest.mark.parametrize("kind", ["attempt_mutation", "job_insert", "source_insert"])
+def test_post_apply_scope_graph_blocks_attempt_drift_and_stable_membership_growth(
+    tmp_path: Path, kind: str
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    if kind == "attempt_mutation":
+        con.execute(
+            "UPDATE smart_update_attempt SET terminal_outcome='MERGED' WHERE id=400"
+        )
+    elif kind == "job_insert":
+        con.execute(
+            "INSERT INTO joboutbox"
+            "(id,event_id,task,status,attempts,payload,coalesce_key,updated_at,next_run_at) "
+            "VALUES(999,10,'telegraph_build','done',1,'null','telegraph:new',"
+            "'2026-08-23T12:00:00Z','2026-08-23T12:00:00Z')"
+        )
+    else:
+        con.execute(
+            "INSERT INTO event_source"
+            "(id,event_id,source_type,source_url,canonical_source_url) "
+            "VALUES(999,20,'telegram','https://t.me/source/new',"
+            "'https://t.me/source/new')"
+        )
+    con.commit()
+    con.close()
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "apply")
+
+
+def test_rollback_restores_job_stable_fields_but_preserves_scheduler_timestamps(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE joboutbox SET updated_at='2026-08-23T12:00:00Z',"
+        "next_run_at='2026-08-23T12:05:00Z' WHERE id=600"
+    )
+    con.commit()
+    con.close()
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT status,last_error,updated_at,next_run_at FROM joboutbox WHERE id=600"
+    ).fetchone() == (
+        "pending",
+        None,
+        "2026-08-23T12:00:00Z",
+        "2026-08-23T12:05:00Z",
+    )
+    con.close()
+
+
 @pytest.mark.parametrize(
     ("assignment", "expected"),
     [
@@ -656,6 +754,265 @@ def test_rollback_restores_rows_and_refuses_post_apply_drift(tmp_path: Path) -> 
     con.close()
 
 
+def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE event SET end_date='2026-10-30',end_date_is_inferred=0,"
+        "lifecycle_status='cancelled',silent=1,identity_status='merged',"
+        "merged_into_event_id=20 WHERE id=21"
+    )
+    con.execute("UPDATE event_source SET event_id=20 WHERE id=121")
+    con.execute(
+        "INSERT INTO event_source_fact(id,event_id,source_id,fact) "
+        "VALUES(503,20,121,'restored occurrence fact')"
+    )
+    con.execute(
+        "INSERT INTO eventposter(id,event_id,poster_hash,raw_sha256,review_status) "
+        "VALUES(220,20,'restored-poster','restored-raw','duplicate')"
+    )
+    con.execute(
+        "INSERT INTO smart_update_candidate_state"
+        "(id,occurrence_key,current_outcome,accepted_event_id,diagnostic_event_id,reason) "
+        "VALUES(302,'occ-restore','MERGED',20,20,'prior incident merge')"
+    )
+    con.commit()
+    con.close()
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][1]["content_updates"] = [
+        {
+            "event_id": 21,
+            "before": {
+                "end_date": "2026-10-30",
+                "end_date_is_inferred": 0,
+                "lifecycle_status": "cancelled",
+                "silent": 1,
+                "identity_status": "merged",
+                "merged_into_event_id": 20,
+            },
+            "after": {
+                "end_date": None,
+                "end_date_is_inferred": 0,
+                "lifecycle_status": "active",
+                "silent": 0,
+                "identity_status": "canonical",
+                "merged_into_event_id": None,
+            },
+        }
+    ]
+    manifest["clusters"][1]["state_repairs"] = [
+        {
+            "table": "event_source",
+            "id": 121,
+            "before": {"event_id": 20},
+            "after": {"event_id": 21},
+        },
+        {
+            "table": "event_source_fact",
+            "id": 503,
+            "before": {"event_id": 20},
+            "after": {"event_id": 21},
+        },
+        {
+            "table": "eventposter",
+            "id": 220,
+            "before": {"event_id": 20, "review_status": "duplicate"},
+            "after": {"event_id": 21, "review_status": "approved"},
+        },
+        {
+            "table": "smart_update_candidate_state",
+            "id": 302,
+            "before": {
+                "accepted_event_id": 20,
+                "diagnostic_event_id": 20,
+                "current_outcome": "MERGED",
+                "reason": "prior incident merge",
+            },
+            "after": {
+                "accepted_event_id": 21,
+                "diagnostic_event_id": 20,
+                "current_outcome": "CREATED",
+                "reason": "source-grounded occurrence restoration",
+            },
+        },
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    dry = repair.run(db, manifest_path)
+    assert dry["status"] == "ready"
+    assert any(item["action"] == "content_update" for item in dry["diff"])
+
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    assert applied["changed"] is True
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT end_date,end_date_is_inferred,lifecycle_status,silent,"
+        "identity_status,merged_into_event_id FROM event WHERE id=21"
+    ).fetchone() == (None, 0, "active", 0, "canonical", None)
+    assert con.execute("SELECT event_id FROM event_source WHERE id=121").fetchone()[0] == 21
+    assert con.execute("SELECT event_id FROM event_source_fact WHERE id=503").fetchone()[0] == 21
+    assert con.execute("SELECT event_id,review_status FROM eventposter WHERE id=220").fetchone() == (21, "approved")
+    assert con.execute("SELECT accepted_event_id,current_outcome FROM smart_update_candidate_state WHERE id=302").fetchone() == (21, "CREATED")
+    con.close()
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    noop = repair.run(db, manifest_path, "apply")
+    assert noop["status"] == "noop"
+    assert noop["changed"] is False
+    assert noop["diff"] == []
+
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT end_date,end_date_is_inferred,lifecycle_status,silent,"
+        "identity_status,merged_into_event_id FROM event WHERE id=21"
+    ).fetchone() == ("2026-10-30", 0, "cancelled", 1, "merged", 20)
+    assert con.execute("SELECT event_id FROM event_source WHERE id=121").fetchone()[0] == 20
+    assert con.execute("SELECT event_id FROM event_source_fact WHERE id=503").fetchone()[0] == 20
+    assert con.execute("SELECT event_id,review_status FROM eventposter WHERE id=220").fetchone() == (20, "duplicate")
+    assert con.execute("SELECT accepted_event_id,current_outcome FROM smart_update_candidate_state WHERE id=302").fetchone() == (20, "MERGED")
+    con.close()
+
+    drifted = copy.deepcopy(manifest)
+    drifted["clusters"][1]["content_updates"][0]["before"]["end_date"] = "2026-11-01"
+    drifted["census"]["sha256"] = repair.census_hash(
+        drifted["census"]["cutoff"], drifted["clusters"]
+    )
+    manifest_path.write_text(json.dumps(drifted), encoding="utf-8")
+    with pytest.raises(repair.RepairBlocked, match="content_update_before_mismatch"):
+        repair.run(db, manifest_path)
+
+
+def test_merge_can_preserve_rejected_unrelated_poster_evidence(tmp_path: Path) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][0]["poster_exclusions"] = [
+        {"id": 201, "reason": "source_carrier_unrelated_media"}
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    con = sqlite3.connect(db)
+    row = con.execute(
+        "SELECT event_id,review_status,duplicate_of_id,review_reason "
+        "FROM eventposter WHERE id=201"
+    ).fetchone()
+    assert row[:3] == (11, "rejected", None)
+    assert "source_carrier_unrelated_media" in row[3]
+    con.close()
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    noop = repair.run(db, manifest_path, "apply")
+    assert noop["status"] == "noop"
+    assert noop["diff"] == []
+
+
+def test_component_poster_exclusions_are_scoped_to_each_merge_edge(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _mixed_component_manifest(db, manifest_path)
+    con = sqlite3.connect(db)
+    con.executemany(
+        "INSERT INTO eventposter(id,event_id,poster_hash,raw_sha256,review_status) "
+        "VALUES(?,?,?,?,?)",
+        [
+            (206, 23, "carrier-23", "carrier-raw-23", "approved"),
+            (207, 24, "carrier-24", "carrier-raw-24", "approved"),
+        ],
+    )
+    con.commit()
+    con.close()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    manifest["clusters"][1]["expected_graph_sha256"] = repair.cluster_graph_hash(
+        con, manifest["clusters"][1]["event_ids"]
+    )
+    con.close()
+    manifest["clusters"][1]["poster_exclusions"] = [
+        {"id": 206, "obsolete_id": 23, "reason": "unrelated_carrier_media"},
+        {"id": 207, "obsolete_id": 24, "reason": "unrelated_carrier_media"},
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT event_id,review_status FROM eventposter WHERE id=206"
+    ).fetchone() == (23, "rejected")
+    assert con.execute(
+        "SELECT event_id,review_status FROM eventposter WHERE id=207"
+    ).fetchone() == (24, "rejected")
+    con.close()
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    assert repair.run(db, manifest_path, "apply")["status"] == "noop"
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
+
+
+def test_state_repair_cannot_move_row_outside_adjudicated_unit(tmp_path: Path) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][1]["state_repairs"] = [
+        {
+            "table": "event_source",
+            "id": 121,
+            "before": {"event_id": 21},
+            "after": {"event_id": 30},
+        }
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(repair.RepairBlocked, match="state_repair_target_outside_unit"):
+        repair.run(db, manifest_path)
+
+
+def test_content_update_cannot_reference_event_outside_adjudicated_unit(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][1]["content_updates"] = [
+        {
+            "event_id": 21,
+            "before": {"merged_into_event_id": None},
+            "after": {"merged_into_event_id": 30},
+        }
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(
+        repair.RepairBlocked, match="content_update_target_outside_unit"
+    ):
+        repair.run(db, manifest_path)
+
+
 def test_manifest_cross_cluster_and_census_hash_are_fail_closed(tmp_path: Path) -> None:
     db = tmp_path / "fixture.sqlite"
     manifest_path = tmp_path / "manifest.json"
@@ -711,7 +1068,7 @@ def test_mixed_component_executes_merges_and_only_explicit_pair_decisions(
     # component's other Cartesian pairs receive no inferred blanket verdict.
     assert len(rows) == 2
     relations = [json.loads(row["decision_payload"])["relation"] for row in rows]
-    assert relations.count("related_but_distinct") == 1
+    assert relations.count("distinct_occurrence") == 1
     assert relations.count("parent_child") == 1
     assert {(row["event_id"], row["candidate_event_id"]) for row in rows}.isdisjoint(
         {(20, 23), (21, 24)}
