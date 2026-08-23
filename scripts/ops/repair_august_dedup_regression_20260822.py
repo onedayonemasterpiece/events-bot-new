@@ -6,6 +6,11 @@ adjudicated clusters whose complete pre-write state is pinned by a census hash,
 row hashes, candidate-state rows, and source occurrence bindings.  Dry-run is
 the CLI default.  Apply is fail-closed and uses ``BEGIN IMMEDIATE``.
 
+The same reviewed cluster may carry narrowly allowlisted, before/after-pinned
+date-anchor corrections.  They share the merge transaction, backup, verify,
+rollback, and exact-second-apply receipt instead of using an unguarded SQL
+sidecar.
+
 No public or social API is called.  Public URLs on obsolete Event rows are
 retained and returned as a cleanup handoff mapping.
 """
@@ -62,6 +67,7 @@ PUBLICATION_OWNERSHIP_FIELDS = (
     "live_post_id",
 )
 PAIR_RELATIONS = {"MERGE", "KEEP_DISTINCT_RELATED", "PARENT_CHILD"}
+CONTENT_UPDATE_FIELDS = {"date", "time", "end_date", "end_date_is_inferred"}
 
 
 class RepairBlocked(RuntimeError):
@@ -232,7 +238,12 @@ def _load_manifest(path: str | Path) -> tuple[dict[str, Any], str]:
 
 def _validate_manifest_shape(
     manifest: dict[str, Any],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
     if manifest.get("schema_version") != MANIFEST_VERSION:
         raise RepairBlocked("manifest_schema_version")
     if manifest.get("incident") != INCIDENT:
@@ -253,6 +264,8 @@ def _validate_manifest_shape(
     merges: list[dict[str, Any]] = []
     reviews: list[dict[str, Any]] = []
     validation_units: list[dict[str, Any]] = []
+    content_updates: list[dict[str, Any]] = []
+    content_update_ids: set[int] = set()
     seen_ids: dict[int, str] = {}
     cluster_ids: set[str] = set()
     for cluster in clusters:
@@ -324,6 +337,39 @@ def _validate_manifest_shape(
         ):
             raise RepairBlocked(f"publication_constraints_required:{cluster_id}")
         validation_units.append(cluster)
+
+        unit_content_updates = cluster.get("content_updates", [])
+        if not isinstance(unit_content_updates, list):
+            raise RepairBlocked(f"content_updates_invalid:{cluster_id}")
+        for update in unit_content_updates:
+            if not isinstance(update, dict):
+                raise RepairBlocked(f"content_update_invalid:{cluster_id}")
+            try:
+                update_event_id = int(update["event_id"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RepairBlocked(f"content_update_event_id_invalid:{cluster_id}") from exc
+            before = update.get("before")
+            after = update.get("after")
+            if (
+                update_event_id not in event_ids
+                or update_event_id in content_update_ids
+                or not isinstance(before, dict)
+                or not isinstance(after, dict)
+                or not before
+                or set(before) != set(after)
+                or not set(before).issubset(CONTENT_UPDATE_FIELDS)
+                or before == after
+            ):
+                raise RepairBlocked(f"content_update_invalid:{cluster_id}:{update_event_id}")
+            content_update_ids.add(update_event_id)
+            content_updates.append(
+                {
+                    "cluster_id": cluster_id,
+                    "event_id": update_event_id,
+                    "before": dict(before),
+                    "after": dict(after),
+                }
+            )
 
         if is_component:
             pair_verdicts = cluster.get("pair_verdicts")
@@ -468,7 +514,7 @@ def _validate_manifest_shape(
                 )
     if not merges:
         raise RepairBlocked("merge_cluster_required")
-    return merges, reviews, validation_units
+    return merges, reviews, validation_units, content_updates
 
 
 def _candidate_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -510,6 +556,7 @@ def _validate_preconditions(
     manifest: dict[str, Any],
     merges: list[dict[str, Any]],
     validation_units: list[dict[str, Any]],
+    content_updates: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     _require_schema(con)
     selected_ids: set[int] = set()
@@ -527,6 +574,14 @@ def _validate_preconditions(
             for field, expected in anchor.items():
                 if field not in row.keys() or row[field] != expected:
                     raise RepairBlocked(f"event_anchor_mismatch:{cluster_id}:{event_id}:{field}")
+
+    for update in content_updates:
+        row = _event(con, int(update["event_id"]))
+        for field, expected in update["before"].items():
+            if field not in row.keys() or row[field] != expected:
+                raise RepairBlocked(
+                    f"content_update_before_mismatch:{update['cluster_id']}:{update['event_id']}:{field}"
+                )
 
     touched = sorted(selected_ids)
     placeholders = ",".join("?" for _ in touched)
@@ -624,7 +679,12 @@ def _cleanup_mapping(con: sqlite3.Connection, merges: Sequence[dict[str, Any]]) 
     return mapping
 
 
-def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[str, Any]]) -> tuple[int, int]:
+def _backup_rows(
+    con: sqlite3.Connection,
+    manifest_sha: str,
+    merges: Sequence[dict[str, Any]],
+    content_updates: Sequence[dict[str, Any]],
+) -> tuple[int, int]:
     con.execute(
         f"CREATE TABLE IF NOT EXISTS {BACKUP_TABLE}(manifest_sha TEXT NOT NULL, table_name TEXT NOT NULL, row_id INTEGER NOT NULL, row_json TEXT NOT NULL, row_sha256 TEXT NOT NULL, PRIMARY KEY(manifest_sha,table_name,row_id))"
     )
@@ -636,7 +696,11 @@ def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[di
         con.execute(
             f"ALTER TABLE {RECEIPT_TABLE} ADD COLUMN observed_job_timestamp_drift_json TEXT NOT NULL DEFAULT '[]'"
         )
-    touched = sorted({int(c["canonical_id"]) for c in merges} | {int(x) for c in merges for x in c["obsolete_ids"]})
+    touched = sorted(
+        {int(c["canonical_id"]) for c in merges}
+        | {int(x) for c in merges for x in c["obsolete_ids"]}
+        | {int(update["event_id"]) for update in content_updates}
+    )
     p = ",".join("?" for _ in touched)
     selections: list[tuple[str, str, tuple[Any, ...]]] = [
         ("event", f"id IN ({p})", tuple(touched)),
@@ -683,6 +747,36 @@ def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[di
         con.execute("SELECT COUNT(*) FROM event_source_fact f LEFT JOIN event_source s ON s.id=f.source_id WHERE s.id IS NULL").fetchone()[0]
     )
     return baseline_fk, baseline_orphans
+
+
+def _apply_content_updates(
+    con: sqlite3.Connection, content_updates: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    diff: list[dict[str, Any]] = []
+    for update in content_updates:
+        event_id = int(update["event_id"])
+        before = dict(update["before"])
+        after = dict(update["after"])
+        row = _event(con, event_id)
+        for field, expected in before.items():
+            if row[field] != expected:
+                raise RepairBlocked(
+                    f"content_update_before_mismatch:{update['cluster_id']}:{event_id}:{field}"
+                )
+        fields = sorted(after)
+        con.execute(
+            f"UPDATE event SET {','.join(f'{field}=?' for field in fields)} WHERE id=?",
+            tuple(after[field] for field in fields) + (event_id,),
+        )
+        diff.append(
+            {
+                "table": "event",
+                "id": event_id,
+                "action": "content_update",
+                "fields": {field: {"before": before[field], "after": after[field]} for field in fields},
+            }
+        )
+    return diff
 
 
 def _replace_links(value: Any, replacements: dict[int, int], self_id: int) -> str:
@@ -974,7 +1068,12 @@ def _receipt_current_hashes(
     return result
 
 
-def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def _verify(
+    con: sqlite3.Connection,
+    manifest_sha: str,
+    merges: Sequence[dict[str, Any]],
+    content_updates: Sequence[dict[str, Any]],
+) -> dict[str, Any]:
     receipt = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
     if receipt is None or receipt["status"] != "applied":
         raise RepairBlocked("applied_receipt_missing")
@@ -1002,6 +1101,13 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
         missing_receipt_audits = len(receipt_audit_ids) - present
     if missing_receipt_audits:
         raise RepairBlocked(f"receipt_audit_rows_missing:{missing_receipt_audits}")
+    for update in content_updates:
+        row = _event(con, int(update["event_id"]))
+        for field, expected in update["after"].items():
+            if row[field] != expected:
+                raise RepairBlocked(
+                    f"content_update_after_mismatch:{update['cluster_id']}:{update['event_id']}:{field}"
+                )
     touched_obsolete = [int(x) for c in merges for x in c["obsolete_ids"]]
     for cluster in merges:
         canonical = int(cluster["canonical_id"])
@@ -1236,7 +1342,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
     if mode not in {"dry-run", "apply", "verify", "rollback"}:
         raise RepairBlocked("mode_invalid")
     manifest, manifest_sha = _load_manifest(manifest_path)
-    merges, reviews, validation_units = _validate_manifest_shape(manifest)
+    merges, reviews, validation_units, content_updates = _validate_manifest_shape(manifest)
     path = Path(db_path).expanduser().resolve()
     if not path.is_file():
         raise RepairBlocked("database_not_found")
@@ -1249,7 +1355,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         if mode == "dry-run":
             con.execute("PRAGMA query_only=ON")
             observed_timestamp_drift = _validate_preconditions(
-                con, manifest, merges, validation_units
+                con, manifest, merges, validation_units, content_updates
             )
             planned = [
                 {"cluster_id": c["cluster_id"], "canonical_id": int(c["canonical_id"]), "obsolete_ids": [int(x) for x in c["obsolete_ids"]], "action": "merge"}
@@ -1264,6 +1370,15 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                     "action": "record_pair_relation",
                 }
                 for review in reviews
+            )
+            planned.extend(
+                {
+                    "cluster_id": update["cluster_id"],
+                    "event_id": int(update["event_id"]),
+                    "action": "content_update",
+                    "fields": update["after"],
+                }
+                for update in content_updates
             )
             return {
                 "schema_version": MANIFEST_VERSION,
@@ -1286,7 +1401,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         if mode in {"verify", "rollback"} and RECEIPT_TABLE not in {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
             raise RepairBlocked("repair_receipt_table_missing")
         if mode == "verify":
-            verification = _verify(con, manifest_sha, merges)
+            verification = _verify(con, manifest_sha, merges, content_updates)
             con.commit()
             return {"schema_version": MANIFEST_VERSION, "incident": INCIDENT, "mode": mode, "status": "verified", "changed": False, "diff": [], "manifest_sha256": manifest_sha, "verification": verification, "cleanup_mapping": _cleanup_mapping(con, merges), "social_actions_performed": False}
         if mode == "rollback":
@@ -1298,7 +1413,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         if RECEIPT_TABLE in {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
             existing = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
         if existing is not None and existing["status"] == "applied":
-            verification = _verify(con, manifest_sha, merges)
+            verification = _verify(con, manifest_sha, merges, content_updates)
             observed_timestamp_drift = json.loads(
                 str(
                     existing["observed_job_timestamp_drift_json"]
@@ -1314,15 +1429,18 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         # Therefore timestamp-only scheduler drift can be observed safely while
         # every stable semantic field and publication owner remains pinned.
         observed_timestamp_drift = _validate_preconditions(
-            con, manifest, merges, validation_units
+            con, manifest, merges, validation_units, content_updates
         )
-        baseline_fk, baseline_orphans = _backup_rows(con, manifest_sha, merges)
+        baseline_fk, baseline_orphans = _backup_rows(
+            con, manifest_sha, merges, content_updates
+        )
         con.execute(
             f"INSERT INTO {RECEIPT_TABLE}(manifest_sha,incident,prevention_sha,census_sha,status,baseline_fk,baseline_orphans,observed_job_timestamp_drift_json) VALUES(?,?,?,?,?,?,?,?)",
             (manifest_sha, INCIDENT, manifest["prevention_sha"], manifest["census"]["sha256"], "applying", baseline_fk, baseline_orphans, _json(observed_timestamp_drift)),
         )
         diff: list[dict[str, Any]] = []
         audit_ids: list[int] = []
+        diff.extend(_apply_content_updates(con, content_updates))
         for cluster in merges:
             cluster_diff, cluster_audits = _apply_cluster(con, cluster)
             diff.extend(cluster_diff)
@@ -1341,7 +1459,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             f"UPDATE {RECEIPT_TABLE} SET status='applied',after_hashes_json=?,audit_ids_json=?,diff_json=?,applied_at=? WHERE manifest_sha=?",
             (_json(after_hashes), _json(audit_ids), _json(diff), datetime.now(timezone.utc).isoformat(), manifest_sha),
         )
-        verification = _verify(con, manifest_sha, merges)
+        verification = _verify(con, manifest_sha, merges, content_updates)
         cleanup = _cleanup_mapping(con, merges)
         con.commit()
         return {

@@ -24,6 +24,7 @@ def _make_db(path: Path) -> None:
         """
         CREATE TABLE event(
           id INTEGER PRIMARY KEY, title TEXT NOT NULL, date TEXT NOT NULL, time TEXT NOT NULL,
+          end_date TEXT, end_date_is_inferred INTEGER NOT NULL DEFAULT 0,
           lifecycle_status TEXT NOT NULL DEFAULT 'active', silent INTEGER NOT NULL DEFAULT 0,
           identity_status TEXT NOT NULL DEFAULT 'canonical', merged_into_event_id INTEGER,
           linked_event_ids TEXT NOT NULL DEFAULT '[]', telegraph_url TEXT, ics_url TEXT,
@@ -654,6 +655,66 @@ def test_rollback_restores_rows_and_refuses_post_apply_drift(tmp_path: Path) -> 
     assert con.execute("SELECT COUNT(*) FROM event_identity_decision_log WHERE decision='repair_merge'").fetchone()[0] == 0
     assert con.execute("PRAGMA quick_check").fetchone()[0] == "ok"
     con.close()
+
+
+def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE event SET end_date='2026-10-30',end_date_is_inferred=0 WHERE id=21"
+    )
+    con.commit()
+    con.close()
+    manifest = _manifest(db, manifest_path)
+    manifest["clusters"][1]["content_updates"] = [
+        {
+            "event_id": 21,
+            "before": {"end_date": "2026-10-30", "end_date_is_inferred": 0},
+            "after": {"end_date": None, "end_date_is_inferred": 0},
+        }
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    dry = repair.run(db, manifest_path)
+    assert dry["status"] == "ready"
+    assert any(item["action"] == "content_update" for item in dry["diff"])
+
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    assert applied["changed"] is True
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT end_date,end_date_is_inferred FROM event WHERE id=21"
+    ).fetchone() == (None, 0)
+    con.close()
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    noop = repair.run(db, manifest_path, "apply")
+    assert noop["status"] == "noop"
+    assert noop["changed"] is False
+    assert noop["diff"] == []
+
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT end_date,end_date_is_inferred FROM event WHERE id=21"
+    ).fetchone() == ("2026-10-30", 0)
+    con.close()
+
+    drifted = copy.deepcopy(manifest)
+    drifted["clusters"][1]["content_updates"][0]["before"]["end_date"] = "2026-11-01"
+    drifted["census"]["sha256"] = repair.census_hash(
+        drifted["census"]["cutoff"], drifted["clusters"]
+    )
+    manifest_path.write_text(json.dumps(drifted), encoding="utf-8")
+    with pytest.raises(repair.RepairBlocked, match="content_update_before_mismatch"):
+        repair.run(db, manifest_path)
 
 
 def test_manifest_cross_cluster_and_census_hash_are_fail_closed(tmp_path: Path) -> None:

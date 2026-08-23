@@ -10,7 +10,11 @@
   drift, and verify/rollback/second-apply use the same stable projection.
   Repair manifests can express explicit mixed pair relations inside one
   component, so reviewed merge groups, parent/child edges and related-but-
-  distinct pairs no longer become one blanket transitive verdict.
+  distinct pairs no longer become one blanket transitive verdict. Reviewed
+  clusters may also carry allowlisted before/after CAS updates for
+  `date`/`time`/`end_date` anchors; those corrections now share the same
+  transaction, row backup, verify, rollback and exact second-apply receipt as
+  the dedup repair instead of requiring an unguarded SQL sidecar.
 
 - Fixed: Qtickets URLs now remain product/series recall signals rather than
   occurrence IDs. Parser occurrence identity uses the concrete date/time, so

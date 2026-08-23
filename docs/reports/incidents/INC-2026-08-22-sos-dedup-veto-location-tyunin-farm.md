@@ -418,6 +418,15 @@ candidates. A concrete same-date/same-time replay may match; a different date
 or separately sold slot stays distinct. Vendor schedule end dates are source
 facts, not the `end_date` of a one-day excursion.
 
+The incident executor therefore accepts narrowly allowlisted, manifest-local
+before/after updates only for `date`, `time`, `end_date` and
+`end_date_is_inferred`. The full Event row hash and cluster graph still pin the
+pre-state; the explicit `before` values are rechecked under `BEGIN IMMEDIATE`.
+Updated Event rows are kept in the same incident backup and are covered by the
+same apply, verify, rollback and exact second-apply CAS receipt as the merge and
+pair-ledger operations. This is an incident repair surface, not a new normal
+ingestion or prevention path.
+
 ### Required evidence
 
 - first-bad matrix/diff/runtime trace;
