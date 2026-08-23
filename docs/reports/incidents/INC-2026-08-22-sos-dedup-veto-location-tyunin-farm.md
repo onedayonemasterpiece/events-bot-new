@@ -1,10 +1,10 @@
 # INC-2026-08-22 August Smart Update deduplication regression
 
-Status: investigating
+Status: closed
 Severity: sev1
 Service: Smart Update identity / Telegram Monitoring / public projections
 Opened: 2026-08-22
-Closed: —
+Closed: 2026-08-23
 Owners: events-bot maintainer / Codex
 Related incidents: `INC-2026-05-30-active-duplicate-events-recall-gate`, `INC-2026-07-11-event-vector-sidecar-sync-stalled`, `INC-2026-08-04-smart-update-identity-source-replay-corruption`, `INC-2026-08-10-smart-update-identity-terminal-loss`, `INC-2026-08-22-tyunin-farm-location-drift`
 Related docs: `docs/features/smart-event-update/README.md`, `docs/features/smart-event-update/identity-state-machine.md`, `docs/features/unsigned-personalization/semantic-vector-retrieval.md`, `docs/operations/smart-update-prod-audit.md`
@@ -130,6 +130,30 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   timeout. The minimal router correction makes both existing paths announce
   the same unavailable-action status; the gate is not weakened and no
   candidate or public root was mutated.
+- `2026-08-23 01:05Z` — PR #561 merges as
+  `dbbddfc1f603c16712c41e440c94146404ae2bbe` and is deployed from that exact
+  clean `origin/main` revision as Fly version `2023`. The release image is
+  `deployment-01M0P261GQ6XA1QMW2WCHQWF4H`, digest
+  `sha256:9978c0adebacb89d14ede38e0ec5342d1ebe40ee7426c6a93a661a46e3855d7f`.
+  Health, runtime file logging and SQLite remain ready/healthy.
+- `2026-08-23 01:16..03:38Z` — the exact-main compensating build
+  `static-site:production-secret-20260823T031459-e7257b8f:864b333daede`
+  completes for 544 Events / 4,036 files. Production-root and secret-candidate
+  Chromium gates both pass, including the focused-surface disabled-action
+  sequence. Fly validates and publishes the immutable 4,042-object review
+  candidate at `04:34:54Z`; its receipt records `root_mutation=false` and
+  `stable_ics_mutation=false`.
+- `2026-08-23 04:39Z` — a new untruncated production census covers 551
+  active/upcoming canonical Events and 1,127 recall-biased pairs. All six
+  hard-signal pairs are source-grounded legitimate occurrences or different
+  products at the same venue/time; unresolved hard duplicates remain zero.
+- `2026-08-23 05:03..05:04Z` — current-catalog vector reconciliation
+  `ops_run=7030` refreshes 49 changed embeddings; the immediately following
+  independently owned convergence pass `ops_run=7031` proves 550/550 eligible
+  documents in each kind, 1,100/1,100 current embeddings, zero missing/stale/
+  orphan rows and zero provider calls. Two overlapping preliminary attempts
+  (`7028/7029`) hit ordinary provider RPM deferral; they introduced no fallback
+  path or additional dedup adjudication and the durable owner converged.
 
 ## Root Cause
 
@@ -408,6 +432,11 @@ merged.
   only the document-body recovery branch announced unavailability. The router
   now applies the same existing inert/status contract in both focus states,
   with a real Chromium regression that asserts focus before `Enter`.
+- PR #561 (`dbbddfc1f603c16712c41e440c94146404ae2bbe`, Fly `2023`) ships that
+  focused-surface correction from exact `origin/main`. The final compensating
+  build succeeds with all release checks and both Chromium reports green. Its
+  immutable review candidate is verified at the public bearer surface without
+  promoting or mutating the public root.
 
 ## Corrective Actions
 
@@ -425,6 +454,8 @@ merged.
 - [x] Deploy prevention from exact `origin/main`; verify health and SQLite.
 - [x] Deploy raw-byte-safe repair hotfix, apply reviewed true duplicates and
   rebuild projections.
+- [x] Complete the vector-barrier-protected static catch-up and verify the
+  immutable review candidate without public-root promotion.
 
 ## Acceptance Criteria
 
@@ -442,15 +473,20 @@ merged.
 - prevention implementation: PR #554
   (`c0103be2c7ddc760486bd79e19825a69ceae4165`, Fly `2016`) and
   PR #556 (`2c2a10c1688f1b1a58521da44898dbe0905f0936`, Fly `2018`);
+- static release-gate completion: PR #561
+  (`dbbddfc1f603c16712c41e440c94146404ae2bbe`, Fly `2023`), exact-main image
+  `deployment-01M0P261GQ6XA1QMW2WCHQWF4H`, digest
+  `sha256:9978c0adebacb89d14ede38e0ec5342d1ebe40ee7426c6a93a661a46e3855d7f`;
 - repair safety: PR #555
   (`b662a4bef81efa431ae4642ceb62caa80e07973c`, Fly `2017`);
 - tests: 121 focused merge-path tests pass, including exact production-shaped
   `3216/8284` and `7907/8280`; the full named positive/negative corpus,
   replay ×2 and two-worker replay pass with no added normal-path call;
-- Fly deployment `2018` runs exact `origin/main@2c2a10c16`; machine
-  `48e419df93e078`, image
-  `deployment-01M0NB137BFTE9NSBK769YDA9S`; `/healthz` is ready and SQLite
-  `quick_check=ok`;
+- final Fly deployment `2023` runs exact
+  `origin/main@dbbddfc1f603c16712c41e440c94146404ae2bbe`; machine
+  `48e419df93e078`; `/healthz` is ready, the runtime mirror is enabled/active,
+  SQLite `quick_check=ok`, and the pre-existing foreign-key-check baseline is
+  unchanged at `195`;
 - manifest v4 apply/verify/second-apply: `applied / verified / noop`;
   candidate/source/poster violations all zero, foreign-key baseline
   `195 → 195`;
@@ -469,10 +505,34 @@ merged.
   `FINAL_RETRY/distinct_not_grounded` and also created nothing;
 - final production census SHA-256
   `5e083181783bc37670329ef7a5c1bfc359f7dc8686c5e512c66c5d034846cecf`
-  has zero unresolved hard duplicates.
-
-Static-site completion evidence is recorded below when the final vector
-barrier-protected operator build completes.
+  has zero unresolved hard duplicates. The closure recapture at
+  `2026-08-23T04:39:26Z` (gzip SHA-256
+  `ec91e8628daec59858327fd61cbd3f6319810e17ea0ed95e688ab8c1c62ea8bf`)
+  contains 551 current Events and 1,127 candidate pairs; its six hard-signal
+  pairs are all reviewed `KEEP_DISTINCT`, so the unresolved count remains
+  zero;
+- vector barrier input: `ops_run=7023` completed 544/544 documents in each
+  kind, reused 1,088 unchanged embeddings and made zero provider calls;
+- final post-catch-up vector convergence: `ops_run=7030` completed 550/550
+  eligible documents in each kind, refreshed 49 changed embeddings, reused
+  1,051 unchanged embeddings and left zero documents behind the call cap;
+  `ops_run=7031` then reused all 1,100 embeddings with zero provider calls and
+  proved 100% document/embedding coverage with zero missing, stale or orphan
+  rows;
+- final static catch-up:
+  `static-site:production-secret-20260823T031459-e7257b8f:864b333daede`
+  succeeded from repo SHA `dbbddfc1f603c16712c41e440c94146404ae2bbe`
+  with 544 Events, 3,733 pages and 4,036 files. The candidate archive SHA-256
+  is `ad8cbd589091a69c66b087da1bf83985bc63d581ad37d44a79cf8ed8df1435ec`;
+  Fly published and hash/MIME-verified 4,042 create-only objects. Candidate
+  root, today, tomorrow, weekend, sitemap, robots and discovery probes all
+  return HTTP 200. Both Chromium evidence reports are green, the public root
+  was not promoted (`root_mutation=false`) and stable ICS was not mutated. A
+  duplicate recovery claimant later overwrote historical job `66368` with its
+  stale claim-token error after the first claimant had already committed this
+  exact success. A receipt/history/repo-SHA-guarded CAS restored the terminal
+  row to `done/current_review_ready`; its second apply was a no-op and did not
+  alter the successful build state or candidate.
 
 ## Prevention
 
