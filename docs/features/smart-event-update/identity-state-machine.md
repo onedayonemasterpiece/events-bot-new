@@ -121,6 +121,21 @@ structured date, time, end date/scope and child ordinal. Free LLM prose alone is
 never the identity key. A same-time sibling needs a distinct producer child
 slot; a key collision is retryable rather than semantic merge permission.
 
+A vendor **product/series** identifier is not automatically an occurrence
+identifier. In particular, a Qtickets product URL can sell several concrete
+dates. Qtickets parser ownership therefore binds the product URL together with
+the concrete `date + time`; the vendor schedule/sales-window end is excluded
+from that key. The same product and slot may converge on an existing owner,
+while another date or separately sold time remains a distinct occurrence for
+the existing semantic adjudicator. This does not add an LLM stage or make the
+URL unique.
+
+For a grounded `FINAL_DISTINCT`, the final ledger carries the uniquely reviewed
+owner (when the blocked comparison set has exactly one Event) and the durable
+candidate-state ID. After creation, that state binds the accepted Event, so an
+audit can resolve the exact owner/candidate pair even after a later exact replay
+updates the state's current terminal outcome.
+
 The packet fingerprint is separate from both keys:
 
 - same canonical source + same key + same fingerprint →

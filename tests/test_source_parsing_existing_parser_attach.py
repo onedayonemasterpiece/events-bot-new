@@ -7,7 +7,7 @@ import source_parsing.handlers as handlers
 import source_parsing.philharmonia as philharmonia
 import source_parsing.qtickets as qtickets
 from db import Database
-from models import Event, EventSource
+from models import Event, EventSource, EventSourceFact
 from source_parsing.parser import TheatreEvent
 from smart_event_update import SmartUpdateTerminalOutcome
 
@@ -197,6 +197,82 @@ async def test_exact_shared_catalogue_url_attaches_supporting_terminal_noop(tmp_
         ).scalar_one()
     assert row.canonical_source_url == source_url
     assert row.source_role == "context_only"
+    await db.close()
+
+
+@pytest.mark.asyncio
+async def test_qtickets_exact_attach_persists_slot_identity_and_schedule_fact(tmp_path):
+    db = Database(str(tmp_path / "events.sqlite"))
+    await db.init()
+    event_date = (date.today() + timedelta(days=7)).isoformat()
+    source_url = "https://kaliningrad.qtickets.events/251797-svetlogorsk-i-yantarnyy"
+    async with db.get_session() as session:
+        stored = Event(
+            title="Светлогорск и Янтарный",
+            description="Однодневная экскурсия",
+            source_text="Источник",
+            date=event_date,
+            time="09:15",
+            location_name="Центральная площадь",
+            ticket_link=source_url,
+        )
+        session.add(stored)
+        await session.commit()
+        await session.refresh(stored)
+        event_id = int(stored.id)
+
+    candidate = TheatreEvent(
+        title="Светлогорск и Янтарный",
+        description="Однодневная экскурсия.",
+        date_raw=f"{event_date}T09:15:00+02:00",
+        parsed_date=event_date,
+        parsed_time="09:15",
+        end_date=None,
+        vendor_schedule_end_date=(date.today() + timedelta(days=70)).isoformat(),
+        location="Центральная площадь",
+        ticket_status="available",
+        url=source_url,
+        source_type="qtickets",
+    )
+
+    assert await handlers.attach_parser_source_to_exact_existing(
+        db, event_id, "qtickets", candidate
+    )
+    # Exact refresh is deterministic and idempotent: no second source/fact row.
+    assert await handlers.attach_parser_source_to_exact_existing(
+        db, event_id, "qtickets", candidate
+    )
+    async with db.get_session() as session:
+        source = (
+            await session.execute(
+                select(EventSource).where(EventSource.event_id == event_id)
+            )
+        ).scalar_one()
+        facts = list(
+            (
+                await session.execute(
+                    select(EventSourceFact).where(
+                        EventSourceFact.event_id == event_id,
+                        EventSourceFact.source_id == int(source.id),
+                    )
+                )
+            ).scalars()
+        )
+    assert source.source_role == "identity_bearing"
+    assert source.candidate_key
+    assert source.occurrence_key == handlers._parser_occurrence_key(
+        source_type="qtickets",
+        source_url=source_url,
+        date_value=event_date,
+        end_date_value=None,
+        time_value="09:15",
+        producer_ordinal=0,
+    )
+    assert "Окно расписания/продаж Qtickets до:" in (source.source_text or "")
+    assert "Дата окончания:" not in (source.source_text or "")
+    assert len(facts) == 1
+    assert facts[0].status == "note"
+    assert facts[0].fact.startswith("Окно расписания/продаж Qtickets до:")
     await db.close()
 
 

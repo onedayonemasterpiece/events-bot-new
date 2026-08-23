@@ -144,6 +144,9 @@ class TheatreEvent:
     parsed_date: Optional[str] = None  # ISO format YYYY-MM-DD
     parsed_time: Optional[str] = None  # HH:MM format
     end_date: Optional[str] = None  # ISO format YYYY-MM-DD
+    # Qtickets can expose the end of a whole product sales/schedule window in
+    # JSON-LD. Keep it as provenance instead of extending one dated occurrence.
+    vendor_schedule_end_date: Optional[str] = None
     
     # Prices
     ticket_price_min: Optional[int] = None

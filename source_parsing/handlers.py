@@ -14,6 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Optional, Sequence
 from urllib.parse import urlparse, urljoin
 
@@ -38,8 +39,8 @@ from source_parsing.parser import (
 from poster_media import PosterMedia, is_supabase_storage_url, process_media
 from kaggle_registry import list_jobs, remove_job
 from video_announce.kaggle_client import KaggleClient
-from models import Event, EventSource
-from smart_update_identity import canonicalize_identity_url
+from models import Event, EventSource, EventSourceFact
+from smart_update_identity import canonicalize_identity_url, stable_candidate_identity
 from smart_event_update import SmartUpdateTerminalOutcome
 
 logger = logging.getLogger(__name__)
@@ -618,6 +619,40 @@ async def attach_parser_source_to_exact_existing(
         canonical_source_url = canonicalize_identity_url(source_url)
         if not canonical_source_url:
             return False
+        normalized_source_name = str(source_name).strip().lower()
+        is_qtickets = normalized_source_name == "qtickets"
+        occurrence_key = None
+        candidate_key = None
+        projected_source_text = (event.description or "").strip() or None
+        schedule_fact = None
+        if is_qtickets:
+            occurrence_key = _parser_occurrence_key(
+                source_type="qtickets",
+                source_url=source_url,
+                date_value=event.parsed_date,
+                end_date_value=event.end_date,
+                time_value=event.parsed_time,
+                producer_ordinal=0,
+            )
+            candidate_key, _ = stable_candidate_identity(
+                SimpleNamespace(
+                    source_url=source_url,
+                    occurrence_key=occurrence_key,
+                )
+            )
+            projected_source_text = _build_parser_source_text(
+                event,
+                full_description=(event.description or "").strip(),
+                location_name=str(stored.location_name or event.location or "").strip(),
+            )
+            vendor_schedule_end_date = str(
+                getattr(event, "vendor_schedule_end_date", None) or ""
+            ).strip()
+            if vendor_schedule_end_date:
+                schedule_fact = (
+                    "Окно расписания/продаж Qtickets до: "
+                    f"{vendor_schedule_end_date}"
+                )
         # Prefer a row that already owns this canonical identity for the same
         # event. Legacy databases can contain both a raw/trailing-slash row and
         # a newer canonical row. Updating the raw row would collide with the
@@ -629,17 +664,25 @@ async def attach_parser_source_to_exact_existing(
                 for row in rows
                 if str(row.canonical_source_url or "").strip()
                 == canonical_source_url
+                and (
+                    not is_qtickets
+                    or str(row.occurrence_key or "").strip()
+                    in {"", str(occurrence_key)}
+                )
             ),
             None,
         )
         existing = existing_canonical or existing_by_url
+        conflict_conditions = [
+            EventSource.canonical_source_url == canonical_source_url,
+            EventSource.source_role == "identity_bearing",
+            EventSource.event_id != int(event_id),
+        ]
+        if is_qtickets:
+            conflict_conditions.append(EventSource.occurrence_key == occurrence_key)
         conflicting_owner = (
             await session.execute(
-                select(EventSource.event_id).where(
-                    EventSource.canonical_source_url == canonical_source_url,
-                    EventSource.source_role == "identity_bearing",
-                    EventSource.event_id != int(event_id),
-                ).limit(1)
+                select(EventSource.event_id).where(*conflict_conditions).limit(1)
             )
         ).scalar_one_or_none()
         # A catalogue/performance page may legitimately carry several exact
@@ -654,26 +697,63 @@ async def attach_parser_source_to_exact_existing(
             session.add(
                 EventSource(
                     event_id=int(event_id),
-                    source_type=f"parser:{str(source_name).strip().lower()}",
+                    source_type=f"parser:{normalized_source_name}",
                     source_url=source_url,
                     canonical_source_url=canonical_source_url,
                     source_role=source_role,
-                    source_text=(event.description or "").strip() or None,
+                    source_text=projected_source_text,
+                    candidate_key=candidate_key,
+                    occurrence_key=occurrence_key,
                     imported_at=datetime.now(timezone.utc),
                     trust_level="high",
                 )
             )
+            await session.flush()
+            existing = next(
+                row
+                for row in (
+                    await session.execute(
+                        select(EventSource).where(
+                            EventSource.event_id == int(event_id),
+                            EventSource.source_url == source_url,
+                        )
+                    )
+                ).scalars()
+            )
         else:
-            existing.source_type = f"parser:{str(source_name).strip().lower()}"
+            existing.source_type = f"parser:{normalized_source_name}"
             existing.canonical_source_url = canonical_source_url
             if existing_canonical is None:
                 existing.source_role = source_role
-            if event.description and not existing.source_text:
+            if is_qtickets:
+                existing.source_text = projected_source_text
+                existing.candidate_key = candidate_key
+                existing.occurrence_key = occurrence_key
+            elif event.description and not existing.source_text:
                 existing.source_text = event.description.strip()
             if not existing.trust_level:
                 existing.trust_level = "high"
             existing.imported_at = datetime.now(timezone.utc)
             session.add(existing)
+        if schedule_fact and existing.id is not None:
+            already_recorded = (
+                await session.execute(
+                    select(EventSourceFact.id).where(
+                        EventSourceFact.event_id == int(event_id),
+                        EventSourceFact.source_id == int(existing.id),
+                        EventSourceFact.fact == schedule_fact,
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            if already_recorded is None:
+                session.add(
+                    EventSourceFact(
+                        event_id=int(event_id),
+                        source_id=int(existing.id),
+                        fact=schedule_fact,
+                        status="note",
+                    )
+                )
         await session.commit()
     return True
 
@@ -842,6 +922,15 @@ def _build_parser_source_text(
     if end_date_text and end_date_text != date_text:
         lines.append(f"Дата окончания: {end_date_text}")
 
+    vendor_schedule_end_date = str(
+        getattr(theatre_event, "vendor_schedule_end_date", None) or ""
+    ).strip()
+    if vendor_schedule_end_date:
+        lines.append(
+            "Окно расписания/продаж Qtickets до: "
+            f"{vendor_schedule_end_date} (метаданные продукта; не дата окончания occurrence)"
+        )
+
     time_text = str(theatre_event.parsed_time or "").strip()
     if time_text and time_text != "00:00":
         lines.append(f"Время: {time_text}")
@@ -884,8 +973,12 @@ def _build_parser_source_text(
                 "Контракт источника:",
                 (
                     "Это структурированная билетная страница Qtickets: "
-                    "название, площадка, адрес и даты выше являются "
-                    "каноническими полями страницы. OCR афиши используй "
+                    "название, площадка, адрес и конкретные дата/время occurrence "
+                    "выше являются каноническими полями страницы. Окно расписания/"
+                    "продаж относится ко всему продукту и не задаёт end_date этой "
+                    "occurrence само по себе. Указывай end_date только когда "
+                    "описание явно подтверждает непрерывное многодневное событие. "
+                    "OCR афиши используй "
                     "только как дополнительный источник фактов; не заменяй "
                     "название страницы отдельными словами с афиши, если "
                     "каноническое название уже указано."
@@ -1434,14 +1527,20 @@ def _parser_occurrence_key(
 ) -> str:
     """Build one stable official-parser slot identity without prose fields."""
 
+    normalized_source_type = str(source_type or "theatre").strip().lower()
     occurrence_material = {
-        "source_type": str(source_type or "theatre").strip().lower(),
+        "source_type": normalized_source_type,
         "source_url": canonicalize_identity_url(source_url) or str(source_url),
         "date": str(date_value or "").strip(),
-        "end_date": str(end_date_value or "").strip(),
         "time": str(time_value or "00:00").strip().replace(".", ":"),
-        "producer_ordinal": int(producer_ordinal),
     }
+    if normalized_source_type != "qtickets":
+        occurrence_material.update(
+            {
+                "end_date": str(end_date_value or "").strip(),
+                "producer_ordinal": int(producer_ordinal),
+            }
+        )
     return "parser-slot:" + hashlib.sha256(
         json.dumps(
             occurrence_material,
@@ -1570,7 +1669,6 @@ async def add_new_event_via_queue(
             draft.date = theatre_event.parsed_date
         if theatre_event.parsed_time:
             draft.time = theatre_event.parsed_time
-            
         # Override prices if available
         if theatre_event.ticket_price_min is not None:
             draft.ticket_price_min = theatre_event.ticket_price_min
@@ -1690,6 +1788,9 @@ async def add_new_event_via_queue(
                 pushkin_card=bool(draft.pushkin_card),
                 search_digest=draft.search_digest,
                 raw_excerpt=final_description,
+                vendor_schedule_end_date=(
+                    getattr(theatre_event, "vendor_schedule_end_date", None) or None
+                ),
                 posters=posters,
                 producer_ordinal=effective_producer_ordinal,
                 occurrence_key=parser_occurrence_key,

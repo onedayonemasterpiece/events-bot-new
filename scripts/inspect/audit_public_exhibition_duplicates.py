@@ -72,7 +72,12 @@ _AUTHORITATIVE_REVIEW_STAGES = {
     "final_merge_identity_gate",
     "manual_pair_review_v1",
 }
-_KEEP_DISTINCT_RELATIONS = {"distinct_event", "distinct_occurrence"}
+_KEEP_DISTINCT_RELATIONS = {
+    "distinct_event",
+    "distinct_occurrence",
+    "related_but_distinct",
+    "parent_child",
+}
 _CONFIRMED_DECISIONS = {"CONFIRMED_DUPLICATE", "FINAL_MATCH"}
 
 
@@ -113,6 +118,7 @@ def _load_authoritative_pair_reviews(
         return out
 
     state_pairs: dict[int, tuple[int, int]] = {}
+    state_accepted: dict[int, int] = {}
     state_cols = _columns(conn, "smart_update_candidate_state")
     if {"id", "accepted_event_id", "diagnostic_event_id"} <= state_cols:
         for row in conn.execute(
@@ -120,9 +126,17 @@ def _load_authoritative_pair_reviews(
             "FROM smart_update_candidate_state "
             "WHERE accepted_event_id IS NOT NULL AND diagnostic_event_id IS NOT NULL"
         ):
-            key = tuple(sorted((int(row[1]), int(row[2]))))
+            state_id = int(row[0])
+            accepted_id = int(row[1])
+            state_accepted[state_id] = accepted_id
+            key = tuple(sorted((accepted_id, int(row[2]))))
             if key in pair_keys:
-                state_pairs[int(row[0])] = key
+                state_pairs[state_id] = key
+        for row in conn.execute(
+            "SELECT id, accepted_event_id FROM smart_update_candidate_state "
+            "WHERE accepted_event_id IS NOT NULL"
+        ):
+            state_accepted[int(row[0])] = int(row[1])
 
     candidate_expr = "candidate_event_id" if "candidate_event_id" in log_cols else "NULL"
     confidence_expr = "confidence" if "confidence" in log_cols else "NULL"
@@ -151,6 +165,12 @@ def _load_authoritative_pair_reviews(
             except (TypeError, ValueError):
                 state_id = 0
             key = state_pairs.get(state_id)
+            if key is None and row[1] is not None and state_id in state_accepted:
+                ledger_pair = tuple(
+                    sorted((int(row[1]), int(state_accepted[state_id])))
+                )
+                if ledger_pair in pair_keys:
+                    key = ledger_pair
         if key is None:
             continue
 

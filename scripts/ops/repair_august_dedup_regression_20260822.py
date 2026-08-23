@@ -38,6 +38,30 @@ PUBLIC_URL_COLUMNS = (
     "source_post_url",
     "source_vk_post_url",
 )
+JOB_STABLE_FIELDS = (
+    "id",
+    "event_id",
+    "task",
+    "status",
+    "attempts",
+    "payload",
+    "last_error",
+    "last_result",
+    "coalesce_key",
+    "depends_on",
+)
+JOB_VOLATILE_FIELDS = ("updated_at", "next_run_at")
+PUBLICATION_OWNERSHIP_FIELDS = (
+    "id",
+    "event_id",
+    "platform",
+    "target",
+    "stored_url",
+    "live_url",
+    "stored_post_id",
+    "live_post_id",
+)
+PAIR_RELATIONS = {"MERGE", "KEEP_DISTINCT_RELATED", "PARENT_CHILD"}
 
 
 class RepairBlocked(RuntimeError):
@@ -75,7 +99,8 @@ def _require_schema(con: sqlite3.Connection) -> None:
         "event_source": {"id", "event_id", "source_type", "source_url", "canonical_source_url", "candidate_key", "occurrence_key", "smart_update_candidate_id"},
         "event_source_fact": {"id", "event_id", "source_id", "fact"},
         "eventposter": {"id", "event_id", "poster_hash", "raw_sha256", "review_status", "duplicate_of_id", "review_reason"},
-        "joboutbox": {"id", "event_id", "status", "last_error"},
+        "joboutbox": {*JOB_STABLE_FIELDS, *JOB_VOLATILE_FIELDS},
+        "event_publication": set(PUBLICATION_OWNERSHIP_FIELDS),
         "smart_update_candidate_state": {"id", "occurrence_key", "current_outcome", "accepted_event_id", "diagnostic_event_id"},
         "smart_update_attempt": {"id", "candidate_state_id", "terminal_outcome", "accepted_event_id", "diagnostic_event_id"},
         "event_identity_decision_log": {"id", "event_id", "candidate_event_id", "source_id", "decision", "decision_reason", "confidence", "decided_by", "decision_payload"},
@@ -99,6 +124,25 @@ def _event(con: sqlite3.Connection, event_id: int) -> sqlite3.Row:
     return row
 
 
+def _job_semantic_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    return {field: item.get(field) for field in JOB_STABLE_FIELDS}
+
+
+def _job_timestamp_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    return {field: item.get(field) for field in JOB_VOLATILE_FIELDS}
+
+
+def _publication_ownership_projection(
+    row: sqlite3.Row | dict[str, Any],
+) -> dict[str, Any]:
+    """Pin the event-to-publication resource binding, not reconcile metadata."""
+
+    item = dict(row)
+    return {field: item.get(field) for field in PUBLICATION_OWNERSHIP_FIELDS}
+
+
 def cluster_graph_hash(con: sqlite3.Connection, event_ids: Sequence[int]) -> str:
     """Hash every incident-relevant row attached to an adjudicated cluster."""
 
@@ -120,7 +164,16 @@ def cluster_graph_hash(con: sqlite3.Connection, event_ids: Sequence[int]) -> str
         "event_source": sources,
         "event_source_fact": [],
         "eventposter": _rows(con, "eventposter", f"event_id IN ({p})", ids),
-        "joboutbox": _rows(con, "joboutbox", f"event_id IN ({p})", ids),
+        # Scheduler timestamps are deliberately not graph identity.  Their
+        # transaction-bound comparison is recorded separately at apply time.
+        "joboutbox": [
+            _job_semantic_projection(row)
+            for row in _rows(con, "joboutbox", f"event_id IN ({p})", ids)
+        ],
+        "event_publication": [
+            _publication_ownership_projection(row)
+            for row in _rows(con, "event_publication", f"event_id IN ({p})", ids)
+        ],
         "smart_update_candidate_state": candidates,
         "smart_update_attempt": [],
         "event_identity_decision_log": _rows(
@@ -177,7 +230,9 @@ def _load_manifest(path: str | Path) -> tuple[dict[str, Any], str]:
     return manifest, _sha(_json(manifest))
 
 
-def _validate_manifest_shape(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _validate_manifest_shape(
+    manifest: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     if manifest.get("schema_version") != MANIFEST_VERSION:
         raise RepairBlocked("manifest_schema_version")
     if manifest.get("incident") != INCIDENT:
@@ -196,27 +251,45 @@ def _validate_manifest_shape(manifest: dict[str, Any]) -> tuple[list[dict[str, A
         raise RepairBlocked("census_hash_mismatch")
 
     merges: list[dict[str, Any]] = []
-    distinct: list[dict[str, Any]] = []
+    reviews: list[dict[str, Any]] = []
+    validation_units: list[dict[str, Any]] = []
     seen_ids: dict[int, str] = {}
     cluster_ids: set[str] = set()
     for cluster in clusters:
         if not isinstance(cluster, dict):
             raise RepairBlocked("cluster_not_object")
-        cluster_id = str(cluster.get("cluster_id") or "")
+        is_component = "pair_verdicts" in cluster or "component_id" in cluster
+        cluster_id = str(
+            (cluster.get("component_id") if is_component else cluster.get("cluster_id"))
+            or ""
+        )
         if not cluster_id or cluster_id in cluster_ids:
             raise RepairBlocked("cluster_id_invalid")
         cluster_ids.add(cluster_id)
-        relation = str(cluster.get("relation") or "").upper()
-        if relation not in {"MERGE", "SAME_EVENT", "KEEP_DISTINCT"}:
-            raise RepairBlocked(f"cluster_relation_invalid:{cluster_id}")
-        try:
-            canonical_id = int(cluster["canonical_id"])
-            obsolete_ids = [int(item) for item in cluster.get("obsolete_ids", [])]
-        except (KeyError, TypeError, ValueError) as exc:
-            raise RepairBlocked(f"cluster_event_ids_invalid:{cluster_id}") from exc
-        if canonical_id <= 0 or not obsolete_ids or canonical_id in obsolete_ids or len(set(obsolete_ids)) != len(obsolete_ids):
-            raise RepairBlocked(f"cluster_event_ids_invalid:{cluster_id}")
-        for event_id in (canonical_id, *obsolete_ids):
+        if is_component:
+            try:
+                event_ids = [int(value) for value in cluster.get("event_ids", [])]
+            except (TypeError, ValueError) as exc:
+                raise RepairBlocked(f"component_event_ids_invalid:{cluster_id}") from exc
+            if (
+                len(event_ids) < 2
+                or any(value <= 0 for value in event_ids)
+                or len(set(event_ids)) != len(event_ids)
+            ):
+                raise RepairBlocked(f"component_event_ids_invalid:{cluster_id}")
+        else:
+            relation = str(cluster.get("relation") or "").upper()
+            if relation not in {"MERGE", "SAME_EVENT", "KEEP_DISTINCT"}:
+                raise RepairBlocked(f"cluster_relation_invalid:{cluster_id}")
+            try:
+                canonical_id = int(cluster["canonical_id"])
+                obsolete_ids = [int(item) for item in cluster.get("obsolete_ids", [])]
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RepairBlocked(f"cluster_event_ids_invalid:{cluster_id}") from exc
+            if canonical_id <= 0 or not obsolete_ids or canonical_id in obsolete_ids or len(set(obsolete_ids)) != len(obsolete_ids):
+                raise RepairBlocked(f"cluster_event_ids_invalid:{cluster_id}")
+            event_ids = [canonical_id, *obsolete_ids]
+        for event_id in event_ids:
             previous = seen_ids.get(event_id)
             if previous is not None:
                 raise RepairBlocked(f"cross_cluster_event_id:{event_id}:{previous}:{cluster_id}")
@@ -226,17 +299,141 @@ def _validate_manifest_shape(manifest: dict[str, Any]) -> tuple[list[dict[str, A
         confidence = cluster.get("confidence")
         if not isinstance(confidence, (int, float)) or not 0 <= float(confidence) <= 1:
             raise RepairBlocked(f"cluster_confidence_invalid:{cluster_id}")
-        if not isinstance(cluster.get("conflicts"), list) or not isinstance(cluster.get("public_mapping"), dict):
+        if not isinstance(cluster.get("conflicts"), list):
             raise RepairBlocked(f"cluster_evidence_shape:{cluster_id}")
         expected_hashes = cluster.get("expected_row_hashes")
-        if not isinstance(expected_hashes, dict) or set(expected_hashes) != {str(x) for x in (canonical_id, *obsolete_ids)}:
+        if not isinstance(expected_hashes, dict) or set(expected_hashes) != {str(x) for x in event_ids}:
             raise RepairBlocked(f"expected_row_hashes_incomplete:{cluster_id}")
         anchors = cluster.get("anchors")
         if not isinstance(anchors, dict) or set(anchors) != set(expected_hashes):
             raise RepairBlocked(f"anchors_incomplete:{cluster_id}")
         if not re.fullmatch(r"[0-9a-f]{64}", str(cluster.get("expected_graph_sha256") or "")):
             raise RepairBlocked(f"expected_graph_hash_required:{cluster_id}")
-        public_mapping = cluster["public_mapping"]
+        expected_jobs = cluster.get("expected_job_rows")
+        if not isinstance(expected_jobs, list) or any(
+            not isinstance(row, dict)
+            or not set(JOB_STABLE_FIELDS + JOB_VOLATILE_FIELDS).issubset(row)
+            for row in expected_jobs
+        ):
+            raise RepairBlocked(f"job_constraints_required:{cluster_id}")
+        expected_publications = cluster.get("expected_event_publications")
+        if not isinstance(expected_publications, list) or any(
+            not isinstance(row, dict)
+            or not set(PUBLICATION_OWNERSHIP_FIELDS).issubset(row)
+            for row in expected_publications
+        ):
+            raise RepairBlocked(f"publication_constraints_required:{cluster_id}")
+        validation_units.append(cluster)
+
+        if is_component:
+            pair_verdicts = cluster.get("pair_verdicts")
+            if not isinstance(pair_verdicts, list) or not pair_verdicts:
+                raise RepairBlocked(f"pair_verdicts_required:{cluster_id}")
+            seen_pairs: set[tuple[int, int]] = set()
+            component_merges: list[dict[str, Any]] = []
+            for verdict in pair_verdicts:
+                if not isinstance(verdict, dict):
+                    raise RepairBlocked(f"pair_verdict_invalid:{cluster_id}")
+                try:
+                    left_id = int(verdict["left_id"])
+                    right_id = int(verdict["right_id"])
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise RepairBlocked(f"pair_verdict_invalid:{cluster_id}") from exc
+                if left_id == right_id or left_id not in event_ids or right_id not in event_ids:
+                    raise RepairBlocked(f"pair_verdict_ids_invalid:{cluster_id}")
+                pair_key = tuple(sorted((left_id, right_id)))
+                if pair_key in seen_pairs:
+                    raise RepairBlocked(f"pair_verdict_duplicate:{cluster_id}:{pair_key[0]}:{pair_key[1]}")
+                seen_pairs.add(pair_key)
+                pair_relation = str(verdict.get("relation") or "").upper()
+                if pair_relation not in PAIR_RELATIONS:
+                    raise RepairBlocked(f"pair_relation_invalid:{cluster_id}:{left_id}:{right_id}")
+                adjudication = {
+                    "reason": verdict.get("reason", cluster["reason"]),
+                    "confidence": verdict.get("confidence", confidence),
+                    "evidence": verdict.get("evidence", cluster["evidence"]),
+                    "conflicts": verdict.get("conflicts", cluster["conflicts"]),
+                }
+                if (
+                    not str(adjudication["reason"] or "")
+                    or not isinstance(adjudication["confidence"], (int, float))
+                    or not 0 <= float(adjudication["confidence"]) <= 1
+                    or not isinstance(adjudication["evidence"], list)
+                    or not isinstance(adjudication["conflicts"], list)
+                ):
+                    raise RepairBlocked(f"pair_adjudication_invalid:{cluster_id}:{left_id}:{right_id}")
+                if pair_relation == "MERGE":
+                    try:
+                        pair_canonical = int(verdict["canonical_id"])
+                    except (KeyError, TypeError, ValueError) as exc:
+                        raise RepairBlocked(f"pair_merge_canonical_invalid:{cluster_id}:{left_id}:{right_id}") from exc
+                    if pair_canonical not in {left_id, right_id}:
+                        raise RepairBlocked(f"pair_merge_canonical_invalid:{cluster_id}:{left_id}:{right_id}")
+                    obsolete = right_id if pair_canonical == left_id else left_id
+                    component_merges.append(
+                        {
+                            "cluster_id": f"{cluster_id}:merge:{pair_key[0]}:{pair_key[1]}",
+                            "component_id": cluster_id,
+                            "canonical_id": pair_canonical,
+                            "obsolete_ids": [obsolete],
+                            "reason": str(adjudication["reason"]),
+                            "confidence": float(adjudication["confidence"]),
+                            "evidence": list(adjudication["evidence"]),
+                            "conflicts": list(adjudication["conflicts"]),
+                            "source_policy": cluster.get("source_policy"),
+                            "poster_policy": cluster.get("poster_policy"),
+                            "public_mapping": {
+                                "canonical_id": pair_canonical,
+                                "obsolete_ids": [obsolete],
+                            },
+                        }
+                    )
+                else:
+                    if "canonical_id" in verdict:
+                        raise RepairBlocked(f"pair_nonmerge_canonical_forbidden:{cluster_id}:{left_id}:{right_id}")
+                    if (
+                        float(adjudication["confidence"]) < 0.8
+                        or not adjudication["evidence"]
+                        or not adjudication["conflicts"]
+                    ):
+                        raise RepairBlocked(
+                            f"pair_keep_distinct_evidence_missing:{cluster_id}:{left_id}:{right_id}"
+                        )
+                    reviews.append(
+                        {
+                            "cluster_id": cluster_id,
+                            "component_id": cluster_id,
+                            "left_id": left_id,
+                            "right_id": right_id,
+                            "relation": (
+                                "related_but_distinct"
+                                if pair_relation == "KEEP_DISTINCT_RELATED"
+                                else "parent_child"
+                            ),
+                            **adjudication,
+                        }
+                    )
+            canonical_ids = {int(item["canonical_id"]) for item in component_merges}
+            obsolete_ids_in_merges = {
+                int(value) for item in component_merges for value in item["obsolete_ids"]
+            }
+            if canonical_ids & obsolete_ids_in_merges or len(obsolete_ids_in_merges) != len(component_merges):
+                raise RepairBlocked(f"pair_merge_execution_order_unsafe:{cluster_id}")
+            if component_merges:
+                if cluster.get("source_policy") != "move_unique_collapse_exact":
+                    raise RepairBlocked(f"source_policy_invalid:{cluster_id}")
+                if cluster.get("poster_policy") != "move_preserve_graph":
+                    raise RepairBlocked(f"poster_policy_invalid:{cluster_id}")
+                if not isinstance(cluster.get("expected_candidate_states"), list):
+                    raise RepairBlocked(f"candidate_constraints_required:{cluster_id}")
+                if not isinstance(cluster.get("expected_source_bindings"), list):
+                    raise RepairBlocked(f"occurrence_constraints_required:{cluster_id}")
+            merges.extend(sorted(component_merges, key=lambda item: (int(item["canonical_id"]), int(item["obsolete_ids"][0]))))
+            continue
+
+        public_mapping = cluster.get("public_mapping")
+        if not isinstance(public_mapping, dict):
+            raise RepairBlocked(f"cluster_evidence_shape:{cluster_id}")
         if public_mapping.get("canonical_id") != canonical_id or public_mapping.get("obsolete_ids") != obsolete_ids:
             raise RepairBlocked(f"public_mapping_mismatch:{cluster_id}")
         if relation in {"MERGE", "SAME_EVENT"}:
@@ -255,10 +452,23 @@ def _validate_manifest_shape(manifest: dict[str, Any]) -> tuple[list[dict[str, A
                 raise RepairBlocked(f"distinct_relation_invalid:{cluster_id}")
             if float(confidence) < 0.8 or not cluster["evidence"] or not cluster["conflicts"]:
                 raise RepairBlocked(f"keep_distinct_evidence_missing:{cluster_id}")
-            distinct.append(cluster)
+            for left_id, right_id in combinations(event_ids, 2):
+                reviews.append(
+                    {
+                        "cluster_id": cluster_id,
+                        "component_id": None,
+                        "left_id": left_id,
+                        "right_id": right_id,
+                        "relation": distinct_relation,
+                        "reason": cluster["reason"],
+                        "confidence": float(confidence),
+                        "evidence": list(cluster["evidence"]),
+                        "conflicts": list(cluster["conflicts"]),
+                    }
+                )
     if not merges:
         raise RepairBlocked("merge_cluster_required")
-    return merges, distinct
+    return merges, reviews, validation_units
 
 
 def _candidate_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -286,11 +496,26 @@ def _source_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _validate_preconditions(con: sqlite3.Connection, manifest: dict[str, Any], merges: list[dict[str, Any]], distinct: list[dict[str, Any]]) -> None:
+def _unit_id_and_event_ids(unit: dict[str, Any]) -> tuple[str, list[int]]:
+    if "pair_verdicts" in unit or "component_id" in unit:
+        return str(unit["component_id"]), [int(value) for value in unit["event_ids"]]
+    return str(unit["cluster_id"]), [
+        int(unit["canonical_id"]),
+        *(int(value) for value in unit["obsolete_ids"]),
+    ]
+
+
+def _validate_preconditions(
+    con: sqlite3.Connection,
+    manifest: dict[str, Any],
+    merges: list[dict[str, Any]],
+    validation_units: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     _require_schema(con)
-    for cluster in (*merges, *distinct):
-        cluster_id = str(cluster["cluster_id"])
-        ids = [int(cluster["canonical_id"]), *(int(x) for x in cluster["obsolete_ids"])]
+    selected_ids: set[int] = set()
+    for cluster in validation_units:
+        cluster_id, ids = _unit_id_and_event_ids(cluster)
+        selected_ids.update(ids)
         for event_id in ids:
             row = _event(con, event_id)
             expected_hash = str(cluster["expected_row_hashes"][str(event_id)])
@@ -302,10 +527,8 @@ def _validate_preconditions(con: sqlite3.Connection, manifest: dict[str, Any], m
             for field, expected in anchor.items():
                 if field not in row.keys() or row[field] != expected:
                     raise RepairBlocked(f"event_anchor_mismatch:{cluster_id}:{event_id}:{field}")
-        if cluster in distinct and cluster_graph_hash(con, ids) != cluster["expected_graph_sha256"]:
-            raise RepairBlocked(f"cluster_graph_hash_mismatch:{cluster_id}")
 
-    touched = sorted({int(c["canonical_id"]) for c in merges for _ in (0,)} | {int(x) for c in merges for x in c["obsolete_ids"]})
+    touched = sorted(selected_ids)
     placeholders = ",".join("?" for _ in touched)
     running = con.execute(
         f"SELECT id FROM joboutbox WHERE event_id IN ({placeholders}) AND status='running' ORDER BY id",
@@ -314,32 +537,71 @@ def _validate_preconditions(con: sqlite3.Connection, manifest: dict[str, Any], m
     if running:
         raise RepairBlocked("affected_job_running:" + ",".join(str(row[0]) for row in running))
 
-    for cluster in merges:
-        cluster_id = str(cluster["cluster_id"])
-        ids = [int(cluster["canonical_id"]), *(int(x) for x in cluster["obsolete_ids"])]
+    observed_timestamp_drift: list[dict[str, Any]] = []
+    for cluster in validation_units:
+        cluster_id, ids = _unit_id_and_event_ids(cluster)
         p = ",".join("?" for _ in ids)
-        actual_candidates = [
-            _candidate_projection(row)
-            for row in con.execute(
-                f"SELECT * FROM smart_update_candidate_state WHERE accepted_event_id IN ({p}) OR diagnostic_event_id IN ({p}) ORDER BY id",
-                (*ids, *ids),
-            ).fetchall()
+        if "expected_candidate_states" in cluster:
+            actual_candidates = [
+                _candidate_projection(row)
+                for row in con.execute(
+                    f"SELECT * FROM smart_update_candidate_state WHERE accepted_event_id IN ({p}) OR diagnostic_event_id IN ({p}) ORDER BY id",
+                    (*ids, *ids),
+                ).fetchall()
+            ]
+            expected_candidates = sorted(cluster["expected_candidate_states"], key=lambda row: int(row["id"]))
+            if actual_candidates != expected_candidates:
+                raise RepairBlocked(f"candidate_state_constraint_mismatch:{cluster_id}")
+        if "expected_source_bindings" in cluster:
+            actual_sources = [
+                _source_projection(row)
+                for row in con.execute(f"SELECT * FROM event_source WHERE event_id IN ({p}) ORDER BY id", tuple(ids)).fetchall()
+            ]
+            expected_sources = sorted(cluster["expected_source_bindings"], key=lambda row: int(row["id"]))
+            if actual_sources != expected_sources:
+                raise RepairBlocked(f"source_occurrence_constraint_mismatch:{cluster_id}")
+
+        actual_job_rows = _rows(con, "joboutbox", f"event_id IN ({p})", ids)
+        expected_job_rows = sorted(
+            cluster["expected_job_rows"], key=lambda row: int(row["id"])
+        )
+        actual_semantic = [_job_semantic_projection(row) for row in actual_job_rows]
+        expected_semantic = [_job_semantic_projection(row) for row in expected_job_rows]
+        if actual_semantic != expected_semantic:
+            raise RepairBlocked(f"job_semantic_constraint_mismatch:{cluster_id}")
+        expected_jobs_by_id = {int(row["id"]): row for row in expected_job_rows}
+        if len(expected_jobs_by_id) != len(expected_job_rows):
+            raise RepairBlocked(f"job_constraints_duplicate:{cluster_id}")
+        for actual in actual_job_rows:
+            job_id = int(actual["id"])
+            expected_timestamps = _job_timestamp_projection(expected_jobs_by_id[job_id])
+            observed_timestamps = _job_timestamp_projection(actual)
+            if expected_timestamps != observed_timestamps:
+                observed_timestamp_drift.append(
+                    {
+                        "id": job_id,
+                        "expected": expected_timestamps,
+                        "observed": observed_timestamps,
+                    }
+                )
+
+        actual_publications = [
+            _publication_ownership_projection(row)
+            for row in _rows(con, "event_publication", f"event_id IN ({p})", ids)
         ]
-        expected_candidates = sorted(cluster["expected_candidate_states"], key=lambda row: int(row["id"]))
-        if actual_candidates != expected_candidates:
-            raise RepairBlocked(f"candidate_state_constraint_mismatch:{cluster_id}")
-        actual_sources = [
-            _source_projection(row)
-            for row in con.execute(f"SELECT * FROM event_source WHERE event_id IN ({p}) ORDER BY id", tuple(ids)).fetchall()
-        ]
-        expected_sources = sorted(cluster["expected_source_bindings"], key=lambda row: int(row["id"]))
-        if actual_sources != expected_sources:
-            raise RepairBlocked(f"source_occurrence_constraint_mismatch:{cluster_id}")
+        expected_publications = sorted(
+            (
+                _publication_ownership_projection(row)
+                for row in cluster["expected_event_publications"]
+            ),
+            key=lambda row: int(row["id"]),
+        )
+        if actual_publications != expected_publications:
+            raise RepairBlocked(f"event_publication_constraint_mismatch:{cluster_id}")
         if cluster_graph_hash(con, ids) != cluster["expected_graph_sha256"]:
             raise RepairBlocked(f"cluster_graph_hash_mismatch:{cluster_id}")
 
-    # KEEP_DISTINCT rows are deliberately only validated census evidence.  They
-    # are excluded from every touched-id set and every write selection below.
+    return sorted(observed_timestamp_drift, key=lambda item: int(item["id"]))
 
 
 def _public_identity(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -367,8 +629,13 @@ def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[di
         f"CREATE TABLE IF NOT EXISTS {BACKUP_TABLE}(manifest_sha TEXT NOT NULL, table_name TEXT NOT NULL, row_id INTEGER NOT NULL, row_json TEXT NOT NULL, row_sha256 TEXT NOT NULL, PRIMARY KEY(manifest_sha,table_name,row_id))"
     )
     con.execute(
-        f"CREATE TABLE IF NOT EXISTS {RECEIPT_TABLE}(manifest_sha TEXT PRIMARY KEY, incident TEXT NOT NULL, prevention_sha TEXT NOT NULL, census_sha TEXT NOT NULL, status TEXT NOT NULL, baseline_fk INTEGER NOT NULL, baseline_orphans INTEGER NOT NULL, after_hashes_json TEXT, audit_ids_json TEXT NOT NULL DEFAULT '[]', diff_json TEXT NOT NULL DEFAULT '[]', applied_at TEXT, rolled_back_at TEXT)"
+        f"CREATE TABLE IF NOT EXISTS {RECEIPT_TABLE}(manifest_sha TEXT PRIMARY KEY, incident TEXT NOT NULL, prevention_sha TEXT NOT NULL, census_sha TEXT NOT NULL, status TEXT NOT NULL, baseline_fk INTEGER NOT NULL, baseline_orphans INTEGER NOT NULL, after_hashes_json TEXT, audit_ids_json TEXT NOT NULL DEFAULT '[]', diff_json TEXT NOT NULL DEFAULT '[]', observed_job_timestamp_drift_json TEXT NOT NULL DEFAULT '[]', applied_at TEXT, rolled_back_at TEXT)"
     )
+    receipt_columns = set(_table_columns(con, RECEIPT_TABLE))
+    if "observed_job_timestamp_drift_json" not in receipt_columns:
+        con.execute(
+            f"ALTER TABLE {RECEIPT_TABLE} ADD COLUMN observed_job_timestamp_drift_json TEXT NOT NULL DEFAULT '[]'"
+        )
     touched = sorted({int(c["canonical_id"]) for c in merges} | {int(x) for c in merges for x in c["obsolete_ids"]})
     p = ",".join("?" for _ in touched)
     selections: list[tuple[str, str, tuple[Any, ...]]] = [
@@ -376,6 +643,7 @@ def _backup_rows(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[di
         ("event_source", f"event_id IN ({p})", tuple(touched)),
         ("eventposter", f"event_id IN ({p})", tuple(touched)),
         ("joboutbox", f"event_id IN ({p}) AND status IN ('pending','paused')", tuple(touched)),
+        ("event_publication", f"event_id IN ({p})", tuple(touched)),
         ("smart_update_candidate_state", f"accepted_event_id IN ({p})", tuple(touched)),
     ]
     touched_source_ids = [
@@ -583,6 +851,8 @@ def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[li
             "conflicts": cluster["conflicts"],
             "social_actions_performed": False,
         }
+        if cluster.get("component_id"):
+            payload["component_id"] = str(cluster["component_id"])
         cursor = con.execute(
             "INSERT INTO event_identity_decision_log(event_id,candidate_event_id,decision,decision_reason,confidence,decided_by,decision_payload) VALUES(?,?,?,?,?,?,?)",
             (canonical, obsolete, "repair_merge", str(cluster["reason"]), float(cluster["confidence"]), "incident_manifest_repair", _json(payload)),
@@ -601,63 +871,69 @@ def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[li
     return diff, audit_ids
 
 
-def _record_keep_distinct_review(
+def _record_pair_review(
     con: sqlite3.Connection,
-    cluster: dict[str, Any],
+    review: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[int]]:
-    """Persist pair-correlated, source-grounded hard-negative verdicts.
+    """Persist one explicitly adjudicated, source-grounded hard negative.
 
-    The audit deliberately cannot treat a manifest's Event IDs as an allowlist.
-    Each retained pair therefore receives an append-only final/manual ledger row
-    containing the reviewed evidence and concrete identity conflict.
+    Mixed components must never infer a blanket distinct verdict.  MERGE pairs
+    are executed separately; only explicit relationship pairs arrive here.
     """
 
-    cluster_id = str(cluster["cluster_id"])
-    canonical = int(cluster["canonical_id"])
-    relation = str(cluster.get("distinct_relation") or "distinct_event")
+    cluster_id = str(review["cluster_id"])
+    component_id = review.get("component_id")
+    relation = str(review["relation"])
+    event_id = int(review["left_id"])
+    distinct_id = int(review["right_id"])
     diff: list[dict[str, Any]] = []
     audit_ids: list[int] = []
-    reviewed_ids = [canonical, *[int(value) for value in cluster["obsolete_ids"]]]
-    for event_id, distinct_id in combinations(reviewed_ids, 2):
-        payload = {
-            "stage": "manual_pair_review_v1",
-            "incident": INCIDENT,
-            "cluster_id": cluster_id,
-            "action": "FINAL_DISTINCT",
-            "relation": relation,
-            "owner_event_id": event_id,
+    payload = {
+        "stage": "manual_pair_review_v1",
+        "incident": INCIDENT,
+        "cluster_id": cluster_id,
+        "action": "FINAL_DISTINCT",
+        # Audit-compatible identity verdict.  The more specific semantic edge
+        # remains explicit and is not flattened into a component-wide rule.
+        "relation": relation,
+        "owner_event_id": event_id,
+        "candidate_event_id": distinct_id,
+        "evidence": list(review["evidence"]),
+        "blocking_conflicts": list(review["conflicts"]),
+        "confidence": float(review["confidence"]),
+        "social_actions_performed": False,
+    }
+    if component_id:
+        payload["component_id"] = str(component_id)
+    if relation == "parent_child":
+        payload["parent_event_id"] = event_id
+        payload["child_event_id"] = distinct_id
+    cursor = con.execute(
+        "INSERT INTO event_identity_decision_log("
+        "event_id,candidate_event_id,decision,decision_reason,confidence,"
+        "decided_by,decision_payload) VALUES(?,?,?,?,?,?,?)",
+        (
+            event_id,
+            distinct_id,
+            "FINAL_DISTINCT",
+            str(review["reason"]),
+            float(review["confidence"]),
+            "incident_manifest_repair",
+            _json(payload),
+        ),
+    )
+    audit_id = int(cursor.lastrowid)
+    audit_ids.append(audit_id)
+    diff.append(
+        {
+            "table": "event_identity_decision_log",
+            "id": audit_id,
+            "action": "record_pair_relation",
+            "event_id": event_id,
             "candidate_event_id": distinct_id,
-            "evidence": list(cluster["evidence"]),
-            "blocking_conflicts": list(cluster["conflicts"]),
-            "confidence": float(cluster["confidence"]),
-            "social_actions_performed": False,
+            "relation": relation,
         }
-        cursor = con.execute(
-            "INSERT INTO event_identity_decision_log("
-            "event_id,candidate_event_id,decision,decision_reason,confidence,"
-            "decided_by,decision_payload) VALUES(?,?,?,?,?,?,?)",
-            (
-                event_id,
-                distinct_id,
-                "FINAL_DISTINCT",
-                str(cluster["reason"]),
-                float(cluster["confidence"]),
-                "incident_manifest_repair",
-                _json(payload),
-            ),
-        )
-        audit_id = int(cursor.lastrowid)
-        audit_ids.append(audit_id)
-        diff.append(
-            {
-                "table": "event_identity_decision_log",
-                "id": audit_id,
-                "action": "record_keep_distinct",
-                "event_id": event_id,
-                "candidate_event_id": distinct_id,
-                "relation": relation,
-            }
-        )
+    )
     return diff, audit_ids
 
 
@@ -668,7 +944,15 @@ def _backup_current_hashes(con: sqlite3.Connection, manifest_sha: str) -> dict[s
         (manifest_sha,),
     ):
         current = con.execute(f'SELECT * FROM "{row["table_name"]}" WHERE id=?', (int(row["row_id"]),)).fetchone()
-        result[f"{row['table_name']}:{int(row['row_id'])}"] = row_hash(current) if current is not None else None
+        if current is None:
+            current_hash = None
+        elif str(row["table_name"]) == "joboutbox":
+            current_hash = row_hash(_job_semantic_projection(current))
+        elif str(row["table_name"]) == "event_publication":
+            current_hash = row_hash(_publication_ownership_projection(current))
+        else:
+            current_hash = row_hash(current)
+        result[f"{row['table_name']}:{int(row['row_id'])}"] = current_hash
     return result
 
 
@@ -919,13 +1203,27 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
     for row in con.execute(f"SELECT table_name,row_json FROM {BACKUP_TABLE} WHERE manifest_sha=? ORDER BY table_name,row_id", (manifest_sha,)):
         backups.setdefault(str(row["table_name"]), []).append(json.loads(str(row["row_json"])))
     # Parents/sources precede facts; event rows also repair external links.
-    for table in ("event", "event_source", "event_identity_decision_log", "event_source_fact", "eventposter", "joboutbox", "smart_update_candidate_state"):
+    for table in (
+        "event",
+        "event_source",
+        "event_identity_decision_log",
+        "event_source_fact",
+        "eventposter",
+        "joboutbox",
+        "smart_update_candidate_state",
+    ):
         for data in backups.get(table, []):
             _restore_row(con, table, data)
     for table, rows in backups.items():
         for data in rows:
             current = con.execute(f'SELECT * FROM "{table}" WHERE id=?', (int(data["id"]),)).fetchone()
-            if current is None or row_hash(current) != _sha(_json(data)):
+            if table == "event_publication":
+                matches = current is not None and row_hash(
+                    _publication_ownership_projection(current)
+                ) == row_hash(_publication_ownership_projection(data))
+            else:
+                matches = current is not None and row_hash(current) == _sha(_json(data))
+            if not matches:
                 raise RepairBlocked(f"rollback_restore_mismatch:{table}:{data['id']}")
     quick = str(con.execute("PRAGMA quick_check").fetchone()[0])
     if quick.lower() != "ok":
@@ -938,7 +1236,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
     if mode not in {"dry-run", "apply", "verify", "rollback"}:
         raise RepairBlocked("mode_invalid")
     manifest, manifest_sha = _load_manifest(manifest_path)
-    merges, distinct = _validate_manifest_shape(manifest)
+    merges, reviews, validation_units = _validate_manifest_shape(manifest)
     path = Path(db_path).expanduser().resolve()
     if not path.is_file():
         raise RepairBlocked("database_not_found")
@@ -950,19 +1248,22 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
     try:
         if mode == "dry-run":
             con.execute("PRAGMA query_only=ON")
-            _validate_preconditions(con, manifest, merges, distinct)
+            observed_timestamp_drift = _validate_preconditions(
+                con, manifest, merges, validation_units
+            )
             planned = [
                 {"cluster_id": c["cluster_id"], "canonical_id": int(c["canonical_id"]), "obsolete_ids": [int(x) for x in c["obsolete_ids"]], "action": "merge"}
                 for c in merges
             ]
             planned.extend(
                 {
-                    "cluster_id": c["cluster_id"],
-                    "canonical_id": int(c["canonical_id"]),
-                    "distinct_ids": [int(x) for x in c["obsolete_ids"]],
-                    "action": "record_keep_distinct",
+                    "cluster_id": review["cluster_id"],
+                    "left_id": int(review["left_id"]),
+                    "right_id": int(review["right_id"]),
+                    "relation": str(review["relation"]),
+                    "action": "record_pair_relation",
                 }
-                for c in distinct
+                for review in reviews
             )
             return {
                 "schema_version": MANIFEST_VERSION,
@@ -974,7 +1275,9 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                 "prevention_sha": manifest["prevention_sha"],
                 "census": manifest["census"],
                 "diff": planned,
-                "keep_distinct_count": len(distinct),
+                "pair_review_count": len(reviews),
+                "keep_distinct_count": len(reviews),
+                "observed_job_timestamp_drift": observed_timestamp_drift,
                 "cleanup_mapping": _cleanup_mapping(con, merges),
                 "social_actions_performed": False,
             }
@@ -993,18 +1296,30 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
 
         existing = None
         if RECEIPT_TABLE in {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
-            existing = con.execute(f"SELECT status FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
+            existing = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
         if existing is not None and existing["status"] == "applied":
             verification = _verify(con, manifest_sha, merges)
+            observed_timestamp_drift = json.loads(
+                str(
+                    existing["observed_job_timestamp_drift_json"]
+                    if "observed_job_timestamp_drift_json" in existing.keys()
+                    else "[]"
+                )
+            )
             con.commit()
-            return {"schema_version": MANIFEST_VERSION, "incident": INCIDENT, "mode": mode, "status": "noop", "changed": False, "diff": [], "manifest_sha256": manifest_sha, "verification": verification, "cleanup_mapping": _cleanup_mapping(con, merges), "social_actions_performed": False}
+            return {"schema_version": MANIFEST_VERSION, "incident": INCIDENT, "mode": mode, "status": "noop", "changed": False, "diff": [], "manifest_sha256": manifest_sha, "verification": verification, "observed_job_timestamp_drift": observed_timestamp_drift, "cleanup_mapping": _cleanup_mapping(con, merges), "social_actions_performed": False}
         if existing is not None:
             raise RepairBlocked(f"manifest_receipt_status:{existing['status']}")
-        _validate_preconditions(con, manifest, merges, distinct)
+        # This reread occurs only after BEGIN IMMEDIATE acquired the write lock.
+        # Therefore timestamp-only scheduler drift can be observed safely while
+        # every stable semantic field and publication owner remains pinned.
+        observed_timestamp_drift = _validate_preconditions(
+            con, manifest, merges, validation_units
+        )
         baseline_fk, baseline_orphans = _backup_rows(con, manifest_sha, merges)
         con.execute(
-            f"INSERT INTO {RECEIPT_TABLE}(manifest_sha,incident,prevention_sha,census_sha,status,baseline_fk,baseline_orphans) VALUES(?,?,?,?,?,?,?)",
-            (manifest_sha, INCIDENT, manifest["prevention_sha"], manifest["census"]["sha256"], "applying", baseline_fk, baseline_orphans),
+            f"INSERT INTO {RECEIPT_TABLE}(manifest_sha,incident,prevention_sha,census_sha,status,baseline_fk,baseline_orphans,observed_job_timestamp_drift_json) VALUES(?,?,?,?,?,?,?,?)",
+            (manifest_sha, INCIDENT, manifest["prevention_sha"], manifest["census"]["sha256"], "applying", baseline_fk, baseline_orphans, _json(observed_timestamp_drift)),
         )
         diff: list[dict[str, Any]] = []
         audit_ids: list[int] = []
@@ -1012,8 +1327,8 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             cluster_diff, cluster_audits = _apply_cluster(con, cluster)
             diff.extend(cluster_diff)
             audit_ids.extend(cluster_audits)
-        for cluster in distinct:
-            cluster_diff, cluster_audits = _record_keep_distinct_review(con, cluster)
+        for review in reviews:
+            cluster_diff, cluster_audits = _record_pair_review(con, review)
             diff.extend(cluster_diff)
             audit_ids.extend(cluster_audits)
         after_hashes = _receipt_current_hashes(
@@ -1040,6 +1355,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             "census": manifest["census"],
             "diff": diff,
             "verification": verification,
+            "observed_job_timestamp_drift": observed_timestamp_drift,
             "cleanup_mapping": cleanup,
             "social_actions_performed": False,
         }

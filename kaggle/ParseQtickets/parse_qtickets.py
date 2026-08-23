@@ -368,6 +368,17 @@ def parse_event_detail(url):
         except Exception:
             pass
 
+    occurrence_end_date = parsed_end_date
+    vendor_schedule_end_date = None
+    if parsed_date and parsed_end_date and parsed_end_date != parsed_date:
+        # Qtickets product JSON-LD spans the product's selectable schedule.
+        # Preserve that boundary as evidence, but do not deterministically turn
+        # it into the duration of this concrete startDate slot. The existing
+        # host LLM may still derive a genuine multi-day range from explicit
+        # descriptive evidence without another model call.
+        vendor_schedule_end_date = parsed_end_date
+        occurrence_end_date = None
+
     # Ticket Status
     ticket_status = "unknown"
     if json_ld and "offers" in json_ld:
@@ -400,7 +411,8 @@ def parse_event_detail(url):
         "date_raw": start_date,
         "parsed_date": parsed_date,
         "parsed_time": parsed_time,
-        "end_date": parsed_end_date,
+        "end_date": occurrence_end_date,
+        "vendor_schedule_end_date": vendor_schedule_end_date,
         "location": location,
         "location_address": location_address,
         "url": url,

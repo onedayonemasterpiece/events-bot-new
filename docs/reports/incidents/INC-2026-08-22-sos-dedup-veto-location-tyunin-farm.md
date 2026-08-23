@@ -378,6 +378,46 @@ merged.
 7. SHA is on `origin/main`; deploy is clean exact-main; `/healthz`, quick-check,
    logs and two full ingestion iterations pass.
 
+### 2026-08-23 pre-repair contract correction
+
+The first Terra manifest is invalid and must never be applied. Its final live
+dry-run correctly stopped before mutation when scheduler-owned
+`joboutbox.updated_at/next_run_at` changed, but the same manifest also treated
+three different Qtickets dates as merges and assigned one blanket verdict to a
+mixed admissions component.
+
+The repair CAS now separates job state as follows:
+
+- stable semantic fields (`id`, `event_id`, `task`, `status`, `attempts`,
+  `payload`, `last_error`, `last_result`, `coalesce_key`, `depends_on`) remain
+  fail-closed;
+- only `updated_at` and `next_run_at` may drift, and only after a
+  transaction-bound reread under `BEGIN IMMEDIATE`; observed drift is recorded
+  in the receipt;
+- any running job or stable-field change blocks apply;
+- selected `event_publication` ownership (`id`, Event owner, platform/target and
+  stored/live URL/post identifiers) is pinned and rechecked in the same
+  transaction; reconcile metadata (`status`, match method/confidence and
+  `resolved_at`) may move and is neither overwritten by rollback nor treated as
+  ownership drift;
+- receipt/verify/rollback/no-op CAS uses the same stable projection so a later
+  scheduler timestamp does not invalidate an otherwise identical second
+  apply.
+
+Manifest components may now carry explicit pair-scoped verdicts. Merge edges
+form only their reviewed equivalence groups; `PARENT_CHILD` and related
+distinct edges never merge transitively and never generate implicit verdicts
+for every unordered pair. Evidence, conflicts and confidence belong to each
+declared pair. Audit-facing distinct rows retain `distinct_event` or
+`distinct_occurrence` while preserving the more specific semantic relation in
+their payload.
+
+Qtickets product URLs are series/recall signals. Pairs `7604/7707`,
+`7580/7833` and `7805/8253` are different dated occurrences, not merge
+candidates. A concrete same-date/same-time replay may match; a different date
+or separately sold slot stays distinct. Vendor schedule end dates are source
+facts, not the `end_date` of a one-day excursion.
+
 ### Required evidence
 
 - first-bad matrix/diff/runtime trace;

@@ -1344,6 +1344,7 @@ def input_packet_fingerprint(value: Any) -> str:
             "time_is_default",
             "end_date",
             "end_date_is_inferred",
+            "vendor_schedule_end_date",
             "festival",
             "festival_context",
             "festival_full",

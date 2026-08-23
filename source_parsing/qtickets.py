@@ -323,6 +323,9 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     or (item.get("time") or "").strip()
                 )
                 end_date = (item.get("end_date") or "").strip() or None
+                vendor_schedule_end_date = (
+                    (item.get("vendor_schedule_end_date") or "").strip() or None
+                )
                 if end_date:
                     try:
                         end_date = datetime.strptime(end_date, "%Y-%m-%d").date().isoformat()
@@ -336,6 +339,23 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                                 title[:80],
                             )
                             end_date = None
+                if vendor_schedule_end_date:
+                    try:
+                        vendor_schedule_end_date = datetime.strptime(
+                            vendor_schedule_end_date, "%Y-%m-%d"
+                        ).date().isoformat()
+                    except ValueError:
+                        try:
+                            vendor_schedule_end_date = datetime.fromisoformat(
+                                vendor_schedule_end_date
+                            ).date().isoformat()
+                        except ValueError:
+                            logger.warning(
+                                "qtickets_parse: invalid vendor_schedule_end_date=%r title=%s",
+                                vendor_schedule_end_date,
+                                title[:80],
+                            )
+                            vendor_schedule_end_date = None
 
                 if not parsed_date and date_raw:
                     try:
@@ -356,6 +376,17 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
 
                 if not parsed_time:
                     parsed_time = "00:00"
+
+                # New parser dumps classify the JSON-LD product boundary
+                # explicitly. Preserve old dumps verbatim: without this marker
+                # the host cannot safely guess whether a historical range was
+                # a real multi-day event or a vendor schedule.
+                if (
+                    vendor_schedule_end_date
+                    and end_date == vendor_schedule_end_date
+                    and parsed_date != end_date
+                ):
+                    end_date = None
 
                 location = (
                     (item.get("location") or "").strip()
@@ -407,6 +438,7 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     parsed_date=parsed_date,
                     parsed_time=parsed_time,
                     end_date=end_date,
+                    vendor_schedule_end_date=vendor_schedule_end_date,
                     ticket_price_min=price_min,
                     ticket_price_max=price_max,
                 )

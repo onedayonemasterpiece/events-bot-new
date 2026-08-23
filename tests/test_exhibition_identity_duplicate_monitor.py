@@ -8,6 +8,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "inspect" / "audit_public_exhibition_duplicates.py"
 _SPEC = importlib.util.spec_from_file_location("audit_public_exhibition_duplicates", _SCRIPT)
 assert _SPEC and _SPEC.loader
@@ -303,6 +305,62 @@ def test_audit_partitions_recall_candidates_by_authoritative_evidence(tmp_path):
     )
 
 
+@pytest.mark.parametrize("relation", ["related_but_distinct", "parent_child"])
+def test_mixed_component_hard_negative_relations_are_authoritative(
+    tmp_path, relation
+):
+    db_path = tmp_path / f"{relation}.sqlite"
+    conn = sqlite3.connect(db_path)
+    _init(conn)
+    _init_review_tables(conn)
+    _insert(
+        conn,
+        1,
+        "Выставка Приёмная кампания",
+        "2026-08-20",
+        "2026-09-20",
+        "Школа искусств",
+        "Калининград",
+        "выставка",
+        "active",
+        "canonical",
+        None,
+    )
+    _insert(
+        conn,
+        2,
+        "Выставка Приёмная кампания отделения",
+        "2026-08-20",
+        "2026-09-20",
+        "Школа искусств",
+        "Калининград",
+        "выставка",
+        "active",
+        "canonical",
+        None,
+    )
+    _review(
+        conn,
+        1,
+        1,
+        2,
+        decision="FINAL_DISTINCT",
+        relation=relation,
+        evidence=["source-grounded campaign and department roles"],
+        conflicts=["scope and separately maintained identity"],
+    )
+    conn.commit()
+    conn.close()
+
+    payload = _monitor.build_audit_payload(
+        db_path, current=date(2026, 8, 23), since_days=14
+    )
+
+    assert payload["candidate_pair_count"] == 1
+    assert payload["keep_distinct_count"] == 1
+    assert payload["unresolved_count"] == 0
+
+
 def test_keep_distinct_requires_grounding_and_linked_ids_are_not_identity_proof(tmp_path):
     db_path = tmp_path / "linked.sqlite"
     conn = sqlite3.connect(db_path)
@@ -350,6 +408,46 @@ def test_keep_distinct_requires_grounding_and_linked_ids_are_not_identity_proof(
     reviewed = _monitor.build_audit_payload(db_path, current=date(2026, 8, 23))
     assert reviewed["keep_distinct_count"] == 1
     assert reviewed["unresolved_count"] == 0
+
+
+def test_final_distinct_correlates_owner_log_to_accepted_candidate_state(tmp_path):
+    db_path = tmp_path / "state-correlated.sqlite"
+    conn = sqlite3.connect(db_path)
+    _init(conn)
+    _init_review_tables(conn)
+    for values in (
+        (1, "Выставка одной серии", "2026-08-23", "2026-09-01", "Музей", "Калининград", "выставка", "active", "canonical", None),
+        (2, "Выставка одной серии", "2026-08-24", "2026-09-02", "Музей", "Калининград", "выставка", "active", "canonical", None),
+    ):
+        _insert(conn, *values)
+    conn.execute(
+        "insert into smart_update_candidate_state(id,accepted_event_id,diagnostic_event_id) values(7,2,NULL)"
+    )
+    conn.execute(
+        "insert into event_identity_decision_log(id,event_id,candidate_event_id,decision,decision_reason,confidence,decided_by,decision_payload,created_at) "
+        "values(1,1,NULL,'FINAL_DISTINCT','different dated occurrence',0.99,'smart_update.identity_gate',?,'2026-08-23 08:00:00')",
+        (
+            __import__("json").dumps(
+                {
+                    "stage": "final_identity_adjudicator",
+                    "action": "FINAL_DISTINCT",
+                    "relation": "distinct_occurrence",
+                    "evidence": ["source states the separately dated occurrence"],
+                    "blocking_conflicts": ["date: 2026-08-23 vs 2026-08-24"],
+                    "candidate_state_id": 7,
+                }
+            ),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    payload = _monitor.build_audit_payload(
+        db_path, current=date(2026, 8, 23), since_days=14
+    )
+    assert payload["candidate_pair_count"] == 1
+    assert payload["keep_distinct_count"] == 1
+    assert payload["unresolved_count"] == 0
 
 
 def test_production_shaped_august_duplicate_reviews_are_confirmed(tmp_path):
