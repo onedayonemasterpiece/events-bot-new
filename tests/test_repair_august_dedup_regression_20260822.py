@@ -66,7 +66,17 @@ def _make_db(path: Path) -> None:
           ON eventposter(event_id,raw_sha256)
           WHERE raw_sha256 IS NOT NULL AND TRIM(raw_sha256) != '';
         CREATE TABLE joboutbox(
-          id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, status TEXT NOT NULL, last_error TEXT,
+          id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, task TEXT NOT NULL,
+          status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, payload TEXT,
+          last_error TEXT, last_result TEXT, coalesce_key TEXT, depends_on INTEGER,
+          updated_at TEXT, next_run_at TEXT,
+          FOREIGN KEY(event_id) REFERENCES event(id)
+        );
+        CREATE TABLE event_publication(
+          id INTEGER PRIMARY KEY, event_id INTEGER NOT NULL, platform TEXT NOT NULL,
+          target TEXT NOT NULL, stored_url TEXT, live_url TEXT, stored_post_id INTEGER,
+          live_post_id INTEGER, match_method TEXT, match_confidence REAL,
+          status TEXT NOT NULL, resolved_at TEXT,
           FOREIGN KEY(event_id) REFERENCES event(id)
         );
         CREATE TABLE event_identity_decision_log(
@@ -127,8 +137,19 @@ def _make_db(path: Path) -> None:
         ],
     )
     con.executemany(
-        "INSERT INTO joboutbox VALUES(?,?,?,?)",
-        [(600, 11, "pending", None), (601, 11, "done", "historic result"), (602, 10, "paused", None)],
+        "INSERT INTO joboutbox VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (600, 11, "event_media_review", "pending", 0, '{"event_id":11}', None, None, "media:11", None, "2026-08-22T10:00:00Z", "2026-08-22T10:05:00Z"),
+            (601, 11, "telegraph_build", "done", 1, "null", None, "historic result", "telegraph:11", 600, "2026-08-22T09:00:00Z", "2026-08-22T09:00:00Z"),
+            (602, 10, "event_media_review", "paused", 2, '{"event_id":10}', "paused", None, "media:10", None, "2026-08-22T08:00:00Z", "2026-08-23T08:00:00Z"),
+        ],
+    )
+    con.executemany(
+        "INSERT INTO event_publication VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (700, 10, "vk", "klgdevents", "https://vk.com/wall-1_100", "https://vk.com/wall-1_100", 100, 100, "exact", 1.0, "published", "2026-08-22T10:00:00Z"),
+            (701, 11, "vk", "klgdevents", "https://vk.com/wall-1_101", "https://vk.com/wall-1_101", 101, 101, "exact", 1.0, "published", "2026-08-22T10:00:00Z"),
+        ],
     )
     con.commit()
     con.close()
@@ -196,6 +217,20 @@ def _manifest(db: Path, path: Path) -> dict:
         cluster["expected_graph_sha256"] = repair.cluster_graph_hash(
             con, [cluster["canonical_id"], *cluster["obsolete_ids"]]
         )
+        ids = [cluster["canonical_id"], *cluster["obsolete_ids"]]
+        placeholders = ",".join("?" for _ in ids)
+        cluster["expected_job_rows"] = [
+            dict(row)
+            for row in con.execute(
+                f"SELECT * FROM joboutbox WHERE event_id IN ({placeholders}) ORDER BY id", ids
+            )
+        ]
+        cluster["expected_event_publications"] = [
+            dict(row)
+            for row in con.execute(
+                f"SELECT * FROM event_publication WHERE event_id IN ({placeholders}) ORDER BY id", ids
+            )
+        ]
     con.close()
     manifest = {
         "schema_version": 1,
@@ -214,6 +249,100 @@ def _row_hash(db: Path, event_id: int) -> str:
     value = repair.row_hash(con.execute("SELECT * FROM event WHERE id=?", (event_id,)).fetchone())
     con.close()
     return value
+
+
+def _mixed_component_manifest(db: Path, path: Path) -> dict:
+    """Build an admissions-style component with duplicate and family edges."""
+
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO event(id,title,date,time) VALUES(22,'Admissions umbrella','2026-08-25','09:00')"
+    )
+    con.execute(
+        "INSERT INTO event(id,title,date,time) VALUES(23,'Exhibition duplicate','2026-08-25','10:00')"
+    )
+    con.execute(
+        "INSERT INTO event(id,title,date,time) VALUES(24,'Excursion duplicate','2026-08-25','12:00')"
+    )
+    con.executemany(
+        "INSERT INTO event_source VALUES(?,?,?,?,?,?,?,?)",
+        [
+            (122, 22, "telegram", "https://t.me/source/22", "https://t.me/source/22", None, None, None),
+            (123, 23, "telegram", "https://t.me/source/23", "https://t.me/source/23", None, None, None),
+            (124, 24, "telegram", "https://t.me/source/24", "https://t.me/source/24", None, None, None),
+        ],
+    )
+    con.commit()
+    con.close()
+    manifest = _manifest(db, path)
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    ids = [20, 21, 22, 23, 24]
+    p = ",".join("?" for _ in ids)
+    pairs = [
+        {"left_id": 20, "right_id": 23, "relation": "MERGE", "canonical_id": 20},
+        {"left_id": 21, "right_id": 24, "relation": "MERGE", "canonical_id": 21},
+        {"left_id": 20, "right_id": 21, "relation": "KEEP_DISTINCT_RELATED"},
+        {"left_id": 20, "right_id": 24, "relation": "KEEP_DISTINCT_RELATED"},
+        {"left_id": 21, "right_id": 23, "relation": "KEEP_DISTINCT_RELATED"},
+        {"left_id": 23, "right_id": 24, "relation": "KEEP_DISTINCT_RELATED"},
+        {"left_id": 22, "right_id": 20, "relation": "PARENT_CHILD"},
+        {"left_id": 22, "right_id": 21, "relation": "PARENT_CHILD"},
+        {"left_id": 22, "right_id": 23, "relation": "PARENT_CHILD"},
+        {"left_id": 22, "right_id": 24, "relation": "PARENT_CHILD"},
+    ]
+    component = {
+        "component_id": "admissions_departments",
+        "event_ids": ids,
+        "pair_verdicts": pairs,
+        "reason": "manual_component_adjudication",
+        "confidence": 1.0,
+        "evidence": ["department titles and source posts"],
+        "conflicts": ["department scope or parent campaign role"],
+        "expected_row_hashes": {
+            str(event_id): repair.row_hash(
+                con.execute("SELECT * FROM event WHERE id=?", (event_id,)).fetchone()
+            )
+            for event_id in ids
+        },
+        "anchors": {
+            str(event_id): {
+                "title": con.execute(
+                    "SELECT title FROM event WHERE id=?", (event_id,)
+                ).fetchone()[0]
+            }
+            for event_id in ids
+        },
+        "expected_graph_sha256": repair.cluster_graph_hash(con, ids),
+        "source_policy": "move_unique_collapse_exact",
+        "poster_policy": "move_preserve_graph",
+        "expected_candidate_states": [],
+        "expected_source_bindings": [
+            repair._source_projection(row)
+            for row in con.execute(
+                f"SELECT * FROM event_source WHERE event_id IN ({p}) ORDER BY id", ids
+            )
+        ],
+        "expected_job_rows": [
+            dict(row)
+            for row in con.execute(
+                f"SELECT * FROM joboutbox WHERE event_id IN ({p}) ORDER BY id", ids
+            )
+        ],
+        "expected_event_publications": [
+            dict(row)
+            for row in con.execute(
+                f"SELECT * FROM event_publication WHERE event_id IN ({p}) ORDER BY id", ids
+            )
+        ],
+    }
+    con.close()
+    manifest["clusters"][1] = component
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return manifest
 
 
 def test_dry_run_apply_preserves_graph_cancels_jobs_and_second_apply_is_exact_noop(tmp_path: Path) -> None:
@@ -305,7 +434,10 @@ def test_running_job_blocks_all_writes(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     _make_db(db)
     con = sqlite3.connect(db)
-    con.execute("INSERT INTO joboutbox VALUES(699,11,'running',NULL)")
+    con.execute(
+        "INSERT INTO joboutbox(id,event_id,task,status,attempts,payload,coalesce_key,updated_at,next_run_at) "
+        "VALUES(699,11,'telegraph_build','running',0,'null','telegraph:running','2026-08-22T10:00:00Z','2026-08-22T10:00:00Z')"
+    )
     con.commit()
     con.close()
     _manifest(db, manifest_path)
@@ -314,6 +446,96 @@ def test_running_job_blocks_all_writes(tmp_path: Path) -> None:
     with pytest.raises(repair.RepairBlocked, match="affected_job_running:699"):
         repair.run(db, manifest_path, "apply")
     assert db.read_bytes() == before
+
+
+def test_scheduler_timestamp_only_drift_is_observed_and_apply_is_allowed(tmp_path: Path) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE joboutbox SET updated_at=?,next_run_at=? WHERE id=600",
+        ("2026-08-22T11:00:00Z", "2026-08-22T11:05:00Z"),
+    )
+    con.commit()
+    con.close()
+
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    assert applied["observed_job_timestamp_drift"] == [
+        {
+            "id": 600,
+            "expected": {
+                "updated_at": "2026-08-22T10:00:00Z",
+                "next_run_at": "2026-08-22T10:05:00Z",
+            },
+            "observed": {
+                "updated_at": "2026-08-22T11:00:00Z",
+                "next_run_at": "2026-08-22T11:05:00Z",
+            },
+        }
+    ]
+    con = sqlite3.connect(db)
+    stored = json.loads(
+        con.execute(
+            f"SELECT observed_job_timestamp_drift_json FROM {repair.RECEIPT_TABLE}"
+        ).fetchone()[0]
+    )
+    con.close()
+    assert stored == applied["observed_job_timestamp_drift"]
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE joboutbox SET updated_at='2026-08-22T12:00:00Z',"
+        "next_run_at='2026-08-22T12:05:00Z' WHERE id=600"
+    )
+    con.commit()
+    con.close()
+    second = repair.run(db, manifest_path, "apply")
+    assert second["status"] == "noop"
+    assert second["changed"] is False
+    assert second["diff"] == []
+
+
+@pytest.mark.parametrize(
+    ("assignment", "expected"),
+    [
+        ("status='error'", "job_semantic_constraint_mismatch"),
+        ("attempts=attempts+1", "job_semantic_constraint_mismatch"),
+        ("last_result='new result'", "job_semantic_constraint_mismatch"),
+        ("last_error='new error'", "job_semantic_constraint_mismatch"),
+        ("payload='{\"event_id\":999}'", "job_semantic_constraint_mismatch"),
+        ("depends_on=999", "job_semantic_constraint_mismatch"),
+    ],
+)
+def test_job_semantic_drift_blocks_apply(
+    tmp_path: Path, assignment: str, expected: str
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    con = sqlite3.connect(db)
+    con.execute(f"UPDATE joboutbox SET {assignment} WHERE id=600")
+    con.commit()
+    con.close()
+
+    with pytest.raises(repair.RepairBlocked, match=expected):
+        repair.run(db, manifest_path, "apply")
+
+
+def test_event_publication_ownership_drift_blocks_apply(tmp_path: Path) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    con = sqlite3.connect(db)
+    con.execute("UPDATE event_publication SET event_id=10 WHERE id=701")
+    con.commit()
+    con.close()
+
+    with pytest.raises(repair.RepairBlocked, match="event_publication_constraint_mismatch"):
+        repair.run(db, manifest_path, "apply")
 
 
 def test_poster_hash_and_raw_identity_disagreement_fails_closed(tmp_path: Path) -> None:
@@ -430,4 +652,93 @@ def test_manifest_cross_cluster_and_census_hash_are_fail_closed(tmp_path: Path) 
     broken["census"]["sha256"] = "0" * 64
     manifest_path.write_text(json.dumps(broken), encoding="utf-8")
     with pytest.raises(repair.RepairBlocked, match="census_hash_mismatch"):
+        repair.run(db, manifest_path)
+
+
+def test_mixed_component_executes_merges_and_only_explicit_pair_decisions(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _mixed_component_manifest(db, manifest_path)
+
+    dry = repair.run(db, manifest_path)
+    assert dry["status"] == "ready"
+    assert sum(item["action"] == "merge" for item in dry["diff"]) == 3
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    assert tuple(
+        con.execute(
+            "SELECT identity_status,merged_into_event_id FROM event WHERE id=23"
+        ).fetchone()
+    ) == ("merged", 20)
+    assert tuple(
+        con.execute(
+            "SELECT identity_status,merged_into_event_id FROM event WHERE id=24"
+        ).fetchone()
+    ) == ("merged", 21)
+    rows = con.execute(
+        "SELECT event_id,candidate_event_id,decision_payload "
+        "FROM event_identity_decision_log WHERE decision='FINAL_DISTINCT' "
+        "AND json_extract(decision_payload,'$.component_id')='admissions_departments'"
+    ).fetchall()
+    assert len(rows) == 8
+    relations = [json.loads(row["decision_payload"])["relation"] for row in rows]
+    assert relations.count("related_but_distinct") == 4
+    assert relations.count("parent_child") == 4
+    assert {(row["event_id"], row["candidate_event_id"]) for row in rows}.isdisjoint(
+        {(20, 23), (21, 24)}
+    )
+    con.close()
+    second = repair.run(db, manifest_path, "apply")
+    assert second["status"] == "noop"
+    assert second["changed"] is False
+    assert second["diff"] == []
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("drop", "pair_coverage_incomplete"),
+        ("reverse_duplicate", "pair_verdict_duplicate"),
+        ("bad_canonical", "pair_merge_canonical_invalid"),
+        ("unsafe_order", "pair_merge_execution_order_unsafe"),
+    ],
+)
+def test_mixed_component_pair_contract_is_complete_unique_and_canonical(
+    tmp_path: Path, mutation: str, expected: str
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    manifest = _mixed_component_manifest(db, manifest_path)
+    pairs = manifest["clusters"][1]["pair_verdicts"]
+    if mutation == "drop":
+        pairs.pop()
+    elif mutation == "reverse_duplicate":
+        duplicate = copy.deepcopy(pairs[0])
+        duplicate["left_id"], duplicate["right_id"] = (
+            duplicate["right_id"],
+            duplicate["left_id"],
+        )
+        pairs.append(duplicate)
+    else:
+        if mutation == "bad_canonical":
+            pairs[0]["canonical_id"] = 21
+        else:
+            pairs[2] = {
+                "left_id": 20,
+                "right_id": 21,
+                "relation": "MERGE",
+                "canonical_id": 20,
+            }
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(repair.RepairBlocked, match=expected):
         repair.run(db, manifest_path)

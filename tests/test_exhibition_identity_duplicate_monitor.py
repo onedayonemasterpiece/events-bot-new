@@ -8,6 +8,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "inspect" / "audit_public_exhibition_duplicates.py"
 _SPEC = importlib.util.spec_from_file_location("audit_public_exhibition_duplicates", _SCRIPT)
 assert _SPEC and _SPEC.loader
@@ -301,6 +303,62 @@ def test_audit_partitions_recall_candidates_by_authoritative_evidence(tmp_path):
         payload[key]
         for key in ("confirmed_duplicate_count", "keep_distinct_count", "unresolved_count")
     )
+
+
+@pytest.mark.parametrize("relation", ["related_but_distinct", "parent_child"])
+def test_mixed_component_hard_negative_relations_are_authoritative(
+    tmp_path, relation
+):
+    db_path = tmp_path / f"{relation}.sqlite"
+    conn = sqlite3.connect(db_path)
+    _init(conn)
+    _init_review_tables(conn)
+    _insert(
+        conn,
+        1,
+        "Выставка Приёмная кампания",
+        "2026-08-20",
+        "2026-09-20",
+        "Школа искусств",
+        "Калининград",
+        "выставка",
+        "active",
+        "canonical",
+        None,
+    )
+    _insert(
+        conn,
+        2,
+        "Выставка Приёмная кампания отделения",
+        "2026-08-20",
+        "2026-09-20",
+        "Школа искусств",
+        "Калининград",
+        "выставка",
+        "active",
+        "canonical",
+        None,
+    )
+    _review(
+        conn,
+        1,
+        1,
+        2,
+        decision="FINAL_DISTINCT",
+        relation=relation,
+        evidence=["source-grounded campaign and department roles"],
+        conflicts=["scope and separately maintained identity"],
+    )
+    conn.commit()
+    conn.close()
+
+    payload = _monitor.build_audit_payload(
+        db_path, current=date(2026, 8, 23), since_days=14
+    )
+
+    assert payload["candidate_pair_count"] == 1
+    assert payload["keep_distinct_count"] == 1
+    assert payload["unresolved_count"] == 0
 
 
 def test_keep_distinct_requires_grounding_and_linked_ids_are_not_identity_proof(tmp_path):

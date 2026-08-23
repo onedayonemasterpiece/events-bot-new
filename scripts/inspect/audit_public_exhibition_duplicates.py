@@ -72,7 +72,12 @@ _AUTHORITATIVE_REVIEW_STAGES = {
     "final_merge_identity_gate",
     "manual_pair_review_v1",
 }
-_KEEP_DISTINCT_RELATIONS = {"distinct_event", "distinct_occurrence"}
+_KEEP_DISTINCT_RELATIONS = {
+    "distinct_event",
+    "distinct_occurrence",
+    "related_but_distinct",
+    "parent_child",
+}
 _CONFIRMED_DECISIONS = {"CONFIRMED_DUPLICATE", "FINAL_MATCH"}
 
 
