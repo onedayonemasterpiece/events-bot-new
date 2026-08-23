@@ -52,10 +52,13 @@ const isStateMatrix = representation.state === 'state-matrix';
 
 <style is:global>
   .date-listing-candidate-page--states { padding-block:16px 96px; }
+  .date-listing-candidate-page--states~.mobile-bottom-nav,
+  body:has(.date-listing-candidate-page--states) .mobile-bottom-nav { display:none!important; }
   .date-listing-state-matrix { width:min(1180px,calc(100% - 32px)); margin:0 auto; display:grid; gap:16px; }
   .date-listing-state-matrix .date-listing-candidate__state { width:100%; min-height:0; margin:0; }
   @media (min-width:760px) { .date-listing-state-matrix { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-  @media (max-width:759px) { .date-listing-state-matrix { width:auto; margin:0 12px; } .date-listing-state-matrix .date-listing-candidate__state { margin:0; } }
+  @media (max-width:759px) { .date-listing-state-matrix { width:360px; margin:0 auto; } .date-listing-state-matrix .date-listing-candidate__state { margin:0; } }
+  @media (max-width:359px) { .date-listing-state-matrix { width:calc(100vw - 16px); } }
 </style>
 
 {representation.id === 'full-page-mobile-shell' && (

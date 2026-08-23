@@ -31,6 +31,8 @@ assert.doesNotMatch(candidate, /import DateListingSurface/u);
 assert.match(candidate, /data-candidate-composition="sot-linked-primitives"/u);
 assert.match(candidate, /MobileListingRailSurface/u);
 assert.match(candidate, /ExactTimeTimeline/u);
+assert.doesNotMatch(candidate, /date-listing-candidate__state[\s\S]*?<header>/u);
+assert.match(candidate, /width:360px; height:240px/u);
 
 const sourceRepo = process.env.DESIGN_SYSTEM_REPO;
 if (sourceRepo) {
