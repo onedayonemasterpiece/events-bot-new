@@ -276,6 +276,8 @@ def _validate_manifest_shape(
     list[dict[str, Any]],
     list[dict[str, Any]],
     list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
 ]:
     if manifest.get("schema_version") != MANIFEST_VERSION:
         raise RepairBlocked("manifest_schema_version")
@@ -301,6 +303,8 @@ def _validate_manifest_shape(
     content_update_ids: set[int] = set()
     state_repairs: list[dict[str, Any]] = []
     state_repair_keys: set[tuple[str, int]] = set()
+    source_exclusions: list[dict[str, Any]] = []
+    source_exclusion_ids: set[int] = set()
     seen_ids: dict[int, str] = {}
     cluster_ids: set[str] = set()
     for cluster in clusters:
@@ -373,6 +377,45 @@ def _validate_manifest_shape(
             raise RepairBlocked(f"publication_constraints_required:{cluster_id}")
         validation_units.append(cluster)
 
+        unit_source_exclusions = cluster.get("source_exclusions", [])
+        if not isinstance(unit_source_exclusions, list):
+            raise RepairBlocked(f"source_exclusions_invalid:{cluster_id}")
+        for exclusion in unit_source_exclusions:
+            if not isinstance(exclusion, dict):
+                raise RepairBlocked(f"source_exclusion_invalid:{cluster_id}")
+            try:
+                source_id = int(exclusion["id"])
+                source_event_id = int(exclusion["event_id"])
+                replacement_source_id = int(exclusion["replacement_source_id"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RepairBlocked(f"source_exclusion_invalid:{cluster_id}") from exc
+            source_url = str(exclusion.get("source_url") or "")
+            expected_row_sha256 = str(exclusion.get("expected_row_sha256") or "")
+            if (
+                source_id <= 0
+                or replacement_source_id <= 0
+                or replacement_source_id == source_id
+                or source_id in source_exclusion_ids
+                or source_event_id not in event_ids
+                or not source_url
+                or not re.fullmatch(r"[0-9a-f]{64}", expected_row_sha256)
+                or not str(exclusion.get("reason") or "")
+            ):
+                raise RepairBlocked(f"source_exclusion_invalid:{cluster_id}:{source_id}")
+            source_exclusion_ids.add(source_id)
+            source_exclusions.append(
+                {
+                    "cluster_id": cluster_id,
+                    "event_ids": list(event_ids),
+                    "id": source_id,
+                    "event_id": source_event_id,
+                    "source_url": source_url,
+                    "replacement_source_id": replacement_source_id,
+                    "expected_row_sha256": expected_row_sha256,
+                    "reason": str(exclusion["reason"]),
+                }
+            )
+
         unit_content_updates = cluster.get("content_updates", [])
         if not isinstance(unit_content_updates, list):
             raise RepairBlocked(f"content_updates_invalid:{cluster_id}")
@@ -425,6 +468,7 @@ def _validate_manifest_shape(
                 table not in STATE_REPAIR_FIELDS
                 or row_id <= 0
                 or key in state_repair_keys
+                or (table == "event_source" and row_id in source_exclusion_ids)
                 or not isinstance(before, dict)
                 or not isinstance(after, dict)
                 or not before
@@ -638,7 +682,14 @@ def _validate_manifest_shape(
                 )
     if not merges:
         raise RepairBlocked("merge_cluster_required")
-    return merges, reviews, validation_units, content_updates, state_repairs
+    return (
+        merges,
+        reviews,
+        validation_units,
+        content_updates,
+        state_repairs,
+        source_exclusions,
+    )
 
 
 def _candidate_projection(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -682,6 +733,7 @@ def _validate_preconditions(
     validation_units: list[dict[str, Any]],
     content_updates: list[dict[str, Any]],
     state_repairs: list[dict[str, Any]],
+    source_exclusions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     _require_schema(con)
     selected_ids: set[int] = set()
@@ -776,6 +828,59 @@ def _validate_preconditions(
                 raise RepairBlocked(
                     f"state_repair_before_mismatch:{repair['cluster_id']}:{repair['table']}:{repair['id']}:{field}"
                 )
+
+    for exclusion in source_exclusions:
+        source_id = int(exclusion["id"])
+        replacement_source_id = int(exclusion["replacement_source_id"])
+        row = con.execute(
+            "SELECT * FROM event_source WHERE id=?", (source_id,)
+        ).fetchone()
+        if (
+            row is None
+            or int(row["event_id"]) != int(exclusion["event_id"])
+            or str(row["source_url"]) != exclusion["source_url"]
+            or row_hash(row) != exclusion["expected_row_sha256"]
+        ):
+            raise RepairBlocked(
+                f"source_exclusion_cas_mismatch:{exclusion['cluster_id']}:{source_id}"
+            )
+        replacement = con.execute(
+            "SELECT * FROM event_source WHERE id=?", (replacement_source_id,)
+        ).fetchone()
+        matching_repairs = [
+            repair
+            for repair in state_repairs
+            if repair["table"] == "event_source"
+            and int(repair["id"]) == replacement_source_id
+            and int(repair["after"].get("event_id") or 0)
+            == int(exclusion["event_id"])
+        ]
+        if (
+            replacement is None
+            or str(replacement["source_url"]) != exclusion["source_url"]
+            or int(replacement["event_id"])
+            not in {int(value) for value in exclusion["event_ids"]}
+            or len(matching_repairs) != 1
+        ):
+            raise RepairBlocked(
+                f"source_exclusion_replacement_mismatch:{exclusion['cluster_id']}:{source_id}:{replacement_source_id}"
+            )
+        fact_refs = int(
+            con.execute(
+                "SELECT COUNT(*) FROM event_source_fact WHERE source_id=?",
+                (source_id,),
+            ).fetchone()[0]
+        )
+        decision_refs = int(
+            con.execute(
+                "SELECT COUNT(*) FROM event_identity_decision_log WHERE source_id=?",
+                (source_id,),
+            ).fetchone()[0]
+        )
+        if fact_refs or decision_refs:
+            raise RepairBlocked(
+                f"source_exclusion_referenced:{exclusion['cluster_id']}:{source_id}:{fact_refs}:{decision_refs}"
+            )
 
     seen_excluded_posters: set[int] = set()
     for cluster in merges:
@@ -896,6 +1001,7 @@ def _backup_rows(
     validation_units: Sequence[dict[str, Any]],
     content_updates: Sequence[dict[str, Any]],
     state_repairs: Sequence[dict[str, Any]],
+    source_exclusions: Sequence[dict[str, Any]],
 ) -> tuple[int, int]:
     con.execute(
         f"CREATE TABLE IF NOT EXISTS {BACKUP_TABLE}(manifest_sha TEXT NOT NULL, table_name TEXT NOT NULL, row_id INTEGER NOT NULL, row_json TEXT NOT NULL, row_sha256 TEXT NOT NULL, PRIMARY KEY(manifest_sha,table_name,row_id))"
@@ -939,6 +1045,10 @@ def _backup_rows(
     selections.extend(
         (str(repair["table"]), "id=?", (int(repair["id"]),))
         for repair in state_repairs
+    )
+    selections.extend(
+        ("event_source", "id=?", (int(exclusion["id"]),))
+        for exclusion in source_exclusions
     )
     selected_candidate_ids = [
         int(row[0])
@@ -1020,6 +1130,55 @@ def _apply_content_updates(
                 "id": event_id,
                 "action": "content_update",
                 "fields": {field: {"before": before[field], "after": after[field]} for field in fields},
+            }
+        )
+    return diff
+
+
+def _apply_source_exclusions(
+    con: sqlite3.Connection, source_exclusions: Sequence[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    diff: list[dict[str, Any]] = []
+    for exclusion in sorted(source_exclusions, key=lambda item: int(item["id"])):
+        source_id = int(exclusion["id"])
+        row = con.execute(
+            "SELECT * FROM event_source WHERE id=?", (source_id,)
+        ).fetchone()
+        if (
+            row is None
+            or int(row["event_id"]) != int(exclusion["event_id"])
+            or str(row["source_url"]) != exclusion["source_url"]
+            or row_hash(row) != exclusion["expected_row_sha256"]
+        ):
+            raise RepairBlocked(
+                f"source_exclusion_cas_mismatch:{exclusion['cluster_id']}:{source_id}"
+            )
+        fact_refs = int(
+            con.execute(
+                "SELECT COUNT(*) FROM event_source_fact WHERE source_id=?",
+                (source_id,),
+            ).fetchone()[0]
+        )
+        decision_refs = int(
+            con.execute(
+                "SELECT COUNT(*) FROM event_identity_decision_log WHERE source_id=?",
+                (source_id,),
+            ).fetchone()[0]
+        )
+        if fact_refs or decision_refs:
+            raise RepairBlocked(
+                f"source_exclusion_referenced:{exclusion['cluster_id']}:{source_id}:{fact_refs}:{decision_refs}"
+            )
+        con.execute("DELETE FROM event_source WHERE id=?", (source_id,))
+        diff.append(
+            {
+                "table": "event_source",
+                "id": source_id,
+                "action": "source_exclusion",
+                "event_id": int(exclusion["event_id"]),
+                "source_url": exclusion["source_url"],
+                "replacement_source_id": int(exclusion["replacement_source_id"]),
+                "reason": exclusion["reason"],
             }
         )
     return diff
@@ -1391,6 +1550,7 @@ def _verify(
     merges: Sequence[dict[str, Any]],
     content_updates: Sequence[dict[str, Any]],
     state_repairs: Sequence[dict[str, Any]],
+    source_exclusions: Sequence[dict[str, Any]],
     scope_event_ids: Sequence[int],
 ) -> dict[str, Any]:
     receipt = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
@@ -1444,6 +1604,25 @@ def _verify(
                 raise RepairBlocked(
                     f"state_repair_after_mismatch:{repair['cluster_id']}:{repair['table']}:{repair['id']}:{field}"
                 )
+    for exclusion in source_exclusions:
+        if con.execute(
+            "SELECT 1 FROM event_source WHERE id=?", (int(exclusion["id"]),)
+        ).fetchone() is not None:
+            raise RepairBlocked(
+                f"source_exclusion_still_present:{exclusion['cluster_id']}:{exclusion['id']}"
+            )
+        replacement = con.execute(
+            "SELECT event_id,source_url FROM event_source WHERE id=?",
+            (int(exclusion["replacement_source_id"]),),
+        ).fetchone()
+        if (
+            replacement is None
+            or int(replacement["event_id"]) != int(exclusion["event_id"])
+            or str(replacement["source_url"]) != exclusion["source_url"]
+        ):
+            raise RepairBlocked(
+                f"source_exclusion_replacement_after_mismatch:{exclusion['cluster_id']}:{exclusion['id']}"
+            )
     touched_obsolete = [int(x) for c in merges for x in c["obsolete_ids"]]
     for cluster in merges:
         canonical = int(cluster["canonical_id"])
@@ -1616,6 +1795,7 @@ def _verify(
         "poster_graph_orphans": poster_orphans,
         "decision_source_orphans": decision_source_orphans,
         "candidate_owner_violations": bad_owner,
+        "excluded_source_count": len(source_exclusions),
         "pending_obsolete_jobs": 0,
         "receipt_audit_rows": len(receipt_audit_ids),
     }
@@ -1721,6 +1901,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         validation_units,
         content_updates,
         state_repairs,
+        source_exclusions,
     ) = _validate_manifest_shape(manifest)
     scope_event_ids = sorted(
         {
@@ -1747,6 +1928,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                 validation_units,
                 content_updates,
                 state_repairs,
+                source_exclusions,
             )
             planned = [
                 {"cluster_id": c["cluster_id"], "canonical_id": int(c["canonical_id"]), "obsolete_ids": [int(x) for x in c["obsolete_ids"]], "action": "merge"}
@@ -1781,6 +1963,19 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                 }
                 for repair in state_repairs
             )
+            planned.extend(
+                {
+                    "cluster_id": exclusion["cluster_id"],
+                    "table": "event_source",
+                    "id": int(exclusion["id"]),
+                    "action": "source_exclusion",
+                    "event_id": int(exclusion["event_id"]),
+                    "source_url": exclusion["source_url"],
+                    "replacement_source_id": int(exclusion["replacement_source_id"]),
+                    "reason": exclusion["reason"],
+                }
+                for exclusion in source_exclusions
+            )
             return {
                 "schema_version": MANIFEST_VERSION,
                 "incident": INCIDENT,
@@ -1808,6 +2003,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                 merges,
                 content_updates,
                 state_repairs,
+                source_exclusions,
                 scope_event_ids,
             )
             con.commit()
@@ -1827,6 +2023,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                 merges,
                 content_updates,
                 state_repairs,
+                source_exclusions,
                 scope_event_ids,
             )
             observed_timestamp_drift = json.loads(
@@ -1850,6 +2047,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             validation_units,
             content_updates,
             state_repairs,
+            source_exclusions,
         )
         baseline_fk, baseline_orphans = _backup_rows(
             con,
@@ -1858,6 +2056,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             validation_units,
             content_updates,
             state_repairs,
+            source_exclusions,
         )
         con.execute(
             f"INSERT INTO {RECEIPT_TABLE}(manifest_sha,incident,prevention_sha,census_sha,status,baseline_fk,baseline_orphans,observed_job_timestamp_drift_json) VALUES(?,?,?,?,?,?,?,?)",
@@ -1866,6 +2065,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
         diff: list[dict[str, Any]] = []
         audit_ids: list[int] = []
         diff.extend(_apply_content_updates(con, content_updates))
+        diff.extend(_apply_source_exclusions(con, source_exclusions))
         diff.extend(_apply_state_repairs(con, state_repairs))
         for cluster in merges:
             cluster_diff, cluster_audits = _apply_cluster(con, cluster)
@@ -1893,6 +2093,7 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             merges,
             content_updates,
             state_repairs,
+            source_exclusions,
             scope_event_ids,
         )
         cleanup = _cleanup_mapping(con, merges)

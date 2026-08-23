@@ -160,6 +160,21 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   still duplicate public identities. This invalidates the previous closure;
   prevention remains deployed, but content repair and a new full verification
   are outstanding.
+- `2026-08-23 14:06..14:20Z` — the mixed-verdict/CAS repair contract reaches
+  exact `origin/main@b40d32c280d1b31616f647c298d0e5aa5b076a13` and Fly release
+  `2027`. Health is ready; a new immutable 877,752,320-byte snapshot
+  (`sha256:4b8cfaf3f4173e3eaf494a51cc8fb2c5bf72d17bdf7d032d81e31eca288f40eb`)
+  passes live and snapshot `quick_check=ok`, keeps the foreign-key baseline at
+  `195`, and contains all 23 recall pairs. The new semantic manifest classifies
+  every pair and its read-only dry-run is ready.
+- `2026-08-23 14:21Z` — the required writable snapshot simulation rolls back
+  before any live mutation on `UNIQUE(event_source.event_id,source_url)`.
+  Root-cause evidence shows incomplete unreferenced source `12225231` already
+  occupying Event `7963` with the same URL as the richer occurrence-bearing
+  source `12157728` that must be restored. The transaction remains unapplied;
+  the repair contract is narrowed to permit only a hash-pinned deletion whose
+  same-URL replacement is moved into the same Event, while any fact or identity
+  decision reference blocks deletion.
 
 ## Root Cause
 

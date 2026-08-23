@@ -890,6 +890,105 @@ def test_content_updates_are_cas_guarded_transactional_verified_and_reversible(
         repair.run(db, manifest_path)
 
 
+def test_source_exclusion_replaces_unreferenced_collision_and_is_reversible(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO event_source VALUES(?,?,?,?,?,?,?,?)",
+        (
+            122,
+            20,
+            "telegram",
+            "https://t.me/source/restored",
+            "https://t.me/source/restored",
+            "candidate-restored",
+            "occ-restored",
+            None,
+        ),
+    )
+    con.execute(
+        "INSERT INTO event_source VALUES(?,?,?,?,?,?,?,?)",
+        (
+            123,
+            21,
+            "legacy",
+            "https://t.me/source/restored",
+            None,
+            None,
+            None,
+            None,
+        ),
+    )
+    con.execute(
+        "INSERT INTO event_source_fact VALUES(503,20,122,'restored occurrence fact')"
+    )
+    con.commit()
+    con.row_factory = sqlite3.Row
+    excluded = con.execute("SELECT * FROM event_source WHERE id=123").fetchone()
+    excluded_hash = repair.row_hash(excluded)
+    con.close()
+
+    manifest = _manifest(db, manifest_path)
+    cluster = manifest["clusters"][1]
+    cluster["source_exclusions"] = [
+        {
+            "id": 123,
+            "event_id": 21,
+            "source_url": "https://t.me/source/restored",
+            "replacement_source_id": 122,
+            "expected_row_sha256": excluded_hash,
+            "reason": "incomplete legacy collision replaced by the source-bearing row",
+        }
+    ]
+    cluster["state_repairs"] = [
+        {
+            "table": "event_source",
+            "id": 122,
+            "before": {"event_id": 20},
+            "after": {"event_id": 21},
+        },
+        {
+            "table": "event_source_fact",
+            "id": 503,
+            "before": {"event_id": 20},
+            "after": {"event_id": 21},
+        },
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    dry = repair.run(db, manifest_path)
+    assert any(item["action"] == "source_exclusion" for item in dry["diff"])
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["verification"]["excluded_source_count"] == 1
+    con = sqlite3.connect(db)
+    assert con.execute("SELECT 1 FROM event_source WHERE id=123").fetchone() is None
+    assert con.execute("SELECT event_id FROM event_source WHERE id=122").fetchone()[0] == 21
+    assert con.execute(
+        "SELECT event_id,source_id FROM event_source_fact WHERE id=503"
+    ).fetchone() == (21, 122)
+    con.close()
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    noop = repair.run(db, manifest_path, "apply")
+    assert noop["status"] == "noop"
+    assert noop["diff"] == []
+
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
+    con = sqlite3.connect(db)
+    assert con.execute("SELECT event_id FROM event_source WHERE id=122").fetchone()[0] == 20
+    assert con.execute("SELECT event_id FROM event_source WHERE id=123").fetchone()[0] == 21
+    assert con.execute(
+        "SELECT event_id,source_id FROM event_source_fact WHERE id=503"
+    ).fetchone() == (20, 122)
+    con.close()
+
+
 def test_merge_can_preserve_rejected_unrelated_poster_evidence(tmp_path: Path) -> None:
     db = tmp_path / "fixture.sqlite"
     manifest_path = tmp_path / "manifest.json"

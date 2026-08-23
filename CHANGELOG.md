@@ -25,6 +25,11 @@
   scheduler timestamps. A receipt-level stable scope-graph also pins table
   membership and candidate-attempt history, so post-apply source/job additions
   or attempt mutations cannot be misreported as an exact no-op.
+  A reviewed occurrence restoration may also CAS-delete an unreferenced,
+  incomplete `event_source` collision only when a same-URL replacement source
+  is pinned and moved into that exact Event in the same transaction. The
+  exclusion is backed up, verified absent, covered by the receipt graph and
+  restored by rollback; fact or decision-log references block it.
 
 - Fixed: Qtickets URLs now remain product/series recall signals rather than
   occurrence IDs. Parser occurrence identity uses the concrete date/time, so
