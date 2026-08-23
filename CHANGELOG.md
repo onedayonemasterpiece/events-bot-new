@@ -19,7 +19,10 @@
   allowlisted state-repair contract can restore a previously merged genuine
   occurrence's source/fact/poster/candidate ownership, and a reviewed merge may
   retain unrelated source-carrier images as rejected evidence on the obsolete
-  shell instead of moving them into reader media.
+  shell instead of moving them into reader media. Receipt CAS now covers every
+  adjudicated unit and every stable job row, including distinct-only Events and
+  completed/error jobs; rollback restores stable job fields without rewinding
+  scheduler timestamps.
 
 - Fixed: Qtickets URLs now remain product/series recall signals rather than
   occurrence IDs. Parser occurrence identity uses the concrete date/time, so

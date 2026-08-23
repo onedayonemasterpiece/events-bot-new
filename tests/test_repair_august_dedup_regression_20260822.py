@@ -492,6 +492,69 @@ def test_scheduler_timestamp_only_drift_is_observed_and_apply_is_allowed(tmp_pat
     assert second["diff"] == []
 
 
+def test_post_apply_stable_job_drift_blocks_verify_and_second_apply(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    # A completed job was historically outside the backup receipt surface.
+    con.execute("UPDATE joboutbox SET last_result='operator drift' WHERE id=601")
+    con.commit()
+    con.close()
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "verify")
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "apply")
+
+
+def test_post_apply_distinct_component_source_drift_is_receipt_pinned(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    con.execute("UPDATE event_source SET event_id=30 WHERE id=120")
+    con.commit()
+    con.close()
+    with pytest.raises(repair.RepairBlocked, match="verification_cas_mismatch"):
+        repair.run(db, manifest_path, "verify")
+
+
+def test_rollback_restores_job_stable_fields_but_preserves_scheduler_timestamps(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _manifest(db, manifest_path)
+    assert repair.run(db, manifest_path, "apply")["status"] == "applied"
+    con = sqlite3.connect(db)
+    con.execute(
+        "UPDATE joboutbox SET updated_at='2026-08-23T12:00:00Z',"
+        "next_run_at='2026-08-23T12:05:00Z' WHERE id=600"
+    )
+    con.commit()
+    con.close()
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT status,last_error,updated_at,next_run_at FROM joboutbox WHERE id=600"
+    ).fetchone() == (
+        "pending",
+        None,
+        "2026-08-23T12:00:00Z",
+        "2026-08-23T12:05:00Z",
+    )
+    con.close()
+
+
 @pytest.mark.parametrize(
     ("assignment", "expected"),
     [
@@ -820,6 +883,55 @@ def test_merge_can_preserve_rejected_unrelated_poster_evidence(tmp_path: Path) -
     noop = repair.run(db, manifest_path, "apply")
     assert noop["status"] == "noop"
     assert noop["diff"] == []
+
+
+def test_component_poster_exclusions_are_scoped_to_each_merge_edge(
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "fixture.sqlite"
+    manifest_path = tmp_path / "manifest.json"
+    _make_db(db)
+    _mixed_component_manifest(db, manifest_path)
+    con = sqlite3.connect(db)
+    con.executemany(
+        "INSERT INTO eventposter(id,event_id,poster_hash,raw_sha256,review_status) "
+        "VALUES(?,?,?,?,?)",
+        [
+            (206, 23, "carrier-23", "carrier-raw-23", "approved"),
+            (207, 24, "carrier-24", "carrier-raw-24", "approved"),
+        ],
+    )
+    con.commit()
+    con.close()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    manifest["clusters"][1]["expected_graph_sha256"] = repair.cluster_graph_hash(
+        con, manifest["clusters"][1]["event_ids"]
+    )
+    con.close()
+    manifest["clusters"][1]["poster_exclusions"] = [
+        {"id": 206, "obsolete_id": 23, "reason": "unrelated_carrier_media"},
+        {"id": 207, "obsolete_id": 24, "reason": "unrelated_carrier_media"},
+    ]
+    manifest["census"]["sha256"] = repair.census_hash(
+        manifest["census"]["cutoff"], manifest["clusters"]
+    )
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    applied = repair.run(db, manifest_path, "apply")
+    assert applied["status"] == "applied"
+    con = sqlite3.connect(db)
+    assert con.execute(
+        "SELECT event_id,review_status FROM eventposter WHERE id=206"
+    ).fetchone() == (23, "rejected")
+    assert con.execute(
+        "SELECT event_id,review_status FROM eventposter WHERE id=207"
+    ).fetchone() == (24, "rejected")
+    con.close()
+    assert repair.run(db, manifest_path, "verify")["status"] == "verified"
+    assert repair.run(db, manifest_path, "apply")["status"] == "noop"
+    assert repair.run(db, manifest_path, "rollback")["status"] == "rolled_back"
 
 
 def test_state_repair_cannot_move_row_outside_adjudicated_unit(tmp_path: Path) -> None:

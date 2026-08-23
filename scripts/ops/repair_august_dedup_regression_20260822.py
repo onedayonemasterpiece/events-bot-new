@@ -502,9 +502,7 @@ def _validate_manifest_shape(
                             "conflicts": list(adjudication["conflicts"]),
                             "source_policy": cluster.get("source_policy"),
                             "poster_policy": cluster.get("poster_policy"),
-                            "poster_exclusions": cluster.get(
-                                "poster_exclusions", []
-                            ),
+                            "poster_exclusions": [],
                             "public_mapping": {
                                 "canonical_id": pair_canonical,
                                 "obsolete_ids": [obsolete],
@@ -559,7 +557,35 @@ def _validate_manifest_shape(
                     for item in poster_exclusions
                 ):
                     raise RepairBlocked(f"poster_exclusions_invalid:{cluster_id}")
-                cluster["poster_exclusions"] = poster_exclusions
+                merge_obsolete_ids = {
+                    int(value)
+                    for item in component_merges
+                    for value in item["obsolete_ids"]
+                }
+                seen_exclusion_ids: set[int] = set()
+                for exclusion in poster_exclusions:
+                    poster_id = int(exclusion["id"])
+                    try:
+                        exclusion_obsolete_id = int(exclusion["obsolete_id"])
+                    except (KeyError, TypeError, ValueError) as exc:
+                        raise RepairBlocked(
+                            f"poster_exclusion_obsolete_required:{cluster_id}:{poster_id}"
+                        ) from exc
+                    if (
+                        poster_id in seen_exclusion_ids
+                        or exclusion_obsolete_id not in merge_obsolete_ids
+                    ):
+                        raise RepairBlocked(
+                            f"poster_exclusion_component_invalid:{cluster_id}:{poster_id}"
+                        )
+                    seen_exclusion_ids.add(poster_id)
+                for merge in component_merges:
+                    obsolete_id = int(merge["obsolete_ids"][0])
+                    merge["poster_exclusions"] = [
+                        dict(exclusion)
+                        for exclusion in poster_exclusions
+                        if int(exclusion["obsolete_id"]) == obsolete_id
+                    ]
                 if not isinstance(cluster.get("expected_candidate_states"), list):
                     raise RepairBlocked(f"candidate_constraints_required:{cluster_id}")
                 if not isinstance(cluster.get("expected_source_bindings"), list):
@@ -867,6 +893,7 @@ def _backup_rows(
     con: sqlite3.Connection,
     manifest_sha: str,
     merges: Sequence[dict[str, Any]],
+    validation_units: Sequence[dict[str, Any]],
     content_updates: Sequence[dict[str, Any]],
     state_repairs: Sequence[dict[str, Any]],
 ) -> tuple[int, int]:
@@ -882,7 +909,12 @@ def _backup_rows(
             f"ALTER TABLE {RECEIPT_TABLE} ADD COLUMN observed_job_timestamp_drift_json TEXT NOT NULL DEFAULT '[]'"
         )
     touched = sorted(
-        {int(c["canonical_id"]) for c in merges}
+        {
+            event_id
+            for unit in validation_units
+            for event_id in _unit_id_and_event_ids(unit)[1]
+        }
+        | {int(c["canonical_id"]) for c in merges}
         | {int(x) for c in merges for x in c["obsolete_ids"]}
         | {int(update["event_id"]) for update in content_updates}
     )
@@ -891,9 +923,18 @@ def _backup_rows(
         ("event", f"id IN ({p})", tuple(touched)),
         ("event_source", f"event_id IN ({p})", tuple(touched)),
         ("eventposter", f"event_id IN ({p})", tuple(touched)),
-        ("joboutbox", f"event_id IN ({p}) AND status IN ('pending','paused')", tuple(touched)),
+        ("joboutbox", f"event_id IN ({p})", tuple(touched)),
         ("event_publication", f"event_id IN ({p})", tuple(touched)),
-        ("smart_update_candidate_state", f"accepted_event_id IN ({p})", tuple(touched)),
+        (
+            "smart_update_candidate_state",
+            f"accepted_event_id IN ({p}) OR diagnostic_event_id IN ({p})",
+            (*touched, *touched),
+        ),
+        (
+            "event_identity_decision_log",
+            f"event_id IN ({p}) OR candidate_event_id IN ({p})",
+            (*touched, *touched),
+        ),
     ]
     selections.extend(
         (str(repair["table"]), "id=?", (int(repair["id"]),))
@@ -1560,7 +1601,16 @@ def _restore_row(con: sqlite3.Connection, table: str, data: dict[str, Any]) -> N
     columns = list(data)
     existing = con.execute(f'SELECT 1 FROM "{table}" WHERE id=?', (int(data["id"]),)).fetchone()
     if existing:
-        update_columns = [column for column in columns if column != "id"]
+        if table == "joboutbox":
+            update_columns = [
+                column for column in JOB_STABLE_FIELDS if column != "id"
+            ]
+        elif table == "event_publication":
+            update_columns = [
+                column for column in PUBLICATION_OWNERSHIP_FIELDS if column != "id"
+            ]
+        else:
+            update_columns = [column for column in columns if column != "id"]
         assignments = ",".join('"{}"=?'.format(column) for column in update_columns)
         con.execute(
             f'UPDATE "{table}" SET {assignments} WHERE id=?',
@@ -1611,7 +1661,11 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
     for table, rows in backups.items():
         for data in rows:
             current = con.execute(f'SELECT * FROM "{table}" WHERE id=?', (int(data["id"]),)).fetchone()
-            if table == "event_publication":
+            if table == "joboutbox":
+                matches = current is not None and row_hash(
+                    _job_semantic_projection(current)
+                ) == row_hash(_job_semantic_projection(data))
+            elif table == "event_publication":
                 matches = current is not None and row_hash(
                     _publication_ownership_projection(current)
                 ) == row_hash(_publication_ownership_projection(data))
@@ -1750,7 +1804,12 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             state_repairs,
         )
         baseline_fk, baseline_orphans = _backup_rows(
-            con, manifest_sha, merges, content_updates, state_repairs
+            con,
+            manifest_sha,
+            merges,
+            validation_units,
+            content_updates,
+            state_repairs,
         )
         con.execute(
             f"INSERT INTO {RECEIPT_TABLE}(manifest_sha,incident,prevention_sha,census_sha,status,baseline_fk,baseline_orphans,observed_job_timestamp_drift_json) VALUES(?,?,?,?,?,?,?,?)",
