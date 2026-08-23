@@ -66,7 +66,12 @@ PUBLICATION_OWNERSHIP_FIELDS = (
     "stored_post_id",
     "live_post_id",
 )
-PAIR_RELATIONS = {"MERGE", "KEEP_DISTINCT_RELATED", "PARENT_CHILD"}
+PAIR_RELATIONS = {
+    "MERGE",
+    "KEEP_DISTINCT_RELATED",
+    "KEEP_DISTINCT_OCCURRENCE",
+    "PARENT_CHILD",
+}
 CONTENT_UPDATE_FIELDS = {
     "date",
     "time",
@@ -525,7 +530,11 @@ def _validate_manifest_shape(
                             "relation": (
                                 "related_but_distinct"
                                 if pair_relation == "KEEP_DISTINCT_RELATED"
-                                else "parent_child"
+                                else (
+                                    "distinct_occurrence"
+                                    if pair_relation == "KEEP_DISTINCT_OCCURRENCE"
+                                    else "parent_child"
+                                )
                             ),
                             **adjudication,
                         }

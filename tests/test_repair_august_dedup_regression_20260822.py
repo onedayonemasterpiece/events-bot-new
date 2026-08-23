@@ -283,7 +283,7 @@ def _mixed_component_manifest(db: Path, path: Path) -> dict:
     pairs = [
         {"left_id": 20, "right_id": 23, "relation": "MERGE", "canonical_id": 20},
         {"left_id": 21, "right_id": 24, "relation": "MERGE", "canonical_id": 21},
-        {"left_id": 20, "right_id": 21, "relation": "KEEP_DISTINCT_RELATED"},
+        {"left_id": 20, "right_id": 21, "relation": "KEEP_DISTINCT_OCCURRENCE"},
         {"left_id": 22, "right_id": 20, "relation": "PARENT_CHILD"},
     ]
     component = {
@@ -877,7 +877,7 @@ def test_mixed_component_executes_merges_and_only_explicit_pair_decisions(
     # component's other Cartesian pairs receive no inferred blanket verdict.
     assert len(rows) == 2
     relations = [json.loads(row["decision_payload"])["relation"] for row in rows]
-    assert relations.count("related_but_distinct") == 1
+    assert relations.count("distinct_occurrence") == 1
     assert relations.count("parent_child") == 1
     assert {(row["event_id"], row["candidate_event_id"]) for row in rows}.isdisjoint(
         {(20, 23), (21, 24)}

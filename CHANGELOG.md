@@ -10,7 +10,8 @@
   drift, and verify/rollback/second-apply use the same stable projection.
   Repair manifests can express explicit mixed pair relations inside one
   component, so reviewed merge groups, parent/child edges and related-but-
-  distinct pairs no longer become one blanket transitive verdict. Reviewed
+  distinct or occurrence-distinct pairs no longer become one blanket
+  transitive verdict. Reviewed
   clusters may also carry allowlisted before/after CAS updates for
   date/time/range, venue/address and ticket-contact anchors; those corrections now share the same
   transaction, row backup, verify, rollback and exact second-apply receipt as

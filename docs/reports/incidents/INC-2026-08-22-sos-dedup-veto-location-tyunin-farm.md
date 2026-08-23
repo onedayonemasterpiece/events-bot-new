@@ -406,11 +406,11 @@ The repair CAS now separates job state as follows:
 
 Manifest components may now carry explicit pair-scoped verdicts. Merge edges
 form only their reviewed equivalence groups; `PARENT_CHILD` and related
-distinct edges never merge transitively and never generate implicit verdicts
-for every unordered pair. Evidence, conflicts and confidence belong to each
-declared pair. Audit-facing distinct rows retain `distinct_event` or
-`distinct_occurrence` while preserving the more specific semantic relation in
-their payload.
+or occurrence-distinct edges never merge transitively and never generate
+implicit verdicts for every unordered pair. Evidence, conflicts and confidence
+belong to each declared pair. Audit-facing distinct rows retain
+`distinct_event` or `distinct_occurrence` while preserving the more specific
+semantic relation in their payload.
 
 Qtickets product URLs are series/recall signals. Pairs `7604/7707`,
 `7580/7833` and `7805/8253` are different dated occurrences, not merge
