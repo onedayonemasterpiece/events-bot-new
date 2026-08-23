@@ -640,6 +640,9 @@ class EventCandidate:
     time_is_default: bool = False
     end_date: str | None = None
     end_date_is_inferred: bool = False
+    # Product-level availability metadata. It is auditable provenance and must
+    # never extend the duration/identity of a concrete event occurrence.
+    vendor_schedule_end_date: str | None = None
     festival: str | None = None
     festival_context: str | None = None
     festival_full: str | None = None
@@ -12041,6 +12044,23 @@ def _specific_ticket_url_for_match(url: str | None) -> str | None:
     return None
 
 
+def _qtickets_product_url_for_match(url: str | None) -> str | None:
+    """Return a Qtickets product/series URL, never an occurrence verdict."""
+
+    norm = _normalize_ticket_url_for_match(url)
+    if not norm:
+        return None
+    try:
+        host = str(urlsplit(norm).hostname or "").casefold()
+    except Exception:
+        return None
+    if host in {"qtickets.events", "qtickets.ru"} or host.endswith(
+        (".qtickets.events", ".qtickets.ru")
+    ):
+        return norm
+    return None
+
+
 def _is_http_url(url: str | None) -> bool:
     if not url:
         return False
@@ -13722,6 +13742,25 @@ def _dedup_adjudicator_accept_merge(
     cand_time = _candidate_anchor_time(candidate, is_canonical_site=False)
     ev_time = _event_anchor_time(match_event)
     time_conflict = _has_explicit_time_conflict(cand_time, ev_time)
+
+    # Qtickets URLs identify a product/series. Concrete date/time anchors own
+    # its separately sold occurrences, so even an erroneous semantic SAME_EVENT
+    # answer cannot turn another dated slot into an update of this one.
+    candidate_qtickets_product = _qtickets_product_url_for_match(candidate.ticket_link)
+    existing_qtickets_product = _qtickets_product_url_for_match(
+        getattr(match_event, "ticket_link", None)
+    )
+    same_qtickets_product = bool(
+        candidate_qtickets_product
+        and candidate_qtickets_product == existing_qtickets_product
+    )
+    candidate_date = str(candidate.date or "").strip()[:10]
+    existing_date = str(getattr(match_event, "date", "") or "").strip()[:10]
+    if same_qtickets_product and candidate_date and existing_date:
+        if candidate_date != existing_date:
+            return False, "qtickets_product_date_split"
+        if time_conflict:
+            return False, "qtickets_product_time_split"
 
     # §4.5 hard invariant: same source post + different time = legitimate multi-session
     # split (e.g. 5426/5427 from t.me/gusmuseum/4509). Always create, regardless of LLM.
@@ -15927,7 +15966,9 @@ async def _match_existing_event_by_event_source_url(
         return None
     if _candidate_source_role(candidate) != "identity_bearing":
         return None
-    is_canonical_site = str(candidate.source_type or "").strip().lower().startswith("parser:")
+    normalized_source_type = str(candidate.source_type or "").strip().lower()
+    is_canonical_site = normalized_source_type.startswith("parser:")
+    is_qtickets_product = normalized_source_type == "parser:qtickets"
 
     async with db.get_session() as session:
         stmt = (
@@ -15962,7 +16003,13 @@ async def _match_existing_event_by_event_source_url(
             event_start = _parse_iso_date(getattr(ev, "date", None))
             event_end = _parse_iso_date(getattr(ev, "end_date", None)) or event_start
             candidate_day = _parse_iso_date(date_raw)
-            if is_canonical_site and event_start and event_end and candidate_day:
+            if is_qtickets_product:
+                # A Qtickets URL is product/series recall, not global occurrence
+                # identity. Even a polluted legacy schedule range cannot own a
+                # different concrete date.
+                if str(getattr(ev, "date", "") or "").strip() != date_raw:
+                    continue
+            elif is_canonical_site and event_start and event_end and candidate_day:
                 if not (event_start <= candidate_day <= event_end):
                     continue
             elif str(getattr(ev, "date", "") or "").strip() != date_raw:
@@ -20740,6 +20787,14 @@ async def _smart_event_update_impl(
             initial_records: list[tuple[str, str]] = []
             for fact in _initial_added_facts(candidate):
                 initial_records.append((fact, "added"))
+            if candidate.vendor_schedule_end_date:
+                initial_records.append(
+                    (
+                        "Окно расписания/продаж Qtickets до: "
+                        f"{candidate.vendor_schedule_end_date}",
+                        "note",
+                    )
+                )
             for fact in (extracted_facts or [])[:18]:
                 initial_records.append((fact, "added"))
             note_lines: list[str] = []
@@ -22288,6 +22343,11 @@ async def _smart_event_update_impl(
         note_log.extend((queue_notes or [])[:6])
         note_log.extend((text_filter_facts or [])[:2])
         note_log.extend((poster_filter_facts or [])[:3])
+        if candidate.vendor_schedule_end_date:
+            note_log.append(
+                "Окно расписания/продаж Qtickets до: "
+                f"{candidate.vendor_schedule_end_date}"
+            )
         # NOTE: We intentionally do NOT include "Текст дополнен: ..." snippets anymore.
         # Operator must see changes as explicit facts (✅/↩️) and can open Telegraph for the full text.
 

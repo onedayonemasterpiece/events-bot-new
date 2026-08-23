@@ -572,9 +572,6 @@ async def test_typed_accepted_match_reuses_existing_owner(tmp_path, monkeypatch)
 
 _AUGUST_POSITIVE_CASES = [
     ("SOS", 8117, "Тройной день рождения: Барн, Chipi Clo и SOS", "Праздничный SOS", "2026-08-22", "21:00", "Барн", "вечеринка", "https://barn.timepad.ru/event/4147114"),
-    ("qTickets-247858", 7580, "Коса, коты и сыр", "Коса, коты и сыр", "2026-08-18", "", "Королевские ворота", "экскурсия", "https://qtickets.ru/event/247858-kosa-koty-i-syr"),
-    ("qTickets-251796", 7603, "Малые средневековые города", "Малые (средневековые) города", "2026-08-18", "", "Калининградская область", "экскурсия", "https://qtickets.ru/event/251796-malye-srednevekovye-goroda"),
-    ("Baltic Odyssey", 8055, "Балтийская Одиссея", "Балтийская Одиссея", "2026-08-22", "", "Побережье", "фестиваль", "https://balticodyssey.qtickets.ru/"),
     ("Great Teachers reminder", 3216, "Великие учителя", "Великие учителя", "2026-08-21", "", "Третьяковская галерея", "выставка", None),
     ("Durer exhibition reminder", 5703, "Альбрехт Дюрер. Секретный код", "Выставка «Секретный код Альбрехта Дюрера»", "2026-08-16", "", "Музей изобразительных искусств", "выставка", None),
     ("Living Thread of Traditions", 7609, "Живая нить традиций", "Живая нить традиций", "2026-08-15", "11:00", "ОКЦ ТеплоСеть", "выставка", None),
@@ -582,9 +579,6 @@ _AUGUST_POSITIVE_CASES = [
 
 _POSITIVE_ANCHORS = {
     "SOS": dict(owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date=None, candidate_end_date=None),
-    "qTickets-247858": dict(owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date="2026-10-30", candidate_end_date="2026-10-30"),
-    "qTickets-251796": dict(owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date="2026-10-31", candidate_end_date="2026-10-31"),
-    "Baltic Odyssey": dict(owner_date="2025-08-22", candidate_date="2026-08-22", owner_end_date="2026-08-24", candidate_end_date="2026-08-24"),
     "Great Teachers reminder": dict(owner_date="2026-04-09", candidate_date="2026-08-21", owner_end_date="2026-09-27", candidate_end_date="2026-09-06"),
     "Durer exhibition reminder": dict(owner_date="2026-06-06", candidate_date="2026-08-16", owner_end_date="2026-08-30", candidate_end_date="2026-08-30", owner_time="12:00"),
     "Living Thread of Traditions": dict(owner_date="2026-08-15", candidate_date="2026-08-15", owner_end_date="2026-09-05", candidate_end_date="2026-09-05", owner_time="11:00..18:00"),
@@ -638,6 +632,9 @@ _AUGUST_HARD_NEGATIVES = [
     ("festival_parent_vs_independent_child", "Йога на фестивале", "занятие", "10:00", "distinct_event"),
     ("one_source_multiple_children", "Второй самостоятельный child", "спектакль", "17:00", "distinct_event"),
     ("same_venue_distinct_exhibitions", "Другая выставка", "выставка", "", "distinct_event"),
+    ("qTickets-247858", "Коса, коты и сыр", "экскурсия", "", "distinct_occurrence"),
+    ("qTickets-251796", "Малые (средневековые) города", "экскурсия", "", "distinct_occurrence"),
+    ("Baltic Odyssey", "Балтийская Одиссея", "фестиваль", "", "distinct_occurrence"),
 ]
 
 _NEGATIVE_ANCHORS = {
@@ -648,6 +645,9 @@ _NEGATIVE_ANCHORS = {
     "festival_parent_vs_independent_child": dict(owner_title="Фестиваль на Козьей горке", owner_type="фестиваль", owner_time="10:00", owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date="2026-08-23", candidate_end_date=None, owner_source_url="https://t.me/kozia_gorka/1556", candidate_source_url="https://t.me/kozia_gorka/1556", owner_festival="Фестиваль на Козьей горке", candidate_festival="Фестиваль на Козьей горке", candidate_festival_context="independent_child"),
     "one_source_multiple_children": dict(owner_title="Первый самостоятельный child", owner_type="спектакль", owner_time="17:00", owner_date="2026-08-22", candidate_date="2026-08-22", owner_end_date=None, candidate_end_date=None, owner_source_url="https://vk.com/wall-53460968_11826", candidate_source_url="https://vk.com/wall-53460968_11826", candidate_occurrence_key="child:1"),
     "same_venue_distinct_exhibitions": dict(owner_title="Альбрехт Дюрер", owner_type="выставка", owner_time="", owner_date="2026-08-01", candidate_date="2026-08-01", owner_end_date="2026-09-30", candidate_end_date="2026-09-30"),
+    "qTickets-247858": dict(owner_id=7580, owner_title="Коса, коты и сыр", owner_type="экскурсия", owner_time="", owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date=None, candidate_end_date=None, ticket_link="https://qtickets.ru/event/247858-kosa-koty-i-syr"),
+    "qTickets-251796": dict(owner_id=7603, owner_title="Малые средневековые города", owner_type="экскурсия", owner_time="", owner_date="2026-08-15", candidate_date="2026-08-18", owner_end_date=None, candidate_end_date=None, ticket_link="https://qtickets.ru/event/251796-malye-srednevekovye-goroda"),
+    "Baltic Odyssey": dict(owner_id=8055, owner_title="Балтийская Одиссея", owner_type="фестиваль", owner_time="", owner_date="2025-08-22", candidate_date="2026-08-22", owner_end_date="2025-08-24", candidate_end_date="2026-08-24", ticket_link="https://balticodyssey.qtickets.ru/"),
 }
 
 
@@ -656,6 +656,9 @@ _NEGATIVE_ANCHORS = {
 async def test_named_august_hard_negative_corpus_stays_distinct(
     tmp_path, monkeypatch, case_name, title, event_type, event_time, relation,
 ):
+    monkeypatch.setattr(
+        su, "_should_skip_past_smart_update_candidate", lambda _candidate: False
+    )
     anchors = _NEGATIVE_ANCHORS[case_name]
     db, result, owner_id = await _run_vector_veto_adjudicator_replay(
         tmp_path,
@@ -688,7 +691,14 @@ async def test_named_august_hard_negative_corpus_stays_distinct(
     [
         row
         for row in _AUGUST_HARD_NEGATIVES
-        if row[0] in {"same_day_distinct_sessions", "recurring_series_distinct_dates"}
+        if row[0]
+        in {
+            "same_day_distinct_sessions",
+            "recurring_series_distinct_dates",
+            "qTickets-247858",
+            "qTickets-251796",
+            "Baltic Odyssey",
+        }
     ],
 )
 async def test_structural_hard_negatives_reject_even_adversarial_match(
@@ -696,6 +706,9 @@ async def test_structural_hard_negatives_reject_even_adversarial_match(
 ):
     """Hard occurrence conflicts override even an erroneous model match."""
 
+    monkeypatch.setattr(
+        su, "_should_skip_past_smart_update_candidate", lambda _candidate: False
+    )
     anchors = _NEGATIVE_ANCHORS[case_name]
     db, result, owner_id = await _run_vector_veto_adjudicator_replay(
         tmp_path,
@@ -710,7 +723,7 @@ async def test_structural_hard_negatives_reject_even_adversarial_match(
             relation="same_event",
             reason_code="identical_anchors_dup",
             confidence=0.99,
-            match_event_id=5703,
+            match_event_id=int(anchors.get("owner_id", 5703)),
             evidence=[title],
         ),
     )
@@ -746,7 +759,8 @@ def test_named_corpus_manifest_and_executable_cases_are_complete():
     # All named fixtures execute, and each named test also executes two
     # post-owner exact packet replays. This is regression coverage, not a
     # population-level precision/recall estimate.
-    assert len(_AUGUST_POSITIVE_CASES) == len(_AUGUST_HARD_NEGATIVES) == 7
+    assert len(_AUGUST_POSITIVE_CASES) == 4
+    assert len(_AUGUST_HARD_NEGATIVES) == 10
 
 
 @pytest.mark.asyncio

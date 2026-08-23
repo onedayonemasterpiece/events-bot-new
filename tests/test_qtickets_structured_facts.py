@@ -80,6 +80,11 @@ async def test_qtickets_replay_keeps_structured_text_through_smart_update(tmp_pa
 
     monkeypatch.setattr(su, "_classify_topics", _no_topics)
     monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
+    # This is an immutable historical incident replay, not a current ingestion
+    # eligibility test.
+    monkeypatch.setattr(
+        su, "_should_skip_past_smart_update_candidate", lambda _candidate: False
+    )
 
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

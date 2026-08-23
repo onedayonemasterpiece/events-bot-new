@@ -561,7 +561,7 @@ async def test_anchor_review_repairs_invalid_quote_in_same_call(monkeypatch) -> 
 
 
 @pytest.mark.asyncio
-async def test_parser_exact_source_url_matches_existing_recurring_range(tmp_path) -> None:
+async def test_qtickets_product_url_does_not_own_another_date_in_legacy_range(tmp_path) -> None:
     db = Database(str(tmp_path / "parser-range.sqlite"))
     await db.init()
     try:
@@ -590,8 +590,6 @@ async def test_parser_exact_source_url_matches_existing_recurring_range(tmp_path
                 )
             )
             await session.commit()
-            event_id = int(event.id)
-
         candidate = EventCandidate(
             source_type="parser:qtickets",
             source_url=url,
@@ -607,8 +605,7 @@ async def test_parser_exact_source_url_matches_existing_recurring_range(tmp_path
 
         matched = await su._match_existing_event_by_event_source_url(db, candidate)
 
-        assert matched is not None
-        assert int(matched.id) == event_id
+        assert matched is None
     finally:
         await db.close()
 

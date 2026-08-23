@@ -842,6 +842,15 @@ def _build_parser_source_text(
     if end_date_text and end_date_text != date_text:
         lines.append(f"Дата окончания: {end_date_text}")
 
+    vendor_schedule_end_date = str(
+        getattr(theatre_event, "vendor_schedule_end_date", None) or ""
+    ).strip()
+    if vendor_schedule_end_date:
+        lines.append(
+            "Окно расписания/продаж Qtickets до: "
+            f"{vendor_schedule_end_date} (метаданные продукта; не дата окончания occurrence)"
+        )
+
     time_text = str(theatre_event.parsed_time or "").strip()
     if time_text and time_text != "00:00":
         lines.append(f"Время: {time_text}")
@@ -884,8 +893,10 @@ def _build_parser_source_text(
                 "Контракт источника:",
                 (
                     "Это структурированная билетная страница Qtickets: "
-                    "название, площадка, адрес и даты выше являются "
-                    "каноническими полями страницы. OCR афиши используй "
+                    "название, площадка, адрес и конкретные дата/время occurrence "
+                    "выше являются каноническими полями страницы. Окно расписания/"
+                    "продаж относится ко всему продукту и не задаёт end_date этой "
+                    "occurrence. OCR афиши используй "
                     "только как дополнительный источник фактов; не заменяй "
                     "название страницы отдельными словами с афиши, если "
                     "каноническое название уже указано."
@@ -1434,14 +1445,20 @@ def _parser_occurrence_key(
 ) -> str:
     """Build one stable official-parser slot identity without prose fields."""
 
+    normalized_source_type = str(source_type or "theatre").strip().lower()
     occurrence_material = {
-        "source_type": str(source_type or "theatre").strip().lower(),
+        "source_type": normalized_source_type,
         "source_url": canonicalize_identity_url(source_url) or str(source_url),
         "date": str(date_value or "").strip(),
-        "end_date": str(end_date_value or "").strip(),
         "time": str(time_value or "00:00").strip().replace(".", ":"),
-        "producer_ordinal": int(producer_ordinal),
     }
+    if normalized_source_type != "qtickets":
+        occurrence_material.update(
+            {
+                "end_date": str(end_date_value or "").strip(),
+                "producer_ordinal": int(producer_ordinal),
+            }
+        )
     return "parser-slot:" + hashlib.sha256(
         json.dumps(
             occurrence_material,
@@ -1570,6 +1587,17 @@ async def add_new_event_via_queue(
             draft.date = theatre_event.parsed_date
         if theatre_event.parsed_time:
             draft.time = theatre_event.parsed_time
+        vendor_schedule_end_date = str(
+            getattr(theatre_event, "vendor_schedule_end_date", None) or ""
+        ).strip()
+        if (
+            str(theatre_event.source_type or "").strip().lower() == "qtickets"
+            and vendor_schedule_end_date
+            and str(draft.end_date or "").strip() == vendor_schedule_end_date
+        ):
+            # Guard the already-paid extraction result against copying product
+            # availability metadata into this occurrence's public duration.
+            draft.end_date = None
             
         # Override prices if available
         if theatre_event.ticket_price_min is not None:
@@ -1690,6 +1718,9 @@ async def add_new_event_via_queue(
                 pushkin_card=bool(draft.pushkin_card),
                 search_digest=draft.search_digest,
                 raw_excerpt=final_description,
+                vendor_schedule_end_date=(
+                    getattr(theatre_event, "vendor_schedule_end_date", None) or None
+                ),
                 posters=posters,
                 producer_ordinal=effective_producer_ordinal,
                 occurrence_key=parser_occurrence_key,

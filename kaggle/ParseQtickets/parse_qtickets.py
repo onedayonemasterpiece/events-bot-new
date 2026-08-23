@@ -85,6 +85,7 @@ STATUS_PROGRESS = {
 STATUS_CLIENT = load_status_client(log=lambda message: logger.info(message)) if load_status_client else None
 
 BASE_URL = "https://kaliningrad.qtickets.events"
+MAX_QTICKETS_OCCURRENCE_SPAN_DAYS = 14
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -368,6 +369,23 @@ def parse_event_detail(url):
         except Exception:
             pass
 
+    occurrence_end_date = parsed_end_date
+    vendor_schedule_end_date = None
+    if parsed_date and parsed_end_date:
+        try:
+            span_days = (
+                datetime.fromisoformat(parsed_end_date).date()
+                - datetime.fromisoformat(parsed_date).date()
+            ).days
+        except Exception:
+            span_days = 0
+        if span_days > MAX_QTICKETS_OCCURRENCE_SPAN_DAYS:
+            # A Qtickets product URL may sell many independent dates. A remote
+            # JSON-LD end date is then the catalogue/sales horizon, not the end
+            # of the concrete startDate occurrence emitted by this row.
+            vendor_schedule_end_date = parsed_end_date
+            occurrence_end_date = None
+
     # Ticket Status
     ticket_status = "unknown"
     if json_ld and "offers" in json_ld:
@@ -400,7 +418,8 @@ def parse_event_detail(url):
         "date_raw": start_date,
         "parsed_date": parsed_date,
         "parsed_time": parsed_time,
-        "end_date": parsed_end_date,
+        "end_date": occurrence_end_date,
+        "vendor_schedule_end_date": vendor_schedule_end_date,
         "location": location,
         "location_address": location_address,
         "url": url,

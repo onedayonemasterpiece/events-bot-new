@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 # Kernel folder name
 QTICKETS_KERNEL_FOLDER = "ParseQtickets"
+MAX_QTICKETS_OCCURRENCE_SPAN_DAYS = 14
 
 
 async def run_qtickets_kaggle_kernel(
@@ -323,6 +324,9 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     or (item.get("time") or "").strip()
                 )
                 end_date = (item.get("end_date") or "").strip() or None
+                vendor_schedule_end_date = (
+                    (item.get("vendor_schedule_end_date") or "").strip() or None
+                )
                 if end_date:
                     try:
                         end_date = datetime.strptime(end_date, "%Y-%m-%d").date().isoformat()
@@ -336,6 +340,23 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                                 title[:80],
                             )
                             end_date = None
+                if vendor_schedule_end_date:
+                    try:
+                        vendor_schedule_end_date = datetime.strptime(
+                            vendor_schedule_end_date, "%Y-%m-%d"
+                        ).date().isoformat()
+                    except ValueError:
+                        try:
+                            vendor_schedule_end_date = datetime.fromisoformat(
+                                vendor_schedule_end_date
+                            ).date().isoformat()
+                        except ValueError:
+                            logger.warning(
+                                "qtickets_parse: invalid vendor_schedule_end_date=%r title=%s",
+                                vendor_schedule_end_date,
+                                title[:80],
+                            )
+                            vendor_schedule_end_date = None
 
                 if not parsed_date and date_raw:
                     try:
@@ -356,6 +377,21 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
 
                 if not parsed_time:
                     parsed_time = "00:00"
+
+                # Backward-compatible host guard for older Kaggle dumps. A
+                # long Qtickets JSON-LD range is a product schedule/sales
+                # horizon; short ranges remain valid multi-day occurrences.
+                if parsed_date and end_date:
+                    try:
+                        span_days = (
+                            datetime.fromisoformat(end_date).date()
+                            - datetime.fromisoformat(parsed_date).date()
+                        ).days
+                    except ValueError:
+                        span_days = 0
+                    if span_days > MAX_QTICKETS_OCCURRENCE_SPAN_DAYS:
+                        vendor_schedule_end_date = vendor_schedule_end_date or end_date
+                        end_date = None
 
                 location = (
                     (item.get("location") or "").strip()
@@ -407,6 +443,7 @@ def parse_qtickets_output(file_paths: list[str]) -> list[TheatreEvent]:
                     parsed_date=parsed_date,
                     parsed_time=parsed_time,
                     end_date=end_date,
+                    vendor_schedule_end_date=vendor_schedule_end_date,
                     ticket_price_min=price_min,
                     ticket_price_max=price_max,
                 )
