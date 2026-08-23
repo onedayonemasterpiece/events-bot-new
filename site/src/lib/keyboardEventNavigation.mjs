@@ -1273,10 +1273,12 @@ export function initKeyboardEventNavigation(options = {}) {
           return;
         }
         if (event.code === 'Enter' && target === surface) {
+          event.preventDefault();
           if (primary instanceof win.HTMLElement) {
-            event.preventDefault();
             recordShortcutUse('primary_cta');
             primary.click();
+          } else {
+            setStatus('Основное действие недоступно для выбранного события.');
           }
           return;
         }

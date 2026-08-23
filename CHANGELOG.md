@@ -29,7 +29,11 @@
   gate also now accepts the existing disabled-primary keyboard contract for
   sold-out events: `Enter` must announce that the action is unavailable rather
   than activate the disabled control, while the same run must retain a separate
-  enabled-CTA specimen for positive activation coverage.
+  enabled-CTA specimen for positive activation coverage. The shared keyboard
+  router now preserves that same inert/status behavior after a navigation
+  shortcut has focused the event action surface; previously only the
+  document-body recovery path announced unavailability and focused `Enter`
+  returned silently.
 
 - Fixed: the existing Smart Update **merge-path** identity gate now closes
   through the same typed `FINAL_MATCH` / source-grounded `FINAL_DISTINCT` /

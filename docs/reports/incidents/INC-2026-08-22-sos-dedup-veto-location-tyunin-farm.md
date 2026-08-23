@@ -114,6 +114,22 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   `collect_source_urls` used an unordered `event_source` scan. Ordering by the
   durable source id restores byte-identical payloads without suppressing the
   catalog barrier or changing event identity.
+- `2026-08-22 22:56Z` — exact-main Fly version `2022`
+  (`origin/main@5886b9a306a90fc9a1ed82fb66912ad67876eddd`) carries the
+  state-aware browser gate. The following vector operator pass (`ops_run=7020`)
+  converges both vector kinds for all 544 current eligible Events, reuses all
+  1,088 embeddings, makes zero provider calls and removes 116 now-past Events.
+- `2026-08-23 00:41:01Z` — compensating StaticSiteBuilder run
+  `static-site:production-secret-20260823T010000-154c4c31:f0148b7cce2f`
+  passes the vector barrier, builds 544 Events / 4,036 files and passes the
+  earlier browser geometry and keyboard checks, then fails closed waiting for
+  the disabled-action status. The real sequence focuses the event action
+  surface with `KeyL` before `Enter`; that focused-surface branch silently
+  returned when no enabled primary existed, unlike the existing document-body
+  recovery branch. A production-sequence Chromium regression reproduces the
+  timeout. The minimal router correction makes both existing paths announce
+  the same unavailable-action status; the gate is not weakened and no
+  candidate or public root was mutated.
 
 ## Root Cause
 
@@ -386,7 +402,12 @@ merged.
   existing runtime contract for both states: enabled primaries activate once,
   disabled primaries remain inert and announce unavailability, and at least
   one enabled specimen remains mandatory. No candidate/public root mutation
-  occurred in the failed run.
+  occurred in the failed run. The subsequent production-sequence run exposed
+  that `KeyL` first focuses the shared event action surface: its separate
+  `Enter` branch still returned silently when the primary was disabled, while
+  only the document-body recovery branch announced unavailability. The router
+  now applies the same existing inert/status contract in both focus states,
+  with a real Chromium regression that asserts focus before `Enter`.
 
 ## Corrective Actions
 

@@ -58,6 +58,8 @@ test('sold-out current-event Enter stays inert and announces unavailability', as
     await page.goto(server.origin, { waitUntil:'domcontentloaded' });
     await page.locator('[data-keyboard-event-surface]').waitFor({ state:'attached' });
     await page.locator('.desktop-clean-description').click({ position:{ x:20, y:20 } });
+    await page.keyboard.press('KeyL');
+    assert.equal(await page.locator('[data-keyboard-event-surface]:focus').count(), 1);
     await page.keyboard.press('Enter');
     await page.waitForFunction(
       () => document.querySelector('[data-keyboard-prototype-status]')?.textContent === 'Основное действие недоступно для выбранного события.',
