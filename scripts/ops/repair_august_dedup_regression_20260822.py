@@ -13,6 +13,7 @@ retained and returned as a cleanup handoff mapping.
 from __future__ import annotations
 
 import argparse
+from itertools import combinations
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -249,6 +250,11 @@ def _validate_manifest_shape(manifest: dict[str, Any]) -> tuple[list[dict[str, A
                 raise RepairBlocked(f"occurrence_constraints_required:{cluster_id}")
             merges.append(cluster)
         else:
+            distinct_relation = str(cluster.get("distinct_relation") or "distinct_event")
+            if distinct_relation not in {"distinct_event", "distinct_occurrence"}:
+                raise RepairBlocked(f"distinct_relation_invalid:{cluster_id}")
+            if float(confidence) < 0.8 or not cluster["evidence"] or not cluster["conflicts"]:
+                raise RepairBlocked(f"keep_distinct_evidence_missing:{cluster_id}")
             distinct.append(cluster)
     if not merges:
         raise RepairBlocked("merge_cluster_required")
@@ -595,6 +601,66 @@ def _apply_cluster(con: sqlite3.Connection, cluster: dict[str, Any]) -> tuple[li
     return diff, audit_ids
 
 
+def _record_keep_distinct_review(
+    con: sqlite3.Connection,
+    cluster: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[int]]:
+    """Persist pair-correlated, source-grounded hard-negative verdicts.
+
+    The audit deliberately cannot treat a manifest's Event IDs as an allowlist.
+    Each retained pair therefore receives an append-only final/manual ledger row
+    containing the reviewed evidence and concrete identity conflict.
+    """
+
+    cluster_id = str(cluster["cluster_id"])
+    canonical = int(cluster["canonical_id"])
+    relation = str(cluster.get("distinct_relation") or "distinct_event")
+    diff: list[dict[str, Any]] = []
+    audit_ids: list[int] = []
+    reviewed_ids = [canonical, *[int(value) for value in cluster["obsolete_ids"]]]
+    for event_id, distinct_id in combinations(reviewed_ids, 2):
+        payload = {
+            "stage": "manual_pair_review_v1",
+            "incident": INCIDENT,
+            "cluster_id": cluster_id,
+            "action": "FINAL_DISTINCT",
+            "relation": relation,
+            "owner_event_id": event_id,
+            "candidate_event_id": distinct_id,
+            "evidence": list(cluster["evidence"]),
+            "blocking_conflicts": list(cluster["conflicts"]),
+            "confidence": float(cluster["confidence"]),
+            "social_actions_performed": False,
+        }
+        cursor = con.execute(
+            "INSERT INTO event_identity_decision_log("
+            "event_id,candidate_event_id,decision,decision_reason,confidence,"
+            "decided_by,decision_payload) VALUES(?,?,?,?,?,?,?)",
+            (
+                event_id,
+                distinct_id,
+                "FINAL_DISTINCT",
+                str(cluster["reason"]),
+                float(cluster["confidence"]),
+                "incident_manifest_repair",
+                _json(payload),
+            ),
+        )
+        audit_id = int(cursor.lastrowid)
+        audit_ids.append(audit_id)
+        diff.append(
+            {
+                "table": "event_identity_decision_log",
+                "id": audit_id,
+                "action": "record_keep_distinct",
+                "event_id": event_id,
+                "candidate_event_id": distinct_id,
+                "relation": relation,
+            }
+        )
+    return diff, audit_ids
+
+
 def _backup_current_hashes(con: sqlite3.Connection, manifest_sha: str) -> dict[str, str | None]:
     result: dict[str, str | None] = {}
     for row in con.execute(
@@ -606,10 +672,52 @@ def _backup_current_hashes(con: sqlite3.Connection, manifest_sha: str) -> dict[s
     return result
 
 
+def _receipt_current_hashes(
+    con: sqlite3.Connection,
+    manifest_sha: str,
+    audit_ids: Sequence[int],
+    *,
+    include_created_audits: bool,
+) -> dict[str, str | None]:
+    result = _backup_current_hashes(con, manifest_sha)
+    if include_created_audits:
+        for audit_id in audit_ids:
+            row = con.execute(
+                "SELECT * FROM event_identity_decision_log WHERE id=?",
+                (int(audit_id),),
+            ).fetchone()
+            result[f"created_audit:{int(audit_id)}"] = row_hash(row) if row is not None else None
+    return result
+
+
 def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[str, Any]]) -> dict[str, Any]:
     receipt = con.execute(f"SELECT * FROM {RECEIPT_TABLE} WHERE manifest_sha=?", (manifest_sha,)).fetchone()
     if receipt is None or receipt["status"] != "applied":
         raise RepairBlocked("applied_receipt_missing")
+    receipt_audit_ids = [int(value) for value in json.loads(str(receipt["audit_ids_json"] or "[]"))]
+    expected_after_hashes = json.loads(str(receipt["after_hashes_json"] or "{}"))
+    include_created_audits = any(
+        str(key).startswith("created_audit:") for key in expected_after_hashes
+    )
+    if _receipt_current_hashes(
+        con,
+        manifest_sha,
+        receipt_audit_ids,
+        include_created_audits=include_created_audits,
+    ) != expected_after_hashes:
+        raise RepairBlocked("verification_cas_mismatch")
+    missing_receipt_audits = 0
+    if receipt_audit_ids:
+        ap = ",".join("?" for _ in receipt_audit_ids)
+        present = int(
+            con.execute(
+                f"SELECT COUNT(*) FROM event_identity_decision_log WHERE id IN ({ap})",
+                tuple(receipt_audit_ids),
+            ).fetchone()[0]
+        )
+        missing_receipt_audits = len(receipt_audit_ids) - present
+    if missing_receipt_audits:
+        raise RepairBlocked(f"receipt_audit_rows_missing:{missing_receipt_audits}")
     touched_obsolete = [int(x) for c in merges for x in c["obsolete_ids"]]
     for cluster in merges:
         canonical = int(cluster["canonical_id"])
@@ -766,6 +874,7 @@ def _verify(con: sqlite3.Connection, manifest_sha: str, merges: Sequence[dict[st
         "decision_source_orphans": decision_source_orphans,
         "candidate_owner_violations": bad_owner,
         "pending_obsolete_jobs": 0,
+        "receipt_audit_rows": len(receipt_audit_ids),
     }
 
 
@@ -792,9 +901,17 @@ def _rollback(con: sqlite3.Connection, manifest_sha: str) -> dict[str, Any]:
     if receipt is None or receipt["status"] != "applied":
         raise RepairBlocked("rollback_receipt_not_applied")
     expected_after = json.loads(str(receipt["after_hashes_json"] or "{}"))
-    if _backup_current_hashes(con, manifest_sha) != expected_after:
-        raise RepairBlocked("rollback_cas_mismatch")
     audit_ids = [int(x) for x in json.loads(str(receipt["audit_ids_json"] or "[]"))]
+    include_created_audits = any(
+        str(key).startswith("created_audit:") for key in expected_after
+    )
+    if _receipt_current_hashes(
+        con,
+        manifest_sha,
+        audit_ids,
+        include_created_audits=include_created_audits,
+    ) != expected_after:
+        raise RepairBlocked("rollback_cas_mismatch")
     if audit_ids:
         p = ",".join("?" for _ in audit_ids)
         con.execute(f"DELETE FROM event_identity_decision_log WHERE id IN ({p})", tuple(audit_ids))
@@ -838,6 +955,15 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
                 {"cluster_id": c["cluster_id"], "canonical_id": int(c["canonical_id"]), "obsolete_ids": [int(x) for x in c["obsolete_ids"]], "action": "merge"}
                 for c in merges
             ]
+            planned.extend(
+                {
+                    "cluster_id": c["cluster_id"],
+                    "canonical_id": int(c["canonical_id"]),
+                    "distinct_ids": [int(x) for x in c["obsolete_ids"]],
+                    "action": "record_keep_distinct",
+                }
+                for c in distinct
+            )
             return {
                 "schema_version": MANIFEST_VERSION,
                 "incident": INCIDENT,
@@ -886,7 +1012,16 @@ def run(db_path: str | Path, manifest_path: str | Path, mode: str = "dry-run") -
             cluster_diff, cluster_audits = _apply_cluster(con, cluster)
             diff.extend(cluster_diff)
             audit_ids.extend(cluster_audits)
-        after_hashes = _backup_current_hashes(con, manifest_sha)
+        for cluster in distinct:
+            cluster_diff, cluster_audits = _record_keep_distinct_review(con, cluster)
+            diff.extend(cluster_diff)
+            audit_ids.extend(cluster_audits)
+        after_hashes = _receipt_current_hashes(
+            con,
+            manifest_sha,
+            audit_ids,
+            include_created_audits=True,
+        )
         con.execute(
             f"UPDATE {RECEIPT_TABLE} SET status='applied',after_hashes_json=?,audit_ids_json=?,diff_json=?,applied_at=? WHERE manifest_sha=?",
             (_json(after_hashes), _json(audit_ids), _json(diff), datetime.now(timezone.utc).isoformat(), manifest_sha),

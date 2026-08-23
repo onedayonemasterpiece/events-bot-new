@@ -2,7 +2,23 @@
 
 ## [Unreleased]
 
-- Fixed: completed the production repair for the August Smart Update
+- Fixed: the exhibition duplicate audit now treats similarity as recall and
+  reports a strict partition of candidate, confirmed duplicate,
+  evidence-backed keep-distinct and unresolved pairs. Success requires both
+  confirmed and unresolved counts to be zero across the complete current
+  corpus; rollout-window metrics cannot hide older active candidates. A `KEEP_DISTINCT` result must be
+  a pair-correlated final/manual ledger verdict with concrete source evidence
+  and conflicts; Event IDs and `linked_event_ids` alone never suppress an
+  alarm. Added the two production-shaped August duplicate fixtures and retained
+  the complete positive/hard-negative identity corpus. The guarded August
+  repair executor now appends pair-correlated `manual_pair_review_v1` ledger
+  rows for reviewed `KEEP_DISTINCT` clusters, so retained controls become
+  auditable without an Event-ID allowlist. Created verdict rows are included in
+  verify/rollback CAS hashes and roll back with the same receipt.
+  Run `7033` superseded the earlier closure claim, so the systemic incident is again
+  `mitigated / verification` pending Terra content repair.
+
+- Fixed: recorded the earlier production repair attempt for the August Smart Update
   deduplication regression. Three reviewed, hash/CAS-guarded manifest
   generations merged 55 obsolete Event shells while preserving source, fact,
   poster and audit history; every verify passed and every second apply was a
@@ -11,10 +27,11 @@
   removed from canonicals `7915/8083`, Event `8285` was restored as the
   source-grounded distinct 16:00 action, and the corrected Event `3216` VK
   projection was reconciled from postponed id `10005` to live id `10007`.
-  Final vector convergence covers 100% of eligible `related_v1` and
-  `search_v3` documents with zero provider calls on the no-op pass; the
-  untruncated production census has no unresolved hard duplicates. The static
-  immutable-snapshot barrier now hashes the same deterministic, probe-free
+  Final vector convergence covered 100% of then-eligible `related_v1` and
+  `search_v3` documents with zero provider calls on the no-op pass; later
+  audit `7033` found 23 recall candidates including two confirmed remaining
+  duplicate pairs, so this work is mitigation evidence rather than closure.
+  The static immutable-snapshot barrier now hashes the same deterministic, probe-free
   Search projection as the vector owner, so transient remote image-dimension
   results cannot strand an unchanged catalog behind
   `vector_barrier_catalog_revision_pending`. Event-source URLs are also

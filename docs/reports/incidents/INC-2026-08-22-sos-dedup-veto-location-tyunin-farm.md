@@ -1,10 +1,10 @@
 # INC-2026-08-22 August Smart Update deduplication regression
 
-Status: closed
+Status: mitigated / verification
 Severity: sev1
 Service: Smart Update identity / Telegram Monitoring / public projections
 Opened: 2026-08-22
-Closed: 2026-08-23
+Closed: —
 Owners: events-bot maintainer / Codex
 Related incidents: `INC-2026-05-30-active-duplicate-events-recall-gate`, `INC-2026-07-11-event-vector-sidecar-sync-stalled`, `INC-2026-08-04-smart-update-identity-source-replay-corruption`, `INC-2026-08-10-smart-update-identity-terminal-loss`, `INC-2026-08-22-tyunin-farm-location-drift`
 Related docs: `docs/features/smart-event-update/README.md`, `docs/features/smart-event-update/identity-state-machine.md`, `docs/features/unsigned-personalization/semantic-vector-retrieval.md`, `docs/operations/smart-update-prod-audit.md`
@@ -154,6 +154,12 @@ checkpoint matrix and control-flow diff localized the first bad commit.
   orphan rows and zero provider calls. Two overlapping preliminary attempts
   (`7028/7029`) hit ordinary provider RPM deferral; they introduced no fallback
   path or additional dedup adjudication and the durable owner converged.
+- `2026-08-23 05:45Z` — scheduled duplicate audit `ops_run=7033` fails with
+  23 untruncated recall candidates / 13 clusters. Source review confirms at
+  least `7614/8273` («Цветущая форма») and `8156/8187` («Мой город») are
+  still duplicate public identities. This invalidates the previous closure;
+  prevention remains deployed, but content repair and a new full verification
+  are outstanding.
 
 ## Root Cause
 
@@ -452,23 +458,30 @@ merged.
   evidence is mandatory for distinct, `unsafe_to_merge` retries, and
   overlapping same-title/same-ticket long-event repost drift fails closed.
 - [x] Deploy prevention from exact `origin/main`; verify health and SQLite.
-- [x] Deploy raw-byte-safe repair hotfix, apply reviewed true duplicates and
-  rebuild projections.
+- [x] Deploy raw-byte-safe repair tooling and retain CAS/idempotency checks.
+- [x] Split the exhibition audit into recall candidates, confirmed duplicates,
+  evidence-backed `KEEP_DISTINCT`, and unresolved pairs; fail on confirmed or
+  unresolved results. `linked_event_ids` is never identity evidence. The
+  guarded repair executor appends rollback-tracked, pair-correlated
+  `manual_pair_review_v1` verdicts for approved hard negatives.
+- [ ] Complete the new Terra-reviewed 23-pair census, apply the approved
+  content repair, and verify a second no-op apply without unauthorized social
+  mutations.
 - [x] Complete the vector-barrier-protected static catch-up and verify the
   immutable review candidate without public-root promotion.
 
-## Acceptance Criteria
+## Acceptance Criteria (not yet satisfied)
 
-- vector coverage both kinds 100%; critical fixtures 100%; duplicate recall
-  at least 99%; distinct preservation at least 99%; hard-negative false merges
-  zero;
+- vector coverage both kinds 100%; critical fixtures pass; hard-negative false
+  merges zero. No precision/recall percentage is claimed until the current
+  corpus has an independently reviewed denominator;
 - owner/veto to ordinary CREATE zero; exact replay zero new Events; concurrent
   replay one owner; normal-path LLM count unchanged;
 - no unresolved hard duplicates after full census/repair;
 - SHA reachable from `origin/main`; deploy, health, quick-check and two full
   ingestion iterations pass.
 
-## Release And Closure Evidence
+## Historical Release Evidence (closure superseded by run 7033)
 
 - prevention implementation: PR #554
   (`c0103be2c7ddc760486bd79e19825a69ceae4165`, Fly `2016`) and
@@ -503,9 +516,9 @@ merged.
   existing owner `7895` with zero creates; `ops_run=6993` completed a
   product rejection with zero creates. The adjacent `ops_run=6991` exercised
   `FINAL_RETRY/distinct_not_grounded` and also created nothing;
-- final production census SHA-256
+- superseded production census SHA-256
   `5e083181783bc37670329ef7a5c1bfc359f7dc8686c5e512c66c5d034846cecf`
-  has zero unresolved hard duplicates. The closure recapture at
+  previously reported zero unresolved hard duplicates. The superseded recapture at
   `2026-08-23T04:39:26Z` (gzip SHA-256
   `ec91e8628daec59858327fd61cbd3f6319810e17ea0ed95e688ab8c1c62ea8bf`)
   contains 551 current Events and 1,127 candidate pairs; its six hard-signal

@@ -743,8 +743,9 @@ def test_named_corpus_manifest_and_executable_cases_are_complete():
     siblings = negative_by_name["one_source_multiple_children"]
     assert siblings["owner"]["source_url"] == siblings["candidate"]["source_url"]
     assert siblings["owner"]["occurrence_key"] != siblings["candidate"]["occurrence_key"]
-    # 14/14 executable semantic fixtures is 100%, above both 99% gates; each
-    # named test also executes two post-owner exact packet replays.
+    # All named fixtures execute, and each named test also executes two
+    # post-owner exact packet replays. This is regression coverage, not a
+    # population-level precision/recall estimate.
     assert len(_AUGUST_POSITIVE_CASES) == len(_AUGUST_HARD_NEGATIVES) == 7
 
 

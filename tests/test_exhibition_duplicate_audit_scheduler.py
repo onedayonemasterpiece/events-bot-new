@@ -74,6 +74,34 @@ async def _insert_identity_decision(
         await conn.commit()
 
 
+async def _insert_pair_review(
+    db: Database,
+    left_id: int,
+    right_id: int,
+    *,
+    decision: str,
+    relation: str,
+    evidence: list[str],
+    conflicts: list[str],
+) -> None:
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO event_identity_decision_log(
+                event_id, candidate_event_id, source_type, source_url, decision,
+                decision_reason, confidence, decided_by, decision_payload
+            ) VALUES(?, ?, 'manual', 'artifact://terra-review', ?, 'reviewed_pair',
+                     0.99, 'terra.manual-review', ?)
+            """,
+            (left_id, right_id, decision, json.dumps({
+                "stage": "manual_pair_review_v1", "action": decision,
+                "relation": relation, "evidence": evidence,
+                "blocking_conflicts": conflicts,
+            }, ensure_ascii=False)),
+        )
+        await conn.commit()
+
+
 @pytest.mark.asyncio
 async def test_exhibition_duplicate_audit_scheduler_records_success(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
@@ -131,6 +159,11 @@ async def test_exhibition_duplicate_audit_scheduler_records_failure_and_alerts(t
             identity_status="merged",
             merged_into_event_id=1,
         )
+        await _insert_pair_review(
+            db, 1, 2, decision="CONFIRMED_DUPLICATE", relation="same_event",
+            evidence=["same title, range, venue and source-defined exhibition"],
+            conflicts=[],
+        )
         bot = _Bot()
 
         payload = await run_exhibition_duplicate_audit_scheduler(
@@ -155,7 +188,10 @@ async def test_exhibition_duplicate_audit_scheduler_records_failure_and_alerts(t
         assert details["duplicates"][0]["left_id"] == 1
         assert details["duplicates"][0]["right_id"] == 2
         assert bot.messages and bot.messages[0][0] == 4242
-        assert "high-confidence" in bot.messages[0][1]
+        assert payload["confirmed_duplicate_count"] == 1
+        assert payload["unresolved_count"] == 0
+        assert "confirmed=1" in bot.messages[0][1]
+        assert "unresolved=0" in bot.messages[0][1]
     finally:
         await db.close()
 
@@ -168,7 +204,7 @@ async def test_exhibition_duplicate_audit_scheduler_records_failed_before_raise(
         await _insert_event(db, 1, "Розовый натюрморт", "2026-07-01", "2026-08-01", "Музей")
         await _insert_event(db, 2, "Розовый натюрморт", "2026-07-02", "2026-08-02", "Музей")
 
-        with pytest.raises(RuntimeError, match="high-confidence public exhibition duplicates"):
+        with pytest.raises(RuntimeError, match="public exhibition duplicates require action"):
             await run_exhibition_duplicate_audit_scheduler(
                 db,
                 None,
@@ -185,6 +221,39 @@ async def test_exhibition_duplicate_audit_scheduler_records_failed_before_raise(
         status, metrics_raw = row
         assert status == "failed"
         assert json.loads(metrics_raw)["high_confidence_duplicate_count"] == 1
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_exhibition_duplicate_audit_succeeds_for_grounded_keep_distinct(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    try:
+        await db.init()
+        await _insert_event(db, 1, "Выставка Точка и линия", "2026-07-01", "2026-09-01", "Музей")
+        await _insert_event(db, 2, "Экскурсия по выставке Точка и линия", "2026-07-02", "2026-09-01", "Музей")
+        await _insert_pair_review(
+            db, 1, 2, decision="FINAL_DISTINCT", relation="distinct_event",
+            evidence=["source identifies a separately bookable excursion"],
+            conflicts=["event_type: exhibition vs excursion"],
+        )
+
+        payload = await run_exhibition_duplicate_audit_scheduler(
+            db, None, run_id="audit-distinct", current_date=date(2026, 7, 2)
+        )
+        assert payload["candidate_pair_count"] == 1
+        assert payload["keep_distinct_count"] == 1
+        assert payload["confirmed_duplicate_count"] == 0
+        assert payload["unresolved_count"] == 0
+        async with db.raw_conn() as conn:
+            row = await (await conn.execute(
+                "SELECT status, metrics_json, details_json FROM ops_run ORDER BY id DESC LIMIT 1"
+            )).fetchone()
+        assert row is not None and row[0] == "success"
+        metrics = json.loads(row[1]); details = json.loads(row[2])
+        assert metrics["candidate_pair_count"] == 1
+        assert metrics["keep_distinct_count"] == 1
+        assert details["keep_distinct_pairs"][0]["disposition"] == "KEEP_DISTINCT"
     finally:
         await db.close()
 

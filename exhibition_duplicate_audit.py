@@ -47,7 +47,9 @@ def _date_env(name: str) -> date | None:
 
 
 def _status_from_payload(payload: dict[str, Any]) -> str:
-    return "failed" if int(payload.get("high_confidence_duplicate_count") or 0) > 0 else "success"
+    confirmed = int(payload.get("confirmed_duplicate_count") or 0)
+    unresolved = int(payload.get("unresolved_count") or 0)
+    return "failed" if confirmed > 0 or unresolved > 0 else "success"
 
 
 def _metrics_from_payload(
@@ -57,6 +59,22 @@ def _metrics_from_payload(
 ) -> dict[str, Any]:
     metrics = {
         "public_exhibition_count": int(payload.get("public_exhibition_count") or 0),
+        "candidate_pair_count": int(payload.get("candidate_pair_count") or 0),
+        "confirmed_duplicate_count": int(payload.get("confirmed_duplicate_count") or 0),
+        "keep_distinct_count": int(payload.get("keep_distinct_count") or 0),
+        "unresolved_count": int(payload.get("unresolved_count") or 0),
+        "candidate_pair_window_count": int(payload.get("candidate_pair_window_count") or 0),
+        "confirmed_duplicate_window_count": int(
+            payload.get("confirmed_duplicate_window_count") or 0
+        ),
+        "keep_distinct_window_count": int(payload.get("keep_distinct_window_count") or 0),
+        "unresolved_window_count": int(payload.get("unresolved_window_count") or 0),
+        "candidate_pair_total_count": int(payload.get("candidate_pair_total_count") or 0),
+        "confirmed_duplicate_total_count": int(
+            payload.get("confirmed_duplicate_total_count") or 0
+        ),
+        "keep_distinct_total_count": int(payload.get("keep_distinct_total_count") or 0),
+        "unresolved_total_count": int(payload.get("unresolved_total_count") or 0),
         "high_confidence_duplicate_count": int(payload.get("high_confidence_duplicate_count") or 0),
         "high_confidence_duplicate_cluster_count": int(
             payload.get("high_confidence_duplicate_cluster_count") or 0
@@ -97,18 +115,33 @@ def _details_from_payload(
     rollout_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     max_pairs = _int_env("EXHIBITION_DUPLICATE_AUDIT_MAX_DETAILS_PAIRS", 20, minimum=1)
-    duplicates = list(payload.get("duplicates") or [])
-    all_duplicates = list(payload.get("all_duplicates") or [])
+    candidate_pairs = list(payload.get("candidate_pairs") or [])
+    confirmed = list(payload.get("confirmed_duplicates") or [])
+    keep_distinct = list(payload.get("keep_distinct_pairs") or [])
+    unresolved = list(payload.get("unresolved_pairs") or [])
+    all_candidates = list(payload.get("all_candidate_pairs") or [])
     details = {
         "scheduler_run_id": run_id,
         "current_date": payload.get("current_date"),
         "since_date": payload.get("since_date"),
         "since_days": payload.get("since_days"),
-        "duplicates_truncated": len(duplicates) > max_pairs,
-        "duplicates": duplicates[:max_pairs],
-        "all_duplicate_count": len(all_duplicates),
-        "all_duplicates_truncated": len(all_duplicates) > max_pairs,
-        "all_duplicates": all_duplicates[:max_pairs],
+        "candidate_pairs_truncated": len(candidate_pairs) > max_pairs,
+        "candidate_pairs": candidate_pairs[:max_pairs],
+        "confirmed_duplicates_truncated": len(confirmed) > max_pairs,
+        "confirmed_duplicates": confirmed[:max_pairs],
+        "keep_distinct_pairs_truncated": len(keep_distinct) > max_pairs,
+        "keep_distinct_pairs": keep_distinct[:max_pairs],
+        "unresolved_pairs_truncated": len(unresolved) > max_pairs,
+        "unresolved_pairs": unresolved[:max_pairs],
+        "all_candidate_pair_count": len(all_candidates),
+        "all_candidate_pairs_truncated": len(all_candidates) > max_pairs,
+        "all_candidate_pairs": all_candidates[:max_pairs],
+        # Compatibility aliases contain only actionable pairs.
+        "duplicates_truncated": len(confirmed) + len(unresolved) > max_pairs,
+        "duplicates": (confirmed + unresolved)[:max_pairs],
+        "all_duplicate_count": int(payload.get("high_confidence_duplicate_total_count") or 0),
+        "all_duplicates_truncated": len(list(payload.get("all_duplicates") or [])) > max_pairs,
+        "all_duplicates": list(payload.get("all_duplicates") or [])[:max_pairs],
     }
     if rollout_payload:
         details["identity_gate"] = {
@@ -132,9 +165,13 @@ async def _notify_admin(
     payload: dict[str, Any],
     status: str,
 ) -> None:
-    duplicate_count = int(payload.get("high_confidence_duplicate_count") or 0)
+    candidate_count = int(payload.get("candidate_pair_count") or 0)
+    confirmed_count = int(payload.get("confirmed_duplicate_count") or 0)
+    keep_distinct_count = int(payload.get("keep_distinct_count") or 0)
+    unresolved_count = int(payload.get("unresolved_count") or 0)
+    actionable_count = confirmed_count + unresolved_count
     notify_success = _env_enabled("EXHIBITION_DUPLICATE_AUDIT_NOTIFY_ON_SUCCESS", default=False)
-    if duplicate_count <= 0 and not notify_success:
+    if actionable_count <= 0 and not notify_success:
         return
     if bot is None or not hasattr(bot, "send_message"):
         return
@@ -145,23 +182,23 @@ async def _notify_admin(
     max_pairs = _int_env("EXHIBITION_DUPLICATE_AUDIT_MAX_ALERT_PAIRS", 8, minimum=1)
     lines = [
         (
-            "🚨 Exhibition duplicate audit: найдены high-confidence дубли"
-            if duplicate_count > 0
-            else "✅ Exhibition duplicate audit: дублей не найдено"
+            "🚨 Exhibition duplicate audit: есть подтверждённые/неразрешённые пары"
+            if actionable_count > 0
+            else "✅ Exhibition duplicate audit: все кандидаты доказанно различны"
         ),
         f"status={status}",
         f"current_date={payload.get('current_date')} window_days={payload.get('since_days')}",
-        f"public_exhibitions={payload.get('public_exhibition_count')} duplicate_pairs_since={duplicate_count} clusters_since={payload.get('high_confidence_duplicate_cluster_count')}",
-        f"duplicate_pairs_total={payload.get('high_confidence_duplicate_total_count')} clusters_total={payload.get('high_confidence_duplicate_total_cluster_count')}",
+        f"public_exhibitions={payload.get('public_exhibition_count')} candidates={candidate_count} confirmed={confirmed_count} keep_distinct={keep_distinct_count} unresolved={unresolved_count}",
+        f"actionable_clusters={payload.get('high_confidence_duplicate_cluster_count')}",
     ]
-    for pair in list(payload.get("duplicates") or [])[:max_pairs]:
+    for pair in (list(payload.get("confirmed_duplicates") or []) + list(payload.get("unresolved_pairs") or []))[:max_pairs]:
         lines.append(
             f"• #{pair.get('left_id')} ↔ #{pair.get('right_id')} "
             f"{float(pair.get('confidence') or 0):.3f}: "
             f"{pair.get('left_title')} / {pair.get('right_title')}"
         )
-    if duplicate_count > max_pairs:
-        lines.append(f"… ещё {duplicate_count - max_pairs} пар(ы) в ops_run.details_json")
+    if actionable_count > max_pairs:
+        lines.append(f"… ещё {actionable_count - max_pairs} пар(ы) в ops_run.details_json")
     try:
         await bot.send_message(chat_id, "\n".join(lines), disable_web_page_preview=True)
     except Exception:
@@ -179,10 +216,10 @@ async def run_exhibition_duplicate_audit_scheduler(
 ) -> dict[str, Any]:
     """Run the read-only /vystavki/ duplicate acceptance audit and record ops_run.
 
-    The audit is intentionally non-mutating.  High-confidence duplicates are a
-    rollout/quality regression: the run is stored as ``failed`` and, by default,
-    the scheduler raises after recording and notifying so APScheduler also emits
-    a job error.
+    The audit is intentionally non-mutating. Confirmed duplicates and candidates
+    without authoritative evidence are rollout/quality regressions. A heuristic
+    candidate is non-actionable only after a correlated, source-grounded
+    ``FINAL_DISTINCT`` verdict.
     """
 
     db_path = Path(getattr(db, "path", "") or "")
@@ -220,17 +257,19 @@ async def run_exhibition_duplicate_audit_scheduler(
         details = _details_from_payload(payload, run_id=run_id, rollout_payload=rollout_payload)
         await finish_ops_run(db, run_id=ops_run_id, status=status, metrics=metrics, details=details)
         logger.info(
-            "exhibition_duplicate_audit status=%s public_exhibitions=%s duplicates=%s clusters=%s",
+            "exhibition_duplicate_audit status=%s public_exhibitions=%s candidates=%s confirmed=%s unresolved=%s",
             status,
             metrics["public_exhibition_count"],
-            metrics["high_confidence_duplicate_count"],
-            metrics["high_confidence_duplicate_cluster_count"],
+            metrics["candidate_pair_count"],
+            metrics["confirmed_duplicate_count"],
+            metrics["unresolved_count"],
         )
         await _notify_admin(db, bot, payload=payload, status=status)
         if status == "failed" and should_raise:
             raise RuntimeError(
-                "high-confidence public exhibition duplicates found: "
-                f"{metrics['high_confidence_duplicate_count']}"
+                "public exhibition duplicates require action: "
+                f"confirmed={metrics['confirmed_duplicate_count']} "
+                f"unresolved={metrics['unresolved_count']}"
             )
         return payload
     except Exception as exc:
