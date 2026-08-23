@@ -378,7 +378,11 @@ writes `browser_visual=ok`. Its current-event `Enter` check follows the
 rendered action contract: an enabled primary CTA must receive exactly one
 activation, while an intentionally disabled primary (for example a sold-out
 event) must remain inert and announce that the action is unavailable. The
-specimen set must still contain at least one enabled primary CTA, so disabled
+announcement is required both when `Enter` uses the document-body recovery
+path and when an earlier navigation shortcut has already focused the shared
+event action surface; focused-surface routing must not silently swallow the
+disabled action. The specimen set must still contain at least one enabled
+primary CTA, so disabled
 data cannot silently remove positive `Enter` coverage. For compatibility
 investigation the same executable accepts `--browser firefox` and
 `--browser webkit`; the host must have the official Playwright system
