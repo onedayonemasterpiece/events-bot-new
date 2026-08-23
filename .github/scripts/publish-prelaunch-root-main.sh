@@ -24,17 +24,19 @@ test "$(git rev-parse origin/main)" = "$EXPECTED_SHA"
 test "${GITHUB_REF:-refs/heads/main}" = refs/heads/main
 test -z "$(git status --porcelain)"
 
-# The form may change; visual, background, assets and SEO/GEO bytes may not.
+# Keep the approved artwork and visual CSS byte-identical. The root component
+# and layout are source-hash pinned below because the approved launch date also
+# changes their visible copy and SEO/GEO metadata.
 git diff --exit-code "$PROD_VISUAL_SHA" -- \
   site/src/assets/prelaunch-approved \
-  site/src/components/PrelaunchPage.astro \
-  site/src/layouts/PrelaunchLayout.astro \
   site/src/styles/prelaunch-calibration.css \
   site/src/styles/prelaunch-consent.css \
   site/src/styles/prelaunch-page.css \
   site/src/styles/prelaunch-polish.css \
   site/src/styles/prelaunch-static.css \
   site/scripts/prepare-prelaunch-artwork.mjs
+test "$(sha256sum site/src/components/PrelaunchPage.astro | cut -d' ' -f1)" = '0939c343fb1e6ed62f05582d5f7ac89b44c9a1d471e8f9ed16c31765c51d9d69'
+test "$(sha256sum site/src/layouts/PrelaunchLayout.astro | cut -d' ' -f1)" = '4ac4f45d6a04ebce10f11c6a7c1e2455ffbdee10870fe499c127cec9174ebf67'
 
 npm --prefix site run test:prelaunch-form
 
@@ -51,9 +53,11 @@ restore_pages
 trap - EXIT
 
 grep -q 'data-prelaunch-page' site/dist/index.html
-grep -q '<title>Полюбить Калининград Анонсы — запуск 1 сентября</title>' site/dist/index.html
+grep -q '<title>Полюбить Калининград Анонсы — запуск 5 сентября</title>' site/dist/index.html
 grep -q '<link rel="canonical" href="https://kenigevents.ru/">' site/dist/index.html
-grep -q 'content="Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 1 сентября 2026 года."' site/dist/index.html
+grep -q 'content="Персонализированный сервис анонсов и навигатор по культурным и просветительским событиям Калининградской области. Запуск 5 сентября 2026 года."' site/dist/index.html
+grep -q '<time datetime="2026-09-05">5 сентября</time>' site/dist/index.html
+if grep -q '1 сентября' site/dist/index.html; then echo 'Production root contains stale launch date' >&2; exit 1; fi
 grep -q 'content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"' site/dist/index.html
 if grep -q 'noindex' site/dist/index.html; then echo 'Production root contains noindex' >&2; exit 1; fi
 test "$(sha256sum site/dist/assets/prelaunch/prelaunch-scene-desktop.webp | cut -d' ' -f1)" = '3e975fcd07d025f33c948b32758164905d3abc4b1bc91da5e84819604b712061'
