@@ -6,6 +6,8 @@ Migration: `supabase/migrations/20260824170000_google_ai_youtube_interaction_v2.
 
 This is additive and idempotent. It adds thought-token fields, `google_ai_finalize_interaction_v2`, a provably-unsent release RPC, exact v2 capability markers, and positive finite owner-supplied model limits. It does not contain secrets and does not edit an already-applied bootstrap migration.
 
+The owner label “Gemini Embedding 2” is canonicalized to the current official Gemini API endpoint ID `gemini-embedding-2-preview`. The display-like alias `gemini-embedding-2` is deliberately not inserted as a second row.
+
 ## Scope-ownership blocker
 
 `google_ai_model_limits` is global by model. Before apply, enumerate the distinct `quota_scope` values for every candidate key in `GOOGLE_AI_NORMAL_KEY_ENVS` and establish that the owner-supplied matrix applies to all of them. Several ENV keys in one `quota_scope` are one project quota, not several quotas.
@@ -35,7 +37,7 @@ WHERE model IN (
   'gemini-2.5-flash-preview-tts', 'gemini-3-flash-preview',
   'gemini-3.1-flash-tts-preview', 'gemini-3.5-flash',
   'gemini-3.6-flash', 'gemini-3.7-flash',
-  'gemini-embedding-001', 'gemini-embedding-2',
+  'gemini-embedding-001', 'gemini-embedding-2-preview',
   'gemini-robotics-er-1.6-preview', 'gemini-robotics-er-2-preview',
   'gemma-4-26b-a4b-it'
 )
@@ -89,7 +91,7 @@ The capability object must include:
 | gemini-3.6-flash | 5 | 250000 | 20 |
 | gemini-3.7-flash | 5 | 250000 | 20 |
 | gemini-embedding-001 | 100 | 30000 | 1000 |
-| gemini-embedding-2 | 100 | 30000 | 1000 |
+| gemini-embedding-2-preview | 100 | 30000 | 1000 |
 | gemini-robotics-er-1.6-preview | 5 | 250000 | 20 |
 | gemini-robotics-er-2-preview | 5 | 250000 | 20 |
 | gemma-4-26b-a4b-it | 30 | 16000 | 14400 |
