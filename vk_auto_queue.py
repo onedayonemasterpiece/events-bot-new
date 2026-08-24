@@ -308,7 +308,7 @@ async def _cancel_matching_event_from_notice(
     lifecycle_action: Any | None = None,
 ) -> tuple[int | None, str | None]:
     """Try to find a matching event and mark it as cancelled/postponed (inactive)."""
-    from sqlalchemy import select
+    from sqlalchemy import or_, select
     from models import Event, EventSource, EventSourceFact
     from smart_event_update import (
         EventCandidate,
@@ -361,13 +361,31 @@ async def _cancel_matching_event_from_notice(
             notice_text or "",
         )
     )
-    kind = "перенос" if is_postponed else "отмена"
-    next_status = "postponed" if is_postponed else "cancelled"
+    kind = "перенос" if is_postponed or action_name.startswith("RESCHEDULE_") else "отмена"
+    next_status = (
+        "rescheduled"
+        if action_name.startswith("RESCHEDULE_")
+        else "postponed"
+        if is_postponed
+        else "cancelled"
+    )
 
     async with db.get_session() as session:
-        stmt = select(Event).where(Event.lifecycle_status == "active")
+        eligible_statuses = ["active"]
+        if action_name == "CANCEL":
+            eligible_statuses.append("cancelled")
+        elif action_name == "POSTPONE":
+            eligible_statuses.append("postponed")
+        stmt = select(Event).where(Event.lifecycle_status.in_(eligible_statuses))
         if date_hint:
-            stmt = stmt.where(Event.date.like(f"{date_hint}%"))
+            candidate_dates = [date_hint]
+            if action_name == "RESCHEDULE_DATE":
+                new_date_hint = str(getattr(lifecycle_action, "new_date", "") or "").strip()
+                if new_date_hint and new_date_hint not in candidate_dates:
+                    candidate_dates.append(new_date_hint)
+            stmt = stmt.where(
+                or_(*(Event.date.like(f"{candidate_date}%") for candidate_date in candidate_dates))
+            )
         res = await session.execute(stmt)
         events = list(res.scalars().all())
 
@@ -390,13 +408,25 @@ async def _cancel_matching_event_from_notice(
                     score += 2
             if title_hint:
                 ev_title = (ev.title or "").strip()
-                if title_hint.casefold() in ev_title.casefold() or ev_title.casefold() in title_hint.casefold():
-                    score += 5
+                title_contains = (
+                    title_hint.casefold() in ev_title.casefold()
+                    or ev_title.casefold() in title_hint.casefold()
+                )
                 ev_tokens = _title_tokens(ev_title)
                 overlap = len(title_tokens & ev_tokens) if title_tokens else 0
+                # A typed title is an identity anchor, not an optional scoring
+                # bonus.  Exact location alone previously let lifecycle replay
+                # mutate unrelated events after the real target had already
+                # moved date or reached a terminal state.
+                if not title_contains and overlap == 0:
+                    continue
+                if title_contains:
+                    score += 5
                 score += min(6, overlap * 2)
             scored.append((score, ev))
 
+        if not scored:
+            return None, f"title_mismatch title_hint={title_hint!r} date={date_hint or ''}"
         scored.sort(key=lambda x: (x[0], int(getattr(x[1], "id", 0) or 0)), reverse=True)
         best_score, best = scored[0]
         # Guardrail: require at least some matching signal.

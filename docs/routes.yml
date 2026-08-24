@@ -98,6 +98,7 @@ sections:
     incident_august_smart_update_dedup_regression_2026_08_22: docs/reports/incidents/INC-2026-08-22-sos-dedup-veto-location-tyunin-farm.md
     incident_tyunin_farm_location_drift_2026_08_22: docs/reports/incidents/INC-2026-08-22-tyunin-farm-location-drift.md
     incident_smart_update_identity_terminal_loss_2026_08_10: docs/reports/incidents/INC-2026-08-10-smart-update-identity-terminal-loss.md
+    incident_vk_lifecycle_replay_stale_tg_repost_2026_08_24: docs/reports/incidents/INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost.md
     incident_smart_update_identity_source_replay_corruption_2026_08_04: docs/reports/incidents/INC-2026-08-04-smart-update-identity-source-replay-corruption.md
     incident_event_vector_sidecar_sync_stalled_2026_07_11: docs/reports/incidents/INC-2026-07-11-event-vector-sidecar-sync-stalled.md
     incident_mtproto_proxy_desktop_reconnect_2026_08_15: docs/reports/incidents/INC-2026-08-15-mtproto-proxy-desktop-reconnect.md

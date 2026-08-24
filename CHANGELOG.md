@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Fixed: VK typed lifecycle replay now treats a supplied title as a mandatory
+  identity anchor, recognizes already-rescheduled targets on the new date and
+  already-cancelled/postponed targets in their terminal state, and cannot
+  mutate an unrelated same-location Event by venue score alone. Telegram promo
+  repost selection additionally rejects a stored bot post whose immutable
+  source snapshot date conflicts with the mutable canonical Event date, and
+  records the source observation time instead of the selector time. Production
+  incident `INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost` restored Events
+  `8257`/`8258` and their Telegraph/ICS/calendar projections and removed stale
+  announcement `@kenigevents/4813`.
+
 - Fixed: the August dedup repair CAS now ignores only scheduler-owned
   `joboutbox.updated_at/next_run_at` drift after a transaction-bound stable
   reread, while still blocking running jobs and any status, attempt, payload,

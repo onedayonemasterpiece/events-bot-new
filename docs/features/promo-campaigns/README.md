@@ -436,6 +436,14 @@ a large extra button. It looks at the promoted event's stored
 future events: when an event has a concrete start time, the repost is eligible
 only before the `min_lead_hours` cutoff (`4` hours by default), so daily/digest
 channels do not amplify events that have already started or are about to start.
+For a stored bot event post, eligibility is also checked against its immutable
+`event_source` snapshot. The generated post's explicit Russian date must match
+the current canonical `event.date`; if it does not, the candidate fails closed
+and logs `promo.tg repost skip stale source snapshot`. This prevents a later
+bad lifecycle mutation from making an expired post look future again. The
+exposure's `source_published_at` uses the earliest matching source observation
+timestamp instead of the current selector time; it is observation evidence,
+not a claim that Telegram's exact publication timestamp is stored in SQLite.
 To keep broad amplification diverse, `tg_repost` also applies a same-title
 repeat cooldown. `dedup_hours` still protects the exact source URL, while
 `repeat_cooldown_days` / `repeat_cooldown_hours` (default: `7` days) suppresses

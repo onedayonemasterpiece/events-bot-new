@@ -50,6 +50,7 @@ from promo import (
     _render_vk_festival_carousel_card,
     _render_vk_festival_carousel_poster_card,
     _publish_vk_festival_carousel,
+    _recent_event_tg_posts,
     _vk_festival_carousel_configured_publish_date,
     resolve_video_promo_candidates,
 )
@@ -94,6 +95,62 @@ def _event(title: str, day: str, *, festival: str | None = None) -> Event:
         photo_urls=["https://example.com/poster.jpg"],
         photo_count=1,
     )
+
+
+@pytest.mark.asyncio
+async def test_tg_repost_rejects_stale_source_snapshot_and_keeps_observed_timestamp(
+    tmp_path,
+) -> None:
+    db = Database(str(tmp_path / "tg-source-snapshot.sqlite"))
+    await db.init()
+    observed_at = datetime(2026, 8, 23, 2, 21, tzinfo=timezone.utc)
+
+    stale = _event("Старый анонс", "2026-09-05")
+    stale.time = "10:00"
+    stale.tg_event_post_url = "https://t.me/c/3954607218/3716"
+    current = _event("Текущий анонс", "2026-09-05")
+    current.time = "11:00"
+    current.tg_event_post_url = "https://t.me/c/3954607218/3717"
+    async with db.get_session() as session:
+        session.add_all([stale, current])
+        await session.flush()
+        session.add_all(
+            [
+                EventSource(
+                    event_id=int(stale.id),
+                    source_type="telegram",
+                    source_url="https://t.me/kldevents/3716",
+                    source_chat_username="kldevents",
+                    source_message_id=3716,
+                    source_text="Старый анонс\n23 августа 10:00",
+                    imported_at=observed_at,
+                ),
+                EventSource(
+                    event_id=int(current.id),
+                    source_type="telegram",
+                    source_url="https://t.me/kldevents/3717",
+                    source_chat_username="kldevents",
+                    source_message_id=3717,
+                    source_text="Текущий анонс\n5 сентября 11:00",
+                    imported_at=observed_at,
+                ),
+            ]
+        )
+        await session.commit()
+
+    rows = await _recent_event_tg_posts(
+        db,
+        campaign_id=11,
+        events=[stale, current],
+        source_chat="@kldevents",
+        since_utc=datetime(2026, 8, 17, tzinfo=timezone.utc),
+        until_utc=datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc),
+    )
+
+    assert [(int(event.id), url, source_at) for event, url, source_at in rows] == [
+        (int(current.id), current.tg_event_post_url, observed_at)
+    ]
+    await db.close()
 
 
 def _popular_review_pick(
