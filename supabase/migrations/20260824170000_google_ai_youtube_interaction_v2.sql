@@ -323,7 +323,7 @@ VALUES
     ('gemini-3.6-flash', 5, 250000, 20),
     ('gemini-3.7-flash', 5, 250000, 20),
     ('gemini-embedding-001', 100, 30000, 1000),
-    ('gemini-embedding-2', 100, 30000, 1000),
+    ('gemini-embedding-2-preview', 100, 30000, 1000),
     ('gemini-robotics-er-1.6-preview', 5, 250000, 20),
     ('gemini-robotics-er-2-preview', 5, 250000, 20),
     ('gemma-4-26b-a4b-it', 30, 16000, 14400)
