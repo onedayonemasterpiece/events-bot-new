@@ -1,10 +1,10 @@
 # INC-2026-08-24 VK lifecycle replay caused a stale Telegram repost
 
-Status: mitigated
+Status: closed
 Severity: sev1
 Service: VK lifecycle ingestion, canonical events, promo Telegram reposts
 Opened: 2026-08-24
-Closed: —
+Closed: 2026-08-24
 Owners: events-bot production
 Related incidents: `INC-2026-05-07-vk-time-reschedule-wrong-match`, `INC-2026-05-17-vk-retrospective-reschedule-wrong-postponement`, `INC-2026-06-13-poll-repost-wrong-date-and-copy`, `INC-2026-06-29-tg-promo-compensation-repeat`
 Related docs: `docs/operations/incident-management.md`, `docs/operations/runtime-logs.md`, `docs/features/promo-campaigns/README.md`
@@ -56,6 +56,17 @@ alone. The same replay also cancelled a second unrelated zoo event.
 - 2026-08-24 13:14 Europe/Kaliningrad: Events `8257`/`8258` and their source
   ownership were repaired; the outbox rebuilt Telegraph, ICS, and both calendar
   posts by 13:14:41.
+- 2026-08-24 13:26 Europe/Kaliningrad: clean `origin/main` merge
+  `07f2ac9b2cda5e7bf649438c84226d761db34a39` was deployed as Fly machine
+  version `2029`.
+- 2026-08-24 13:26 Europe/Kaliningrad: the temporary full-volume backup left
+  only about 89 MB free during release and briefly made `/healthz` critical.
+  The already-downloaded remote copy was removed immediately; the narrow
+  incident backup tables and local full backup were retained. Health returned
+  to HTTP 200 with more than 940 MB free before closure.
+- 2026-08-24 13:30 Europe/Kaliningrad: a controlled compensating promo run
+  rejected another stale source snapshot and published valid event `8226`
+  (`29 августа`) as `@kenigevents/4814`; activity `31` remained enabled.
 
 ## Root Cause
 
@@ -124,9 +135,10 @@ alone. The same replay also cancelled a second unrelated zoo event.
 ## Immediate Mitigation
 
 - Paused promo activity `31` before its next due run.
-- Preserved `/data/inc-2026-08-24-before-stale-tg-repost.sqlite` plus
-  `codex_backup_inc20260824_*` table snapshots; `PRAGMA quick_check` returned
-  `ok`.
+- Downloaded the full online SQLite backup to the incident artifact and
+  retained `codex_backup_inc20260824_*` narrow production table snapshots;
+  `PRAGMA quick_check` returned `ok`. The remote full backup was deleted after
+  download to restore the production volume's free-space margin.
 - Deleted `@kenigevents/4813` and marked exposure `1015` as
   `REMOVED_INCIDENT`, so the invalid delivery no longer consumes the public
   daily cap.
@@ -152,11 +164,40 @@ alone. The same replay also cancelled a second unrelated zoo event.
 
 ## Release And Closure Evidence
 
-- deployed SHA: pending
-- deploy path: pending
-- regression checks: pending
-- post-deploy verification: pending
+- PR [#570](https://github.com/onedayonemasterpiece/events-bot-new/pull/570)
+  merged the fix as `07f2ac9b2cda5e7bf649438c84226d761db34a39` into
+  `origin/main`; all three required GitHub checks passed.
+- `scripts/deploy_fly_main.sh` deployed that exact clean SHA to Fly machine
+  `48e419df93e078`, version `2029`, image deployment
+  `deployment-01M0SR59ET4E7G3F3EQG4EMK60`; the runtime repo marker matched the
+  deployed SHA.
+- Local regression command
+  `pytest -q tests/test_vk_auto_queue_import.py tests/test_promo.py` passed
+  `104` tests. It includes the already-rescheduled replay, already-cancelled
+  replay, unrelated same-location protection, and stale Telegram snapshot
+  cases. `py_compile`, `git diff --check`, and routes YAML parsing also passed.
+- Production DB verification found Events `8257`/`8258` active on 2026-08-22
+  and 2026-08-23, zero false incident source rows, exposure `1015` marked
+  `REMOVED_INCIDENT` with zero public targets, and `PRAGMA quick_check=ok`.
+- Authenticated Telegram verification found `@kenigevents/4813` absent;
+  `@kldevents/3716`, repaired `@kenigeventscalendar/8703`, Telegraph, and ICS
+  all retained 2026-08-23. The compensating `@kenigevents/4814` and its source
+  `@kldevents/3646` both say `29 августа`.
+- Authenticated VK API verification confirmed managed post
+  `wall-231920894_10009` still says `23 августа 10:00`; source notice
+  `wall-48383763_41891` still explicitly says the 22/23-August excursions
+  proceed.
+- Post-deploy runtime logs show the new guard rejecting stale event `7934`.
+  Repeated `/healthz` responses were HTTP 200 with `ok=true`, `ready=true`,
+  DB/schedulers/tasks/disk healthy, and no issues.
 
 ## Prevention
 
-- Pending implementation and regression evidence.
+- Lifecycle replay now looks through the target's already-reached date/status
+  while requiring title identity whenever the structured action supplies a
+  title; a venue match alone cannot mutate another event.
+- Stored Telegram reposts now compare the immutable post snapshot date with
+  the mutable canonical Event date and skip conflicting candidates.
+- Release-time SQLite backups must be downloaded and removed from the
+  constrained production volume as one operation; narrow incident tables stay
+  available for server-side rollback evidence.
