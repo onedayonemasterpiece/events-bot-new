@@ -276,6 +276,16 @@ provider URL is never returned to the MCP client.
 Viewer names, profile/user IDs, recent-viewer lists and other viewer identities
 are excluded; the adapters do not mark stories read or call viewer-list methods.
 
+Ordinary Telegram message reads use the same materialization boundary. Every
+provider-owned media token in a returned `media` array is replaced by a fresh
+principal/provider-bound outer `ast_*` reference before it crosses MCP; the
+adapter token is never usable as a public reference even though both tokens
+share the same syntactic prefix. Each returned image ref must therefore be
+accepted immediately by `social_asset_preview` for that same principal. A
+Telegram `grouped_id` media album is one logical feed item: up to ten members
+are returned in Telegram order, do not consume separate page slots, and an
+exact-item read from any member expands the complete bounded album.
+
 An image story uses the existing typed `story` action with exactly one ready
 image `asset_ref` and one opaque target. Preparation freezes the exact target,
 provider, asset digest/MIME/size/dimensions/expiry, resolved story policy,

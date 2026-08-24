@@ -1059,10 +1059,19 @@ class SocialWorkspaceRuntime:
                 if ("item", raw) not in known:
                     known[("item", raw)] = self._mint_ref("item", raw, platform, principal)
                 return known[("item", raw)]
-            if key in {"asset_ref"} and node is not None:
+            # Provider read contracts expose media as an array of bare opaque
+            # asset strings, while action contracts expose ``asset_ref`` in an
+            # attachment object.  Both shapes must cross the same outer
+            # principal/provider binding boundary.  Returning the adapter's
+            # inner ``ast_*`` from a read makes the immediately following
+            # ``social_asset_preview`` lookup fail because that token has no
+            # row in ``social_workspace_ref``.
+            if key in {"asset_ref", "media"} and node is not None:
                 raw = str(node)
                 if ("asset", raw) not in known:
-                    known[("asset", raw)] = self._mint_ref("asset", raw, platform, principal)
+                    known[("asset", raw)] = self._mint_ref(
+                        "asset", raw, platform, principal
+                    )
                 return known[("asset", raw)]
             if isinstance(node, str):
                 return _SECRET_VALUE.sub("[REDACTED]", node)[:8192]

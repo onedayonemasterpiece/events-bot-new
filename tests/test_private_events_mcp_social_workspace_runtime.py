@@ -229,6 +229,41 @@ class FakeDocumentAdapter(FakeAdapter):
         assert role is MediaRole.DOCUMENT
         return "provider-document-binding"
 
+
+class FakeReadMediaAdapter(FakeAdapter):
+    """Return provider-owned media refs exactly as a social read adapter does."""
+
+    async def read(self, request):
+        if request.operation is SocialReadOperation.GET_ITEM:
+            return {
+                "item": {
+                    "item_ref": request.item_ref,
+                    "target_ref": "provider-target-media",
+                    "kind": "message",
+                    "published_at": "2026-08-24T12:00:00Z",
+                    "text": "album",
+                    "caption": "",
+                    "basic_metrics": {"views": 1},
+                    "media": [
+                        "ast_providerreadmedia000000000001",
+                        "ast_providerreadmedia000000000002",
+                    ],
+                    "trust": "untrusted_external_data",
+                },
+                "trust": "untrusted_external_data",
+            }
+        return await super().read(request)
+
+    async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+        assert asset_ref in {
+            "ast_providerreadmedia000000000001",
+            "ast_providerreadmedia000000000002",
+        }
+        assert len(owner_binding) == 64
+        assert self.asset_bytes is not None
+        assert len(self.asset_bytes) <= max_bytes
+        return self.asset_bytes
+
 @pytest.fixture
 def runtime(tmp_path: Path):
     adapter = FakeAdapter()
@@ -297,6 +332,59 @@ async def test_story_asset_preview_returns_bounded_mcp_image_not_provider_refere
     encoded = json.dumps(response)
     assert "provider-asset-story-42" not in encoded
     assert "download_url" not in encoded
+
+
+@pytest.mark.asyncio
+async def test_read_media_refs_are_outer_bound_and_each_can_be_previewed(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeReadMediaAdapter()
+    source = BytesIO()
+    Image.new("RGB", (640, 360), (30, 90, 150)).save(source, format="PNG")
+    adapter.asset_bytes = source.getvalue()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        provider_timeout_seconds=0.02,
+    )
+    call_context = scoped_context("telegram:read", "telegram:story:read")
+    principal = RuntimePrincipal.from_context(call_context)
+    target_ref = service._mint_ref(
+        "target", "provider-target-media", "telegram", principal
+    )
+    item_ref = service._mint_ref(
+        "item", "itm_providerreadmessage0000000001", "telegram", principal
+    )
+
+    item = await service.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "get_item",
+                "item_ref": item_ref,
+                "read_access": "private",
+            }
+        ),
+        call_context,
+    )
+
+    media_refs = item["item"]["media"]
+    assert len(media_refs) == 2
+    assert all(ref.startswith("ast_") for ref in media_refs)
+    assert not any(ref.startswith("ast_providerreadmedia") for ref in media_refs)
+    assert len(
+        store._connect()
+        .execute(
+            "SELECT ref_hash FROM social_workspace_ref WHERE ref_kind='asset'"
+        )
+        .fetchall()
+    ) == 2
+    for ref in media_refs:
+        preview = await service.asset_preview("telegram", ref, call_context)
+        assert preview.structured["mime_type"] == "image/jpeg"
+        assert preview.content[0]["type"] == "image"
 
 
 @pytest.mark.asyncio

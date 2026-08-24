@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Fixed: private `eventsBot` MCP social reads now replace provider-internal
+  strings nested in `media[]` with principal-bound outer asset refs, so every
+  returned Telegram image can be passed directly to `social_asset_preview`
+  instead of failing as unbound. Telegram `grouped_id` albums are projected as
+  one logical feed item with all images in order, and exact-item reads expand
+  the complete bounded album. Added the regression contract for
+  `INC-2026-08-24-mcp-telegram-album-media-ref`; production rollout remains
+  intentionally pending while an active user MCP read is in progress.
+
 - Fixed: VK typed lifecycle replay now treats a supplied title as a mandatory
   identity anchor, recognizes already-rescheduled targets on the new date and
   already-cancelled/postponed targets in their terminal state, and cannot
