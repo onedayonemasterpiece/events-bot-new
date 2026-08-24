@@ -24,7 +24,7 @@ EXPECTED = {
     "gemini-3.6-flash": (5, 250000, 20),
     "gemini-3.7-flash": (5, 250000, 20),
     "gemini-embedding-001": (100, 30000, 1000),
-    "gemini-embedding-2": (100, 30000, 1000),
+    "gemini-embedding-2-preview": (100, 30000, 1000),
     "gemini-robotics-er-1.6-preview": (5, 250000, 20),
     "gemini-robotics-er-2-preview": (5, 250000, 20),
     "gemma-4-26b-a4b-it": (30, 16000, 14400),
@@ -44,6 +44,7 @@ def parsed_rows() -> dict[str, tuple[int, int, int]]:
 def test_exact_owner_matrix_uses_canonical_positive_model_ids() -> None:
     assert parsed_rows() == EXPECTED
     assert all(min(limits) > 0 for limits in EXPECTED.values())
+    assert "gemini-embedding-2" not in parsed_rows()
     assert "antigravity-preview-05-2026" not in parsed_rows()
     assert "live" not in {model.casefold() for model in parsed_rows()}
     assert not any("ground" in model.casefold() for model in parsed_rows())
