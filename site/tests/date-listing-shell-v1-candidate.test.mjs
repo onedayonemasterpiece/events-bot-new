@@ -33,6 +33,8 @@ assert.doesNotMatch(candidate, /import DateListingSurface/u);
 assert.match(candidate, /data-candidate-composition="sot-linked-primitives"/u);
 assert.match(candidate, /MobileListingRailSurface/u);
 assert.match(candidate, /ExactTimeTimeline/u);
+assert.match(candidate, /const calendarToday = generatedAt\?\.slice\(0, 10\) \|\| getCurrentDate\(\)/u);
+assert.match(candidate, /calendarToday=\{calendarToday\}/u);
 assert.doesNotMatch(candidate, /date-listing-candidate__state[\s\S]*?<header>/u);
 assert.match(candidate, /width:360px; height:240px/u);
 
@@ -45,6 +47,7 @@ assert.match(mobileRail, /\.date-chip--weekend-range\{flex-basis:74px;width:74px
 assert.match(mobileRail, /\.date-chip\[aria-current=date\]\{background:var\(--rail-primary\);color:#fff;box-shadow:0 5px 12px rgba\(121,48,20,\.18\);opacity:1\}/u);
 assert.match(mobileRail, /\.date-calendar-trigger\{[^}]*border-left:1px solid rgba\(121,48,20,\.12\)[^}]*box-shadow:-8px 0 12px rgba\(255,253,248,\.94\)/u);
 assert.match(mobileDateAccessory, /aria-disabled="true"/u);
+assert.match(mobileDateAccessory, /getStaticEventDateAvailability\(today\)/u);
 assert.match(mobileDateAccessory, /index === 0 \|\| item\.day === 1 \? item\.month : ''/u);
 assert.match(mobileDateAccessory, /M7 2a1 1 0 0 1 1 1v1h8V3/u);
 

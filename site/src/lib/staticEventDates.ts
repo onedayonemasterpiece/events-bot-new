@@ -15,9 +15,9 @@ import {
  * Keep route generation, mobile cells, the public manifest and Today runtime
  * guard on the exact same date-listing inventory.
  */
-export function getStaticEventDateAvailability(): EventDateAvailability {
+export function getStaticEventDateAvailability(referenceDate = getCurrentDate()): EventDateAvailability {
   const dateListingEvents = getEvents().filter((event) => !isExhibitionLikeEvent(event));
-  return buildEventDateAvailability(dateListingEvents, getCurrentDate());
+  return buildEventDateAvailability(dateListingEvents, referenceDate);
 }
 
 export function getStaticEventDateManifest(): EventDateManifest {

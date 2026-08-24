@@ -15,7 +15,10 @@ const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const tomorrow = isoDate(new Date(parseDate(today).getTime() + DAY));
 const currentWeekendStart = getWeekendRange().start;
 const availableWeekendStarts = new Set(getAvailableWeekendRanges().map((range) => range.start));
-const availability = getStaticEventDateAvailability();
+// Candidate/golden surfaces pass their corpus reference date through `today`.
+// Production callers still pass getCurrentDate(), so the production contract is
+// unchanged while conformance captures stop drifting with the wall clock.
+const availability = getStaticEventDateAvailability(today);
 // On Sunday the current weekend starts one day before the build reference.
 // Keep that selected Saturday in the rail/sheet instead of producing a
 // calendar with no aria-current date.

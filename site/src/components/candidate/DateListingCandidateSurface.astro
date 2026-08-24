@@ -42,6 +42,7 @@ const mobileDate = new Intl.DateTimeFormat('ru-RU', { day:'numeric', month:'long
 const mobileWeekday = new Intl.DateTimeFormat('ru-RU', { weekday:'long', timeZone:'Europe/Kaliningrad' })
   .format(new Date(`${date}T12:00:00+02:00`));
 const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${readyEvents.length} ${eventCountLabel(readyEvents.length)}`;
+const calendarToday = generatedAt?.slice(0, 10) || getCurrentDate();
 ---
 
 <section
@@ -81,7 +82,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${readyEvents.length} $
         feedMeta="Фото → о событии → лайк"
         current={kind}
         cities={cities}
-        calendarToday={getCurrentDate()}
+        calendarToday={calendarToday}
         calendarDate={date}
         weather={{ date, dateLabel, routeKind: kind }}
       />
