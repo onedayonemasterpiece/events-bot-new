@@ -158,6 +158,9 @@ feed slots and an exact-item read exposed only one album member.
 
 ## Release And Closure Evidence
 
+- prepared fix: `6f95dec39` on draft PR
+  [#572](https://github.com/onedayonemasterpiece/events-bot-new/pull/572);
+  the PR is intentionally held from merge/deploy during the active user read
 - deployed SHA: pending; production change explicitly deferred by user
 - deploy path: pending; must be exact merged `origin/main`
 - regression checks: local targeted tests passing; complete suite pending final
