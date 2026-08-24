@@ -304,8 +304,20 @@ class FakeRefs:
         return binding
 
     def mint_read_asset(self, *, target_ref, media, role):
-        del target_ref, media, role
-        return ASSET_REF
+        del target_ref
+        existing = next(
+            (
+                ref
+                for ref, binding in self.assets.items()
+                if binding.provider_media is media and binding.role is role
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing
+        ref = f"ast_readmedia{len(self.assets):08d}"
+        self.assets[ref] = TelegramAssetBinding(ref, role, media)
+        return ref
 
     def mint_upload_asset(self, *, role, upload):
         assert isinstance(upload, TelegramVerifiedUpload)
@@ -1180,6 +1192,66 @@ async def test_dialog_search_target_history_and_global_keyword_search_are_bounde
     )
     assert global_results["results"][0]["text"] == "needle"
     assert "peer_id" not in repr(global_results)
+
+
+@pytest.mark.asyncio
+async def test_telegram_album_is_one_item_with_every_ordered_image_ref(harness):
+    adapter, client, refs, _ = harness
+    first_album = []
+    for message_id, text in ((1162, "album caption"), (1163, ""), (1164, "")):
+        message = Message(message_id, text)
+        message.grouped_id = 987654321
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        first_album.append(message)
+    second_album = []
+    for message_id, text in ((1159, "second album"), (1160, "")):
+        message = Message(message_id, text)
+        message.grouped_id = 987654320
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        second_album.append(message)
+    client.messages[CHANNEL_REF] = [
+        *reversed(first_album),
+        *reversed(second_album),
+        Message(1158, "older post"),
+    ]
+
+    feed = await adapter.read(
+        read_request(SocialReadOperation.LIST_ITEMS, target_ref=CHANNEL_REF, limit=2)
+    )
+
+    assert len(feed["results"]) == 2
+    assert feed["results"][0]["text"] == "album caption"
+    assert feed["results"][1]["text"] == "second album"
+    assert [len(item["media"]) for item in feed["results"]] == [3, 2]
+    media_ids = [
+        [refs.assets[ref].provider_media.photo.id for ref in item["media"]]
+        for item in feed["results"]
+    ]
+    assert media_ids == [[1162, 1163, 1164], [1159, 1160]]
+
+
+@pytest.mark.asyncio
+async def test_telegram_get_item_expands_album_even_from_one_member(harness):
+    adapter, client, refs, _ = harness
+    album = []
+    for message_id, text in ((1162, "album caption"), (1163, ""), (1164, "")):
+        message = Message(message_id, text)
+        message.grouped_id = 11223344
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        album.append(message)
+    client.messages[CHANNEL_REF] = [*reversed(album), Message(1161, "older")]
+    item_ref = refs.mint_item(target_ref=CHANNEL_REF, message_id=1163).item_ref
+
+    response = await adapter.read(
+        read_request(SocialReadOperation.GET_ITEM, item_ref=item_ref)
+    )
+
+    assert response["item"]["text"] == "album caption"
+    assert len(response["item"]["media"]) == 3
+    assert [
+        refs.assets[ref].provider_media.photo.id
+        for ref in response["item"]["media"]
+    ] == [1162, 1163, 1164]
 
 
 @pytest.mark.asyncio

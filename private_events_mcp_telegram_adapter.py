@@ -1739,9 +1739,19 @@ class TelegramWorkspaceAdapter:
         target: TelegramTargetBinding,
         *,
         kind: SocialItemKind | None = None,
+        album_messages: Sequence[Any] | None = None,
     ) -> dict[str, Any]:
-        message_id = _provider_message_id(message)
-        text = _safe_text(getattr(message, "message", None), 4096)
+        members = self._ordered_album_members(message, album_messages)
+        representative = next(
+            (
+                member
+                for member in members
+                if _safe_text(getattr(member, "message", None), 4096)
+            ),
+            members[0],
+        )
+        message_id = _provider_message_id(representative)
+        text = _safe_text(getattr(representative, "message", None), 4096)
         selected_kind = kind or (
             SocialItemKind.POST
             if target.kind is SocialTargetKind.CHANNEL
@@ -1757,22 +1767,118 @@ class TelegramWorkspaceAdapter:
             "item_ref": item.item_ref,
             "target_ref": target.target_ref,
             "kind": selected_kind.value,
-            "published_at": _utc(getattr(message, "date", None)),
+            "published_at": _utc(getattr(representative, "date", None)),
             "text": text,
             "caption": "",
-            "basic_metrics": _message_metrics(message),
+            "basic_metrics": _message_metrics(representative),
             "trust": _TRUST,
         }
-        media = getattr(message, "media", None)
-        if media is not None:
+        media_refs: list[str] = []
+        for member in members[:10]:
+            media = getattr(member, "media", None)
+            role = self._message_media_role(media)
+            if media is None or role is None:
+                continue
             media_ref = self._mint_read_asset(
                 target_ref=target.target_ref,
                 media=media,
-                role=MediaRole.DOCUMENT,
+                role=role,
             )
             validate_opaque_ref(media_ref, "asset")
-            payload["media"] = [media_ref]
+            media_refs.append(media_ref)
+        if media_refs:
+            payload["media"] = media_refs
         return payload
+
+    @staticmethod
+    def _message_grouped_id(message: Any) -> int | None:
+        grouped_id = getattr(message, "grouped_id", None)
+        return grouped_id if type(grouped_id) is int and grouped_id != 0 else None
+
+    @staticmethod
+    def _message_media_role(media: Any) -> MediaRole | None:
+        if media is None:
+            return None
+        if media.__class__.__name__ == "MessageMediaPhoto" or getattr(
+            media, "photo", None
+        ) is not None:
+            return MediaRole.IMAGE
+        document = getattr(media, "document", None)
+        if document is None:
+            return None
+        mime_type = getattr(document, "mime_type", None)
+        mime_type = mime_type.lower() if isinstance(mime_type, str) else ""
+        if mime_type.startswith("image/"):
+            return (
+                MediaRole.ANIMATION
+                if mime_type == "image/gif"
+                else MediaRole.IMAGE
+            )
+        if mime_type.startswith("video/") or bool(getattr(media, "video", False)):
+            return MediaRole.VIDEO
+        if mime_type.startswith("audio/") or bool(getattr(media, "audio", False)):
+            return MediaRole.AUDIO
+        return MediaRole.DOCUMENT
+
+    @classmethod
+    def _ordered_album_members(
+        cls, message: Any, album_messages: Sequence[Any] | None
+    ) -> list[Any]:
+        grouped_id = cls._message_grouped_id(message)
+        if grouped_id is None:
+            return [message]
+        candidates = list(album_messages or ())
+        if not any(
+            _provider_message_id(candidate) == _provider_message_id(message)
+            for candidate in candidates
+        ):
+            candidates.append(message)
+        members = [
+            candidate
+            for candidate in candidates
+            if cls._message_grouped_id(candidate) == grouped_id
+        ]
+        members.sort(key=_provider_message_id)
+        return members[:10] or [message]
+
+    @classmethod
+    def _logical_message_groups(cls, messages: Sequence[Any]) -> list[list[Any]]:
+        grouped: dict[int, list[Any]] = {}
+        for message in messages:
+            grouped_id = cls._message_grouped_id(message)
+            if grouped_id is not None:
+                grouped.setdefault(grouped_id, []).append(message)
+        results: list[list[Any]] = []
+        seen: set[int] = set()
+        for message in messages:
+            grouped_id = cls._message_grouped_id(message)
+            if grouped_id is None:
+                results.append([message])
+            elif grouped_id not in seen:
+                seen.add(grouped_id)
+                results.append(
+                    cls._ordered_album_members(message, grouped[grouped_id])
+                )
+        return results
+
+    async def _album_messages_near(
+        self, client: Any, target: TelegramTargetBinding, message: Any
+    ) -> list[Any]:
+        """Fetch at most one Telegram album around an already resolved member."""
+
+        if self._message_grouped_id(message) is None:
+            return [message]
+        message_id = _provider_message_id(message)
+        iterator = client.iter_messages(
+            target.entity,
+            limit=21,
+            # Telegram media groups contain at most ten items with adjacent
+            # message ids.  Starting just above that window includes the
+            # selected member and all possible siblings without a broad scan.
+            offset_id=message_id + 11,
+        )
+        nearby = await self._iterate(iterator)
+        return self._ordered_album_members(message, nearby)
 
     @staticmethod
     def _story_metrics(story_or_views: Any) -> dict[str, int]:
@@ -1948,18 +2054,33 @@ class TelegramWorkspaceAdapter:
         if type(offset_id) is not int or offset_id < 0:
             raise SocialWorkspaceValidationError("cursor state is invalid")
         limit = min(request.limit, _MAX_PAGE)
+        # ``limit`` is a logical-post limit.  Telegram counts every member of a
+        # grouped media album as a message, so fetch a bounded expansion before
+        # collapsing.  This prevents a three-photo post from consuming three
+        # result slots or being truncated to one photo at a page boundary.
+        scan_limit = min(_MAX_GLOBAL_SCAN + 1, limit * 10 + 11)
         iterator = client.iter_messages(
             target.entity,
-            limit=limit + 1,
+            limit=scan_limit,
             offset_id=offset_id,
-            search=request.query if request.operation is SocialReadOperation.SEARCH_ITEMS else None,
+            search=(
+                request.query
+                if request.operation is SocialReadOperation.SEARCH_ITEMS
+                else None
+            ),
         )
         messages = await self._iterate(iterator)
-        selected = messages[:limit]
-        results = [self._item_payload(message, target) for message in selected]
+        logical = self._logical_message_groups(messages)
+        selected = logical[:limit]
+        results = [
+            self._item_payload(group[0], target, album_messages=group)
+            for group in selected
+        ]
         state = (
             {
-                "offset_id": _provider_message_id(selected[-1]),
+                "offset_id": min(
+                    _provider_message_id(message) for message in selected[-1]
+                ),
                 "target_ref": target.target_ref,
                 "query": request.query or "",
             }
@@ -1969,7 +2090,7 @@ class TelegramWorkspaceAdapter:
         return self._page(
             results,
             family=family,
-            more=len(messages) > limit,
+            more=len(logical) > limit or len(messages) >= scan_limit,
             state=state,
             binding=cursor_binding,
         )
@@ -2365,7 +2486,13 @@ class TelegramWorkspaceAdapter:
                     )
                     return {"item": self._story_payload(story, target), "trust": _TRUST}
                 message = await _await(client.get_messages(target.entity, ids=item.message_id))
-                return {"item": self._item_payload(message, target), "trust": _TRUST}
+                album = await self._album_messages_near(client, target, message)
+                return {
+                    "item": self._item_payload(
+                        message, target, album_messages=album
+                    ),
+                    "trust": _TRUST,
+                }
             if operation is SocialReadOperation.LIST_COMMENTS:
                 return await self._comments(client, lease, request)
             if operation is SocialReadOperation.LIST_REACTIONS:
