@@ -2599,6 +2599,95 @@ def _tg_source_url_for_chat(ev: Event, chat: str | None) -> str | None:
     return url
 
 
+_TG_SOURCE_MONTHS = {
+    "января": 1,
+    "февраля": 2,
+    "марта": 3,
+    "апреля": 4,
+    "мая": 5,
+    "июня": 6,
+    "июля": 7,
+    "августа": 8,
+    "сентября": 9,
+    "октября": 10,
+    "ноября": 11,
+    "декабря": 12,
+}
+_TG_SOURCE_DATE_RE = re.compile(
+    r"(?iu)(?<!\d)(\d{1,2})(?:\s*[-–—]\s*(\d{1,2}))?\s+"
+    r"(" + "|".join(_TG_SOURCE_MONTHS) + r")(?:\s+((?:19|20)\d{2}))?\b"
+)
+
+
+def _tg_source_snapshot_dates(text: str | None, *, year_hint: int) -> set[date]:
+    """Extract dates from our generated Telegram event-post snapshot.
+
+    The source row is immutable evidence of what the already-published post
+    says.  This parser is intentionally narrow: it validates the bot's stable
+    ``23 августа 10:00`` rendering rather than making a new semantic decision
+    from arbitrary social copy.
+    """
+
+    dates: set[date] = set()
+    for match in _TG_SOURCE_DATE_RE.finditer(str(text or "")):
+        month = _TG_SOURCE_MONTHS.get(match.group(3).casefold())
+        year = int(match.group(4) or year_hint)
+        if not month:
+            continue
+        for raw_day in (match.group(1), match.group(2)):
+            if not raw_day:
+                continue
+            try:
+                dates.add(date(year, month, int(raw_day)))
+            except ValueError:
+                continue
+    return dates
+
+
+async def _tg_source_snapshots_for_events(
+    db: Database,
+    *,
+    events: list[Event],
+    source_chat: str,
+) -> dict[int, tuple[str, datetime]]:
+    event_ids = [int(ev.id) for ev in events if ev.id is not None]
+    if not event_ids:
+        return {}
+    source_name = str(source_chat or "").strip().lstrip("@").casefold()
+    async with db.get_session() as session:
+        res = await session.execute(
+            select(EventSource)
+            .where(EventSource.event_id.in_(event_ids))
+            .where(EventSource.source_type == "telegram")
+            .order_by(EventSource.imported_at.asc(), EventSource.id.asc())
+        )
+        sources = list(res.scalars().all())
+    by_id: dict[int, tuple[str, datetime]] = {}
+    event_by_id = {int(ev.id): ev for ev in events if ev.id is not None}
+    for source in sources:
+        event_id = int(source.event_id)
+        if event_id in by_id:
+            continue
+        ev = event_by_id.get(event_id)
+        if ev is None:
+            continue
+        post_id = _tg_message_id_from_url(str(getattr(ev, "tg_event_post_url", "") or ""))
+        if post_id is None or int(getattr(source, "source_message_id", 0) or 0) != post_id:
+            continue
+        source_username = str(getattr(source, "source_chat_username", "") or "").lstrip("@").casefold()
+        if source_name and source_username and source_username != source_name:
+            continue
+        observed_at = getattr(source, "imported_at", None)
+        if not isinstance(observed_at, datetime):
+            continue
+        if observed_at.tzinfo is None:
+            observed_at = observed_at.replace(tzinfo=timezone.utc)
+        else:
+            observed_at = observed_at.astimezone(timezone.utc)
+        by_id[event_id] = (str(getattr(source, "source_text", "") or ""), observed_at)
+    return by_id
+
+
 async def _recent_event_tg_organic_posts(
     db: Database,
     *,
@@ -2660,6 +2749,11 @@ async def _recent_event_tg_posts(
     rows: list[tuple[Event, str, datetime]] = []
     source_name = str(source_chat or "").strip().lstrip("@").lower()
     event_by_id = {int(ev.id): ev for ev in events if ev.id is not None}
+    source_snapshots = await _tg_source_snapshots_for_events(
+        db,
+        events=events,
+        source_chat=source_chat,
+    )
     for ev in events:
         if not event_is_repostable_for_promo(
             ev,
@@ -2681,7 +2775,25 @@ async def _recent_event_tg_posts(
         is_internal_tme_c_url = "t.me/c/" in url_l or "telegram.me/c/" in url_l
         if source_name and not (is_public_source_url or is_internal_tme_c_url):
             continue
-        rows.append((ev, url, until_utc))
+        observed_at = until_utc
+        snapshot = source_snapshots.get(int(ev.id or 0))
+        if snapshot is not None:
+            source_text, observed_at = snapshot
+            event_date = _event_start_date(ev)
+            snapshot_dates = _tg_source_snapshot_dates(
+                source_text,
+                year_hint=event_date.year if event_date else until_utc.year,
+            )
+            if event_date is not None and snapshot_dates and event_date not in snapshot_dates:
+                logger.warning(
+                    "promo.tg repost skip stale source snapshot event_id=%s event_date=%s source_dates=%s source_url=%s",
+                    getattr(ev, "id", None),
+                    event_date.isoformat(),
+                    sorted(item.isoformat() for item in snapshot_dates),
+                    url,
+                )
+                continue
+        rows.append((ev, url, observed_at))
 
     publication_exposures = await _recent_activity_exposures(
         db,

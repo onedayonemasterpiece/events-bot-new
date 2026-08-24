@@ -749,6 +749,129 @@ async def test_vk_auto_cancel_match_requires_date_or_title_anchor(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_vk_lifecycle_reschedule_replay_finds_target_on_new_date_not_same_location_neighbor(
+    tmp_path,
+):
+    db = Database(str(tmp_path / "reschedule-replay.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        from models import Event
+
+        target = Event(
+            title="Косплей-фестиваль «Мимикрия»",
+            description="Описание",
+            source_text="src",
+            date="2026-09-05",
+            time="12:00",
+            location_name="Калининградский зоопарк",
+            city="Калининград",
+        )
+        neighbor = Event(
+            title="Парикмахеры верблюдов, муравьедов повара",
+            description="Описание",
+            source_text="src",
+            date="2026-08-23",
+            time="10:00",
+            location_name="Калининградский зоопарк",
+            city="Калининград",
+        )
+        session.add_all([target, neighbor])
+        await session.commit()
+        await session.refresh(target)
+        await session.refresh(neighbor)
+        target_id = int(target.id)
+        neighbor_id = int(neighbor.id)
+
+    event_id, err = await vk_auto_queue._cancel_matching_event_from_notice(
+        db,
+        notice_text=(
+            "Косплей-фестиваль «Мимикрия», который должен был состояться "
+            "23 августа, переносим на 5 сентября."
+        ),
+        source_url="https://vk.com/wall-48383763_41891",
+        source_name="Калининградский зоопарк",
+        location_hint="Калининградский зоопарк",
+        published_at=datetime(2026, 8, 20, 10, 0, tzinfo=timezone.utc),
+        lifecycle_action=LifecycleAction(
+            action=LifecycleActionType.RESCHEDULE_DATE,
+            target_title="Косплей-фестиваль «Мимикрия»",
+            target_date="2026-08-23",
+            new_date="2026-09-05",
+            target_location="Калининградский зоопарк",
+        ),
+    )
+
+    assert err is None
+    assert event_id == target_id
+    async with db.get_session() as session:
+        target = await session.get(Event, target_id)
+        neighbor = await session.get(Event, neighbor_id)
+    assert (target.date, target.lifecycle_status) == ("2026-09-05", "active")
+    assert (neighbor.date, neighbor.lifecycle_status) == ("2026-08-23", "active")
+
+
+@pytest.mark.asyncio
+async def test_vk_lifecycle_cancel_replay_finds_cancelled_target_not_same_location_neighbor(
+    tmp_path,
+):
+    db = Database(str(tmp_path / "cancel-replay.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        from models import Event
+
+        target = Event(
+            title="Музыкальный вечер в зоопарке",
+            description="Описание",
+            source_text="src",
+            date="2026-08-22",
+            time="19:00",
+            location_name="Калининградский зоопарк",
+            city="Калининград",
+            lifecycle_status="cancelled",
+        )
+        neighbor = Event(
+            title="Ветеринарный экспресс",
+            description="Описание",
+            source_text="src",
+            date="2026-08-22",
+            time="10:00",
+            location_name="Калининградский зоопарк",
+            city="Калининград",
+        )
+        session.add_all([target, neighbor])
+        await session.commit()
+        await session.refresh(target)
+        await session.refresh(neighbor)
+        target_id = int(target.id)
+        neighbor_id = int(neighbor.id)
+
+    event_id, err = await vk_auto_queue._cancel_matching_event_from_notice(
+        db,
+        notice_text="Музыкальный вечер, ожидаемый 22 августа, отменяем.",
+        source_url="https://vk.com/wall-48383763_41891",
+        source_name="Калининградский зоопарк",
+        location_hint="Калининградский зоопарк",
+        published_at=datetime(2026, 8, 20, 10, 0, tzinfo=timezone.utc),
+        lifecycle_action=LifecycleAction(
+            action=LifecycleActionType.CANCEL,
+            target_title="Музыкальный вечер",
+            target_date="2026-08-22",
+            target_location="Калининградский зоопарк",
+        ),
+    )
+
+    assert err is None
+    assert event_id == target_id
+    async with db.get_session() as session:
+        target = await session.get(Event, target_id)
+        neighbor = await session.get(Event, neighbor_id)
+    assert target.lifecycle_status == "cancelled"
+    assert neighbor.lifecycle_status == "active"
+
+
+@pytest.mark.asyncio
 async def test_vk_auto_import_marks_inbox_imported_and_links_multiple_events(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

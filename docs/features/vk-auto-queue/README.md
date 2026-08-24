@@ -84,6 +84,16 @@ VK API fetch
 Повтор возможен только как явно
 наблюдаемое операторское re-drive, а не как фоновый вечный цикл.
 
+Typed lifecycle matching is replay-idempotent. When an action supplies
+`target_title`, title identity is mandatory: exact venue/date/time can improve
+ranking but may never select a candidate with zero title containment and zero
+title-token overlap. `RESCHEDULE_DATE` searches both the original and new date,
+while `CANCEL`/`POSTPONE` also consider an already-terminal matching target.
+Therefore an explicit replay attaches context to the already-rescheduled or
+already-cancelled Event instead of mutating an unrelated active Event that
+shares the venue. See regression contract
+`INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost`.
+
 Cursor не продвигается, пока не сохранены все полученные in-horizon packets и
 для каждого нового revision не записан admission receipt / fail-open enqueue.
 Page/hard cap создаёт `vk_crawl_continuation`. Неизменившийся revision с тем же

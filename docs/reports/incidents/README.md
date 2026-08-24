@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost.md`
+  - Scope: VK lifecycle replay candidate identity, promo Telegram source-date
+    consistency, and production repair/catch-up for events `8257`/`8258` and
+    `@kenigevents/4813`.
+  - Must not regress: a typed lifecycle action with a title must never select a
+    zero-title-overlap event by location alone; replay must recognize the
+    already-rescheduled/cancelled target idempotently; promo must not forward an
+    expired source post merely because a corrupted mutable event date is future.
 - `INC-2026-08-22-sos-dedup-veto-location-tyunin-farm.md`
   - Scope: systemic August Smart Update vector + LLM identity regression,
     final match/distinct/retry application, occurrence-scoped replay and safe
