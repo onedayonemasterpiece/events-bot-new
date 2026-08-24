@@ -1,0 +1,836 @@
+{
+  "schema_version": "weekend-listing-astro-projection.v1",
+  "generated": true,
+  "independently_editable": false,
+  "source_repository": "onedayonemasterpiece/lovekgd-design-system",
+  "source_manifest_path": "catalog/page-archetypes/weekend-listing-v1/fixture-manifest.v1.json",
+  "source_manifest_sha256": "474f633e52a5038a23e8baea6239ed75574651e9555005fe745d81cfa017b762",
+  "manifest_id": "archetype.listing.weekend-v1.golden-v1",
+  "manifest_version": "1.0.0-candidate.1",
+  "source_corpus": {
+    "path": "catalog/fixtures/ui-reference-events/v1/corpus.json",
+    "corpus_id": "ui-reference-events.v1",
+    "corpus_sha256": "9ca2960fb8d723f95b19c012b50f8abb5e4503eedcf673fe178ed0f4afd46320",
+    "assets_manifest_path": "catalog/fixtures/ui-reference-events/v1/assets-manifest.json",
+    "assets_manifest_sha256": "3819811e9598a65e03a2a4467672c5e836142c6fd6c3a21178b644fe0dff6953",
+    "surface_expectations_path": "catalog/fixtures/ui-reference-events/v1/surface-expectations.json",
+    "reference_clock": {
+      "current_date": "2026-08-21",
+      "reference_iso": "2026-08-21T09:00:00+02:00",
+      "timezone": "Europe/Kaliningrad"
+    }
+  },
+  "weekend_range": {
+    "start": "2026-08-22",
+    "end": "2026-08-23",
+    "date_label": "22–23 августа",
+    "route": "/vyhodnye/"
+  },
+  "ranges": [
+    {
+      "href": "/vyhodnye/",
+      "label": "22–23 августа",
+      "selected": true,
+      "actualCurrent": true
+    },
+    {
+      "href": "/vyhodnye/2026-08-29/",
+      "label": "29–30 августа"
+    },
+    {
+      "href": "/vyhodnye/2026-09-05/",
+      "label": "5–6 сентября"
+    },
+    {
+      "href": "/vyhodnye/2026-09-12/",
+      "label": "12–13 сентября"
+    },
+    {
+      "href": "/vyhodnye/2026-09-19/",
+      "label": "19–20 сентября"
+    },
+    {
+      "href": "/vyhodnye/2026-09-26/",
+      "label": "26–27 сентября"
+    }
+  ],
+  "representations": [
+    {
+      "order": 1,
+      "id": "typical-desktop",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "state": "ready",
+      "fixture_ids": [
+        "event.real.7807",
+        "event.real.7906"
+      ],
+      "shell": "body-crop"
+    },
+    {
+      "order": 2,
+      "id": "typical-mobile",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "state": "ready",
+      "fixture_ids": [
+        "event.real.7807",
+        "event.real.7906"
+      ],
+      "shell": "body-crop"
+    },
+    {
+      "order": 3,
+      "id": "sparse",
+      "viewport": {
+        "width": 1280,
+        "height": 760
+      },
+      "state": "ready",
+      "fixture_ids": [
+        "event.real.7906"
+      ],
+      "shell": "body-crop",
+      "coverage": [
+        "one-event",
+        "one-empty-day",
+        "single-time-row"
+      ]
+    },
+    {
+      "order": 4,
+      "id": "empty",
+      "viewport": {
+        "width": 390,
+        "height": 720
+      },
+      "state": "empty",
+      "fixture_ids": [],
+      "shell": "none"
+    },
+    {
+      "order": 5,
+      "id": "stress",
+      "viewport": {
+        "width": 1024,
+        "height": 1000
+      },
+      "state": "ready",
+      "fixture_ids": [
+        "event.real.7807",
+        "event.real.7906"
+      ],
+      "shell": "body-crop",
+      "coverage": [
+        "six-range-navigation-items",
+        "range-wrap-at-compact-desktop",
+        "all-events-in-saturday-column",
+        "empty-sunday-column",
+        "two-distinct-time-rows",
+        "long-copy",
+        "multi-image"
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "fixture_id": "event.real.7807",
+      "event_id": 7807,
+      "expected_group": "2026-08-22",
+      "preview_event_sha256": "ff0010eb67230f68f9c8c1d31dcdd04aeb734e04ac4287fa333afab1de2b6841",
+      "payload_file_sha256": "391c1a456f322f312643760b0120630b3442d9eb51f4c1bf19679d6731036cfd",
+      "preview_event": {
+        "address": null,
+        "age_recommendation": null,
+        "age_recommendation_label": null,
+        "age_restriction": null,
+        "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+        "age_restriction_provenance": null,
+        "age_restriction_status": "insufficient_evidence",
+        "city": "Калининград",
+        "data_quality_notes": [],
+        "description_html": "<p>Городские библиотеки организуют праздничную программу ко Дню Государственного флага Российской Федерации. Мероприятие пройдёт на площадке у Верхнего озера, ориентир — скейт-парк 🇷🇺.</p>\n<h3>Содержание программы</h3>\n<p>В центре внимания — история появления государственного символа России. Участникам предлагается вспомнить основные этапы становления этого символа.</p>\n<h3>Активности и разработки</h3>\n<p>Программа включает разнообразные форматы взаимодействия:<br />- Творческие мастер-классы.<br />- Знакомство с российскими научно-техническими разработками.</p>",
+        "display_date": "2026-08-22",
+        "display_time": "12:00",
+        "duration_forecast_minutes": null,
+        "end_at": null,
+        "end_date": null,
+        "event_type": "лекция",
+        "eventness_status": "event",
+        "face_boxes": [
+          {
+            "h": 0.204,
+            "w": 0.152,
+            "x": 0.304,
+            "y": 0.217
+          },
+          {
+            "h": 0.142,
+            "w": 0.084,
+            "x": 0.402,
+            "y": 0.367
+          },
+          {
+            "h": 0.128,
+            "w": 0.081,
+            "x": 0.52,
+            "y": 0.128
+          }
+        ],
+        "festival": null,
+        "focal_point": {
+          "x": 0.45,
+          "y": 0.55
+        },
+        "id": 7807,
+        "identity_status": "canonical",
+        "image_alt": "Изображение события «Праздничная программа ко Дню Государственного флага Российской Федерации»",
+        "image_assets": [
+          {
+            "alt": "Изображение события «Праздничная программа ко Дню Государственного флага Российской Федерации»",
+            "asset_key": "00da20e7dd8d036df2b908e20202550e77d4f166742479234902b33697b0416d",
+            "current_pixel_sha256": "9bc2e2e8de11a9f4af0598ef515c22e191de0659f77a15f989c9fd98fe16cf33",
+            "face_boxes": [
+              {
+                "h": 0.204,
+                "w": 0.152,
+                "x": 0.304,
+                "y": 0.217
+              },
+              {
+                "h": 0.142,
+                "w": 0.084,
+                "x": 0.402,
+                "y": 0.367
+              },
+              {
+                "h": 0.128,
+                "w": 0.081,
+                "x": 0.52,
+                "y": 0.128
+              }
+            ],
+            "focal_point": {
+              "x": 0.45,
+              "y": 0.55
+            },
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_id": 1785,
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_pixel_sha256": "9bc2e2e8de11a9f4af0598ef515c22e191de0659f77a15f989c9fd98fe16cf33",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_reason_code": "main_subjects",
+            "geometry_source_height": 1707,
+            "geometry_source_width": 2560,
+            "geometry_status": "classified",
+            "height": 1707,
+            "image_kind": "photo",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 0.95,
+            "media_semantic_status": "classified",
+            "quality_score": 15.8903,
+            "recommended_hero_fit": "cover",
+            "recommended_object_position": "45% 55%",
+            "safe_crop": true,
+            "source_order": 0,
+            "src": "https://static.kenigevents.ru/p/image/v2/00/00da20e7dd8d036df2b908e20202550e77d4f166742479234902b33697b0416d.webp",
+            "thumbnail_sources": [
+              {
+                "height": 171,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/00/00da20e7dd8d036df2b908e20202550e77d4f166742479234902b33697b0416d/256.webp",
+                "width": 256
+              },
+              {
+                "height": 341,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/00/00da20e7dd8d036df2b908e20202550e77d4f166742479234902b33697b0416d/512.webp",
+                "width": 512
+              }
+            ],
+            "valuable_region": {
+              "confidence": 1,
+              "h": 0.895,
+              "w": 0.694,
+              "x": 0.024,
+              "y": 0.103
+            },
+            "width": 2560
+          }
+        ],
+        "image_media_role": "event_photo",
+        "image_object_position": "45% 55%",
+        "image_text_mode": "visual_only",
+        "image_url": "https://static.kenigevents.ru/p/image/v2/00/00da20e7dd8d036df2b908e20202550e77d4f166742479234902b33697b0416d.webp",
+        "is_public": true,
+        "is_searchable": true,
+        "lifecycle_status": "active",
+        "likes_count": 10,
+        "map_query": "Калининград, Скейт-парк у Верхнего озера",
+        "merged_into_event_id": null,
+        "meta_description": "Городские библиотеки проводят лекцию об истории государственного флага России с мастер-классами и научно-техническими разработками.",
+        "ocr_boxes": [],
+        "organizer_names": [
+          "Городские библиотеки"
+        ],
+        "other_date_ids": [],
+        "participants": [],
+        "popularity_reason_codes": [],
+        "popularity_signal_score": 0,
+        "publication_status": "published",
+        "pushkin_card": false,
+        "question_cta": null,
+        "record_kind": "event",
+        "safe_crop": true,
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "service_likes_count": 0,
+        "shares_count": 0,
+        "silent": false,
+        "slug": "prazdnichnaya-programma-ko-dnyu-gosudarstvennogo-flaga-rossiyskoy-federats-kaliningrad-7807",
+        "source_count": 5,
+        "source_engagement_sources_count": 3,
+        "source_likes_count": 10,
+        "source_prod_id": 7807,
+        "source_url": "https://vk.com/wall-32547811_11195",
+        "source_urls": [
+          "https://vk.com/wall-32547811_11195",
+          "https://vk.com/wall-231920894_9247",
+          "https://t.me/c/3954607218/3363",
+          "https://t.me/kenigeventscalendar/8347",
+          "https://t.me/kldevents/3363"
+        ],
+        "source_views_count": 366,
+        "start_date": "2026-08-22",
+        "start_time": "12:00",
+        "starts_at": "2026-08-22T12:00:00+02:00",
+        "status_label": "Бесплатно",
+        "summary": "Городские библиотеки проводят лекцию об истории государственного флага России с мастер-классами и научно-техническими разработками.",
+        "telegraph_url": "https://telegra.ph/Prazdnichnaya-programma-ko-Dnyu-Gosudarstvennogo-flaga-Rossijskoj-Federacii-08-17",
+        "ticket": {
+          "href": "https://kaliningradlib.ru/node/20736",
+          "is_free": true,
+          "kind": "registration",
+          "label": "Зарегистрироваться",
+          "note": null,
+          "price_label": null,
+          "status": "registration"
+        },
+        "time_range_end": null,
+        "timezone": "Europe/Kaliningrad",
+        "title": "Праздничная программа ко Дню Государственного флага Российской Федерации",
+        "topics": [
+          "MASTERCLASS",
+          "SCIENCE_POP",
+          "FAMILY"
+        ],
+        "updated_at": "2026-08-17 13:31:27.702655",
+        "valuable_region": {
+          "confidence": 1,
+          "h": 0.895,
+          "w": 0.694,
+          "x": 0.024,
+          "y": 0.103
+        },
+        "venue_name": "Скейт-парк у Верхнего озера",
+        "video_assets": []
+      }
+    },
+    {
+      "fixture_id": "event.real.7906",
+      "event_id": 7906,
+      "expected_group": "2026-08-22",
+      "preview_event_sha256": "2052001842c42ac5aeaac6295cfc87a20010f6394cc16941d3386aef64579318",
+      "payload_file_sha256": "7ba978df33f9b6737f10e48a0caadf0d25ba8c44b13991b567b6733867289517",
+      "preview_event": {
+        "address": "Калининградская 1",
+        "age_recommendation": null,
+        "age_recommendation_label": null,
+        "age_restriction": null,
+        "age_restriction_decision_version": "event-age-decision-v1",
+        "age_restriction_provenance": null,
+        "age_restriction_status": "assessed",
+        "city": "Дружба",
+        "data_quality_notes": [],
+        "description_html": "<p>Музыкальное путешествие в сердце Вены с исполнением произведений австрийских композиторов объединит мастерство оркестра и вокальное искусство. Ведущая Ольга Серебрякова расскажет слушателям о тайнах венской музыки 🎻.</p>\n<h3>Исполнители и программа</h3>\n<p>На сцене выступит Калининградский областной оркестр русских народных инструментов под управлением художественного руководителя и главного дирижёра Антона Жукова. В программе прозвучат произведения следующих мастеров:<br />- Моцарт<br />- Штраус<br />- Шуберт<br />- Гайдн<br />- Другие мастера</p>\n<h3>Солисты и вокал</h3>\n<p>Особую атмосферу создаст вокальное исполнение солистов:<br />- Анаит Мкртчян (сопрано)<br />- Александр Дудницкий (баритон)</p>\n<h3>Организационные детали</h3>\n<p>Для гостей организован трансфер из Калининграда, Зеленоградска и Светлогорска. Цена: от 1000 ₽ 🎼.</p>",
+        "display_date": "2026-08-22",
+        "display_time": "18:00",
+        "duration_forecast_minutes": null,
+        "end_at": null,
+        "end_date": null,
+        "event_type": "концерт",
+        "eventness_status": "event",
+        "face_boxes": [
+          {
+            "h": 0.064,
+            "w": 0.037,
+            "x": 0.488,
+            "y": 0.436
+          },
+          {
+            "h": 0.066,
+            "w": 0.039,
+            "x": 0.762,
+            "y": 0.405
+          },
+          {
+            "h": 0.057,
+            "w": 0.037,
+            "x": 0.694,
+            "y": 0.438
+          },
+          {
+            "h": 0.061,
+            "w": 0.038,
+            "x": 0.935,
+            "y": 0.442
+          },
+          {
+            "h": 0.06,
+            "w": 0.035,
+            "x": 0.622,
+            "y": 0.493
+          },
+          {
+            "h": 0.075,
+            "w": 0.04,
+            "x": 0.841,
+            "y": 0.516
+          },
+          {
+            "h": 0.061,
+            "w": 0.035,
+            "x": 0.322,
+            "y": 0.575
+          },
+          {
+            "h": 0.053,
+            "w": 0.034,
+            "x": 0.406,
+            "y": 0.543
+          },
+          {
+            "h": 0.055,
+            "w": 0.032,
+            "x": 0.551,
+            "y": 0.547
+          },
+          {
+            "h": 0.066,
+            "w": 0.037,
+            "x": 0.248,
+            "y": 0.564
+          },
+          {
+            "h": 0.056,
+            "w": 0.037,
+            "x": 0.195,
+            "y": 0.551
+          },
+          {
+            "h": 0.062,
+            "w": 0.04,
+            "x": 0.133,
+            "y": 0.513
+          },
+          {
+            "h": 0.061,
+            "w": 0.036,
+            "x": 0.055,
+            "y": 0.506
+          },
+          {
+            "h": 0.061,
+            "w": 0.022,
+            "x": 0,
+            "y": 0.552
+          },
+          {
+            "h": 0.055,
+            "w": 0.03,
+            "x": 0.293,
+            "y": 0.596
+          }
+        ],
+        "festival": null,
+        "focal_point": {
+          "x": 0.5,
+          "y": 0.6
+        },
+        "id": 7906,
+        "identity_status": "canonical",
+        "image_alt": "Изображение события «Концерт «Откровения Вены»»",
+        "image_assets": [
+          {
+            "alt": "Изображение события «Концерт «Откровения Вены»»",
+            "asset_key": "3b39decaefc68395b19183aff5ec5195775ccc83e543198621240013da13b73f",
+            "current_pixel_sha256": "6d81abce4c339008763af40a3efaa6a4ce8adb21c2ec30b21232ea8dc17b1aae",
+            "face_boxes": [
+              {
+                "h": 0.064,
+                "w": 0.037,
+                "x": 0.488,
+                "y": 0.436
+              },
+              {
+                "h": 0.066,
+                "w": 0.039,
+                "x": 0.762,
+                "y": 0.405
+              },
+              {
+                "h": 0.057,
+                "w": 0.037,
+                "x": 0.694,
+                "y": 0.438
+              },
+              {
+                "h": 0.061,
+                "w": 0.038,
+                "x": 0.935,
+                "y": 0.442
+              },
+              {
+                "h": 0.06,
+                "w": 0.035,
+                "x": 0.622,
+                "y": 0.493
+              },
+              {
+                "h": 0.075,
+                "w": 0.04,
+                "x": 0.841,
+                "y": 0.516
+              },
+              {
+                "h": 0.061,
+                "w": 0.035,
+                "x": 0.322,
+                "y": 0.575
+              },
+              {
+                "h": 0.053,
+                "w": 0.034,
+                "x": 0.406,
+                "y": 0.543
+              },
+              {
+                "h": 0.055,
+                "w": 0.032,
+                "x": 0.551,
+                "y": 0.547
+              },
+              {
+                "h": 0.066,
+                "w": 0.037,
+                "x": 0.248,
+                "y": 0.564
+              },
+              {
+                "h": 0.056,
+                "w": 0.037,
+                "x": 0.195,
+                "y": 0.551
+              },
+              {
+                "h": 0.062,
+                "w": 0.04,
+                "x": 0.133,
+                "y": 0.513
+              },
+              {
+                "h": 0.061,
+                "w": 0.036,
+                "x": 0.055,
+                "y": 0.506
+              },
+              {
+                "h": 0.061,
+                "w": 0.022,
+                "x": 0,
+                "y": 0.552
+              },
+              {
+                "h": 0.055,
+                "w": 0.03,
+                "x": 0.293,
+                "y": 0.596
+              }
+            ],
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.6
+            },
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_id": 1842,
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_pixel_sha256": "6d81abce4c339008763af40a3efaa6a4ce8adb21c2ec30b21232ea8dc17b1aae",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_reason_code": "group_performance",
+            "geometry_source_height": 668,
+            "geometry_source_width": 1187,
+            "geometry_status": "classified",
+            "height": 668,
+            "image_kind": "photo",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 0.95,
+            "media_semantic_status": "classified",
+            "quality_score": 14.1835,
+            "recommended_hero_fit": "cover",
+            "recommended_object_position": "50% 60%",
+            "safe_crop": true,
+            "source_order": 0,
+            "src": "https://static.kenigevents.ru/p/image/v2/3b/3b39decaefc68395b19183aff5ec5195775ccc83e543198621240013da13b73f.webp",
+            "thumbnail_sources": [
+              {
+                "height": 144,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/3b/3b39decaefc68395b19183aff5ec5195775ccc83e543198621240013da13b73f/256.webp",
+                "width": 256
+              },
+              {
+                "height": 288,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/3b/3b39decaefc68395b19183aff5ec5195775ccc83e543198621240013da13b73f/512.webp",
+                "width": 512
+              }
+            ],
+            "valuable_region": {
+              "confidence": 1,
+              "h": 0.599,
+              "w": 0.998,
+              "x": 0,
+              "y": 0.395
+            },
+            "width": 1187
+          },
+          {
+            "alt": "Изображение события «Концерт «Откровения Вены»»",
+            "asset_key": "3e9309efb815c1e01151498af064e1dadd87b2877f5deb25608767ffe82cb7eb",
+            "current_pixel_sha256": "9a04142bb4e215828f449f0067d7b8cb4af35873f51d39aa3564aec6db649823",
+            "face_boxes": [],
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.55
+            },
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_id": 1893,
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_pixel_sha256": "9a04142bb4e215828f449f0067d7b8cb4af35873f51d39aa3564aec6db649823",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_reason_code": "main_stage_performance",
+            "geometry_source_height": 681,
+            "geometry_source_width": 1290,
+            "geometry_status": "classified",
+            "height": 681,
+            "image_kind": "photo",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 1,
+            "media_semantic_status": "classified",
+            "quality_score": 14.286,
+            "recommended_hero_fit": "cover",
+            "recommended_object_position": "50% 55%",
+            "safe_crop": true,
+            "source_order": 1,
+            "src": "https://static.kenigevents.ru/p/image/v2/3e/3e9309efb815c1e01151498af064e1dadd87b2877f5deb25608767ffe82cb7eb.webp",
+            "thumbnail_sources": [
+              {
+                "height": 135,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/3e/3e9309efb815c1e01151498af064e1dadd87b2877f5deb25608767ffe82cb7eb/256.webp",
+                "width": 256
+              },
+              {
+                "height": 270,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/3e/3e9309efb815c1e01151498af064e1dadd87b2877f5deb25608767ffe82cb7eb/512.webp",
+                "width": 512
+              }
+            ],
+            "valuable_region": {
+              "confidence": 0.95,
+              "h": 0.513,
+              "w": 0.22,
+              "x": 0.373,
+              "y": 0.102
+            },
+            "width": 1290
+          },
+          {
+            "alt": "Изображение события «Концерт «Откровения Вены»»",
+            "asset_key": "0496a6ed06d9d44403161af767d841442dfccd8e82b49bba622220a7ef851ddc",
+            "current_pixel_sha256": "457333144774da0750ceaef9d1b1db6a0c8620a7f3ad1e8191452b8642d97b56",
+            "face_boxes": [
+              {
+                "h": 0.063,
+                "w": 0.051,
+                "x": 0.057,
+                "y": 0.343
+              },
+              {
+                "h": 0.107,
+                "w": 0.067,
+                "x": 0.206,
+                "y": 0.307
+              },
+              {
+                "h": 0.11,
+                "w": 0.059,
+                "x": 0.393,
+                "y": 0.246
+              },
+              {
+                "h": 0.127,
+                "w": 0.071,
+                "x": 0.52,
+                "y": 0.218
+              },
+              {
+                "h": 0.119,
+                "w": 0.061,
+                "x": 0.67,
+                "y": 0.307
+              },
+              {
+                "h": 0.085,
+                "w": 0.037,
+                "x": 0.757,
+                "y": 0.408
+              },
+              {
+                "h": 0.127,
+                "w": 0.057,
+                "x": 0.831,
+                "y": 0.278
+              }
+            ],
+            "focal_point": {
+              "x": 0.55,
+              "y": 0.5
+            },
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_id": 1895,
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_pixel_sha256": "457333144774da0750ceaef9d1b1db6a0c8620a7f3ad1e8191452b8642d97b56",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_reason_code": "ensemble_of_musicians",
+            "geometry_source_height": 725,
+            "geometry_source_width": 1290,
+            "geometry_status": "classified",
+            "height": 725,
+            "image_kind": "photo",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 1,
+            "media_semantic_status": "classified",
+            "quality_score": 14.3486,
+            "recommended_hero_fit": "cover",
+            "recommended_object_position": "55% 50%",
+            "safe_crop": true,
+            "source_order": 2,
+            "src": "https://static.kenigevents.ru/p/image/v2/04/0496a6ed06d9d44403161af767d841442dfccd8e82b49bba622220a7ef851ddc.webp",
+            "thumbnail_sources": [
+              {
+                "height": 144,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/04/0496a6ed06d9d44403161af767d841442dfccd8e82b49bba622220a7ef851ddc/256.webp",
+                "width": 256
+              },
+              {
+                "height": 288,
+                "src": "https://static.kenigevents.ru/p/thumb/v1/04/0496a6ed06d9d44403161af767d841442dfccd8e82b49bba622220a7ef851ddc/512.webp",
+                "width": 512
+              }
+            ],
+            "valuable_region": {
+              "confidence": 1,
+              "h": 0.831,
+              "w": 0.986,
+              "x": 0,
+              "y": 0.156
+            },
+            "width": 1290
+          }
+        ],
+        "image_media_role": "event_photo",
+        "image_object_position": "50% 60%",
+        "image_text_mode": "visual_only",
+        "image_url": "https://static.kenigevents.ru/p/image/v2/3b/3b39decaefc68395b19183aff5ec5195775ccc83e543198621240013da13b73f.webp",
+        "is_public": true,
+        "is_searchable": true,
+        "lifecycle_status": "active",
+        "likes_count": 37,
+        "map_query": "Дружба, Алленбургская кирха, Калининградская 1",
+        "merged_into_event_id": null,
+        "meta_description": "Оркестр русских народных инструментов и солисты исполнят произведения Моцарта, Штрауса, Шуберта и Гайдна.",
+        "ocr_boxes": [],
+        "organizer_names": [],
+        "other_date_ids": [
+          8057
+        ],
+        "participants": [],
+        "popularity_reason_codes": [],
+        "popularity_signal_score": 0,
+        "publication_status": "published",
+        "pushkin_card": false,
+        "question_cta": {
+          "provider": "vk",
+          "source": "managed_afisha_post",
+          "url": "https://vk.com/wall-231920894_9364"
+        },
+        "record_kind": "event",
+        "safe_crop": true,
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "service_likes_count": 0,
+        "shares_count": 0,
+        "silent": false,
+        "slug": "kontsert-otkroveniya-veny-druzhba-7906",
+        "source_count": 7,
+        "source_engagement_sources_count": 3,
+        "source_likes_count": 37,
+        "source_prod_id": 7906,
+        "source_url": "https://vk.com/wall-53235177_7111",
+        "source_urls": [
+          "https://vk.com/wall-53235177_7111",
+          "https://vk.com/wall-231920894_9364",
+          "https://t.me/c/3954607218/3497",
+          "https://t.me/kenigeventscalendar/8434",
+          "https://t.me/kldevents/3409",
+          "https://t.me/kldevents/3497",
+          "https://vk.com/wall-231920894_9359"
+        ],
+        "source_views_count": 909,
+        "start_date": "2026-08-22",
+        "start_time": "18:00",
+        "starts_at": "2026-08-22T18:00:00+02:00",
+        "status_label": "1000 ₽",
+        "summary": "Оркестр русских народных инструментов и солисты исполнят произведения Моцарта, Штрауса, Шуберта и Гайдна.",
+        "telegraph_url": "https://telegra.ph/Koncert-Otkroveniya-Veny-08-18",
+        "ticket": {
+          "href": "https://allenburg.ru/kontsert-klassicheskoy-muzyki-otkroveniya-veny-22-avgusta-2026-gotika-holl",
+          "is_free": false,
+          "kind": "ticket",
+          "label": "Купить билет",
+          "note": null,
+          "price_label": "1000 ₽",
+          "status": "sale"
+        },
+        "time_range_end": null,
+        "timezone": "Europe/Kaliningrad",
+        "title": "Концерт «Откровения Вены»",
+        "topics": [
+          "CONCERTS"
+        ],
+        "updated_at": "2026-08-18 10:14:37.474850",
+        "valuable_region": {
+          "confidence": 1,
+          "h": 0.599,
+          "w": 0.998,
+          "x": 0,
+          "y": 0.395
+        },
+        "venue_name": "Алленбургская кирха",
+        "video_assets": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+---
+import type { PreviewEvent } from '../../lib/types';
+import WeekendListingSurface from '../listings/WeekendListingSurface.astro';
+import ListingCandidateStatePanel from './ListingCandidateStatePanel.astro';
+
+interface RangeLink { href: string; label: string; selected?: boolean; actualCurrent?: boolean; }
+interface Props {
+  events: PreviewEvent[];
+  start: string;
+  end: string;
+  dateLabel: string;
+  currentDate: string;
+  ranges: RangeLink[];
+  state?: 'ready' | 'loading' | 'empty' | 'error';
+  representation: 'typical-desktop' | 'typical-mobile' | 'sparse' | 'empty' | 'stress';
+}
+
+const { events, start, end, dateLabel, currentDate, ranges, state = 'ready', representation } = Astro.props;
+---
+
+<section
+  class="weekend-listing-candidate"
+  data-weekend-listing-candidate-root
+  data-weekend-listing-candidate-state={state}
+  data-weekend-listing-representation={representation}
+  aria-busy={state === 'loading' ? 'true' : undefined}
+>
+  {state === 'ready' ? (
+    <WeekendListingSurface
+      events={events}
+      start={start}
+      end={end}
+      dateLabel={dateLabel}
+      currentDate={currentDate}
+      ranges={ranges}
+    />
+  ) : (
+    <ListingCandidateStatePanel context="weekend" state={state} />
+  )}
+</section>
+
+<style>
+  .weekend-listing-candidate { min-width:0; }
+</style>

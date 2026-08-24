@@ -1,0 +1,53 @@
+---
+import EventLayout from '../../../layouts/EventLayout.astro';
+import WeekendListingCandidateSurface from '../../../components/candidate/WeekendListingCandidateSurface.astro';
+import projection from '../../../data/candidate/weekend-listing-v1.generated.json';
+import type { PreviewEvent } from '../../../lib/types';
+
+export function getStaticPaths() {
+  return projection.representations.map((representation) => ({ params:{ representation:representation.id }, props:{ representation } }));
+}
+
+const { representation } = Astro.props;
+const fixtureMap = new Map(projection.fixtures.map((fixture) => [fixture.fixture_id, fixture.preview_event as PreviewEvent]));
+const events = representation.fixture_ids.map((id) => fixtureMap.get(id)).filter(Boolean) as PreviewEvent[];
+const state = representation.state === 'ready' ? 'ready' : representation.state;
+---
+
+<EventLayout
+  title={`${representation.id} · Weekend Listing v1 candidate`}
+  description="Изолированная noindex candidate-поверхность Weekend для Astro ↔ SoT ↔ Penpot сверки."
+  canonicalUrl={`https://kenigevents.ru/lab/weekend-listing-v1/${representation.id}/`}
+  structuredData={[]}
+  headerCurrent="weekend"
+  mobileSection="dates"
+  mobileBottomMode="nav"
+  noindex={true}
+>
+  <main
+    id="main"
+    class:list={["ke-listing-page", "weekend-listing-candidate-page", state !== 'ready' && "weekend-listing-candidate-page--state"]}
+    data-weekend-listing-representation={representation.id}
+    data-fixture-manifest-id={projection.manifest_id}
+    data-fixture-manifest-version={projection.manifest_version}
+    data-fixture-source-sha256={projection.source_manifest_sha256}
+    data-fixture-ids={representation.fixture_ids.join(',')}
+  >
+    <WeekendListingCandidateSurface
+      events={events}
+      start={projection.weekend_range.start}
+      end={projection.weekend_range.end}
+      dateLabel={projection.weekend_range.date_label}
+      currentDate={projection.source_corpus.reference_clock.current_date}
+      ranges={projection.ranges}
+      state={state}
+      representation={representation.id}
+    />
+  </main>
+</EventLayout>
+
+<style is:global>
+  .weekend-listing-candidate-page--state { padding-block:16px 96px; }
+  .weekend-listing-candidate-page--state~.mobile-bottom-nav,
+  body:has(.weekend-listing-candidate-page--state) .mobile-bottom-nav { display:none!important; }
+</style>

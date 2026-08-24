@@ -1,0 +1,81 @@
+---
+interface Props {
+  context: 'date' | 'weekend';
+  state: 'loading' | 'empty' | 'error';
+}
+
+const { context, state } = Astro.props;
+const weekend = context === 'weekend';
+const copy = state === 'empty'
+  ? {
+      title: weekend ? 'На эти выходные событий пока нет' : 'Событий на эту дату пока нет',
+      description: weekend ? 'Можно выбрать соседние выходные.' : 'Можно выбрать соседний день или открыть календарь.',
+      action: weekend ? 'Другие выходные' : 'Выбрать дату',
+    }
+  : state === 'error'
+    ? {
+        title: 'Не удалось загрузить события',
+        description: weekend ? 'Выбранные выходные остаются видимыми. Повторите попытку.' : 'Сохранённая дата остаётся видимой. Повторите попытку.',
+        action: 'Повторить',
+      }
+    : null;
+---
+
+<div
+  class:list={[
+    'listing-candidate-state',
+    'date-listing-candidate__state',
+    `listing-candidate-state--${context}`,
+    state === 'error' && 'listing-candidate-state--error',
+    state === 'error' && 'date-listing-candidate__message--error',
+  ]}
+  role={state === 'error' ? 'alert' : 'status'}
+  data-listing-candidate-state-panel={state}
+  data-listing-candidate-context={context}
+>
+  {state === 'loading' ? (
+    <div class="listing-candidate-state__loading date-listing-candidate__loading" aria-label="Загрузка событий">
+      <strong>Загрузка событий</strong>
+      <div class="listing-candidate-state__skeleton date-listing-candidate__skeleton">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  ) : (
+    <div class="listing-candidate-state__message date-listing-candidate__message">
+      <strong>{copy?.title}</strong>
+      <p>{copy?.description}</p>
+      {state === 'empty' ? <a href={weekend ? '/vyhodnye/' : '/zavtra/'}>{copy?.action}</a> : <button type="button" data-listing-candidate-retry>{copy?.action}</button>}
+    </div>
+  )}
+</div>
+
+<style>
+  .listing-candidate-state {
+    box-sizing:border-box; width:360px; height:240px; margin:0 auto; padding:18px;
+    border:1px solid #e1d3c2; border-radius:20px; background:#f2e7d7; color:#221a14;
+    display:flex; flex-direction:column; align-items:flex-start; gap:12px; overflow:hidden;
+  }
+  .listing-candidate-state[data-listing-candidate-state-panel='loading'] { padding:16px; background:#fffdf8; }
+  .listing-candidate-state--error { background:#fff0ec; }
+  .listing-candidate-state__loading { width:100%; display:grid; gap:12px; }
+  .listing-candidate-state__loading>strong,
+  .listing-candidate-state__message strong { display:block; font-size:20px; line-height:24px; font-weight:900; }
+  .listing-candidate-state__skeleton { display:grid; gap:12px; }
+  .listing-candidate-state__skeleton span {
+    display:block; height:48px; border-radius:14px;
+    background:linear-gradient(105deg,#efe3d3 8%,#fff8ed 20%,#efe3d3 34%); background-size:220% 100%;
+    animation:listing-candidate-pulse 1.25s ease-in-out infinite;
+  }
+  .listing-candidate-state__message { width:100%; display:grid; gap:12px; }
+  .listing-candidate-state__message p { margin:0; color:#6d6259; font-size:14px; line-height:21px; font-weight:700; }
+  .listing-candidate-state__message a,
+  .listing-candidate-state__message button {
+    min-height:48px; display:inline-flex; align-items:center; justify-self:start; padding:0 18px; border:0; border-radius:14px;
+    background:#793014; color:#fff; font:850 14px/1 Inter,system-ui,sans-serif; text-decoration:none; cursor:pointer;
+  }
+  .listing-candidate-state__message a:focus-visible,
+  .listing-candidate-state__message button:focus-visible { outline:3px solid #98401f; outline-offset:3px; }
+  @keyframes listing-candidate-pulse { to { background-position-x:-220%; } }
+  @media (max-width:359px) { .listing-candidate-state { width:calc(100vw - 16px); } }
+  @media (prefers-reduced-motion:reduce) { .listing-candidate-state__skeleton span { animation:none; } }
+</style>

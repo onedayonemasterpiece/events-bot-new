@@ -23,6 +23,7 @@ for (const fixture of projection.fixtures) {
 
 const route = readFileSync(resolve(repo, 'src/pages/lab/date-listing-shell-v1/[representation].astro'), 'utf8');
 const candidate = readFileSync(resolve(repo, 'src/components/candidate/DateListingCandidateSurface.astro'), 'utf8');
+const statePanel = readFileSync(resolve(repo, 'src/components/candidate/ListingCandidateStatePanel.astro'), 'utf8');
 const mobileRail = readFileSync(resolve(repo, 'src/components/listings/MobileListingRailSurface.astro'), 'utf8');
 const mobileDateAccessory = readFileSync(resolve(repo, 'src/components/listings/MobileDateAccessory.astro'), 'utf8');
 assert.match(route, /noindex=\{true\}/u);
@@ -36,7 +37,8 @@ assert.match(candidate, /ExactTimeTimeline/u);
 assert.match(candidate, /const calendarToday = generatedAt\?\.slice\(0, 10\) \|\| getCurrentDate\(\)/u);
 assert.match(candidate, /calendarToday=\{calendarToday\}/u);
 assert.doesNotMatch(candidate, /date-listing-candidate__state[\s\S]*?<header>/u);
-assert.match(candidate, /width:360px; height:240px/u);
+assert.match(candidate, /ListingCandidateStatePanel/u);
+assert.match(statePanel, /width:360px; height:240px/u);
 
 // These are independently materialized Date chip states, not incidental pixels
 // inside a page-level screenshot. Keep the actual Astro state surface explicit

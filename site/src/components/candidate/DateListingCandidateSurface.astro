@@ -10,6 +10,7 @@ import ExactTimeTimeline from '../listings/ExactTimeTimeline.astro';
 import MobileListingRailSurface from '../listings/MobileListingRailSurface.astro';
 import ListingPersonalFilter from '../ListingPersonalFilter.astro';
 import WeatherDateContext from '../WeatherDateContext.astro';
+import ListingCandidateStatePanel from './ListingCandidateStatePanel.astro';
 
 interface Props {
   kind: 'today' | 'tomorrow' | 'date';
@@ -98,59 +99,10 @@ const calendarToday = generatedAt?.slice(0, 10) || getCurrentDate();
       <ListingPersonalFilter total={readyEvents.length} label={kind === 'tomorrow' ? 'завтра' : dateLabel} version={2} placement="floating" />
     </div>
   ) : (
-    <div class="date-listing-candidate__state" role={state === 'error' ? 'alert' : 'status'}>
-      {state === 'loading' ? (
-        <div class="date-listing-candidate__loading" aria-label="Загрузка событий">
-          <strong>Загрузка событий</strong>
-          <div class="date-listing-candidate__skeleton">
-          <span></span><span></span><span></span>
-          </div>
-        </div>
-      ) : state === 'empty' ? (
-        <div class="date-listing-candidate__message">
-          <strong>Событий на эту дату пока нет</strong>
-          <p>Можно выбрать соседний день или открыть календарь.</p>
-          <a href="/zavtra/">Выбрать дату</a>
-        </div>
-      ) : (
-        <div class="date-listing-candidate__message date-listing-candidate__message--error">
-          <strong>Не удалось загрузить события</strong>
-          <p>Сохранённая дата остаётся видимой. Повторите попытку.</p>
-          <button type="button" data-date-listing-retry>Повторить</button>
-        </div>
-      )}
-    </div>
+    <ListingCandidateStatePanel context="date" state={state} />
   )}
 </section>
 
 <style>
   .date-listing-candidate { min-width:0; }
-  .date-listing-candidate__state {
-    box-sizing:border-box; width:360px; height:240px; margin:0 auto; padding:18px;
-    border:1px solid #e1d3c2; border-radius:20px; background:#f2e7d7; color:#221a14;
-    display:flex; flex-direction:column; align-items:flex-start; gap:12px; overflow:hidden;
-  }
-  .date-listing-candidate[data-date-listing-candidate-state='loading'] .date-listing-candidate__state { padding:16px; background:#fffdf8; }
-  .date-listing-candidate[data-date-listing-candidate-state='error'] .date-listing-candidate__state { background:#fff0ec; }
-  .date-listing-candidate__loading { width:100%; display:grid; gap:12px; }
-  .date-listing-candidate__loading>strong,
-  .date-listing-candidate__message strong { display:block; font-size:20px; line-height:24px; font-weight:900; }
-  .date-listing-candidate__skeleton { display:grid; gap:12px; }
-  .date-listing-candidate__skeleton span {
-    display:block; height:48px; border-radius:14px;
-    background:linear-gradient(105deg,#efe3d3 8%,#fff8ed 20%,#efe3d3 34%); background-size:220% 100%;
-    animation:date-listing-candidate-pulse 1.25s ease-in-out infinite;
-  }
-  .date-listing-candidate__message { width:100%; display:grid; gap:12px; }
-  .date-listing-candidate__message p { margin:0; color:#6d6259; font-size:14px; line-height:21px; font-weight:700; }
-  .date-listing-candidate__message a,
-  .date-listing-candidate__message button {
-    min-height:48px; display:inline-flex; align-items:center; justify-self:start; padding:0 18px; border:0; border-radius:14px;
-    background:#793014; color:#fff; font:850 14px/1 Inter,system-ui,sans-serif; text-decoration:none; cursor:pointer;
-  }
-  .date-listing-candidate__message a:focus-visible,
-  .date-listing-candidate__message button:focus-visible { outline:3px solid #98401f; outline-offset:3px; }
-  @keyframes date-listing-candidate-pulse { to { background-position-x:-220%; } }
-  @media (max-width:359px) { .date-listing-candidate__state { width:calc(100vw - 16px); } }
-  @media (prefers-reduced-motion:reduce) { .date-listing-candidate__skeleton span { animation:none; } }
 </style>
