@@ -628,10 +628,23 @@ such as a compromised private path.
 
 For an already installed connector, preserve the exact endpoint/private path,
 ChatGPT client ID/secret, OAuth resource/audience, signing key/state and
-connector name. After the exact-main deploy, open the **existing** ChatGPT
-connection and choose **Refresh**, complete its existing OAuth flow if prompted,
-then start a **new chat** so ChatGPT obtains the refreshed tool catalogue. Old
-chats may retain an earlier catalogue.
+connector name. Treat two refresh boundaries separately:
+
+1. **Connection/OAuth refresh** keeps the existing access/refresh-token flow
+   healthy. It does not prove that a changed action definition was approved.
+2. **Workspace action refresh** updates ChatGPT's frozen tool/input snapshot.
+   After any tool description, schema or security-scheme change, an app owner
+   or workspace administrator must open the existing app's action control,
+   choose **Refresh**, review the diff, enable/publish the reviewed update, and
+   only then start a **new chat** with the app selected. For an unpublished
+   developer app, use its equivalent Scan Tools/Refresh flow before the new
+   chat.
+
+Old chats may retain an earlier catalogue. A successful OAuth refresh or a
+direct server/OpenCode `tools/list` probe is not ChatGPT action-publication
+evidence. If the workspace plan does not expose an in-place action-update path,
+stop and treat republishing as a controlled app-publication migration; do not
+improvise by rotating the MCP identity or deleting the working connection.
 
 Never delete/re-add the connection and never rename it for a normal media/story
 upgrade. Never run `--new-install` to make these tools appear. A replacement
