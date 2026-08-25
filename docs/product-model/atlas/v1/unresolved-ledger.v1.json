@@ -1,0 +1,140 @@
+{
+  "schema_version": "lovekgd-product-atlas-unresolved-ledger.v1",
+  "registry_id": "lovekgd.product-atlas.v1.unresolved",
+  "snapshot_date": "2026-08-25",
+  "items": [
+    {
+      "id": "unresolved.partner-product-model",
+      "type": "not_modeled",
+      "status": "not_modeled",
+      "title": "Future partner needs, Jobs and outcomes",
+      "definition": "Partner-facing UI and organization records exist, but no separate partner discovery research establishes partner needs, Jobs or outcomes.",
+      "affected_entity_ids": ["lane.future-partner", "decision.partner-needs-not-modeled"],
+      "source_refs": ["src.product-methodology", "src.route-archetype-registry"],
+      "resolution_gate": "Separate partner research and explicit owner decision; route or UI existence is insufficient.",
+      "prohibited_shortcut": "Infer partner Jobs from `/partners/`, `/partnerstvo/`, organization pages or commercial assumptions."
+    },
+    {
+      "id": "unresolved.user-outcome-production-evidence",
+      "type": "evidence_gap",
+      "status": "unresolved",
+      "title": "Product-wide task completion and outcome evidence",
+      "definition": "Search health proves one bounded live journey, while product-wide discovery, decision confidence, saved-state recovery and personalization outcomes lack one accepted production-wide readout.",
+      "affected_entity_ids": ["user-outcome.find-relevant-within-30-cards", "user-outcome.make-confident-event-decision", "user-outcome.recover-saved-state", "owner-outcome.regular-use", "owner-outcome.lower-empty-sessions"],
+      "source_refs": ["src.analytics-contract", "src.search-runtime-health", "src.product-methodology"],
+      "resolution_gate": "Versioned production event/metric contracts, complete denominators, coverage report and reviewed analysis record.",
+      "prohibited_shortcut": "Treat UI existence, deployment, click-through or one healthy synthetic journey as a proven outcome."
+    },
+    {
+      "id": "unresolved.static-root-release",
+      "type": "release_gap",
+      "status": "partial",
+      "title": "Public static root remains NO-GO",
+      "definition": "Immutable candidates and default-off atomic publisher exist, but URL lifecycle, critical data progression, live ALB/SWS/DNS, rollback and full acceptance gates remain open.",
+      "affected_entity_ids": ["capability.current-event-catalog", "capability.listing-discovery", "capability.event-detail", "operator-job.review-release-candidate"],
+      "source_refs": ["src.static-release-plan", "src.acceptance-inventory"],
+      "resolution_gate": "All P0 release gates and accepted root evidence on an exact main-reachable SHA.",
+      "prohibited_shortcut": "Call a secret candidate or checked artifact a production root release."
+    },
+    {
+      "id": "unresolved.critical-data-progression",
+      "type": "runtime_evidence_gap",
+      "status": "unresolved",
+      "title": "Critical producer progression and downstream consumption",
+      "definition": "Required producers do not yet have the complete scheduled terminal evidence, no-change receipts, downstream-consumption proof and failure drills required by the release plan.",
+      "affected_entity_ids": ["capability.current-event-catalog", "owner-outcome.content-trust-and-coverage", "mq.catalog-quality-and-coverage", "mq.critical-fact-coherence"],
+      "source_refs": ["src.static-release-plan", "src.latest-production-incident"],
+      "resolution_gate": "Versioned producer registry, production schedule, three consecutive terminal passes and both required failure drills.",
+      "prohibited_shortcut": "Treat an old last-good artifact or a job start as evidence that the pipeline progressed."
+    },
+    {
+      "id": "unresolved.personalization-causal-value",
+      "type": "outcome_gap",
+      "status": "unresolved",
+      "title": "Personalization value and diversity uplift",
+      "definition": "Target architecture, signal policy, fallback and acceptance exist, but no accepted randomized holdout proves causal improvement while preserving diversity and guardrails.",
+      "affected_entity_ids": ["job.receive-personal-relevance", "capability.personalized-discovery", "mq.personalization-value-and-diversity"],
+      "source_refs": ["src.personalization-contract", "src.analytics-contract", "src.first-party-action-map"],
+      "resolution_gate": "Registered holdout/A-B contract, compatible model/profile revisions, coverage and owner-reviewed outcome evidence.",
+      "prohibited_shortcut": "Compare self-selected `/dlya-menya/` visitors with the general audience or feed action-map diagnostics directly into the profile."
+    },
+    {
+      "id": "unresolved.favorites-identity-reconciliation",
+      "type": "delivery_and_runtime_gap",
+      "status": "partial",
+      "title": "Favorites local/account/multi-device reconciliation",
+      "definition": "Saved-state semantics are defined, but anonymous-to-account merge, account switching, cross-tab synchronization and multi-device revision lag lack complete accepted runtime evidence.",
+      "affected_entity_ids": ["job.return-to-saved-event", "capability.saved-events", "capability.identity-and-session", "mq.saved-state-recovery"],
+      "source_refs": ["src.acceptance-inventory", "src.personalization-data-ownership", "src.analytics-contract"],
+      "resolution_gate": "Correlated E2E receipts across local, account, account-switch and multi-device contexts with zero duplicate/leak evidence.",
+      "prohibited_shortcut": "Infer durable recovery from a local UI state or one browser session."
+    },
+    {
+      "id": "unresolved.event-detail-outcome-and-states",
+      "type": "ui_and_outcome_gap",
+      "status": "partial",
+      "title": "Event detail unresolved semantic states and decision outcome",
+      "definition": "The corrected contract keeps evidence-bound states honest, including unresolved desktop and mobile media branches; behavioral proxies do not directly prove decision confidence.",
+      "affected_entity_ids": ["job.evaluate-event", "capability.event-detail", "mq.event-detail-supports-decision", "ui-gap.event-detail-state-coverage"],
+      "source_refs": ["src.corrected-archetype-contracts", "src.static-site-feature", "src.acceptance-inventory"],
+      "resolution_gate": "Exact source/browser evidence for unresolved states, owner review, native bindings and mixed behavioral/qualitative decision evidence.",
+      "prohibited_shortcut": "Promote requested but unobserved states or equate engaged reading with confidence."
+    },
+    {
+      "id": "unresolved.ui-family-promotion",
+      "type": "ui_sot_gap",
+      "status": "partial",
+      "title": "Corrected archetypes are reconstructed, not promoted UI families",
+      "definition": "The corrected global archetype package provides stable semantic IDs and source evidence, but native component/archetype promotion and consumer migration remain separate gates.",
+      "affected_entity_ids": ["ui-gap.component-and-archetype-promotion", "capability.listing-discovery", "capability.event-detail", "capability.smart-search", "capability.saved-events", "capability.personalized-discovery"],
+      "source_refs": ["src.corrected-ui-manifest", "src.route-archetype-registry", "src.component-composition-graph", "src.design-system-checklist"],
+      "resolution_gate": "Astro == Git SoT == Penpot parity, owner acceptance, exact bindings, consumer migration and fail-closed conformance.",
+      "prohibited_shortcut": "Call reconstructed semantic contracts promoted components or accepted visual design."
+    },
+    {
+      "id": "unresolved.penpot-bindings",
+      "type": "binding_pending",
+      "status": "unresolved",
+      "title": "Product Atlas and UI native Penpot bindings",
+      "definition": "No public reviewed Product Atlas MCP materialization receipt or stable native binding IDs exist for this Git-only version.",
+      "affected_entity_ids": ["decision.product-atlas-penpot-mcp-only"],
+      "source_refs": ["src.corrected-ui-manifest", "src.product-atlas-planning-gates", "src.penpot-operating-model"],
+      "binding_status": "binding_pending",
+      "resolution_gate": "After the parity entry gate, run an explicit scoped Penpot MCP task, read back exact file/page/object identities and commit a reviewed receipt.",
+      "prohibited_shortcut": "Invent UUIDs, infer IDs from links, or treat local/unpublished bindings as public evidence."
+    },
+    {
+      "id": "unresolved.product-atlas-plugin-removal",
+      "type": "supersession_cleanup",
+      "status": "partial",
+      "title": "Remove obsolete Product Atlas plugin path from active documentation and artifacts",
+      "definition": "Historical plugin documentation, contract, prototype and stable-delivery references conflict with the accepted MCP-only operating path until removed or explicitly archived by Git history.",
+      "affected_entity_ids": ["decision.product-atlas-penpot-mcp-only", "finding.plugin-path-superseded"],
+      "source_refs": ["src.product-atlas-stable-delivery-legacy", "src.product-atlas-plugin-doc", "src.product-atlas-plugin-contract", "src.product-atlas-plugin-prototype", "src.penpot-operating-model", "src.product-atlas-planning-gates"],
+      "resolution_gate": "Design-system child PR deletes plugin contract/prototype and replaces active docs with MCP-only delivery; product docs point to the new decision.",
+      "prohibited_shortcut": "Leave plugin language in active planning while describing it as current architecture elsewhere."
+    },
+    {
+      "id": "unresolved.interest-club-browser-evidence",
+      "type": "runtime_ui_evidence_gap",
+      "status": "unresolved",
+      "title": "Interest-club detail browser evidence failure",
+      "definition": "The corrected route registry maps `/kluby-po-interesam/game-vibes/` but both browser observations failed, so route linkage is preserved without pretending runtime visual evidence passed.",
+      "affected_entity_ids": ["capability.curated-discovery"],
+      "source_refs": ["src.route-archetype-registry", "src.corrected-archetype-contracts", "src.static-release-plan"],
+      "resolution_gate": "Reproduce the exact route at pinned source/snapshot and obtain successful desktop/mobile browser observations or a typed product/runtime disposition.",
+      "prohibited_shortcut": "Treat 100% route-to-archetype mapping as 100% successful browser health."
+    },
+    {
+      "id": "unresolved.action-map-no-active-campaign",
+      "type": "not_applicable",
+      "status": "not_applicable",
+      "title": "No active first-party action-map campaign",
+      "definition": "The action-map contract is accepted, but active capture is optional, default-off and not required to materialize Product Atlas Git SoT.",
+      "affected_entity_ids": ["capability.product-measurement-and-evidence", "mq.ui-affordance-diagnostics"],
+      "source_refs": ["src.first-party-action-map", "src.analytics-contract", "src.static-release-plan"],
+      "resolution_gate": "Only a registered question and decision use may justify AM-1 through AM-4; otherwise the correct state remains off/not applicable.",
+      "prohibited_shortcut": "Treat absence of an active campaign as a product failure or enable permanent clickstream collection."
+    }
+  ]
+}
