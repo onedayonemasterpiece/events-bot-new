@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Fail-closed validation for LoveKGD Product Atlas Git SoT v1.
 
-The validator intentionally checks semantic integrity, not whether a feature has
-achieved a user or owner outcome. It has no network, analytics or Penpot access.
+This validator proves structural and semantic traceability. It deliberately does
+not infer that delivery, deployment or healthy runtime proves a user/owner
+outcome. It has no network, analytics or Penpot access.
 """
 
 from __future__ import annotations
@@ -46,6 +47,16 @@ SOURCE_STATUSES = {
     "unresolved",
 }
 LANES = {"user", "owner_operator", "future_partner"}
+FACETS = {
+    "definition",
+    "delivery",
+    "verification",
+    "deployment",
+    "runtime_health",
+    "evidence",
+    "user_outcome",
+    "owner_outcome",
+}
 COMMON_FIELDS = {
     "id",
     "kind",
@@ -56,19 +67,21 @@ COMMON_FIELDS = {
     "source_refs",
     "confidence",
     "relations",
+    "facets",
     "unresolved_conflicts",
     "supersession_history",
-    "facets",
 }
-FACETS = {
-    "definition",
-    "delivery",
-    "verification",
-    "deployment",
-    "runtime_health",
-    "evidence",
+PARTNER_MEANING_KINDS = {
+    "user_need",
+    "job",
+    "job_story",
     "user_outcome",
     "owner_outcome",
+    "journey",
+    "journey_step",
+    "recovery_path",
+    "capability",
+    "user_story",
 }
 PRODUCT_ID_PREFIXES = (
     "lane.",
@@ -114,6 +127,7 @@ EXPECTED_ARCHETYPES = {
     "archetype.special-state",
 }
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
 UUID_LIKE = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-"
     r"[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\b"
@@ -133,34 +147,34 @@ def load_json(path: Path) -> Any:
         raise ValidationError(f"invalid JSON {path.relative_to(ROOT)}: {exc}") from exc
 
 
-def walk_values(value: Any) -> Iterable[Any]:
+def walk(value: Any) -> Iterable[Any]:
     yield value
     if isinstance(value, dict):
         for child in value.values():
-            yield from walk_values(child)
+            yield from walk(child)
     elif isinstance(value, list):
         for child in value:
-            yield from walk_values(child)
+            yield from walk(child)
 
 
 def assert_no_done(value: Any, label: str) -> None:
-    for child in walk_values(value):
+    for child in walk(value):
         if isinstance(child, str) and child.strip().lower() == "done":
             raise ValidationError(f"forbidden one-dimensional status 'done' in {label}")
 
 
 def collect_entities() -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
     by_id: dict[str, dict[str, Any]] = {}
-    all_entities: list[dict[str, Any]] = []
+    entities: list[dict[str, Any]] = []
     for filename in ENTITY_FILES:
         document = load_json(ATLAS / filename)
         assert_no_done(document, filename)
-        entities = document.get("entities")
-        if not isinstance(entities, list) or not entities:
+        records = document.get("entities")
+        if not isinstance(records, list) or not records:
             raise ValidationError(f"{filename}: non-empty entities[] required")
-        for entity in entities:
+        for entity in records:
             if not isinstance(entity, dict):
-                raise ValidationError(f"{filename}: every entity must be an object")
+                raise ValidationError(f"{filename}: entity must be an object")
             missing = COMMON_FIELDS - entity.keys()
             if missing:
                 raise ValidationError(
@@ -168,9 +182,9 @@ def collect_entities() -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]
                 )
             entity_id = entity["id"]
             if not isinstance(entity_id, str) or not entity_id:
-                raise ValidationError(f"{filename}: invalid entity id")
+                raise ValidationError(f"{filename}: invalid entity ID")
             if entity_id in by_id:
-                raise ValidationError(f"duplicate entity id: {entity_id}")
+                raise ValidationError(f"duplicate entity ID: {entity_id}")
             if entity["status"] not in ENTITY_STATUSES:
                 raise ValidationError(f"{entity_id}: invalid status {entity['status']!r}")
             if entity["stakeholder_lane"] not in LANES:
@@ -178,28 +192,30 @@ def collect_entities() -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]
                     f"{entity_id}: invalid stakeholder lane {entity['stakeholder_lane']!r}"
                 )
             if not isinstance(entity["source_refs"], list) or not entity["source_refs"]:
-                raise ValidationError(f"{entity_id}: source_refs must be non-empty")
+                raise ValidationError(f"{entity_id}: non-empty source_refs required")
             if not isinstance(entity["relations"], list):
-                raise ValidationError(f"{entity_id}: relations must be an array")
+                raise ValidationError(f"{entity_id}: relations[] required")
+            confidence = entity["confidence"]
+            if not isinstance(confidence, dict) or not confidence.get("level"):
+                raise ValidationError(f"{entity_id}: confidence level required")
             facets = entity["facets"]
             if not isinstance(facets, dict) or set(facets) != FACETS:
                 raise ValidationError(
                     f"{entity_id}: facets must be exactly {sorted(FACETS)}"
                 )
-            confidence = entity["confidence"]
-            if not isinstance(confidence, dict) or not confidence.get("level"):
-                raise ValidationError(f"{entity_id}: confidence level required")
+            # A guardrail saying partner meaning must not be invented is an
+            # owner-controlled constraint, not invented partner product meaning.
             if (
                 entity["stakeholder_lane"] == "future_partner"
-                and entity["kind"] != "stakeholder_lane"
+                and entity["kind"] in PARTNER_MEANING_KINDS
                 and entity["status"] != "not_modeled"
             ):
                 raise ValidationError(
                     f"{entity_id}: future partner product meaning must remain not_modeled"
                 )
             by_id[entity_id] = entity
-            all_entities.append(entity)
-    return by_id, all_entities
+            entities.append(entity)
+    return by_id, entities
 
 
 def validate_sources(entities: list[dict[str, Any]]) -> set[str]:
@@ -208,9 +224,10 @@ def validate_sources(entities: list[dict[str, Any]]) -> set[str]:
     assert_no_done(lock, "source-lock.v1.json")
     sources = lock.get("sources")
     if not isinstance(sources, list) or not sources:
-        raise ValidationError("source-lock.v1.json: sources[] required")
+        raise ValidationError("source-lock.v1.json: non-empty sources[] required")
+
     source_ids: set[str] = set()
-    unresolved_source_ids: set[str] = set()
+    unresolved_blob_ids: set[str] = set()
     for source in sources:
         required = {
             "id",
@@ -229,41 +246,40 @@ def validate_sources(entities: list[dict[str, Any]]) -> set[str]:
             raise ValidationError(f"source {source.get('id')}: missing {sorted(missing)}")
         source_id = source["id"]
         if source_id in source_ids:
-            raise ValidationError(f"duplicate source id: {source_id}")
+            raise ValidationError(f"duplicate source ID: {source_id}")
         source_ids.add(source_id)
         if source["status"] not in SOURCE_STATUSES:
-            raise ValidationError(f"{source_id}: invalid source status {source['status']!r}")
+            raise ValidationError(f"{source_id}: invalid source status")
         if not HEX40.fullmatch(source["repository_sha"]):
-            raise ValidationError(f"{source_id}: invalid repository SHA")
-        if source["blob_sha"] is not None and not HEX40.fullmatch(source["blob_sha"]):
-            raise ValidationError(f"{source_id}: invalid blob SHA")
-        if source["blob_sha"] is None:
-            unresolved_source_ids.add(source_id)
+            raise ValidationError(f"{source_id}: exact repository SHA required")
+        blob = source["blob_sha"]
+        if blob is None:
+            unresolved_blob_ids.add(source_id)
+        elif not HEX40.fullmatch(blob):
+            raise ValidationError(f"{source_id}: invalid Git blob SHA")
 
-    resolution_ids: set[str] = set()
+    resolved_ids: set[str] = set()
     for resolution in exact.get("resolutions", []):
         source_id = resolution.get("source_id")
         if source_id not in source_ids:
             raise ValidationError(f"source resolution references unknown source {source_id}")
-        if source_id in resolution_ids:
+        if source_id in resolved_ids:
             raise ValidationError(f"duplicate source resolution: {source_id}")
-        resolution_ids.add(source_id)
+        resolved_ids.add(source_id)
         blob = resolution.get("blob_sha")
         aggregate = resolution.get("aggregate_sha256")
         if blob is None and aggregate is None:
-            raise ValidationError(f"{source_id}: exact blob or aggregate hash required")
+            raise ValidationError(f"{source_id}: blob or aggregate hash required")
         if blob is not None and not HEX40.fullmatch(blob):
             raise ValidationError(f"{source_id}: invalid resolved blob SHA")
-        if aggregate is not None and not re.fullmatch(r"[0-9a-f]{64}", aggregate):
+        if aggregate is not None and not HEX64.fullmatch(aggregate):
             raise ValidationError(f"{source_id}: invalid aggregate SHA-256")
-    missing_resolutions = unresolved_source_ids - resolution_ids
-    if missing_resolutions:
-        raise ValidationError(
-            f"source lock contains unresolved null blob SHAs: {sorted(missing_resolutions)}"
-        )
 
-    locked = lock.get("locks", {})
-    ui = locked.get("corrected_ui_sot", {})
+    missing = unresolved_blob_ids - resolved_ids
+    if missing:
+        raise ValidationError(f"null source blobs lack exact resolution: {sorted(missing)}")
+
+    ui = lock.get("locks", {}).get("corrected_ui_sot", {})
     if ui.get("sha") != "9b8043f3bdb86fab4eee00bf94b0f10d4f029c50":
         raise ValidationError("corrected UI SoT SHA drift")
     if ui.get("manifest_sha256") != (
@@ -289,11 +305,11 @@ def validate_relations(by_id: dict[str, dict[str, Any]], entities: list[dict[str
             if not isinstance(target, str) or not target:
                 raise ValidationError(f"{entity['id']}: relation target_id required")
             if target.startswith(PRODUCT_ID_PREFIXES) and target not in by_id:
-                raise ValidationError(f"{entity['id']}: orphan product relation {target}")
+                raise ValidationError(f"{entity['id']}: orphan relation {target}")
 
 
 def validate_user_stories(by_id: dict[str, dict[str, Any]], entities: list[dict[str, Any]]) -> None:
-    for story in (e for e in entities if e["kind"] == "user_story"):
+    for story in (entity for entity in entities if entity["kind"] == "user_story"):
         contract = story.get("story_contract")
         required = {
             "actor",
@@ -307,23 +323,24 @@ def validate_user_stories(by_id: dict[str, dict[str, Any]], entities: list[dict[
             "release_evidence",
             "current_status",
         }
-        if not isinstance(contract, dict) or required - contract.keys():
-            raise ValidationError(
-                f"{story['id']}: complete story_contract required; missing "
-                f"{sorted(required - set(contract or {}))}"
-            )
-        for linked_id in (
+        if not isinstance(contract, dict):
+            raise ValidationError(f"{story['id']}: story_contract required")
+        missing = required - contract.keys()
+        if missing:
+            raise ValidationError(f"{story['id']}: story_contract missing {sorted(missing)}")
+        linked = (
             list(contract["acceptance_rule_ids"])
             + list(contract["acceptance_scenario_ids"])
             + [contract["measurement_question_id"]]
-        ):
-            if linked_id not in by_id:
-                raise ValidationError(f"{story['id']}: orphan story contract link {linked_id}")
-        relation_types = {r["type"] for r in story["relations"]}
+        )
+        for target in linked:
+            if target not in by_id:
+                raise ValidationError(f"{story['id']}: orphan story link {target}")
+        relation_types = {relation["type"] for relation in story["relations"]}
         mandatory = {"develops", "supports", "used_in", "verified_by", "measured_by"}
         if not mandatory <= relation_types:
             raise ValidationError(
-                f"{story['id']}: User Story missing relation types {sorted(mandatory - relation_types)}"
+                f"{story['id']}: missing relation types {sorted(mandatory - relation_types)}"
             )
         if not str(contract["observable_result"]).strip():
             raise ValidationError(f"{story['id']}: observable result required")
@@ -340,17 +357,16 @@ def validate_ui_linkage(by_id: dict[str, dict[str, Any]], source_ids: set[str]) 
     archetypes = [link.get("archetype_id") for link in links]
     if set(archetypes) != EXPECTED_ARCHETYPES or len(archetypes) != len(set(archetypes)):
         raise ValidationError(
-            f"UI linkage archetype mismatch: missing={sorted(EXPECTED_ARCHETYPES - set(archetypes))}, "
+            f"UI archetype mismatch: missing={sorted(EXPECTED_ARCHETYPES - set(archetypes))}, "
             f"extra={sorted(set(archetypes) - EXPECTED_ARCHETYPES)}"
         )
     if document.get("coverage", {}).get("route_registry_mapping_percent") != 100:
-        raise ValidationError("route registry coverage must remain 100%")
+        raise ValidationError("route registry mapping must remain 100%")
     if UUID_LIKE.search(json.dumps(document, ensure_ascii=False)):
-        raise ValidationError("fabricated or unpublished UUID found in UI linkage")
+        raise ValidationError("fabricated or unpublished UUID in UI linkage")
+
     for link in links:
         link_id = link.get("id", "<unknown>")
-        if not link.get("semantic_regions"):
-            raise ValidationError(f"{link_id}: semantic regions required")
         for source_ref in link.get("source_refs", []):
             if source_ref not in source_ids:
                 raise ValidationError(f"{link_id}: unknown source ref {source_ref}")
@@ -365,13 +381,14 @@ def validate_ui_linkage(by_id: dict[str, dict[str, Any]], source_ids: set[str]) 
                 raise ValidationError(f"{link_id}: orphan measurement question {measurement_id}")
         if not link.get("measurement_question_ids") and link.get("measurement_status") != "not_modeled":
             raise ValidationError(f"{link_id}: measurement question or not_modeled marker required")
-        for region in link["semantic_regions"]:
+        regions = link.get("semantic_regions")
+        if not isinstance(regions, list) or not regions:
+            raise ValidationError(f"{link_id}: semantic_regions[] required")
+        for region in regions:
             if region.get("configured_instance_binding") != "binding_pending":
-                raise ValidationError(
-                    f"{link_id}:{region.get('region_id')}: only binding_pending is allowed"
-                )
+                raise ValidationError(f"{link_id}: unpublished binding must be binding_pending")
             if not region.get("region_id") or not region.get("product_screen_states"):
-                raise ValidationError(f"{link_id}: region ID and ProductScreenStates required")
+                raise ValidationError(f"{link_id}: region and ProductScreenStates required")
 
 
 def validate_unresolved(by_id: dict[str, dict[str, Any]], source_ids: set[str]) -> None:
@@ -379,7 +396,7 @@ def validate_unresolved(by_id: dict[str, dict[str, Any]], source_ids: set[str]) 
     assert_no_done(document, "unresolved-ledger.v1.json")
     items = document.get("items")
     if not isinstance(items, list) or not items:
-        raise ValidationError("unresolved ledger must be non-empty")
+        raise ValidationError("unresolved-ledger.v1.json: non-empty items[] required")
     seen: set[str] = set()
     for item in items:
         item_id = item.get("id")
