@@ -101,6 +101,12 @@ derived two different owner bindings from the same OAuth context.
   quota denial incremented the provider failure circuit. A failing-before
   regression and bounded fix were prepared; genuine provider failures still
   open the circuit.
+- 2026-08-25 23:46–23:51 UTC — PR `#583` merged the local-policy/provider-
+  circuit correction. Exact-main Fly release `v2037` deployed SHA
+  `548c5a681853c21da2f5e4a9a4df0d6a562a920f`; public health was ready and the
+  immutable in-image SHA matched. Two consecutive bounded Telegram feed reads
+  succeeded, and the latest sanitized Telegram circuit row retained zero
+  consecutive failures with no circuit or flood deadline.
 
 ## Root Cause
 
@@ -234,6 +240,8 @@ derived two different owner bindings from the same OAuth context.
 - [x] Honor the persisted provider hold and complete compensating catch-up for
   the affected voice cohort; verify every distinct voice reaches ready or a
   documented terminal error before closure.
+- [x] Merge/deploy the local-policy/provider-circuit correction and prove two
+  consecutive bounded Telegram reads leave the latest circuit row healthy.
 - [ ] Keep the incident open until `resolve_item` is observed from ChatGPT and
   the requested high-level result succeeds.
 
@@ -243,7 +251,9 @@ derived two different owner bindings from the same OAuth context.
   `297b3c76131a5461e9b601bea9e78afaf49a2847`, Fly `v2035`
 - principal compatibility deploy:
   `e327a400f0453fa38401e4cdb32ffed5a6ce61e6`, Fly `v2036`
-- deploy path: prior exact-main deployment through
+- local-policy/provider-circuit deploy:
+  `548c5a681853c21da2f5e4a9a4df0d6a562a920f`, Fly `v2037`
+- deploy path: both corrective releases used exact-main deployment through
   `scripts/deploy_fly_main.sh`
 - regression checks: production health ready; live authenticated server schema
   contains both providers; recent ChatGPT OAuth refresh contains both provider
@@ -251,7 +261,9 @@ derived two different owner bindings from the same OAuth context.
 - post-deploy verification: ready health and exact-main SHA passed; an already
   queued social job returned its durable state and later ready text through
   public status/get without re-ingress; the full affected cohort reached
-  `14/14` complete and `14/14` ready/non-empty through the same public tools.
+  `14/14` complete and `14/14` ready/non-empty through the same public tools;
+  two post-`v2037` bounded Telegram feed reads succeeded and the newest
+  sanitized circuit row remained at zero failures with no active deadline.
   ChatGPT workspace action publication and real refreshed-conversation
   acceptance remain pending
 
