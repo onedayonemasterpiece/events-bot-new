@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: Telegram read-triggered audio transcription now negotiates the
+  stricter provider-media materialization ceiling with the generic audio-store
+  upload ceiling. This prevents production voice reads from rejecting the
+  server's own byte bound before download, while retaining the existing
+  provider cap, principal binding, cache and per-attachment failure isolation.
+
 - Added: private `eventsBot` MCP Telegram reads now resolve canonical public and
   private message links, classify voice/audio/photo/video/round-video/
   animation/document media into additive safe attachment details, and preserve

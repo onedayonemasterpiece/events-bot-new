@@ -267,9 +267,12 @@ class FakeReadMediaAdapter(FakeAdapter):
 
 
 class FakeTelegramAudioReadAdapter(FakeAdapter):
+    max_read_asset_bytes = 30 * 1024 * 1024
+
     def __init__(self) -> None:
         super().__init__()
         self.downloads: list[str] = []
+        self.read_bounds: list[int] = []
         self.fail_ref: str | None = None
 
     async def read(self, request):
@@ -307,6 +310,7 @@ class FakeTelegramAudioReadAdapter(FakeAdapter):
     async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
         assert len(owner_binding) == 64
         assert max_bytes >= 16
+        self.read_bounds.append(max_bytes)
         self.downloads.append(asset_ref)
         if asset_ref == self.fail_ref:
             raise RuntimeError("provider path /secret and access_hash")
@@ -469,6 +473,9 @@ async def test_read_media_refs_are_outer_bound_and_each_can_be_previewed(
 async def test_telegram_audio_read_ready_cache_dedup_and_safe_projection(tmp_path: Path) -> None:
     adapter = FakeTelegramAudioReadAdapter()
     transcriber = FakeReadAudioService(ready=True)
+    # The audio store accepts much larger uploads than Telegram provider media.
+    # Reads must use the stricter adapter limit instead of rejecting the bound.
+    transcriber.config.max_asset_bytes = 512 * 1024 * 1024
     store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
     runtime = SocialWorkspaceRuntime(
         store=store,
@@ -509,6 +516,7 @@ async def test_telegram_audio_read_ready_cache_dedup_and_safe_projection(tmp_pat
         for value in second["item"]["attachments"]
     )
     assert len(adapter.downloads) == 2
+    assert adapter.read_bounds == [adapter.max_read_asset_bytes] * 2
     assert transcriber.starts == 2
     encoded = json.dumps([first, second], ensure_ascii=False)
     for forbidden in (

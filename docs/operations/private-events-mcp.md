@@ -310,6 +310,9 @@ and Telegram-native worker. `transcribe_audio=false` skips byte ingress and job
 creation while retaining media metadata. Provider bytes enter an internal
 trusted ingress directly; the server never fabricates a ChatGPT `fileParams`
 object, provider URL, native file identifier or filesystem path.
+The materialization request uses the stricter of the audio store's configured
+asset limit and the Telegram adapter's provider-media limit; the larger generic
+upload ceiling must never be passed back as an invalid provider read bound.
 
 Read-triggered jobs are bound to the authenticated principal and an HMAC of the
 target/item/media identity, then verified against the content SHA-256. A repeat

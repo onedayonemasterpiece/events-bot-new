@@ -1266,11 +1266,13 @@ class SocialWorkspaceRuntime:
         result = copy.deepcopy(dict(raw))
         owner_binding = self._principal_hash(principal)
         configured_limit = getattr(getattr(service, "config", None), "max_asset_bytes", None)
-        max_bytes = (
-            int(configured_limit)
-            if type(configured_limit) is int and 0 < configured_limit <= 2 * 1024 * 1024 * 1024
-            else 64 * 1024 * 1024
-        )
+        adapter_limit = getattr(adapter, "max_read_asset_bytes", None)
+        valid_limits = [
+            int(value)
+            for value in (configured_limit, adapter_limit)
+            if type(value) is int and 0 < value <= 2 * 1024 * 1024 * 1024
+        ]
+        max_bytes = min(valid_limits) if valid_limits else 64 * 1024 * 1024
         enrichment_deadline = (
             asyncio.get_running_loop().time() + self.provider_timeout_seconds
         )

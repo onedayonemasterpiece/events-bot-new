@@ -660,6 +660,11 @@ class _LivePolicy:
 
 
 class TelegramWorkspaceAdapter:
+    # Provider-derived Telegram media is deliberately capped below the generic
+    # audio upload/store ceiling.  The runtime reads this public capability so
+    # it never asks the adapter for an invalid 512 MiB materialization bound.
+    max_read_asset_bytes = _MAX_UPLOAD_BYTES
+
     """Fixed high-level Telegram implementation for Social Workspace."""
 
     platform = "telegram"

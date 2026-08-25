@@ -1,6 +1,6 @@
 # INC-2026-08-24 MCP Telegram albums returned unusable media references
 
-Status: open — integrated regression candidate, release pending
+Status: open — post-deploy audio-bound regression hotfix pending
 Severity: sev2
 Service: private eventsBot MCP social workspace, Telegram reads and image preview
 Opened: 2026-08-24
@@ -63,6 +63,17 @@ accepted as a public reference or returned as metadata.
   no deploy, production config/DB mutation, or further live MCP/Telegram probe
   was performed while another ChatGPT window was actively reading through the
   connector.
+- 2026-08-25 20:26 UTC: reviewed integration PR `#575` merged to `main` after
+  all three required CI jobs passed.
+- 2026-08-25 20:31 UTC: exact merged SHA deployed as Fly release `v2030`;
+  `/healthz` was ready and the in-image SHA matched `origin/main`.
+- 2026-08-25 20:36 UTC: the sanitized existing-connection canary resolved and
+  read the private target and found multiple voice attachments, but every
+  enrichment returned the generic isolated failure and no audio job row was
+  created. No transcript or provider/native identity was recorded.
+- 2026-08-25 20:40 UTC: a failing regression proved the generic audio store's
+  512 MiB ceiling was being passed to the Telegram adapter, whose closed
+  provider-media request contract accepts at most 30 MiB.
 
 ## Root Cause
 
@@ -78,6 +89,13 @@ accepted as a public reference or returned as metadata.
    Telegram `Message` and minted at most one media ref. Feed pagination counted
    each `grouped_id` member separately, and exact-item reads did not fetch the
    selected member's album siblings.
+5. The follow-on audio integration selected only
+   `AudioTranscriptionService.config.max_asset_bytes` for the provider download
+   request. Production uses 512 MiB for generic audio ingress, while the
+   Telegram adapter intentionally accepts a maximum 30 MiB provider read
+   bound. The adapter therefore rejected the request before downloading bytes
+   or creating a durable job; per-attachment isolation correctly kept the
+   thread response available but projected a generic transcription failure.
 
 ## Contributing Factors
 
@@ -168,14 +186,20 @@ accepted as a public reference or returned as metadata.
 - [ ] Run the real two-album ChatGPT acceptance and record sanitized evidence.
 - [ ] Add stable stage-specific denial reasons for asset-preview observability
   without exposing refs, provider IDs or exception text.
+- [ ] Merge/deploy the provider-limit negotiation hotfix, then repeat the same
+  existing-connection voice canary through ready/cache-hit without manual
+  reconnect.
 
 ## Release And Closure Evidence
 
 - prepared fix: `6f95dec39` on draft PR
   [#572](https://github.com/onedayonemasterpiece/events-bot-new/pull/572);
   the PR is intentionally held from merge/deploy during the active user read
-- deployed SHA: pending; production change explicitly deferred by user
-- deploy path: pending; must be exact merged `origin/main`
+- integration PR: [#575](https://github.com/onedayonemasterpiece/events-bot-new/pull/575),
+  merged as `980a5694cf0c172d07f4082dfbfd8f2cd1837a43`
+- deployed SHA/release: `980a5694cf0c172d07f4082dfbfd8f2cd1837a43`,
+  Fly `v2030`; post-deploy audio-bound hotfix remains pending
+- deploy path: `scripts/deploy_fly_main.sh` from clean exact `origin/main`
 - regression checks: integrated local focused private MCP/audio/Telegram/VK
   suites pass on the integration branch; complete release suite and live
   acceptance remain pending final release candidate
