@@ -911,19 +911,19 @@ class InMemoryTelegramOpaqueRefStore:
         document = getattr(media, "document", None)
         photo = getattr(media, "photo", None)
         provider_object = document if document is not None else photo
-        file_reference = getattr(provider_object, "file_reference", b"")
-        if isinstance(file_reference, memoryview):
-            file_reference = file_reference.tobytes()
-        if not isinstance(file_reference, (bytes, bytearray)):
-            file_reference = repr(file_reference).encode("utf-8", "replace")
         entity = getattr(target, "entity", None)
+        # Telegram file_reference is an expiring download capability and can
+        # rotate whenever the same message is fetched.  It must remain inside
+        # the snapshotted provider media used for the actual byte read, but it
+        # is not a durable media identity.  Building the cache key from stable
+        # provider object/message coordinates prevents repeat reads from
+        # creating a fresh transcription job for unchanged media.
         identity = "\x1f".join(
             str(value)
             for value in (
                 getattr(entity, "id", None),
                 getattr(provider_object, "id", None),
                 getattr(provider_object, "access_hash", None),
-                hashlib.sha256(bytes(file_reference)).hexdigest(),
                 item_message_id,
                 media_kind or role.value,
             )

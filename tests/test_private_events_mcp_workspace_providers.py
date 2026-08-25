@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 import private_events_mcp_provider_adapters as legacy_adapters
 import private_events_mcp_workspace_providers as workspace_providers
 from private_events_mcp.social_workspace import (
+    MediaRole,
     SocialTargetKind,
     validate_prepare_request,
 )
@@ -256,6 +258,55 @@ def test_telegram_bindings_survive_store_restart(config, tmp_path) -> None:
     )
     second = InMemoryTelegramOpaqueRefStore(isolated)
     assert second.resolve_target(binding.target_ref).title == "Exact person"
+
+
+def test_telegram_media_fingerprint_ignores_rotating_file_reference(
+    config, tmp_path
+) -> None:
+    isolated = replace(
+        config,
+        auth_database_path=str(tmp_path / "telegram-media-auth.sqlite"),
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+    )
+    refs = InMemoryTelegramOpaqueRefStore(isolated)
+    target = refs.mint_target(
+        entity=SimpleNamespace(id=42),
+        kind=SocialTargetKind.USER,
+        title="Synthetic target",
+        canonical_handle=None,
+        profile_link=None,
+        is_self=False,
+    )
+
+    def mint(file_reference: bytes, *, access_hash: int = 7001) -> str:
+        media = SimpleNamespace(
+            document=SimpleNamespace(
+                id=9001,
+                access_hash=access_hash,
+                file_reference=file_reference,
+            )
+        )
+        return refs.mint_read_asset(
+            target_ref=target.target_ref,
+            media=media,
+            role=MediaRole.DOCUMENT,
+            media_kind="voice",
+            item_message_id=101,
+        )
+
+    first = refs.resolve_asset(mint(b"first-expiring-capability"))
+    rotated = refs.resolve_asset(mint(b"rotated-expiring-capability"))
+    different_media = refs.resolve_asset(
+        mint(b"rotated-expiring-capability", access_hash=7002)
+    )
+
+    assert first.identity_fingerprint == rotated.identity_fingerprint
+    assert first.identity_fingerprint != different_media.identity_fingerprint
+    assert (
+        first.provider_media.document.file_reference
+        != rotated.provider_media.document.file_reference
+    )
 
 
 def test_workspace_builder_is_lazy_and_matches_enabled_providers(config) -> None:

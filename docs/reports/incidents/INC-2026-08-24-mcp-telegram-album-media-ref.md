@@ -1,6 +1,6 @@
 # INC-2026-08-24 MCP Telegram albums returned unusable media references
 
-Status: open — post-deploy audio-bound regression hotfix pending
+Status: open — stable Telegram media-identity hotfix pending
 Severity: sev2
 Service: private eventsBot MCP social workspace, Telegram reads and image preview
 Opened: 2026-08-24
@@ -74,6 +74,14 @@ accepted as a public reference or returned as metadata.
 - 2026-08-25 20:40 UTC: a failing regression proved the generic audio store's
   512 MiB ceiling was being passed to the Telegram adapter, whose closed
   provider-media request contract accepts at most 30 MiB.
+- 2026-08-25 20:48 UTC: reviewed hotfix PR `#576` was deployed from exact
+  `origin/main` as Fly release `v2031`; health and the in-image SHA matched.
+- 2026-08-25 20:49–20:54 UTC: the repeated sanitized canary proved provider
+  byte ingress now worked, but also exposed an unstable cache identity: a
+  refreshed Telegram download capability produced a new job on each read.
+  The canary was stopped, 103 still-queued duplicate jobs were retired while
+  retaining one active/queued job per observed content group, and no private
+  target, transcript or provider-native identifier was recorded.
 
 ## Root Cause
 
@@ -96,6 +104,12 @@ accepted as a public reference or returned as metadata.
    bound. The adapter therefore rejected the request before downloading bytes
    or creating a durable job; per-attachment isolation correctly kept the
    thread response available but projected a generic transcription failure.
+6. The provider-media identity HMAC also included Telegram `file_reference`.
+   That field is an expiring download capability which may rotate whenever the
+   same message is fetched; it is not durable media identity. Repeat reads
+   therefore bypassed the intended idempotency lookup and created duplicate
+   transcription jobs even though the provider object, message and bytes were
+   unchanged.
 
 ## Contributing Factors
 
@@ -109,6 +123,9 @@ accepted as a public reference or returned as metadata.
   trust-boundary token escaped.
 - Asset-preview audit reasons collapsed all runtime failures to the exception
   class, slowing diagnosis.
+- Synthetic cache tests supplied an already-stable fingerprint and therefore
+  did not exercise the production ref store with a rotated Telegram download
+  capability.
 
 ## Automation Contract
 
@@ -189,6 +206,9 @@ accepted as a public reference or returned as metadata.
 - [ ] Merge/deploy the provider-limit negotiation hotfix, then repeat the same
   existing-connection voice canary through ready/cache-hit without manual
   reconnect.
+- [ ] Exclude expiring Telegram download capability material from durable media
+  identity, deploy the regression, and repeat the canary without new duplicate
+  jobs.
 
 ## Release And Closure Evidence
 
@@ -197,13 +217,16 @@ accepted as a public reference or returned as metadata.
   the PR is intentionally held from merge/deploy during the active user read
 - integration PR: [#575](https://github.com/onedayonemasterpiece/events-bot-new/pull/575),
   merged as `980a5694cf0c172d07f4082dfbfd8f2cd1837a43`
-- deployed SHA/release: `980a5694cf0c172d07f4082dfbfd8f2cd1837a43`,
-  Fly `v2030`; post-deploy audio-bound hotfix remains pending
+- audio-bound hotfix PR:
+  [#576](https://github.com/onedayonemasterpiece/events-bot-new/pull/576),
+  merged/deployed as `4a81d12e9d24cf7b978b5f5bbe7d80cf36643e03`,
+  Fly `v2031`
 - deploy path: `scripts/deploy_fly_main.sh` from clean exact `origin/main`
 - regression checks: integrated local focused private MCP/audio/Telegram/VK
   suites pass on the integration branch; complete release suite and live
   acceptance remain pending final release candidate
-- post-deploy verification: pending
+- post-deploy verification: provider byte ingress passed; repeat-read stable
+  media identity/cache acceptance remains pending the follow-on hotfix
 
 ## Prevention
 
