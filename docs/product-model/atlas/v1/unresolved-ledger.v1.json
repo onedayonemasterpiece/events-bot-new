@@ -75,7 +75,7 @@
       "status": "partial",
       "title": "Event detail unresolved semantic states and decision outcome",
       "definition": "The corrected contract keeps evidence-bound states honest, including unresolved desktop and mobile media branches; behavioral proxies do not directly prove decision confidence.",
-      "affected_entity_ids": ["job.evaluate-event", "capability.event-detail", "mq.event-detail-supports-decision", "ui-gap.event-detail-state-coverage"],
+      "affected_entity_ids": ["job.evaluate-event", "capability.event-detail", "mq.event-detail-supports-decision", "ui-gap.event-detail-unresolved-states"],
       "source_refs": ["src.corrected-archetype-contracts", "src.static-site-feature", "src.acceptance-inventory"],
       "resolution_gate": "Exact source/browser evidence for unresolved states, owner review, native bindings and mixed behavioral/qualitative decision evidence.",
       "prohibited_shortcut": "Promote requested but unobserved states or equate engaged reading with confidence."
@@ -86,7 +86,7 @@
       "status": "partial",
       "title": "Corrected archetypes are reconstructed, not promoted UI families",
       "definition": "The corrected global archetype package provides stable semantic IDs and source evidence, but native component/archetype promotion and consumer migration remain separate gates.",
-      "affected_entity_ids": ["ui-gap.component-and-archetype-promotion", "capability.listing-discovery", "capability.event-detail", "capability.smart-search", "capability.saved-events", "capability.personalized-discovery"],
+      "affected_entity_ids": ["problem.ui-system-not-promoted", "capability.listing-discovery", "capability.event-detail", "capability.smart-search", "capability.saved-events", "capability.personalized-discovery"],
       "source_refs": ["src.corrected-ui-manifest", "src.route-archetype-registry", "src.component-composition-graph", "src.design-system-checklist"],
       "resolution_gate": "Astro == Git SoT == Penpot parity, owner acceptance, exact bindings, consumer migration and fail-closed conformance.",
       "prohibited_shortcut": "Call reconstructed semantic contracts promoted components or accepted visual design."
@@ -109,7 +109,7 @@
       "status": "partial",
       "title": "Remove obsolete Product Atlas plugin path from active documentation and artifacts",
       "definition": "Historical plugin documentation, contract, prototype and stable-delivery references conflict with the accepted MCP-only operating path until removed or explicitly archived by Git history.",
-      "affected_entity_ids": ["decision.product-atlas-penpot-mcp-only", "finding.plugin-path-superseded"],
+      "affected_entity_ids": ["decision.product-atlas-penpot-mcp-only", "finding.product-atlas-plugin-delivery-superseded"],
       "source_refs": ["src.product-atlas-stable-delivery-legacy", "src.product-atlas-plugin-doc", "src.product-atlas-plugin-contract", "src.product-atlas-plugin-prototype", "src.penpot-operating-model", "src.product-atlas-planning-gates"],
       "resolution_gate": "Design-system child PR deletes plugin contract/prototype and replaces active docs with MCP-only delivery; product docs point to the new decision.",
       "prohibited_shortcut": "Leave plugin language in active planning while describing it as current architecture elsewhere."
