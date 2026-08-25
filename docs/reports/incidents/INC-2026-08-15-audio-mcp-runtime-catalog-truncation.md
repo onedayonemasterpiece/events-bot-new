@@ -122,6 +122,17 @@ or renaming any existing tool and without changing OAuth consent.
 
 ## Release And Closure Evidence
 
+- 2026-08-25 existing-connection regression: the deployed 30-tool production
+  catalog serialized to 151,699 bytes and retained
+  `audio_transcription_start`, `audio_transcription_status` and
+  `audio_transcription_get` as positions 1–3. A private Telegram high-level
+  read reached the same audio service, returned one ready result among 12 voice
+  attachments, and reported cache hits for all 12 on the repeat read without
+  logout, reauthorization or manual reconnect. This proves the new social-read
+  ingress and result path but does not replace the still-pending standalone
+  ChatGPT `audio_transcription_start` acceptance required to close this older
+  incident.
+
 - 2026-08-25 integration regression: Telegram high-level read enrichment reuses
   the existing audio service internally without adding a top-level tool; the
   standalone start/status/get descriptors remain the discovery prefix in their
