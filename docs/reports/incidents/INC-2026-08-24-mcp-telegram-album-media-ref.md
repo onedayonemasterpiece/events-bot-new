@@ -1,6 +1,6 @@
 # INC-2026-08-24 MCP Telegram albums returned unusable media references
 
-Status: open — provider Retry-After hotfix pending
+Status: monitoring — audio/link regression accepted; original image-preview acceptance pending
 Severity: sev2
 Service: private eventsBot MCP social workspace, Telegram reads and image preview
 Opened: 2026-08-24
@@ -97,6 +97,23 @@ accepted as a public reference or returned as metadata.
   a sanitized direct status probe returned HTTP 429 with a 4,600-second
   `Retry-After`. The existing reconcile loop retained the job safely but did
   not persist or honor that provider backoff.
+- 2026-08-25 21:52 UTC: Retry-After PR `#579` was deployed from exact
+  `origin/main` as Fly release `v2034`. The in-image SHA matched main,
+  `/healthz` was ready, and the running job retained a bounded durable
+  provider hold across the deployment instead of polling again.
+- 2026-08-25 21:54 UTC: one canonical queued job was completed by reusing the
+  already validated result of its exact owner/source-digest predecessor. The
+  compensating catch-up re-bound the transcript and manifest to the canonical
+  opaque job, recomputed the changed manifest digest, revalidated every output
+  file and left the other 11 canonical jobs durable and queued.
+- 2026-08-25 22:00 UTC: the existing OAuth connection completed a sanitized
+  live canary without logout, reauthorization, deletion or re-addition. It
+  resolved the private link, read the item and its thread, found 12 voice
+  attachments, returned one ready transcript and 11 queued attachments, and
+  reported cache hits for all 12 on the repeat read. The opt-out read contained
+  no transcription. Response checks found no provider/native identity, session
+  material or local path disclosure; the saved receipt and audit persisted no
+  private link or transcript text.
 
 ## Root Cause
 
@@ -224,21 +241,25 @@ accepted as a public reference or returned as metadata.
 
 ## Follow-up Actions
 
-- [ ] Merge and deploy only after the user confirms the active MCP read has
-  finished.
-- [ ] Run the real two-album ChatGPT acceptance and record sanitized evidence.
+- [x] Merge through reviewed CI and deploy each production correction from a
+  clean worktree at exact `origin/main`.
+- [x] Run the existing-connection private Telegram item/thread audio acceptance and
+  record only sanitized response-shape, media-count, cache and privacy evidence.
+- [ ] Run the original two-album read-to-preview acceptance through the real
+  ChatGPT client and record only sanitized image-block counts; this is the
+  remaining closure gate for the pre-existing preview incident.
 - [ ] Add stable stage-specific denial reasons for asset-preview observability
   without exposing refs, provider IDs or exception text.
-- [ ] Merge/deploy the provider-limit negotiation hotfix, then repeat the same
+- [x] Merge/deploy the provider-limit negotiation hotfix, then repeat the same
   existing-connection voice canary through ready/cache-hit without manual
   reconnect.
-- [ ] Exclude expiring Telegram download capability material from durable media
+- [x] Exclude expiring Telegram download capability material from durable media
   identity, deploy the regression, and repeat the canary without new duplicate
   jobs.
-- [ ] Keep queued audio jobs durable without creating concurrent waiting
+- [x] Keep queued audio jobs durable without creating concurrent waiting
   dispatch tasks; schedule only the oldest job after the active run is terminal
   and apply a bounded global backoff when the shared session is busy.
-- [ ] Persist bounded Kaggle `Retry-After` evidence on a running job and skip
+- [x] Persist bounded Kaggle `Retry-After` evidence on a running job and skip
   reconciliation until that wall-clock deadline survives process restarts.
 
 ## Release And Closure Evidence
@@ -260,13 +281,22 @@ accepted as a public reference or returned as metadata.
   [#578](https://github.com/onedayonemasterpiece/events-bot-new/pull/578),
   merged/deployed as `8d8e2eeafaaea0d9c6cf6ac95653f656558e7a98`,
   Fly `v2033`
+- Retry-After hotfix PR:
+  [#579](https://github.com/onedayonemasterpiece/events-bot-new/pull/579),
+  merged/deployed as `4932241ffbac317d6d469afedb4b0771891601ad`,
+  Fly `v2034`
 - deploy path: `scripts/deploy_fly_main.sh` from clean exact `origin/main`
-- regression checks: integrated local focused private MCP/audio/Telegram/VK
-  suites pass on the integration branch; complete release suite and live
-  acceptance remain pending final release candidate
-- post-deploy verification: provider byte ingress and stable repeat-read cache
-  identity passed; serialized dispatch preserved exactly 12 canonical jobs;
-  ready-result acceptance is pending the provider-declared status backoff
+- regression checks: archive self-tests `44 passed`; final broad private
+  MCP/audio regression suite `504 passed` with three pre-existing aiohttp
+  warnings; focused dispatch/reconciliation regressions, compileall and
+  `git diff --check` passed; every production PR passed all three required CI
+  jobs
+- post-deploy verification: the production catalog retained all 30 tools with
+  audio start/status/get first and serialized to 151,699 bytes; provider byte
+  ingress and stable repeat-read cache identity passed; exactly 12 canonical
+  voice jobs remained after repeated reads (`1 complete`, `11 queued`); the
+  post-reset audit contained only successful resolve/item/thread operations;
+  Fly health was ready and the in-image SHA matched exact `origin/main`
 
 ## Prevention
 
