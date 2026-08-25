@@ -1,0 +1,102 @@
+name: Materialize Telegram linked voice read
+
+on:
+  push:
+    branches:
+      - feature/mcp-telegram-voice-read-20260825
+    paths:
+      - '.codex/telegram_voice_read_payload/**'
+      - '.github/workflows/materialize-telegram-voice-read.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-telegram-voice-read-20260825
+  cancel-in-progress: false
+
+jobs:
+  materialize-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/mcp-telegram-voice-read-20260825
+          fetch-depth: 1
+          persist-credentials: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Reassemble exact prebuilt payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t parts < <(find .codex/telegram_voice_read_payload -maxdepth 1 -type f -name 'part*.b64' -printf '%f\n' | sort)
+          expected=(part00.b64 part01.b64 part02.b64 part03.b64 part04.b64 part05.b64 part06.b64 part07.b64)
+          test "${#parts[@]}" -eq "${#expected[@]}"
+          test "${parts[*]}" = "${expected[*]}"
+          cat .codex/telegram_voice_read_payload/part{00..07}.b64 \
+            | base64 --decode \
+            > scripts/ops/materialize_telegram_voice_read_patch.py
+          echo '2299e2134bcac3ce35ecbed7a1664c0185ef4be89470587fad8f8e5bb4460d79  scripts/ops/materialize_telegram_voice_read_patch.py' \
+            | sha256sum --check --strict
+          python scripts/ops/materialize_telegram_voice_read_patch.py
+          test ! -e scripts/ops/materialize_telegram_voice_read_patch.py
+          rm -rf .codex/telegram_voice_read_payload
+          rm -f .github/workflows/materialize-telegram-voice-read.yml
+
+      - name: Verify exact final files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/telegram-voice-read.sha256 <<'EOF'
+          f949744b2b779d56e524831cecc983857cb4a2b60c430ae0fb5ac845320445a4  private_events_mcp/telegram_voice_read.py
+          24e329b7679ecaabe3d7dbb02a479c0018424b92c7695cf82b8b7945170cd3ac  private_events_mcp/integration.py
+          b334a265242b578a352c5b1273ff06301bb06d3139e8f07fa9dd1424c5bdcb8a  tests/test_private_events_mcp_telegram_voice_read.py
+          528b1769fee7098034fffa4a317942dc6c8a66512a0689417c1cd94abd6a7210  docs/operations/telegram-linked-message-read.md
+          EOF
+          sha256sum --check --strict /tmp/telegram-voice-read.sha256
+          PYTHONPATH=. python -m compileall -q private_events_mcp private_events_mcp*.py tests
+          git diff --check
+
+      - name: Install repository dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run linked-read contract tests
+        run: PYTHONPATH=. python -m pytest -q tests/test_private_events_mcp_telegram_voice_read.py
+
+      - name: Run audio-transcription regressions
+        run: PYTHONPATH=. python -m pytest -q tests/test_audio_transcription_*.py
+
+      - name: Run Telegram MCP regressions
+        run: PYTHONPATH=. python -m pytest -q tests/test_private_events_mcp_telegram*.py
+
+      - name: Run complete private MCP release suite
+        run: PYTHONPATH=. python -m pytest -q tests/test_private_events_mcp_*.py
+
+      - name: Commit only the verified final patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess
+          expected = {
+              'private_events_mcp/telegram_voice_read.py',
+              'private_events_mcp/integration.py',
+              'tests/test_private_events_mcp_telegram_voice_read.py',
+              'docs/operations/telegram-linked-message-read.md',
+              '.github/workflows/materialize-telegram-voice-read.yml',
+              *{f'.codex/telegram_voice_read_payload/part{i:02d}.b64' for i in range(8)},
+          }
+          actual = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          if actual != expected:
+              raise SystemExit(f'unexpected changed paths: missing={sorted(expected-actual)} extra={sorted(actual-expected)}')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(mcp): read Telegram voice messages from links'
+          git push origin HEAD:feature/mcp-telegram-voice-read-20260825
