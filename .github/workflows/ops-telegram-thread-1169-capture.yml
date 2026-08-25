@@ -1,4 +1,4 @@
-name: Capture Telegram thread 1169 encrypted
+name: Recapture Telegram thread 1169 with local Whisper
 
 on:
   push:
@@ -23,24 +23,26 @@ jobs:
       TOKENIZERS_PARALLELISM: "false"
       OMP_NUM_THREADS: "2"
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ops/telegram-thread-1169-capture-20260825
-          persist-credentials: false
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install isolated capture runtime
+      - name: Install corrected isolated capture runtime
         run: >-
           python -m pip install --disable-pip-version-check --quiet
           'Telethon==1.40.0'
           'cryptography>=42'
           'faster-whisper==1.2.0'
+          'requests>=2.32'
 
-      - name: Read thread, transcribe voice messages and encrypt locally
-        run: python scripts/ops/capture_telegram_thread_1169_encrypted.py
+      - name: Fetch immutable capture program
+        run: >-
+          curl --fail --silent --show-error --location
+          'https://raw.githubusercontent.com/onedayonemasterpiece/events-bot-new/b31091671ed50f7e109144e603398eeb0b34f347/scripts/ops/capture_telegram_thread_1169_encrypted.py'
+          --output /tmp/capture_telegram_thread_1169_encrypted.py
+
+      - name: Read thread, transcribe all voice messages and encrypt locally
+        run: python /tmp/capture_telegram_thread_1169_encrypted.py
 
       - name: Upload encrypted capture only
         if: always()
