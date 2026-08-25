@@ -1,4 +1,4 @@
-name: Probe Telegram thread 1169 capture credentials
+name: Capture Telegram thread 1169 encrypted
 
 on:
   push:
@@ -8,52 +8,45 @@ on:
       - .github/workflows/ops-telegram-thread-1169-capture.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  probe:
+  capture:
     environment: volunteer-monitor-canary
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     env:
       TELEGRAM_AUTH_BUNDLE_GH_ACTIONS: ${{ secrets.TELEGRAM_AUTH_BUNDLE_GH_ACTIONS }}
       TELEGRAM_GH_ACTIONS_API_ID: ${{ secrets.TELEGRAM_GH_ACTIONS_API_ID }}
       TELEGRAM_GH_ACTIONS_API_HASH: ${{ secrets.TELEGRAM_GH_ACTIONS_API_HASH }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "2"
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ops/telegram-thread-1169-capture-20260825
+          persist-credentials: false
 
-      - name: Record credential presence without values
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-          report = {
-              'schema_version': 1,
-              'bundle_available': bool(os.environ.get('TELEGRAM_AUTH_BUNDLE_GH_ACTIONS', '').strip()),
-              'api_id_available': bool(os.environ.get('TELEGRAM_GH_ACTIONS_API_ID', '').strip()),
-              'api_hash_available': bool(os.environ.get('TELEGRAM_GH_ACTIONS_API_HASH', '').strip()),
-          }
-          report['credentials_complete'] = all(report[key] for key in (
-              'bundle_available', 'api_id_available', 'api_hash_available'
-          ))
-          Path('ops-telegram-thread-1169-credential-probe.json').write_text(
-              json.dumps(report, indent=2, sort_keys=True) + '\n',
-              encoding='utf-8',
-          )
-          PY
+      - name: Install isolated capture runtime
+        run: >-
+          python -m pip install --disable-pip-version-check --quiet
+          'Telethon==1.40.0'
+          'cryptography>=42'
+          'faster-whisper==1.2.0'
 
-      - name: Commit probe receipt
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f ops-telegram-thread-1169-credential-probe.json
-          git commit -m "ops: record Telegram capture credential probe"
-          git push origin HEAD:ops/telegram-thread-1169-capture-20260825
+      - name: Read thread, transcribe voice messages and encrypt locally
+        run: python scripts/ops/capture_telegram_thread_1169_encrypted.py
+
+      - name: Upload encrypted capture only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-thread-1169-encrypted-${{ github.run_id }}
+          path: secure-capture/
+          if-no-files-found: error
+          retention-days: 1
