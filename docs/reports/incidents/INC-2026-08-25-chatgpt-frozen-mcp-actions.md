@@ -1,6 +1,6 @@
 # INC-2026-08-25 ChatGPT retained a VK-only action and could not poll social voice jobs
 
-Status: mitigating — principal fix deployed; action refresh, final catch-up and live ChatGPT acceptance pending
+Status: mitigating — principal fix and catch-up complete; action refresh and live ChatGPT acceptance pending
 Severity: sev2
 Service: private eventsBot ChatGPT MCP action discovery and Telegram voice reads
 Opened: 2026-08-25
@@ -89,8 +89,9 @@ derived two different owner bindings from the same OAuth context.
   `e327a400f0453fa38401e4cdb32ffed5a6ce61e6` and reported ready health.
 - 2026-08-25 23:05–23:30 UTC — status/get accepted already queued social jobs
   without re-ingress. The serialized lane resumed after the provider hold and
-  advanced the affected fourteen-reference cohort from queued to completed
-  work at its normal bounded cadence.
+  advanced the affected fourteen-reference cohort from queued to `14/14`
+  complete at its normal bounded cadence. Public get then returned `14/14`
+  ready, non-empty results for the same principal.
 - 2026-08-25 23:15–23:22 UTC — an independent authorized read covered the
   complete chat history and all sixteen voice messages; Telegram native
   transcription returned text for all sixteen. This recovered the requested
@@ -230,7 +231,7 @@ derived two different owner bindings from the same OAuth context.
   sanitized receipt.
 - [x] Merge/deploy the owner-binding correction from exact `origin/main`, then
   prove a pre-deploy queued social `atr_*` can be polled without re-ingress.
-- [ ] Honor the persisted provider hold and complete compensating catch-up for
+- [x] Honor the persisted provider hold and complete compensating catch-up for
   the affected voice cohort; verify every distinct voice reaches ready or a
   documented terminal error before closure.
 - [ ] Keep the incident open until `resolve_item` is observed from ChatGPT and
@@ -249,9 +250,10 @@ derived two different owner bindings from the same OAuth context.
   read families; affected conversation produced no `resolve_item` audit row
 - post-deploy verification: ready health and exact-main SHA passed; an already
   queued social job returned its durable state and later ready text through
-  public status/get without re-ingress; ChatGPT workspace action publication,
-  final cohort catch-up and real refreshed-conversation acceptance remain
-  pending
+  public status/get without re-ingress; the full affected cohort reached
+  `14/14` complete and `14/14` ready/non-empty through the same public tools.
+  ChatGPT workspace action publication and real refreshed-conversation
+  acceptance remain pending
 
 ## Prevention
 
