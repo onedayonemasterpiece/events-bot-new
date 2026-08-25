@@ -990,6 +990,27 @@ def test_vk_item_and_notification_tools_are_provider_and_scope_isolated(runtime)
     assert dialogs.input_schema["properties"]["read_access"] == {"const": "dialogs"}
 
 
+def test_chatgpt_legacy_scope_descriptor_publishes_telegram_and_vk_item_resolve(runtime) -> None:
+    service, _adapter, _store = runtime
+    service.adapters["vk"] = FakeAdapter()
+    tool = next(
+        item
+        for item in build_social_workspace_tools(service)
+        if item.name == "social_item_resolve"
+    )
+
+    descriptor = tool.descriptor(frozenset({"telegram:read", "vk:read"}))
+
+    assert descriptor["inputSchema"]["properties"]["platform"] == {
+        "type": "string",
+        "enum": ["telegram", "vk"],
+    }
+    assert {tuple(item["scopes"]) for item in descriptor["securitySchemes"]} == {
+        ("telegram:read",),
+        ("vk:read",),
+    }
+
+
 @pytest.mark.asyncio
 async def test_vk_dialog_tool_returns_metadata_only_for_legacy_read_scope(runtime) -> None:
     service, _adapter, _store = runtime

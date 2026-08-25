@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: the ChatGPT MCP upgrade runbook now distinguishes OAuth connection
+  refresh from the workspace's frozen action-definition snapshot. Tool schema
+  changes require administrator review/publication in action control and a new
+  chat; a healthy token refresh or direct server `tools/list` no longer counts
+  as real ChatGPT catalogue acceptance.
+
 - Fixed: Kaggle audio reconciliation now persists a bounded HTTP `Retry-After`
   deadline when status reads are rate-limited, and the durable monitor honors
   that wall-clock hold across restarts instead of probing again on every short

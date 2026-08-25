@@ -18,6 +18,12 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-25-chatgpt-frozen-mcp-actions.md`
+  - Scope: ChatGPT workspace-approved MCP action snapshots, action-definition
+    refresh/publication, and real new-chat invocation after a schema change.
+  - Must not regress: OAuth connection refresh is not accepted as proof that a
+    changed action schema reached ChatGPT; closure requires administrator review
+    and publication plus a successful real conversation call.
 - `INC-2026-08-24-mcp-telegram-album-media-ref.md`
   - Scope: private eventsBot MCP outer media-reference binding, Telegram
     `grouped_id` album reads, and `social_asset_preview` image materialization.
