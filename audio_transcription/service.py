@@ -421,6 +421,14 @@ class AudioTranscriptionService:
 
     async def status(self, *, job_ref: str, owner_binding: str) -> dict[str, Any]:
         job = self.job_store.get(job_ref, owner_binding=owner_binding)
+        # A provider-read ingress schedules dispatch on the same event loop and
+        # immediately asks for status.  Give an already-runnable dispatch one
+        # scheduling turn so an instant backend can advance to RUNNING and be
+        # reconciled below.  This is not a polling delay and does not hold the
+        # high-level read open for a remote Kaggle run.
+        if job.state in {JobState.QUEUED, JobState.DISPATCHING}:
+            await asyncio.sleep(0)
+            job = self.job_store.get(job_ref, owner_binding=owner_binding)
         if job.state is JobState.RUNNING:
             job = await self._reconcile_job(job)
         payload = job.public_dict()

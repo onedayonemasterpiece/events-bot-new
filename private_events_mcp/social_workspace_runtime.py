@@ -1271,6 +1271,9 @@ class SocialWorkspaceRuntime:
             if type(configured_limit) is int and 0 < configured_limit <= 2 * 1024 * 1024 * 1024
             else 64 * 1024 * 1024
         )
+        enrichment_deadline = (
+            asyncio.get_running_loop().time() + self.provider_timeout_seconds
+        )
 
         async def enrich_item(item: dict[str, Any]) -> None:
             attachments = item.get("attachments")
@@ -1281,6 +1284,15 @@ class SocialWorkspaceRuntime:
                     "voice",
                     "audio",
                 }:
+                    continue
+                if asyncio.get_running_loop().time() >= enrichment_deadline:
+                    attachment.pop("binding_fingerprint", None)
+                    attachment["transcription"] = {
+                        "status": "failed",
+                        "cache_hit": False,
+                        "error_code": "TRANSCRIPTION_TIMEOUT",
+                        "trust": "untrusted_external_data",
+                    }
                     continue
                 asset_ref = attachment.get("asset_ref")
                 fingerprint = attachment.pop("binding_fingerprint", None)
@@ -1308,24 +1320,38 @@ class SocialWorkspaceRuntime:
                 ).hexdigest()
                 idempotency_key = "tg:" + identity
                 try:
-                    started = await service.start_provider_transcription(
-                        owner_binding=owner_binding,
-                        idempotency_key=idempotency_key,
-                        provider_fingerprint=fingerprint,
-                        content_loader=lambda ref=asset_ref: adapter.read_asset(
-                            ref,
+                    started = await asyncio.wait_for(
+                        service.start_provider_transcription(
                             owner_binding=owner_binding,
-                            max_bytes=max_bytes,
+                            idempotency_key=idempotency_key,
+                            provider_fingerprint=fingerprint,
+                            content_loader=lambda ref=asset_ref: adapter.read_asset(
+                                ref,
+                                owner_binding=owner_binding,
+                                max_bytes=max_bytes,
+                            ),
+                            mime_type=(
+                                str(attachment["mime_type"])
+                                if isinstance(attachment.get("mime_type"), str)
+                                else None
+                            ),
                         ),
-                        mime_type=(
-                            str(attachment["mime_type"])
-                            if isinstance(attachment.get("mime_type"), str)
-                            else None
+                        timeout=max(
+                            0.001,
+                            enrichment_deadline
+                            - asyncio.get_running_loop().time(),
                         ),
                     )
                     job_ref = str(started.get("job_ref") or "")
-                    status = await service.status(
-                        job_ref=job_ref, owner_binding=owner_binding
+                    status = await asyncio.wait_for(
+                        service.status(
+                            job_ref=job_ref, owner_binding=owner_binding
+                        ),
+                        timeout=max(
+                            0.001,
+                            enrichment_deadline
+                            - asyncio.get_running_loop().time(),
+                        ),
                     )
                     state = str(status.get("state") or started.get("state") or "queued")
                     transcription: dict[str, Any] = {
@@ -1343,12 +1369,19 @@ class SocialWorkspaceRuntime:
                         "trust": "untrusted_external_data",
                     }
                     if state == "complete":
-                        completed = await service.get_result(
-                            job_ref=job_ref,
-                            owner_binding=owner_binding,
-                            view="plain",
-                            offset=0,
-                            limit=60_000,
+                        completed = await asyncio.wait_for(
+                            service.get_result(
+                                job_ref=job_ref,
+                                owner_binding=owner_binding,
+                                view="plain",
+                                offset=0,
+                                limit=60_000,
+                            ),
+                            timeout=max(
+                                0.001,
+                                enrichment_deadline
+                                - asyncio.get_running_loop().time(),
+                            ),
                         )
                         if completed.get("ready") and isinstance(completed.get("text"), str):
                             transcription["text"] = completed["text"][:60_000]
@@ -1365,6 +1398,13 @@ class SocialWorkspaceRuntime:
                     attachment["transcription"] = transcription
                 except asyncio.CancelledError:
                     raise
+                except asyncio.TimeoutError:
+                    attachment["transcription"] = {
+                        "status": "failed",
+                        "cache_hit": False,
+                        "error_code": "TRANSCRIPTION_TIMEOUT",
+                        "trust": "untrusted_external_data",
+                    }
                 except Exception:  # noqa: BLE001 - isolate provider/audio failure per media
                     attachment["transcription"] = {
                         "status": "failed",

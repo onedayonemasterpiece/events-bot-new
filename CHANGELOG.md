@@ -19,8 +19,8 @@
   instead of failing as unbound. Telegram `grouped_id` albums are projected as
   one logical feed item with all images in order, and exact-item reads expand
   the complete bounded album. Added the regression contract for
-  `INC-2026-08-24-mcp-telegram-album-media-ref`; production rollout remains
-  intentionally pending while an active user MCP read is in progress.
+  `INC-2026-08-24-mcp-telegram-album-media-ref`; production rollout and live
+  acceptance remain pending the ordinary reviewed release path.
 
 - Fixed: VK typed lifecycle replay now treats a supplied title as a mandatory
   identity anchor, recognizes already-rescheduled targets on the new date and

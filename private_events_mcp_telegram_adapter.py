@@ -2242,6 +2242,10 @@ class TelegramWorkspaceAdapter:
         if type(offset_id) is not int or offset_id < 0:
             raise SocialWorkspaceValidationError("cursor state is invalid")
         limit = min(request.limit, _MAX_PAGE)
+        # Telegram counts physical messages, while this API counts albums as
+        # one logical item.  Fetch a bounded physical-message window so a
+        # ten-part album cannot be cut at the requested logical page size.
+        scan_limit = min(_MAX_GLOBAL_SCAN + 1, limit * 10 + 1)
         await self._fenced(lease)
         response = await self._call(
             client,
@@ -2252,15 +2256,29 @@ class TelegramWorkspaceAdapter:
                 offset_id=offset_id,
                 offset_rate=cursor.get("offset_rate", 0),
                 offset_peer=cursor.get("offset_peer"),
-                limit=limit + 1,
+                limit=scan_limit,
             ),
         )
-        messages = list(getattr(response, "messages", []) or [])[: limit + 1]
-        results: list[dict[str, Any]] = []
-        for message in messages[:limit]:
+        messages = list(getattr(response, "messages", []) or [])[:scan_limit]
+        grouped: list[tuple[TelegramTargetBinding, list[Any]]] = []
+        by_album: dict[tuple[str, int], list[Any]] = {}
+        for message in messages:
             target = await self._target_from_message(client, message)
-            results.append(self._item_payload(message, target))
-        last = messages[min(limit, len(messages)) - 1] if results else None
+            grouped_id = self._message_grouped_id(message)
+            key = (target.target_ref, grouped_id) if grouped_id is not None else None
+            if key is not None and key in by_album:
+                by_album[key].append(message)
+                continue
+            members = [message]
+            grouped.append((target, members))
+            if key is not None:
+                by_album[key] = members
+        selected = grouped[:limit]
+        results = [
+            self._item_payload(members[0], target, album_messages=members)
+            for target, members in selected
+        ]
+        last = selected[-1][1][-1] if selected else None
         state = (
             {
                 "offset_id": _provider_message_id(last),
@@ -2274,7 +2292,7 @@ class TelegramWorkspaceAdapter:
         return self._page(
             results,
             family="global_search",
-            more=len(messages) > limit,
+            more=len(grouped) > limit or len(messages) >= scan_limit,
             state=state,
             binding=cursor_binding,
         )
@@ -2336,6 +2354,8 @@ class TelegramWorkspaceAdapter:
         for item in items:
             item.pop("target_ref", None)
             item.pop("media", None)
+            item.pop("attachments", None)
+            item.pop("media_details", None)
             item.pop("entities", None)
             item["text"] = item["text"][:768]
             item["caption"] = item["caption"][:256]
@@ -2388,6 +2408,8 @@ class TelegramWorkspaceAdapter:
         cursor_binding = self._cursor_binding(request, target_ref=target.target_ref)
         cursor = self._cursor("comments", request.cursor, binding=cursor_binding)
         offset_id = cursor.get("offset_id", 0)
+        limit = min(request.limit, _MAX_PAGE)
+        scan_limit = min(_MAX_GLOBAL_SCAN + 1, limit * 10 + 1)
         response = await self._call(
             client,
             lease,
@@ -2396,24 +2418,32 @@ class TelegramWorkspaceAdapter:
                 peer=target.entity,
                 message_id=item.message_id,
                 offset_id=offset_id,
-                limit=min(request.limit, _MAX_PAGE) + 1,
+                limit=scan_limit,
             ),
         )
-        messages = list(getattr(response, "messages", []) or [])
-        limit = min(request.limit, _MAX_PAGE)
+        messages = list(getattr(response, "messages", []) or [])[:scan_limit]
+        logical = self._logical_message_groups(messages)
+        selected = logical[:limit]
         payload: dict[str, Any] = {
             "root_item_ref": item.item_ref,
             "items": [
-                self._item_payload(message, target, kind=SocialItemKind.COMMENT)
-                for message in messages[:limit]
+                self._item_payload(
+                    members[0],
+                    target,
+                    kind=SocialItemKind.COMMENT,
+                    album_messages=members,
+                )
+                for members in selected
             ],
             "trust": _TRUST,
         }
-        if len(messages) > limit and messages[:limit]:
+        if (len(logical) > limit or len(messages) >= scan_limit) and selected:
             payload["next_cursor"] = self._new_cursor(
                 "comments",
                 {
-                    "offset_id": _provider_message_id(messages[limit - 1]),
+                    "offset_id": min(
+                        _provider_message_id(message) for message in selected[-1]
+                    ),
                     "item_ref": item.item_ref,
                 },
                 binding=cursor_binding,

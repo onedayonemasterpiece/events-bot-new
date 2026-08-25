@@ -36,8 +36,9 @@ accepted as a public reference or returned as metadata.
 
 ## Detection
 
-- The user reported the failed read of private chat `KenigEvents · UI review`
-  and message `1162` on 2026-08-24.
+- The user reported a failed read of an operator-authorized private chat item
+  on 2026-08-24. The private target and native item identity are intentionally
+  omitted from this public incident record.
 - Production `social_workspace_audit` contained 17 denied Telegram
   `asset_preview` calls from 12:04 through 12:27 UTC on 2026-08-24, while
   Telegram item/story reads succeeded and reported media.

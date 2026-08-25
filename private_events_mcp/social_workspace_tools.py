@@ -523,7 +523,15 @@ def build_social_workspace_tools(
         "publicly_discoverable": False,
         "cacheable": False,
         "open_world": True,
-        "timeout_seconds": runtime.provider_timeout_seconds,
+        # A read performs one provider call and may then spend one separately
+        # bounded provider-timeout budget on trusted audio enrichment.  The
+        # outer protocol deadline must cover both phases so a slow attachment
+        # is projected as a per-media failure instead of cancelling the base
+        # message/thread response.
+        "timeout_seconds": max(
+            5.0,
+            runtime.provider_timeout_seconds * 2.0 + 2.0,
+        ),
     }
     specs = [
         ToolSpec("social_capabilities", "Social capabilities",

@@ -564,6 +564,51 @@ async def test_telegram_audio_read_pending_failure_isolation_and_opt_out(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_telegram_audio_timeout_preserves_base_read_and_isolates_media(tmp_path: Path) -> None:
+    class SlowReadAudioService(FakeReadAudioService):
+        async def start_provider_transcription(self, **values):
+            await asyncio.sleep(0.05)
+            return await super().start_provider_transcription(**values)
+
+    adapter = FakeTelegramAudioReadAdapter()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    runtime = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        provider_timeout_seconds=0.01,
+    )
+    runtime.enable_audio_transcription(SlowReadAudioService())
+    call_context = scoped_context("telegram:read")
+    principal = RuntimePrincipal.from_context(call_context)
+    item_ref = runtime._mint_ref(
+        "item", "itm_provider_audio_timeout_000001", "telegram", principal
+    )
+
+    result = await runtime.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "get_item",
+                "item_ref": item_ref,
+                "read_access": "private",
+            }
+        ),
+        call_context,
+    )
+
+    assert result["item"]["text"] == "voice batch"
+    assert [
+        value["transcription"]["error_code"]
+        for value in result["item"]["attachments"]
+    ] == ["TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_TIMEOUT"]
+    assert all(
+        value["transcription"]["status"] == "failed"
+        for value in result["item"]["attachments"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_self_resolution_and_opaque_encrypted_binding(runtime) -> None:
     service, _adapter, store = runtime
     request = validate_read_request({
