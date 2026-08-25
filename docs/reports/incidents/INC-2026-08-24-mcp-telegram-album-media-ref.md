@@ -1,6 +1,6 @@
 # INC-2026-08-24 MCP Telegram albums returned unusable media references
 
-Status: open — stable Telegram media-identity hotfix pending
+Status: open — serialized audio-dispatch hotfix pending
 Severity: sev2
 Service: private eventsBot MCP social workspace, Telegram reads and image preview
 Opened: 2026-08-24
@@ -82,6 +82,16 @@ accepted as a public reference or returned as metadata.
   The canary was stopped, 103 still-queued duplicate jobs were retired while
   retaining one active/queued job per observed content group, and no private
   target, transcript or provider-native identifier was recorded.
+- 2026-08-25 21:08 UTC: the stable-identity fix from PR `#577` was deployed as
+  exact-main Fly release `v2032`. A bounded repeat canary created exactly 12
+  jobs for 12 discovered voice attachments and the count remained stable on
+  repeat reads, proving the cache identity fix.
+- 2026-08-25 21:10–21:20 UTC: the canary exposed a second multi-item dispatch
+  defect. Although the backend semaphore serialized dispatch bodies, every
+  queued attachment still owned a waiting task and probed the same shared
+  Kaggle/Telegram session in a burst. Kaggle began returning HTTP 429 for
+  status reads; the 12 canonical jobs remained safely queued and no further
+  duplicate jobs were created.
 
 ## Root Cause
 
@@ -110,6 +120,11 @@ accepted as a public reference or returned as metadata.
    therefore bypassed the intended idempotency lookup and created duplicate
    transcription jobs even though the provider object, message and bytes were
    unchanged.
+7. `AudioTranscriptionService` created a dispatch task for every durable queued
+   job. Its semaphore serialized the backend calls but did not serialize the
+   remote-session guard/status probes performed by those waiting tasks. A
+   multi-voice thread therefore produced a status burst against one shared
+   Kaggle kernel and could exhaust the provider's request allowance.
 
 ## Contributing Factors
 
@@ -126,6 +141,8 @@ accepted as a public reference or returned as metadata.
 - Synthetic cache tests supplied an already-stable fingerprint and therefore
   did not exercise the production ref store with a rotated Telegram download
   capability.
+- Dispatch tests covered one job and backend mutual exclusion, but not a
+  provider read that creates many durable queued jobs at once.
 
 ## Automation Contract
 
@@ -209,6 +226,9 @@ accepted as a public reference or returned as metadata.
 - [ ] Exclude expiring Telegram download capability material from durable media
   identity, deploy the regression, and repeat the canary without new duplicate
   jobs.
+- [ ] Keep queued audio jobs durable without creating concurrent waiting
+  dispatch tasks; schedule only the oldest job after the active run is terminal
+  and apply a bounded global backoff when the shared session is busy.
 
 ## Release And Closure Evidence
 
@@ -221,12 +241,17 @@ accepted as a public reference or returned as metadata.
   [#576](https://github.com/onedayonemasterpiece/events-bot-new/pull/576),
   merged/deployed as `4a81d12e9d24cf7b978b5f5bbe7d80cf36643e03`,
   Fly `v2031`
+- stable-identity hotfix PR:
+  [#577](https://github.com/onedayonemasterpiece/events-bot-new/pull/577),
+  merged/deployed as `ef165165cddd765e9d0bf9cb95c5ffb5a0034426`,
+  Fly `v2032`
 - deploy path: `scripts/deploy_fly_main.sh` from clean exact `origin/main`
 - regression checks: integrated local focused private MCP/audio/Telegram/VK
   suites pass on the integration branch; complete release suite and live
   acceptance remain pending final release candidate
-- post-deploy verification: provider byte ingress passed; repeat-read stable
-  media identity/cache acceptance remains pending the follow-on hotfix
+- post-deploy verification: provider byte ingress and stable repeat-read cache
+  identity passed; ready-result acceptance is pending serialized dispatch and
+  recovery from the provider status-rate limit
 
 ## Prevention
 
