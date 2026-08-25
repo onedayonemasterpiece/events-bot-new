@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: Telegram voice/audio repeat reads no longer use the expiring
+  `file_reference` download capability as durable provider-media identity.
+  Stable provider object/message coordinates now drive the owner-bound
+  transcription idempotency key, preventing unchanged media from creating a
+  fresh job whenever Telegram rotates its download capability.
+
 - Fixed: Telegram read-triggered audio transcription now negotiates the
   stricter provider-media materialization ceiling with the generic audio-store
   upload ceiling. This prevents production voice reads from rejecting the
