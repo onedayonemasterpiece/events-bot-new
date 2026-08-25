@@ -944,6 +944,121 @@ async def test_budgets_and_denials_are_durably_audited(tmp_path: Path) -> None:
     assert ("denied", "cross_target") in rows
 
 
+@pytest.mark.asyncio
+async def test_local_media_budget_denial_does_not_open_provider_circuit(
+    tmp_path: Path,
+) -> None:
+    class MediaAdapter(FakeAdapter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.read_calls = 0
+
+        async def read(self, request):
+            self.read_calls += 1
+            return {
+                "results": [
+                    {
+                        "item_ref": "native-media-budget-item",
+                        "target_ref": request.target_ref,
+                        "kind": "message",
+                        "published_at": "2026-08-25T12:00:00Z",
+                        "text": "bounded item",
+                        "caption": "",
+                        "basic_metrics": {"views": 0},
+                        "media": [
+                            "native-media-budget-asset-1",
+                            "native-media-budget-asset-2",
+                        ],
+                        "trust": "untrusted_external_data",
+                    }
+                ],
+                "trust": "untrusted_external_data",
+            }
+
+    adapter = MediaAdapter()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        circuit_failure_threshold=1,
+        budget_dimension_limits={
+            "media": {
+                "global": 100,
+                "principal": 100,
+                "target": 1,
+                "action": 100,
+            }
+        },
+    )
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref(
+        "target", "native-media-budget-target", "telegram", principal
+    )
+    request = validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "list_items",
+            "target_ref": target,
+            "read_access": "private",
+            "limit": 25,
+        }
+    )
+
+    for _ in range(2):
+        with pytest.raises(SocialWorkspaceRuntimeError, match="media budget exceeded"):
+            await service.read(request, context())
+
+    assert adapter.read_calls == 2
+    with sqlite3.connect(store.path) as conn:
+        row = conn.execute(
+            "SELECT consecutive_failures,circuit_open_until "
+            "FROM social_workspace_circuit"
+        ).fetchone()
+    assert row == (0, None)
+
+
+@pytest.mark.asyncio
+async def test_provider_read_failure_still_opens_provider_circuit(
+    tmp_path: Path,
+) -> None:
+    class FailingAdapter(FakeAdapter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.read_calls = 0
+
+        async def read(self, request):
+            self.read_calls += 1
+            raise RuntimeError("untrusted provider failure")
+
+    adapter = FailingAdapter()
+    service = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        circuit_failure_threshold=1,
+    )
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref(
+        "target", "native-provider-failure-target", "telegram", principal
+    )
+    request = validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "list_items",
+            "target_ref": target,
+            "read_access": "private",
+            "limit": 25,
+        }
+    )
+
+    with pytest.raises(SocialWorkspaceRuntimeError, match="provider operation failed"):
+        await service.read(request, context())
+    with pytest.raises(SocialWorkspaceRuntimeError, match="circuit gate is open"):
+        await service.read(request, context())
+    assert adapter.read_calls == 1
+
+
 def test_publish_attempt_budget_uses_utc_day_not_hour(tmp_path: Path) -> None:
     current = [1_787_616_000]  # 2026-08-25T00:00:00Z
     service = SocialWorkspaceRuntime(

@@ -1,6 +1,6 @@
 # INC-2026-08-25 ChatGPT retained a VK-only action and could not poll social voice jobs
 
-Status: mitigating — principal fix prepared; action refresh, deploy, catch-up and live ChatGPT acceptance pending
+Status: mitigating — principal fix and catch-up complete; action refresh and live ChatGPT acceptance pending
 Severity: sev2
 Service: private eventsBot ChatGPT MCP action discovery and Telegram voice reads
 Opened: 2026-08-25
@@ -55,6 +55,10 @@ derived two different owner bindings from the same OAuth context.
   serialized run under a persisted provider hold plus 23 queued jobs; the file
   log mirror was enabled and healthy, while this bounded tool error was not
   emitted as a runtime log line.
+- Continued pagination later reached the local hourly media budget. The
+  provider call itself had succeeded, but the runtime counted the subsequent
+  local quota rejection as a provider failure; repeated attempts therefore
+  opened the provider circuit and obscured the real bounded-policy reason.
 
 ## Timeline
 
@@ -80,6 +84,23 @@ derived two different owner bindings from the same OAuth context.
   queued voice jobs. Production retained one running job under a persisted
   `Retry-After` deadline at 23:01 UTC; no busy-poll or unsafe duplicate start
   was attempted.
+- 2026-08-25 23:04 UTC — PR `#582` merged the same-principal compatibility
+  lookup to `main`; exact-main Fly release `v2036` deployed SHA
+  `e327a400f0453fa38401e4cdb32ffed5a6ce61e6` and reported ready health.
+- 2026-08-25 23:05–23:30 UTC — status/get accepted already queued social jobs
+  without re-ingress. The serialized lane resumed after the provider hold and
+  advanced the affected fourteen-reference cohort from queued to `14/14`
+  complete at its normal bounded cadence. Public get then returned `14/14`
+  ready, non-empty results for the same principal.
+- 2026-08-25 23:15–23:22 UTC — an independent authorized read covered the
+  complete chat history and all sixteen voice messages; Telegram native
+  transcription returned text for all sixteen. This recovered the requested
+  idea intake but does not replace the required refreshed-ChatGPT MCP canary.
+- 2026-08-25 23:13–23:18 UTC — production budget/circuit evidence identified a
+  second runtime defect: a successful provider read followed by local media
+  quota denial incremented the provider failure circuit. A failing-before
+  regression and bounded fix were prepared; genuine provider failures still
+  open the circuit.
 
 ## Root Cause
 
@@ -105,6 +126,11 @@ derived two different owner bindings from the same OAuth context.
    Kaggle lane and a persisted provider `Retry-After`. That delay was operating
    as designed, but the owner mismatch removed the only explicit polling path
    and made an accepted queue look like a terminal failure.
+8. `SocialWorkspaceRuntime.read()` used one `provider_attempted` flag for every
+   later exception. A safe local media/egress budget rejection after a
+   successful adapter response was consequently persisted as a provider
+   failure. After the threshold, the next read received a provider-circuit
+   error even though neither Telegram nor the adapter had failed.
 
 ## Contributing Factors
 
@@ -119,6 +145,9 @@ derived two different owner bindings from the same OAuth context.
 - The original live acceptance proved repeat-read cache behavior but did not
   call the separately exposed audio status/get tools with an `atr_*` minted by
   Social Workspace, so the owner-binding mismatch escaped coverage.
+- Provider-circuit tests covered actual provider errors but did not assert that
+  a successful provider call followed by a local quota refusal resets, rather
+  than increments, the provider failure streak.
 
 ## Automation Contract
 
@@ -189,6 +218,10 @@ derived two different owner bindings from the same OAuth context.
 - Added a multi-voice regression that reads two queued social voice
   attachments and obtains the completed text for each through public
   status/get.
+- Separated provider transport outcome from later local response-policy
+  outcome. Successful adapter reads now remain provider successes when egress
+  or media quota withholds the response, while real provider failures and flood
+  waits retain the existing circuit behavior.
 
 ## Follow-up Actions
 
@@ -196,9 +229,9 @@ derived two different owner bindings from the same OAuth context.
   actions without changing the MCP endpoint or OAuth identity.
 - [ ] Run the real new-chat Telegram link/thread/audio acceptance and attach a
   sanitized receipt.
-- [ ] Merge/deploy the owner-binding correction from exact `origin/main`, then
+- [x] Merge/deploy the owner-binding correction from exact `origin/main`, then
   prove a pre-deploy queued social `atr_*` can be polled without re-ingress.
-- [ ] Honor the persisted provider hold and complete compensating catch-up for
+- [x] Honor the persisted provider hold and complete compensating catch-up for
   the affected voice cohort; verify every distinct voice reaches ready or a
   documented terminal error before closure.
 - [ ] Keep the incident open until `resolve_item` is observed from ChatGPT and
@@ -208,13 +241,18 @@ derived two different owner bindings from the same OAuth context.
 
 - deployed SHA at detection:
   `297b3c76131a5461e9b601bea9e78afaf49a2847`, Fly `v2035`
+- principal compatibility deploy:
+  `e327a400f0453fa38401e4cdb32ffed5a6ce61e6`, Fly `v2036`
 - deploy path: prior exact-main deployment through
   `scripts/deploy_fly_main.sh`
 - regression checks: production health ready; live authenticated server schema
   contains both providers; recent ChatGPT OAuth refresh contains both provider
   read families; affected conversation produced no `resolve_item` audit row
-- post-deploy verification: server side passed; ChatGPT workspace action
-  publication, owner-binding deploy, voice catch-up and real conversation
+- post-deploy verification: ready health and exact-main SHA passed; an already
+  queued social job returned its durable state and later ready text through
+  public status/get without re-ingress; the full affected cohort reached
+  `14/14` complete and `14/14` ready/non-empty through the same public tools.
+  ChatGPT workspace action publication and real refreshed-conversation
   acceptance remain pending
 
 ## Prevention
