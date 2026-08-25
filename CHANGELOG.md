@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed: `audio_transcription_status` and `audio_transcription_get` now accept
+  durable `atr_*` references created by Telegram Social Workspace reads for the
+  same verified OAuth principal. The compatibility lookup preserves existing
+  queued jobs and assets, still rejects another subject/client/resource, and
+  avoids the invalid workaround of passing a social `ast_*` asset to the
+  standalone file-ingress tool. Added a multi-voice read-to-status/get
+  regression covering every returned transcript reference.
+
 - Fixed: the ChatGPT MCP upgrade runbook now distinguishes OAuth connection
   refresh from the workspace's frozen action-definition snapshot. Tool schema
   changes require administrator review/publication in action control and a new

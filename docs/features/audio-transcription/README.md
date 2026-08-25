@@ -223,6 +223,25 @@ queued/dispatching/running
 
 A background monitor recovers queued jobs after restart, polls running Kaggle kernels, collects verified outputs, and cleans terminal assets. Dispatch is serialized because one dedicated Telegram auth scope backs the lane. The idempotency key is bound to the source digest and semantic request; reusing it for another recording fails closed.
 
+`queued` is a durable accepted state, not a promise that text will be available
+inside the originating MCP call. The ordinary monitor cadence is 20 seconds.
+Only one durable job crosses the shared Kaggle/Telegram session boundary at a
+time, and a provider `Retry-After` is persisted as `retry_not_before` and
+survives restart. Consumers should poll status at a bounded cadence and fetch
+only after `complete`; aggressively repeating list/status calls cannot advance
+the remote lane and may extend provider throttling. A batch of voice messages
+can therefore require several serialized runs.
+
+Telegram Social Workspace reads may return an `atr_*` created by the same
+service. `audio_transcription_status` and `audio_transcription_get` accept that
+reference only when the current verified OAuth subject, client and resource
+match the Social Workspace owner binding. They first retain the signed binding
+used by ordinary uploaded-file jobs, then use the same principal's historical
+Social Workspace binding as a compatibility lookup. This keeps already queued
+jobs addressable without migrating assets or weakening cross-principal
+isolation. `ast_*` remains a social asset reference and is never valid input to
+`audio_transcription_start`.
+
 ## Configuration
 
 Required only when enabled:

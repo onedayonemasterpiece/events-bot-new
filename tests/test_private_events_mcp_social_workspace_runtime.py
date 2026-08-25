@@ -13,6 +13,8 @@ from typing import Any
 import pytest
 from PIL import Image
 
+from audio_transcription.job_store import JobOwnershipError
+from audio_transcription.mcp import build_audio_transcription_tools
 import private_events_mcp.social_workspace_runtime as runtime_module
 from private_events_mcp.auth_store import OAuthStateStore, OAuthStoreError
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
@@ -346,6 +348,40 @@ class FakeReadAudioService:
         assert values["view"] == "plain"
         return {"ready": True, "text": "external transcript"}
 
+
+class OwnerAwareReadAudioService(FakeReadAudioService):
+    """Synthetic service enforcing the real durable owner boundary."""
+
+    async def start_provider_transcription(self, **values):
+        result = await super().start_provider_transcription(**values)
+        self.jobs[values["idempotency_key"]]["owner_binding"] = values[
+            "owner_binding"
+        ]
+        return result
+
+    def _owned(self, job_ref, owner_binding):
+        job = next(value for value in self.jobs.values() if value["job_ref"] == job_ref)
+        if job["owner_binding"] != owner_binding:
+            raise JobOwnershipError("wrong owner")
+        return job
+
+    async def status(self, *, job_ref, owner_binding):
+        job = self._owned(job_ref, owner_binding)
+        return {
+            "job_ref": job_ref,
+            "state": "complete" if self.ready else job["state"],
+        }
+
+    async def get_result(self, *, job_ref, owner_binding, **values):
+        self._owned(job_ref, owner_binding)
+        assert values["view"] == "plain"
+        return {
+            "job_ref": job_ref,
+            "state": "complete",
+            "ready": True,
+            "text": "external transcript",
+        }
+
 @pytest.fixture
 def runtime(tmp_path: Path):
     adapter = FakeAdapter()
@@ -533,6 +569,70 @@ async def test_telegram_audio_read_ready_cache_dedup_and_safe_projection(tmp_pat
         and value["transcription"]["trust"] == "untrusted_external_data"
         for value in first["item"]["attachments"]
     )
+
+
+@pytest.mark.asyncio
+async def test_social_voice_batch_refs_are_readable_by_audio_status_and_get(
+    tmp_path: Path,
+) -> None:
+    """A multi-voice private read can finish through the public poll/get path."""
+
+    adapter = FakeTelegramAudioReadAdapter()
+    transcriber = OwnerAwareReadAudioService(ready=False)
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    runtime = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read", "telegram:publish")
+    principal = RuntimePrincipal.from_context(call_context)
+    item_ref = runtime._mint_ref(
+        "item", "itm_provider_private_voice_batch", "telegram", principal
+    )
+
+    read = await runtime.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "get_item",
+                "item_ref": item_ref,
+                "read_access": "private",
+            }
+        ),
+        call_context,
+    )
+    refs = [
+        attachment["transcription"]["transcription_ref"]
+        for attachment in read["item"]["attachments"]
+    ]
+    assert len(refs) == 2
+    assert all(
+        attachment["transcription"]["status"] == "queued"
+        for attachment in read["item"]["attachments"]
+    )
+
+    transcriber.ready = True
+    tools = {
+        tool.name: tool
+        for tool in build_audio_transcription_tools(
+            transcriber, signing_key="unit-test-key-that-is-long-enough"
+        )
+    }
+    transcripts = []
+    for job_ref in refs:
+        status = await tools["audio_transcription_status"].handler(
+            {"job_ref": job_ref}, call_context
+        )
+        result = await tools["audio_transcription_get"].handler(
+            {"job_ref": job_ref, "view": "plain"}, call_context
+        )
+        assert status["state"] == "complete"
+        assert result["ready"] is True
+        transcripts.append(result["text"])
+
+    assert transcripts == ["external transcript", "external transcript"]
 
 
 @pytest.mark.asyncio

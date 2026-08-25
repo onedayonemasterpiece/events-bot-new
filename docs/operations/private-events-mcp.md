@@ -328,6 +328,26 @@ IDs, access hashes, file references, provider/model details, auth/session data,
 URLs and paths. This internal path is authorized by the social read scope; it
 does not invoke or weaken the standalone `audio:transcribe`/publish tool gate.
 
+When the caller also has access to the standalone audio tools, the returned
+`atr_*` is accepted by `audio_transcription_status` and
+`audio_transcription_get` for the same verified OAuth
+subject/client/resource. Read-triggered jobs use the historical Social
+Workspace owner binding while uploaded-file jobs use the signed audio binding;
+status/get checks both bindings derived from the current authenticated context
+and still rejects another principal. Do not pass `ast_*` to
+`audio_transcription_start`: a social asset reference is neither ChatGPT
+`fileParams` nor a supported local/file reference.
+
+Transcription is intentionally asynchronous and serialized because the lane
+uses one dedicated Telegram session. `queued` is therefore a successful
+durable acceptance, not completed text. The monitor normally advances on the
+configured 20-second poll cadence, but a provider `Retry-After` is persisted
+and takes precedence across restarts. Clients must not busy-poll or invent a
+fixed completion deadline: inspect status at a bounded cadence, honor the
+reported durable state, call `audio_transcription_get` only after `complete`,
+or repeat the same high-level social read later to receive ready text from the
+cache. A multi-voice chat may take several serialized runs to finish.
+
 The Telegram MCP workspace continues to use only
 `TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP`. The remote transcription worker keeps
 its distinct configured `TELEGRAM_AUTH_BUNDLE_TRANSCRIPTION` lane; neither may
