@@ -7,6 +7,7 @@ import time
 from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -229,6 +230,118 @@ class FakeDocumentAdapter(FakeAdapter):
         assert role is MediaRole.DOCUMENT
         return "provider-document-binding"
 
+
+class FakeReadMediaAdapter(FakeAdapter):
+    """Return provider-owned media refs exactly as a social read adapter does."""
+
+    async def read(self, request):
+        if request.operation is SocialReadOperation.GET_ITEM:
+            return {
+                "item": {
+                    "item_ref": request.item_ref,
+                    "target_ref": "provider-target-media",
+                    "kind": "message",
+                    "published_at": "2026-08-24T12:00:00Z",
+                    "text": "album",
+                    "caption": "",
+                    "basic_metrics": {"views": 1},
+                    "media": [
+                        "ast_providerreadmedia000000000001",
+                        "ast_providerreadmedia000000000002",
+                    ],
+                    "trust": "untrusted_external_data",
+                },
+                "trust": "untrusted_external_data",
+            }
+        return await super().read(request)
+
+    async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+        assert asset_ref in {
+            "ast_providerreadmedia000000000001",
+            "ast_providerreadmedia000000000002",
+        }
+        assert len(owner_binding) == 64
+        assert self.asset_bytes is not None
+        assert len(self.asset_bytes) <= max_bytes
+        return self.asset_bytes
+
+
+class FakeTelegramAudioReadAdapter(FakeAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.downloads: list[str] = []
+        self.fail_ref: str | None = None
+
+    async def read(self, request):
+        refs = [
+            "ast_provider_voice_media_0000000001",
+            "ast_provider_voice_media_0000000002",
+        ]
+        return {
+            "item": {
+                "item_ref": request.item_ref,
+                "target_ref": "provider-target-audio",
+                "kind": "message",
+                "published_at": "2026-08-25T12:00:00Z",
+                "text": "voice batch",
+                "caption": "",
+                "basic_metrics": {"views": 0},
+                "media": refs,
+                "attachments": [
+                    {
+                        "asset_ref": ref,
+                        "kind": "voice",
+                        "mime_type": "audio/ogg",
+                        "byte_length": 16,
+                        "duration_seconds": float(index + 1),
+                        "binding_fingerprint": str(index + 1) * 64,
+                        "trust": "untrusted_external_data",
+                    }
+                    for index, ref in enumerate(refs)
+                ],
+                "trust": "untrusted_external_data",
+            },
+            "trust": "untrusted_external_data",
+        }
+
+    async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+        assert len(owner_binding) == 64
+        assert max_bytes >= 16
+        self.downloads.append(asset_ref)
+        if asset_ref == self.fail_ref:
+            raise RuntimeError("provider path /secret and access_hash")
+        return b"OggS" + b"\0" * 12
+
+
+class FakeReadAudioService:
+    def __init__(self, *, ready: bool = False) -> None:
+        self.config = SimpleNamespace(max_asset_bytes=1024)
+        self.ready = ready
+        self.jobs: dict[str, dict] = {}
+        self.starts = 0
+
+    async def start_provider_transcription(self, **values):
+        key = values["idempotency_key"]
+        existing = self.jobs.get(key)
+        if existing is not None:
+            return {**existing, "created": False}
+        self.starts += 1
+        await values["content_loader"]()
+        job = {
+            "job_ref": "atr_" + f"{self.starts:024d}",
+            "state": "complete" if self.ready else "queued",
+        }
+        self.jobs[key] = job
+        return {**job, "created": True}
+
+    async def status(self, *, job_ref, owner_binding):
+        assert len(owner_binding) == 64
+        return next(value for value in self.jobs.values() if value["job_ref"] == job_ref)
+
+    async def get_result(self, **values):
+        assert values["view"] == "plain"
+        return {"ready": True, "text": "external transcript"}
+
 @pytest.fixture
 def runtime(tmp_path: Path):
     adapter = FakeAdapter()
@@ -297,6 +410,202 @@ async def test_story_asset_preview_returns_bounded_mcp_image_not_provider_refere
     encoded = json.dumps(response)
     assert "provider-asset-story-42" not in encoded
     assert "download_url" not in encoded
+
+
+@pytest.mark.asyncio
+async def test_read_media_refs_are_outer_bound_and_each_can_be_previewed(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeReadMediaAdapter()
+    source = BytesIO()
+    Image.new("RGB", (640, 360), (30, 90, 150)).save(source, format="PNG")
+    adapter.asset_bytes = source.getvalue()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        provider_timeout_seconds=0.02,
+    )
+    call_context = scoped_context("telegram:read", "telegram:story:read")
+    principal = RuntimePrincipal.from_context(call_context)
+    target_ref = service._mint_ref(
+        "target", "provider-target-media", "telegram", principal
+    )
+    item_ref = service._mint_ref(
+        "item", "itm_providerreadmessage0000000001", "telegram", principal
+    )
+
+    item = await service.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "get_item",
+                "item_ref": item_ref,
+                "read_access": "private",
+            }
+        ),
+        call_context,
+    )
+
+    media_refs = item["item"]["media"]
+    assert len(media_refs) == 2
+    assert all(ref.startswith("ast_") for ref in media_refs)
+    assert not any(ref.startswith("ast_providerreadmedia") for ref in media_refs)
+    assert len(
+        store._connect()
+        .execute(
+            "SELECT ref_hash FROM social_workspace_ref WHERE ref_kind='asset'"
+        )
+        .fetchall()
+    ) == 2
+    for ref in media_refs:
+        preview = await service.asset_preview("telegram", ref, call_context)
+        assert preview.structured["mime_type"] == "image/jpeg"
+        assert preview.content[0]["type"] == "image"
+
+
+@pytest.mark.asyncio
+async def test_telegram_audio_read_ready_cache_dedup_and_safe_projection(tmp_path: Path) -> None:
+    adapter = FakeTelegramAudioReadAdapter()
+    transcriber = FakeReadAudioService(ready=True)
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    runtime = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+    principal = RuntimePrincipal.from_context(call_context)
+    item_ref = runtime._mint_ref(
+        "item", "itm_provider_audio_message_000001", "telegram", principal
+    )
+    request = validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "get_item",
+            "item_ref": item_ref,
+            "read_access": "private",
+        }
+    )
+
+    first = await runtime.read(request, call_context)
+    second = await runtime.read(request, call_context)
+
+    assert [value["transcription"]["status"] for value in first["item"]["attachments"]] == [
+        "ready",
+        "ready",
+    ]
+    assert all(
+        value["transcription"]["text"] == "external transcript"
+        for value in first["item"]["attachments"]
+    )
+    assert first["item"]["media"] == [
+        value["asset_ref"] for value in first["item"]["attachments"]
+    ]
+    assert all(
+        value["transcription"]["cache_hit"] is True
+        for value in second["item"]["attachments"]
+    )
+    assert len(adapter.downloads) == 2
+    assert transcriber.starts == 2
+    encoded = json.dumps([first, second], ensure_ascii=False)
+    for forbidden in (
+        "provider-target-audio",
+        "provider_voice_media",
+        "binding_fingerprint",
+        "access_hash",
+        "/secret",
+    ):
+        assert forbidden not in encoded
+        assert forbidden.encode() not in Path(store.path).read_bytes()
+    assert all(
+        value["trust"] == "untrusted_external_data"
+        and value["transcription"]["trust"] == "untrusted_external_data"
+        for value in first["item"]["attachments"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_telegram_audio_read_pending_failure_isolation_and_opt_out(tmp_path: Path) -> None:
+    adapter = FakeTelegramAudioReadAdapter()
+    adapter.fail_ref = "ast_provider_voice_media_0000000001"
+    transcriber = FakeReadAudioService(ready=False)
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    runtime = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+    principal = RuntimePrincipal.from_context(call_context)
+    item_ref = runtime._mint_ref(
+        "item", "itm_provider_audio_message_000002", "telegram", principal
+    )
+    common = {
+        "platform": "telegram",
+        "operation": "get_item",
+        "item_ref": item_ref,
+        "read_access": "private",
+    }
+
+    result = await runtime.read(validate_read_request(common), call_context)
+    statuses = [value["transcription"]["status"] for value in result["item"]["attachments"]]
+    assert statuses == ["failed", "queued"]
+    assert result["item"]["attachments"][0]["transcription"]["error_code"] == "TRANSCRIPTION_FAILED"
+    calls_before = (len(adapter.downloads), transcriber.starts)
+    disabled = await runtime.read(
+        validate_read_request({**common, "transcribe_audio": False}), call_context
+    )
+    assert calls_before == (len(adapter.downloads), transcriber.starts)
+    assert all("transcription" not in value for value in disabled["item"]["attachments"])
+
+
+@pytest.mark.asyncio
+async def test_telegram_audio_timeout_preserves_base_read_and_isolates_media(tmp_path: Path) -> None:
+    class SlowReadAudioService(FakeReadAudioService):
+        async def start_provider_transcription(self, **values):
+            await asyncio.sleep(0.05)
+            return await super().start_provider_transcription(**values)
+
+    adapter = FakeTelegramAudioReadAdapter()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    runtime = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        provider_timeout_seconds=0.01,
+    )
+    runtime.enable_audio_transcription(SlowReadAudioService())
+    call_context = scoped_context("telegram:read")
+    principal = RuntimePrincipal.from_context(call_context)
+    item_ref = runtime._mint_ref(
+        "item", "itm_provider_audio_timeout_000001", "telegram", principal
+    )
+
+    result = await runtime.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "get_item",
+                "item_ref": item_ref,
+                "read_access": "private",
+            }
+        ),
+        call_context,
+    )
+
+    assert result["item"]["text"] == "voice batch"
+    assert [
+        value["transcription"]["error_code"]
+        for value in result["item"]["attachments"]
+    ] == ["TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_TIMEOUT"]
+    assert all(
+        value["transcription"]["status"] == "failed"
+        for value in result["item"]["attachments"]
+    )
 
 
 @pytest.mark.asyncio
@@ -650,7 +959,7 @@ def test_vk_item_and_notification_tools_are_provider_and_scope_isolated(runtime)
             service, capability_policy={"telegram": True, "vk": False}
         )
     }
-    assert "social_item_resolve" not in telegram_only
+    assert "social_item_resolve" in telegram_only
     assert "social_comment_hints_list" not in telegram_only
     assert "social_dialogs_list" not in telegram_only
 

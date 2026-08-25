@@ -205,6 +205,59 @@ def _editorial_state(request, **updates: Any) -> EditorialSampleState:
     return replace(state, **updates)
 
 
+def test_telegram_item_link_and_audio_flag_are_optional_compatible_additions() -> None:
+    base = {
+        "platform": "telegram",
+        "operation": "resolve_item",
+        "target_locator": {
+            "kind": "profile_link",
+            "value": "https://t.me/example_channel/42",
+        },
+        "read_access": "public",
+    }
+    validate(base, SOCIAL_WORKSPACE_READ_SCHEMA)
+    assert validate_read_request(base).transcribe_audio is True
+    disabled = {**base, "transcribe_audio": False}
+    validate(disabled, SOCIAL_WORKSPACE_READ_SCHEMA)
+    assert validate_read_request(disabled).transcribe_audio is False
+    assert "transcribe_audio" not in SOCIAL_WORKSPACE_READ_SCHEMA["required"]
+
+
+def test_item_output_schema_accepts_additive_safe_audio_details() -> None:
+    payload = {
+        "item": {
+            "item_ref": ITEM_REF,
+            "target_ref": TARGET_REF,
+            "kind": "message",
+            "published_at": "2026-08-25T12:00:00Z",
+            "text": "",
+            "caption": "",
+            "basic_metrics": {"views": 0},
+            "media": [ASSET_REF],
+            "attachments": [
+                {
+                    "asset_ref": ASSET_REF,
+                    "kind": "voice",
+                    "mime_type": "audio/ogg",
+                    "byte_length": 12,
+                    "duration_seconds": 1.5,
+                    "transcription": {
+                        "status": "ready",
+                        "transcription_ref": "atr_" + "x" * 24,
+                        "text": "external transcript",
+                        "cache_hit": True,
+                        "trust": "untrusted_external_data",
+                    },
+                    "trust": "untrusted_external_data",
+                }
+            ],
+            "trust": "untrusted_external_data",
+        },
+        "trust": "untrusted_external_data",
+    }
+    validate(payload, SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA)
+
+
 def _approval_grant(context: ApprovalContext, **updates: Any) -> ApprovalGrant:
     grant = ApprovalGrant(
         approval_ref=APPROVAL_REF,

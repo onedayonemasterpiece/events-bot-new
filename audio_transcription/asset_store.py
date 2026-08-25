@@ -634,6 +634,131 @@ class AudioAssetStore:
             _path=final_path,
         )
 
+    def ingest_provider_media(
+        self,
+        content: bytes | bytearray | memoryview | Any,
+        *,
+        owner_binding: str,
+        provider_fingerprint: str,
+        mime_type: str | None = None,
+        display_name: str | None = None,
+    ) -> VerifiedAudioAsset:
+        """Ingest trusted provider bytes without fabricating a URL or fileParams.
+
+        ``provider_fingerprint`` is an authenticated, non-reversible identity
+        produced inside the Telegram adapter.  It is owner-bound in this store
+        and used only for cache lookup; native provider identifiers are never
+        persisted in request JSON or returned to callers.
+        """
+
+        if not isinstance(provider_fingerprint, str) or re.fullmatch(
+            r"[0-9a-f]{64}", provider_fingerprint
+        ) is None:
+            raise AudioAssetRejected("AUDIO_REF_UNRESOLVED", "invalid provider media identity")
+        owner_mac = self._owner_mac(owner_binding)
+        file_id_mac = self._file_id_mac("provider:" + provider_fingerprint)
+        now = int(self._clock())
+        with self._lock, self._db() as db:
+            row = db.execute(
+                """SELECT storage_ref FROM audio_assets
+                   WHERE owner_mac=? AND file_id_mac=? AND expires_at>?
+                   ORDER BY created_at DESC LIMIT 1""",
+                (owner_mac, file_id_mac, now),
+            ).fetchone()
+        if row:
+            return self.reverify(str(row[0]), owner_binding=owner_binding)
+
+        declared = _normalise_mime(mime_type)
+        if declared not in _GENERIC_MIMES and declared not in _ALLOWED_DECLARED_MIMES:
+            raise AudioAssetRejected("AUDIO_MIME_NOT_ALLOWED", "declared MIME is not audio")
+        if isinstance(content, (bytes, bytearray, memoryview)):
+            chunks: Any = (bytes(content),)
+        elif callable(getattr(content, "read", None)):
+            chunks = iter(lambda: content.read(256 * 1024), b"")
+        else:
+            raise AudioAssetRejected("AUDIO_FILE_INVALID", "provider media is not a byte stream")
+
+        temp_fd, temp_name = tempfile.mkstemp(prefix=".provider-ingress-", dir=self.root)
+        temp_path = Path(temp_name)
+        digest = hashlib.sha256()
+        header = bytearray()
+        length = 0
+        try:
+            os.fchmod(temp_fd, 0o600)
+            for chunk in chunks:
+                if not isinstance(chunk, (bytes, bytearray, memoryview)):
+                    raise AudioAssetRejected("AUDIO_FILE_INVALID", "provider stream returned invalid bytes")
+                data = bytes(chunk)
+                if not data:
+                    continue
+                length += len(data)
+                if length > self._max_asset_bytes:
+                    raise AudioAssetRejected("AUDIO_FILE_TOO_LARGE", "audio exceeds byte limit")
+                if len(header) < 65_536:
+                    header.extend(data[: 65_536 - len(header)])
+                digest.update(data)
+                _write_all(temp_fd, data)
+            os.fsync(temp_fd)
+        except BaseException:
+            temp_path.unlink(missing_ok=True)
+            raise
+        finally:
+            os.close(temp_fd)
+        if length <= 0:
+            temp_path.unlink(missing_ok=True)
+            raise AudioAssetRejected("AUDIO_FILE_INVALID", "audio is empty")
+        detected = detect_audio_mime(bytes(header))
+        compatible = {
+            "audio/mp4": {"audio/m4a", "audio/mp4", "audio/x-m4a", "video/mp4"},
+            "audio/mpeg": {"audio/mp3", "audio/mpeg"},
+            "audio/wav": {"audio/wav", "audio/wave", "audio/x-wav"},
+            "audio/ogg": {"audio/ogg", "audio/opus"},
+            "audio/webm": {"audio/webm", "video/webm"},
+        }
+        if detected is None:
+            temp_path.unlink(missing_ok=True)
+            raise AudioAssetRejected("AUDIO_FILE_INVALID", "unsupported audio container")
+        if declared not in _GENERIC_MIMES and declared not in compatible.get(
+            detected, {detected}
+        ):
+            temp_path.unlink(missing_ok=True)
+            raise AudioAssetRejected("AUDIO_MIME_MISMATCH", "audio MIME does not match bytes")
+
+        suffix = _MIME_SUFFIX[detected]
+        safe_name = _safe_display_name(display_name, suffix=suffix)
+        storage_ref = "aud_" + secrets.token_urlsafe(32)
+        final_name = secrets.token_hex(32) + ".asset"
+        final_path = self.root / final_name
+        expires_at = now + self._ttl_seconds
+        with self._lock, self._db() as db:
+            self._cleanup_expired_locked(db, now=now)
+            if self._capacity_bytes(db) + length > self._max_store_bytes:
+                temp_path.unlink(missing_ok=True)
+                raise AudioAssetRejected("AUDIO_STORE_FULL", "audio store capacity exceeded")
+            os.replace(temp_path, final_path)
+            os.chmod(final_path, 0o400)
+            db.execute(
+                """INSERT INTO audio_assets(
+                   storage_ref,filename,owner_mac,file_id_mac,sha256,mime_type,
+                   byte_length,display_name,suffix,created_at,expires_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    storage_ref, final_name, owner_mac, file_id_mac,
+                    digest.hexdigest(), detected, length, safe_name, suffix,
+                    now, expires_at,
+                ),
+            )
+        return VerifiedAudioAsset(
+            storage_ref=storage_ref,
+            content_digest=digest.hexdigest(),
+            mime_type=detected,
+            byte_length=length,
+            expires_at=expires_at,
+            display_name=safe_name,
+            suffix=suffix,
+            _path=final_path,
+        )
+
     def _load_row(self, storage_ref: str) -> tuple[Any, ...]:
         if not _REF_RE.fullmatch(str(storage_ref or "")):
             raise AudioAssetNotFound("unknown audio reference")

@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+- Added: private `eventsBot` MCP Telegram reads now resolve canonical public and
+  private message links, classify voice/audio/photo/video/round-video/
+  animation/document media into additive safe attachment details, and preserve
+  `media[]` as principal-bound opaque asset refs. When the existing audio
+  pipeline is enabled, high-level reads default to cache-first owner-bound
+  voice/audio transcription with optional `transcribe_audio=false`, ready or
+  opaque pending status, repeat-read deduplication and per-attachment failure
+  isolation. Native/provider/session/path data remains excluded; VK exact-link,
+  audio-first tool order, OAuth/resource identity and automatic reconnect
+  contracts remain unchanged.
+
+- Fixed: private `eventsBot` MCP social reads now replace provider-internal
+  strings nested in `media[]` with principal-bound outer asset refs, so every
+  returned Telegram image can be passed directly to `social_asset_preview`
+  instead of failing as unbound. Telegram `grouped_id` albums are projected as
+  one logical feed item with all images in order, and exact-item reads expand
+  the complete bounded album. Added the regression contract for
+  `INC-2026-08-24-mcp-telegram-album-media-ref`; production rollout and live
+  acceptance remain pending the ordinary reviewed release path.
+
 - Fixed: VK typed lifecycle replay now treats a supplied title as a mandatory
   identity anchor, recognizes already-rescheduled targets on the new date and
   already-cancelled/postponed targets in their terminal state, and cannot

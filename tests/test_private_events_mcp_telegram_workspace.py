@@ -304,8 +304,20 @@ class FakeRefs:
         return binding
 
     def mint_read_asset(self, *, target_ref, media, role):
-        del target_ref, media, role
-        return ASSET_REF
+        del target_ref
+        existing = next(
+            (
+                ref
+                for ref, binding in self.assets.items()
+                if binding.provider_media is media and binding.role is role
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing
+        ref = f"ast_readmedia{len(self.assets):08d}"
+        self.assets[ref] = TelegramAssetBinding(ref, role, media)
+        return ref
 
     def mint_upload_asset(self, *, role, upload):
         assert isinstance(upload, TelegramVerifiedUpload)
@@ -419,6 +431,8 @@ class FakeClient:
         self.messages[CHANNEL_REF].append(Message(500, "root"))
         self.raise_on: str | None = None
         self.delay = 0.0
+        self.global_search_messages = None
+        self.comment_messages = None
 
     async def connect(self):
         self.connected = True
@@ -542,9 +556,14 @@ class FakeClient:
             return SimpleNamespace(chats=[self.refs.targets[DEST_REF].entity])
         if name == "global_search":
             entity = self.refs.targets[CHANNEL_REF].entity
-            return SimpleNamespace(messages=[Message(801, "needle", entity=entity)])
+            return SimpleNamespace(
+                messages=self.global_search_messages
+                or [Message(801, "needle", entity=entity)]
+            )
         if name == "comments":
-            return SimpleNamespace(messages=[Message(701, "comment")])
+            return SimpleNamespace(
+                messages=self.comment_messages or [Message(701, "comment")]
+            )
         if name == "peer_stories":
             story = Message(601, "")
             story.caption = "story"
@@ -1127,7 +1146,9 @@ async def test_editorial_sample_reaches_100_only_in_pages_of_25_with_description
 
 @pytest.mark.asyncio
 async def test_normalized_results_pass_core_capability_and_editorial_validators(harness):
-    adapter, _, _, _ = harness
+    adapter, client, _, _ = harness
+    media_message = client.messages[CHANNEL_REF][0]
+    media_message.media = SimpleNamespace(photo=SimpleNamespace(id=7001))
     capabilities = await adapter.capabilities(CHANNEL_REF)
     validated = validate_capabilities(capabilities)
     assert validated.target_ref == CHANNEL_REF
@@ -1157,6 +1178,9 @@ async def test_normalized_results_pass_core_capability_and_editorial_validators(
         durable_index=False,
     )
     assert validate_editorial_sample_response(request, state, response) == 25
+    assert all("media" not in item for item in response["items"])
+    assert all("attachments" not in item for item in response["items"])
+    assert all("media_details" not in item for item in response["items"])
 
 
 @pytest.mark.asyncio
@@ -1180,6 +1204,233 @@ async def test_dialog_search_target_history_and_global_keyword_search_are_bounde
     )
     assert global_results["results"][0]["text"] == "needle"
     assert "peer_id" not in repr(global_results)
+
+
+@pytest.mark.asyncio
+async def test_telegram_album_is_one_item_with_every_ordered_image_ref(harness):
+    adapter, client, refs, _ = harness
+    first_album = []
+    for message_id, text in ((7102, "album caption"), (7103, ""), (7104, "")):
+        message = Message(message_id, text)
+        message.grouped_id = 987654321
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        first_album.append(message)
+    second_album = []
+    for message_id, text in ((7099, "second album"), (7100, "")):
+        message = Message(message_id, text)
+        message.grouped_id = 987654320
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        second_album.append(message)
+    client.messages[CHANNEL_REF] = [
+        *reversed(first_album),
+        *reversed(second_album),
+        Message(7098, "older post"),
+    ]
+
+    feed = await adapter.read(
+        read_request(SocialReadOperation.LIST_ITEMS, target_ref=CHANNEL_REF, limit=2)
+    )
+
+    assert len(feed["results"]) == 2
+    assert feed["results"][0]["text"] == "album caption"
+    assert feed["results"][1]["text"] == "second album"
+    assert [len(item["media"]) for item in feed["results"]] == [3, 2]
+    media_ids = [
+        [refs.assets[ref].provider_media.photo.id for ref in item["media"]]
+        for item in feed["results"]
+    ]
+    assert media_ids == [[7102, 7103, 7104], [7099, 7100]]
+
+
+@pytest.mark.asyncio
+async def test_global_search_and_comments_do_not_split_media_groups(harness):
+    adapter, client, _, _ = harness
+    channel = client.refs.targets[CHANNEL_REF].entity
+
+    search_album = []
+    for message_id, text in ((7201, "needle album"), (7202, ""), (7203, "")):
+        message = Message(message_id, text, entity=channel)
+        message.grouped_id = 88001
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        search_album.append(message)
+    client.global_search_messages = [*reversed(search_album), Message(7199, "needle", entity=channel)]
+
+    search = await adapter.read(
+        read_request(SocialReadOperation.SEARCH_ITEMS, query="needle", limit=2)
+    )
+    assert len(search["results"]) == 2
+    assert search["results"][0]["text"] == "needle album"
+    assert len(search["results"][0]["media"]) == 3
+    global_call = next(values for name, values in client.calls if name == "global_search")
+    assert global_call["limit"] >= 21
+
+    comment_album = []
+    for message_id, text in ((7301, "comment album"), (7302, ""), (7303, "")):
+        message = Message(message_id, text)
+        message.grouped_id = 88002
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        comment_album.append(message)
+    client.comment_messages = [*reversed(comment_album), Message(7299, "another")]
+
+    comments = await adapter.read(
+        read_request(SocialReadOperation.LIST_COMMENTS, item_ref=ITEM_REF, limit=2)
+    )
+    assert len(comments["items"]) == 2
+    assert comments["items"][0]["text"] == "comment album"
+    assert len(comments["items"][0]["media"]) == 3
+    comments_call = next(values for name, values in client.calls if name == "comments")
+    assert comments_call["limit"] >= 21
+
+
+@pytest.mark.asyncio
+async def test_telegram_get_item_expands_album_even_from_one_member(harness):
+    adapter, client, refs, _ = harness
+    album = []
+    for message_id, text in ((7102, "album caption"), (7103, ""), (7104, "")):
+        message = Message(message_id, text)
+        message.grouped_id = 11223344
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message_id))
+        album.append(message)
+    client.messages[CHANNEL_REF] = [*reversed(album), Message(7101, "older")]
+    item_ref = refs.mint_item(target_ref=CHANNEL_REF, message_id=7103).item_ref
+
+    response = await adapter.read(
+        read_request(SocialReadOperation.GET_ITEM, item_ref=item_ref)
+    )
+
+    assert response["item"]["text"] == "album caption"
+    assert len(response["item"]["media"]) == 3
+    assert [
+        refs.assets[ref].provider_media.photo.id
+        for ref in response["item"]["media"]
+    ] == [7102, 7103, 7104]
+
+
+@pytest.mark.asyncio
+async def test_telegram_public_and_private_message_links_resolve_exact_item(harness):
+    adapter, client, refs, _ = harness
+    public = await adapter.read(
+        read_request(
+            SocialReadOperation.RESOLVE_ITEM,
+            target_locator=TargetLocator(
+                TargetLocatorKind.PROFILE_LINK,
+                "https://t.me/editorial/500",
+            ),
+            read_access=SocialReadAccess.PUBLIC,
+        )
+    )
+    assert public["item"]["item_ref"].startswith("itm_")
+    assert public["source_target"]["target_ref"] == CHANNEL_REF
+
+    channel = refs.targets[CHANNEL_REF].entity
+
+    async def private_entity(value):
+        assert value == -100100
+        return channel
+
+    client.get_entity = private_entity
+    private = await adapter.read(
+        read_request(
+            SocialReadOperation.RESOLVE_ITEM,
+            target_locator=TargetLocator(
+                TargetLocatorKind.PROFILE_LINK,
+                "https://t.me/c/100/500",
+            ),
+            read_access=SocialReadAccess.PRIVATE,
+        )
+    )
+    assert private["item"]["item_ref"].startswith("itm_")
+    assert "message_id" not in repr(private)
+
+
+@pytest.mark.asyncio
+async def test_telegram_message_link_rejects_malformed_and_unavailable(harness):
+    adapter, client, _, _ = harness
+    malformed = read_request(
+        SocialReadOperation.RESOLVE_ITEM,
+        target_locator=TargetLocator(
+            TargetLocatorKind.PROFILE_LINK,
+            "https://t.me/editorial/not-a-message",
+        ),
+        read_access=SocialReadAccess.PUBLIC,
+    )
+    with pytest.raises(SocialWorkspaceValidationError, match="not canonical"):
+        await adapter.read(malformed)
+
+    async def unavailable(_entity, *, ids):
+        del ids
+        return None
+
+    client.get_messages = unavailable
+    with pytest.raises(TelegramWorkspaceError) as caught:
+        await adapter.read(
+            replace(
+                malformed,
+                target_locator=TargetLocator(
+                    TargetLocatorKind.PROFILE_LINK,
+                    "https://t.me/editorial/999",
+                ),
+            )
+        )
+    assert "999" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_telegram_media_details_classify_actual_document_attributes(harness):
+    adapter, client, refs, _ = harness
+
+    def attribute(name, **values):
+        result = type(name, (), {})()
+        for key, value in values.items():
+            setattr(result, key, value)
+        return result
+
+    cases = [
+        ("voice", "audio/ogg", [attribute("DocumentAttributeAudio", voice=True, duration=4)]),
+        ("audio", "audio/mpeg", [attribute("DocumentAttributeAudio", voice=False, duration=5)]),
+        ("video", "video/mp4", [attribute("DocumentAttributeVideo", round_message=False, duration=6)]),
+        ("round_video", "video/mp4", [attribute("DocumentAttributeVideo", round_message=True, duration=7)]),
+        ("animation", "video/mp4", [attribute("DocumentAttributeAnimated")]),
+        ("document", "application/pdf", []),
+    ]
+    messages = []
+    for offset, (kind, mime, attributes) in enumerate(cases, start=1):
+        message = Message(2000 + offset, kind)
+        document = SimpleNamespace(
+            id=3000 + offset,
+            access_hash=4000 + offset,
+            file_reference=b"synthetic",
+            mime_type=mime,
+            size=100 + offset,
+            attributes=attributes,
+        )
+        message.media = SimpleNamespace(document=document)
+        message.document = document
+        messages.append(message)
+    photo = Message(2010, "photo")
+    photo.media = SimpleNamespace(photo=SimpleNamespace(id=3010))
+    messages.append(photo)
+    client.messages[CHANNEL_REF] = list(reversed(messages))
+
+    page = await adapter.read(
+        read_request(
+            SocialReadOperation.LIST_ITEMS,
+            target_ref=CHANNEL_REF,
+            limit=len(messages),
+        )
+    )
+    observed = {item["text"]: item["attachments"][0]["kind"] for item in page["results"]}
+    assert observed == {
+        "voice": "voice",
+        "audio": "audio",
+        "video": "video",
+        "round_video": "round_video",
+        "animation": "animation",
+        "document": "document",
+        "photo": "photo",
+    }
+    assert all(len(item["media"]) == 1 for item in page["results"])
+    assert all(ref in refs.assets for item in page["results"] for ref in item["media"])
 
 
 @pytest.mark.asyncio

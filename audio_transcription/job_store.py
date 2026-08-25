@@ -172,6 +172,21 @@ class AudioJobStore:
             raise JobOwnershipError("transcription job belongs to another principal")
         return job
 
+    def find_by_idempotency(
+        self, *, owner_binding: str, idempotency_key: str
+    ) -> TranscriptionJob | None:
+        if not _OWNER_RE.fullmatch(owner_binding) or not _IDEMPOTENCY_RE.fullmatch(
+            idempotency_key
+        ):
+            raise ValueError("invalid transcription lookup binding")
+        with self._lock, self._db() as db:
+            row = db.execute(
+                """SELECT * FROM audio_transcription_job
+                   WHERE owner_binding=? AND idempotency_key=?""",
+                (owner_binding, idempotency_key),
+            ).fetchone()
+        return self._from_row(row) if row is not None else None
+
     def update(
         self,
         job_ref: str,

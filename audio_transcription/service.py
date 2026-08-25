@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import shutil
@@ -50,6 +51,7 @@ class AudioTranscriptionService:
         self._monitor_task: asyncio.Task[None] | None = None
         self._dispatch_lock = asyncio.Semaphore(1)
         self._reconcile_locks: dict[str, asyncio.Lock] = {}
+        self._provider_ingress_locks: dict[str, asyncio.Lock] = {}
         self._last_retention_cleanup = 0.0
         self._closed = False
 
@@ -160,6 +162,96 @@ class AudioTranscriptionService:
                 "display_name": asset.display_name,
             },
         }
+
+    async def start_provider_transcription(
+        self,
+        *,
+        owner_binding: str,
+        idempotency_key: str,
+        provider_fingerprint: str,
+        content_loader: Any,
+        mime_type: str | None,
+    ) -> dict[str, Any]:
+        """Internal Telegram-media ingress using authenticated bytes only."""
+
+        lock_key = owner_binding + "\0" + idempotency_key
+        lock = self._provider_ingress_locks.setdefault(lock_key, asyncio.Lock())
+        async with lock:
+            return await self._start_provider_transcription_locked(
+                owner_binding=owner_binding,
+                idempotency_key=idempotency_key,
+                provider_fingerprint=provider_fingerprint,
+                content_loader=content_loader,
+                mime_type=mime_type,
+            )
+
+    async def _start_provider_transcription_locked(
+        self,
+        *,
+        owner_binding: str,
+        idempotency_key: str,
+        provider_fingerprint: str,
+        content_loader: Any,
+        mime_type: str | None,
+    ) -> dict[str, Any]:
+
+        existing = self.job_store.find_by_idempotency(
+            owner_binding=owner_binding,
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            if existing.state is JobState.QUEUED:
+                self._schedule_dispatch(existing)
+            return {**existing.public_dict(), "created": False}
+
+        content = content_loader()
+        if inspect.isawaitable(content):
+            content = await content
+        asset = await asyncio.to_thread(
+            self.asset_store.ingest_provider_media,
+            content,
+            owner_binding=owner_binding,
+            provider_fingerprint=provider_fingerprint,
+            mime_type=mime_type,
+            display_name="telegram-audio",
+        )
+        request_core = {
+            "precision": Precision.PHRASE.value,
+            "timezone": "Europe/Kaliningrad",
+            "recording_started_at": None,
+            "language": "ru",
+            "source_sha256": asset.content_digest,
+            "source_name": asset.display_name,
+            "source_suffix": asset.suffix,
+            "source_binding": hashlib.sha256(
+                provider_fingerprint.encode("ascii")
+            ).hexdigest(),
+        }
+        request = {
+            **request_core,
+            "request_fingerprint": self._fingerprint_request(request_core),
+        }
+        try:
+            job, created = self.job_store.create(
+                owner_binding=owner_binding,
+                idempotency_key=idempotency_key,
+                asset_ref=asset.storage_ref,
+                request=request,
+            )
+        except Exception:
+            try:
+                self.asset_store.delete(asset.storage_ref, owner_binding=owner_binding)
+            except Exception:
+                pass
+            raise
+        if not created and job.asset_ref != asset.storage_ref:
+            try:
+                self.asset_store.delete(asset.storage_ref, owner_binding=owner_binding)
+            except Exception:
+                pass
+        elif job.state is JobState.QUEUED:
+            self._schedule_dispatch(job)
+        return {**job.public_dict(), "created": created}
 
     def _schedule_dispatch(self, job: TranscriptionJob) -> None:
         existing = self._tasks.get(job.job_ref)
@@ -329,6 +421,14 @@ class AudioTranscriptionService:
 
     async def status(self, *, job_ref: str, owner_binding: str) -> dict[str, Any]:
         job = self.job_store.get(job_ref, owner_binding=owner_binding)
+        # A provider-read ingress schedules dispatch on the same event loop and
+        # immediately asks for status.  Give an already-runnable dispatch one
+        # scheduling turn so an instant backend can advance to RUNNING and be
+        # reconciled below.  This is not a polling delay and does not hold the
+        # high-level read open for a remote Kaggle run.
+        if job.state in {JobState.QUEUED, JobState.DISPATCHING}:
+            await asyncio.sleep(0)
+            job = self.job_store.get(job_ref, owner_binding=owner_binding)
         if job.state is JobState.RUNNING:
             job = await self._reconcile_job(job)
         payload = job.public_dict()

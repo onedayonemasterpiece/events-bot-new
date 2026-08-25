@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-24-mcp-telegram-album-media-ref.md`
+  - Scope: private eventsBot MCP outer media-reference binding, Telegram
+    `grouped_id` album reads, and `social_asset_preview` image materialization.
+  - Must not regress: every image ref returned by a social content read must be
+    principal-bound and immediately previewable; two Telegram albums must stay
+    two logical items with all ordered images, and exact-item reads must expand
+    the selected album member to the complete album.
 - `INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost.md`
   - Scope: VK lifecycle replay candidate identity, promo Telegram source-date
     consistency, and production repair/catch-up for events `8257`/`8258` and

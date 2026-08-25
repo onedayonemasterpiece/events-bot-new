@@ -523,7 +523,15 @@ def build_social_workspace_tools(
         "publicly_discoverable": False,
         "cacheable": False,
         "open_world": True,
-        "timeout_seconds": runtime.provider_timeout_seconds,
+        # A read performs one provider call and may then spend one separately
+        # bounded provider-timeout budget on trusted audio enrichment.  The
+        # outer protocol deadline must cover both phases so a slow attachment
+        # is projected as a per-media failure instead of cancelling the base
+        # message/thread response.
+        "timeout_seconds": max(
+            5.0,
+            runtime.provider_timeout_seconds * 2.0 + 2.0,
+        ),
     }
     specs = [
         ToolSpec("social_capabilities", "Social capabilities",
@@ -536,7 +544,7 @@ def build_social_workspace_tools(
                  SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_item_resolve", "Resolve exact social item",
-                 "Resolve one canonical VK post URL to bound item and source-target references.",
+                 "Resolve one canonical VK or Telegram message URL to bound item and source-target references.",
                  read_schema(SocialReadOperation.RESOLVE_ITEM),
                  SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
@@ -662,7 +670,6 @@ def build_social_workspace_tools(
     }
     provider_tools = {
         "social_dialogs_list": "vk",
-        "social_item_resolve": "vk",
         "social_comment_hints_list": "vk",
     }
 
@@ -707,6 +714,9 @@ def build_social_workspace_tools(
         "social_capabilities": discovery_options,
         "social_target_resolve": discovery_options,
         "social_item_resolve": (
+            frozenset({"telegram:read:public"}),
+            frozenset({"telegram:read:private"}),
+            frozenset({"telegram:read"}),
             frozenset({"vk:read:public"}),
             frozenset({"vk:read"}),
         ),

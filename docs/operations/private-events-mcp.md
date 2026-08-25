@@ -128,7 +128,7 @@ matching its granted scopes and the enabled provider/capability flags:
 |---|---|
 | `social_capabilities` | current provider, target and action capabilities |
 | `social_target_resolve` | resolve Saved/self, exact person, channel/group/community or known provider reference into an opaque bound ref |
-| `social_item_resolve` | resolve one canonical VK wall-post URL into bound item and source-target refs |
+| `social_item_resolve` | resolve one canonical VK wall-post URL or public/private Telegram message URL into bound item and source-target refs |
 | `social_targets_search` | bounded target search |
 | `social_targets_list` | bounded public/managed target discovery |
 | `social_dialogs_list` | VK-only metadata list of all or unread dialogs: opaque target, display name, kind and unread count, with no message body/native peer ID |
@@ -275,6 +275,60 @@ they still require HTTPS, public DNS, no userinfo and no redirects, and the
 provider URL is never returned to the MCP client.
 Viewer names, profile/user IDs, recent-viewer lists and other viewer identities
 are excluded; the adapters do not mark stories read or call viewer-list methods.
+
+Ordinary Telegram message reads use the same materialization boundary. Every
+provider-owned media token in a returned `media` array is replaced by a fresh
+principal/provider-bound outer `ast_*` reference before it crosses MCP; the
+adapter token is never usable as a public reference even though both tokens
+share the same syntactic prefix. Each returned image ref must therefore be
+accepted immediately by `social_asset_preview` for that same principal. A
+Telegram `grouped_id` media album is one logical feed item: up to ten members
+are returned in Telegram order, do not consume separate page slots, and an
+exact-item read from any member expands the complete bounded album.
+
+Telegram item resolution accepts only canonical public message links and
+canonical private `/c/` message links. Public links require public-read access;
+private links require private-read access. Malformed, inaccessible or
+target-mismatched links fail with a sanitized social-provider error. The public
+response contains only principal-bound `tgt_*`, `itm_*` and `ast_*` references;
+the native peer/message values used for the exact Telethon lookup never cross
+the adapter boundary. The VK exact wall-link path remains unchanged.
+
+Message/feed/search/thread results retain `media` as the ordered array of
+opaque outer asset refs. They may add `attachments` (and the closed schema also
+reserves `media_details`) with the corresponding asset ref, safe MIME/size/
+duration metadata, and one of `voice`, `audio`, `photo`, `video`,
+`round_video`, `animation` or `document`. Classification is derived from fixed
+Telethon media/document structures, attributes and MIME, never from message
+text.
+
+When the existing audio-transcription capability is active, high-level
+Telegram reads default `transcribe_audio=true`. Voice and ordinary audio
+attachments are enriched in the same response through the existing
+`AudioTranscriptionService`, `AudioAssetStore`, `AudioJobStore`, Kaggle backend
+and Telegram-native worker. `transcribe_audio=false` skips byte ingress and job
+creation while retaining media metadata. Provider bytes enter an internal
+trusted ingress directly; the server never fabricates a ChatGPT `fileParams`
+object, provider URL, native file identifier or filesystem path.
+
+Read-triggered jobs are bound to the authenticated principal and an HMAC of the
+target/item/media identity, then verified against the content SHA-256. A repeat
+read checks the durable job before downloading, so it neither downloads the
+same media nor creates a second job. Fast completion projects `status=ready`
+and bounded transcript text; otherwise the attachment carries
+`queued|running` plus an opaque `atr_*` `transcription_ref`. A later identical
+read projects the completed text automatically. One attachment failure is a
+typed per-attachment `failed` result and cannot fail sibling media or the
+message/thread page. Transcript text and attachment metadata carry the exact
+`untrusted_external_data` marker. Responses, errors and audit exclude native
+IDs, access hashes, file references, provider/model details, auth/session data,
+URLs and paths. This internal path is authorized by the social read scope; it
+does not invoke or weaken the standalone `audio:transcribe`/publish tool gate.
+
+The Telegram MCP workspace continues to use only
+`TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP`. The remote transcription worker keeps
+its distinct configured `TELEGRAM_AUTH_BUNDLE_TRANSCRIPTION` lane; neither may
+borrow the local E2E or monitoring bundle.
 
 An image story uses the existing typed `story` action with exactly one ready
 image `asset_ref` and one opaque target. Preparation freezes the exact target,
@@ -852,7 +906,10 @@ Record all of the following without secrets:
     new chat sees the enabled image/story/document tools; endpoint,
     client/resource/audience, signing identity
     and connector name are unchanged, while Codex still lists exactly seven
-    evidence tools and no social/file tool;
+    evidence tools and no social/file tool. When audio transcription is
+    enabled, `audio_transcription_start`, `audio_transcription_status` and
+    `audio_transcription_get` remain positions 1–3 without dropping or renaming
+    any existing tool;
 17. one ChatGPT-selected image stages through `fileParams`; status reports the
     server-detected MIME, exact size, SHA-256, dimensions and expiry, and neither
     the response nor logs/artifacts contain its download URL, file ID/name or
@@ -884,6 +941,14 @@ Record all of the following without secrets:
     actual downloadable Telegram document, one-attempt count, negative probe
     and file-send off/on rollback probe all pass without secret/path/native-ID
     disclosure.
+23. a sanitized public and private Telegram item-link canary resolves through
+    `social_item_resolve`; a voice-bearing `social_content_item` response keeps
+    an outer `media[]` ref, safe attachment metadata and either ready text or an
+    opaque queued/running transcription ref. A repeat read is a cache hit with
+    no second provider download/job, `transcribe_audio=false` makes no ingress,
+    sibling audio failures stay isolated, and response/log/audit contain no
+    native/provider/session/path data. The existing connector reconnects only
+    through the normal service restart path and is never deleted/re-added.
 
 Rollback order: first turn
 `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=0` for a document-only

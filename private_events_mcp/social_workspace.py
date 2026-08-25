@@ -387,6 +387,7 @@ class SocialReadRequest:
     expected_target_kinds: tuple[SocialTargetKind, ...]
     authorization_basis: EditorialAuthorizationBasis | None = None
     unread_only: bool = False
+    transcribe_audio: bool = True
 
     @property
     def required_scopes(self) -> frozenset[str]:
@@ -823,6 +824,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             "page_size", "total_limit", "read_access", "expected_target_kinds",
             "authorization_basis",
             "unread_only",
+            "transcribe_audio",
         },
         "request",
     )
@@ -899,6 +901,9 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
     unread_only = data.get("unread_only", False)
     if type(unread_only) is not bool:
         raise SocialWorkspaceValidationError("unread_only must be a boolean")
+    transcribe_audio = data.get("transcribe_audio", True)
+    if type(transcribe_audio) is not bool:
+        raise SocialWorkspaceValidationError("transcribe_audio must be a boolean")
 
     if operation is SocialReadOperation.RESOLVE_TARGET:
         if target_locator is None:
@@ -912,17 +917,20 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
                 "exact target resolution must expect one non-self target kind"
             )
     elif operation is SocialReadOperation.RESOLVE_ITEM:
-        if (
-            platform is not SocialPlatform.VK
-            or target_locator is None
-            or target_locator.kind is not TargetLocatorKind.PROFILE_LINK
-        ):
+        if target_locator is None or target_locator.kind is not TargetLocatorKind.PROFILE_LINK:
             raise SocialWorkspaceValidationError(
-                "exact item resolution requires one canonical VK post link"
+                "exact item resolution requires one canonical item link"
             )
-        if read_access is not SocialReadAccess.PUBLIC:
+        if platform is SocialPlatform.VK and read_access is not SocialReadAccess.PUBLIC:
             raise SocialWorkspaceValidationError(
                 "exact item resolution requires public read access"
+            )
+        if platform is SocialPlatform.TELEGRAM and read_access not in {
+            SocialReadAccess.PUBLIC,
+            SocialReadAccess.PRIVATE,
+        }:
+            raise SocialWorkspaceValidationError(
+                "Telegram item resolution requires public or private read access"
             )
         if expected_target_kinds:
             raise SocialWorkspaceValidationError(
@@ -1080,6 +1088,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         expected_target_kinds=expected_target_kinds,
         authorization_basis=authorization_basis,
         unread_only=unread_only,
+        transcribe_audio=transcribe_audio,
     )
 
 
@@ -1949,6 +1958,11 @@ SOCIAL_WORKSPACE_READ_SCHEMA: Mapping[str, Any] = {
             "enum": _enum_values(EditorialAuthorizationBasis),
         },
         "unread_only": {"type": "boolean"},
+        "transcribe_audio": {
+            "type": "boolean",
+            "default": True,
+            "description": "Enrich Telegram voice/audio media through the existing transcription pipeline.",
+        },
         "sample_ref": {"type": "string", "pattern": r"^smp_[A-Za-z0-9_-]{24,160}$"},
         "date_from": {"type": "string", "format": "date"},
         "date_to": {"type": "string", "format": "date"},
@@ -2347,6 +2361,47 @@ _EXTERNAL_TARGET: Mapping[str, Any] = {
     },
 }
 
+_EXTERNAL_TRANSCRIPTION: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["status", "cache_hit", "trust"],
+    "properties": {
+        "status": {
+            "type": "string",
+            "enum": ["ready", "queued", "running", "failed"],
+        },
+        "transcription_ref": {
+            "type": "string",
+            "pattern": r"^atr_[A-Za-z0-9_-]{24,160}$",
+        },
+        "text": {"type": "string", "maxLength": 60000},
+        "cache_hit": {"type": "boolean"},
+        "error_code": {"type": "string", "pattern": r"^[A-Z0-9_]{3,64}$"},
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+_EXTERNAL_MEDIA_DETAIL: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["asset_ref", "kind", "trust"],
+    "properties": {
+        "asset_ref": {"$ref": "#/$defs/asset_ref"},
+        "kind": {
+            "type": "string",
+            "enum": [
+                "voice", "audio", "photo", "video", "round_video",
+                "animation", "document",
+            ],
+        },
+        "mime_type": {"type": "string", "maxLength": 128},
+        "byte_length": {"type": "integer", "minimum": 0},
+        "duration_seconds": {"type": "number", "minimum": 0},
+        "transcription": _EXTERNAL_TRANSCRIPTION,
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
 _EXTERNAL_ITEM: Mapping[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -2364,6 +2419,14 @@ _EXTERNAL_ITEM: Mapping[str, Any] = {
         "media": {
             "type": "array", "maxItems": 10,
             "items": {"$ref": "#/$defs/asset_ref"},
+        },
+        "attachments": {
+            "type": "array", "maxItems": 10,
+            "items": _EXTERNAL_MEDIA_DETAIL,
+        },
+        "media_details": {
+            "type": "array", "maxItems": 10,
+            "items": _EXTERNAL_MEDIA_DETAIL,
         },
         "entities": {
             "type": "array",

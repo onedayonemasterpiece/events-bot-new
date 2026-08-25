@@ -16,6 +16,10 @@ from private_events_mcp.integration import attach_private_events_mcp
 from private_events_mcp.social_workspace import validate_prepare_request
 from private_events_mcp.social_workspace_runtime import RuntimePrincipal
 from private_events_mcp.tool_catalog import ToolCallContext
+from audio_transcription.mcp import (
+    _merge_audio_tools_for_discovery,
+    build_audio_transcription_tools,
+)
 
 
 class _WorkspaceAdapter:
@@ -92,6 +96,49 @@ def test_universal_social_catalog_is_chatgpt_only_and_adapter_set_is_exact(
 
     with pytest.raises(ValueError, match="adapter set"):
         attach_private_events_mcp(web.Application(), universal)
+
+
+def test_full_social_catalog_merge_preserves_every_existing_descriptor_and_size(
+    config, monkeypatch
+) -> None:
+    monkeypatch.delenv("PRIVATE_EVENTS_MCP_AUDIO_TRANSCRIPTION_ENABLED", raising=False)
+    universal = replace(
+        config,
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_vk_enabled=True,
+        universal_social_private_read_enabled=True,
+        universal_social_dm_enabled=True,
+        universal_social_post_enabled=True,
+        universal_social_edit_delete_enabled=True,
+        universal_social_media_story_enabled=True,
+        media_allowed_hosts=("files.example",),
+    )
+    server = attach_private_events_mcp(
+        web.Application(),
+        universal,
+        social_workspace_adapters={
+            "telegram": _WorkspaceAdapter(),
+            "vk": _WorkspaceAdapter(),
+        },
+        asset_ingestor=object(),
+    )
+    assert server is not None
+    existing = server.protocol.tools
+    before = [tool.descriptor() for tool in existing]
+    audio = build_audio_transcription_tools(object(), signing_key="s" * 32)
+
+    merged = _merge_audio_tools_for_discovery(existing, audio)
+    after = [tool.descriptor() for tool in merged]
+
+    assert [descriptor["name"] for descriptor in after[:3]] == [
+        "audio_transcription_start",
+        "audio_transcription_status",
+        "audio_transcription_get",
+    ]
+    assert after[3:] == before
+    assert len({descriptor["name"] for descriptor in after}) == len(after)
+    assert len(json.dumps(after, sort_keys=True, separators=(",", ":"))) < 512 * 1024
 
 
 def test_file_only_server_advertises_document_ingress_to_chatgpt_not_codex(
