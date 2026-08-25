@@ -76,6 +76,46 @@ def _owner_binding(context: ToolCallContext, signing_key: str) -> str:
     return hmac.new(signing_key.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
+def _social_read_owner_binding(context: ToolCallContext) -> str:
+    """Reproduce the owner binding used by Social Workspace audio ingress.
+
+    Read-triggered transcription predates the standalone audio tools' signed
+    binding. Both values are derived from the same verified OAuth context, but
+    existing durable social jobs must remain addressable without rebinding or
+    duplicating their private assets.
+    """
+
+    identity = context.identity
+    resource = context.resource or identity.audience
+    return hashlib.sha256(
+        f"{identity.client_id}\0{identity.subject}\0{resource}".encode("utf-8")
+    ).hexdigest()
+
+
+async def _call_for_authenticated_owner(
+    operation: Any,
+    *,
+    context: ToolCallContext,
+    signing_key: str,
+    values: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Try the standalone binding, then the same principal's social binding."""
+
+    ownership_error: JobOwnershipError | None = None
+    for owner_binding in dict.fromkeys(
+        (
+            _owner_binding(context, signing_key),
+            _social_read_owner_binding(context),
+        )
+    ):
+        try:
+            return await operation(owner_binding=owner_binding, **values)
+        except JobOwnershipError as exc:
+            ownership_error = exc
+    assert ownership_error is not None
+    raise ownership_error
+
+
 def _file_param(value: Any) -> AudioFileParam:
     if not isinstance(value, Mapping):
         raise InvalidArgumentsError("file must be the ChatGPT fileParams object")
@@ -171,11 +211,18 @@ def build_audio_transcription_tools(
 
     async def status(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
-            return await service.status(
-                job_ref=_string(
-                    arguments.get("job_ref"), name="job_ref", required=True, limit=180
-                ),
-                owner_binding=_owner_binding(context, signing_key),
+            return await _call_for_authenticated_owner(
+                service.status,
+                context=context,
+                signing_key=signing_key,
+                values={
+                    "job_ref": _string(
+                        arguments.get("job_ref"),
+                        name="job_ref",
+                        required=True,
+                        limit=180,
+                    )
+                },
             )
         except Exception as exc:
             raise _translate_error(exc) from exc
@@ -190,26 +237,33 @@ def build_audio_transcription_tools(
             ).casefold()
             default_limit = 50 if view == "segments" else 30_000
             maximum = 100 if view == "segments" else 60_000
-            return await service.get_result(
-                job_ref=_string(
-                    arguments.get("job_ref"), name="job_ref", required=True, limit=180
-                ),
-                owner_binding=_owner_binding(context, signing_key),
-                view=view,
-                offset=_int(
-                    arguments.get("offset"),
-                    name="offset",
-                    default=0,
-                    low=0,
-                    high=10_000_000,
-                ),
-                limit=_int(
-                    arguments.get("limit"),
-                    name="limit",
-                    default=default_limit,
-                    low=1,
-                    high=maximum,
-                ),
+            return await _call_for_authenticated_owner(
+                service.get_result,
+                context=context,
+                signing_key=signing_key,
+                values={
+                    "job_ref": _string(
+                        arguments.get("job_ref"),
+                        name="job_ref",
+                        required=True,
+                        limit=180,
+                    ),
+                    "view": view,
+                    "offset": _int(
+                        arguments.get("offset"),
+                        name="offset",
+                        default=0,
+                        low=0,
+                        high=10_000_000,
+                    ),
+                    "limit": _int(
+                        arguments.get("limit"),
+                        name="limit",
+                        default=default_limit,
+                        low=1,
+                        high=maximum,
+                    ),
+                },
             )
         except Exception as exc:
             raise _translate_error(exc) from exc

@@ -20,10 +20,14 @@
 
 - `INC-2026-08-25-chatgpt-frozen-mcp-actions.md`
   - Scope: ChatGPT workspace-approved MCP action snapshots, action-definition
-    refresh/publication, and real new-chat invocation after a schema change.
+    refresh/publication, real new-chat invocation after a schema change, and
+    owner-compatible polling of voice jobs created by Social Workspace reads.
   - Must not regress: OAuth connection refresh is not accepted as proof that a
     changed action schema reached ChatGPT; closure requires administrator review
-    and publication plus a successful real conversation call.
+    and publication plus a successful real conversation call. Every social-read
+    `atr_*` must remain usable by status/get for the same OAuth principal while
+    another principal is rejected; serialized queue and provider hold windows
+    must be honored through final transcript catch-up.
 - `INC-2026-08-24-mcp-telegram-album-media-ref.md`
   - Scope: private eventsBot MCP outer media-reference binding, Telegram
     `grouped_id` album reads, and `social_asset_preview` image materialization.

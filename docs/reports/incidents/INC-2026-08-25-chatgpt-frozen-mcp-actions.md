@@ -1,8 +1,8 @@
-# INC-2026-08-25 ChatGPT retained a VK-only MCP action snapshot
+# INC-2026-08-25 ChatGPT retained a VK-only action and could not poll social voice jobs
 
-Status: open — workspace action refresh and live ChatGPT acceptance pending
+Status: mitigating — principal fix prepared; action refresh, deploy, catch-up and live ChatGPT acceptance pending
 Severity: sev2
-Service: private eventsBot ChatGPT MCP action discovery
+Service: private eventsBot ChatGPT MCP action discovery and Telegram voice reads
 Opened: 2026-08-25
 Closed: —
 Owners: eventsBot MCP / ChatGPT workspace administrator
@@ -17,12 +17,19 @@ reported that the published action schema permitted only VK and attempted a
 long fallback through target search/feed/item operations instead. Production
 already served the corrected Telegram+VK schema, so the server implementation
 and OAuth scopes alone could not repair the workspace-approved ChatGPT action
-snapshot.
+snapshot. The fallback did reach the authorized group and created durable voice
+jobs, but the returned `atr_*` references could not be polled by the public
+audio status/get tools because Social Workspace and standalone audio ingress
+derived two different owner bindings from the same OAuth context.
 
 ## User / Business Impact
 
 - The requested Telegram chat read did not return the requested thread or its
   voice transcripts even though the production MCP could perform that read.
+- Twelve voice reads were durably queued for the affected principal, but
+  `audio_transcription_status` returned `TRANSCRIPTION_PRINCIPAL_MISMATCH`, so
+  the client could not distinguish legitimate serialized delay from failure or
+  collect completed text.
 - ChatGPT spent many calls on unrelated discovery paths and produced no useful
   final result.
 - Connection refresh appeared successful, which obscured the separate
@@ -40,6 +47,14 @@ snapshot.
 - The deployed authenticated `tools/list` was independently verified to expose
   `social_item_resolve.platform = [telegram, vk]`, and the recent ChatGPT token
   refresh retained both provider read families.
+- A provider-ID fallback with the exact expected target kind resolved the
+  authorized private group, and a bounded feed read returned twelve voice
+  attachments with durable queued transcription references.
+- Polling one reference through the public audio tool reproduced
+  `TRANSCRIPTION_PRINCIPAL_MISMATCH`. Production job-store evidence showed one
+  serialized run under a persisted provider hold plus 23 queued jobs; the file
+  log mirror was enabled and healthy, while this bounded tool error was not
+  emitted as a runtime log line.
 
 ## Timeline
 
@@ -57,6 +72,14 @@ snapshot.
 - 2026-08-25 22:39 UTC — evidence from a second ChatGPT window independently
   reproduced the stale-schema rejection while confirming the same exact-main
   production release and server-side regression results.
+- 2026-08-25 22:43 UTC — PR `#581` merged the action-refresh runbook and this
+  regression contract to `main` after all required CI checks passed.
+- 2026-08-25 22:48–22:53 UTC — the fallback resolved the private group only
+  when the exact group kind accompanied its provider ID, read the bounded feed,
+  reproduced the status principal mismatch, and confirmed twelve current
+  queued voice jobs. Production retained one running job under a persisted
+  `Retry-After` deadline at 23:01 UTC; no busy-poll or unsafe duplicate start
+  was attempted.
 
 ## Root Cause
 
@@ -70,6 +93,18 @@ snapshot.
 4. The conversation therefore planned against the old VK-only input enum even
    though production `tools/list` and the token's scopes both supported
    Telegram.
+5. Social Workspace auto-transcription stored jobs under SHA-256 of
+   `client_id + subject + resource`. The standalone audio tools used an HMAC
+   of `subject + client_id + resource` with the server signing key. Both were
+   derived from the same verified OAuth context but were intentionally unequal.
+6. `audio_transcription_status/get` checked only the standalone binding, so a
+   valid `atr_*` returned by a social read was misclassified as belonging to
+   another principal. Passing the associated `ast_*` to file ingress could not
+   work because it is not a ChatGPT `fileParams` object.
+7. The twelve-voice batch also encountered the already documented serialized
+   Kaggle lane and a persisted provider `Retry-After`. That delay was operating
+   as designed, but the owner mismatch removed the only explicit polling path
+   and made an accepted queue look like a terminal failure.
 
 ## Contributing Factors
 
@@ -81,6 +116,9 @@ snapshot.
   chat tool picker.
 - ChatGPT does not currently notify users or administrators that a failed call
   requires action-definition review.
+- The original live acceptance proved repeat-read cache behavior but did not
+  call the separately exposed audio status/get tools with an `atr_*` minted by
+  Social Workspace, so the owner-binding mismatch escaped coverage.
 
 ## Automation Contract
 
@@ -96,6 +134,10 @@ snapshot.
 - ChatGPT workspace Apps action-control snapshot and publication state;
 - `private_events_mcp/tool_catalog.py::ToolSpec.descriptor`;
 - `private_events_mcp/social_workspace_tools.py` social tool descriptors;
+- `private_events_mcp/social_workspace_runtime.py` read-triggered audio owner
+  binding and `audio_transcription/mcp.py` status/get authorization;
+- durable serialized audio jobs, monitor cadence and persisted
+  `retry_not_before` handling;
 - OAuth connection refresh versus action-definition refresh;
 - real new-chat tool selection and invocation.
 
@@ -109,6 +151,11 @@ snapshot.
 - verify the real conversation calls `social_item_resolve` for the authorized
   private Telegram link, then reads the thread and returns ready/queued voice
   status without exposing transcript or provider/native data in evidence;
+- for every queued `atr_*` returned by the social read, prove status/get accepts
+  the same OAuth principal, rejects a different principal, honors durable queue
+  and provider-hold states, and eventually returns every ready transcript;
+- do not pass `ast_*` to standalone file ingress and do not busy-poll or bypass
+  the serialized dedicated Telegram/Kaggle lane;
 - verify health, deployed SHA, OAuth scopes and sanitized MCP audit rows.
 
 ### Required evidence
@@ -116,6 +163,8 @@ snapshot.
 - sanitized before/after action schema showing the platform enum change;
 - administrator-reviewed action refresh/publication receipt;
 - sanitized real ChatGPT call receipt and successful audit row;
+- sanitized voice counts and state transitions only (no references, transcript
+  text, private links or native identifiers) through final ready coverage;
 - exact-main SHA and ready health result.
 
 ## Immediate Mitigation
@@ -125,12 +174,21 @@ snapshot.
   refresh state; no delete/re-add or credential rotation was attempted.
 - Identified the required external control-plane action: refresh, review and
   publish the updated actions in the existing ChatGPT app, then use a new chat.
+- Preserved the durable voice jobs and the provider's persisted hold. No
+  duplicate `audio_transcription_start`, job-owner mutation, unsafe asset
+  migration or aggressive status loop was used.
 
 ## Corrective Actions
 
 - Corrected the runbook to separate OAuth connection refresh from the frozen
   workspace action snapshot.
 - Added this incident as a regression contract for future MCP schema changes.
+- Added a same-authenticated-principal compatibility lookup so public audio
+  status/get can address both standalone-upload and historical Social
+  Workspace jobs while cross-principal access still fails closed.
+- Added a multi-voice regression that reads two queued social voice
+  attachments and obtains the completed text for each through public
+  status/get.
 
 ## Follow-up Actions
 
@@ -138,6 +196,11 @@ snapshot.
   actions without changing the MCP endpoint or OAuth identity.
 - [ ] Run the real new-chat Telegram link/thread/audio acceptance and attach a
   sanitized receipt.
+- [ ] Merge/deploy the owner-binding correction from exact `origin/main`, then
+  prove a pre-deploy queued social `atr_*` can be polled without re-ingress.
+- [ ] Honor the persisted provider hold and complete compensating catch-up for
+  the affected voice cohort; verify every distinct voice reaches ready or a
+  documented terminal error before closure.
 - [ ] Keep the incident open until `resolve_item` is observed from ChatGPT and
   the requested high-level result succeeds.
 
@@ -151,7 +214,8 @@ snapshot.
   contains both providers; recent ChatGPT OAuth refresh contains both provider
   read families; affected conversation produced no `resolve_item` audit row
 - post-deploy verification: server side passed; ChatGPT workspace action
-  publication and real conversation acceptance remain pending
+  publication, owner-binding deploy, voice catch-up and real conversation
+  acceptance remain pending
 
 ## Prevention
 
