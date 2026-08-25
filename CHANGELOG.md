@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: Kaggle audio reconciliation now persists a bounded HTTP `Retry-After`
+  deadline when status reads are rate-limited, and the durable monitor honors
+  that wall-clock hold across restarts instead of probing again on every short
+  poll interval.
+
 - Fixed: multi-voice transcription ingress now keeps later durable jobs queued
   instead of creating one waiting dispatch task and remote-session status probe
   per attachment. The oldest queued job advances only when no local audio run

@@ -404,6 +404,14 @@ class AudioTranscriptionService:
                 active = self.job_store.active_jobs()
                 for job in active:
                     if job.state is JobState.RUNNING:
+                        retry_not_before = (job.progress or {}).get(
+                            "retry_not_before"
+                        )
+                        if (
+                            type(retry_not_before) in {int, float}
+                            and float(retry_not_before) > time.time()
+                        ):
+                            continue
                         await self._reconcile_job(job)
                 # Preserve creation order and schedule at most one durable
                 # queued/restart-interrupted dispatch per pass.
