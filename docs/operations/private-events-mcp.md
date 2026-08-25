@@ -546,6 +546,15 @@ item-only actions are charged to the item's bound source target rather than a
 shared provider bucket (the configured per-principal default is
 `PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY=10`).
 
+Social reads also use durable hourly rate, egress and media budgets. A provider
+call that returned successfully remains a provider success even when its safe
+projected response is subsequently withheld by one of those local budgets.
+Local quota, projection/storage or response-cap failures are audited and
+returned fail-closed, but they do not increment the provider transport circuit.
+Only an actual adapter/provider failure or provider flood wait contributes to
+that circuit; a later legitimate read must not be rejected as a provider outage
+merely because an earlier response exhausted a local quota.
+
 ## Environment and credentials
 
 Base MCP settings when enabled:

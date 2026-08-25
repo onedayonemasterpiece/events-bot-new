@@ -1576,6 +1576,7 @@ class SocialWorkspaceRuntime:
         platform = request.platform.value
         target_ref = request.target_ref
         provider_attempted = False
+        provider_call_succeeded = False
         flood_seconds = 0
         try:
             self._check_circuit(principal, platform, target_ref)
@@ -1607,6 +1608,7 @@ class SocialWorkspaceRuntime:
             except Exception as exc:  # noqa: BLE001 - provider exception text is untrusted
                 flood_seconds = int(getattr(exc, "retry_after", 0) or 0)
                 raise self._safe_provider_error() from None
+            provider_call_succeeded = True
             if (
                 platform == SocialPlatform.TELEGRAM.value
                 and request.transcribe_audio
@@ -1676,8 +1678,11 @@ class SocialWorkspaceRuntime:
         except Exception as exc:
             if provider_attempted:
                 self._record_provider_result(
-                    principal, platform, target_ref, success=False,
-                    flood_seconds=flood_seconds,
+                    principal,
+                    platform,
+                    target_ref,
+                    success=provider_call_succeeded,
+                    flood_seconds=(0 if provider_call_succeeded else flood_seconds),
                 )
             self._audit(principal, platform=platform, operation=request.operation.value,
                         outcome="denied", reason=type(exc).__name__, target_ref=target_ref)

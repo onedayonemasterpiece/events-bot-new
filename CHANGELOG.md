@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: successful social-provider reads that are later withheld by a local
+  response/media budget no longer increment the provider failure circuit or
+  turn subsequent valid reads into a misleading provider-circuit rejection.
+  Real provider transport failures and flood waits still open the same bounded
+  circuit. Added positive and negative regression coverage for the boundary.
+
 - Fixed: `audio_transcription_status` and `audio_transcription_get` now accept
   durable `atr_*` references created by Telegram Social Workspace reads for the
   same verified OAuth principal. The compatibility lookup preserves existing
