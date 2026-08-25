@@ -1,0 +1,72 @@
+{
+  "schema_version": "lovekgd-product-atlas-source-lock-exact-resolutions.v1",
+  "source_lock_ref": "docs/product-model/atlas/v1/source-lock.v1.json",
+  "resolved_at": "2026-08-25T00:00:00Z",
+  "rule": "A null blob_sha in the source lock is unresolved unless this file provides an exact Git blob SHA or an exact aggregate manifest hash for the same source ID and locked repository SHA.",
+  "resolutions": [
+    {
+      "source_id": "src.first-party-action-map",
+      "repository_sha": "821e816b2c8317b1cc5e4b85c5ece72aa27a5c44",
+      "path": "docs/features/static-site-pages/first-party-action-map.md",
+      "blob_sha": "eb61b948355ab1ef49a84437e5fd66a5fde54a81"
+    },
+    {
+      "source_id": "src.static-release-plan",
+      "repository_sha": "821e816b2c8317b1cc5e4b85c5ece72aa27a5c44",
+      "path": "docs/features/static-site-pages/release-plan.md",
+      "blob_sha": "7384a9a10f26910f2b4df1ba158fc1201e4a37eb"
+    },
+    {
+      "source_id": "src.acceptance-inventory",
+      "repository_sha": "821e816b2c8317b1cc5e4b85c5ece72aa27a5c44",
+      "path": "docs/features/static-site-pages/test-scenarios.md",
+      "blob_sha": "d54961688e13288938f043b1252e5e29119e2587"
+    },
+    {
+      "source_id": "src.personalization-contract",
+      "repository_sha": "821e816b2c8317b1cc5e4b85c5ece72aa27a5c44",
+      "path": "docs/features/static-site-pages/personalizaion/personalization-to-be.md",
+      "blob_sha": "158717b2f7df612e7090d24b739a6dd3962625d3"
+    },
+    {
+      "source_id": "src.personalization-data-ownership",
+      "repository_sha": "821e816b2c8317b1cc5e4b85c5ece72aa27a5c44",
+      "path": "docs/architecture/personalization-data-ownership.md",
+      "blob_sha": "55a430beef905d675307eb4ed24a533960edcd02"
+    },
+    {
+      "source_id": "src.incident-management",
+      "repository_sha": "821e816b2c8317b1cc5e4b85c5ece72aa27a5c44",
+      "path": "docs/operations/incident-management.md",
+      "blob_sha": "6085c23a2ecda1518fb0e2e06b7bd7327f7891c1"
+    },
+    {
+      "source_id": "src.production-surface-contract",
+      "repository_sha": "821e816b2c8317b1cc5e4b85c5ece72aa27a5c44",
+      "path": "site/src/data/design-system-production-surface-contract.v1.json",
+      "blob_sha": "874ce27b309aeaa98cf28d6138f96d65c760d1a2"
+    },
+    {
+      "source_id": "src.component-composition-graph",
+      "repository_sha": "9b8043f3bdb86fab4eee00bf94b0f10d4f029c50",
+      "path": "catalog/global-archetype-sot-v1/component-composition-graph.v1.json",
+      "blob_sha": "ad910d846c13129f78e0ac0515b613966913b2ae",
+      "content_sha256": "9824bab7b7e816d77dce043e769423f336c7807f8fba8d2dc33970d661dcbc0e"
+    },
+    {
+      "source_id": "src.corrected-archetype-contracts",
+      "repository_sha": "9b8043f3bdb86fab4eee00bf94b0f10d4f029c50",
+      "path": "catalog/global-archetype-sot-v1/archetype-contracts/*.semantic-contract.v1.json",
+      "aggregate_hash_kind": "sorted-contract-directory-manifest-sha256",
+      "aggregate_sha256": "7c11e9cbd63e7ab8206c39786b909e6dde015dedd2e73c4dca578d1d4ef35963",
+      "manifest_blob_sha": "de406561aca8405f620c1db98f71b024b8af5dd3",
+      "contract_count": 17
+    },
+    {
+      "source_id": "src.design-system-checklist",
+      "repository_sha": "a2991f8b7cc516d7e80f95057d7b9e21ec81097f",
+      "path": "docs/design-system-progress-checklist.md",
+      "blob_sha": "45fe880981b138549a527df0d8dc5852decbf307"
+    }
+  ]
+}
