@@ -804,6 +804,9 @@ class InMemoryTelegramOpaqueRefStore:
             self._state, kind="tg_cursor", signing_key=config.signing_key
         )
         self._operation_lock = threading.RLock()
+        self._media_fingerprint_key = hashlib.sha256(
+            ("telegram-provider-media\0" + config.signing_key).encode("utf-8")
+        ).digest()
         actions: set[SocialAction] = set()
         if config.universal_social_dm_enabled:
             actions.add(SocialAction.SEND_MESSAGE)
@@ -898,8 +901,36 @@ class InMemoryTelegramOpaqueRefStore:
         story_id: int | None = None,
         expires_at: Any | None = None,
         item_kind: Any | None = None,
+        media_kind: str | None = None,
+        mime_type: str | None = None,
+        byte_length: int | None = None,
+        duration_seconds: float | None = None,
+        item_message_id: int | None = None,
     ) -> str:
-        self._targets.get(target_ref)
+        target = self._targets.get(target_ref)
+        document = getattr(media, "document", None)
+        photo = getattr(media, "photo", None)
+        provider_object = document if document is not None else photo
+        file_reference = getattr(provider_object, "file_reference", b"")
+        if isinstance(file_reference, memoryview):
+            file_reference = file_reference.tobytes()
+        if not isinstance(file_reference, (bytes, bytearray)):
+            file_reference = repr(file_reference).encode("utf-8", "replace")
+        entity = getattr(target, "entity", None)
+        identity = "\x1f".join(
+            str(value)
+            for value in (
+                getattr(entity, "id", None),
+                getattr(provider_object, "id", None),
+                getattr(provider_object, "access_hash", None),
+                hashlib.sha256(bytes(file_reference)).hexdigest(),
+                item_message_id,
+                media_kind or role.value,
+            )
+        ).encode("utf-8")
+        fingerprint = hmac.new(
+            self._media_fingerprint_key, identity, hashlib.sha256
+        ).hexdigest()
         ref = _bounded_ref("ast")
         self._assets.put(
             ref,
@@ -910,6 +941,11 @@ class InMemoryTelegramOpaqueRefStore:
                 target_ref=target_ref,
                 story_id=story_id,
                 expires_at=expires_at,
+                media_kind=media_kind,
+                mime_type=mime_type,
+                byte_length=byte_length,
+                duration_seconds=duration_seconds,
+                identity_fingerprint=fingerprint,
             ),
         )
         return ref

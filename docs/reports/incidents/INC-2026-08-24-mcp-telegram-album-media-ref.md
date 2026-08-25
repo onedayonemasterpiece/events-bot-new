@@ -1,6 +1,6 @@
 # INC-2026-08-24 MCP Telegram albums returned unusable media references
 
-Status: open
+Status: open — integrated regression candidate, release pending
 Severity: sev2
 Service: private eventsBot MCP social workspace, Telegram reads and image preview
 Opened: 2026-08-24
@@ -16,6 +16,12 @@ an `ast_*` token for attached media, but `social_asset_preview` rejected that
 same token instead of returning image pixels. Telegram grouped media was also
 projected one provider message at a time, so an album could consume several
 feed slots and an exact-item read exposed only one album member.
+
+The follow-on integration keeps that album/outer-ref fix while adding the same
+closed media-detail projection and cache-first voice/audio enrichment to
+Telegram item/feed/search/thread reads. This is additive: `media[]` remains an
+ordered array of principal-bound outer refs, and no provider-native identity is
+accepted as a public reference or returned as metadata.
 
 ## User / Business Impact
 
@@ -101,6 +107,8 @@ feed slots and an exact-item read exposed only one album member.
 - `private_events_mcp/social_workspace_runtime.py::asset_preview`;
 - `private_events_mcp_telegram_adapter.py::_item_payload` and Telegram
   list/search/get-item reads;
+- Telegram canonical public/private item-link resolution, attachment
+  classification, and trusted provider-byte audio ingress;
 - isolated `/data/private-events-mcp-auth.sqlite` outer and provider binding
   tables;
 - ChatGPT `eventsBot` connector tools `social_content_feed`,
@@ -116,6 +124,10 @@ feed slots and an exact-item read exposed only one album member.
 - prove a Telegram feed containing two `grouped_id` albums returns two logical
   items with every image in original order, up to Telegram's ten-item cap;
 - prove an exact-item read from any album member expands the whole album;
+- prove public/private canonical item links, malformed/unavailable sanitization,
+  VK exact-link stability, every supported Telegram media classification,
+  transcription cache/dedup/opt-out/failure isolation, and absence of sensitive
+  provider data in response/error/audit;
 - run the full private MCP test glob and compile checks;
 - after the active external read finishes and release is authorized, deploy an
   exact clean `origin/main` SHA and repeat the real ChatGPT read-to-preview flow
@@ -163,8 +175,9 @@ feed slots and an exact-item read exposed only one album member.
   the PR is intentionally held from merge/deploy during the active user read
 - deployed SHA: pending; production change explicitly deferred by user
 - deploy path: pending; must be exact merged `origin/main`
-- regression checks: local targeted tests passing; complete suite pending final
-  release candidate
+- regression checks: integrated local focused private MCP/audio/Telegram/VK
+  suites pass on the integration branch; complete release suite and live
+  acceptance remain pending final release candidate
 - post-deploy verification: pending
 
 ## Prevention

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
 import hashlib
 import hmac
 import inspect
@@ -232,6 +233,7 @@ class SocialWorkspaceRuntime:
         self.asset_max_pixels = int(asset_max_pixels)
         self.media_story_enabled = bool(media_story_enabled)
         self.file_send_enabled = bool(file_send_enabled)
+        self.audio_transcription_service: Any | None = None
         if self.asset_max_bytes < 1 or self.asset_max_bytes > 64 * 1024 * 1024:
             raise ValueError("asset_max_bytes is outside the media budget")
         if self.document_max_bytes < 1 or self.document_max_bytes > 64 * 1024 * 1024:
@@ -245,6 +247,14 @@ class SocialWorkspaceRuntime:
         if not 1 <= self.asset_max_pixels <= 40_000_000:
             raise ValueError("asset pixel budget is outside the supported range")
         self._clock = clock
+
+    def enable_audio_transcription(self, service: Any) -> None:
+        """Attach the existing audio service to trusted Telegram read ingress."""
+
+        required = ("start_provider_transcription", "status", "get_result")
+        if any(not callable(getattr(service, name, None)) for name in required):
+            raise TypeError("audio transcription service contract is incomplete")
+        self.audio_transcription_service = service
 
     def _now(self) -> int:
         return int(self._clock())
@@ -1197,6 +1207,9 @@ class SocialWorkspaceRuntime:
                 raise SocialWorkspaceRuntimeError("provider response is invalid")
             if type(schema.get("maximum")) is int and value > schema["maximum"]:
                 raise SocialWorkspaceRuntimeError("provider response is invalid")
+        elif expected_type == "number":
+            if type(value) not in {int, float} or value < schema.get("minimum", value):
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
         elif expected_type == "boolean":
             if type(value) is not bool:
                 raise SocialWorkspaceRuntimeError("provider response is invalid")
@@ -1237,6 +1250,141 @@ class SocialWorkspaceRuntime:
         if len(encoded) > self.response_cap_bytes:
             raise SocialWorkspaceRuntimeError("response cap exceeded")
         return projected
+
+    async def _enrich_telegram_audio(
+        self,
+        raw: Mapping[str, Any],
+        *,
+        principal: RuntimePrincipal,
+    ) -> Mapping[str, Any]:
+        service = self.audio_transcription_service
+        if service is None:
+            return raw
+        adapter = self._adapter(SocialPlatform.TELEGRAM.value)
+        if not callable(getattr(adapter, "read_asset", None)):
+            return raw
+        result = copy.deepcopy(dict(raw))
+        owner_binding = self._principal_hash(principal)
+        configured_limit = getattr(getattr(service, "config", None), "max_asset_bytes", None)
+        max_bytes = (
+            int(configured_limit)
+            if type(configured_limit) is int and 0 < configured_limit <= 2 * 1024 * 1024 * 1024
+            else 64 * 1024 * 1024
+        )
+
+        async def enrich_item(item: dict[str, Any]) -> None:
+            attachments = item.get("attachments")
+            if not isinstance(attachments, list):
+                return
+            for attachment in attachments[:10]:
+                if not isinstance(attachment, dict) or attachment.get("kind") not in {
+                    "voice",
+                    "audio",
+                }:
+                    continue
+                asset_ref = attachment.get("asset_ref")
+                fingerprint = attachment.pop("binding_fingerprint", None)
+                if (
+                    not isinstance(asset_ref, str)
+                    or not isinstance(fingerprint, str)
+                    or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None
+                ):
+                    attachment["transcription"] = {
+                        "status": "failed",
+                        "cache_hit": False,
+                        "error_code": "TRANSCRIPTION_BINDING_INVALID",
+                        "trust": "untrusted_external_data",
+                    }
+                    continue
+                identity = hmac.new(
+                    self._key,
+                    (
+                        "telegram-read-transcription\0"
+                        + owner_binding
+                        + "\0"
+                        + fingerprint
+                    ).encode("ascii"),
+                    hashlib.sha256,
+                ).hexdigest()
+                idempotency_key = "tg:" + identity
+                try:
+                    started = await service.start_provider_transcription(
+                        owner_binding=owner_binding,
+                        idempotency_key=idempotency_key,
+                        provider_fingerprint=fingerprint,
+                        content_loader=lambda ref=asset_ref: adapter.read_asset(
+                            ref,
+                            owner_binding=owner_binding,
+                            max_bytes=max_bytes,
+                        ),
+                        mime_type=(
+                            str(attachment["mime_type"])
+                            if isinstance(attachment.get("mime_type"), str)
+                            else None
+                        ),
+                    )
+                    job_ref = str(started.get("job_ref") or "")
+                    status = await service.status(
+                        job_ref=job_ref, owner_binding=owner_binding
+                    )
+                    state = str(status.get("state") or started.get("state") or "queued")
+                    transcription: dict[str, Any] = {
+                        "status": (
+                            "ready"
+                            if state == "complete"
+                            else "failed"
+                            if state in {"failed", "cancelled"}
+                            else "queued"
+                            if state in {"queued", "dispatching"}
+                            else "running"
+                        ),
+                        "transcription_ref": job_ref,
+                        "cache_hit": not bool(started.get("created", False)),
+                        "trust": "untrusted_external_data",
+                    }
+                    if state == "complete":
+                        completed = await service.get_result(
+                            job_ref=job_ref,
+                            owner_binding=owner_binding,
+                            view="plain",
+                            offset=0,
+                            limit=60_000,
+                        )
+                        if completed.get("ready") and isinstance(completed.get("text"), str):
+                            transcription["text"] = completed["text"][:60_000]
+                        else:
+                            transcription["status"] = "failed"
+                            transcription["error_code"] = "TRANSCRIPTION_RESULT_EXPIRED"
+                    elif state in {"failed", "cancelled"}:
+                        code = status.get("error_code")
+                        transcription["error_code"] = (
+                            str(code)
+                            if isinstance(code, str) and re.fullmatch(r"[A-Z0-9_]{3,64}", code)
+                            else "TRANSCRIPTION_FAILED"
+                        )
+                    attachment["transcription"] = transcription
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001 - isolate provider/audio failure per media
+                    attachment["transcription"] = {
+                        "status": "failed",
+                        "cache_hit": False,
+                        "error_code": "TRANSCRIPTION_FAILED",
+                        "trust": "untrusted_external_data",
+                    }
+
+        async def walk(node: Any) -> None:
+            if isinstance(node, dict):
+                if isinstance(node.get("item_ref"), str):
+                    await enrich_item(node)
+                for child in list(node.values()):
+                    await walk(child)
+            elif isinstance(node, list):
+                for child in node:
+                    await walk(child)
+
+        await walk(result)
+        return result
 
     @staticmethod
     def _safe_provider_error() -> SocialWorkspaceRuntimeError:
@@ -1417,6 +1565,12 @@ class SocialWorkspaceRuntime:
             except Exception as exc:  # noqa: BLE001 - provider exception text is untrusted
                 flood_seconds = int(getattr(exc, "retry_after", 0) or 0)
                 raise self._safe_provider_error() from None
+            if (
+                platform == SocialPlatform.TELEGRAM.value
+                and request.transcribe_audio
+                and isinstance(raw, Mapping)
+            ):
+                raw = await self._enrich_telegram_audio(raw, principal=principal)
             safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
             if not isinstance(safe, dict):
                 raise SocialWorkspaceRuntimeError("provider response must be an object")

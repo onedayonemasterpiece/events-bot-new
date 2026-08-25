@@ -35,6 +35,7 @@ from private_events_mcp.social_workspace import (
     SocialActionIntent,
     SocialItemKind,
     SocialPlatform,
+    SocialReadAccess,
     SocialReadOperation,
     SocialReadRequest,
     SocialTargetKind,
@@ -148,6 +149,11 @@ class TelegramAssetBinding:
     target_ref: str | None = None
     story_id: int | None = None
     expires_at: datetime | None = None
+    media_kind: str | None = None
+    mime_type: str | None = None
+    byte_length: int | None = None
+    duration_seconds: float | None = None
+    identity_fingerprint: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1095,6 +1101,11 @@ class TelegramWorkspaceAdapter:
         role: MediaRole,
         story_id: int | None = None,
         expires_at: datetime | None = None,
+        media_kind: str | None = None,
+        mime_type: str | None = None,
+        byte_length: int | None = None,
+        duration_seconds: float | None = None,
+        item_message_id: int | None = None,
     ) -> str:
         minter = self._refs.mint_read_asset
         parameters = inspect.signature(minter).parameters
@@ -1111,6 +1122,11 @@ class TelegramWorkspaceAdapter:
             ("story_id", story_id),
             ("expires_at", expires_at),
             ("item_kind", SocialItemKind.STORY if story_id is not None else None),
+            ("media_kind", media_kind),
+            ("mime_type", mime_type),
+            ("byte_length", byte_length),
+            ("duration_seconds", duration_seconds),
+            ("item_message_id", item_message_id),
         ):
             if value is not None and (name in parameters or supports_extra):
                 values[name] = value
@@ -1368,6 +1384,75 @@ class TelegramWorkspaceAdapter:
             return self._target_preview(binding)
 
         return await self._session("resolve_target", run)
+
+    @staticmethod
+    def _parse_message_link(value: str) -> tuple[str | int, int, SocialReadAccess]:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in {"t.me", "telegram.me"}
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise SocialWorkspaceValidationError("Telegram message link is not canonical")
+        private = re.fullmatch(r"/c/([1-9][0-9]{0,18})/([1-9][0-9]{0,18})/?", parsed.path)
+        if private is not None:
+            return -int("100" + private.group(1)), int(private.group(2)), SocialReadAccess.PRIVATE
+        public = re.fullmatch(
+            r"/([A-Za-z][A-Za-z0-9_]{1,127})/([1-9][0-9]{0,18})/?",
+            parsed.path,
+        )
+        if public is None:
+            raise SocialWorkspaceValidationError("Telegram message link is not canonical")
+        return public.group(1), int(public.group(2)), SocialReadAccess.PUBLIC
+
+    @staticmethod
+    def _source_target_payload(target: TelegramTargetBinding) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "target_ref": target.target_ref,
+            "kind": target.kind.value,
+            "title": _safe_text(target.title, 256, fallback="Telegram target"),
+            "about": "",
+            "description": "",
+            "basic_metrics": {
+                "members": _int(getattr(target.entity, "participants_count", None))
+            },
+            "trust": _TRUST,
+        }
+        if target.canonical_handle:
+            result["canonical_handle"] = _safe_text(target.canonical_handle, 128)
+        if target.profile_link:
+            result["profile_link"] = _safe_text(target.profile_link, 512)
+        return result
+
+    async def _resolve_item_link(
+        self, client: Any, lease: TelegramLease, request: SocialReadRequest
+    ) -> Mapping[str, Any]:
+        locator = request.target_locator
+        if (
+            locator is None
+            or locator.kind is not TargetLocatorKind.PROFILE_LINK
+            or locator.value is None
+        ):
+            raise SocialWorkspaceValidationError("Telegram message-link resolution is required")
+        entity_locator, message_id, access = self._parse_message_link(locator.value)
+        if request.read_access is not access:
+            raise SocialWorkspaceValidationError("Telegram message-link access mode mismatch")
+        await self._fenced(lease)
+        entity = await _await(client.get_entity(entity_locator))
+        target = self._mint_target(entity)
+        message = await _await(client.get_messages(target.entity, ids=message_id))
+        if message is None or _provider_message_id(message) != message_id or not self._message_matches_target(message, target):
+            raise TelegramWorkspaceError("item_not_found")
+        album = await self._album_messages_near(client, target, message)
+        return {
+            "item": self._item_payload(message, target, album_messages=album),
+            "source_target": self._source_target_payload(target),
+            "trust": _TRUST,
+        }
 
     async def _live_policy(
         self,
@@ -1774,20 +1859,40 @@ class TelegramWorkspaceAdapter:
             "trust": _TRUST,
         }
         media_refs: list[str] = []
+        attachments: list[dict[str, Any]] = []
         for member in members[:10]:
             media = getattr(member, "media", None)
-            role = self._message_media_role(media)
-            if media is None or role is None:
+            detail = self._message_media_detail(member)
+            if media is None or detail is None:
                 continue
             media_ref = self._mint_read_asset(
                 target_ref=target.target_ref,
                 media=media,
-                role=role,
+                role=detail["role"],
+                media_kind=detail["kind"],
+                mime_type=detail.get("mime_type"),
+                byte_length=detail.get("byte_length"),
+                duration_seconds=detail.get("duration_seconds"),
+                item_message_id=_provider_message_id(member),
             )
             validate_opaque_ref(media_ref, "asset")
             media_refs.append(media_ref)
+            binding = self._asset(media_ref)
+            attachment: dict[str, Any] = {
+                "asset_ref": media_ref,
+                "kind": detail["kind"],
+                "trust": _TRUST,
+            }
+            for name in ("mime_type", "byte_length", "duration_seconds"):
+                value = detail.get(name)
+                if value is not None:
+                    attachment[name] = value
+            if binding.identity_fingerprint:
+                attachment["binding_fingerprint"] = binding.identity_fingerprint
+            attachments.append(attachment)
         if media_refs:
             payload["media"] = media_refs
+            payload["attachments"] = attachments
         return payload
 
     @staticmethod
@@ -1796,29 +1901,57 @@ class TelegramWorkspaceAdapter:
         return grouped_id if type(grouped_id) is int and grouped_id != 0 else None
 
     @staticmethod
-    def _message_media_role(media: Any) -> MediaRole | None:
+    def _message_media_detail(message: Any) -> dict[str, Any] | None:
+        media = getattr(message, "media", None)
         if media is None:
             return None
         if media.__class__.__name__ == "MessageMediaPhoto" or getattr(
             media, "photo", None
         ) is not None:
-            return MediaRole.IMAGE
-        document = getattr(media, "document", None)
+            return {"role": MediaRole.IMAGE, "kind": "photo", "mime_type": "image/jpeg"}
+        document = getattr(message, "document", None) or getattr(media, "document", None)
         if document is None:
             return None
         mime_type = getattr(document, "mime_type", None)
         mime_type = mime_type.lower() if isinstance(mime_type, str) else ""
-        if mime_type.startswith("image/"):
-            return (
-                MediaRole.ANIMATION
-                if mime_type == "image/gif"
-                else MediaRole.IMAGE
+        attributes = list(getattr(document, "attributes", None) or [])[:100]
+        audio_attr = next(
+            (value for value in attributes if value.__class__.__name__ == "DocumentAttributeAudio"),
+            None,
+        )
+        video_attr = next(
+            (value for value in attributes if value.__class__.__name__ == "DocumentAttributeVideo"),
+            None,
+        )
+        animated = any(
+            value.__class__.__name__ == "DocumentAttributeAnimated" for value in attributes
+        )
+        duration = getattr(audio_attr or video_attr, "duration", None)
+        detail: dict[str, Any] = {
+            "mime_type": mime_type or "application/octet-stream",
+            "byte_length": max(0, getattr(document, "size", 0))
+            if type(getattr(document, "size", None)) is int
+            else None,
+            "duration_seconds": float(duration)
+            if type(duration) in {int, float} and duration >= 0
+            else None,
+        }
+        if audio_attr is not None or mime_type.startswith("audio/") or getattr(message, "voice", None) is not None or getattr(message, "audio", None) is not None:
+            detail.update(
+                role=MediaRole.AUDIO,
+                kind="voice" if bool(getattr(audio_attr, "voice", False)) or getattr(message, "voice", None) is not None else "audio",
             )
-        if mime_type.startswith("video/") or bool(getattr(media, "video", False)):
-            return MediaRole.VIDEO
-        if mime_type.startswith("audio/") or bool(getattr(media, "audio", False)):
-            return MediaRole.AUDIO
-        return MediaRole.DOCUMENT
+        elif bool(getattr(video_attr, "round_message", False)) or getattr(message, "video_note", None) is not None:
+            detail.update(role=MediaRole.VIDEO, kind="round_video")
+        elif animated or mime_type == "image/gif" or getattr(message, "gif", None) is not None:
+            detail.update(role=MediaRole.ANIMATION, kind="animation")
+        elif mime_type.startswith("video/") or getattr(message, "video", None) is not None:
+            detail.update(role=MediaRole.VIDEO, kind="video")
+        elif mime_type.startswith("image/"):
+            detail.update(role=MediaRole.IMAGE, kind="photo")
+        else:
+            detail.update(role=MediaRole.DOCUMENT, kind="document")
+        return {name: value for name, value in detail.items() if value is not None}
 
     @classmethod
     def _ordered_album_members(
@@ -2469,6 +2602,8 @@ class TelegramWorkspaceAdapter:
 
         async def run(client: Any, lease: TelegramLease, _attempt: _Attempt) -> Mapping[str, Any]:
             operation = request.operation
+            if operation is SocialReadOperation.RESOLVE_ITEM:
+                return await self._resolve_item_link(client, lease, request)
             if operation is SocialReadOperation.SEARCH_TARGETS:
                 return await self._read_targets(client, lease, request)
             if operation is SocialReadOperation.SEARCH_ITEMS and request.target_ref is None:

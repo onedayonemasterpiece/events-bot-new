@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Added: private `eventsBot` MCP Telegram reads now resolve canonical public and
+  private message links, classify voice/audio/photo/video/round-video/
+  animation/document media into additive safe attachment details, and preserve
+  `media[]` as principal-bound opaque asset refs. When the existing audio
+  pipeline is enabled, high-level reads default to cache-first owner-bound
+  voice/audio transcription with optional `transcribe_audio=false`, ready or
+  opaque pending status, repeat-read deduplication and per-attachment failure
+  isolation. Native/provider/session/path data remains excluded; VK exact-link,
+  audio-first tool order, OAuth/resource identity and automatic reconnect
+  contracts remain unchanged.
+
 - Fixed: private `eventsBot` MCP social reads now replace provider-internal
   strings nested in `media[]` with principal-bound outer asset refs, so every
   returned Telegram image can be passed directly to `social_asset_preview`

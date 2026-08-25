@@ -1255,6 +1255,133 @@ async def test_telegram_get_item_expands_album_even_from_one_member(harness):
 
 
 @pytest.mark.asyncio
+async def test_telegram_public_and_private_message_links_resolve_exact_item(harness):
+    adapter, client, refs, _ = harness
+    public = await adapter.read(
+        read_request(
+            SocialReadOperation.RESOLVE_ITEM,
+            target_locator=TargetLocator(
+                TargetLocatorKind.PROFILE_LINK,
+                "https://t.me/editorial/500",
+            ),
+            read_access=SocialReadAccess.PUBLIC,
+        )
+    )
+    assert public["item"]["item_ref"].startswith("itm_")
+    assert public["source_target"]["target_ref"] == CHANNEL_REF
+
+    channel = refs.targets[CHANNEL_REF].entity
+
+    async def private_entity(value):
+        assert value == -100100
+        return channel
+
+    client.get_entity = private_entity
+    private = await adapter.read(
+        read_request(
+            SocialReadOperation.RESOLVE_ITEM,
+            target_locator=TargetLocator(
+                TargetLocatorKind.PROFILE_LINK,
+                "https://t.me/c/100/500",
+            ),
+            read_access=SocialReadAccess.PRIVATE,
+        )
+    )
+    assert private["item"]["item_ref"].startswith("itm_")
+    assert "message_id" not in repr(private)
+
+
+@pytest.mark.asyncio
+async def test_telegram_message_link_rejects_malformed_and_unavailable(harness):
+    adapter, client, _, _ = harness
+    malformed = read_request(
+        SocialReadOperation.RESOLVE_ITEM,
+        target_locator=TargetLocator(
+            TargetLocatorKind.PROFILE_LINK,
+            "https://t.me/editorial/not-a-message",
+        ),
+        read_access=SocialReadAccess.PUBLIC,
+    )
+    with pytest.raises(SocialWorkspaceValidationError, match="not canonical"):
+        await adapter.read(malformed)
+
+    async def unavailable(_entity, *, ids):
+        del ids
+        return None
+
+    client.get_messages = unavailable
+    with pytest.raises(TelegramWorkspaceError) as caught:
+        await adapter.read(
+            replace(
+                malformed,
+                target_locator=TargetLocator(
+                    TargetLocatorKind.PROFILE_LINK,
+                    "https://t.me/editorial/999",
+                ),
+            )
+        )
+    assert "999" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_telegram_media_details_classify_actual_document_attributes(harness):
+    adapter, client, refs, _ = harness
+
+    def attribute(name, **values):
+        result = type(name, (), {})()
+        for key, value in values.items():
+            setattr(result, key, value)
+        return result
+
+    cases = [
+        ("voice", "audio/ogg", [attribute("DocumentAttributeAudio", voice=True, duration=4)]),
+        ("audio", "audio/mpeg", [attribute("DocumentAttributeAudio", voice=False, duration=5)]),
+        ("video", "video/mp4", [attribute("DocumentAttributeVideo", round_message=False, duration=6)]),
+        ("round_video", "video/mp4", [attribute("DocumentAttributeVideo", round_message=True, duration=7)]),
+        ("animation", "video/mp4", [attribute("DocumentAttributeAnimated")]),
+        ("document", "application/pdf", []),
+    ]
+    messages = []
+    for offset, (kind, mime, attributes) in enumerate(cases, start=1):
+        message = Message(2000 + offset, kind)
+        document = SimpleNamespace(
+            id=3000 + offset,
+            access_hash=4000 + offset,
+            file_reference=b"synthetic",
+            mime_type=mime,
+            size=100 + offset,
+            attributes=attributes,
+        )
+        message.media = SimpleNamespace(document=document)
+        message.document = document
+        messages.append(message)
+    photo = Message(2010, "photo")
+    photo.media = SimpleNamespace(photo=SimpleNamespace(id=3010))
+    messages.append(photo)
+    client.messages[CHANNEL_REF] = list(reversed(messages))
+
+    page = await adapter.read(
+        read_request(
+            SocialReadOperation.LIST_ITEMS,
+            target_ref=CHANNEL_REF,
+            limit=len(messages),
+        )
+    )
+    observed = {item["text"]: item["attachments"][0]["kind"] for item in page["results"]}
+    assert observed == {
+        "voice": "voice",
+        "audio": "audio",
+        "video": "video",
+        "round_video": "round_video",
+        "animation": "animation",
+        "document": "document",
+        "photo": "photo",
+    }
+    assert all(len(item["media"]) == 1 for item in page["results"])
+    assert all(ref in refs.assets for item in page["results"] for ref in item["media"])
+
+
+@pytest.mark.asyncio
 async def test_cursor_is_bound_to_operation_target_query_sample_and_dates(harness):
     adapter, _, refs, _ = harness
     history_request = read_request(

@@ -129,6 +129,8 @@ def attach_private_events_mcp(
             mcp_enabled=resolved.enabled,
             signing_key=resolved.signing_key,
         )
+        if audio_service is not None and server.social_workspace is not None:
+            server.social_workspace.enable_audio_transcription(audio_service)
     server.register(app)
     logger.info(
         "private_events_mcp attached endpoint_fingerprint=%s mode=%s",

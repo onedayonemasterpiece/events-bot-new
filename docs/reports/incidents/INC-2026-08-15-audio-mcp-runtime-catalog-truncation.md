@@ -122,6 +122,12 @@ or renaming any existing tool and without changing OAuth consent.
 
 ## Release And Closure Evidence
 
+- 2026-08-25 integration regression: Telegram high-level read enrichment reuses
+  the existing audio service internally without adding a top-level tool; the
+  standalone start/status/get descriptors remain the discovery prefix in their
+  original order. Focused catalog, private MCP, audio and remote-session tests
+  are required again before release; production/live evidence remains pending.
+
 - deployed SHA: `5e86d87583875b240f3cdbac9f198e6742e4b6c0`, reachable
   from `origin/main`
 - deploy path: `scripts/deploy_fly_main.sh` from a clean detached worktree at

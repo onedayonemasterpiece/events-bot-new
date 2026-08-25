@@ -46,6 +46,10 @@ scope.
 - Preserve the existing rotating, replay-resistant behavior for explicit
   `offline_access` grants.
 - Preserve the original rotation policy for public Codex and OpenCode clients.
+- Later additive Telegram item-link/media/audio read fields must preserve the
+  same endpoint, client/resource/audience and refresh state. A normal service
+  restart may reconnect automatically; rollout must not delete/re-add the app,
+  rotate connector identity or require another bootstrap token.
 
 ## Regression contract
 
