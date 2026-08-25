@@ -22,8 +22,48 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate semantic model and foreign keys
-        run: python scripts/validate_product_atlas_v1.py
-      - name: Run focused repository test
+        id: semantic
+        shell: bash
         run: |
-          python -m pip install --disable-pip-version-check pytest
-          python -m pytest -q tests/test_product_atlas_v1.py
+          set +e
+          python scripts/validate_product_atlas_v1.py > product-atlas-semantic.log 2>&1
+          status=$?
+          cat product-atlas-semantic.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Run focused repository test
+        if: always()
+        id: focused
+        shell: bash
+        run: |
+          set +e
+          python -m pip install --disable-pip-version-check pytest > product-atlas-test.log 2>&1
+          install_status=$?
+          if [ "$install_status" -eq 0 ]; then
+            python -m pytest -q tests/test_product_atlas_v1.py >> product-atlas-test.log 2>&1
+            status=$?
+          else
+            status=$install_status
+          fi
+          cat product-atlas-test.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Publish diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-atlas-v1-validation-${{ github.run_id }}
+          path: |
+            product-atlas-semantic.log
+            product-atlas-test.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Write validation summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Product Atlas v1"
+            echo "- semantic exit: ${{ steps.semantic.outputs.exit_code }}"
+            echo "- focused test exit: ${{ steps.focused.outputs.exit_code }}"
+          } >> "$GITHUB_STEP_SUMMARY"
