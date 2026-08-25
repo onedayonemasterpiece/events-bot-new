@@ -89,6 +89,17 @@ def _job_age_hours(job: TranscriptionJob) -> float | None:
     return max(0.0, elapsed.total_seconds() / 3600)
 
 
+def _retry_after_seconds(exc: BaseException) -> int | None:
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    raw = headers.get("retry-after") if hasattr(headers, "get") else None
+    try:
+        seconds = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return min(max(seconds, 1), 6 * 3600)
+
+
 class KaggleAudioBackend:
     def __init__(
         self,
@@ -298,6 +309,12 @@ class KaggleAudioBackend:
                 self.client.get_kernel_status, job.kernel_ref
             )
         except Exception as exc:
+            retry_after = _retry_after_seconds(exc)
+            retry_not_before = (
+                int(datetime.now(timezone.utc).timestamp()) + retry_after
+                if retry_after is not None
+                else None
+            )
             return ReconcileResult(
                 state=JobState.RUNNING,
                 progress={
@@ -305,6 +322,8 @@ class KaggleAudioBackend:
                     "progress_percent": 20,
                     "retry_safe": True,
                     "status_error": type(exc).__name__,
+                    "retry_after_seconds": retry_after,
+                    "retry_not_before": retry_not_before,
                 },
             )
         state = str(status.get("status") or "").strip().upper()

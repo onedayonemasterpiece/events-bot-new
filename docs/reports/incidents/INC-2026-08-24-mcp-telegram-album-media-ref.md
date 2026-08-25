@@ -1,6 +1,6 @@
 # INC-2026-08-24 MCP Telegram albums returned unusable media references
 
-Status: open — serialized audio-dispatch hotfix pending
+Status: open — provider Retry-After hotfix pending
 Severity: sev2
 Service: private eventsBot MCP social workspace, Telegram reads and image preview
 Opened: 2026-08-24
@@ -92,6 +92,11 @@ accepted as a public reference or returned as metadata.
   Kaggle/Telegram session in a burst. Kaggle began returning HTTP 429 for
   status reads; the 12 canonical jobs remained safely queued and no further
   duplicate jobs were created.
+- 2026-08-25 21:35 UTC: serialized-dispatch PR `#578` was deployed from exact
+  `origin/main` as Fly release `v2033`. The job count remained exactly 12, but
+  a sanitized direct status probe returned HTTP 429 with a 4,600-second
+  `Retry-After`. The existing reconcile loop retained the job safely but did
+  not persist or honor that provider backoff.
 
 ## Root Cause
 
@@ -125,6 +130,10 @@ accepted as a public reference or returned as metadata.
    remote-session guard/status probes performed by those waiting tasks. A
    multi-voice thread therefore produced a status burst against one shared
    Kaggle kernel and could exhaust the provider's request allowance.
+8. Kaggle reconciliation converted every status exception into a retry-safe
+   `status_unavailable` result but discarded the HTTP `Retry-After` header.
+   The monitor therefore retried on its ordinary short poll interval instead
+   of holding the durable running job until the provider's stated reset.
 
 ## Contributing Factors
 
@@ -229,6 +238,8 @@ accepted as a public reference or returned as metadata.
 - [ ] Keep queued audio jobs durable without creating concurrent waiting
   dispatch tasks; schedule only the oldest job after the active run is terminal
   and apply a bounded global backoff when the shared session is busy.
+- [ ] Persist bounded Kaggle `Retry-After` evidence on a running job and skip
+  reconciliation until that wall-clock deadline survives process restarts.
 
 ## Release And Closure Evidence
 
@@ -245,13 +256,17 @@ accepted as a public reference or returned as metadata.
   [#577](https://github.com/onedayonemasterpiece/events-bot-new/pull/577),
   merged/deployed as `ef165165cddd765e9d0bf9cb95c5ffb5a0034426`,
   Fly `v2032`
+- serialized-dispatch hotfix PR:
+  [#578](https://github.com/onedayonemasterpiece/events-bot-new/pull/578),
+  merged/deployed as `8d8e2eeafaaea0d9c6cf6ac95653f656558e7a98`,
+  Fly `v2033`
 - deploy path: `scripts/deploy_fly_main.sh` from clean exact `origin/main`
 - regression checks: integrated local focused private MCP/audio/Telegram/VK
   suites pass on the integration branch; complete release suite and live
   acceptance remain pending final release candidate
 - post-deploy verification: provider byte ingress and stable repeat-read cache
-  identity passed; ready-result acceptance is pending serialized dispatch and
-  recovery from the provider status-rate limit
+  identity passed; serialized dispatch preserved exactly 12 canonical jobs;
+  ready-result acceptance is pending the provider-declared status backoff
 
 ## Prevention
 

@@ -1,4 +1,5 @@
 import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -6,7 +7,11 @@ import pytest
 from audio_transcription.asset_store import AudioAssetStore
 from audio_transcription.contracts import JobState
 from audio_transcription.job_store import AudioJobStore, JobOwnershipError
-from audio_transcription.kaggle_backend import DispatchReceipt, ReconcileResult
+from audio_transcription.kaggle_backend import (
+    DispatchReceipt,
+    KaggleAudioBackend,
+    ReconcileResult,
+)
 from audio_transcription.service import AudioTranscriptionService
 
 
@@ -260,4 +265,86 @@ async def test_shared_session_busy_applies_global_dispatch_backoff(tmp_path):
     assert service._dispatch_retry_not_before > asyncio.get_running_loop().time()
     assert jobs.get(first.job_ref, owner_binding=owner).state is JobState.QUEUED
     assert jobs.get(second.job_ref, owner_binding=owner).state is JobState.QUEUED
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_kaggle_reconcile_persists_bounded_retry_after(tmp_path):
+    class StatusError(Exception):
+        def __init__(self):
+            self.response = SimpleNamespace(headers={"retry-after": "4600"})
+
+    class RateLimitedClient:
+        def get_kernel_status(self, _kernel_ref):
+            raise StatusError()
+
+    jobs = AudioJobStore(tmp_path / "jobs.sqlite3")
+    owner = "a" * 64
+    job, _ = jobs.create(
+        owner_binding=owner,
+        idempotency_key="tg:" + "5" * 64,
+        asset_ref="aud_rate_limited",
+        request={"source_sha256": "5" * 64},
+    )
+    job = jobs.update(job.job_ref, state=JobState.RUNNING, kernel_ref="test/kernel")
+    before = int(time.time())
+
+    result = await KaggleAudioBackend(
+        SimpleNamespace(), object(), client=RateLimitedClient()
+    ).reconcile(job)
+
+    assert result.state is JobState.RUNNING
+    assert result.progress["phase"] == "status_unavailable"
+    assert result.progress["retry_after_seconds"] == 4600
+    assert before + 4600 <= result.progress["retry_not_before"] <= int(time.time()) + 4600
+
+
+@pytest.mark.asyncio
+async def test_monitor_honors_persisted_reconcile_retry_window(tmp_path):
+    root = tmp_path / "audio-runtime"
+
+    class CountingBackend:
+        def __init__(self):
+            self.reconciles = 0
+
+        async def reconcile(self, _job):
+            self.reconciles += 1
+            return ReconcileResult(
+                state=JobState.RUNNING,
+                progress={"phase": "running", "progress_percent": 50},
+            )
+
+    backend = CountingBackend()
+    jobs = AudioJobStore(root / "jobs.sqlite3")
+    owner = "a" * 64
+    job, _ = jobs.create(
+        owner_binding=owner,
+        idempotency_key="tg:" + "6" * 64,
+        asset_ref="aud_retry_hold",
+        request={"source_sha256": "6" * 64},
+    )
+    jobs.update(
+        job.job_ref,
+        state=JobState.RUNNING,
+        kernel_ref="test/kernel",
+        progress={
+            "phase": "status_unavailable",
+            "retry_not_before": int(time.time()) + 60,
+        },
+    )
+    service = AudioTranscriptionService(
+        SimpleNamespace(
+            root=root,
+            result_root=root / "results",
+            poll_interval_seconds=0.01,
+        ),
+        asset_store=object(),
+        job_store=jobs,
+        backend=backend,
+    )
+    service._last_retention_cleanup = time.monotonic()
+    service._monitor_task = asyncio.create_task(service._monitor_loop())
+    await asyncio.sleep(0.05)
+
+    assert backend.reconciles == 0
     await service.close()
