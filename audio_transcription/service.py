@@ -52,6 +52,7 @@ class AudioTranscriptionService:
         self._dispatch_lock = asyncio.Semaphore(1)
         self._reconcile_locks: dict[str, asyncio.Lock] = {}
         self._provider_ingress_locks: dict[str, asyncio.Lock] = {}
+        self._dispatch_retry_not_before = 0.0
         self._last_retention_cleanup = 0.0
         self._closed = False
 
@@ -257,6 +258,23 @@ class AudioTranscriptionService:
         existing = self._tasks.get(job.job_ref)
         if existing is not None and not existing.done():
             return
+        loop = asyncio.get_running_loop()
+        if loop.time() < self._dispatch_retry_not_before:
+            return
+        # Only one job may be crossing the shared Telegram/Kaggle dispatch
+        # boundary at a time.  The semaphore protects the backend call itself,
+        # but creating one waiting task per attachment still causes every task
+        # to probe the same remote-session status in a burst as soon as the
+        # lock is released.  Keep the durable jobs queued instead; the monitor
+        # will advance the next one after the active run becomes terminal.
+        if any(not task.done() for task in self._tasks.values()):
+            return
+        if any(
+            active.job_ref != job.job_ref
+            and active.state in {JobState.DISPATCHING, JobState.RUNNING}
+            for active in self.job_store.active_jobs()
+        ):
+            return
         task = asyncio.create_task(
             self._dispatch(job.job_ref, job.owner_binding),
             name=f"audio-transcription-dispatch-{job.job_ref[-8:]}",
@@ -288,6 +306,18 @@ class AudioTranscriptionService:
                 retry_safe = bool(getattr(exc, "retry_safe", False))
                 is_session_busy = type(exc).__name__ == "RemoteTelegramSessionBusyError"
                 if is_session_busy or (retry_safe and attempt < 4):
+                    if is_session_busy:
+                        self._dispatch_retry_not_before = (
+                            asyncio.get_running_loop().time()
+                            + max(
+                                5.0,
+                                float(
+                                    getattr(
+                                        self.config, "poll_interval_seconds", 15.0
+                                    )
+                                ),
+                            )
+                        )
                     self.job_store.update(
                         job_ref,
                         state=JobState.QUEUED,
@@ -373,10 +403,22 @@ class AudioTranscriptionService:
                 self._maybe_cleanup_expired_results()
                 active = self.job_store.active_jobs()
                 for job in active:
-                    if job.state is JobState.QUEUED:
-                        self._schedule_dispatch(job)
-                    elif job.state is JobState.RUNNING:
+                    if job.state is JobState.RUNNING:
                         await self._reconcile_job(job)
+                # Preserve creation order and schedule at most one durable
+                # queued/restart-interrupted dispatch per pass.
+                # _schedule_dispatch also refuses to overlap an active local
+                # run or a retry backoff.
+                queued = next(
+                    (
+                        job
+                        for job in active
+                        if job.state in {JobState.QUEUED, JobState.DISPATCHING}
+                    ),
+                    None,
+                )
+                if queued is not None:
+                    self._schedule_dispatch(queued)
             except asyncio.CancelledError:
                 raise
             except Exception:

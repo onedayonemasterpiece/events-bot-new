@@ -157,3 +157,107 @@ async def test_provider_ingress_first_status_observes_instant_ready_backend(tmp_
     assert result["ready"] is True
     assert result["text"] == "ready now"
     await service.close()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_scheduler_keeps_multiple_durable_jobs_serial(tmp_path):
+    root = tmp_path / "audio-runtime"
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    class BlockingBackend:
+        def __init__(self):
+            self.calls = []
+
+        async def dispatch(self, job):
+            self.calls.append(job.job_ref)
+            entered.set()
+            await release.wait()
+            return DispatchReceipt("test/kernel", "input/ref", "key/ref")
+
+    backend = BlockingBackend()
+    jobs = AudioJobStore(root / "jobs.sqlite3")
+    owner = "a" * 64
+    first, _ = jobs.create(
+        owner_binding=owner,
+        idempotency_key="tg:" + "1" * 64,
+        asset_ref="aud_first",
+        request={"source_sha256": "1" * 64},
+    )
+    second, _ = jobs.create(
+        owner_binding=owner,
+        idempotency_key="tg:" + "2" * 64,
+        asset_ref="aud_second",
+        request={"source_sha256": "2" * 64},
+    )
+    service = AudioTranscriptionService(
+        SimpleNamespace(root=root, result_root=root / "results"),
+        asset_store=object(),
+        job_store=jobs,
+        backend=backend,
+    )
+
+    service._schedule_dispatch(first)
+    service._schedule_dispatch(second)
+    await asyncio.wait_for(entered.wait(), timeout=1)
+    await asyncio.sleep(0)
+
+    assert backend.calls == [first.job_ref]
+    assert jobs.get(second.job_ref, owner_binding=owner).state is JobState.QUEUED
+
+    release.set()
+    await asyncio.gather(*tuple(service._tasks.values()))
+    assert jobs.get(first.job_ref, owner_binding=owner).state is JobState.RUNNING
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_shared_session_busy_applies_global_dispatch_backoff(tmp_path):
+    root = tmp_path / "audio-runtime"
+
+    class RemoteTelegramSessionBusyError(Exception):
+        pass
+
+    class BusyBackend:
+        def __init__(self):
+            self.calls = 0
+
+        async def dispatch(self, _job):
+            self.calls += 1
+            raise RemoteTelegramSessionBusyError("synthetic shared-session hold")
+
+    backend = BusyBackend()
+    jobs = AudioJobStore(root / "jobs.sqlite3")
+    owner = "a" * 64
+    first, _ = jobs.create(
+        owner_binding=owner,
+        idempotency_key="tg:" + "3" * 64,
+        asset_ref="aud_first",
+        request={"source_sha256": "3" * 64},
+    )
+    second, _ = jobs.create(
+        owner_binding=owner,
+        idempotency_key="tg:" + "4" * 64,
+        asset_ref="aud_second",
+        request={"source_sha256": "4" * 64},
+    )
+    service = AudioTranscriptionService(
+        SimpleNamespace(
+            root=root,
+            result_root=root / "results",
+            poll_interval_seconds=20,
+        ),
+        asset_store=object(),
+        job_store=jobs,
+        backend=backend,
+    )
+
+    service._schedule_dispatch(first)
+    await asyncio.gather(*tuple(service._tasks.values()))
+    service._schedule_dispatch(second)
+
+    assert backend.calls == 1
+    assert service._dispatch_retry_not_before > asyncio.get_running_loop().time()
+    assert jobs.get(first.job_ref, owner_binding=owner).state is JobState.QUEUED
+    assert jobs.get(second.job_ref, owner_binding=owner).state is JobState.QUEUED
+    await service.close()

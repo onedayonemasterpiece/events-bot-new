@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Fixed: multi-voice transcription ingress now keeps later durable jobs queued
+  instead of creating one waiting dispatch task and remote-session status probe
+  per attachment. The oldest queued job advances only when no local audio run
+  is active, and shared-session contention applies a global retry backoff,
+  preventing Kaggle status bursts while preserving every durable job.
+
 - Fixed: Telegram voice/audio repeat reads no longer use the expiring
   `file_reference` download capability as durable provider-media identity.
   Stable provider object/message coordinates now drive the owner-bound
