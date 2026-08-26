@@ -1246,6 +1246,21 @@ class SocialWorkspaceRuntime:
         projected = self._project_contract_value(safe, schema)
         if not isinstance(projected, dict):
             raise SocialWorkspaceRuntimeError("provider response must be an object")
+        if (
+            request.operation is SocialReadOperation.RESOLVE_ITEM
+            and request.expected_target_kinds
+        ):
+            source_target = projected.get("source_target")
+            resolved_kind = (
+                source_target.get("kind")
+                if isinstance(source_target, Mapping)
+                else None
+            )
+            expected_kind = request.expected_target_kinds[0]
+            if resolved_kind != expected_kind.value:
+                raise SocialWorkspaceRuntimeError(
+                    "resolved item source target kind mismatch"
+                )
         encoded = _json(projected).encode("utf-8")
         if len(encoded) > self.response_cap_bytes:
             raise SocialWorkspaceRuntimeError("response cap exceeded")

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed: `social_item_resolve` now publishes an operation-specific ChatGPT
+  input schema that requires one canonical link and its read-access class and
+  no longer advertises unrelated target-kind/search/feed fields. Legacy
+  connectors with the former generic schema safely infer public/private access
+  from an exact link and may supply one non-self target-kind hint, which is
+  checked against the resolved source. This removes repeated invalid probes
+  before Telegram history pagination and transcription.
+
 - Fixed: successful social-provider reads that are later withheld by a local
   response/media budget no longer increment the provider failure circuit or
   turn subsequent valid reads into a misleading provider-circuit rejection.
