@@ -223,6 +223,60 @@ def test_telegram_item_link_and_audio_flag_are_optional_compatible_additions() -
     assert "transcribe_audio" not in SOCIAL_WORKSPACE_READ_SCHEMA["required"]
 
 
+def test_exact_item_resolution_infers_access_for_legacy_chatgpt_calls() -> None:
+    private_request = validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "resolve_item",
+            "target_locator": {
+                "kind": "profile_link",
+                "value": "https://t.me/c/100/500",
+            },
+            # The old generic ChatGPT schema advertised this resolve_target-only
+            # hint and did not require read_access.
+            "expected_target_kinds": ["group"],
+        }
+    )
+    assert private_request.read_access.value == "private"
+    assert private_request.expected_target_kinds == (SocialTargetKind.GROUP,)
+
+    public_request = validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "resolve_item",
+            "target_locator": {
+                "kind": "profile_link",
+                "value": "https://t.me/example_channel/42",
+            },
+        }
+    )
+    assert public_request.read_access.value == "public"
+
+
+@pytest.mark.parametrize(
+    "expected_target_kinds",
+    [["self"], ["group", "channel"]],
+)
+def test_exact_item_resolution_rejects_unsafe_legacy_target_kind_hints(
+    expected_target_kinds: list[str],
+) -> None:
+    with pytest.raises(
+        SocialWorkspaceValidationError,
+        match="at most one non-self target kind",
+    ):
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "resolve_item",
+                "target_locator": {
+                    "kind": "profile_link",
+                    "value": "https://t.me/c/100/500",
+                },
+                "expected_target_kinds": expected_target_kinds,
+            }
+        )
+
+
 def test_item_output_schema_accepts_additive_safe_audio_details() -> None:
     payload = {
         "item": {

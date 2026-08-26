@@ -857,6 +857,27 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         if "read_access" in data
         else None
     )
+    # Compatibility for ChatGPT connectors that cached the former generic
+    # resolve_item schema, where read_access was advertised as optional.  The
+    # canonical /c/<internal-chat>/<message> Telegram shape is unambiguously a
+    # private read; all other exact item links use the public lane.
+    if (
+        operation is SocialReadOperation.RESOLVE_ITEM
+        and read_access is None
+        and target_locator is not None
+        and target_locator.kind is TargetLocatorKind.PROFILE_LINK
+    ):
+        is_private_telegram_item = False
+        if platform is SocialPlatform.TELEGRAM and target_locator.value is not None:
+            path = urlsplit(target_locator.value).path
+            is_private_telegram_item = bool(
+                re.fullmatch(r"/c/[1-9][0-9]*/[1-9][0-9]*/?", path)
+            )
+        read_access = (
+            SocialReadAccess.PRIVATE
+            if is_private_telegram_item
+            else SocialReadAccess.PUBLIC
+        )
     raw_expected_kinds = data.get("expected_target_kinds", [])
     if (
         not isinstance(raw_expected_kinds, list)
@@ -932,9 +953,12 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             raise SocialWorkspaceValidationError(
                 "Telegram item resolution requires public or private read access"
             )
-        if expected_target_kinds:
+        if (
+            len(expected_target_kinds) > 1
+            or SocialTargetKind.SELF in expected_target_kinds
+        ):
             raise SocialWorkspaceValidationError(
-                "exact item resolution does not accept target kinds"
+                "exact item resolution accepts at most one non-self target kind"
             )
     elif operation is SocialReadOperation.SEARCH_TARGETS:
         if not query:

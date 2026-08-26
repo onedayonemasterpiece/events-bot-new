@@ -128,7 +128,7 @@ matching its granted scopes and the enabled provider/capability flags:
 |---|---|
 | `social_capabilities` | current provider, target and action capabilities |
 | `social_target_resolve` | resolve Saved/self, exact person, channel/group/community or known provider reference into an opaque bound ref |
-| `social_item_resolve` | resolve one canonical VK wall-post URL or public/private Telegram message URL into bound item and source-target refs |
+| `social_item_resolve` | resolve one canonical VK wall-post URL or public/private Telegram message URL directly into bound item and source-target refs; use before target search/feed when the prompt already contains the exact item URL |
 | `social_targets_search` | bounded target search |
 | `social_targets_list` | bounded public/managed target discovery |
 | `social_dialogs_list` | VK-only metadata list of all or unread dialogs: opaque target, display name, kind and unread count, with no message body/native peer ID |
@@ -294,6 +294,20 @@ response contains only principal-bound `tgt_*`, `itm_*` and `ast_*` references;
 the native peer/message values used for the exact Telethon lookup never cross
 the adapter boundary. The VK exact wall-link path remains unchanged.
 
+The ChatGPT-visible `social_item_resolve` input is deliberately narrower than
+the shared server read contract. It requires exactly `platform`,
+`operation=resolve_item`, a `profile_link` locator and `read_access`, with only
+optional `transcribe_audio`; it does not advertise `expected_target_kinds`,
+search terms, target refs, cursors or feed limits. This is an argument-generation
+contract as well as validation: when the user supplied an exact item URL, the
+client must call this resolver first rather than discover a target and paginate
+its history. For a connector still holding the former generic schema, the
+server temporarily infers private access for canonical Telegram `/c/` item
+links and public access for other exact item links. It accepts at most one
+non-self legacy target-kind hint and checks that hint against the resolved
+source; this compatibility path does not relax exact-link or OAuth access
+binding.
+
 Message/feed/search/thread results retain `media` as the ordered array of
 opaque outer asset refs. They may add `attachments` (and the closed schema also
 reserves `media_details`) with the corresponding asset ref, safe MIME/size/
@@ -347,6 +361,14 @@ fixed completion deadline: inspect status at a bounded cadence, honor the
 reported durable state, call `audio_transcription_get` only after `complete`,
 or repeat the same high-level social read later to receive ready text from the
 cache. A multi-voice chat may take several serialized runs to finish.
+
+A ChatGPT skill/custom instruction may persist the efficient client sequence:
+exact URL first, retain returned opaque refs/cursors, poll only returned
+transcription refs at bounded cadence, and reuse completed results. This can
+remove repeated catalogue exploration and invalid fallback calls, but it does
+not make cold transcription synchronous or bypass the dedicated serialized
+Telegram/Kaggle lane. Server-side idempotency remains authoritative; client
+memory is an orchestration optimization, not a cache or security boundary.
 
 The Telegram MCP workspace continues to use only
 `TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP`. The remote transcription worker keeps

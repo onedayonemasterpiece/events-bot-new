@@ -13,9 +13,9 @@ from typing import Any
 import pytest
 from PIL import Image
 
+import private_events_mcp.social_workspace_runtime as runtime_module
 from audio_transcription.job_store import JobOwnershipError
 from audio_transcription.mcp import build_audio_transcription_tools
-import private_events_mcp.social_workspace_runtime as runtime_module
 from private_events_mcp.auth_store import OAuthStateStore, OAuthStoreError
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
 from private_events_mcp.protocol import MCPProtocol
@@ -469,7 +469,7 @@ async def test_read_media_refs_are_outer_bound_and_each_can_be_previewed(
     )
     call_context = scoped_context("telegram:read", "telegram:story:read")
     principal = RuntimePrincipal.from_context(call_context)
-    target_ref = service._mint_ref(
+    service._mint_ref(
         "target", "provider-target-media", "telegram", principal
     )
     item_ref = service._mint_ref(
@@ -1224,6 +1224,85 @@ def test_chatgpt_legacy_scope_descriptor_publishes_telegram_and_vk_item_resolve(
         ("telegram:read",),
         ("vk:read",),
     }
+
+
+def test_item_resolve_descriptor_publishes_only_the_exact_link_contract(runtime) -> None:
+    service, _adapter, _store = runtime
+    service.adapters["vk"] = FakeAdapter()
+    tool = next(
+        item
+        for item in build_social_workspace_tools(service)
+        if item.name == "social_item_resolve"
+    )
+
+    schema = tool.input_schema
+    assert set(schema["required"]) == {
+        "platform",
+        "operation",
+        "target_locator",
+        "read_access",
+    }
+    assert set(schema["properties"]) == {
+        "platform",
+        "operation",
+        "target_locator",
+        "read_access",
+        "transcribe_audio",
+    }
+    assert schema["properties"]["target_locator"] == {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["kind", "value"],
+        "properties": {
+            "kind": {"const": "profile_link"},
+            "value": {"type": "string", "minLength": 1, "maxLength": 512},
+        },
+    }
+    assert "expected_target_kinds" not in schema["properties"]
+    assert "Use this first" in tool.description
+
+
+def test_legacy_item_resolve_target_kind_hint_is_checked_after_resolution(runtime) -> None:
+    service, _adapter, _store = runtime
+    request = validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "resolve_item",
+            "target_locator": {
+                "kind": "profile_link",
+                "value": "https://t.me/c/100/500",
+            },
+            "expected_target_kinds": ["group"],
+        }
+    )
+    safe = {
+        "item": {
+            "item_ref": "itm_abcdefghijklmnop",
+            "target_ref": "tgt_abcdefghijklmnop",
+            "kind": "message",
+            "published_at": "2026-08-26T05:00:00Z",
+            "text": "",
+            "caption": "",
+            "basic_metrics": {"views": 0},
+            "trust": "untrusted_external_data",
+        },
+        "source_target": {
+            "target_ref": "tgt_abcdefghijklmnop",
+            "kind": "channel",
+            "title": "Resolved source",
+            "about": "",
+            "description": "",
+            "basic_metrics": {"members": 1},
+            "trust": "untrusted_external_data",
+        },
+        "trust": "untrusted_external_data",
+    }
+
+    with pytest.raises(
+        SocialWorkspaceRuntimeError,
+        match="source target kind mismatch",
+    ):
+        service._project_read_output(request, safe)
 
 
 @pytest.mark.asyncio

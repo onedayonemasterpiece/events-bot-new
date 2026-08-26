@@ -1,6 +1,6 @@
 # INC-2026-08-25 ChatGPT retained a VK-only action and could not poll social voice jobs
 
-Status: mitigating — principal fix and catch-up complete; action refresh and live ChatGPT acceptance pending
+Status: mitigating — principal fix/catch-up and first action refresh complete; exact-schema release and live ChatGPT acceptance pending
 Severity: sev2
 Service: private eventsBot ChatGPT MCP action discovery and Telegram voice reads
 Opened: 2026-08-25
@@ -22,6 +22,16 @@ jobs, but the returned `atr_*` references could not be polled by the public
 audio status/get tools because Social Workspace and standalone audio ingress
 derived two different owner bindings from the same OAuth context.
 
+After the administrator refreshed the actions, a new ChatGPT run did discover
+and invoke `social_item_resolve`, but the operation still published the generic
+Social Workspace read union rather than its exact semantic contract. ChatGPT
+therefore generated repeated invalid argument combinations before falling back
+to target/history reads. The fallback completed and every newly created voice
+job reached ready state, proving that provider access, principal compatibility,
+the transcription lane and cache ownership were healthy; the remaining delay
+was client-contract/orchestration overhead plus normal cold serialized audio
+work.
+
 ## User / Business Impact
 
 - The requested Telegram chat read did not return the requested thread or its
@@ -34,6 +44,10 @@ derived two different owner bindings from the same OAuth context.
   final result.
 - Connection refresh appeared successful, which obscured the separate
   workspace action-publication boundary.
+- After action refresh, the client spent about three minutes on invalid exact-
+  resolver/discovery attempts before productive history reads, then needed the
+  normal serialized cold-transcription window for seven previously unseen
+  audio objects.
 
 ## Detection
 
@@ -107,6 +121,23 @@ derived two different owner bindings from the same OAuth context.
   immutable in-image SHA matched. Two consecutive bounded Telegram feed reads
   succeeded, and the latest sanitized Telegram circuit row retained zero
   consecutive failures with no circuit or flood deadline.
+- 2026-08-26 05:36–05:49 UTC — after the administrator refreshed the app
+  actions, a real new ChatGPT run invoked the Telegram item resolver fourteen
+  times, but all fourteen were rejected as invalid arguments. It then made
+  eight successful bounded history reads. Production remained ready with no
+  active Telegram circuit/flood row. Seven fresh, content-distinct audio jobs
+  created by this run advanced from queued/running to `7/7` complete in roughly
+  ten minutes with no terminal errors; none duplicated the prior completed
+  cohort.
+- 2026-08-26 05:50 UTC — code/schema comparison identified the next contract
+  defect: the tool-specific schema fixed only `operation=resolve_item` while
+  still advertising the generic read union and leaving semantic requirements
+  optional. The validator required a canonical profile-link locator and an
+  explicit Telegram access class and rejected resolver-only target-kind hints.
+  The exact rejected payload is intentionally not logged; the refreshed-chat
+  wording and published/validator mismatch make the legacy target-kind field
+  the leading argument-shape explanation rather than evidence of a provider
+  failure.
 
 ## Root Cause
 
@@ -137,6 +168,13 @@ derived two different owner bindings from the same OAuth context.
    successful adapter response was consequently persisted as a provider
    failure. After the threshold, the next read received a provider-circuit
    error even though neither Telegram nor the adapter had failed.
+9. The operation-specific `social_item_resolve` descriptor reused the generic
+   `SOCIAL_WORKSPACE_READ_SCHEMA`. It constrained only the operation enum, so
+   ChatGPT saw irrelevant fields such as `expected_target_kinds`, while
+   `target_locator` and `read_access` remained optional in JSON Schema even
+   though runtime validation required them. Refreshing the action therefore
+   exposed Telegram but did not give the model a generation-safe exact-link
+   contract.
 
 ## Contributing Factors
 
@@ -154,6 +192,8 @@ derived two different owner bindings from the same OAuth context.
 - Provider-circuit tests covered actual provider errors but did not assert that
   a successful provider call followed by a local quota refusal resets, rather
   than increments, the provider failure streak.
+- The descriptor tests asserted the provider enum and security scopes but did
+  not assert the operation-specific required/allowed argument set.
 
 ## Automation Contract
 
@@ -228,10 +268,14 @@ derived two different owner bindings from the same OAuth context.
   outcome. Successful adapter reads now remain provider successes when egress
   or media quota withholds the response, while real provider failures and flood
   waits retain the existing circuit behavior.
+- Narrowed the exact-item tool schema to its canonical-link contract and added
+  a bounded compatibility path for clients holding the former generic schema:
+  infer access from the canonical URL and accept at most one non-self target-
+  kind hint, checked against the resolved source.
 
 ## Follow-up Actions
 
-- [ ] Workspace administrator: refresh/review/publish the updated `eventsBot`
+- [x] Workspace administrator: refresh/review/publish the updated `eventsBot`
   actions without changing the MCP endpoint or OAuth identity.
 - [ ] Run the real new-chat Telegram link/thread/audio acceptance and attach a
   sanitized receipt.
@@ -242,8 +286,11 @@ derived two different owner bindings from the same OAuth context.
   documented terminal error before closure.
 - [x] Merge/deploy the local-policy/provider-circuit correction and prove two
   consecutive bounded Telegram reads leave the latest circuit row healthy.
-- [ ] Keep the incident open until `resolve_item` is observed from ChatGPT and
-  the requested high-level result succeeds.
+- [ ] Keep the incident open until `resolve_item` succeeds from ChatGPT and the
+  requested high-level result succeeds.
+- [ ] Refresh/review/publish the narrowed `social_item_resolve` schema after its
+  exact-main deploy, then prove one successful direct resolver call occurs
+  before any target-search/feed fallback.
 
 ## Release And Closure Evidence
 
@@ -253,6 +300,10 @@ derived two different owner bindings from the same OAuth context.
   `e327a400f0453fa38401e4cdb32ffed5a6ce61e6`, Fly `v2036`
 - local-policy/provider-circuit deploy:
   `548c5a681853c21da2f5e4a9a4df0d6a562a920f`, Fly `v2037`
+- refreshed-action observation before the exact-schema fix: production health
+  ready; fourteen invalid resolver calls, eight successful bounded history
+  reads, no active Telegram circuit/flood state, and `7/7` fresh audio jobs
+  complete with no errors
 - deploy path: both corrective releases used exact-main deployment through
   `scripts/deploy_fly_main.sh`
 - regression checks: production health ready; live authenticated server schema

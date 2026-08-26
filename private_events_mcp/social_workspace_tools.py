@@ -74,6 +74,55 @@ def _read_schema(
     return schema
 
 
+def _resolve_item_schema(
+    *,
+    read_access_values: tuple[str, ...],
+) -> dict[str, Any]:
+    """Publish the exact-link contract instead of the generic read union.
+
+    ChatGPT treats a tool schema as its argument-generation contract.  Leaving
+    resolve-target/search/feed-only fields in this schema caused the client to
+    send otherwise well-intentioned but semantically invalid combinations
+    before falling back to expensive feed pagination.
+    """
+
+    exact_access = [
+        value for value in read_access_values if value in {"public", "private"}
+    ]
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["platform", "operation", "target_locator", "read_access"],
+        "properties": {
+            "platform": {"type": "string", "enum": list(_PLATFORMS)},
+            "operation": {"const": SocialReadOperation.RESOLVE_ITEM.value},
+            "target_locator": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["kind", "value"],
+                "properties": {
+                    "kind": {"const": "profile_link"},
+                    "value": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512,
+                    },
+                },
+            },
+            "read_access": {"type": "string", "enum": exact_access},
+            "transcribe_audio": {
+                "type": "boolean",
+                "default": True,
+                "description": (
+                    "Enrich Telegram voice/audio media through the existing "
+                    "transcription pipeline."
+                ),
+            },
+        },
+    }
+
+
 def _thread_schema() -> dict[str, Any]:
     schema = copy.deepcopy(dict(SOCIAL_WORKSPACE_READ_SCHEMA))
     schema["properties"]["operation"] = {
@@ -454,6 +503,8 @@ def build_social_workspace_tools(
             raise rejected(exc) from None
 
     def read_schema(operation: SocialReadOperation) -> dict[str, Any]:
+        if operation is SocialReadOperation.RESOLVE_ITEM:
+            return _resolve_item_schema(read_access_values=read_access_values)
         return _read_schema(
             operation,
             read_access_values=read_access_values,
@@ -544,7 +595,7 @@ def build_social_workspace_tools(
                  SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_item_resolve", "Resolve exact social item",
-                 "Resolve one canonical VK or Telegram message URL to bound item and source-target references.",
+                 "Use this first when the prompt contains an exact VK or Telegram message URL; resolve that canonical URL directly to bound item and source-target references instead of searching or listing a feed.",
                  read_schema(SocialReadOperation.RESOLVE_ITEM),
                  SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
