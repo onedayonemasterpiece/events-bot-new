@@ -71,6 +71,12 @@ message merely because it was read or transcribed.
   Telethon role confirmed authorization, Premium eligibility and that the
   configured document resolves to a real custom emoji. No Telegram message was
   mutated by this prerequisite check.
+- 2026-08-26 13:09 UTC — a reversible local human-session canary created one
+  temporary Saved Messages item, sent the selected native custom reaction,
+  observed the exact reaction as chosen, then deleted the canary item. A
+  separate read-only search confirmed zero remaining canary messages. This
+  proves the provider/Telethon operation but does not replace the required
+  production MCP plus refreshed-ChatGPT canary.
 
 ## Root Cause
 
@@ -152,6 +158,9 @@ different custom-emoji ID without operator review.
   public schema enum exactly `github_added`, no native document-ID input.
 - Dedicated production MCP Telethon role: authorized, Premium and the reviewed
   custom-emoji document resolved successfully in a read-only probe.
+- Local Telethon mutation canary: selected custom reaction observed with
+  `chosen_order`; temporary Saved Messages item deleted and cleanup readback
+  found zero remnants.
 - Pending: refreshed/published ChatGPT action snapshot.
 - Pending: successful live `github_added` mutation plus semantic
   `list_reactions` readback.
