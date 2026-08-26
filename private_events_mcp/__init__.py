@@ -9,17 +9,19 @@ install_social_poll_extension()
 
 from .integration import attach_private_events_mcp
 from .social import (
-    InMemorySocialAdapter,
-    ProviderNeutralSocialAdapter,
-    SocialAdapterRegistry,
-    SocialProvider,
+    ResolvedTarget,
+    SocialAdapter,
+    SocialPost,
+    SocialPublishReceipt,
+    SocialReadResult,
 )
 
 __all__ = [
-    "InMemorySocialAdapter",
     "PrivateEventsMCPConfig",
-    "ProviderNeutralSocialAdapter",
-    "SocialAdapterRegistry",
-    "SocialProvider",
+    "ResolvedTarget",
+    "SocialAdapter",
+    "SocialPost",
+    "SocialPublishReceipt",
+    "SocialReadResult",
     "attach_private_events_mcp",
 ]
