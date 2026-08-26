@@ -22,6 +22,7 @@ from private_events_mcp.social_workspace import (
     SocialAction,
     SocialActionIntent,
     SocialPlatform,
+    SocialReactionPreset,
     SocialReadAccess,
     SocialReadOperation,
     SocialReadPurpose,
@@ -634,6 +635,7 @@ def intent(action, **changes):
         "destination_target_ref": None,
         "content": None,
         "reaction": None,
+        "reaction_preset": None,
         "schedule_at": None,
         "expected_revision": None,
     }
@@ -1609,6 +1611,86 @@ async def test_every_closed_mutation_family(harness, action, changes, provider_c
     assert receipt["retry_safe"] is False
     assert validate_action_status_response(receipt).value == "succeeded"
     assert provider_call in [name for name, _ in client.calls]
+
+
+@pytest.mark.asyncio
+async def test_github_added_preset_compiles_to_configured_custom_emoji(harness):
+    _, client, refs, governor = harness
+    adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: client,
+        refs=refs,
+        governor=governor,
+        telethon_types=FakeTypes(),
+        reaction_presets={SocialReactionPreset.GITHUB_ADDED: 5294334197832362643},
+        operation_timeout_seconds=1,
+    )
+
+    receipt = await adapter.execute(
+        intent(
+            SocialAction.REACTION,
+            item_ref=ITEM_REF,
+            reaction_preset=SocialReactionPreset.GITHUB_ADDED,
+        ),
+        operation_ref=op_ref(190),
+    )
+
+    assert receipt["status"] == "succeeded"
+    request = next(value for name, value in client.calls if name == "reaction")
+    assert request["reaction"] is None
+    assert request["custom_emoji_id"] == 5294334197832362643
+
+
+def test_github_added_preset_requires_server_side_document_binding(harness):
+    _, client, refs, governor = harness
+    with pytest.raises(ValueError, match="reaction preset"):
+        TelegramWorkspaceAdapter(
+            client_factory=lambda: client,
+            refs=refs,
+            governor=governor,
+            telethon_types=FakeTypes(),
+            reaction_presets={SocialReactionPreset.GITHUB_ADDED: 0},
+            operation_timeout_seconds=1,
+        )
+
+
+def test_github_custom_reaction_readback_uses_semantic_preset(harness):
+    _, client, refs, governor = harness
+    adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: client,
+        refs=refs,
+        governor=governor,
+        telethon_types=FakeTypes(),
+        reaction_presets={SocialReactionPreset.GITHUB_ADDED: 5294334197832362643},
+        operation_timeout_seconds=1,
+    )
+    message = Message(191)
+    message.reactions.results = [
+        SimpleNamespace(
+            reaction=SimpleNamespace(document_id=5294334197832362643),
+            count=1,
+        )
+    ]
+
+    assert adapter._reactions(message, ITEM_REF)["reactions"] == [
+        {"reaction": "github_added", "count": 1}
+    ]
+
+
+def test_default_telethon_types_constructs_native_custom_reaction() -> None:
+    from telethon.tl import types
+
+    bridge = telegram_adapter_module._DefaultTelethonTypes()
+    request = bridge.request(
+        "reaction",
+        peer=types.InputPeerSelf(),
+        message_id=1,
+        reaction=None,
+        custom_emoji_id=5294334197832362643,
+    )
+
+    assert request.reaction == [
+        types.ReactionCustomEmoji(document_id=5294334197832362643)
+    ]
 
 
 @pytest.mark.asyncio

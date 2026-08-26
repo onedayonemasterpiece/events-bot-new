@@ -65,6 +65,12 @@ class SocialAction(_StringEnum):
     STORY = "story"
 
 
+class SocialReactionPreset(_StringEnum):
+    """Closed semantic reactions whose provider IDs stay server-side."""
+
+    GITHUB_ADDED = "github_added"
+
+
 # Invoking one of these tools is the ChatGPT connector's typed assertion that
 # the current user explicitly requested the exact outbound action.  The
 # durable prepare/commit split still binds payload, target and idempotency, but
@@ -442,6 +448,7 @@ class SocialActionIntent:
     destination_target_ref: str | None
     content: RichContent | None
     reaction: str | None
+    reaction_preset: SocialReactionPreset | None
     schedule_at: str | None
     expected_revision: str | None
 
@@ -1229,7 +1236,8 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
         data,
         {
             "platform", "action", "idempotency_key", "target_ref", "item_ref",
-            "destination_target_ref", "content", "reaction", "schedule_at", "expected_revision",
+            "destination_target_ref", "content", "reaction", "reaction_preset",
+            "schedule_at", "expected_revision",
         },
         "request",
     )
@@ -1248,6 +1256,11 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
     reaction = _optional_text(data.get("reaction"), "reaction", maximum=32)
     if reaction is not None and not _REACTION_RE.fullmatch(reaction):
         raise SocialWorkspaceValidationError("reaction is invalid")
+    reaction_preset = (
+        _enum(data.get("reaction_preset"), SocialReactionPreset, "reaction preset")
+        if data.get("reaction_preset") is not None
+        else None
+    )
     schedule_at = (
         _validate_rfc3339(data.get("schedule_at"), "schedule_at")
         if data.get("schedule_at") is not None
@@ -1288,8 +1301,12 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
         raise SocialWorkspaceValidationError("item_ref is required for this action")
     if action is SocialAction.FORWARD and destination_ref is None:
         raise SocialWorkspaceValidationError("destination_target_ref is required for forward")
-    if action is SocialAction.REACTION and reaction is None:
-        raise SocialWorkspaceValidationError("reaction is required for reaction")
+    if action is SocialAction.REACTION and (reaction is None) == (reaction_preset is None):
+        raise SocialWorkspaceValidationError(
+            "exactly one of reaction or reaction_preset is required for reaction"
+        )
+    if reaction_preset is not None and platform is not SocialPlatform.TELEGRAM:
+        raise SocialWorkspaceValidationError("reaction preset is Telegram-only")
     if action is SocialAction.SCHEDULE and schedule_at is None:
         raise SocialWorkspaceValidationError("schedule_at is required for schedule")
     if action is SocialAction.STORY and content is not None and not content.media:
@@ -1301,7 +1318,7 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
         SocialAction.EDIT: {"item_ref", "content", "expected_revision"},
         SocialAction.DELETE: {"item_ref", "expected_revision"},
         SocialAction.FORWARD: {"item_ref", "destination_target_ref"},
-        SocialAction.REACTION: {"item_ref", "reaction"},
+        SocialAction.REACTION: {"item_ref", "reaction", "reaction_preset"},
         SocialAction.COMMENT: {"item_ref", "content"},
         SocialAction.SCHEDULE: {"target_ref", "content", "schedule_at"},
         SocialAction.STORY: {"target_ref", "content"},
@@ -1314,6 +1331,7 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
             "destination_target_ref": destination_ref,
             "content": content,
             "reaction": reaction,
+            "reaction_preset": reaction_preset,
             "schedule_at": schedule_at,
             "expected_revision": expected_revision,
         }.items()
@@ -1333,6 +1351,7 @@ def validate_prepare_request(payload: Mapping[str, Any]) -> SocialActionIntent:
         destination_target_ref=destination_ref,
         content=content,
         reaction=reaction,
+        reaction_preset=reaction_preset,
         schedule_at=schedule_at,
         expected_revision=expected_revision,
     )
@@ -2097,10 +2116,38 @@ SOCIAL_WORKSPACE_PREPARE_SCHEMA: Mapping[str, Any] = {
         "destination_target_ref": {"$ref": "#/$defs/target_ref"},
         "content": {"$ref": "#/$defs/content"},
         "reaction": {"type": "string", "minLength": 1, "maxLength": 32},
+        "reaction_preset": {
+            "type": "string",
+            "enum": _enum_values(SocialReactionPreset),
+            "description": (
+                "Telegram-only semantic marker. github_added uses the "
+                "server-configured GitHub custom emoji without exposing its "
+                "provider document ID."
+            ),
+        },
         "schedule_at": {"type": "string", "format": "date-time"},
         "expected_revision": {"type": "string", "minLength": 1, "maxLength": 160},
     },
     "allOf": [
+        {
+            "if": {
+                "properties": {"action": {"const": "reaction"}},
+                "required": ["action"],
+            },
+            "then": {
+                "oneOf": [
+                    {
+                        "required": ["reaction"],
+                        "not": {"required": ["reaction_preset"]},
+                    },
+                    {
+                        "required": ["reaction_preset"],
+                        "not": {"required": ["reaction"]},
+                        "properties": {"platform": {"const": "telegram"}},
+                    },
+                ]
+            },
+        },
         {
             "if": {
                 "properties": {
@@ -2845,6 +2892,7 @@ __all__ = [
     "SocialCapabilities",
     "SocialItemKind",
     "SocialPlatform",
+    "SocialReactionPreset",
     "SocialReadAccess",
     "SocialReadOperation",
     "SocialReadPurpose",

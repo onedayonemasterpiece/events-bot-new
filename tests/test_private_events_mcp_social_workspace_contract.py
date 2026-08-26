@@ -52,6 +52,7 @@ from private_events_mcp.social_workspace import (
     SafetyAuditEvent,
     SocialAction,
     SocialActionStatus,
+    SocialReactionPreset,
     SocialReadPurpose,
     SocialTargetKind,
     SocialWorkspaceValidationError,
@@ -778,6 +779,27 @@ def test_direct_user_authorization_is_outbound_only_not_edit_or_delete() -> None
     }
     assert SocialAction.EDIT not in DIRECT_USER_AUTHORIZED_ACTIONS
     assert SocialAction.DELETE not in DIRECT_USER_AUTHORIZED_ACTIONS
+
+
+def test_github_added_reaction_preset_is_closed_telegram_only_contract() -> None:
+    payload = {
+        "platform": "telegram",
+        "action": "reaction",
+        "idempotency_key": "github-added-0001",
+        "item_ref": ITEM_REF,
+        "reaction_preset": "github_added",
+    }
+    validate(payload, SOCIAL_WORKSPACE_PREPARE_SCHEMA)
+    intent = validate_prepare_request(payload)
+    assert intent.reaction is None
+    assert intent.reaction_preset is SocialReactionPreset.GITHUB_ADDED
+
+    with pytest.raises(ValidationError):
+        validate({**payload, "reaction": "✅"}, SOCIAL_WORKSPACE_PREPARE_SCHEMA)
+    with pytest.raises(SocialWorkspaceValidationError, match="exactly one"):
+        validate_prepare_request({**payload, "reaction": "✅"})
+    with pytest.raises(SocialWorkspaceValidationError, match="Telegram-only"):
+        validate_prepare_request({**payload, "platform": "vk"})
 
 
 def test_commit_requires_external_atomic_one_use_approval_bound_to_identity_and_digest() -> None:

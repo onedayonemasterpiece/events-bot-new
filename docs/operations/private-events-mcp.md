@@ -426,6 +426,29 @@ must not appear in model context, logs, PRs or artifacts. A provider timeout is
 `outcome_unknown` and `retry_safe=false`; do not retry with a new idempotency
 key until reconciliation.
 
+#### Telegram marker for “added to GitHub”
+
+Use the separate closed reaction option
+`reaction_preset=github_added` when the operator explicitly asks to mark a
+Telegram message whose idea was added to GitHub. The preset is Telegram-only
+and mutually exclusive with the ordinary `reaction` field. Its selected custom
+emoji document ID is configured only on the server through
+`PRIVATE_EVENTS_MCP_TELEGRAM_GITHUB_REACTION_CUSTOM_EMOJI_ID`; the provider ID
+is never accepted from or returned to ChatGPT. The adapter emits Telegram's
+native custom-emoji reaction and `list_reactions` projects the configured icon
+back as the semantic value `github_added`.
+
+An arbitrary Unicode check mark is not a custom-emoji substitute: Telegram
+accepts a normal `ReactionEmoji` only when that exact standard reaction is
+supported for the message/chat. A provider rejection after a mutation attempt
+remains `outcome_unknown` and must be reconciled rather than blindly retried.
+This marker does not mark voice/audio as played and is never added
+automatically by a read or transcription. It is an explicit, separate mutation
+after the GitHub write succeeds. Because the prepare input schema changes when
+this option is introduced, the ChatGPT app action definition must be refreshed,
+reviewed and published, then verified in a new chat as required by
+`INC-2026-08-25-chatgpt-frozen-mcp-actions`.
+
 Runtime kill switches are additional, fail-closed controls:
 
 ```text

@@ -30,6 +30,7 @@ from private_events_mcp.social_workspace import (
     MediaRole,
     SocialAction,
     SocialActionStatus,
+    SocialReactionPreset,
     SocialTargetKind,
     compute_action_digest,
 )
@@ -769,6 +770,14 @@ def build_telegram_workspace_adapter(
         asset_reader=(
             _TelegramVerifiedAssetReader(asset_store)
             if asset_store is not None
+            else None
+        ),
+        reaction_presets=(
+            {
+                SocialReactionPreset.GITHUB_ADDED:
+                    config.telegram_github_reaction_custom_emoji_id
+            }
+            if config.telegram_github_reaction_custom_emoji_id is not None
             else None
         ),
         operation_timeout_seconds=config.social_provider_timeout_seconds,

@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-26-mcp-telegram-custom-emoji-reaction.md`
+  - Scope: explicit Telegram “added to GitHub” semantic marker, server-side
+    custom-emoji binding, native `ReactionCustomEmoji` transport and semantic
+    reaction readback.
+  - Must not regress: ChatGPT never supplies a native custom-emoji document
+    ID; `github_added` is mutually exclusive with an ordinary emoji and maps to
+    the reviewed server binding; reads/transcription never add the marker or
+    change played state; release acceptance includes refreshed ChatGPT actions
+    and a successful live reaction plus readback.
+
 - `INC-2026-08-25-chatgpt-frozen-mcp-actions.md`
   - Scope: ChatGPT workspace-approved MCP action snapshots, action-definition
     refresh/publication, real new-chat invocation after a schema change, and
