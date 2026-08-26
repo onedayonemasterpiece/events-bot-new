@@ -1,6 +1,6 @@
 # INC-2026-08-25 ChatGPT retained a VK-only action and could not poll social voice jobs
 
-Status: mitigating — principal fix/catch-up and first action refresh complete; exact-schema release and live ChatGPT acceptance pending
+Status: mitigating — principal fix/catch-up and exact-schema release complete; refreshed live ChatGPT acceptance pending
 Severity: sev2
 Service: private eventsBot ChatGPT MCP action discovery and Telegram voice reads
 Opened: 2026-08-25
@@ -138,6 +138,16 @@ work.
   wording and published/validator mismatch make the legacy target-kind field
   the leading argument-shape explanation rather than evidence of a provider
   failure.
+- 2026-08-26 06:04–06:08 UTC — PR `#585` merged the operation-specific exact-
+  item schema and bounded legacy compatibility path after all required CI
+  checks passed. Exact-main Fly release `v2038` deployed SHA
+  `25b9b79a75591d7ed9c941844c793017005d7a2b`; public health was ready and the
+  immutable in-image SHA matched. An authenticated production `tools/list`
+  exposed only the five intended exact-item inputs, required locator/access,
+  and omitted the legacy target-kind field. A sanitized direct private-item
+  canary with transcription disabled succeeded and returned the closed
+  item/source/trust shape. This proves the live server contract and resolver,
+  not the still-required refreshed ChatGPT action snapshot.
 
 ## Root Cause
 
@@ -300,11 +310,13 @@ work.
   `e327a400f0453fa38401e4cdb32ffed5a6ce61e6`, Fly `v2036`
 - local-policy/provider-circuit deploy:
   `548c5a681853c21da2f5e4a9a4df0d6a562a920f`, Fly `v2037`
+- exact-item generation-contract deploy:
+  `25b9b79a75591d7ed9c941844c793017005d7a2b`, Fly `v2038`
 - refreshed-action observation before the exact-schema fix: production health
   ready; fourteen invalid resolver calls, eight successful bounded history
   reads, no active Telegram circuit/flood state, and `7/7` fresh audio jobs
   complete with no errors
-- deploy path: both corrective releases used exact-main deployment through
+- deploy path: corrective releases used exact-main deployment through
   `scripts/deploy_fly_main.sh`
 - regression checks: production health ready; live authenticated server schema
   contains both providers; recent ChatGPT OAuth refresh contains both provider
@@ -314,9 +326,10 @@ work.
   public status/get without re-ingress; the full affected cohort reached
   `14/14` complete and `14/14` ready/non-empty through the same public tools;
   two post-`v2037` bounded Telegram feed reads succeeded and the newest
-  sanitized circuit row remained at zero failures with no active deadline.
-  ChatGPT workspace action publication and real refreshed-conversation
-  acceptance remain pending
+  sanitized circuit row remained at zero failures with no active deadline;
+  post-`v2038` public health, immutable SHA, authenticated narrow schema and a
+  direct exact private-item read all passed. The updated ChatGPT workspace
+  action publication and real refreshed-conversation acceptance remain pending
 
 ## Prevention
 
