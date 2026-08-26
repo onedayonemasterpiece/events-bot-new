@@ -1,6 +1,6 @@
 # INC-2026-08-26 Telegram MCP could not mark ideas added to GitHub
 
-Status: mitigating — implementation and local provider evidence complete; exact-main deployment and refreshed-ChatGPT canary pending
+Status: mitigating — exact-main release and production provider prerequisites verified; refreshed-ChatGPT mutation/readback canary pending
 Severity: sev2
 Service: private eventsBot ChatGPT MCP / Telegram Social Workspace reactions
 Opened: 2026-08-26
@@ -60,6 +60,23 @@ message merely because it was read or transcribed.
   evidence confirmed the failure window and sanitized classification.
 - 2026-08-26 13:00 UTC — failing contract, adapter and configuration regressions
   were added before implementation; the focused MCP suite then passed.
+- 2026-08-26 13:02 UTC — all three required CI jobs passed and PR `#588`
+  merged the closed preset to `main` as commit
+  `ca0e70dbf26141dd01e3d0f02b2b8755b7db10d6`.
+- 2026-08-26 13:06 UTC — exact-main Fly release `v2039` deployed that commit.
+  Public health was ready, all machine checks passed and the immutable in-image
+  SHA matched. Live configuration exposed only `github_added` and did not
+  advertise a native document-ID input.
+- 2026-08-26 13:07 UTC — a read-only probe through the dedicated production MCP
+  Telethon role confirmed authorization, Premium eligibility and that the
+  configured document resolves to a real custom emoji. No Telegram message was
+  mutated by this prerequisite check.
+- 2026-08-26 13:09 UTC — a reversible local human-session canary created one
+  temporary Saved Messages item, sent the selected native custom reaction,
+  observed the exact reaction as chosen, then deleted the canary item. A
+  separate read-only search confirmed zero remaining canary messages. This
+  proves the provider/Telethon operation but does not replace the required
+  production MCP plus refreshed-ChatGPT canary.
 
 ## Root Cause
 
@@ -114,11 +131,11 @@ message merely because it was read or transcribed.
 
 ## Remediation
 
-1. Add the closed `SocialReactionPreset.GITHUB_ADDED` contract.
-2. Keep the selected native document ID only in strict server configuration.
-3. Compile the preset with Telethon `ReactionCustomEmoji` while retaining
+1. Added the closed `SocialReactionPreset.GITHUB_ADDED` contract.
+2. Kept the selected native document ID only in strict server configuration.
+3. Compiled the preset with Telethon `ReactionCustomEmoji` while retaining
    `ReactionEmoji` for ordinary supported reactions.
-4. Project the configured custom reaction back to `github_added` in reads.
+4. Projected the configured custom reaction back to `github_added` in reads.
 5. Refresh/publish the ChatGPT action definition and run a controlled live
    mutation/readback canary after exact-main deployment.
 
@@ -131,8 +148,19 @@ different custom-emoji ID without operator review.
 
 ## Closure Evidence
 
-- Pending: merged exact-main SHA and Fly release receipt.
-- Pending: production health and immutable in-image SHA.
+- PR `#588`; required CI: `python-ci`, `static-browser-release-gate` and
+  `smart-update-identity-state-machine` all passed.
+- Fly release `v2039`; deployed code commit
+  `ca0e70dbf26141dd01e3d0f02b2b8755b7db10d6`.
+- Public `/healthz`: `ok=true`, `ready=true`, no issues; Fly machine check
+  `1/1` passing; `/app/.static-site-repo-sha` matched the deployed commit.
+- Production config: Telegram/post workspace enabled, `github_added` bound,
+  public schema enum exactly `github_added`, no native document-ID input.
+- Dedicated production MCP Telethon role: authorized, Premium and the reviewed
+  custom-emoji document resolved successfully in a read-only probe.
+- Local Telethon mutation canary: selected custom reaction observed with
+  `chosen_order`; temporary Saved Messages item deleted and cleanup readback
+  found zero remnants.
 - Pending: refreshed/published ChatGPT action snapshot.
 - Pending: successful live `github_added` mutation plus semantic
   `list_reactions` readback.
