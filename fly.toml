@@ -22,6 +22,9 @@ app = "events-bot-new-wngqia"
   RUNTIME_SCRATCH_PATH = "/tmp"
   RUNTIME_SCRATCH_WARN_FREE_MB = "1024"
   RUNTIME_SCRATCH_CRITICAL_FREE_MB = "512"
+  # Public provider document binding behind the closed MCP semantic option
+  # reaction_preset=github_added. ChatGPT never receives this native ID.
+  PRIVATE_EVENTS_MCP_TELEGRAM_GITHUB_REACTION_CUSTOM_EMOJI_ID = "5294334197832362643"
   ENABLE_EMAIL_OUTBOX_WORKER = "1"
   EMAIL_OUTBOX_WORKER_INTERVAL_SECONDS = "60"
   EMAIL_OUTBOX_CLAIM_LIMIT = "5"

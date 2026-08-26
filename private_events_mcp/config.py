@@ -204,6 +204,7 @@ class PrivateEventsMCPConfig:
     universal_social_edit_delete_enabled: bool = False
     universal_social_media_story_enabled: bool = False
     universal_social_file_send_enabled: bool = False
+    telegram_github_reaction_custom_emoji_id: int | None = None
     social_approval_token: str = ""
     social_targets_json: str = ""
     social_ticket_ttl_seconds: int = 300
@@ -321,6 +322,24 @@ class PrivateEventsMCPConfig:
             ),
             universal_social_media_story_enabled=media_story_enabled,
             universal_social_file_send_enabled=file_send_enabled,
+            telegram_github_reaction_custom_emoji_id=(
+                _strict_int(
+                    "PRIVATE_EVENTS_MCP_TELEGRAM_GITHUB_REACTION_CUSTOM_EMOJI_ID",
+                    1,
+                    low=1,
+                    high=2**63 - 1,
+                )
+                if (
+                    enabled
+                    and (
+                        os.getenv(
+                            "PRIVATE_EVENTS_MCP_TELEGRAM_GITHUB_REACTION_CUSTOM_EMOJI_ID"
+                        )
+                        or ""
+                    ).strip()
+                )
+                else None
+            ),
             social_approval_token=(
                 os.getenv("PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN") or ""
             ).strip(),
@@ -554,6 +573,14 @@ class PrivateEventsMCPConfig:
         ):
             raise ValueError(
                 "Telegram provider and DM action flags are required for universal social file send"
+            )
+        if self.telegram_github_reaction_custom_emoji_id is not None and (
+            not self.universal_social_telegram_enabled
+            or not self.universal_social_post_enabled
+        ):
+            raise ValueError(
+                "Telegram provider and post action flags are required for the "
+                "GitHub reaction preset"
             )
         if self.asset_ingress_enabled:
             largest_asset = max(

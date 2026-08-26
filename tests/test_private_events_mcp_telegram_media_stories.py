@@ -28,10 +28,8 @@ from private_events_mcp_telegram_adapter import (
     TelegramLease,
     TelegramOperationClaim,
     TelegramTargetBinding,
-    TelegramVerifiedUpload,
     TelegramWorkspaceAdapter,
 )
-
 
 NOW = datetime.now(timezone.utc)
 TARGET_REF = "tgt_storychannel000000000001"
@@ -327,6 +325,7 @@ def story_intent(asset_ref=UPLOAD_REF, *, role=MediaRole.IMAGE):
             (MediaAttachment(asset_ref, role),),
         ),
         reaction=None,
+        reaction_preset=None,
         schedule_at=None,
         expected_revision=None,
     )

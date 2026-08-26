@@ -273,3 +273,30 @@ def test_universal_social_flags_are_strictly_parented_and_provider_bound(
     assert config.universal_social_enabled is True
     assert config.universal_social_telegram_enabled is True
     assert config.universal_social_dm_enabled is True
+
+
+def test_github_reaction_custom_emoji_id_is_strict_and_server_side(monkeypatch) -> None:
+    _enabled_env(monkeypatch)
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_CODEX_OAUTH_CLIENT_ID", "codex-public-client"
+    )
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_ENABLED", "1")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_TELEGRAM_ENABLED", "1")
+    monkeypatch.setenv("PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_POST_ENABLED", "1")
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_SOCIAL_APPROVAL_TOKEN", "approval_" + "a" * 48
+    )
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_TELEGRAM_GITHUB_REACTION_CUSTOM_EMOJI_ID",
+        "5294334197832362643",
+    )
+    assert (
+        PrivateEventsMCPConfig.from_env().telegram_github_reaction_custom_emoji_id
+        == 5294334197832362643
+    )
+
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_TELEGRAM_GITHUB_REACTION_CUSTOM_EMOJI_ID", "not-an-id"
+    )
+    with pytest.raises(ValueError, match="GITHUB_REACTION_CUSTOM_EMOJI_ID"):
+        PrivateEventsMCPConfig.from_env()

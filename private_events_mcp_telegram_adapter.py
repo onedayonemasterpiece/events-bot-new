@@ -35,6 +35,7 @@ from private_events_mcp.social_workspace import (
     SocialActionIntent,
     SocialItemKind,
     SocialPlatform,
+    SocialReactionPreset,
     SocialReadAccess,
     SocialReadOperation,
     SocialReadRequest,
@@ -432,6 +433,7 @@ class _DefaultTelethonTypes:
                 (types, "MessageEntityBlockquote"),
                 (types, "InputMessageEntityMentionName"),
                 (types, "ReactionEmoji"),
+                (types, "ReactionCustomEmoji"),
                 (types, "InputMessagesFilterEmpty"),
                 (types, "InputPeerEmpty"),
                 (types, "ChatBannedRights"),
@@ -556,10 +558,15 @@ class _DefaultTelethonTypes:
                 hash=0,
             )
         if name == "reaction":
+            reaction = (
+                types.ReactionCustomEmoji(document_id=values["custom_emoji_id"])
+                if values.get("custom_emoji_id") is not None
+                else types.ReactionEmoji(emoticon=values["reaction"])
+            )
             return functions.messages.SendReactionRequest(
                 peer=values["peer"],
                 msg_id=values["message_id"],
-                reaction=[types.ReactionEmoji(emoticon=values["reaction"])],
+                reaction=[reaction],
             )
         if name == "peer_stories":
             return functions.stories.GetPeerStoriesRequest(peer=values["peer"])
@@ -678,6 +685,7 @@ class TelegramWorkspaceAdapter:
         governor: TelegramGovernor,
         telethon_types: Any | None = None,
         asset_reader: TelegramAssetReader | None = None,
+        reaction_presets: Mapping[SocialReactionPreset, int] | None = None,
         operation_timeout_seconds: float = 30.0,
     ) -> None:
         if not callable(client_factory):
@@ -718,6 +726,14 @@ class TelegramWorkspaceAdapter:
         ):
             raise TypeError("asset_reader must implement open_verified")
         self._asset_reader = asset_reader
+        self._reaction_presets = dict(reaction_presets or {})
+        if any(
+            not isinstance(preset, SocialReactionPreset)
+            or type(document_id) is not int
+            or not 0 < document_id < 2**63
+            for preset, document_id in self._reaction_presets.items()
+        ):
+            raise ValueError("reaction preset binding is invalid")
         self._timeout = float(operation_timeout_seconds)
         self._lock = asyncio.Lock()
 
@@ -2462,7 +2478,15 @@ class TelegramWorkspaceAdapter:
             reaction = getattr(result, "reaction", None)
             value = getattr(reaction, "emoticon", None)
             if not isinstance(value, str):
-                value = "custom"
+                document_id = getattr(reaction, "document_id", None)
+                value = next(
+                    (
+                        preset.value
+                        for preset, configured_id in self._reaction_presets.items()
+                        if configured_id == document_id
+                    ),
+                    "custom",
+                )
             normalized.append({"reaction": value[:32], "count": _int(getattr(result, "count", None))})
         return {"item_ref": item_ref, "reactions": normalized, "trust": _TRUST}
 
@@ -3092,12 +3116,22 @@ class TelegramWorkspaceAdapter:
                     )
                 )
             elif intent.action is SocialAction.REACTION:
-                assert item is not None and source is not None and intent.reaction is not None
+                assert item is not None and source is not None
+                custom_emoji_id = (
+                    self._reaction_presets.get(intent.reaction_preset)
+                    if intent.reaction_preset is not None
+                    else None
+                )
+                if intent.reaction_preset is not None and custom_emoji_id is None:
+                    raise SocialWorkspaceValidationError(
+                        "reaction preset is not configured"
+                    )
                 reaction_request = self._types.request(
                     "reaction",
                     peer=source.entity,
                     message_id=item.message_id,
                     reaction=intent.reaction,
+                    custom_emoji_id=custom_emoji_id,
                 )
                 attempt.provider_mutation_attempted = True
                 result = await self._call(

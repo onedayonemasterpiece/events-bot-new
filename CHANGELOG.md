@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Added: Telegram Social Workspace reactions now expose the closed semantic
+  option `reaction_preset=github_added`. It compiles server-side to the exact
+  GitHub custom-emoji document selected by the operator, while the native ID
+  remains outside MCP arguments and responses. `list_reactions` maps that
+  configured custom reaction back to `github_added`; ordinary `reaction`
+  continues to accept only provider-supported standard reactions.
+
 - Fixed: `social_item_resolve` now publishes an operation-specific ChatGPT
   input schema that requires one canonical link and its read-access class and
   no longer advertises unrelated target-kind/search/feed fields. Legacy

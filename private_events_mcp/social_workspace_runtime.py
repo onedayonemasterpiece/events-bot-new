@@ -2070,6 +2070,11 @@ class SocialWorkspaceRuntime:
             "source_target": source_target,
             "content": content,
             "reaction": intent.reaction,
+            "reaction_preset": (
+                intent.reaction_preset.value
+                if intent.reaction_preset is not None
+                else None
+            ),
             "schedule_at": intent.schedule_at,
             "expires_at": _now_rfc3339(int(row["expires_at"])),
         }
