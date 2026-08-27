@@ -24,6 +24,7 @@ from private_events_mcp.social_workspace import (
     SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
@@ -106,6 +107,7 @@ ALL_SCHEMAS = (
     SOCIAL_WORKSPACE_TARGET_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
@@ -222,6 +224,48 @@ def test_telegram_item_link_and_audio_flag_are_optional_compatible_additions() -
     validate(disabled, SOCIAL_WORKSPACE_READ_SCHEMA)
     assert validate_read_request(disabled).transcribe_audio is False
     assert "transcribe_audio" not in SOCIAL_WORKSPACE_READ_SCHEMA["required"]
+    assert validate_read_request(base).transcription_wait_seconds == 0
+    for seconds in (0, 25, 30):
+        request = {
+            **base,
+            "transcribe_audio": True,
+            "transcription_wait_seconds": seconds,
+        }
+        validate(request, SOCIAL_WORKSPACE_READ_SCHEMA)
+        assert validate_read_request(request).transcription_wait_seconds == seconds
+    for invalid in (True, "25", 1.5, -1, 31):
+        with pytest.raises(SocialWorkspaceValidationError):
+            validate_read_request(
+                {
+                    **base,
+                    "transcribe_audio": True,
+                    "transcription_wait_seconds": invalid,
+                }
+            )
+    with pytest.raises(SocialWorkspaceValidationError):
+        validate_read_request({**base, "transcription_wait_seconds": 1})
+    with pytest.raises(ValidationError):
+        validate({**base, "transcription_wait_seconds": 1}, SOCIAL_WORKSPACE_READ_SCHEMA)
+    with pytest.raises(SocialWorkspaceValidationError):
+        validate_read_request(
+            {
+                **base,
+                "transcribe_audio": False,
+                "transcription_wait_seconds": 0,
+            }
+        )
+    with pytest.raises(SocialWorkspaceValidationError):
+        validate_read_request(
+            {
+                **base,
+                "platform": "vk",
+                "target_locator": {
+                    "kind": "profile_link",
+                    "value": "https://vk.com/wall-1_2",
+                },
+                "transcription_wait_seconds": 1,
+            }
+        )
 
 
 def test_exact_item_resolution_infers_access_for_legacy_chatgpt_calls() -> None:
@@ -301,12 +345,28 @@ def test_item_output_schema_accepts_additive_safe_audio_details() -> None:
                         "transcription_ref": "atr_" + "x" * 24,
                         "text": "external transcript",
                         "cache_hit": True,
+                        "created": False,
+                        "text_included": True,
+                        "truncated": False,
+                        "next_offset": None,
+                        "next_poll_after_seconds": 0,
                         "trust": "untrusted_external_data",
                     },
                     "trust": "untrusted_external_data",
                 }
             ],
             "trust": "untrusted_external_data",
+        },
+        "transcription_summary": {
+            "total": 1,
+            "ready": 1,
+            "queued": 0,
+            "running": 0,
+            "failed": 0,
+            "cache_hits": 1,
+            "created": 0,
+            "wait_expired": False,
+            "next_poll_after_seconds": 0,
         },
         "trust": "untrusted_external_data",
     }

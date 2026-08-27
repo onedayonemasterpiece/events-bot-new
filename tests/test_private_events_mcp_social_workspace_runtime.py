@@ -14,8 +14,8 @@ import pytest
 from PIL import Image
 
 import private_events_mcp.social_workspace_runtime as runtime_module
+from audio_transcription.contracts import JobState
 from audio_transcription.job_store import JobOwnershipError
-from audio_transcription.mcp import build_audio_transcription_tools
 from private_events_mcp.auth_store import OAuthStateStore, OAuthStoreError
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
 from private_events_mcp.protocol import MCPProtocol
@@ -321,10 +321,13 @@ class FakeTelegramAudioReadAdapter(FakeAdapter):
 
 class FakeReadAudioService:
     def __init__(self, *, ready: bool = False) -> None:
-        self.config = SimpleNamespace(max_asset_bytes=1024)
+        self.config = SimpleNamespace(
+            max_asset_bytes=1024, poll_interval_seconds=20
+        )
         self.ready = ready
         self.jobs: dict[str, dict] = {}
         self.starts = 0
+        self.wait_calls: list[tuple[tuple[str, ...], int]] = []
 
     async def start_provider_transcription(self, **values):
         key = values["idempotency_key"]
@@ -346,7 +349,47 @@ class FakeReadAudioService:
 
     async def get_result(self, **values):
         assert values["view"] == "plain"
-        return {"ready": True, "text": "external transcript"}
+        return {
+            "ready": True,
+            "text": "external transcript",
+            "next_offset": None,
+        }
+
+    async def wait_many(self, *, owner_binding, job_refs, wait_seconds):
+        assert len(owner_binding) == 64
+        self.wait_calls.append((tuple(job_refs), wait_seconds))
+        jobs = tuple(
+            SimpleNamespace(
+                job_ref=job_ref,
+                state=JobState.COMPLETE if self.ready else JobState.QUEUED,
+                error_code=None,
+                progress={},
+            )
+            for job_ref in job_refs
+        )
+        return SimpleNamespace(
+            jobs=jobs,
+            wait_requested_seconds=wait_seconds,
+            wait_actual_seconds=0.0,
+            wait_expired=bool(wait_seconds and not self.ready),
+            next_poll_after_seconds=0 if self.ready else 20,
+        )
+
+    async def get_many(self, *, owner_binding, job_refs, limit):
+        assert len(owner_binding) == 64
+        assert 1 <= limit <= 60_000
+        if not self.ready:
+            return {}
+        return {
+            job_ref: {
+                "job_ref": job_ref,
+                "state": "complete",
+                "ready": True,
+                "text": "external transcript"[:limit],
+                "next_offset": None,
+            }
+            for job_ref in job_refs
+        }
 
 
 class OwnerAwareReadAudioService(FakeReadAudioService):
@@ -381,6 +424,181 @@ class OwnerAwareReadAudioService(FakeReadAudioService):
             "ready": True,
             "text": "external transcript",
         }
+
+    async def wait_many(self, *, owner_binding, job_refs, wait_seconds):
+        for job_ref in job_refs:
+            self._owned(job_ref, owner_binding)
+        return await super().wait_many(
+            owner_binding=owner_binding,
+            job_refs=job_refs,
+            wait_seconds=wait_seconds,
+        )
+
+    async def get_many(self, *, owner_binding, job_refs, limit):
+        for job_ref in job_refs:
+            self._owned(job_ref, owner_binding)
+        return await super().get_many(
+            owner_binding=owner_binding,
+            job_refs=job_refs,
+            limit=limit,
+        )
+
+
+class BatchTelegramAudioReadAdapter(FakeAdapter):
+    max_read_asset_bytes = 30 * 1024 * 1024
+
+    def __init__(self, voice_count: int) -> None:
+        super().__init__()
+        self.voice_count = voice_count
+        self.downloads: list[str] = []
+
+    async def read(self, request):
+        items = []
+        for page_start in range(0, self.voice_count, 10):
+            attachments = []
+            media = []
+            for index in range(page_start, min(page_start + 10, self.voice_count)):
+                asset_ref = f"ast_provider_batch_voice_{index:04d}"
+                media.append(asset_ref)
+                attachments.append(
+                    {
+                        "asset_ref": asset_ref,
+                        "kind": "voice" if index % 2 == 0 else "audio",
+                        "mime_type": "audio/ogg",
+                        "byte_length": 16,
+                        "duration_seconds": float(index + 1),
+                        "binding_fingerprint": f"{index + 1:064x}",
+                        "trust": "untrusted_external_data",
+                    }
+                )
+            items.append(
+                {
+                    "item_ref": f"provider-batch-item-{page_start // 10}",
+                    "target_ref": request.target_ref or "provider-batch-target",
+                    "kind": "message",
+                    "published_at": "2026-08-27T08:00:00Z",
+                    "text": "batch voice fixture",
+                    "caption": "",
+                    "basic_metrics": {"views": 0},
+                    "media": media,
+                    "attachments": attachments,
+                    "trust": "untrusted_external_data",
+                }
+            )
+        return {"results": items, "trust": "untrusted_external_data"}
+
+    async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
+        assert len(owner_binding) == 64
+        assert max_bytes >= 16
+        self.downloads.append(asset_ref)
+        return b"OggS" + b"\0" * 12
+
+
+class DeterministicBatchAudioService:
+    """Store-shaped fake proving one registration phase and one batch wait."""
+
+    def __init__(
+        self,
+        states: list[JobState],
+        *,
+        created_flags: list[bool] | None = None,
+        text: str = "external transcript",
+        wait_delay: float = 0.0,
+    ) -> None:
+        self.config = SimpleNamespace(
+            max_asset_bytes=1024,
+            poll_interval_seconds=20,
+        )
+        self.initial_states = states
+        self.created_flags = created_flags or [True] * len(states)
+        self.text = text
+        self.wait_delay = wait_delay
+        self.jobs: dict[str, dict[str, Any]] = {}
+        self.registrations: list[str] = []
+        self.wait_calls: list[tuple[tuple[str, ...], int, int]] = []
+        self.get_many_calls = 0
+
+    async def start_provider_transcription(self, **values):
+        key = values["idempotency_key"]
+        existing = self.jobs.get(key)
+        if existing is not None:
+            self.registrations.append(existing["job_ref"])
+            return {**existing, "created": False}
+        index = len(self.jobs)
+        created = self.created_flags[index]
+        if created:
+            await values["content_loader"]()
+        job = {
+            "job_ref": "atr_" + f"{index + 1:024d}",
+            "state": self.initial_states[index],
+            "error_code": (
+                "TRANSCRIPTION_BACKEND_FAILED"
+                if self.initial_states[index] in {JobState.FAILED, JobState.CANCELLED}
+                else None
+            ),
+        }
+        self.jobs[key] = job
+        self.registrations.append(job["job_ref"])
+        return {
+            "job_ref": job["job_ref"],
+            "state": job["state"].value,
+            "created": created,
+        }
+
+    async def wait_many(self, *, owner_binding, job_refs, wait_seconds):
+        assert len(owner_binding) == 64
+        self.wait_calls.append(
+            (tuple(job_refs), wait_seconds, len(self.registrations))
+        )
+        if self.wait_delay:
+            await asyncio.sleep(self.wait_delay)
+        by_ref = {job["job_ref"]: job for job in self.jobs.values()}
+        jobs = tuple(
+            SimpleNamespace(
+                job_ref=job_ref,
+                state=by_ref[job_ref]["state"],
+                error_code=by_ref[job_ref]["error_code"],
+                progress={},
+            )
+            for job_ref in job_refs
+        )
+        pending = any(not job.state.terminal for job in jobs)
+        return SimpleNamespace(
+            jobs=jobs,
+            wait_requested_seconds=wait_seconds,
+            wait_actual_seconds=self.wait_delay,
+            wait_expired=bool(wait_seconds and pending),
+            next_poll_after_seconds=20 if pending else 0,
+        )
+
+    async def get_many(self, *, owner_binding, job_refs, limit):
+        assert len(owner_binding) == 64
+        self.get_many_calls += 1
+        by_ref = {job["job_ref"]: job for job in self.jobs.values()}
+        results = {}
+        for job_ref in job_refs:
+            if by_ref[job_ref]["state"] is not JobState.COMPLETE:
+                continue
+            chunk = self.text[:limit]
+            results[job_ref] = {
+                "job_ref": job_ref,
+                "state": "complete",
+                "ready": True,
+                "text": chunk,
+                "next_offset": len(chunk) if len(chunk) < len(self.text) else None,
+            }
+        return results
+
+    async def status(self, **_values):
+        raise AssertionError("high-level batch reads must not poll per-job status")
+
+    async def get_result(self, **_values):
+        raise AssertionError("high-level batch reads must use get_many")
+
+    def complete_all(self) -> None:
+        for job in self.jobs.values():
+            job["state"] = JobState.COMPLETE
+            job["error_code"] = None
 
 @pytest.fixture
 def runtime(tmp_path: Path):
@@ -544,6 +762,19 @@ async def test_telegram_audio_read_ready_cache_dedup_and_safe_projection(tmp_pat
         value["transcription"]["text"] == "external transcript"
         for value in first["item"]["attachments"]
     )
+    assert first["transcription_summary"] == {
+        "total": 2,
+        "ready": 2,
+        "queued": 0,
+        "running": 0,
+        "failed": 0,
+        "cache_hits": 0,
+        "created": 2,
+        "wait_expired": False,
+        "next_poll_after_seconds": 0,
+    }
+    assert second["transcription_summary"]["cache_hits"] == 2
+    assert second["transcription_summary"]["created"] == 0
     assert first["item"]["media"] == [
         value["asset_ref"] for value in first["item"]["attachments"]
     ]
@@ -572,10 +803,10 @@ async def test_telegram_audio_read_ready_cache_dedup_and_safe_projection(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_social_voice_batch_refs_are_readable_by_audio_status_and_get(
+async def test_social_voice_batch_repeat_read_returns_ready_text_inline(
     tmp_path: Path,
 ) -> None:
-    """A multi-voice private read can finish through the public poll/get path."""
+    """The normal multi-voice path uses one repeat high-level read, not N polls."""
 
     adapter = FakeTelegramAudioReadAdapter()
     transcriber = OwnerAwareReadAudioService(ready=False)
@@ -614,25 +845,28 @@ async def test_social_voice_batch_refs_are_readable_by_audio_status_and_get(
     )
 
     transcriber.ready = True
-    tools = {
-        tool.name: tool
-        for tool in build_audio_transcription_tools(
-            transcriber, signing_key="unit-test-key-that-is-long-enough"
-        )
-    }
-    transcripts = []
-    for job_ref in refs:
-        status = await tools["audio_transcription_status"].handler(
-            {"job_ref": job_ref}, call_context
-        )
-        result = await tools["audio_transcription_get"].handler(
-            {"job_ref": job_ref, "view": "plain"}, call_context
-        )
-        assert status["state"] == "complete"
-        assert result["ready"] is True
-        transcripts.append(result["text"])
-
-    assert transcripts == ["external transcript", "external transcript"]
+    repeat = await runtime.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "get_item",
+                "item_ref": item_ref,
+                "read_access": "private",
+            }
+        ),
+        call_context,
+    )
+    assert [
+        attachment["transcription"]["transcription_ref"]
+        for attachment in repeat["item"]["attachments"]
+    ] == refs
+    assert repeat["transcription_summary"]["created"] == 0
+    assert repeat["transcription_summary"]["cache_hits"] == 2
+    assert repeat["transcription_summary"]["ready"] == 2
+    assert [
+        attachment["transcription"]["text"]
+        for attachment in repeat["item"]["attachments"]
+    ] == ["external transcript", "external transcript"]
 
 
 @pytest.mark.asyncio
@@ -662,7 +896,9 @@ async def test_telegram_audio_read_pending_failure_isolation_and_opt_out(tmp_pat
     result = await runtime.read(validate_read_request(common), call_context)
     statuses = [value["transcription"]["status"] for value in result["item"]["attachments"]]
     assert statuses == ["failed", "queued"]
-    assert result["item"]["attachments"][0]["transcription"]["error_code"] == "TRANSCRIPTION_FAILED"
+    assert result["item"]["attachments"][0]["transcription"]["error_code"] == (
+        "TRANSCRIPTION_MATERIALIZATION_FAILED"
+    )
     calls_before = (len(adapter.downloads), transcriber.starts)
     disabled = await runtime.read(
         validate_read_request({**common, "transcribe_audio": False}), call_context
@@ -709,11 +945,289 @@ async def test_telegram_audio_timeout_preserves_base_read_and_isolates_media(tmp
     assert [
         value["transcription"]["error_code"]
         for value in result["item"]["attachments"]
-    ] == ["TRANSCRIPTION_TIMEOUT", "TRANSCRIPTION_TIMEOUT"]
+    ] == [
+        "TRANSCRIPTION_MATERIALIZATION_FAILED",
+        "TRANSCRIPTION_MATERIALIZATION_FAILED",
+    ]
     assert all(
         value["transcription"]["status"] == "failed"
         for value in result["item"]["attachments"]
     )
+
+
+def _batch_request(runtime, call_context, voice_count, *, wait_seconds=25):
+    principal = RuntimePrincipal.from_context(call_context)
+    target_ref = runtime._mint_ref(
+        "target", f"provider-batch-target-{voice_count}", "telegram", principal
+    )
+    return validate_read_request(
+        {
+            "platform": "telegram",
+            "operation": "list_items",
+            "target_ref": target_ref,
+            "read_access": "private",
+            "transcribe_audio": True,
+            "transcription_wait_seconds": wait_seconds,
+        }
+    )
+
+
+def _batch_attachments(payload):
+    return [
+        attachment
+        for item in payload["results"]
+        for attachment in item["attachments"]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_twenty_voice_read_registers_all_jobs_before_one_batch_wait(
+    tmp_path: Path, caplog
+) -> None:
+    adapter = BatchTelegramAudioReadAdapter(20)
+    transcriber = DeterministicBatchAudioService([JobState.QUEUED] * 20)
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+
+    with caplog.at_level("INFO", logger="private_events_mcp.social_workspace_runtime"):
+        result = await asyncio.wait_for(
+            runtime.read(
+                _batch_request(runtime, call_context, 20, wait_seconds=25),
+                call_context,
+            ),
+            timeout=0.5,
+        )
+
+    assert len(adapter.downloads) == 20
+    assert len(transcriber.jobs) == 20
+    assert transcriber.wait_calls == [
+        (
+            tuple(f"atr_{index:024d}" for index in range(1, 21)),
+            25,
+            20,
+        )
+    ]
+    assert result["transcription_summary"] == {
+        "total": 20,
+        "ready": 0,
+        "queued": 20,
+        "running": 0,
+        "failed": 0,
+        "cache_hits": 0,
+        "created": 20,
+        "wait_expired": True,
+        "next_poll_after_seconds": 20,
+    }
+    attachments = _batch_attachments(result)
+    assert len(attachments) == 20
+    assert all(
+        attachment["transcription"]["status"] == "queued"
+        and "error_code" not in attachment["transcription"]
+        for attachment in attachments
+    )
+    assert "TRANSCRIPTION_TIMEOUT" not in json.dumps(result)
+    batch_lines = [
+        record.getMessage()
+        for record in caplog.records
+        if record.getMessage().startswith("social_voice_transcription_batch ")
+    ]
+    assert len(batch_lines) == 1
+    assert all(
+        forbidden not in batch_lines[0]
+        for forbidden in (
+            "atr_",
+            "ast_",
+            "t.me/",
+            "provider-batch",
+            "external transcript",
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_voice_batch_mixed_durable_states_are_projected_without_poll_burst(
+    tmp_path: Path,
+) -> None:
+    states = [
+        JobState.COMPLETE,
+        JobState.QUEUED,
+        JobState.DISPATCHING,
+        JobState.RUNNING,
+        JobState.COLLECTING,
+        JobState.FAILED,
+        JobState.CANCELLED,
+    ]
+    adapter = BatchTelegramAudioReadAdapter(len(states))
+    transcriber = DeterministicBatchAudioService(
+        states,
+        created_flags=[False, True, False, False, False, False, False],
+    )
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+
+    result = await runtime.read(
+        _batch_request(runtime, call_context, len(states), wait_seconds=25),
+        call_context,
+    )
+
+    assert result["transcription_summary"] == {
+        "total": 7,
+        "ready": 1,
+        "queued": 2,
+        "running": 2,
+        "failed": 2,
+        "cache_hits": 6,
+        "created": 1,
+        "wait_expired": True,
+        "next_poll_after_seconds": 20,
+    }
+    transcriptions = [
+        attachment["transcription"] for attachment in _batch_attachments(result)
+    ]
+    assert [value["status"] for value in transcriptions] == [
+        "ready",
+        "queued",
+        "queued",
+        "running",
+        "running",
+        "failed",
+        "failed",
+    ]
+    assert transcriptions[0]["text"] == "external transcript"
+    assert all(
+        "error_code" not in value for value in transcriptions[1:5]
+    )
+    assert all(
+        value["error_code"] == "TRANSCRIPTION_BACKEND_FAILED"
+        for value in transcriptions[5:]
+    )
+    assert len(adapter.downloads) == 1
+    assert transcriber.get_many_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_repeat_high_level_voice_read_reuses_jobs_and_inlines_ready_text(
+    tmp_path: Path,
+) -> None:
+    adapter = BatchTelegramAudioReadAdapter(4)
+    transcriber = DeterministicBatchAudioService([JobState.QUEUED] * 4)
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+    request = _batch_request(runtime, call_context, 4, wait_seconds=0)
+
+    first = await runtime.read(request, call_context)
+    first_refs = [
+        item["transcription"]["transcription_ref"]
+        for item in _batch_attachments(first)
+    ]
+    transcriber.complete_all()
+    second = await runtime.read(request, call_context)
+
+    assert len(adapter.downloads) == 4
+    assert len(transcriber.jobs) == 4
+    assert first["transcription_summary"]["created"] == 4
+    assert first["transcription_summary"]["queued"] == 4
+    assert second["transcription_summary"]["created"] == 0
+    assert second["transcription_summary"]["cache_hits"] == 4
+    assert second["transcription_summary"]["ready"] == 4
+    assert [
+        item["transcription"]["transcription_ref"]
+        for item in _batch_attachments(second)
+    ] == first_refs
+    assert all(
+        item["transcription"]["text"] == "external transcript"
+        for item in _batch_attachments(second)
+    )
+
+
+@pytest.mark.asyncio
+async def test_voice_batch_response_cap_uses_reproducible_inline_prefixes(
+    tmp_path: Path,
+) -> None:
+    full_text = "длинная расшифровка " * 10_000
+    adapter = BatchTelegramAudioReadAdapter(2)
+    transcriber = DeterministicBatchAudioService(
+        [JobState.COMPLETE, JobState.COMPLETE], text=full_text
+    )
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        response_cap_bytes=40 * 1024,
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+
+    result = await runtime.read(
+        _batch_request(runtime, call_context, 2, wait_seconds=0), call_context
+    )
+    encoded = json.dumps(result, ensure_ascii=False).encode("utf-8")
+    assert len(encoded) <= 40 * 1024
+    for attachment in _batch_attachments(result):
+        transcription = attachment["transcription"]
+        assert transcription["status"] == "ready"
+        assert transcription["text_included"] is True
+        assert transcription["truncated"] is True
+        assert transcription["next_offset"] == len(transcription["text"])
+        assert full_text.startswith(transcription["text"])
+
+
+@pytest.mark.asyncio
+async def test_provider_timeout_and_batch_wait_are_independent(tmp_path: Path) -> None:
+    class SlowProviderAdapter(BatchTelegramAudioReadAdapter):
+        async def read(self, request):
+            await asyncio.sleep(0.05)
+            return await super().read(request)
+
+    slow_adapter = SlowProviderAdapter(1)
+    untouched = DeterministicBatchAudioService([JobState.QUEUED])
+    slow_runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "slow.sqlite")),
+        adapters={"telegram": slow_adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        provider_timeout_seconds=0.01,
+    )
+    slow_runtime.enable_audio_transcription(untouched)
+    call_context = scoped_context("telegram:read")
+    with pytest.raises(SocialWorkspaceRuntimeError, match="provider operation timed out"):
+        await slow_runtime.read(
+            _batch_request(slow_runtime, call_context, 1, wait_seconds=30),
+            call_context,
+        )
+    assert untouched.registrations == []
+
+    fast_adapter = BatchTelegramAudioReadAdapter(1)
+    waiting = DeterministicBatchAudioService(
+        [JobState.QUEUED], wait_delay=0.05
+    )
+    fast_runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "fast.sqlite")),
+        adapters={"telegram": fast_adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        provider_timeout_seconds=0.01,
+    )
+    fast_runtime.enable_audio_transcription(waiting)
+    result = await fast_runtime.read(
+        _batch_request(fast_runtime, call_context, 1, wait_seconds=30),
+        call_context,
+    )
+    assert result["transcription_summary"]["queued"] == 1
+    assert result["transcription_summary"]["wait_expired"] is True
 
 
 @pytest.mark.asyncio
@@ -1248,6 +1762,7 @@ def test_item_resolve_descriptor_publishes_only_the_exact_link_contract(runtime)
         "target_locator",
         "read_access",
         "transcribe_audio",
+        "transcription_wait_seconds",
     }
     assert schema["properties"]["target_locator"] == {
         "type": "object",
@@ -1260,6 +1775,7 @@ def test_item_resolve_descriptor_publishes_only_the_exact_link_contract(runtime)
     }
     assert "expected_target_kinds" not in schema["properties"]
     assert "Use this first" in tool.description
+    assert tool.timeout_seconds >= service.provider_timeout_seconds + 32
 
 
 def test_legacy_item_resolve_target_kind_hint_is_checked_after_resolution(runtime) -> None:
