@@ -205,8 +205,9 @@ accepted as a public reference or returned as metadata.
 - prove an exact-item read from any album member expands the whole album;
 - prove public/private canonical item links, malformed/unavailable sanitization,
   VK exact-link stability, every supported Telegram media classification,
-  transcription cache/dedup/opt-out/failure isolation, and absence of sensitive
-  provider data in response/error/audit;
+  transcription batch registration-before-wait, cache/dedup/repeat-inline,
+  opt-out/failure isolation, and absence of sensitive provider data in
+  response/error/audit;
 - run the full private MCP test glob and compile checks;
 - after the active external read finishes and release is authorized, deploy an
   exact clean `origin/main` SHA and repeat the real ChatGPT read-to-preview flow
@@ -261,6 +262,9 @@ accepted as a public reference or returned as metadata.
   and apply a bounded global backoff when the shared session is busy.
 - [x] Persist bounded Kaggle `Retry-After` evidence on a running job and skip
   reconciliation until that wall-clock deadline survives process restarts.
+- [ ] Merge/deploy the high-level bounded voice batch read, refresh the changed
+  ChatGPT actions and prove repeat item/thread reads return aggregate states and
+  inline ready text without per-ref provider polling.
 
 ## Release And Closure Evidence
 

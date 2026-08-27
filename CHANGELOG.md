@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Fixed: high-level Telegram item/feed/thread reads now collect and register
+  every unique voice/audio job before one optional whole-batch
+  `transcription_wait_seconds=0..30`, independently of provider transport
+  timeout. Repeat reads return fresh aggregate durable states and inline ready
+  text without N per-ref status/get polling; wait expiry preserves queued or
+  running state instead of fabricating terminal `TRANSCRIPTION_TIMEOUT`.
+  Owner isolation, stable media deduplication, serialized dispatch, persisted
+  Retry-After and the existing three single-job fallback tools remain intact.
+  Long inline results expose reproducible continuation offsets, and one
+  sanitized batch log contains counts/timings only.
+
 - Added: Telegram Social Workspace reactions now expose the closed semantic
   option `reaction_preset=github_added`. It compiles server-side to the exact
   GitHub custom-emoji document selected by the operator, while the native ID
