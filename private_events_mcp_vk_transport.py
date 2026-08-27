@@ -137,7 +137,10 @@ async def _session_for(url: str, timeout_seconds: float) -> tuple[Any, Any]:
     session = aiohttp.ClientSession(
         connector=connector,
         cookie_jar=aiohttp.DummyCookieJar(),
-        auto_decompress=False,
+        # VK upload endpoints may gzip their JSON receipt. StreamReader
+        # applies decompression before the bounded iter_chunked loop below,
+        # so decoded bytes remain subject to the same response-size cap.
+        auto_decompress=True,
         trust_env=False,
         timeout=aiohttp.ClientTimeout(total=timeout_seconds),
         headers={"User-Agent": "events-bot-private-vk-media/1"},
