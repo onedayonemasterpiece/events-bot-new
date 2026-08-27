@@ -1,4 +1,8 @@
-from private_events_mcp_vk_adapter import (
+from private_events_mcp_vk_poll_calls import install_vk_poll_calls
+
+install_vk_poll_calls()
+
+from private_events_mcp_vk_adapter import (  # noqa: E402
     VK_FIXED_METHOD_ALLOWLIST,
     VK_OPERATION_ACTORS,
     VKActor,
