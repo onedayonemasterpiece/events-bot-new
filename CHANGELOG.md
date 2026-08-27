@@ -19,7 +19,8 @@
   registration cap could still defer later attachments across repeat reads;
   registration now completes every individually bounded attempt before the
   shared wait, and only the four batch-read tools receive the worst-case
-  schema-bounded protocol deadline.
+  schema-bounded protocol deadline. Oversized untrusted provider batches fail
+  closed before any download or durable job side effect.
 
 - Added: Telegram Social Workspace reactions now expose the closed semantic
   option `reaction_preset=github_added`. It compiles server-side to the exact

@@ -1365,6 +1365,10 @@ class SocialWorkspaceRuntime:
                         ):
                             continue
                         voice_total += 1
+                        if voice_total > MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ:
+                            raise SocialWorkspaceRuntimeError(
+                                "provider voice batch exceeds response cap"
+                            )
                         asset_ref = attachment.get("asset_ref")
                         fingerprint = attachment.pop("binding_fingerprint", None)
                         if (

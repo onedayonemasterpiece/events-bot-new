@@ -248,6 +248,8 @@ second durable-store wait still happens once. The four batch-read MCP deadlines
 cover the initial provider read, every schema-bounded registration wave, the
 maximum store wait and projection margin; unrelated actions retain the shorter
 ordinary deadline.
+The same 250-attachment schema ceiling is enforced on the untrusted raw provider
+batch before any registration task or media download is created.
 
 Each enriched attachment returns `ready|queued|running|failed`, the opaque
 `atr_*` where materialization succeeded, `created`, `cache_hit`, inline text

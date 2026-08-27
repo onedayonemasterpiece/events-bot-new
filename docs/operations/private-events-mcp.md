@@ -340,6 +340,9 @@ provider-media attempt remains individually bounded; the four batch-read MCP
 deadlines cover the initial provider read, all schema-bounded waves, up to 30
 seconds of store wait and a small projection margin. Unrelated actions keep the
 short ordinary deadline.
+An untrusted provider result above the 250-attachment schema ceiling is rejected
+before any registration task, provider-media download or durable job side
+effect, so the deadline calculation is also an enforced runtime boundary.
 Materialization is capped at three concurrent ingress operations, while remote
 dispatch remains strictly serialized.
 

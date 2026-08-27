@@ -1,6 +1,6 @@
 # INC-2026-08-27 MCP social voice batch reads required per-job polling
 
-Status: mitigating — bounded batch implementation is in draft review; production/action refresh acceptance pending
+Status: mitigating — production canary regression found; registration-completion hotfix and action refresh pending
 Severity: sev2
 Service: private eventsBot MCP Social Workspace and audio transcription
 Opened: 2026-08-27
@@ -78,6 +78,10 @@ confirmed the defect above those preserved layers.
    not itself honor the monitor's persisted provider hold.
 5. The public attachment/output contract lacked batch summary, creation/cache
    evidence and explicit inline continuation metadata.
+6. The first merged correction bounded the entire registration stage to one
+   12-second provider timeout. With concurrency three, that global cap expired
+   between waves and prevented later attachments from receiving even one
+   individually bounded materialization attempt before the common wait.
 
 ## Contributing Factors
 
@@ -159,6 +163,8 @@ confirmed the defect above those preserved layers.
   three, individually bounded materialization attempts and one owner-bound
   store-only wait. All attempts finish before that wait; only the four batch
   tools receive a schema-bounded worst-case protocol deadline.
+- Enforced the same 250-attachment ceiling on untrusted provider output before
+  creating registration tasks or media/job side effects.
 - Added typed durable `snapshot_many`, `wait_many` and `get_many` service methods
   without a new public MCP tool.
 - Added inline text/continuation metadata, aggregate summary and one sanitized

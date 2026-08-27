@@ -1406,6 +1406,44 @@ async def test_protocol_allows_slow_bounded_twenty_voice_registration_stage(
 
 
 @pytest.mark.asyncio
+async def test_oversized_untrusted_voice_batch_fails_before_registration(
+    tmp_path: Path,
+) -> None:
+    adapter = BatchTelegramAudioReadAdapter(
+        MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ + 1
+    )
+    transcriber = DeterministicBatchAudioService(
+        [JobState.QUEUED] * (MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ + 1)
+    )
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+
+    with pytest.raises(
+        SocialWorkspaceRuntimeError,
+        match="provider voice batch exceeds response cap",
+    ):
+        await runtime.read(
+            _batch_request(
+                runtime,
+                call_context,
+                MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ + 1,
+                wait_seconds=25,
+            ),
+            call_context,
+        )
+
+    assert adapter.downloads == []
+    assert transcriber.jobs == {}
+    assert transcriber.registrations == []
+    assert transcriber.wait_calls == []
+
+
+@pytest.mark.asyncio
 async def test_self_resolution_and_opaque_encrypted_binding(runtime) -> None:
     service, _adapter, store = runtime
     request = validate_read_request({
