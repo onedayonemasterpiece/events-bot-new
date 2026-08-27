@@ -241,9 +241,13 @@ concurrency capped at three, then calls the service's owner-bound
 `wait_many`/`get_many` path. That wait reads only the durable store; it never
 calls provider status, bypasses the monitor, ignores `retry_not_before`, or
 creates one remote waiting task per attachment.
-The whole registration stage has one provider-timeout budget (not one budget
-per concurrency wave), and the MCP tool deadline covers provider read,
-registration, the maximum 30-second store wait and projection margin.
+Each registration attempt has its own provider-media timeout; the small-bounded
+waves are allowed to finish before the common store wait begins. This is not an
+N-times transcription wait: only materialization is waved, while the 0..30
+second durable-store wait still happens once. The four batch-read MCP deadlines
+cover the initial provider read, every schema-bounded registration wave, the
+maximum store wait and projection margin; unrelated actions retain the shorter
+ordinary deadline.
 
 Each enriched attachment returns `ready|queued|running|failed`, the opaque
 `atr_*` where materialization succeeded, `created`, `cache_hit`, inline text

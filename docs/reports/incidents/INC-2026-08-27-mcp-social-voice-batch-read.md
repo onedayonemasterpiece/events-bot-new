@@ -53,6 +53,16 @@ confirmed the defect above those preserved layers.
   actions, bounded the whole registration stage, sized the protocol for two
   provider budgets plus the batch wait, and added protocol/resolver/thread
   regression coverage.
+- 2026-08-27: PR `#590` merged as
+  `fbd0cb0da148a59e6fe0c325e824a7a36a0af82b` and Fly v2041 deployed that exact
+  SHA; `/healthz` was ready, checks were 1/1, and authenticated `tools/list`
+  returned 30 tools / 172,799 bytes with exactly the four intended action
+  schemas and no truncation.
+- 2026-08-27: the first sanitized 25-voice canary exposed a remaining
+  regression: one 12-second global registration cap created 9 jobs and
+  localized 16 attachments before the wait. Later high-level reads eventually
+  found all 25, but that violated registration-before-wait and made first-read
+  duration 39.673 seconds. No provider rate limit or private-data leak occurred.
 
 ## Root Cause
 
@@ -146,7 +156,9 @@ confirmed the defect above those preserved layers.
 - Added explicit `transcription_wait_seconds=0..30`, valid only with explicit
   `transcribe_audio=true`, while keeping provider transport timeout separate.
 - Added collect/register/wait/project stages with ingress concurrency capped at
-  three, one global registration timeout and one owner-bound store-only wait.
+  three, individually bounded materialization attempts and one owner-bound
+  store-only wait. All attempts finish before that wait; only the four batch
+  tools receive a schema-bounded worst-case protocol deadline.
 - Added typed durable `snapshot_many`, `wait_many` and `get_many` service methods
   without a new public MCP tool.
 - Added inline text/continuation metadata, aggregate summary and one sanitized
@@ -155,7 +167,9 @@ confirmed the defect above those preserved layers.
 
 ## Follow-up Actions
 
-- [ ] Merge PR `#590` after full CI and deploy exact clean `origin/main`.
+- [x] Merge PR `#590` after full CI and deploy exact clean `origin/main`.
+- [ ] Merge and deploy the post-canary registration-completion hotfix, then
+  repeat the same sanitized multi-voice canary.
 - [ ] Refresh, review and publish the four changed high-level read actions in
   the existing ChatGPT app; start a new chat.
 - [ ] Run the sanitized private multi-voice canary, honor returned refresh delay
@@ -166,14 +180,17 @@ confirmed the defect above those preserved layers.
 ## Release And Closure Evidence
 
 - branch: `fix/mcp-social-voice-batch-read-20260827`
-- draft PR: `#590`
+- merged PR: `#590`
 - code commit: `3bba47d14`
 - test commit: `0fd484d8d`
-- deployed SHA: pending
-- deploy path: pending exact-main `scripts/deploy_fly_main.sh`
-- regression checks: focused local suite and initial PR CI passed; post-review
-  full suite/CI and live acceptance pending
-- post-deploy verification: pending
+- follow-up commit: `2dd8ba0be`
+- merge/deployed SHA: `fbd0cb0da148a59e6fe0c325e824a7a36a0af82b`
+- Fly version: `2041`
+- deploy path: exact-main `scripts/deploy_fly_main.sh`
+- regression checks: 105 focused and 524 relevant tests passed; PR CI 3/3 green
+- post-deploy verification: health ready, Fly 1/1, image SHA exact, authenticated
+  catalog 30 tools / 172,799 bytes / no truncation; first canary found the
+  registration-cap regression above, so hotfix/action refresh remain pending
 
 ## Prevention
 

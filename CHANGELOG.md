@@ -15,6 +15,11 @@
   sanitized batch log contains counts and full high-level response timing only;
   unrelated search/analytics/reaction actions do not advertise the new wait or
   summary contract.
+  A post-deploy 25-voice canary then exposed that a single global 12-second
+  registration cap could still defer later attachments across repeat reads;
+  registration now completes every individually bounded attempt before the
+  shared wait, and only the four batch-read tools receive the worst-case
+  schema-bounded protocol deadline.
 
 - Added: Telegram Social Workspace reactions now expose the closed semantic
   option `reaction_preset=github_added`. It compiles server-side to the exact
