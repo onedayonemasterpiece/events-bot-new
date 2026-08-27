@@ -15,6 +15,7 @@ import hmac
 import json
 import os
 import pickle
+import re
 import secrets
 import sqlite3
 import stat
@@ -315,13 +316,47 @@ class SQLiteProviderCoordinator:
                     idempotency_hash TEXT NOT NULL UNIQUE,
                     action_digest TEXT NOT NULL,
                     action TEXT NOT NULL,
+                    intent_ciphertext TEXT,
+                    content_fingerprint TEXT,
+                    media_digests_json TEXT,
                     result_json TEXT,
                     claimed_at_ms INTEGER NOT NULL,
                     updated_at_ms INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS social_provider_vk_attempt (
+                    operation_ref TEXT NOT NULL,
+                    attempt_no INTEGER NOT NULL,
+                    stage TEXT NOT NULL,
+                    provider_method TEXT NOT NULL,
+                    request_started_at_ms INTEGER NOT NULL,
+                    request_finished_at_ms INTEGER,
+                    http_status INTEGER,
+                    provider_result_ciphertext TEXT,
+                    normalized_error_class TEXT,
+                    provider_error_code INTEGER,
+                    provider_error_message TEXT,
+                    outcome_classification TEXT,
+                    PRIMARY KEY(operation_ref, attempt_no)
+                );
                 INSERT OR IGNORE INTO social_provider_tg_state(singleton) VALUES(1);
                 """
             )
+            columns = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(social_provider_vk_operation)")
+            }
+            if "intent_ciphertext" not in columns:
+                conn.execute(
+                    "ALTER TABLE social_provider_vk_operation ADD COLUMN intent_ciphertext TEXT"
+                )
+            if "content_fingerprint" not in columns:
+                conn.execute(
+                    "ALTER TABLE social_provider_vk_operation ADD COLUMN content_fingerprint TEXT"
+                )
+            if "media_digests_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE social_provider_vk_operation ADD COLUMN media_digests_json TEXT"
+                )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=3.0, isolation_level=None)
@@ -394,12 +429,86 @@ class DurableVKCooldown:
         return None
 
 
+class DurableVKAttemptRecorder:
+    """Persist one sanitized row per fixed VK API/multipart stage."""
+
+    def __init__(
+        self, state: SQLiteProviderCoordinator, signing_key: str
+    ) -> None:
+        self.state = state
+        self.signing_key = signing_key
+
+    def record(self, operation_ref: str, event: Mapping[str, Any]) -> None:
+        stage = str(event.get("stage") or "")
+        method = str(event.get("method") or "")
+        phase = str(event.get("phase") or "")
+        if (
+            not operation_ref.startswith("op_")
+            or not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", stage)
+            or not re.fullmatch(r"[A-Za-z][A-Za-z0-9.]{1,95}", method)
+            or phase not in {"started", "finished"}
+        ):
+            raise ProviderBindingError("VK attempt event is invalid")
+        now = self.state.now_ms()
+        with self.state._lock, self.state._connect() as conn:
+            if phase == "started":
+                attempt_no = int(
+                    conn.execute(
+                        """SELECT COALESCE(MAX(attempt_no),0)+1
+                           FROM social_provider_vk_attempt WHERE operation_ref=?""",
+                        (operation_ref,),
+                    ).fetchone()[0]
+                )
+                conn.execute(
+                    """INSERT INTO social_provider_vk_attempt(
+                       operation_ref,attempt_no,stage,provider_method,
+                       request_started_at_ms) VALUES(?,?,?,?,?)""",
+                    (operation_ref, attempt_no, stage, method, now),
+                )
+                return
+            row = conn.execute(
+                """SELECT attempt_no FROM social_provider_vk_attempt
+                   WHERE operation_ref=? AND stage=? AND request_finished_at_ms IS NULL
+                   ORDER BY attempt_no DESC LIMIT 1""",
+                (operation_ref, stage),
+            ).fetchone()
+            if row is None:
+                raise ProviderBindingError("VK attempt completion is unbound")
+            provider_result = event.get("provider_result")
+            ciphertext = (
+                _seal_binding(self.signing_key, provider_result)
+                if isinstance(provider_result, Mapping) and provider_result
+                else None
+            )
+            conn.execute(
+                """UPDATE social_provider_vk_attempt SET
+                   request_finished_at_ms=?,http_status=?,provider_result_ciphertext=?,
+                   normalized_error_class=?,provider_error_code=?,
+                   provider_error_message=?,outcome_classification=?
+                   WHERE operation_ref=? AND attempt_no=?""",
+                (
+                    now,
+                    event.get("http_status") if type(event.get("http_status")) is int else None,
+                    ciphertext,
+                    str(event.get("error_class") or "")[:64] or None,
+                    event.get("provider_error_code")
+                    if type(event.get("provider_error_code")) is int
+                    else None,
+                    str(event.get("provider_error_message") or "")[:128] or None,
+                    str(event.get("outcome") or "")[:32] or None,
+                    operation_ref,
+                    int(row["attempt_no"]),
+                ),
+            )
+
+
 _VK_TOKEN_ENVS: Mapping[VKActor, str] = {
     VKActor.PUBLIC_READER: "PRIVATE_EVENTS_MCP_VK_PUBLIC_READER_TOKEN",
     VKActor.NOTIFICATION_READER: "PRIVATE_EVENTS_MCP_VK_NOTIFICATION_READER_TOKEN",
     VKActor.DIALOG_READER: "PRIVATE_EVENTS_MCP_VK_DIALOG_READER_TOKEN",
     VKActor.USER_MESSENGER: "PRIVATE_EVENTS_MCP_VK_USER_MESSENGER_TOKEN",
     VKActor.COMMUNITY_EDITOR: "PRIVATE_EVENTS_MCP_VK_COMMUNITY_EDITOR_TOKEN",
+    VKActor.MEDIA_EDITOR: "PRIVATE_EVENTS_MCP_VK_MEDIA_EDITOR_TOKEN",
     VKActor.ANALYTICS_READER: "PRIVATE_EVENTS_MCP_VK_ANALYTICS_READER_TOKEN",
     VKActor.STORY_READER: "PRIVATE_EVENTS_MCP_VK_STORY_READER_TOKEN",
     VKActor.STORY_EDITOR: "PRIVATE_EVENTS_MCP_VK_STORY_EDITOR_TOKEN",
@@ -512,6 +621,7 @@ def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]
         VKActor.DIALOG_READER: set(),
         VKActor.USER_MESSENGER: set(),
         VKActor.COMMUNITY_EDITOR: set(),
+        VKActor.MEDIA_EDITOR: set(),
         VKActor.ANALYTICS_READER: {"analytics"},
         VKActor.STORY_READER: set(),
         VKActor.STORY_EDITOR: set(),
@@ -530,7 +640,7 @@ def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]
         allowed[VKActor.USER_MESSENGER].update({"edit", "delete"})
         allowed[VKActor.COMMUNITY_EDITOR].update({"edit", "delete"})
     if config.universal_social_media_story_enabled:
-        allowed[VKActor.COMMUNITY_EDITOR].add("media_upload")
+        allowed[VKActor.MEDIA_EDITOR].add("media_upload")
         allowed[VKActor.STORY_READER].add("story_read")
         allowed[VKActor.STORY_EDITOR].add("story_write")
     return {actor: frozenset(capabilities) for actor, capabilities in allowed.items()}
@@ -546,9 +656,15 @@ class DurableVKWorkspaceAdapter:
 
     platform = "vk"
 
-    def __init__(self, delegate: VKWorkspaceAdapter, state: SQLiteProviderCoordinator) -> None:
+    def __init__(
+        self,
+        delegate: VKWorkspaceAdapter,
+        state: SQLiteProviderCoordinator,
+        signing_key: str,
+    ) -> None:
         self.delegate = delegate
         self.state = state
+        self.signing_key = signing_key
 
     async def capabilities(self, target_ref: str | None) -> Mapping[str, Any]:
         return await self.delegate.capabilities(target_ref)
@@ -605,11 +721,30 @@ class DurableVKWorkspaceAdapter:
                 if row["result_json"]:
                     return json.loads(row["result_json"])
                 return self._unknown(operation_ref, str(row["action"]))
+            evidence = getattr(self.delegate, "durable_intent_evidence", None)
+            if callable(evidence):
+                content_fingerprint, media_digests = evidence(intent)
+            else:
+                content_fingerprint = hashlib.sha256(
+                    str(getattr(getattr(intent, "content", None), "text", "")).encode()
+                ).hexdigest()
+                media_digests = []
             conn.execute(
                 """INSERT INTO social_provider_vk_operation(
-                   operation_ref,idempotency_hash,action_digest,action,
-                   claimed_at_ms,updated_at_ms) VALUES(?,?,?,?,?,?)""",
-                (operation_ref, idem, digest, intent.action.value, now, now),
+                   operation_ref,idempotency_hash,action_digest,action,intent_ciphertext,
+                   content_fingerprint,media_digests_json,
+                   claimed_at_ms,updated_at_ms) VALUES(?,?,?,?,?,?,?,?,?)""",
+                (
+                    operation_ref,
+                    idem,
+                    digest,
+                    intent.action.value,
+                    _seal_binding(self.signing_key, intent),
+                    content_fingerprint,
+                    json.dumps(media_digests, separators=(",", ":")),
+                    now,
+                    now,
+                ),
             )
             conn.execute("COMMIT")
         try:
@@ -650,14 +785,70 @@ class DurableVKWorkspaceAdapter:
     async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:
         with self.state._lock, self.state._connect() as conn:
             row = conn.execute(
-                """SELECT action,result_json FROM social_provider_vk_operation
+                """SELECT action,result_json,intent_ciphertext,claimed_at_ms
+                   FROM social_provider_vk_operation
                    WHERE operation_ref=?""",
                 (operation_ref,),
             ).fetchone()
         if row is None:
             raise ProviderBindingError("VK operation is unknown")
         if row["result_json"]:
-            return json.loads(row["result_json"])
+            cached = json.loads(row["result_json"])
+            if cached.get("status") != SocialActionStatus.OUTCOME_UNKNOWN.value:
+                return cached
+            reconcile_intent = getattr(self.delegate, "reconcile_intent", None)
+            if callable(reconcile_intent) and row["intent_ciphertext"]:
+                try:
+                    intent = _open_binding(
+                        self.signing_key, str(row["intent_ciphertext"])
+                    )
+                    with self.state._lock, self.state._connect() as attempt_conn:
+                        attempt_rows = attempt_conn.execute(
+                            """SELECT stage,provider_result_ciphertext
+                               FROM social_provider_vk_attempt
+                               WHERE operation_ref=? AND provider_result_ciphertext IS NOT NULL
+                               ORDER BY attempt_no""",
+                            (operation_ref,),
+                        ).fetchall()
+                    provider_post_id: int | None = None
+                    provider_photo_refs: list[tuple[int, int]] = []
+                    for attempt in attempt_rows:
+                        result = _open_binding(
+                            self.signing_key, str(attempt["provider_result_ciphertext"])
+                        )
+                        if not isinstance(result, Mapping):
+                            continue
+                        if attempt["stage"] == "wall_post" and type(result.get("post_id")) is int:
+                            provider_post_id = int(result["post_id"])
+                        if (
+                            attempt["stage"] == "wall_photo_save"
+                            and type(result.get("photo_owner_id")) is int
+                            and type(result.get("photo_id")) is int
+                        ):
+                            provider_photo_refs.append(
+                                (int(result["photo_owner_id"]), int(result["photo_id"]))
+                            )
+                    observed = dict(
+                        await reconcile_intent(
+                            operation_ref,
+                            intent,
+                            claimed_at_ms=int(row["claimed_at_ms"]),
+                            provider_post_id=provider_post_id,
+                            provider_photo_refs=tuple(provider_photo_refs),
+                        )
+                    )
+                except Exception:  # noqa: BLE001 - provider details stay private
+                    return cached
+                if observed.get("status") == SocialActionStatus.SUCCEEDED.value:
+                    encoded = json.dumps(observed, ensure_ascii=False, sort_keys=True)
+                    with self.state._lock, self.state._connect() as conn:
+                        conn.execute(
+                            """UPDATE social_provider_vk_operation
+                               SET result_json=?,updated_at_ms=? WHERE operation_ref=?""",
+                            (encoded, self.state.now_ms(), operation_ref),
+                        )
+                    return observed
+            return cached
         return self._unknown(operation_ref, str(row["action"]))
 
 
@@ -721,9 +912,10 @@ def build_vk_workspace_adapter(
         story_media_reader=(
             SecureVKStoryMediaReader() if asset_store is not None else None
         ),
+        attempt_recorder=DurableVKAttemptRecorder(state, config.signing_key),
         timeout_seconds=config.social_provider_timeout_seconds,
     )
-    return DurableVKWorkspaceAdapter(delegate, state)
+    return DurableVKWorkspaceAdapter(delegate, state, config.signing_key)
 
 
 def build_private_events_mcp_workspace_adapters(

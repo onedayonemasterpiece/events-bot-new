@@ -237,6 +237,7 @@ class OAuthStateStore:
                     action_digest TEXT NOT NULL,
                     idempotency_hash TEXT NOT NULL,
                     intent_ciphertext TEXT NOT NULL,
+                    operation_ref TEXT,
                     status TEXT NOT NULL,
                     expires_at INTEGER NOT NULL,
                     created_at INTEGER NOT NULL,
@@ -327,6 +328,23 @@ class OAuthStateStore:
                     SELECT RAISE(ABORT, 'social_workspace_audit is append-only');
                 END;
                 """
+            )
+            # Additive migration for databases created before operation refs were
+            # allocated at prepare time.  Keeping the future operation on the
+            # preparation makes status(preparation_ref) stable across commit.
+            columns = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(social_workspace_preparation)")
+            }
+            if "operation_ref" not in columns:
+                conn.execute(
+                    "ALTER TABLE social_workspace_preparation ADD COLUMN operation_ref TEXT"
+                )
+            conn.execute(
+                """CREATE UNIQUE INDEX IF NOT EXISTS
+                   ux_social_workspace_preparation_operation_ref
+                   ON social_workspace_preparation(operation_ref)
+                   WHERE operation_ref IS NOT NULL"""
             )
 
     @staticmethod

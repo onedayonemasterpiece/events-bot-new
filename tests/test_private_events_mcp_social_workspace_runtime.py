@@ -84,6 +84,7 @@ class FakeAdapter:
         self.resolve_calls = 0
         self.capability_calls = 0
         self.asset_bytes: bytes | None = None
+        self.forced_result: dict[str, Any] | None = None
 
     async def capabilities(self, target_ref):
         self.capability_calls += 1
@@ -147,6 +148,8 @@ class FakeAdapter:
         self.operation_refs.append(operation_ref)
         if self.timeout:
             await asyncio.sleep(0.1)
+        if self.forced_result is not None:
+            return dict(self.forced_result)
         return {
             "target_ref": intent.target_ref or intent.destination_target_ref,
             "item_ref": "native-sent-99",
@@ -2671,6 +2674,8 @@ async def test_approval_capabilities_are_hash_only_at_rest(runtime) -> None:
     )
     status = await service.status("preparation", prepared["preparation_ref"], context())
     assert status["status"] == "approved"
+    assert status["operation_ref"].startswith("op_")
+    assert status["operation_ref"] != "op_" + "0" * 24
     committed = await service.commit(
         {
             "preparation_ref": prepared["preparation_ref"],
@@ -2679,6 +2684,13 @@ async def test_approval_capabilities_are_hash_only_at_rest(runtime) -> None:
         context(),
     )
     assert committed["status"] == "succeeded"
+    by_preparation = await service.status(
+        "preparation", prepared["preparation_ref"], context()
+    )
+    by_operation = await service.status(
+        "operation", committed["operation_ref"], context()
+    )
+    assert by_preparation == by_operation == committed
 
 
 @pytest.mark.asyncio
@@ -2722,6 +2734,39 @@ async def test_provider_success_followed_by_egress_denial_is_not_reported_failed
         )]
     assert "failed" not in outcomes
     assert "succeeded_response_withheld" in outcomes
+
+
+@pytest.mark.asyncio
+async def test_provider_returned_unknown_is_not_audited_as_success(runtime) -> None:
+    service, adapter, store = runtime
+    adapter.forced_result = {
+        "status": "outcome_unknown",
+        "retry_safe": False,
+        "error_code": "provider_timeout",
+    }
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-user", "telegram", principal)
+    intent = validate_prepare_request({
+        "platform": "telegram", "action": "send_message",
+        "idempotency_key": "returned-unknown-123", "target_ref": target,
+        "content": {"text": "Hello", "entities": [], "media": []},
+    })
+    prepared = await service.prepare(intent, context())
+    approval = service.approve_preparation(
+        preparation_ref=prepared["preparation_ref"],
+        operator_principal="operator", operator_nonce="unknown-nonce-12345",
+    )
+    result = await service.commit({
+        "preparation_ref": prepared["preparation_ref"], **approval,
+        "action_digest": prepared["action_digest"],
+    }, context())
+    assert result["status"] == "outcome_unknown"
+    with sqlite3.connect(store.path) as conn:
+        audit = conn.execute(
+            """SELECT outcome,reason_code FROM social_workspace_audit
+               WHERE operation='commit' ORDER BY id DESC LIMIT 1"""
+        ).fetchone()
+    assert audit == ("outcome_unknown", "provider_timeout")
 
 
 @pytest.mark.asyncio

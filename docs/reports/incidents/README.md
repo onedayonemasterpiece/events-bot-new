@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown.md`
+  - Scope: private eventsBot MCP VK text+image action lifecycle, durable
+    preparation→operation mapping, provider-stage outcome classification,
+    bounded wall reconciliation and VK content date filters.
+  - Must not regress: `committed` is never provider-success evidence;
+    preparation status returns the real linked operation; definite pre-wall
+    provider errors are failed while possibly-sent wall writes remain
+    non-retryable unknown; same-day search/feed cannot leak older posts; closure
+    requires one authenticated, image-bearing VK post readback with no duplicate.
+
 - `INC-2026-08-27-mcp-social-voice-batch-read.md`
   - Scope: bounded high-level Telegram voice batching, durable store-only wait,
     inline ready text/continuation, aggregate states and action refresh.

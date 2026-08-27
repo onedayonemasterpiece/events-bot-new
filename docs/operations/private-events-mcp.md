@@ -454,6 +454,17 @@ Every external mutation follows:
    server-side approval before one provider attempt;
 5. `social_action_status` or read-after-write evidence reconciles the receipt.
 
+The preparation allocates the real future `operation_ref`; status by either the
+preparation or operation reference therefore converges on the same durable
+receipt. A definite provider rejection before a wall mutation is `failed` and
+may be `retry_safe=true`. Only a transport ambiguity at a mutation boundary is
+`outcome_unknown`. VK reconciliation never repeats `wall.post`: it performs a
+bounded authenticated wall read and accepts success only for one exact target,
+normalized-text, time-window and expected-photo match. When photo-save or
+wall-post returned native identifiers before a later ambiguity, those values
+are encrypted in provider state and reconciliation uses the exact photo/post
+identifier rather than text alone.
+
 The approval token is never pasted into ChatGPT. It is not an OAuth token and
 must not appear in model context, logs, PRs or artifacts. A provider timeout is
 `outcome_unknown` and `retry_safe=false`; do not retry with a new idempotency
@@ -556,6 +567,7 @@ PRIVATE_EVENTS_MCP_VK_NOTIFICATION_READER_TOKEN
 PRIVATE_EVENTS_MCP_VK_DIALOG_READER_TOKEN
 PRIVATE_EVENTS_MCP_VK_USER_MESSENGER_TOKEN
 PRIVATE_EVENTS_MCP_VK_COMMUNITY_EDITOR_TOKEN
+PRIVATE_EVENTS_MCP_VK_MEDIA_EDITOR_TOKEN
 PRIVATE_EVENTS_MCP_VK_ANALYTICS_READER_TOKEN
 PRIVATE_EVENTS_MCP_VK_STORY_READER_TOKEN
 PRIVATE_EVENTS_MCP_VK_STORY_EDITOR_TOKEN
@@ -565,7 +577,10 @@ Only configured actor/action capability sets are advertised. The transport uses
 fixed VK API 5.199 method paths, rejects redirects, bounds responses, and emits
 only sanitized provider error codes. Public-wall and private-dialog access are
 separate; a public scope cannot route to conversation history. Cursor context
-binds target, operation, access class and unread/all mode. `social_dialogs_list`
+binds target, operation, access class, inclusive UTC `date_from`/`date_to`, item
+kinds and unread/all mode. VK list/search results are post-filtered to those
+inclusive date bounds even where the provider search method cannot express the
+same closed interval. `social_dialogs_list`
 uses the dialog-reader role and projects only an opaque target ref, display name,
 dialog kind and unread count. It never returns `last_message`, message text or a
 native peer ID. The returned user, group-chat or community dialog target can be
@@ -579,12 +594,24 @@ Provider continuation state is validated before use and capped before encrypted
 SQLite persistence; an oversized VK `next_from` value fails closed instead of
 growing the auth/state database.
 
-Image/story operations preserve the same separation: community publication,
-story editing, story reads and story aggregate analytics are authorized by
-their dedicated actor roles and fixed capability sets. A generic token or
-`main.vk_api` fallback cannot satisfy a missing role. The adapter receives a
+Image/story operations preserve the same separation: `wall.post` uses the
+community-editor actor, while wall-photo upload/save requires the explicit
+user-token `media_editor` actor because the upload chain has a different
+provider authorization contract. `image` is not advertised unless that actor
+is configured and permitted. Story editing, story reads and story aggregate
+analytics remain on their dedicated roles. A generic token or `main.vk_api`
+fallback cannot satisfy a missing role. The adapter receives a
 verified local asset stream and never exposes or accepts a raw VK upload-server
-URL/method. Story metrics are aggregate views/likes/replies/shares where VK
+URL/method. Multipart responses are consumed to EOF under a decoded-byte cap;
+one short network chunk is not treated as the whole JSON response. Safe logs
+record only opaque operation, fixed stage, status and sanitized code. A durable
+attempt row records the attempt number, fixed method/stage, start/finish,
+available HTTP status, normalized outcome/error and an encrypted envelope for
+native photo/post results; target/content/media fingerprints remain bounded and
+tokens, upload URLs and bodies are never stored. Ordinary VK item/feed reads
+project wall photos as principal-bound opaque `media[]`/attachment refs, so
+MCP readback can attest image presence without exposing native IDs. Story
+metrics are aggregate views/likes/replies/shares where VK
 returns them; viewer/member identities are discarded.
 
 `social_comment_hints_list` uses only the fixed `notifications.get` method,
