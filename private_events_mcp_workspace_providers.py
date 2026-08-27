@@ -315,6 +315,7 @@ class SQLiteProviderCoordinator:
                     idempotency_hash TEXT NOT NULL UNIQUE,
                     action_digest TEXT NOT NULL,
                     action TEXT NOT NULL,
+                    intent_ciphertext TEXT,
                     result_json TEXT,
                     claimed_at_ms INTEGER NOT NULL,
                     updated_at_ms INTEGER NOT NULL
@@ -322,6 +323,14 @@ class SQLiteProviderCoordinator:
                 INSERT OR IGNORE INTO social_provider_tg_state(singleton) VALUES(1);
                 """
             )
+            columns = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(social_provider_vk_operation)")
+            }
+            if "intent_ciphertext" not in columns:
+                conn.execute(
+                    "ALTER TABLE social_provider_vk_operation ADD COLUMN intent_ciphertext TEXT"
+                )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=3.0, isolation_level=None)
@@ -400,6 +409,7 @@ _VK_TOKEN_ENVS: Mapping[VKActor, str] = {
     VKActor.DIALOG_READER: "PRIVATE_EVENTS_MCP_VK_DIALOG_READER_TOKEN",
     VKActor.USER_MESSENGER: "PRIVATE_EVENTS_MCP_VK_USER_MESSENGER_TOKEN",
     VKActor.COMMUNITY_EDITOR: "PRIVATE_EVENTS_MCP_VK_COMMUNITY_EDITOR_TOKEN",
+    VKActor.MEDIA_EDITOR: "PRIVATE_EVENTS_MCP_VK_MEDIA_EDITOR_TOKEN",
     VKActor.ANALYTICS_READER: "PRIVATE_EVENTS_MCP_VK_ANALYTICS_READER_TOKEN",
     VKActor.STORY_READER: "PRIVATE_EVENTS_MCP_VK_STORY_READER_TOKEN",
     VKActor.STORY_EDITOR: "PRIVATE_EVENTS_MCP_VK_STORY_EDITOR_TOKEN",
@@ -512,6 +522,7 @@ def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]
         VKActor.DIALOG_READER: set(),
         VKActor.USER_MESSENGER: set(),
         VKActor.COMMUNITY_EDITOR: set(),
+        VKActor.MEDIA_EDITOR: set(),
         VKActor.ANALYTICS_READER: {"analytics"},
         VKActor.STORY_READER: set(),
         VKActor.STORY_EDITOR: set(),
@@ -530,7 +541,7 @@ def _vk_allowed(config: PrivateEventsMCPConfig) -> dict[VKActor, frozenset[str]]
         allowed[VKActor.USER_MESSENGER].update({"edit", "delete"})
         allowed[VKActor.COMMUNITY_EDITOR].update({"edit", "delete"})
     if config.universal_social_media_story_enabled:
-        allowed[VKActor.COMMUNITY_EDITOR].add("media_upload")
+        allowed[VKActor.MEDIA_EDITOR].add("media_upload")
         allowed[VKActor.STORY_READER].add("story_read")
         allowed[VKActor.STORY_EDITOR].add("story_write")
     return {actor: frozenset(capabilities) for actor, capabilities in allowed.items()}
@@ -546,9 +557,15 @@ class DurableVKWorkspaceAdapter:
 
     platform = "vk"
 
-    def __init__(self, delegate: VKWorkspaceAdapter, state: SQLiteProviderCoordinator) -> None:
+    def __init__(
+        self,
+        delegate: VKWorkspaceAdapter,
+        state: SQLiteProviderCoordinator,
+        signing_key: str,
+    ) -> None:
         self.delegate = delegate
         self.state = state
+        self.signing_key = signing_key
 
     async def capabilities(self, target_ref: str | None) -> Mapping[str, Any]:
         return await self.delegate.capabilities(target_ref)
@@ -607,9 +624,17 @@ class DurableVKWorkspaceAdapter:
                 return self._unknown(operation_ref, str(row["action"]))
             conn.execute(
                 """INSERT INTO social_provider_vk_operation(
-                   operation_ref,idempotency_hash,action_digest,action,
-                   claimed_at_ms,updated_at_ms) VALUES(?,?,?,?,?,?)""",
-                (operation_ref, idem, digest, intent.action.value, now, now),
+                   operation_ref,idempotency_hash,action_digest,action,intent_ciphertext,
+                   claimed_at_ms,updated_at_ms) VALUES(?,?,?,?,?,?,?)""",
+                (
+                    operation_ref,
+                    idem,
+                    digest,
+                    intent.action.value,
+                    _seal_binding(self.signing_key, intent),
+                    now,
+                    now,
+                ),
             )
             conn.execute("COMMIT")
         try:
@@ -650,14 +675,42 @@ class DurableVKWorkspaceAdapter:
     async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:
         with self.state._lock, self.state._connect() as conn:
             row = conn.execute(
-                """SELECT action,result_json FROM social_provider_vk_operation
+                """SELECT action,result_json,intent_ciphertext,claimed_at_ms
+                   FROM social_provider_vk_operation
                    WHERE operation_ref=?""",
                 (operation_ref,),
             ).fetchone()
         if row is None:
             raise ProviderBindingError("VK operation is unknown")
         if row["result_json"]:
-            return json.loads(row["result_json"])
+            cached = json.loads(row["result_json"])
+            if cached.get("status") != SocialActionStatus.OUTCOME_UNKNOWN.value:
+                return cached
+            reconcile_intent = getattr(self.delegate, "reconcile_intent", None)
+            if callable(reconcile_intent) and row["intent_ciphertext"]:
+                try:
+                    intent = _open_binding(
+                        self.signing_key, str(row["intent_ciphertext"])
+                    )
+                    observed = dict(
+                        await reconcile_intent(
+                            operation_ref,
+                            intent,
+                            claimed_at_ms=int(row["claimed_at_ms"]),
+                        )
+                    )
+                except Exception:  # noqa: BLE001 - provider details stay private
+                    return cached
+                if observed.get("status") == SocialActionStatus.SUCCEEDED.value:
+                    encoded = json.dumps(observed, ensure_ascii=False, sort_keys=True)
+                    with self.state._lock, self.state._connect() as conn:
+                        conn.execute(
+                            """UPDATE social_provider_vk_operation
+                               SET result_json=?,updated_at_ms=? WHERE operation_ref=?""",
+                            (encoded, self.state.now_ms(), operation_ref),
+                        )
+                    return observed
+            return cached
         return self._unknown(operation_ref, str(row["action"]))
 
 
@@ -723,7 +776,7 @@ def build_vk_workspace_adapter(
         ),
         timeout_seconds=config.social_provider_timeout_seconds,
     )
-    return DurableVKWorkspaceAdapter(delegate, state)
+    return DurableVKWorkspaceAdapter(delegate, state, config.signing_key)
 
 
 def build_private_events_mcp_workspace_adapters(

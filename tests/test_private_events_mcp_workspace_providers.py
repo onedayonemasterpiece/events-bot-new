@@ -82,6 +82,18 @@ def test_vk_actor_transport_has_exact_credentials_and_no_fallback() -> None:
     assert no_role_token.permits(VKActor.PUBLIC_READER, "discover") is False
 
 
+def test_vk_media_upload_uses_dedicated_user_actor_token() -> None:
+    transport = DedicatedVKActorTransport(
+        allowed={VKActor.MEDIA_EDITOR: frozenset({"media_upload"})},
+        environ={
+            "PRIVATE_EVENTS_MCP_VK_MEDIA_EDITOR_TOKEN": "user-editor-secret",
+            "PRIVATE_EVENTS_MCP_VK_COMMUNITY_EDITOR_TOKEN": "group-editor-secret",
+        },
+    )
+    assert transport.permits(VKActor.MEDIA_EDITOR, "media_upload") is True
+    assert transport.permits(VKActor.COMMUNITY_EDITOR, "media_upload") is False
+
+
 @pytest.mark.asyncio
 async def test_vk_actor_transport_reads_all_fragmented_response_chunks() -> None:
     class FragmentedContent:
@@ -215,7 +227,7 @@ async def test_vk_operation_receipt_survives_adapter_restart(tmp_path) -> None:
     path = tmp_path / "auth.sqlite"
     first_delegate = Delegate()
     first = DurableVKWorkspaceAdapter(
-        first_delegate, SQLiteProviderCoordinator(str(path))
+        first_delegate, SQLiteProviderCoordinator(str(path)), "vk-test-signing-key"
     )
     intent = validate_prepare_request(
         {
@@ -232,11 +244,72 @@ async def test_vk_operation_receipt_survives_adapter_restart(tmp_path) -> None:
 
     second_delegate = Delegate()
     second = DurableVKWorkspaceAdapter(
-        second_delegate, SQLiteProviderCoordinator(str(path))
+        second_delegate, SQLiteProviderCoordinator(str(path)), "vk-test-signing-key"
     )
     assert await second.execute(intent, operation_ref=operation_ref) == receipt
     assert await second.reconcile(operation_ref) == receipt
     assert second_delegate.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_vk_unknown_receipt_reconciles_from_encrypted_intent_after_restart(
+    tmp_path,
+) -> None:
+    class Delegate:
+        def __init__(self, unknown: bool) -> None:
+            self.unknown = unknown
+            self.reconciliations = 0
+
+        async def execute(self, intent, *, operation_ref):
+            return {
+                "platform": "vk",
+                "operation_ref": operation_ref,
+                "action": intent.action.value,
+                "status": "outcome_unknown" if self.unknown else "succeeded",
+                "retry_safe": False,
+                **({"error_code": "provider_timeout"} if self.unknown else {}),
+            }
+
+        async def reconcile_intent(
+            self, operation_ref, intent, *, claimed_at_ms
+        ):
+            self.reconciliations += 1
+            assert intent.content.text == "Durable exact post"
+            assert claimed_at_ms > 0
+            return {
+                "platform": "vk",
+                "operation_ref": operation_ref,
+                "action": intent.action.value,
+                "status": "succeeded",
+                "retry_safe": False,
+                "item_ref": "itm_" + "c" * 24,
+            }
+
+    path = tmp_path / "vk-reconcile.sqlite"
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "publish",
+            "idempotency_key": "durable-reconcile-vk-001",
+            "target_ref": "tgt_" + "a" * 24,
+            "content": {"text": "Durable exact post"},
+        }
+    )
+    operation_ref = "op_" + "b" * 24
+    first = DurableVKWorkspaceAdapter(
+        Delegate(True), SQLiteProviderCoordinator(str(path)), "vk-test-signing-key"
+    )
+    unknown = await first.execute(intent, operation_ref=operation_ref)
+    assert unknown["status"] == "outcome_unknown"
+    second_delegate = Delegate(False)
+    second = DurableVKWorkspaceAdapter(
+        second_delegate,
+        SQLiteProviderCoordinator(str(path)),
+        "vk-test-signing-key",
+    )
+    reconciled = await second.reconcile(operation_ref)
+    assert reconciled["status"] == "succeeded"
+    assert second_delegate.reconciliations == 1
 
 
 def test_telegram_bindings_survive_store_restart(config, tmp_path) -> None:

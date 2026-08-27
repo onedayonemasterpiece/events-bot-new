@@ -2087,10 +2087,18 @@ class SocialWorkspaceRuntime:
                 if existing:
                     if existing["action_digest"] != digest:
                         raise SocialWorkspaceRuntimeError("idempotency key payload mutation denied")
+                    if not existing["operation_ref"]:
+                        operation = "op_" + secrets.token_urlsafe(24)
+                        conn.execute(
+                            """UPDATE social_workspace_preparation SET operation_ref=?
+                               WHERE preparation_hash=? AND operation_ref IS NULL""",
+                            (operation, existing["preparation_hash"]),
+                        )
                     conn.execute("COMMIT")
                     return self._preparation_result(existing["preparation_ref"], intent,
                         digest, int(existing["expires_at"]), str(existing["status"]))
                 prep = "prep_" + secrets.token_urlsafe(24)
+                operation = "op_" + secrets.token_urlsafe(24)
                 expires = now + self.preparation_ttl_seconds
                 if verified_assets:
                     expires = min(
@@ -2110,11 +2118,11 @@ class SocialWorkspaceRuntime:
                 conn.execute(
                     """INSERT INTO social_workspace_preparation(preparation_hash,preparation_ref,
                        client_hash,subject_hash,resource_hash,platform,action,target_ref_hash,
-                       action_digest,idempotency_hash,intent_ciphertext,status,expires_at,created_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       action_digest,idempotency_hash,intent_ciphertext,operation_ref,status,expires_at,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (self._hash(prep), prep, client, subject, resource, platform,
                      intent.action.value, self._hash(intent.target_ref) if intent.target_ref else None,
-                     digest, idem, self._encrypt(_json(persisted_intent)),
+                     digest, idem, self._encrypt(_json(persisted_intent)), operation,
                      status, expires, now),
                 )
                 conn.execute("COMMIT")
@@ -2521,7 +2529,12 @@ class SocialWorkspaceRuntime:
                         raise SocialWorkspaceRuntimeError(
                             "approval receipt was already consumed"
                         )
-                operation = "op_" + secrets.token_urlsafe(24)
+                operation = str(prep["operation_ref"] or ("op_" + secrets.token_urlsafe(24)))
+                if not prep["operation_ref"]:
+                    conn.execute(
+                        "UPDATE social_workspace_preparation SET operation_ref=? WHERE preparation_hash=?",
+                        (operation, self._hash(prep_ref)),
+                    )
                 conn.execute(
                     """INSERT INTO social_workspace_operation(operation_hash,operation_ref,
                        preparation_hash,client_hash,subject_hash,resource_hash,platform,action,
@@ -2572,10 +2585,19 @@ class SocialWorkspaceRuntime:
             if size > self.response_cap_bytes:
                 raise SocialWorkspaceRuntimeError("response cap exceeded")
             self._consume_budget(principal, platform, target_ref, intent.action.value, "egress", size)
-            self._finish_operation(operation, safe, None)
-            self._record_provider_result(principal, platform, target_ref, success=True)
-            self._audit(principal, platform=platform, operation="commit", outcome="succeeded",
-                        reason="provider_succeeded", target_ref=target_ref,
+            self._finish_operation(operation, safe, safe.get("error_code"))
+            succeeded = safe["status"] == SocialActionStatus.SUCCEEDED.value
+            self._record_provider_result(
+                principal, platform, target_ref, success=succeeded
+            )
+            audit_outcome = str(safe["status"])
+            audit_reason = (
+                "provider_succeeded"
+                if succeeded
+                else str(safe.get("error_code") or "provider_returned_non_success")
+            )
+            self._audit(principal, platform=platform, operation="commit", outcome=audit_outcome,
+                        reason=audit_reason, target_ref=target_ref,
                         action_digest=digest, response_bytes=size, media_items=media_count)
             return safe
         except asyncio.TimeoutError:
@@ -2658,7 +2680,26 @@ class SocialWorkspaceRuntime:
             prep = conn.execute("SELECT * FROM social_workspace_preparation WHERE preparation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?", (self._hash(reference), client, subject, resource)).fetchone()
             if prep is None:
                 raise SocialWorkspaceRuntimeError("preparation is unknown or not bound")
-            return {"platform": prep["platform"], "operation_ref": "op_" + "0" * 24,
+            linked = conn.execute(
+                """SELECT * FROM social_workspace_operation
+                   WHERE preparation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?""",
+                (self._hash(reference), client, subject, resource),
+            ).fetchone()
+            if linked is not None:
+                if linked["result_json"]:
+                    return json.loads(linked["result_json"])
+                return {"platform": linked["platform"], "operation_ref": linked["operation_ref"],
+                        "action": linked["action"], "status": linked["status"],
+                        "retry_safe": bool(linked["retry_safe"])}
+            operation_ref = prep["operation_ref"]
+            if not operation_ref:
+                operation_ref = "op_" + secrets.token_urlsafe(24)
+                conn.execute(
+                    """UPDATE social_workspace_preparation SET operation_ref=?
+                       WHERE preparation_hash=? AND operation_ref IS NULL""",
+                    (operation_ref, self._hash(reference)),
+                )
+            return {"platform": prep["platform"], "operation_ref": operation_ref,
                     "action": prep["action"], "status": prep["status"], "retry_safe": False}
 
     async def reconcile(self, operation_ref: str, context: ToolCallContext) -> dict[str, Any]:

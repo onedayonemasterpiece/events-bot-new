@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+import private_events_mcp_vk_transport as vk_transport_module
+
 from private_events_mcp.social_workspace import (
     MediaRole,
     validate_prepare_request,
@@ -24,6 +26,7 @@ from private_events_mcp_vk_adapter import (
     _validated_vk_https_url,
 )
 from private_events_mcp_vk_transport import (
+    SecureVKMultipartTransport,
     VKMediaTransportError,
 )
 from private_events_mcp_vk_transport import (
@@ -80,6 +83,7 @@ class FakeTransport:
         self.calls: list[dict[str, Any]] = []
         self.denied: set[tuple[VKActor, str]] = set()
         self.fail_method: str | None = None
+        self.last_wall_post: dict[str, Any] = {}
 
     def permits(self, actor: VKActor, capability: str) -> bool:
         return (actor, capability) not in self.denied
@@ -94,7 +98,16 @@ class FakeTransport:
         if method == "photos.saveWallPhoto":
             return [{"id": 55, "owner_id": -101, "access_key": "safe_key"}]
         if method == "wall.post":
+            self.last_wall_post = dict(call["params"])
             return {"post_id": 501}
+        if method == "wall.getById":
+            return [{
+                "id": 501,
+                "owner_id": -101,
+                "date": 1_800_000_000,
+                "text": self.last_wall_post.get("message", ""),
+                "attachments": [{"type": "photo", "photo": {"id": 55}}],
+            }]
         if method in {"stories.getPhotoUploadServer", "stories.getVideoUploadServer"}:
             return {"upload_url": "https://pu.vk.com/story-upload?sig=signed"}
         if method == "stories.save":
@@ -199,9 +212,12 @@ class FakeAssetReader:
 class FakeMultipart:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
+        self.fail = False
 
     async def upload(self, **call: Any) -> VKMultipartUploadResult:
         self.calls.append(call)
+        if self.fail:
+            raise VKMediaTransportError("sanitized multipart failure")
         if call["purpose"] is VKUploadPurpose.WALL_PHOTO:
             return VKMultipartUploadResult(server=321, photo="opaque-photo-json", upload_hash="upload-hash")
         return VKMultipartUploadResult(story_upload_result='{"upload_result":"opaque"}')
@@ -290,6 +306,7 @@ async def test_verified_wall_photo_upload_is_fixed_opaque_and_idempotent() -> No
         "photos.getWallUploadServer",
         "photos.saveWallPhoto",
         "wall.post",
+        "wall.getById",
     ]
     assert transport.calls[0]["params"] == {"group_id": 101}
     assert transport.calls[1]["params"] == {
@@ -299,6 +316,7 @@ async def test_verified_wall_photo_upload_is_fixed_opaque_and_idempotent() -> No
         "hash": "upload-hash",
     }
     assert transport.calls[2]["params"]["attachments"] == "photo-101_55_safe_key"
+    assert receipt["read_after_write"]["verified"] is True
     assert len(multipart.calls) == 1
     assert multipart.calls[0]["purpose"] is VKUploadPurpose.WALL_PHOTO
     assert multipart.calls[0]["content"] == IMAGE_BYTES
@@ -321,7 +339,7 @@ async def test_denial_and_integrity_failure_happen_before_provider_attempt() -> 
             "content": {"media": [{"asset_ref": asset_ref, "role": "image"}]},
         }
     )
-    transport.denied.add((VKActor.COMMUNITY_EDITOR, "media_upload"))
+    transport.denied.add((VKActor.MEDIA_EDITOR, "media_upload"))
     denied = await adapter.execute(intent)
     assert denied["status"] == "failed"
     assert denied["error_code"] == "actor_capability_denied"
@@ -344,6 +362,90 @@ async def test_denial_and_integrity_failure_happen_before_provider_attempt() -> 
     receipt = await adapter.execute(bad)
     assert receipt["status"] == "failed" and receipt["error_code"] == "asset_integrity_failed"
     assert transport.calls == [] and len(reader.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_multipart_failure_before_wall_post_is_definite_and_retry_safe() -> None:
+    adapter, _refs, transport, _reader, multipart, _story_reader, target_ref = build_adapter()
+    storage_ref = "ing_" + "i" * 24
+    asset_ref = await adapter.stage_asset(
+        verified_asset(storage_ref, IMAGE_BYTES, "image/jpeg"), role=MediaRole.IMAGE
+    )
+    multipart.fail = True
+    result = await adapter.execute(
+        validate_prepare_request(
+            {
+                "platform": "vk",
+                "action": "publish",
+                "idempotency_key": "wall-multipart-definite-001",
+                "target_ref": target_ref,
+                "content": {
+                    "text": "Photo",
+                    "media": [{"asset_ref": asset_ref, "role": "image"}],
+                },
+            }
+        )
+    )
+    assert [call["method"] for call in transport.calls] == [
+        "photos.getWallUploadServer"
+    ]
+    assert result == {
+        "platform": "vk",
+        "operation_ref": result["operation_ref"],
+        "action": "publish",
+        "status": "failed",
+        "retry_safe": True,
+        "error_code": "media_upload_failed",
+    }
+
+
+@pytest.mark.asyncio
+async def test_multipart_transport_reads_fragmented_json_until_eof(monkeypatch) -> None:
+    class FragmentedContent:
+        async def read(self, _limit: int) -> bytes:
+            # This models aiohttp StreamReader.read(n): it may return currently
+            # available bytes without waiting for EOF.
+            return b'{"server":321,'
+
+        async def iter_chunked(self, _size: int):
+            yield b'{"server":321,'
+            yield b'"photo":"opaque-photo",'
+            yield b'"hash":"upload-hash"}'
+
+    class Response:
+        status = 200
+        headers: dict[str, str] = {}
+        content = FragmentedContent()
+
+    class RequestContext:
+        async def __aenter__(self):
+            return Response()
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class Session:
+        def post(self, *_args, **_kwargs):
+            return RequestContext()
+
+        async def close(self):
+            return None
+
+    async def fake_session_for(_url: str, _timeout: float):
+        return Session(), object()
+
+    monkeypatch.setattr(vk_transport_module, "_session_for", fake_session_for)
+    result = await SecureVKMultipartTransport().upload(
+        purpose=VKUploadPurpose.WALL_PHOTO,
+        upload_url="https://pu.vk.com/upload.php?sig=signed",
+        content=b"image-bytes",
+        filename="asset.png",
+        mime_type="image/png",
+        timeout_seconds=5,
+    )
+    assert result == VKMultipartUploadResult(
+        server=321, photo="opaque-photo", upload_hash="upload-hash"
+    )
 
 
 @pytest.mark.asyncio
@@ -395,8 +497,9 @@ async def test_story_image_upload_save_readback_and_unknown_after_attempt() -> N
             }
         )
     )
-    assert uncertain["status"] == "outcome_unknown"
-    assert uncertain["error_code"] == "outcome_unknown" and uncertain["retry_safe"] is False
+    assert uncertain["status"] == "failed"
+    assert uncertain["error_code"] == "provider_transport_error"
+    assert uncertain["retry_safe"] is True
 
 
 @pytest.mark.asyncio
@@ -564,6 +667,6 @@ async def test_stage_rejects_paths_urls_and_story_delete_is_fixed() -> None:
     }
     assert required.issubset(VK_FIXED_METHOD_ALLOWLIST)
     assert VK_OPERATION_ACTORS["wall_photo_upload_server"] == (
-        "community_editor",
+        "media_editor",
         "media_upload",
     )

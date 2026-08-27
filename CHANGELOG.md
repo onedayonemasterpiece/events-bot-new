@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed: private `eventsBot` MCP VK image publishing now consumes fragmented
+  multipart-upload JSON to EOF, separates the user-token media actor from the
+  community wall editor, preserves definite pre-wall errors instead of
+  broadening every attempted call to `outcome_unknown`, and can reconcile an
+  uncertain wall write through bounded exact provider readback without a blind
+  replay. Preparation status now resolves to its real durable operation,
+  returned non-success receipts are audited as non-success, and VK content
+  reads enforce inclusive UTC date bounds with date-bound cursors. Regression
+  contract: `INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown`.
+
 - Fixed: the four high-level Telegram voice surfaces (`social_item_resolve`,
   feed, item and the comment-thread branch) now collect and register
   every unique voice/audio job before one optional whole-batch

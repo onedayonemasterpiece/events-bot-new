@@ -1,0 +1,94 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: 1ad95daa097a6fb768bb60770c2967539c7805fb
+base_branch: origin/main
+integration_branch: hotfix/inc-2026-08-27-eventsbot-vk-editorial
+global_constraints:
+  - preserve the successful Telegram publication
+  - never blindly replay the original outcome_unknown VK operation
+  - use authenticated VK readback before and after the one catch-up write
+  - do not expose provider credentials or native identifiers through MCP
+verification_owner: root
+stop_conditions:
+  - provider readback cannot exclude an existing duplicate
+  - exact VK target or administrator rights cannot be verified
+  - deploy SHA is not reachable from origin/main before closure
+lanes:
+  - id: discovery-lifecycle
+    role: planner
+    requirement_ids: [R03, R04]
+    target: MCP lifecycle, VK transport, durable state
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["*"]
+    expected_output: code map and root-cause evidence
+    verification_scope: inspection_only
+    status: completed
+    effort: medium
+  - id: discovery-search
+    role: planner
+    requirement_ids: [R05]
+    target: VK content date filtering and cursor binding
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["*"]
+    expected_output: code map and failing reproduction
+    verification_scope: inspection_only
+    status: completed
+    effort: medium
+  - id: discovery-production
+    role: planner
+    requirement_ids: [R02, R08]
+    target: Fly durable state/runtime logs and authenticated VK readback
+    execution_mode: parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ["*"]
+    expected_output: sanitized provider/runtime evidence
+    verification_scope: inspection_only
+    status: completed
+    effort: high
+  - id: implementation
+    role: worker
+    requirement_ids: [R01, R03, R04, R05, R06]
+    target: existing MCP lifecycle and VK adapter
+    depends_on: [discovery-lifecycle, discovery-search, discovery-production]
+    execution_mode: serial_after_dependency
+    branch: hotfix/inc-2026-08-27-eventsbot-vk-editorial
+    worktree: /home/dev/projects/events-bot-new_inc-vk-mcp-editorial
+    writable_files:
+      - private_events_mcp/**
+      - private_events_mcp_vk_*.py
+      - private_events_mcp_workspace_providers.py
+      - tests/test_private_events_mcp_*.py
+      - docs/operations/private-events-mcp.md
+      - docs/reports/incidents/**
+      - docs/routes.yml
+      - CHANGELOG.md
+      - .env.example
+    forbidden_files:
+      - Telegram publication data
+      - unrelated event pipeline files
+    expected_output: committed integrated fix and regression evidence
+    verification_scope: full_local
+    status: completed
+    effort: high
+  - id: release-catchup
+    role: merge_reviewer
+    requirement_ids: [R07, R08, R09]
+    target: main merge, deploy, health, one VK catch-up and final readback
+    depends_on: [implementation]
+    execution_mode: serial_after_dependency
+    branch: hotfix/inc-2026-08-27-eventsbot-vk-editorial
+    worktree: /home/dev/projects/events-bot-new_inc-vk-mcp-editorial
+    writable_files: []
+    forbidden_files: ["Telegram publication"]
+    expected_output: deployed main SHA, public VK URL, provider and MCP evidence
+    verification_scope: full_local
+    status: in_progress
+    effort: high

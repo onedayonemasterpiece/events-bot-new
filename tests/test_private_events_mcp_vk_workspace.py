@@ -92,8 +92,11 @@ class FakeTransport:
         self.denied: set[tuple[VKActor, str]] = set()
         self.timeout_method: str | None = None
         self.captcha_method: str | None = None
+        self.api_error_method: str | None = None
+        self.api_error_code = 27
         self.flagged_wall = False
         self.last_message_peer = 101
+        self.last_wall_post: dict[str, Any] = {}
 
     def permits(self, actor: VKActor, capability: str) -> bool:
         return (actor, capability) not in self.denied
@@ -106,6 +109,13 @@ class FakeTransport:
             await asyncio.sleep(0.1)
         if method == self.captcha_method:
             return {"error": {"error_code": 14, "error_msg": "provider_secret"}}
+        if method == self.api_error_method:
+            return {
+                "error": {
+                    "error_code": self.api_error_code,
+                    "error_msg": "provider_secret must not escape",
+                }
+            }
         if method == "utils.resolveScreenName":
             return {"type": "group" if params["screen_name"] == "named_club" else "user", "object_id": 101}
         if method == "users.get":
@@ -133,7 +143,15 @@ class FakeTransport:
             return {"items": [self._post(501), self._post(502)]}
         if method == "wall.getById":
             owner_id, post_id = str(params["posts"]).split("_", 1)
-            return [{**self._post(int(post_id)), "owner_id": int(owner_id), "likes": {"count": 7}, "comments": {"count": 4}, "reposts": {"count": 2}}]
+            attachments = [
+                {"type": "photo", "photo": {"id": 55}}
+                for value in str(self.last_wall_post.get("attachments") or "").split(",")
+                if value.startswith("photo")
+            ]
+            return [{**self._post(int(post_id)), "owner_id": int(owner_id),
+                     "text": self.last_wall_post.get("message", self._post(int(post_id))["text"]),
+                     "attachments": attachments,
+                     "likes": {"count": 7}, "comments": {"count": 4}, "reposts": {"count": 2}}]
         if method == "notifications.get":
             if params.get("start_from") == "provider-page-2":
                 return {"items": []}
@@ -259,6 +277,7 @@ class FakeTransport:
             self.last_message_peer = params["peer_id"]
             return {"message_id": 901}
         if method == "wall.post":
+            self.last_wall_post = dict(params)
             return {"post_id": 801}
         if method == "wall.createComment":
             return {"comment_id": 802}
@@ -271,6 +290,12 @@ class FakeTransport:
     @staticmethod
     def _post(post_id: int) -> dict[str, Any]:
         return {"id": post_id, "owner_id": -101, "date": 1_700_000_000 + post_id, "text": f"Post {post_id} provider_secret", "views": {"count": post_id}, "likes": {"count": 2}, "comments": {"count": 1}, "reposts": {"count": 1}}
+
+
+def _timestamp(day: str, hour: int = 12) -> int:
+    from datetime import datetime, timezone
+
+    return int(datetime.fromisoformat(f"{day}T{hour:02d}:00:00+00:00").timestamp())
 
 
 @pytest.fixture
@@ -753,9 +778,173 @@ async def test_actor_denial_timeout_captcha_and_no_provider_error_leakage(worksp
     result = await adapter.execute(intent)
     assert result["status"] == "outcome_unknown"
     assert result["retry_safe"] is False
-    assert result["error_code"] == "outcome_unknown"
+    assert result["error_code"] == "provider_timeout"
     assert len([call for call in transport.calls if call["method"] == "wall.post"]) == 1
     assert any(event == ("after", "community_editor", "outcome_unknown") for event in governor.events)
+
+
+@pytest.mark.asyncio
+async def test_definite_vk_api_error_is_failed_with_concrete_code(workspace) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    transport.api_error_method = "wall.post"
+    result = await adapter.execute(
+        validate_prepare_request(
+            {
+                "platform": "vk",
+                "action": "publish",
+                "idempotency_key": "definite-vk-error-27",
+                "target_ref": community,
+                "content": {"text": "Must fail definitively"},
+            }
+        )
+    )
+    assert result["status"] == "failed"
+    assert result["retry_safe"] is True
+    assert result["error_code"] == "vk_api_error_27"
+    assert "provider_secret" not in json.dumps(result)
+
+
+@pytest.mark.asyncio
+async def test_wall_post_without_readback_remains_non_retryable_unknown(workspace) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    transport.api_error_method = "wall.getById"
+    result = await adapter.execute(
+        validate_prepare_request(
+            {
+                "platform": "vk",
+                "action": "publish",
+                "idempotency_key": "wall-readback-missing-001",
+                "target_ref": community,
+                "content": {"text": "Provider accepted but cannot attest"},
+            }
+        )
+    )
+    assert result["status"] == "outcome_unknown"
+    assert result["retry_safe"] is False
+    assert result["error_code"] == "read_after_write_failed"
+    assert [call["method"] for call in transport.calls] == [
+        "wall.post",
+        "wall.getById",
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("operation", "targeted"),
+    [("list_items", True), ("search_items", True), ("search_items", False)],
+)
+async def test_content_reads_apply_inclusive_utc_date_bounds(
+    workspace, operation: str, targeted: bool
+) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    original_invoke = transport.invoke
+
+    async def bounded_invoke(**call: Any) -> Any:
+        if call["method"] in {"wall.get", "wall.search", "newsfeed.search"}:
+            return {
+                "items": [
+                    {**transport._post(19), "date": _timestamp("2026-08-19")},
+                    {**transport._post(27), "date": _timestamp("2026-08-27", 0)},
+                    {**transport._post(28), "date": _timestamp("2026-08-27", 23)},
+                    {**transport._post(29), "date": _timestamp("2026-08-28")},
+                ]
+            }
+        return await original_invoke(**call)
+
+    transport.invoke = bounded_invoke  # type: ignore[method-assign]
+    payload: dict[str, Any] = {
+        "operation": operation,
+        "read_access": "public",
+        "limit": 10,
+        "date_from": "2026-08-27",
+        "date_to": "2026-08-27",
+    }
+    if operation == "search_items":
+        payload["query"] = "Кантиана"
+    if targeted:
+        payload["target_ref"] = mint_target(refs)
+    page = await adapter.read(read_request(**payload))
+    assert [item["published_at"][:10] for item in page["results"]] == [
+        "2026-08-27",
+        "2026-08-27",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_cursor_is_bound_to_date_window(workspace) -> None:
+    adapter, _transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    first = await adapter.read(
+        read_request(
+            "list_items",
+            target_ref=community,
+            read_access="public",
+            limit=2,
+            date_from="2026-08-19",
+            date_to="2026-08-20",
+        )
+    )
+    with pytest.raises(VKWorkspaceError, match="cursor_context_mismatch"):
+        await adapter.read(
+            read_request(
+                "list_items",
+                target_ref=community,
+                read_access="public",
+                limit=2,
+                cursor=first["next_cursor"],
+                date_from="2026-08-27",
+                date_to="2026-08-27",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_uncertain_publish_reconciles_by_exact_wall_readback(workspace) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    claimed = _timestamp("2026-08-27", 15)
+    original_invoke = transport.invoke
+
+    async def readback_invoke(**call: Any) -> Any:
+        if call["method"] == "wall.get":
+            transport.calls.append(call)
+            return {
+                "items": [
+                    {
+                        "id": 1777,
+                        "owner_id": -101,
+                        "date": claimed + 30,
+                        "text": "Exact   editorial\npost",
+                        "attachments": [{"type": "photo", "photo": {"id": 55}}],
+                    }
+                ]
+            }
+        return await original_invoke(**call)
+
+    transport.invoke = readback_invoke  # type: ignore[method-assign]
+    asset = refs.mint(
+        "asset", {"role": "image", "attachment": "photo-101_55"}
+    )
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "publish",
+            "idempotency_key": "reconcile-wall-readback-001",
+            "target_ref": community,
+            "content": {
+                "text": "Exact editorial post",
+                "media": [{"asset_ref": asset, "role": "image"}],
+            },
+        }
+    )
+    result = await adapter.reconcile_intent(
+        "op_" + "r" * 24, intent, claimed_at_ms=claimed * 1000
+    )
+    assert result["status"] == "succeeded"
+    assert result["read_after_write"]["verified"] is True
+    assert [call["method"] for call in transport.calls] == ["wall.get"]
 
 
 @pytest.mark.asyncio

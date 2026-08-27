@@ -189,9 +189,16 @@ class SecureVKMultipartTransport:
                             raise VKMediaTransportError("VK upload response is too large")
                     except ValueError as exc:
                         raise VKMediaTransportError("VK upload response is invalid") from exc
-                raw = await response.content.read(self.max_response_bytes + 1)
-                if len(raw) > self.max_response_bytes:
-                    raise VKMediaTransportError("VK upload response is too large")
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    if not isinstance(chunk, bytes):
+                        raise VKMediaTransportError("VK upload response is invalid")
+                    total += len(chunk)
+                    if total > self.max_response_bytes:
+                        raise VKMediaTransportError("VK upload response is too large")
+                    chunks.append(bytes(chunk))
+                raw = b"".join(chunks)
         finally:
             await session.close()
         try:
