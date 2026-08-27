@@ -2401,6 +2401,15 @@ class VKWorkspaceAdapter:
                 },
             )
         claimed_seconds = claimed_at_ms // 1000
+        scheduled_seconds = (
+            int(
+                datetime.fromisoformat(
+                    intent.schedule_at.replace("Z", "+00:00")
+                ).timestamp()
+            )
+            if intent.action is SocialAction.SCHEDULE and intent.schedule_at
+            else None
+        )
         matches: list[Mapping[str, Any]] = []
         for raw in _items(response):
             post_id = _int(raw.get("id"))
@@ -2408,8 +2417,16 @@ class VKWorkspaceAdapter:
             published = _int(raw.get("date"))
             if post_id is None or owner_id != target["owner_id"]:
                 continue
-            if intent.action is SocialAction.PUBLISH and (
-                published is None or abs(published - claimed_seconds) > 30 * 60
+            expected_seconds = (
+                scheduled_seconds
+                if intent.action is SocialAction.SCHEDULE
+                else claimed_seconds
+            )
+            tolerance_seconds = 60 if intent.action is SocialAction.SCHEDULE else 30 * 60
+            if (
+                published is None
+                or expected_seconds is None
+                or abs(published - expected_seconds) > tolerance_seconds
             ):
                 continue
             if self._match_text(str(raw.get("text") or "")) != expected_text:

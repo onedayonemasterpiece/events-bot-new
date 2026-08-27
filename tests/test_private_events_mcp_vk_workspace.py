@@ -1048,6 +1048,51 @@ async def test_reconciliation_never_invents_success(
 
 
 @pytest.mark.asyncio
+async def test_scheduled_reconciliation_binds_publish_date_and_editor_actor(
+    workspace,
+) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    original_invoke = transport.invoke
+
+    async def postponed_invoke(**call: Any) -> Any:
+        if call["method"] == "wall.get" and call["params"]["filter"] == "postponed":
+            transport.calls.append(call)
+            return {
+                "items": [
+                    {
+                        "id": 1901,
+                        "owner_id": -101,
+                        "date": _timestamp("2026-08-28", 12),
+                        "text": "Scheduled exact text",
+                        "attachments": [],
+                    }
+                ]
+            }
+        return await original_invoke(**call)
+
+    transport.invoke = postponed_invoke  # type: ignore[method-assign]
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "schedule",
+            "idempotency_key": "scheduled-reconcile-date-001",
+            "target_ref": community,
+            "schedule_at": "2026-08-29T12:00:00Z",
+            "content": {"text": "Scheduled exact text"},
+        }
+    )
+    result = await adapter.reconcile_intent(
+        "op_" + "s" * 24,
+        intent,
+        claimed_at_ms=_timestamp("2026-08-27", 15) * 1000,
+    )
+    assert result["status"] == "outcome_unknown"
+    assert result["error_code"] == "reconciliation_not_observed"
+    assert transport.calls[0]["actor"] is VKActor.COMMUNITY_EDITOR
+
+
+@pytest.mark.asyncio
 async def test_idempotency_binds_full_intent_and_rejects_conflict_before_provider(workspace) -> None:
     adapter, transport, refs, _, _ = workspace
     community = mint_target(refs)
