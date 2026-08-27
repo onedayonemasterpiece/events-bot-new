@@ -46,22 +46,35 @@ ignored its requested date range.
   `1ad95daa097a6fb768bb60770c2967539c7805fb`.
 - 2026-08-27 — the current production media user token successfully completed
   a non-mutating `photos.getWallUploadServer` probe for the intended group.
+- 2026-08-27 16:30 UTC — the first catch-up acceptance run stopped safely at
+  `wall_photo_multipart`; `photos.saveWallPhoto` and `wall.post` were not called.
+- 2026-08-27 16:33 UTC — an exact production transport probe proved that VK's
+  upload endpoint returned HTTP 200 JSON with `Content-Encoding: gzip`, while
+  the pinned MCP session had automatic decompression disabled and attempted to
+  parse the compressed 1,029-byte body as JSON.
 
 ## Root Cause
 
 Production evidence localizes the failed attempt to the multipart step between
 the one successful upload-server API call and the never-started photo-save
-call. The original low-level exception is unrecoverable because the adapter
-discarded its class/stage and runtime logs recorded only the outer HTTP request.
-The strongest supported root-cause inference is the deterministic transport
-defect found and reproduced in that exact localized stage:
-it called `aiohttp.StreamReader.read(limit)` once and treated a short currently
-available chunk as EOF. A fragmented, otherwise valid VK JSON response was
-therefore parsed as truncated JSON and collapsed to a generic provider error.
-The same short-read class had already been removed from the ordinary VK API
-transport but remained in the multipart transport. This is a confirmed code
-defect with deterministic regression coverage, not a recovered original
-traceback; the record deliberately preserves that evidentiary limit.
+call. The original low-level exception remains unrecoverable because the
+adapter discarded its class/stage and runtime logs recorded only the outer HTTP
+request. A post-deploy acceptance attempt failed at the same fixed stage without
+calling either later mutation, which made an exact boundary probe safe. That
+probe confirmed the operative transport defect: VK returned the valid upload
+receipt with HTTP 200 and `Content-Encoding: gzip`, while the pinned aiohttp
+session set `auto_decompress=False`; the transport consequently parsed
+compressed bytes as JSON and normalized the decode failure to
+`media_upload_failed`.
+
+The same transport also called `aiohttp.StreamReader.read(limit)` once and
+treated a short currently available chunk as EOF. That independently confirmed
+fragmentation defect could truncate an otherwise valid JSON receipt. Both
+defects existed in the exact localized stage and are fixed: content decoding is
+enabled before the decoded-byte cap, and the response is consumed to EOF. The
+gzip response is directly confirmed production evidence; attribution of the
+unrecoverable original attempt to either one of the two defects remains an
+inference, not a recovered traceback.
 
 Four lifecycle defects amplified the incident: any failure after the first
 provider call was broadened to non-retryable `outcome_unknown`; core runtime
@@ -133,6 +146,7 @@ operation ref. Separately, VK list/search code never applied accepted
 - [x] Enforce inclusive content date bounds and date-bound cursors.
 - [x] Read multipart upload responses to EOF under the byte cap and split media
   upload onto an explicit user-token actor.
+- [x] Decode gzip-encoded VK upload receipts before bounded JSON parsing.
 - [ ] Deploy and perform one verified catch-up publish.
 
 ## Follow-up Actions
@@ -151,8 +165,9 @@ operation ref. Separately, VK list/search code never applied accepted
 
 ## Prevention
 
-The regression suite includes fragmented multipart JSON, pre-wall multipart
-failure classification, definite VK API rejection, mutation timeout,
+The regression suite includes gzip-enabled multipart sessions, fragmented
+multipart JSON, pre-wall multipart failure classification, definite VK API
+rejection, mutation timeout,
 restart-safe exact wall reconciliation, preparation/operation convergence,
 non-success audit classification, inclusive date filtering and date-bound
 cursors. Closure still requires production deployment and the one-post live

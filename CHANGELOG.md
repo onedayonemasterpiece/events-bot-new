@@ -2,8 +2,9 @@
 
 ## [Unreleased]
 
-- Fixed: private `eventsBot` MCP VK image publishing now consumes fragmented
-  multipart-upload JSON to EOF, separates the user-token media actor from the
+- Fixed: private `eventsBot` MCP VK image publishing now decompresses VK's
+  gzip-encoded multipart receipt and consumes fragmented JSON to EOF under the
+  decoded-byte cap, separates the user-token media actor from the
   community wall editor, preserves definite pre-wall errors instead of
   broadening every attempted call to `outcome_unknown`, and can reconcile an
   uncertain wall write through bounded exact provider readback without a blind

@@ -602,8 +602,10 @@ is configured and permitted. Story editing, story reads and story aggregate
 analytics remain on their dedicated roles. A generic token or `main.vk_api`
 fallback cannot satisfy a missing role. The adapter receives a
 verified local asset stream and never exposes or accepts a raw VK upload-server
-URL/method. Multipart responses are consumed to EOF under a decoded-byte cap;
-one short network chunk is not treated as the whole JSON response. Safe logs
+URL/method. Multipart responses enable bounded HTTP content decompression
+because VK may return the upload receipt as gzip, then consume decoded bytes to
+EOF under the cap; one short network chunk is not treated as the whole JSON
+response. Safe logs
 record only opaque operation, fixed stage, status and sanitized code. A durable
 attempt row records the attempt number, fixed method/stage, start/finish,
 available HTTP status, normalized outcome/error and an encrypted envelope for

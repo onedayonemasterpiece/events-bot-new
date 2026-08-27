@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
+import aiohttp
 import pytest
 
 import private_events_mcp_vk_transport as vk_transport_module
@@ -29,6 +30,7 @@ from private_events_mcp_vk_transport import (
     SecureVKMultipartTransport,
     VKMediaTransportError,
 )
+from private_events_mcp_vk_transport import _session_for as _vk_session_for
 from private_events_mcp_vk_transport import (
     _validated_url as _validated_vk_transport_url,
 )
@@ -515,6 +517,33 @@ async def test_multipart_transport_reads_fragmented_json_until_eof(monkeypatch) 
     assert result == VKMultipartUploadResult(
         server=321, photo="opaque-photo", upload_hash="upload-hash"
     )
+
+
+@pytest.mark.asyncio
+async def test_multipart_transport_enables_bounded_content_decompression(monkeypatch) -> None:
+    captured: dict[str, Any] = {}
+
+    class Connector:
+        def __init__(self, **kwargs: Any) -> None:
+            captured["connector"] = kwargs
+
+    class Session:
+        def __init__(self, **kwargs: Any) -> None:
+            captured["session"] = kwargs
+
+    async def public_addresses(_host: str, _port: int) -> tuple[str, ...]:
+        return ("93.184.216.34",)
+
+    monkeypatch.setattr(vk_transport_module, "_public_addresses", public_addresses)
+    monkeypatch.setattr(aiohttp, "TCPConnector", Connector)
+    monkeypatch.setattr(aiohttp, "ClientSession", Session)
+
+    session, _connector = await _vk_session_for(
+        "https://pu.vk.com/upload.php?sig=signed", 5
+    )
+
+    assert isinstance(session, Session)
+    assert captured["session"]["auto_decompress"] is True
 
 
 @pytest.mark.asyncio
