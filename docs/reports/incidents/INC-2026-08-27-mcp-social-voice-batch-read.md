@@ -49,6 +49,10 @@ confirmed the defect above those preserved layers.
 - 2026-08-27: deterministic regressions were added for 20 new voices, mixed
   states, repeat reads, owner isolation, response continuation and independent
   timeout budgets; draft PR `#590` was opened.
+- 2026-08-27: pre-merge review narrowed the public delta to exactly four
+  actions, bounded the whole registration stage, sized the protocol for two
+  provider budgets plus the batch wait, and added protocol/resolver/thread
+  regression coverage.
 
 ## Root Cause
 
@@ -142,7 +146,7 @@ confirmed the defect above those preserved layers.
 - Added explicit `transcription_wait_seconds=0..30`, valid only with explicit
   `transcribe_audio=true`, while keeping provider transport timeout separate.
 - Added collect/register/wait/project stages with ingress concurrency capped at
-  three and one owner-bound store-only wait.
+  three, one global registration timeout and one owner-bound store-only wait.
 - Added typed durable `snapshot_many`, `wait_many` and `get_many` service methods
   without a new public MCP tool.
 - Added inline text/continuation metadata, aggregate summary and one sanitized
@@ -167,7 +171,8 @@ confirmed the defect above those preserved layers.
 - test commit: `0fd484d8d`
 - deployed SHA: pending
 - deploy path: pending exact-main `scripts/deploy_fly_main.sh`
-- regression checks: focused local suite passed; full CI/live acceptance pending
+- regression checks: focused local suite and initial PR CI passed; post-review
+  full suite/CI and live acceptance pending
 - post-deploy verification: pending
 
 ## Prevention

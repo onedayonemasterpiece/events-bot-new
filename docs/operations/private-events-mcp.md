@@ -333,7 +333,11 @@ For a batch-oriented read, send both `transcribe_audio=true` and optional
 returns one snapshot without active waiting; a positive value is one common
 bounded wait for the entire response. The Telegram/VK provider call retains its
 separate `social_provider_timeout_seconds`; no attachment can consume the batch
-wait before the remaining voice/audio jobs are at least registered or found.
+wait before the remaining voice/audio jobs are registered/found or explicitly
+localized as a materialization failure. The complete registration stage, not
+each concurrency wave, is bounded by one provider timeout; the MCP protocol
+deadline covers provider read, that registration budget, up to 30 seconds of
+store wait and a small projection margin.
 Materialization is capped at three concurrent ingress operations, while remote
 dispatch remains strictly serialized.
 
@@ -361,6 +365,8 @@ native IDs, access hashes, file references, provider/model details,
 auth/session data, private URLs, paths and transcript bodies. This internal path
 is authorized by the social read scope; it does not invoke or weaken the
 standalone `audio:transcribe`/publish tool gate.
+Its `response_duration_ms` spans the provider read through projection, response
+cap enforcement and audit rather than reporting only enrichment time.
 
 When the caller also has access to the standalone audio tools, the returned
 `atr_*` is accepted by `audio_transcription_status` and

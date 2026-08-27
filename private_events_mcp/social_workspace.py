@@ -956,6 +956,19 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         raise SocialWorkspaceValidationError(
             "transcription_wait_seconds is supported only for Telegram"
         )
+    if (
+        "transcription_wait_seconds" in data
+        and operation
+        not in {
+            SocialReadOperation.RESOLVE_ITEM,
+            SocialReadOperation.LIST_ITEMS,
+            SocialReadOperation.GET_ITEM,
+            SocialReadOperation.LIST_COMMENTS,
+        }
+    ):
+        raise SocialWorkspaceValidationError(
+            "transcription_wait_seconds is unsupported for this read operation"
+        )
 
     if operation is SocialReadOperation.RESOLVE_TARGET:
         if target_locator is None:
@@ -2650,6 +2663,7 @@ SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_DIA
 SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA = _external_page_schema(
     _EXTERNAL_ITEM, include_transcription_summary=True
 )
+SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_ITEM)
 _EXTERNAL_STORY_ITEM: Mapping[str, Any] = {
     **_EXTERNAL_ITEM,
     "properties": {**_EXTERNAL_ITEM["properties"], "kind": {"const": "story"}},
@@ -2954,6 +2968,7 @@ __all__ = [
     "SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA",
     "SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA",

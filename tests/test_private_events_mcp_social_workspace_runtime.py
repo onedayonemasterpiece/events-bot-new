@@ -485,6 +485,29 @@ class BatchTelegramAudioReadAdapter(FakeAdapter):
                     "trust": "untrusted_external_data",
                 }
             )
+        if request.operation is SocialReadOperation.RESOLVE_ITEM:
+            item = items[0]
+            return {
+                "item": item,
+                "source_target": {
+                    "target_ref": item["target_ref"],
+                    "kind": "group",
+                    "title": "Batch voice fixture",
+                    "about": "",
+                    "description": "",
+                    "basic_metrics": {"members": 1},
+                    "trust": "untrusted_external_data",
+                },
+                "trust": "untrusted_external_data",
+            }
+        if request.operation is SocialReadOperation.GET_ITEM:
+            return {"item": items[0], "trust": "untrusted_external_data"}
+        if request.operation is SocialReadOperation.LIST_COMMENTS:
+            return {
+                "root_item_ref": request.item_ref,
+                "items": [{**item, "kind": "comment"} for item in items],
+                "trust": "untrusted_external_data",
+            }
         return {"results": items, "trust": "untrusted_external_data"}
 
     async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
@@ -973,11 +996,11 @@ def _batch_request(runtime, call_context, voice_count, *, wait_seconds=25):
 
 
 def _batch_attachments(payload):
-    return [
-        attachment
-        for item in payload["results"]
-        for attachment in item["attachments"]
-    ]
+    if isinstance(payload.get("item"), dict):
+        items = [payload["item"]]
+    else:
+        items = payload.get("results", payload.get("items", []))
+    return [attachment for item in items for attachment in item["attachments"]]
 
 
 @pytest.mark.asyncio
@@ -1047,6 +1070,92 @@ async def test_twenty_voice_read_registers_all_jobs_before_one_batch_wait(
             "external transcript",
         )
     )
+
+
+@pytest.mark.asyncio
+async def test_exact_item_resolver_returns_inline_batch_transcription(
+    tmp_path: Path,
+) -> None:
+    adapter = BatchTelegramAudioReadAdapter(1)
+    transcriber = DeterministicBatchAudioService([JobState.COMPLETE])
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+
+    result = await runtime.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "resolve_item",
+                "target_locator": {
+                    "kind": "profile_link",
+                    "value": "https://t.me/c/100/500",
+                },
+                "read_access": "private",
+                "transcribe_audio": True,
+                "transcription_wait_seconds": 25,
+            }
+        ),
+        call_context,
+    )
+
+    assert result["source_target"]["kind"] == "group"
+    assert result["transcription_summary"]["ready"] == 1
+    transcription = result["item"]["attachments"][0]["transcription"]
+    assert transcription["status"] == "ready"
+    assert transcription["text"] == "external transcript"
+    assert transcriber.wait_calls[0][1:] == (25, 1)
+
+
+@pytest.mark.asyncio
+async def test_comment_thread_returns_one_batch_summary_without_per_ref_polling(
+    tmp_path: Path,
+) -> None:
+    adapter = BatchTelegramAudioReadAdapter(2)
+    transcriber = DeterministicBatchAudioService([JobState.QUEUED] * 2)
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+    principal = RuntimePrincipal.from_context(call_context)
+    root_ref = runtime._mint_ref(
+        "item", "provider-thread-root", "telegram", principal
+    )
+
+    result = await runtime.read(
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "list_comments",
+                "item_ref": root_ref,
+                "read_access": "private",
+                "transcribe_audio": True,
+                "transcription_wait_seconds": 25,
+            }
+        ),
+        call_context,
+    )
+
+    assert result["root_item_ref"] == root_ref
+    assert result["transcription_summary"]["queued"] == 2
+    assert all(
+        attachment["transcription"]["status"] == "queued"
+        for attachment in _batch_attachments(result)
+    )
+    assert transcriber.wait_calls == [
+        (
+            ("atr_000000000000000000000001", "atr_000000000000000000000002"),
+            25,
+            2,
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -1228,6 +1337,68 @@ async def test_provider_timeout_and_batch_wait_are_independent(tmp_path: Path) -
     )
     assert result["transcription_summary"]["queued"] == 1
     assert result["transcription_summary"]["wait_expired"] is True
+
+
+@pytest.mark.asyncio
+async def test_protocol_allows_slow_bounded_twenty_voice_registration_stage(
+    tmp_path: Path,
+) -> None:
+    class SlowRegistrationService(DeterministicBatchAudioService):
+        async def start_provider_transcription(self, **values):
+            await asyncio.sleep(0.01)
+            return await super().start_provider_transcription(**values)
+
+    adapter = BatchTelegramAudioReadAdapter(20)
+    transcriber = SlowRegistrationService([JobState.QUEUED] * 20)
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+        provider_timeout_seconds=0.15,
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read", "telegram:read:private")
+    request = _batch_request(runtime, call_context, 20, wait_seconds=0)
+    protocol = MCPProtocol(
+        build_social_workspace_tools(
+            runtime,
+            capability_policy={"telegram": True, "vk": False},
+        ),
+        cache_ttl_seconds=60,
+        challenge='Bearer error="invalid_token"',
+        resource=call_context.resource,
+        allowed_client_ids=frozenset({call_context.identity.client_id}),
+    )
+
+    response = await asyncio.wait_for(
+        protocol.dispatch(
+            {
+                "jsonrpc": "2.0",
+                "id": 92,
+                "method": "tools/call",
+                "params": {
+                    "name": "social_content_feed",
+                    "arguments": {
+                        "platform": request.platform.value,
+                        "operation": request.operation.value,
+                        "target_ref": request.target_ref,
+                        "read_access": request.read_access.value,
+                        "transcribe_audio": True,
+                        "transcription_wait_seconds": 0,
+                    },
+                },
+            },
+            call_context.identity,
+        ),
+        timeout=0.5,
+    )
+
+    assert response["result"]["isError"] is False
+    assert response["result"]["structuredContent"]["transcription_summary"][
+        "queued"
+    ] == 20
+    assert len(transcriber.jobs) == 20
+    assert transcriber.wait_calls[0][2] == 20
 
 
 @pytest.mark.asyncio
@@ -1775,7 +1946,39 @@ def test_item_resolve_descriptor_publishes_only_the_exact_link_contract(runtime)
     }
     assert "expected_target_kinds" not in schema["properties"]
     assert "Use this first" in tool.description
-    assert tool.timeout_seconds >= service.provider_timeout_seconds + 32
+    assert tool.timeout_seconds >= service.provider_timeout_seconds * 2 + 35
+
+
+def test_only_four_read_actions_advertise_batch_wait_and_summary(runtime) -> None:
+    service, _adapter, _store = runtime
+
+    def contains_property(value: Any, name: str) -> bool:
+        if isinstance(value, dict):
+            properties = value.get("properties")
+            if isinstance(properties, dict) and name in properties:
+                return True
+            return any(contains_property(child, name) for child in value.values())
+        if isinstance(value, list):
+            return any(contains_property(child, name) for child in value)
+        return False
+
+    tools = build_social_workspace_tools(service)
+    expected = {
+        "social_item_resolve",
+        "social_content_feed",
+        "social_content_item",
+        "social_content_thread",
+    }
+    assert {
+        tool.name
+        for tool in tools
+        if contains_property(tool.input_schema, "transcription_wait_seconds")
+    } == expected
+    assert {
+        tool.name
+        for tool in tools
+        if contains_property(tool.output_schema, "transcription_summary")
+    } == expected
 
 
 def test_legacy_item_resolve_target_kind_hint_is_checked_after_resolution(runtime) -> None:

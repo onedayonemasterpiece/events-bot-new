@@ -36,6 +36,7 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
@@ -1249,7 +1250,7 @@ class SocialWorkspaceRuntime:
             SocialReadOperation.RESOLVE_ITEM: SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
             SocialReadOperation.SEARCH_TARGETS: SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_DIALOGS: SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA,
-            SocialReadOperation.SEARCH_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+            SocialReadOperation.SEARCH_ITEMS: SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.GET_ITEM: SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_COMMENTS: SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
@@ -1291,17 +1292,15 @@ class SocialWorkspaceRuntime:
         *,
         principal: RuntimePrincipal,
         wait_seconds: int,
-    ) -> Mapping[str, Any]:
+    ) -> tuple[Mapping[str, Any], dict[str, Any] | None]:
         service = self.audio_transcription_service
         if service is None:
-            return raw
+            return raw, None
         adapter = self._adapter(SocialPlatform.TELEGRAM.value)
         if not callable(getattr(adapter, "read_asset", None)):
-            return raw
+            return raw, None
         result = copy.deepcopy(dict(raw))
         owner_binding = self._principal_hash(principal)
-        loop = asyncio.get_running_loop()
-        batch_started = loop.time()
         configured_limit = getattr(getattr(service, "config", None), "max_asset_bytes", None)
         adapter_limit = getattr(adapter, "max_read_asset_bytes", None)
         valid_limits = [
@@ -1408,8 +1407,22 @@ class SocialWorkspaceRuntime:
 
         registration_limit = asyncio.Semaphore(3)
 
-        async def register(idempotency_key: str, group: dict[str, Any]) -> None:
+        def mark_registration_failed(group: dict[str, Any]) -> None:
             nonlocal materialization_failures
+            if group.get("registration_failed"):
+                return
+            materialization_failures += len(group["attachments"])
+            group["registration_failed"] = True
+            for attachment in group["attachments"]:
+                attachment["transcription"] = base_transcription(
+                    status="failed",
+                    created=False,
+                    cache_hit=False,
+                    next_poll_after_seconds=normal_poll_after,
+                    error_code="TRANSCRIPTION_MATERIALIZATION_FAILED",
+                )
+
+        async def register(idempotency_key: str, group: dict[str, Any]) -> None:
             try:
                 async with registration_limit:
                     started = await asyncio.wait_for(
@@ -1434,20 +1447,29 @@ class SocialWorkspaceRuntime:
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001 - one media must not fail the social read
-                materialization_failures += len(group["attachments"])
-                group["registration_failed"] = True
-                for attachment in group["attachments"]:
-                    attachment["transcription"] = base_transcription(
-                        status="failed",
-                        created=False,
-                        cache_hit=False,
-                        next_poll_after_seconds=normal_poll_after,
-                        error_code="TRANSCRIPTION_MATERIALIZATION_FAILED",
-                    )
+                mark_registration_failed(group)
 
-        await asyncio.gather(
-            *(register(key, group) for key, group in groups.items())
-        )
+        registration_tasks = {
+            asyncio.create_task(register(key, group)): group
+            for key, group in groups.items()
+        }
+        if registration_tasks:
+            try:
+                _done, pending = await asyncio.wait(
+                    registration_tasks,
+                    timeout=self.provider_timeout_seconds,
+                )
+            except asyncio.CancelledError:
+                for task in registration_tasks:
+                    task.cancel()
+                await asyncio.gather(*registration_tasks, return_exceptions=True)
+                raise
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+                for task in pending:
+                    mark_registration_failed(registration_tasks[task])
 
         registered = [
             group for group in groups.values() if isinstance(group.get("job_ref"), str)
@@ -1584,24 +1606,18 @@ class SocialWorkspaceRuntime:
             ),
         }
         result["transcription_summary"] = summary
-        logger.info(
-            "social_voice_transcription_batch voice_total=%s jobs_created=%s "
-            "cache_hits=%s ready=%s queued=%s running=%s failed=%s "
-            "wait_requested_ms=%s wait_actual_ms=%s response_duration_ms=%s "
-            "wait_expired=%s",
-            voice_total,
-            summary["created"],
-            summary["cache_hits"],
-            summary["ready"],
-            summary["queued"],
-            summary["running"],
-            summary["failed"],
-            wait_seconds * 1000,
-            round(wait_actual_seconds * 1000),
-            round((loop.time() - batch_started) * 1000),
-            wait_expired,
-        )
-        return result
+        return result, {
+            "voice_total": voice_total,
+            "jobs_created": summary["created"],
+            "cache_hits": summary["cache_hits"],
+            "ready": summary["ready"],
+            "queued": summary["queued"],
+            "running": summary["running"],
+            "failed": summary["failed"],
+            "wait_requested_ms": wait_seconds * 1000,
+            "wait_actual_ms": round(wait_actual_seconds * 1000),
+            "wait_expired": wait_expired,
+        }
 
     @staticmethod
     def _safe_provider_error() -> SocialWorkspaceRuntimeError:
@@ -1747,6 +1763,8 @@ class SocialWorkspaceRuntime:
     async def read(self, request: SocialReadRequest, context: ToolCallContext) -> dict[str, Any]:
         if request.operation is SocialReadOperation.RESOLVE_TARGET:
             return await self.resolve(request, context)
+        read_started = asyncio.get_running_loop().time()
+        batch_telemetry: dict[str, Any] | None = None
         principal = RuntimePrincipal.from_context(context)
         platform = request.platform.value
         target_ref = request.target_ref
@@ -1787,9 +1805,16 @@ class SocialWorkspaceRuntime:
             if (
                 platform == SocialPlatform.TELEGRAM.value
                 and request.transcribe_audio
+                and request.operation
+                in {
+                    SocialReadOperation.RESOLVE_ITEM,
+                    SocialReadOperation.LIST_ITEMS,
+                    SocialReadOperation.GET_ITEM,
+                    SocialReadOperation.LIST_COMMENTS,
+                }
                 and isinstance(raw, Mapping)
             ):
-                raw = await self._enrich_telegram_audio(
+                raw, batch_telemetry = await self._enrich_telegram_audio(
                     raw,
                     principal=principal,
                     wait_seconds=request.transcription_wait_seconds,
@@ -1853,6 +1878,24 @@ class SocialWorkspaceRuntime:
             self._audit(principal, platform=platform, operation=request.operation.value,
                         outcome="succeeded", reason=audit_reason, target_ref=target_ref,
                         response_bytes=size, media_items=media_count)
+            if batch_telemetry is not None:
+                logger.info(
+                    "social_voice_transcription_batch voice_total=%s jobs_created=%s "
+                    "cache_hits=%s ready=%s queued=%s running=%s failed=%s "
+                    "wait_requested_ms=%s wait_actual_ms=%s response_duration_ms=%s "
+                    "wait_expired=%s",
+                    batch_telemetry["voice_total"],
+                    batch_telemetry["jobs_created"],
+                    batch_telemetry["cache_hits"],
+                    batch_telemetry["ready"],
+                    batch_telemetry["queued"],
+                    batch_telemetry["running"],
+                    batch_telemetry["failed"],
+                    batch_telemetry["wait_requested_ms"],
+                    batch_telemetry["wait_actual_ms"],
+                    round((asyncio.get_running_loop().time() - read_started) * 1000),
+                    batch_telemetry["wait_expired"],
+                )
             return safe
         except Exception as exc:
             if provider_attempted:

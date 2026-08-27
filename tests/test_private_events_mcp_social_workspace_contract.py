@@ -25,6 +25,7 @@ from private_events_mcp.social_workspace import (
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
@@ -106,6 +107,7 @@ ALL_SCHEMAS = (
     SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_TARGET_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
@@ -263,6 +265,20 @@ def test_telegram_item_link_and_audio_flag_are_optional_compatible_additions() -
                     "kind": "profile_link",
                     "value": "https://vk.com/wall-1_2",
                 },
+                "transcription_wait_seconds": 1,
+            }
+        )
+    with pytest.raises(
+        SocialWorkspaceValidationError,
+        match="unsupported for this read operation",
+    ):
+        validate_read_request(
+            {
+                "platform": "telegram",
+                "operation": "search_items",
+                "query": "voice",
+                "read_access": "private",
+                "transcribe_audio": True,
                 "transcription_wait_seconds": 1,
             }
         )
@@ -1025,6 +1041,7 @@ def test_external_output_families_are_closed_bounded_and_untrusted() -> None:
         (SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA, {"results": [target], "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_TARGET_GET_OUTPUT_SCHEMA, {"target": target, "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA, {"results": [item], "trust": "untrusted_external_data"}),
+        (SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA, {"results": [item], "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA, {"item": item, "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA, {"root_item_ref": ITEM_REF, "items": [{**item, "kind": "comment"}], "trust": "untrusted_external_data"}),
         (SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA, {"results": [{**item, "kind": "story"}], "trust": "untrusted_external_data"}),

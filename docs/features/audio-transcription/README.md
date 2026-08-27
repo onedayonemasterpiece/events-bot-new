@@ -241,6 +241,9 @@ concurrency capped at three, then calls the service's owner-bound
 `wait_many`/`get_many` path. That wait reads only the durable store; it never
 calls provider status, bypasses the monitor, ignores `retry_not_before`, or
 creates one remote waiting task per attachment.
+The whole registration stage has one provider-timeout budget (not one budget
+per concurrency wave), and the MCP tool deadline covers provider read,
+registration, the maximum 30-second store wait and projection margin.
 
 Each enriched attachment returns `ready|queued|running|failed`, the opaque
 `atr_*` where materialization succeeded, `created`, `cache_hit`, inline text
@@ -380,7 +383,8 @@ Static/local acceptance in this change:
 - timeline/TXT/SRT/VTT export tests;
 - audio signature policy tests;
 - owner-bound durable job/idempotency tests;
-- deterministic 20-voice registration-before-wait, mixed-state, repeat-inline,
+- deterministic 20-voice registration-before-wait (including MCP protocol
+  dispatch), exact-link resolver/comment-thread, mixed-state, repeat-inline,
   continuation and cross-principal batch tests;
 - real local ffprobe and OGG/Opus transcode test;
 - Telegram native error classification test;
