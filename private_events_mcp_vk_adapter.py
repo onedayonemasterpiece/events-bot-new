@@ -153,6 +153,10 @@ class VKCooldownHook(Protocol):
     async def record_success(self, actor: VKActor) -> None: ...
 
 
+class VKAttemptRecorder(Protocol):
+    def record(self, operation_ref: str, event: Mapping[str, Any]) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class _CallPolicy:
     actor: VKActor
@@ -192,6 +196,7 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "get_groups": _policy(VKActor.PUBLIC_READER, "discover", "groups.getById", ["group_ids"], ["fields"]),
     "search_groups": _policy(VKActor.PUBLIC_READER, "discover", "groups.search", ["q", "count"], ["offset", "type"]),
     "wall_feed": _policy(VKActor.PUBLIC_READER, "read_public", "wall.get", ["owner_id", "count", "filter"], ["offset"]),
+    "wall_feed_editor": _policy(VKActor.COMMUNITY_EDITOR, "post_publish", "wall.get", ["owner_id", "count", "filter"], ["offset"]),
     "wall_item": _policy(VKActor.PUBLIC_READER, "read_public", "wall.getById", ["posts"], ["extended"]),
     "wall_search": _policy(VKActor.PUBLIC_READER, "search_public", "wall.search", ["owner_id", "query", "count"], ["offset", "owners_only"]),
     "newsfeed_search": _policy(VKActor.PUBLIC_READER, "search_public", "newsfeed.search", ["q", "count"], ["start_from"]),
@@ -334,6 +339,7 @@ class VKWorkspaceAdapter:
         asset_reader: VKVerifiedAssetReader | None = None,
         multipart_transport: VKMultipartTransport | None = None,
         story_media_reader: VKStoryMediaReader | None = None,
+        attempt_recorder: VKAttemptRecorder | None = None,
         timeout_seconds: float = 10.0,
     ) -> None:
         if not callable(getattr(transport, "invoke", None)) or not callable(getattr(transport, "permits", None)):
@@ -362,6 +368,7 @@ class VKWorkspaceAdapter:
         self._asset_reader = asset_reader
         self._multipart_transport = multipart_transport
         self._story_media_reader = story_media_reader
+        self._attempt_recorder = attempt_recorder
         self._timeout = float(timeout_seconds)
         self._lock = asyncio.Lock()
         self._action_lock = asyncio.Lock()
@@ -406,9 +413,20 @@ class VKWorkspaceAdapter:
             except Exception:  # noqa: BLE001 - normalize injected governor failures
                 raise VKWorkspaceError("rate_limited") from None
             outcome = "failed"
+            attempt_finished = False
+            def emit(phase: str, **details: Any) -> None:
+                if attempt_hook is not None:
+                    attempt_hook(
+                        {
+                            "stage": operation,
+                            "method": policy.method,
+                            "phase": phase,
+                            **details,
+                        }
+                    )
             try:
                 if attempt_hook is not None:
-                    attempt_hook()
+                    emit("started")
                 result = await asyncio.wait_for(
                     self._transport.invoke(
                         actor=policy.actor,
@@ -423,15 +441,51 @@ class VKWorkspaceAdapter:
                     error = result.get("error")
                     code = error.get("error_code") if isinstance(error, Mapping) else None
                     if code == 14:
+                        emit(
+                            "finished",
+                            http_status=200,
+                            provider_error_code=14,
+                            provider_error_message="vk_api_error_14",
+                            error_class="captcha_cooldown",
+                            outcome="failed",
+                        )
+                        attempt_finished = True
                         await self._await(self._cooldown.record_captcha(policy.actor))
                         raise VKWorkspaceError("captcha_cooldown")
                     provider_code = code if type(code) is int and 0 <= code <= 9999 else 0
+                    emit(
+                        "finished",
+                        http_status=200,
+                        provider_error_code=provider_code,
+                        provider_error_message=f"vk_api_error_{provider_code}",
+                        error_class="vk_api_error",
+                        outcome="failed",
+                    )
+                    attempt_finished = True
                     raise VKWorkspaceError(
                         f"vk_api_error_{provider_code}",
                         retry_safe=True,
                         stage=operation,
                     )
                 outcome = "succeeded"
+                provider_result: dict[str, Any] = {}
+                if operation == "wall_post" and isinstance(result, Mapping):
+                    if type(result.get("post_id")) is int:
+                        provider_result["post_id"] = result["post_id"]
+                elif operation == "wall_photo_save":
+                    photos = _items(result)
+                    if photos and type(photos[0].get("id")) is int and type(photos[0].get("owner_id")) is int:
+                        provider_result = {
+                            "photo_id": photos[0]["id"],
+                            "photo_owner_id": photos[0]["owner_id"],
+                        }
+                emit(
+                    "finished",
+                    http_status=200,
+                    provider_result=provider_result,
+                    outcome="succeeded",
+                )
+                attempt_finished = True
                 await self._await(self._cooldown.record_success(policy.actor))
                 return result
             except asyncio.CancelledError:
@@ -439,15 +493,33 @@ class VKWorkspaceAdapter:
                 raise
             except asyncio.TimeoutError:
                 outcome = "outcome_unknown"
+                if not attempt_finished:
+                    emit(
+                        "finished",
+                        error_class="provider_timeout",
+                        outcome="outcome_unknown",
+                    )
                 raise VKWorkspaceError(
                     "provider_timeout", outcome_unknown=True, stage=operation
                 ) from None
-            except VKWorkspaceError:
+            except VKWorkspaceError as exc:
+                if not attempt_finished:
+                    emit(
+                        "finished",
+                        error_class=exc.code,
+                        outcome=("outcome_unknown" if exc.outcome_unknown else "failed"),
+                    )
                 raise
             except Exception as exc:  # noqa: BLE001 - sanitize arbitrary provider failures
                 if getattr(exc, "code", None) == 14 or getattr(exc, "error_code", None) == 14:
                     await self._await(self._cooldown.record_captcha(policy.actor))
                     raise VKWorkspaceError("captcha_cooldown") from None
+                if not attempt_finished:
+                    emit(
+                        "finished",
+                        error_class="provider_transport_error",
+                        outcome="outcome_unknown",
+                    )
                 raise VKWorkspaceError(
                     "provider_transport_error", outcome_unknown=True, stage=operation
                 ) from None
@@ -628,7 +700,18 @@ class VKWorkspaceAdapter:
         extension = extensions.get(materialized.mime_type)
         if extension is None:
             raise VKWorkspaceError("asset_mime_unsupported")
-        attempt_hook()
+        multipart_stage = {
+            VKUploadPurpose.WALL_PHOTO: "wall_photo_multipart",
+            VKUploadPurpose.STORY_PHOTO: "story_photo_multipart",
+            VKUploadPurpose.STORY_VIDEO: "story_video_multipart",
+        }[purpose]
+        attempt_hook(
+            {
+                "stage": multipart_stage,
+                "method": "multipart.upload",
+                "phase": "started",
+            }
+        )
         try:
             result = await asyncio.wait_for(
                 self._multipart_transport.upload(
@@ -644,11 +727,38 @@ class VKWorkspaceAdapter:
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - multipart payloads/errors are provider-private
+            attempt_hook(
+                {
+                    "stage": multipart_stage,
+                    "method": "multipart.upload",
+                    "phase": "finished",
+                    "error_class": "media_upload_failed",
+                    "outcome": "failed",
+                }
+            )
             raise VKWorkspaceError(
                 "media_upload_failed", retry_safe=True, stage="wall_photo_upload"
             ) from None
         if not isinstance(result, VKMultipartUploadResult):
+            attempt_hook(
+                {
+                    "stage": multipart_stage,
+                    "method": "multipart.upload",
+                    "phase": "finished",
+                    "error_class": "provider_response_invalid",
+                    "outcome": "failed",
+                }
+            )
             raise VKWorkspaceError("provider_unavailable")
+        attempt_hook(
+            {
+                "stage": multipart_stage,
+                "method": "multipart.upload",
+                "phase": "finished",
+                "http_status": 200,
+                "outcome": "succeeded",
+            }
+        )
         return result
 
     async def read_asset(
@@ -1301,6 +1411,33 @@ class VKWorkspaceAdapter:
         }
         if target_ref is not None:
             output["target_ref"] = target_ref
+        media: list[str] = []
+        details: list[dict[str, Any]] = []
+        attachments = raw.get("attachments")
+        for attachment in (
+            attachments if isinstance(attachments, list) else []
+        )[:10]:
+            if not isinstance(attachment, Mapping) or attachment.get("type") != "photo":
+                continue
+            try:
+                asset_ref = self._story_media_ref(attachment)
+            except VKWorkspaceError:
+                continue
+            if asset_ref is None:
+                continue
+            media.append(asset_ref)
+            details.append(
+                {
+                    "asset_ref": asset_ref,
+                    "kind": "photo",
+                    "mime_type": "image/jpeg",
+                    "trust": _TRUST,
+                }
+            )
+        if media:
+            output["media"] = media
+            output["attachments"] = details
+            output["media_details"] = details
         return output
 
     @staticmethod
@@ -1492,6 +1629,11 @@ class VKWorkspaceAdapter:
             if post_id is None:
                 continue
             item = self._public_item(raw, native=self._wall_native(owner_id, post_id))
+            # Editorial sampling has its own deliberately text-only contract;
+            # ordinary item/feed reads retain the safe opaque media projection.
+            item.pop("media", None)
+            item.pop("attachments", None)
+            item.pop("media_details", None)
             item["text"] = item["text"][:768]
             item["caption"] = item["caption"][:256]
             selected.append(item)
@@ -1740,6 +1882,25 @@ class VKWorkspaceAdapter:
             bindings.append(binding)
         return content.text, bindings
 
+    def durable_intent_evidence(
+        self, intent: SocialActionIntent
+    ) -> tuple[str, list[str]]:
+        text, bindings = self._content(intent)
+        content_fingerprint = hashlib.sha256(
+            self._match_text(text).encode("utf-8")
+        ).hexdigest()
+        media_digests: list[str] = []
+        for binding in bindings:
+            digest = binding.get("content_digest")
+            if isinstance(digest, str) and _CONTENT_DIGEST.fullmatch(digest):
+                media_digests.append(digest)
+            else:
+                attachment = str(binding.get("attachment") or "")
+                media_digests.append(
+                    "sha256:" + hashlib.sha256(attachment.encode()).hexdigest()
+                )
+        return content_fingerprint, media_digests
+
     @staticmethod
     def _legacy_attachments(bindings: Sequence[Mapping[str, Any]]) -> str | None:
         values: list[str] = []
@@ -1794,7 +1955,11 @@ class VKWorkspaceAdapter:
                 or not isinstance(upload.upload_hash, str)
                 or not upload.upload_hash
             ):
-                raise VKWorkspaceError("provider_unavailable")
+                raise VKWorkspaceError(
+                    "media_upload_response_invalid",
+                    retry_safe=True,
+                    stage="wall_photo_multipart",
+                )
             saved = await self._call(
                 "wall_photo_save",
                 {
@@ -1807,12 +1972,20 @@ class VKWorkspaceAdapter:
             )
             photos = _items(saved)
             if not photos:
-                raise VKWorkspaceError("provider_unavailable")
+                raise VKWorkspaceError(
+                    "photo_save_response_invalid",
+                    retry_safe=True,
+                    stage="wall_photo_save",
+                )
             owner_id = _int(photos[0].get("owner_id"))
             photo_id = _int(photos[0].get("id"))
             access_key = photos[0].get("access_key")
             if owner_id is None or photo_id is None:
-                raise VKWorkspaceError("provider_unavailable")
+                raise VKWorkspaceError(
+                    "photo_save_response_invalid",
+                    retry_safe=True,
+                    stage="wall_photo_save",
+                )
             attachment = f"photo{owner_id}_{photo_id}"
             if isinstance(access_key, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,256}", access_key):
                 attachment += "_" + access_key
@@ -1874,8 +2047,9 @@ class VKWorkspaceAdapter:
         write_verified = False
         mutation_may_have_happened = False
 
-        def mark_provider_attempted() -> None:
-            return None
+        def mark_provider_attempted(event: Mapping[str, Any]) -> None:
+            if self._attempt_recorder is not None:
+                self._attempt_recorder.record(operation_ref, event)
 
         async def action_call(operation: str, params: Mapping[str, Any]) -> Any:
             nonlocal mutation_may_have_happened
@@ -1921,7 +2095,11 @@ class VKWorkspaceAdapter:
                 response = await action_call("wall_post", params)
                 post_id = response.get("post_id") if isinstance(response, Mapping) else None
                 if type(post_id) is not int:
-                    raise VKWorkspaceError("provider_unavailable")
+                    raise VKWorkspaceError(
+                        "wall_post_response_invalid",
+                        outcome_unknown=True,
+                        stage="wall_post",
+                    )
                 new_item_native = self._wall_native(target["owner_id"], post_id)
                 try:
                     readback = await self._call(
@@ -2168,6 +2346,8 @@ class VKWorkspaceAdapter:
         intent: SocialActionIntent,
         *,
         claimed_at_ms: int,
+        provider_post_id: int | None = None,
+        provider_photo_refs: Sequence[tuple[int, int]] = (),
     ) -> Mapping[str, Any]:
         """Reconcile an uncertain wall write by bounded provider readback.
 
@@ -2194,19 +2374,32 @@ class VKWorkspaceAdapter:
             for media in (intent.content.media if intent.content else ())
             if media.role is MediaRole.IMAGE
         )
-        response = await self._call(
-            "wall_feed",
-            {
-                "owner_id": target["owner_id"],
-                "count": 100,
-                "offset": 0,
-                "filter": (
-                    "postponed"
+        if provider_post_id is not None and intent.action is SocialAction.PUBLISH:
+            response = await self._call(
+                "wall_item",
+                {
+                    "posts": f"{target['owner_id']}_{provider_post_id}",
+                    "extended": 0,
+                },
+            )
+        else:
+            response = await self._call(
+                (
+                    "wall_feed_editor"
                     if intent.action is SocialAction.SCHEDULE
-                    else "owner"
+                    else "wall_feed"
                 ),
-            },
-        )
+                {
+                    "owner_id": target["owner_id"],
+                    "count": 100,
+                    "offset": 0,
+                    "filter": (
+                        "postponed"
+                        if intent.action is SocialAction.SCHEDULE
+                        else "owner"
+                    ),
+                },
+            )
         claimed_seconds = claimed_at_ms // 1000
         matches: list[Mapping[str, Any]] = []
         for raw in _items(response):
@@ -2222,6 +2415,14 @@ class VKWorkspaceAdapter:
             if self._match_text(str(raw.get("text") or "")) != expected_text:
                 continue
             attachments = raw.get("attachments")
+            observed_photo_refs = {
+                (_int(photo.get("owner_id")), _int(photo.get("id")))
+                for attachment in (attachments if isinstance(attachments, list) else [])
+                if isinstance(attachment, Mapping)
+                and attachment.get("type") == "photo"
+                and isinstance(attachment.get("photo"), Mapping)
+                for photo in (attachment["photo"],)
+            }
             photo_count = sum(
                 1
                 for attachment in (attachments if isinstance(attachments, list) else [])
@@ -2229,6 +2430,10 @@ class VKWorkspaceAdapter:
                 and attachment.get("type") == "photo"
             )
             if photo_count < expected_photos:
+                continue
+            if provider_photo_refs and not set(provider_photo_refs).issubset(
+                observed_photo_refs
+            ):
                 continue
             matches.append(raw)
         if len(matches) == 1:

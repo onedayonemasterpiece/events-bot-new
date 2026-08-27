@@ -7,7 +7,9 @@
   community wall editor, preserves definite pre-wall errors instead of
   broadening every attempted call to `outcome_unknown`, and can reconcile an
   uncertain wall write through bounded exact provider readback without a blind
-  replay. Preparation status now resolves to its real durable operation,
+  replay. Fixed-stage attempts and encrypted native photo/post results are now
+  durable, and VK item/feed readback projects wall photos as principal-bound
+  opaque media. Preparation status now resolves to its real durable operation,
   returned non-success receipts are audited as non-success, and VK content
   reads enforce inclusive UTC date bounds with date-bound cursors. Regression
   contract: `INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown`.

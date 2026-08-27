@@ -53,12 +53,15 @@ Production evidence localizes the failed attempt to the multipart step between
 the one successful upload-server API call and the never-started photo-save
 call. The original low-level exception is unrecoverable because the adapter
 discarded its class/stage and runtime logs recorded only the outer HTTP request.
-The multipart transport contained a deterministic defect in that exact stage:
+The strongest supported root-cause inference is the deterministic transport
+defect found and reproduced in that exact localized stage:
 it called `aiohttp.StreamReader.read(limit)` once and treated a short currently
 available chunk as EOF. A fragmented, otherwise valid VK JSON response was
 therefore parsed as truncated JSON and collapsed to a generic provider error.
 The same short-read class had already been removed from the ordinary VK API
-transport but remained in the multipart transport.
+transport but remained in the multipart transport. This is a confirmed code
+defect with deterministic regression coverage, not a recovered original
+traceback; the record deliberately preserves that evidentiary limit.
 
 Four lifecycle defects amplified the incident: any failure after the first
 provider call was broadened to non-retryable `outcome_unknown`; core runtime
@@ -134,7 +137,9 @@ operation ref. Separately, VK list/search code never applied accepted
 
 ## Follow-up Actions
 
-- [x] Keep provider-stage telemetry free of payload text, tokens and upload URLs.
+- [x] Persist provider-stage start/finish, fixed method, attempt number,
+  sanitized outcome/error and encrypted native result identifiers without
+  payload text, tokens or upload URLs.
 - [ ] Re-audit ChatGPT action publication only if a public tool schema changes.
 
 ## Release And Closure Evidence

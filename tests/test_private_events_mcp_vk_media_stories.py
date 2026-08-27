@@ -251,7 +251,7 @@ def verified_asset(storage_ref: str, content: bytes, mime_type: str) -> SimpleNa
     )
 
 
-def build_adapter():
+def build_adapter(*, attempt_recorder=None):
     refs = FakeRefs()
     transport = FakeTransport()
     asset_reader = FakeAssetReader(
@@ -271,6 +271,7 @@ def build_adapter():
         asset_reader=asset_reader,
         multipart_transport=multipart,
         story_media_reader=story_reader,
+        attempt_recorder=attempt_recorder,
         timeout_seconds=0.1,
     )
     target_ref = refs.mint(
@@ -281,7 +282,17 @@ def build_adapter():
 
 @pytest.mark.asyncio
 async def test_verified_wall_photo_upload_is_fixed_opaque_and_idempotent() -> None:
-    adapter, _refs, transport, reader, multipart, _story_reader, target_ref = build_adapter()
+    class Recorder:
+        def __init__(self) -> None:
+            self.events: list[tuple[str, dict[str, Any]]] = []
+
+        def record(self, operation_ref: str, event: Mapping[str, Any]) -> None:
+            self.events.append((operation_ref, dict(event)))
+
+    recorder = Recorder()
+    adapter, _refs, transport, reader, multipart, _story_reader, target_ref = build_adapter(
+        attempt_recorder=recorder
+    )
     storage_ref = "ing_" + "i" * 24
     asset_ref = await adapter.stage_asset(
         verified_asset(storage_ref, IMAGE_BYTES, "image/jpeg"), role=MediaRole.IMAGE
@@ -317,6 +328,24 @@ async def test_verified_wall_photo_upload_is_fixed_opaque_and_idempotent() -> No
     }
     assert transport.calls[2]["params"]["attachments"] == "photo-101_55_safe_key"
     assert receipt["read_after_write"]["verified"] is True
+    stages = [
+        (event["stage"], event["phase"])
+        for _operation_ref, event in recorder.events
+    ]
+    assert stages == [
+        ("wall_photo_upload_server", "started"),
+        ("wall_photo_upload_server", "finished"),
+        ("wall_photo_multipart", "started"),
+        ("wall_photo_multipart", "finished"),
+        ("wall_photo_save", "started"),
+        ("wall_photo_save", "finished"),
+        ("wall_post", "started"),
+        ("wall_post", "finished"),
+    ]
+    saved = recorder.events[5][1]["provider_result"]
+    posted = recorder.events[7][1]["provider_result"]
+    assert saved == {"photo_id": 55, "photo_owner_id": -101}
+    assert posted == {"post_id": 501}
     assert len(multipart.calls) == 1
     assert multipart.calls[0]["purpose"] is VKUploadPurpose.WALL_PHOTO
     assert multipart.calls[0]["content"] == IMAGE_BYTES
@@ -397,6 +426,46 @@ async def test_multipart_failure_before_wall_post_is_definite_and_retry_safe() -
         "retry_safe": True,
         "error_code": "media_upload_failed",
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failed_method", "expected_methods"),
+    [
+        ("photos.getWallUploadServer", ["photos.getWallUploadServer"]),
+        (
+            "photos.saveWallPhoto",
+            ["photos.getWallUploadServer", "photos.saveWallPhoto"],
+        ),
+    ],
+)
+async def test_vk_api_transport_failure_before_wall_post_is_retry_safe(
+    failed_method: str, expected_methods: list[str]
+) -> None:
+    adapter, _refs, transport, _reader, _multipart, _story_reader, target_ref = build_adapter()
+    asset_ref = await adapter.stage_asset(
+        verified_asset("ing_" + "i" * 24, IMAGE_BYTES, "image/jpeg"),
+        role=MediaRole.IMAGE,
+    )
+    transport.fail_method = failed_method
+    result = await adapter.execute(
+        validate_prepare_request(
+            {
+                "platform": "vk",
+                "action": "publish",
+                "idempotency_key": "prewall-failure-" + failed_method,
+                "target_ref": target_ref,
+                "content": {
+                    "text": "Photo",
+                    "media": [{"asset_ref": asset_ref, "role": "image"}],
+                },
+            }
+        )
+    )
+    assert [call["method"] for call in transport.calls] == expected_methods
+    assert result["status"] == "failed"
+    assert result["retry_safe"] is True
+    assert result["error_code"] == "provider_transport_error"
 
 
 @pytest.mark.asyncio

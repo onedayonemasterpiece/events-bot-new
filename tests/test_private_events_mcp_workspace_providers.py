@@ -19,6 +19,7 @@ from private_events_mcp_workspace_providers import (
     DedicatedVKActorTransport,
     DurableTelegramGovernor,
     DurableVKCooldown,
+    DurableVKAttemptRecorder,
     DurableVKGovernor,
     DurableVKOpaqueRefStore,
     DurableVKWorkspaceAdapter,
@@ -92,6 +93,44 @@ def test_vk_media_upload_uses_dedicated_user_actor_token() -> None:
     )
     assert transport.permits(VKActor.MEDIA_EDITOR, "media_upload") is True
     assert transport.permits(VKActor.COMMUNITY_EDITOR, "media_upload") is False
+
+
+def test_vk_attempt_stage_is_durable_and_native_result_is_encrypted(tmp_path) -> None:
+    state = SQLiteProviderCoordinator(str(tmp_path / "attempt.sqlite"))
+    recorder = DurableVKAttemptRecorder(state, "vk-test-signing-key")
+    operation_ref = "op_" + "a" * 24
+    recorder.record(
+        operation_ref,
+        {
+            "stage": "wall_post",
+            "method": "wall.post",
+            "phase": "started",
+        },
+    )
+    recorder.record(
+        operation_ref,
+        {
+            "stage": "wall_post",
+            "method": "wall.post",
+            "phase": "finished",
+            "http_status": 200,
+            "provider_result": {"post_id": 901},
+            "outcome": "succeeded",
+        },
+    )
+    with state._connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM social_provider_vk_attempt WHERE operation_ref=?",
+            (operation_ref,),
+        ).fetchone()
+    assert row["attempt_no"] == 1
+    assert row["stage"] == "wall_post"
+    assert row["provider_method"] == "wall.post"
+    assert row["request_finished_at_ms"] >= row["request_started_at_ms"]
+    assert row["http_status"] == 200
+    assert row["outcome_classification"] == "succeeded"
+    assert row["provider_result_ciphertext"]
+    assert "901" not in row["provider_result_ciphertext"]
 
 
 @pytest.mark.asyncio
@@ -271,7 +310,7 @@ async def test_vk_unknown_receipt_reconciles_from_encrypted_intent_after_restart
             }
 
         async def reconcile_intent(
-            self, operation_ref, intent, *, claimed_at_ms
+            self, operation_ref, intent, *, claimed_at_ms, **_provider_evidence
         ):
             self.reconciliations += 1
             assert intent.content.text == "Durable exact post"

@@ -2726,7 +2726,29 @@ class SocialWorkspaceRuntime:
             return unknown
         try:
             raw = await asyncio.wait_for(reconcile(operation_ref), self.provider_timeout_seconds)
-            safe = self._sanitize_provider_output(raw, current["platform"], principal)
+            known: dict[tuple[str, str], str] = {}
+            with self.store._lock, self.store._connect() as conn:
+                prep = conn.execute(
+                    """SELECT p.* FROM social_workspace_preparation p
+                       JOIN social_workspace_operation o
+                         ON o.preparation_hash=p.preparation_hash
+                       WHERE o.operation_hash=? AND o.client_hash=?
+                         AND o.subject_hash=? AND o.resource_hash=?""",
+                    (
+                        self._hash(operation_ref),
+                        *self._binding(principal),
+                    ),
+                ).fetchone()
+            if prep is not None:
+                original_intent = self._intent_from_row(prep)
+                native_intent = self._native_intent(original_intent, principal)
+                if native_intent.target_ref and original_intent.target_ref:
+                    known[("target", native_intent.target_ref)] = original_intent.target_ref
+                if native_intent.item_ref and original_intent.item_ref:
+                    known[("item", native_intent.item_ref)] = original_intent.item_ref
+            safe = self._sanitize_provider_output(
+                raw, current["platform"], principal, known_refs=known
+            )
             if not isinstance(safe, dict):
                 raise SocialWorkspaceRuntimeError("provider status must be an object")
             safe.update({"platform": current["platform"], "operation_ref": operation_ref,
@@ -2734,8 +2756,14 @@ class SocialWorkspaceRuntime:
             safe.setdefault("retry_safe", False)
             validate_action_status_response(safe)
             self._finish_operation(operation_ref, safe, safe.get("error_code"))
+            reconciled_status = str(safe["status"])
             self._audit(principal, platform=current["platform"], operation="reconcile",
-                        outcome="succeeded", reason="status_reconciled")
+                        outcome=reconciled_status,
+                        reason=(
+                            "status_reconciled"
+                            if reconciled_status == SocialActionStatus.SUCCEEDED.value
+                            else str(safe.get("error_code") or "reconciliation_pending")
+                        ))
             return safe
         except Exception:  # noqa: BLE001 - provider exception text is untrusted
             self._finish_operation(operation_ref, unknown, unknown["error_code"])

@@ -460,7 +460,10 @@ receipt. A definite provider rejection before a wall mutation is `failed` and
 may be `retry_safe=true`. Only a transport ambiguity at a mutation boundary is
 `outcome_unknown`. VK reconciliation never repeats `wall.post`: it performs a
 bounded authenticated wall read and accepts success only for one exact target,
-normalized-text, time-window and expected-photo match.
+normalized-text, time-window and expected-photo match. When photo-save or
+wall-post returned native identifiers before a later ambiguity, those values
+are encrypted in provider state and reconciliation uses the exact photo/post
+identifier rather than text alone.
 
 The approval token is never pasted into ChatGPT. It is not an OAuth token and
 must not appear in model context, logs, PRs or artifacts. A provider timeout is
@@ -601,7 +604,13 @@ fallback cannot satisfy a missing role. The adapter receives a
 verified local asset stream and never exposes or accepts a raw VK upload-server
 URL/method. Multipart responses are consumed to EOF under a decoded-byte cap;
 one short network chunk is not treated as the whole JSON response. Safe logs
-record only opaque operation, fixed stage, status and sanitized code. Story
+record only opaque operation, fixed stage, status and sanitized code. A durable
+attempt row records the attempt number, fixed method/stage, start/finish,
+available HTTP status, normalized outcome/error and an encrypted envelope for
+native photo/post results; target/content/media fingerprints remain bounded and
+tokens, upload URLs and bodies are never stored. Ordinary VK item/feed reads
+project wall photos as principal-bound opaque `media[]`/attachment refs, so
+MCP readback can attest image presence without exposing native IDs. Story
 metrics are aggregate views/likes/replies/shares where VK
 returns them; viewer/member identities are discarded.
 
