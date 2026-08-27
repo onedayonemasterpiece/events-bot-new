@@ -394,6 +394,7 @@ class SocialReadRequest:
     authorization_basis: EditorialAuthorizationBasis | None = None
     unread_only: bool = False
     transcribe_audio: bool = True
+    transcription_wait_seconds: int = 0
 
     @property
     def required_scopes(self) -> frozenset[str]:
@@ -832,6 +833,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
             "authorization_basis",
             "unread_only",
             "transcribe_audio",
+            "transcription_wait_seconds",
         },
         "request",
     )
@@ -932,6 +934,28 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
     transcribe_audio = data.get("transcribe_audio", True)
     if type(transcribe_audio) is not bool:
         raise SocialWorkspaceValidationError("transcribe_audio must be a boolean")
+    transcription_wait_seconds = data.get("transcription_wait_seconds", 0)
+    if (
+        type(transcription_wait_seconds) is not int
+        or not 0 <= transcription_wait_seconds <= 30
+    ):
+        raise SocialWorkspaceValidationError(
+            "transcription_wait_seconds must be an integer from 0 to 30"
+        )
+    if (
+        "transcription_wait_seconds" in data
+        and data.get("transcribe_audio") is not True
+    ):
+        raise SocialWorkspaceValidationError(
+            "transcription_wait_seconds requires transcribe_audio=true"
+        )
+    if (
+        "transcription_wait_seconds" in data
+        and platform is not SocialPlatform.TELEGRAM
+    ):
+        raise SocialWorkspaceValidationError(
+            "transcription_wait_seconds is supported only for Telegram"
+        )
 
     if operation is SocialReadOperation.RESOLVE_TARGET:
         if target_locator is None:
@@ -1120,6 +1144,7 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
         authorization_basis=authorization_basis,
         unread_only=unread_only,
         transcribe_audio=transcribe_audio,
+        transcription_wait_seconds=transcription_wait_seconds,
     )
 
 
@@ -2006,6 +2031,16 @@ SOCIAL_WORKSPACE_READ_SCHEMA: Mapping[str, Any] = {
             "default": True,
             "description": "Enrich Telegram voice/audio media through the existing transcription pipeline.",
         },
+        "transcription_wait_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "default": 0,
+            "description": (
+                "Telegram-only bounded wait for the whole voice/audio batch. "
+                "Zero enqueues or snapshots without actively waiting."
+            ),
+        },
         "sample_ref": {"type": "string", "pattern": r"^smp_[A-Za-z0-9_-]{24,160}$"},
         "date_from": {"type": "string", "format": "date"},
         "date_to": {"type": "string", "format": "date"},
@@ -2019,6 +2054,18 @@ SOCIAL_WORKSPACE_READ_SCHEMA: Mapping[str, Any] = {
             "items": {"type": "string", "enum": _enum_values(SocialTargetKind)},
         },
     },
+    "allOf": [
+        {
+            "if": {"required": ["transcription_wait_seconds"]},
+            "then": {
+                "required": ["transcribe_audio"],
+                "properties": {
+                    "platform": {"const": "telegram"},
+                    "transcribe_audio": {"const": True},
+                },
+            },
+        }
+    ],
 }
 
 SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA: Mapping[str, Any] = {
@@ -2435,7 +2482,16 @@ _EXTERNAL_TARGET: Mapping[str, Any] = {
 _EXTERNAL_TRANSCRIPTION: Mapping[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["status", "cache_hit", "trust"],
+    "required": [
+        "status",
+        "cache_hit",
+        "created",
+        "text_included",
+        "truncated",
+        "next_offset",
+        "next_poll_after_seconds",
+        "trust",
+    ],
     "properties": {
         "status": {
             "type": "string",
@@ -2447,8 +2503,52 @@ _EXTERNAL_TRANSCRIPTION: Mapping[str, Any] = {
         },
         "text": {"type": "string", "maxLength": 60000},
         "cache_hit": {"type": "boolean"},
+        "created": {"type": "boolean"},
+        "text_included": {"type": "boolean"},
+        "truncated": {"type": "boolean"},
+        "next_offset": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "maximum": 2147483647,
+        },
+        "next_poll_after_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400,
+        },
         "error_code": {"type": "string", "pattern": r"^[A-Z0-9_]{3,64}$"},
         "trust": {"const": "untrusted_external_data"},
+    },
+}
+
+_EXTERNAL_TRANSCRIPTION_SUMMARY: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "total",
+        "ready",
+        "queued",
+        "running",
+        "failed",
+        "cache_hits",
+        "created",
+        "wait_expired",
+        "next_poll_after_seconds",
+    ],
+    "properties": {
+        "total": {"type": "integer", "minimum": 0, "maximum": 250},
+        "ready": {"type": "integer", "minimum": 0, "maximum": 250},
+        "queued": {"type": "integer", "minimum": 0, "maximum": 250},
+        "running": {"type": "integer", "minimum": 0, "maximum": 250},
+        "failed": {"type": "integer", "minimum": 0, "maximum": 250},
+        "cache_hits": {"type": "integer", "minimum": 0, "maximum": 250},
+        "created": {"type": "integer", "minimum": 0, "maximum": 250},
+        "wait_expired": {"type": "boolean"},
+        "next_poll_after_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400,
+        },
     },
 }
 
@@ -2509,18 +2609,23 @@ _EXTERNAL_ITEM: Mapping[str, Any] = {
 }
 
 
-def _external_page_schema(item_schema: Mapping[str, Any]) -> Mapping[str, Any]:
+def _external_page_schema(
+    item_schema: Mapping[str, Any], *, include_transcription_summary: bool = False
+) -> Mapping[str, Any]:
+    properties: dict[str, Any] = {
+        "results": {"type": "array", "maxItems": 25, "items": item_schema},
+        "next_cursor": {"type": "string", "pattern": r"^[A-Za-z0-9_-]{1,512}$"},
+        "trust": {"const": "untrusted_external_data"},
+    }
+    if include_transcription_summary:
+        properties["transcription_summary"] = _EXTERNAL_TRANSCRIPTION_SUMMARY
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$defs": _DEFS,
         "type": "object",
         "additionalProperties": False,
         "required": ["results", "trust"],
-        "properties": {
-            "results": {"type": "array", "maxItems": 25, "items": item_schema},
-            "next_cursor": {"type": "string", "pattern": r"^[A-Za-z0-9_-]{1,512}$"},
-            "trust": {"const": "untrusted_external_data"},
-        },
+        "properties": properties,
     }
 
 
@@ -2542,7 +2647,9 @@ _EXTERNAL_DIALOG: Mapping[str, Any] = {
     },
 }
 SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_DIALOG)
-SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA = _external_page_schema(_EXTERNAL_ITEM)
+SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA = _external_page_schema(
+    _EXTERNAL_ITEM, include_transcription_summary=True
+)
 _EXTERNAL_STORY_ITEM: Mapping[str, Any] = {
     **_EXTERNAL_ITEM,
     "properties": {**_EXTERNAL_ITEM["properties"], "kind": {"const": "story"}},
@@ -2573,6 +2680,7 @@ SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "required": ["item", "trust"],
     "properties": {
         "item": _EXTERNAL_ITEM,
+        "transcription_summary": _EXTERNAL_TRANSCRIPTION_SUMMARY,
         "trust": {"const": "untrusted_external_data"},
     },
 }
@@ -2586,6 +2694,7 @@ SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "properties": {
         "item": _EXTERNAL_ITEM,
         "source_target": _EXTERNAL_TARGET,
+        "transcription_summary": _EXTERNAL_TRANSCRIPTION_SUMMARY,
         "trust": {"const": "untrusted_external_data"},
     },
 }
@@ -2640,6 +2749,7 @@ SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA: Mapping[str, Any] = {
         "root_item_ref": {"$ref": "#/$defs/item_ref"},
         "items": {"type": "array", "maxItems": 25, "items": _EXTERNAL_COMMENT_ITEM},
         "next_cursor": {"type": "string", "pattern": r"^[A-Za-z0-9_-]{1,512}$"},
+        "transcription_summary": _EXTERNAL_TRANSCRIPTION_SUMMARY,
         "trust": {"const": "untrusted_external_data"},
     },
 }

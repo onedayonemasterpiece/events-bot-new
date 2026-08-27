@@ -119,7 +119,29 @@ def _resolve_item_schema(
                     "transcription pipeline."
                 ),
             },
+            "transcription_wait_seconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30,
+                "default": 0,
+                "description": (
+                    "Bounded wait for the whole Telegram voice/audio batch; "
+                    "zero only enqueues or snapshots durable jobs."
+                ),
+            },
         },
+        "allOf": [
+            {
+                "if": {"required": ["transcription_wait_seconds"]},
+                "then": {
+                    "required": ["transcribe_audio"],
+                    "properties": {
+                        "platform": {"const": "telegram"},
+                        "transcribe_audio": {"const": True},
+                    },
+                },
+            }
+        ],
     }
 
 
@@ -574,14 +596,12 @@ def build_social_workspace_tools(
         "publicly_discoverable": False,
         "cacheable": False,
         "open_world": True,
-        # A read performs one provider call and may then spend one separately
-        # bounded provider-timeout budget on trusted audio enrichment.  The
-        # outer protocol deadline must cover both phases so a slow attachment
-        # is projected as a per-media failure instead of cancelling the base
-        # message/thread response.
+        # Provider transport and the one whole-batch transcription wait have
+        # independent budgets.  The protocol deadline must cover both plus a
+        # small projection/serialization margin.
         "timeout_seconds": max(
             5.0,
-            runtime.provider_timeout_seconds * 2.0 + 2.0,
+            runtime.provider_timeout_seconds + 35.0,
         ),
     }
     specs = [
