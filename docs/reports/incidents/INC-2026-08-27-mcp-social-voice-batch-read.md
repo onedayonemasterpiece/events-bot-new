@@ -1,6 +1,6 @@
 # INC-2026-08-27 MCP social voice batch reads required per-job polling
 
-Status: mitigating — production canary regression found; registration-completion hotfix and action refresh pending
+Status: monitoring — hotfix deployed and production canary passed; ChatGPT action refresh pending
 Severity: sev2
 Service: private eventsBot MCP Social Workspace and audio transcription
 Opened: 2026-08-27
@@ -63,6 +63,18 @@ confirmed the defect above those preserved layers.
   localized 16 attachments before the wait. Later high-level reads eventually
   found all 25, but that violated registration-before-wait and made first-read
   duration 39.673 seconds. No provider rate limit or private-data leak occurred.
+- 2026-08-27: PR `#591` removed the shared registration deadline, retained an
+  individual provider-timeout bound for every attachment, and enforced the
+  250-attachment ceiling before downloads, task creation or job side effects.
+  It merged as `816896fe0d159993d67c0855919b14fb0561ad48`; Fly v2042 deployed that
+  exact SHA with ready health, 1/1 checks and matching immutable image SHA.
+- 2026-08-27: authenticated production `tools/list` returned 30 tools in
+  172,843 serialized bytes, with no truncation and exactly the four intended
+  input/output schema changes. The repeated sanitized 25-voice canary found all
+  25 durable jobs in one read (`created=0`, `cache_hits=25`, `failed=0`) in
+  28.016 seconds; one delayed high-level refresh increased inline ready results
+  from 19 to 20, the zero-wait repeat completed in 3.280 seconds, and it created
+  no duplicate jobs or provider rate limits.
 
 ## Root Cause
 
@@ -174,11 +186,11 @@ confirmed the defect above those preserved layers.
 ## Follow-up Actions
 
 - [x] Merge PR `#590` after full CI and deploy exact clean `origin/main`.
-- [ ] Merge and deploy the post-canary registration-completion hotfix, then
+- [x] Merge and deploy the post-canary registration-completion hotfix, then
   repeat the same sanitized multi-voice canary.
 - [ ] Refresh, review and publish the four changed high-level read actions in
   the existing ChatGPT app; start a new chat.
-- [ ] Run the sanitized private multi-voice canary, honor returned refresh delay
+- [x] Run the sanitized private multi-voice canary, honor returned refresh delay
   and attach only aggregate metrics.
 - [ ] Use batch telemetry to establish `time_to_all_ready` before considering
   any separate P1 increase in transcription throughput.
@@ -189,14 +201,27 @@ confirmed the defect above those preserved layers.
 - merged PR: `#590`
 - code commit: `3bba47d14`
 - test commit: `0fd484d8d`
+- docs commit: `30dadbd1c`
 - follow-up commit: `2dd8ba0be`
-- merge/deployed SHA: `fbd0cb0da148a59e6fe0c325e824a7a36a0af82b`
-- Fly version: `2041`
+- hotfix branch: `hotfix/mcp-voice-registration-completion-20260827`
+- hotfix PR: `#591`
+- hotfix commits: `49626f552df902288e79c25f87358a0c7ebe9e3e`,
+  `6604831364b3f12d5b01095cfb19265fee00f091`
+- merge/deployed SHA: `816896fe0d159993d67c0855919b14fb0561ad48`
+- Fly version: `2042`
 - deploy path: exact-main `scripts/deploy_fly_main.sh`
-- regression checks: 105 focused and 524 relevant tests passed; PR CI 3/3 green
+- regression checks: 106 focused and 525 relevant tests passed; PR `#591` CI
+  3/3 green (three pre-existing aiohttp AppKey warnings in the relevant suite)
 - post-deploy verification: health ready, Fly 1/1, image SHA exact, authenticated
-  catalog 30 tools / 172,799 bytes / no truncation; first canary found the
-  registration-cap regression above, so hotfix/action refresh remain pending
+  catalog 30 tools / 172,843 bytes / no truncation; canary metrics were 25
+  voices, first read 28.016 seconds, `created=0`, `cache_hits=25`, first states
+  ready/queued/running/failed `19/5/1/0`, one delayed high-level refresh,
+  `time_to_first_ready=0`, `time_to_50_percent_ready=0`,
+  `time_to_all_terminal` not yet reached, zero-wait repeat 3.280 seconds with
+  ready/queued/running/failed `20/4/1/0`, 20 inline texts, zero duplicate jobs
+  and zero provider rate limits. The only remaining closure gate is refresh,
+  review and publication of the four changed actions in the existing ChatGPT
+  app followed by new-chat acceptance.
 
 ## Prevention
 
