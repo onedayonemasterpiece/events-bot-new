@@ -49,6 +49,109 @@ def test_job_store_is_idempotent_and_owner_bound(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_batch_snapshot_wait_and_get_fail_closed_for_mixed_owners(tmp_path):
+    root = tmp_path / "audio-runtime"
+    jobs = AudioJobStore(root / "jobs.sqlite3")
+    owner_a = "a" * 64
+    owner_b = "b" * 64
+    job_a, _ = jobs.create(
+        owner_binding=owner_a,
+        idempotency_key="tg:" + "1" * 64,
+        asset_ref="aud_owner_a",
+        request={"source_sha256": "1" * 64},
+    )
+    job_b, _ = jobs.create(
+        owner_binding=owner_b,
+        idempotency_key="tg:" + "2" * 64,
+        asset_ref="aud_owner_b",
+        request={"source_sha256": "2" * 64},
+    )
+    service = AudioTranscriptionService(
+        SimpleNamespace(
+            root=root,
+            result_root=root / "results",
+            poll_interval_seconds=20,
+        ),
+        asset_store=object(),
+        job_store=jobs,
+        backend=object(),
+    )
+
+    own = await service.wait_many(
+        owner_binding=owner_a,
+        job_refs=[job_a.job_ref],
+        wait_seconds=0,
+    )
+    assert [job.job_ref for job in own.jobs] == [job_a.job_ref]
+    assert own.wait_expired is False
+    assert own.next_poll_after_seconds == 20
+
+    with pytest.raises(JobOwnershipError):
+        service.snapshot_many(
+            owner_binding=owner_a,
+            job_refs=[job_a.job_ref, job_b.job_ref],
+        )
+    with pytest.raises(JobOwnershipError):
+        await service.wait_many(
+            owner_binding=owner_a,
+            job_refs=[job_a.job_ref, job_b.job_ref],
+            wait_seconds=0,
+        )
+    with pytest.raises(JobOwnershipError):
+        await service.get_many(
+            owner_binding=owner_a,
+            job_refs=[job_a.job_ref, job_b.job_ref],
+            limit=100,
+        )
+
+
+@pytest.mark.asyncio
+async def test_batch_get_many_returns_reproducible_plain_continuation(tmp_path):
+    root = tmp_path / "audio-runtime"
+    result_root = root / "results"
+    jobs = AudioJobStore(root / "jobs.sqlite3")
+    owner = "a" * 64
+    job, _ = jobs.create(
+        owner_binding=owner,
+        idempotency_key="tg:" + "3" * 64,
+        asset_ref="aud_long_result",
+        request={"source_sha256": "3" * 64},
+    )
+    result_dir = result_root / job.job_ref
+    result_dir.mkdir(parents=True)
+    full_text = "длинная расшифровка " * 100
+    (result_dir / "transcript.txt").write_text(full_text, encoding="utf-8")
+    jobs.update(job.job_ref, state=JobState.COMPLETE, result_dir=str(result_dir))
+    service = AudioTranscriptionService(
+        SimpleNamespace(
+            root=root,
+            result_root=result_root,
+            poll_interval_seconds=20,
+        ),
+        asset_store=object(),
+        job_store=jobs,
+        backend=object(),
+    )
+
+    pages = await service.get_many(
+        owner_binding=owner,
+        job_refs=[job.job_ref],
+        limit=37,
+    )
+    first = pages[job.job_ref]
+    assert first["text"] == full_text[:37]
+    assert first["next_offset"] == 37
+    continuation = await service.get_result(
+        job_ref=job.job_ref,
+        owner_binding=owner,
+        view="plain",
+        offset=first["next_offset"],
+        limit=60_000,
+    )
+    assert first["text"] + continuation["text"] == full_text
+
+
+@pytest.mark.asyncio
 async def test_provider_ingress_checks_durable_job_before_loading_bytes(tmp_path):
     root = tmp_path / "audio-runtime"
     assets = AudioAssetStore(

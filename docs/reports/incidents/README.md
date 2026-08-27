@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-27-mcp-social-voice-batch-read.md`
+  - Scope: bounded high-level Telegram voice batching, durable store-only wait,
+    inline ready text/continuation, aggregate states and action refresh.
+  - Must not regress: every voice job is created/found before one common wait;
+    wait expiry never becomes terminal timeout; repeat reads create no duplicate
+    jobs and require no N-per-ref polling; serialized dispatch, Retry-After,
+    owner binding, catalog shape and private/provider-data exclusion remain
+    intact.
+
 - `INC-2026-08-26-mcp-telegram-custom-emoji-reaction.md`
   - Scope: explicit Telegram “added to GitHub” semantic marker, server-side
     custom-emoji binding, native `ReactionCustomEmoji` transport and semantic

@@ -98,6 +98,8 @@ sections:
     incident_august_smart_update_dedup_regression_2026_08_22: docs/reports/incidents/INC-2026-08-22-sos-dedup-veto-location-tyunin-farm.md
     incident_tyunin_farm_location_drift_2026_08_22: docs/reports/incidents/INC-2026-08-22-tyunin-farm-location-drift.md
     incident_smart_update_identity_terminal_loss_2026_08_10: docs/reports/incidents/INC-2026-08-10-smart-update-identity-terminal-loss.md
+    incident_mcp_social_voice_batch_read_2026_08_27: docs/reports/incidents/INC-2026-08-27-mcp-social-voice-batch-read.md
+    incident_chatgpt_frozen_mcp_actions_2026_08_25: docs/reports/incidents/INC-2026-08-25-chatgpt-frozen-mcp-actions.md
     incident_mcp_telegram_album_media_ref_2026_08_24: docs/reports/incidents/INC-2026-08-24-mcp-telegram-album-media-ref.md
     incident_mcp_telegram_custom_emoji_reaction_2026_08_26: docs/reports/incidents/INC-2026-08-26-mcp-telegram-custom-emoji-reaction.md
     incident_vk_lifecycle_replay_stale_tg_repost_2026_08_24: docs/reports/incidents/INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost.md

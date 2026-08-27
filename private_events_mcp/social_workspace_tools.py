@@ -24,6 +24,7 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_MCP_COMMIT_SCHEMA,
     SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
@@ -71,6 +72,12 @@ def _read_schema(
             "type": "string",
             "enum": list(read_access_values),
         }
+    if operation not in {
+        SocialReadOperation.LIST_ITEMS,
+        SocialReadOperation.GET_ITEM,
+    }:
+        schema["properties"].pop("transcription_wait_seconds", None)
+        schema.pop("allOf", None)
     return schema
 
 
@@ -119,7 +126,29 @@ def _resolve_item_schema(
                     "transcription pipeline."
                 ),
             },
+            "transcription_wait_seconds": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30,
+                "default": 0,
+                "description": (
+                    "Bounded wait for the whole Telegram voice/audio batch; "
+                    "zero only enqueues or snapshots durable jobs."
+                ),
+            },
         },
+        "allOf": [
+            {
+                "if": {"required": ["transcription_wait_seconds"]},
+                "then": {
+                    "required": ["transcribe_audio"],
+                    "properties": {
+                        "platform": {"const": "telegram"},
+                        "transcribe_audio": {"const": True},
+                    },
+                },
+            }
+        ],
     }
 
 
@@ -133,6 +162,15 @@ def _thread_schema() -> dict[str, Any]:
     if "operation" not in required:
         required.append("operation")
     schema["required"] = required
+    schema.setdefault("allOf", []).append(
+        {
+            "if": {
+                "properties": {"operation": {"const": "list_reactions"}},
+                "required": ["operation"],
+            },
+            "then": {"not": {"required": ["transcription_wait_seconds"]}},
+        }
+    )
     return schema
 
 
@@ -156,6 +194,8 @@ def _combined_output(*schemas: Mapping[str, Any]) -> dict[str, Any]:
 
 def _analytics_schema() -> dict[str, Any]:
     schema = copy.deepcopy(dict(SOCIAL_WORKSPACE_READ_SCHEMA))
+    schema["properties"].pop("transcription_wait_seconds", None)
+    schema.pop("allOf", None)
     schema["properties"]["operation"] = {
         "type": "string", "enum": ["get_statistics", "get_audience"]
     }
@@ -574,14 +614,12 @@ def build_social_workspace_tools(
         "publicly_discoverable": False,
         "cacheable": False,
         "open_world": True,
-        # A read performs one provider call and may then spend one separately
-        # bounded provider-timeout budget on trusted audio enrichment.  The
-        # outer protocol deadline must cover both phases so a slow attachment
-        # is projected as a per-media failure instead of cancelling the base
-        # message/thread response.
+        # Provider transport and the one whole-batch transcription wait have
+        # independent budgets.  The protocol deadline must cover both plus a
+        # small projection/serialization margin.
         "timeout_seconds": max(
             5.0,
-            runtime.provider_timeout_seconds * 2.0 + 2.0,
+            runtime.provider_timeout_seconds * 2.0 + 35.0,
         ),
     }
     specs = [
@@ -617,7 +655,7 @@ def build_social_workspace_tools(
         ToolSpec("social_content_search", "Search social content",
                  "Search bounded content with mandatory untrusted-data marking.",
                  read_schema(SocialReadOperation.SEARCH_ITEMS),
-                 SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA, handler=read,
+                 SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **common),
         ToolSpec("social_content_feed", "Read social feed",
                  "Read a bounded feed through an opaque target reference.",

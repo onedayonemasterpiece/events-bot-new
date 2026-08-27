@@ -236,9 +236,11 @@ work.
 - verify the real conversation calls `social_item_resolve` for the authorized
   private Telegram link, then reads the thread and returns ready/queued voice
   status without exposing transcript or provider/native data in evidence;
-- for every queued `atr_*` returned by the social read, prove status/get accepts
-  the same OAuth principal, rejects a different principal, honors durable queue
-  and provider-hold states, and eventually returns every ready transcript;
+- prove bounded repeat high-level reads reuse every queued `atr_*`, return one
+  aggregate state summary and inline ready text without N status/get calls;
+  separately retain a single-job fallback check showing status/get accepts the
+  same OAuth principal, rejects a different principal and honors durable queue
+  and provider-hold states;
 - do not pass `ast_*` to standalone file ingress and do not busy-poll or bypass
   the serialized dedicated Telegram/Kaggle lane;
 - verify health, deployed SHA, OAuth scopes and sanitized MCP audit rows.
@@ -282,6 +284,10 @@ work.
   a bounded compatibility path for clients holding the former generic schema:
   infer access from the canonical URL and accept at most one non-self target-
   kind hint, checked against the resolved source.
+- Added one bounded high-level voice batch wait and aggregate/inline result
+  projection. The batch reads owner-bound durable state only, so repeat social
+  reads replace the former N-per-ref status/get loop without bypassing the
+  serialized monitor or persisted Retry-After.
 
 ## Follow-up Actions
 
@@ -301,6 +307,10 @@ work.
 - [ ] Refresh/review/publish the narrowed `social_item_resolve` schema after its
   exact-main deploy, then prove one successful direct resolver call occurs
   before any target-search/feed fallback.
+- [ ] Refresh/review/publish the batch-wait input and summary/attachment output
+  schemas for item resolve, feed, item and thread; in a new chat prove one
+  bounded high-level read plus bounded high-level refreshes returns inline
+  ready text without per-ref polling.
 
 ## Release And Closure Evidence
 

@@ -328,19 +328,45 @@ The materialization request uses the stricter of the audio store's configured
 asset limit and the Telegram adapter's provider-media limit; the larger generic
 upload ceiling must never be passed back as an invalid provider read bound.
 
+For a batch-oriented read, send both `transcribe_audio=true` and optional
+`transcription_wait_seconds=0..30`. Zero creates/finds every durable job and
+returns one snapshot without active waiting; a positive value is one common
+bounded wait for the entire response. The Telegram/VK provider call retains its
+separate `social_provider_timeout_seconds`; no attachment can consume the batch
+wait before the remaining voice/audio jobs are registered/found or explicitly
+localized as a materialization failure. The complete registration stage, not
+each concurrency wave, is bounded by one provider timeout; the MCP protocol
+deadline covers provider read, that registration budget, up to 30 seconds of
+store wait and a small projection margin.
+Materialization is capped at three concurrent ingress operations, while remote
+dispatch remains strictly serialized.
+
 Read-triggered jobs are bound to the authenticated principal and an HMAC of the
 target/item/media identity, then verified against the content SHA-256. A repeat
 read checks the durable job before downloading, so it neither downloads the
-same media nor creates a second job. Fast completion projects `status=ready`
-and bounded transcript text; otherwise the attachment carries
-`queued|running` plus an opaque `atr_*` `transcription_ref`. A later identical
-read projects the completed text automatically. One attachment failure is a
-typed per-attachment `failed` result and cannot fail sibling media or the
-message/thread page. Transcript text and attachment metadata carry the exact
-`untrusted_external_data` marker. Responses, errors and audit exclude native
-IDs, access hashes, file references, provider/model details, auth/session data,
-URLs and paths. This internal path is authorized by the social read scope; it
-does not invoke or weaken the standalone `audio:transcribe`/publish tool gate.
+same media nor creates a second job. Each voice/audio attachment returns the
+same closed object: `status=ready|queued|running|failed`, opaque
+`transcription_ref` after successful materialization, `created`, `cache_hit`,
+`text_included`, `truncated`, `next_offset`, `next_poll_after_seconds` and the
+untrusted-data marker. Ready text is included immediately when the response
+budget permits it. Long text uses a reproducible continuation offset rather
+than silent clipping. A top-level `transcription_summary` reports
+`total/ready/queued/running/failed`, unique-job `cache_hits/created`, one
+`wait_expired` flag and a safe next refresh delay.
+
+The batch wait observes only owner-bound durable rows; it never expands into
+per-ref provider reconciliation and cannot bypass serialized dispatch or a
+persisted `Retry-After`. Local wait expiry leaves queued/running jobs in their
+real state and never fabricates `failed/TRANSCRIPTION_TIMEOUT`. A provider-byte
+failure before durable job creation is localized as safe
+`TRANSCRIPTION_MATERIALIZATION_FAILED` without a ref; siblings and text still
+return. Responses, errors and the single sanitized batch telemetry line exclude
+native IDs, access hashes, file references, provider/model details,
+auth/session data, private URLs, paths and transcript bodies. This internal path
+is authorized by the social read scope; it does not invoke or weaken the
+standalone `audio:transcribe`/publish tool gate.
+Its `response_duration_ms` spans the provider read through projection, response
+cap enforcement and audit rather than reporting only enrichment time.
 
 When the caller also has access to the standalone audio tools, the returned
 `atr_*` is accepted by `audio_transcription_status` and
@@ -356,19 +382,21 @@ Transcription is intentionally asynchronous and serialized because the lane
 uses one dedicated Telegram session. `queued` is therefore a successful
 durable acceptance, not completed text. The monitor normally advances on the
 configured 20-second poll cadence, but a provider `Retry-After` is persisted
-and takes precedence across restarts. Clients must not busy-poll or invent a
-fixed completion deadline: inspect status at a bounded cadence, honor the
-reported durable state, call `audio_transcription_get` only after `complete`,
-or repeat the same high-level social read later to receive ready text from the
-cache. A multi-voice chat may take several serialized runs to finish.
+and takes precedence across restarts. Clients must not busy-poll: repeat the
+same high-level social read only after its `next_poll_after_seconds` to receive
+fresh aggregate states and inline ready text. `audio_transcription_status/get`
+remain compatible single-job fallbacks for a long continuation or diagnostics,
+not the normal N-per-ref route. A multi-voice chat may take several serialized
+runs to finish.
 
 A ChatGPT skill/custom instruction may persist the efficient client sequence:
-exact URL first, retain returned opaque refs/cursors, poll only returned
-transcription refs at bounded cadence, and reuse completed results. This can
-remove repeated catalogue exploration and invalid fallback calls, but it does
-not make cold transcription synchronous or bypass the dedicated serialized
-Telegram/Kaggle lane. Server-side idempotency remains authoritative; client
-memory is an orchestration optimization, not a cache or security boundary.
+exact URL first, request one bounded batch wait, retain returned opaque
+refs/cursors, honor the summary delay, and repeat only the high-level read until
+the desired coverage is ready. This removes per-attachment status/get loops and
+invalid fallback calls, but it does not make cold transcription synchronous or
+bypass the dedicated serialized Telegram/Kaggle lane. Server-side idempotency
+remains authoritative; client memory is an orchestration optimization, not a
+cache or security boundary.
 
 The Telegram MCP workspace continues to use only
 `TELEGRAM_AUTH_BUNDLE_EVENTS_BOT_MCP`. The remote transcription worker keeps
@@ -713,6 +741,12 @@ connector name. Treat two refresh boundaries separately:
    only then start a **new chat** with the app selected. For an unpublished
    developer app, use its equivalent Scan Tools/Refresh flow before the new
    chat.
+
+The voice-batch contract changes both input and output definitions for
+`social_item_resolve`, `social_content_feed`, `social_content_item` and the
+comment branch of `social_content_thread`. After that release, refresh/review/
+publish all four in the existing app before acceptance; do not change the
+endpoint, OAuth app, resource/audience or credentials.
 
 Old chats may retain an earlier catalogue. A successful OAuth refresh or a
 direct server/OpenCode `tools/list` probe is not ChatGPT action-publication

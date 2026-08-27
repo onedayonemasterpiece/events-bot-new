@@ -227,10 +227,40 @@ A background monitor recovers queued jobs after restart, polls running Kaggle ke
 inside the originating MCP call. The ordinary monitor cadence is 20 seconds.
 Only one durable job crosses the shared Kaggle/Telegram session boundary at a
 time, and a provider `Retry-After` is persisted as `retry_not_before` and
-survives restart. Consumers should poll status at a bounded cadence and fetch
-only after `complete`; aggressively repeating list/status calls cannot advance
-the remote lane and may extend provider throttling. A batch of voice messages
-can therefore require several serialized runs.
+survives restart. Aggressive provider/status polling cannot advance that lane
+and may extend throttling. A batch of voice messages can therefore require
+several serialized runs.
+
+High-level Telegram item/feed/thread reads are the primary batch-consumption
+surface. With explicit `transcribe_audio=true`, the optional
+`transcription_wait_seconds` accepts only `0..30`: zero registers or finds all
+jobs and takes a durable snapshot; a positive value performs one bounded wait
+for the whole batch. Provider read timeout remains separate. The runtime first
+collects unique voice/audio identities, then materializes every new job with
+concurrency capped at three, then calls the service's owner-bound
+`wait_many`/`get_many` path. That wait reads only the durable store; it never
+calls provider status, bypasses the monitor, ignores `retry_not_before`, or
+creates one remote waiting task per attachment.
+The whole registration stage has one provider-timeout budget (not one budget
+per concurrency wave), and the MCP tool deadline covers provider read,
+registration, the maximum 30-second store wait and projection margin.
+
+Each enriched attachment returns `ready|queued|running|failed`, the opaque
+`atr_*` where materialization succeeded, `created`, `cache_hit`, inline text
+metadata and `next_poll_after_seconds`. A top-level `transcription_summary`
+contains total/ready/queued/running/failed plus unique-job created/cache-hit
+counts. Expiry of the high-level wait sets `wait_expired=true` while preserving
+the real queued/running durable state; it is never converted into terminal
+`TRANSCRIPTION_TIMEOUT`. A pre-job provider-byte/materialization failure is the
+only localized `failed` exception without an `atr_*`, with the safe code
+`TRANSCRIPTION_MATERIALIZATION_FAILED`; siblings and text messages still return
+and the next identical read may retry materialization.
+
+Ready plain text is included directly within the response budget. If the whole
+response cannot carry it, the attachment states `truncated=true` and provides a
+reproducible character `next_offset` (`0` when no prefix fits). The existing
+owner-bound `audio_transcription_get` remains the fallback for that continuation
+or diagnostics, rather than the ordinary N-per-ref polling route.
 
 Telegram Social Workspace reads may return an `atr_*` created by the same
 service. `audio_transcription_status` and `audio_transcription_get` accept that
@@ -241,6 +271,12 @@ Social Workspace binding as a compatibility lookup. This keeps already queued
 jobs addressable without migrating assets or weakening cross-principal
 isolation. `ast_*` remains a social asset reference and is never valid input to
 `audio_transcription_start`.
+
+One sanitized `social_voice_transcription_batch` log line records only counts
+and timings (`voice_total`, unique jobs created/cache hits, state counts,
+requested/actual wait, response duration and wait expiry). It never records a
+private link, transcript body, opaque/provider ref, native Telegram identity,
+asset path or credential.
 
 ## Configuration
 
@@ -327,7 +363,8 @@ audio_transcription/
   kaggle_backend.py    datasets, kernel launch, registry, output verification
   kaggle_worker.py     actual Kaggle/Telethon processing
   mcp.py               three typed ToolSpec definitions and runtime attachment
-  service.py           restart recovery and background reconciliation
+  service.py           restart recovery, owner-bound batch snapshots/wait/get,
+                       and background reconciliation
   session_guard.py     shared guard plus rolling-deploy compatibility check
   telegram_native.py   TranscribeAudioRequest and UpdateTranscribedAudio
   time_anchor.py       explicit/metadata/filename anchor resolution
@@ -346,6 +383,9 @@ Static/local acceptance in this change:
 - timeline/TXT/SRT/VTT export tests;
 - audio signature policy tests;
 - owner-bound durable job/idempotency tests;
+- deterministic 20-voice registration-before-wait (including MCP protocol
+  dispatch), exact-link resolver/comment-thread, mixed-state, repeat-inline,
+  continuation and cross-principal batch tests;
 - real local ffprobe and OGG/Opus transcode test;
 - Telegram native error classification test;
 - compile check for the complete package and kernel bootstrap.

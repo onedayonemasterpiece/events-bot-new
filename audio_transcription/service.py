@@ -5,8 +5,10 @@ import hashlib
 import inspect
 import json
 import logging
+import math
 import shutil
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -19,6 +21,17 @@ from .kaggle_backend import KaggleAudioBackend
 from .time_anchor import parse_aware_datetime
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class TranscriptionBatchSnapshot:
+    """Owner-bound durable state for one high-level social-read batch."""
+
+    jobs: tuple[TranscriptionJob, ...]
+    wait_requested_seconds: int
+    wait_actual_seconds: float
+    wait_expired: bool
+    next_poll_after_seconds: int
 
 
 class AudioTranscriptionService:
@@ -514,6 +527,110 @@ class AudioTranscriptionService:
                 except Exception:
                     payload["result_metadata_unavailable"] = True
         return payload
+
+    def snapshot_many(
+        self, *, owner_binding: str, job_refs: list[str] | tuple[str, ...]
+    ) -> tuple[TranscriptionJob, ...]:
+        """Read a deduplicated batch without reconciling the remote provider.
+
+        Every lookup uses the ordinary owner gate.  A single foreign reference
+        therefore fails the whole batch closed before any result is returned.
+        """
+
+        unique_refs = tuple(dict.fromkeys(str(ref) for ref in job_refs))
+        return tuple(
+            self.job_store.get(job_ref, owner_binding=owner_binding)
+            for job_ref in unique_refs
+        )
+
+    def _next_batch_poll_after(self, jobs: tuple[TranscriptionJob, ...]) -> int:
+        pending = tuple(job for job in jobs if not job.state.terminal)
+        if not pending:
+            return 0
+        normal = max(1, math.ceil(float(self.config.poll_interval_seconds)))
+        now = time.time()
+        provider_holds = [
+            math.ceil(float(retry_at) - now)
+            for job in pending
+            for retry_at in ((job.progress or {}).get("retry_not_before"),)
+            if type(retry_at) in {int, float} and float(retry_at) > now
+        ]
+        if provider_holds:
+            normal = max(normal, min(provider_holds))
+        return min(86_400, normal)
+
+    async def wait_many(
+        self,
+        *,
+        owner_binding: str,
+        job_refs: list[str] | tuple[str, ...],
+        wait_seconds: int,
+    ) -> TranscriptionBatchSnapshot:
+        """Wait once around durable state, never provider status polling."""
+
+        if type(wait_seconds) is not int or not 0 <= wait_seconds <= 30:
+            raise ValueError("batch transcription wait must be from 0 to 30 seconds")
+        started = asyncio.get_running_loop().time()
+        jobs = self.snapshot_many(owner_binding=owner_binding, job_refs=job_refs)
+        deadline = started + wait_seconds
+        deadline_reached = False
+        while wait_seconds > 0 and any(not job.state.terminal for job in jobs):
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                deadline_reached = True
+                break
+            await asyncio.sleep(
+                min(max(0.05, float(self.config.poll_interval_seconds)), remaining)
+            )
+            jobs = self.snapshot_many(owner_binding=owner_binding, job_refs=job_refs)
+        # Always take one final owner-bound snapshot after the bounded wait.
+        jobs = self.snapshot_many(owner_binding=owner_binding, job_refs=job_refs)
+        actual = max(0.0, asyncio.get_running_loop().time() - started)
+        pending = any(not job.state.terminal for job in jobs)
+        return TranscriptionBatchSnapshot(
+            jobs=jobs,
+            wait_requested_seconds=wait_seconds,
+            wait_actual_seconds=actual,
+            wait_expired=(
+                wait_seconds > 0
+                and pending
+                and (deadline_reached or asyncio.get_running_loop().time() >= deadline)
+            ),
+            next_poll_after_seconds=self._next_batch_poll_after(jobs),
+        )
+
+    async def get_many(
+        self,
+        *,
+        owner_binding: str,
+        job_refs: list[str] | tuple[str, ...],
+        limit: int,
+    ) -> dict[str, dict[str, Any]]:
+        """Return local plain-text pages for already-complete owner jobs only."""
+
+        if type(limit) is not int or not 1 <= limit <= 60_000:
+            raise ValueError("batch transcription result limit is invalid")
+        jobs = self.snapshot_many(owner_binding=owner_binding, job_refs=job_refs)
+        results: dict[str, dict[str, Any]] = {}
+        for job in jobs:
+            if job.state is not JobState.COMPLETE:
+                continue
+            try:
+                results[job.job_ref] = await self.get_result(
+                    job_ref=job.job_ref,
+                    owner_binding=owner_binding,
+                    view="plain",
+                    offset=0,
+                    limit=limit,
+                )
+            except ValueError:
+                results[job.job_ref] = {
+                    "job_ref": job.job_ref,
+                    "state": job.state.value,
+                    "ready": False,
+                    "error_code": "TRANSCRIPTION_RESULT_UNAVAILABLE",
+                }
+        return results
 
     def _result_file(self, job: TranscriptionJob, file_name: str) -> Path:
         if not job.result_dir:

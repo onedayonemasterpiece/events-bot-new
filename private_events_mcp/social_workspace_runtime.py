@@ -15,6 +15,7 @@ import hmac
 import inspect
 import io
 import json
+import logging
 import re
 import secrets
 import sqlite3
@@ -35,6 +36,7 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
@@ -58,6 +60,8 @@ from .social_workspace import (
     validate_resolved_target_preview,
 )
 from .tool_catalog import ToolCallContext, ToolExecutionResult
+
+logger = logging.getLogger(__name__)
 
 
 class SocialWorkspaceRuntimeError(SocialWorkspaceValidationError):
@@ -251,7 +255,7 @@ class SocialWorkspaceRuntime:
     def enable_audio_transcription(self, service: Any) -> None:
         """Attach the existing audio service to trusted Telegram read ingress."""
 
-        required = ("start_provider_transcription", "status", "get_result")
+        required = ("start_provider_transcription", "wait_many", "get_many")
         if any(not callable(getattr(service, name, None)) for name in required):
             raise TypeError("audio transcription service contract is incomplete")
         self.audio_transcription_service = service
@@ -1084,7 +1088,8 @@ class SocialWorkspaceRuntime:
                     )
                 return known[("asset", raw)]
             if isinstance(node, str):
-                return _SECRET_VALUE.sub("[REDACTED]", node)[:8192]
+                maximum = 60_000 if key == "text" else 8192
+                return _SECRET_VALUE.sub("[REDACTED]", node)[:maximum]
             if node is None or isinstance(node, (bool, int, float)):
                 return node
             return str(node)[:1024]
@@ -1125,6 +1130,18 @@ class SocialWorkspaceRuntime:
             )
 
         expected_type = schema.get("type")
+        if isinstance(expected_type, list):
+            for candidate in expected_type:
+                try:
+                    return self._project_contract_value(
+                        value,
+                        {**schema, "type": candidate},
+                        root=root,
+                        field=field,
+                    )
+                except SocialWorkspaceRuntimeError:
+                    continue
+            raise SocialWorkspaceRuntimeError("provider response is invalid")
         if expected_type == "object":
             if not isinstance(value, Mapping):
                 raise SocialWorkspaceRuntimeError("provider response is invalid")
@@ -1213,6 +1230,9 @@ class SocialWorkspaceRuntime:
         elif expected_type == "boolean":
             if type(value) is not bool:
                 raise SocialWorkspaceRuntimeError("provider response is invalid")
+        elif expected_type == "null":
+            if value is not None:
+                raise SocialWorkspaceRuntimeError("provider response is invalid")
         elif expected_type is not None:
             raise SocialWorkspaceRuntimeError("provider response schema is invalid")
 
@@ -1230,7 +1250,7 @@ class SocialWorkspaceRuntime:
             SocialReadOperation.RESOLVE_ITEM: SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA,
             SocialReadOperation.SEARCH_TARGETS: SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_DIALOGS: SOCIAL_WORKSPACE_DIALOG_LIST_OUTPUT_SCHEMA,
-            SocialReadOperation.SEARCH_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
+            SocialReadOperation.SEARCH_ITEMS: SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_ITEMS: SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA,
             SocialReadOperation.GET_ITEM: SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA,
             SocialReadOperation.LIST_COMMENTS: SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
@@ -1271,13 +1291,14 @@ class SocialWorkspaceRuntime:
         raw: Mapping[str, Any],
         *,
         principal: RuntimePrincipal,
-    ) -> Mapping[str, Any]:
+        wait_seconds: int,
+    ) -> tuple[Mapping[str, Any], dict[str, Any] | None]:
         service = self.audio_transcription_service
         if service is None:
-            return raw
+            return raw, None
         adapter = self._adapter(SocialPlatform.TELEGRAM.value)
         if not callable(getattr(adapter, "read_asset", None)):
-            return raw
+            return raw, None
         result = copy.deepcopy(dict(raw))
         owner_binding = self._principal_hash(principal)
         configured_limit = getattr(getattr(service, "config", None), "max_asset_bytes", None)
@@ -1288,160 +1309,315 @@ class SocialWorkspaceRuntime:
             if type(value) is int and 0 < value <= 2 * 1024 * 1024 * 1024
         ]
         max_bytes = min(valid_limits) if valid_limits else 64 * 1024 * 1024
-        enrichment_deadline = (
-            asyncio.get_running_loop().time() + self.provider_timeout_seconds
+
+        def base_transcription(
+            *,
+            status: str,
+            created: bool,
+            cache_hit: bool,
+            next_poll_after_seconds: int,
+            job_ref: str | None = None,
+            error_code: str | None = None,
+        ) -> dict[str, Any]:
+            payload: dict[str, Any] = {
+                "status": status,
+                "cache_hit": cache_hit,
+                "created": created,
+                "text_included": False,
+                "truncated": False,
+                "next_offset": None,
+                "next_poll_after_seconds": next_poll_after_seconds,
+                "trust": "untrusted_external_data",
+            }
+            if job_ref is not None:
+                payload["transcription_ref"] = job_ref
+            if error_code is not None:
+                payload["error_code"] = error_code
+            return payload
+
+        groups: dict[str, dict[str, Any]] = {}
+        voice_total = 0
+        materialization_failures = 0
+        normal_poll_after = max(
+            1,
+            min(
+                86_400,
+                int(getattr(getattr(service, "config", None), "poll_interval_seconds", 20)),
+            ),
         )
 
-        async def enrich_item(item: dict[str, Any]) -> None:
-            attachments = item.get("attachments")
-            if not isinstance(attachments, list):
+        def collect(node: Any) -> None:
+            nonlocal voice_total
+            if isinstance(node, dict):
+                attachments = node.get("attachments")
+                if isinstance(attachments, list):
+                    for attachment in attachments[:10]:
+                        if (
+                            not isinstance(attachment, dict)
+                            or attachment.get("kind") not in {"voice", "audio"}
+                        ):
+                            continue
+                        voice_total += 1
+                        asset_ref = attachment.get("asset_ref")
+                        fingerprint = attachment.pop("binding_fingerprint", None)
+                        if (
+                            not isinstance(asset_ref, str)
+                            or not isinstance(fingerprint, str)
+                            or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None
+                        ):
+                            attachment["transcription"] = base_transcription(
+                                status="failed",
+                                created=False,
+                                cache_hit=False,
+                                next_poll_after_seconds=normal_poll_after,
+                                error_code="TRANSCRIPTION_BINDING_INVALID",
+                            )
+                            continue
+                        identity = hmac.new(
+                            self._key,
+                            (
+                                "telegram-read-transcription\0"
+                                + owner_binding
+                                + "\0"
+                                + fingerprint
+                            ).encode("ascii"),
+                            hashlib.sha256,
+                        ).hexdigest()
+                        group = groups.setdefault(
+                            "tg:" + identity,
+                            {
+                                "fingerprint": fingerprint,
+                                "asset_ref": asset_ref,
+                                "mime_type": (
+                                    str(attachment["mime_type"])
+                                    if isinstance(attachment.get("mime_type"), str)
+                                    else None
+                                ),
+                                "attachments": [],
+                            },
+                        )
+                        group["attachments"].append(attachment)
+                for child in list(node.values()):
+                    collect(child)
+            elif isinstance(node, list):
+                for child in node:
+                    collect(child)
+
+        collect(result)
+
+        registration_limit = asyncio.Semaphore(3)
+
+        def mark_registration_failed(group: dict[str, Any]) -> None:
+            nonlocal materialization_failures
+            if group.get("registration_failed"):
                 return
-            for attachment in attachments[:10]:
-                if not isinstance(attachment, dict) or attachment.get("kind") not in {
-                    "voice",
-                    "audio",
-                }:
-                    continue
-                if asyncio.get_running_loop().time() >= enrichment_deadline:
-                    attachment.pop("binding_fingerprint", None)
-                    attachment["transcription"] = {
-                        "status": "failed",
-                        "cache_hit": False,
-                        "error_code": "TRANSCRIPTION_TIMEOUT",
-                        "trust": "untrusted_external_data",
-                    }
-                    continue
-                asset_ref = attachment.get("asset_ref")
-                fingerprint = attachment.pop("binding_fingerprint", None)
-                if (
-                    not isinstance(asset_ref, str)
-                    or not isinstance(fingerprint, str)
-                    or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None
-                ):
-                    attachment["transcription"] = {
-                        "status": "failed",
-                        "cache_hit": False,
-                        "error_code": "TRANSCRIPTION_BINDING_INVALID",
-                        "trust": "untrusted_external_data",
-                    }
-                    continue
-                identity = hmac.new(
-                    self._key,
-                    (
-                        "telegram-read-transcription\0"
-                        + owner_binding
-                        + "\0"
-                        + fingerprint
-                    ).encode("ascii"),
-                    hashlib.sha256,
-                ).hexdigest()
-                idempotency_key = "tg:" + identity
-                try:
+            materialization_failures += len(group["attachments"])
+            group["registration_failed"] = True
+            for attachment in group["attachments"]:
+                attachment["transcription"] = base_transcription(
+                    status="failed",
+                    created=False,
+                    cache_hit=False,
+                    next_poll_after_seconds=normal_poll_after,
+                    error_code="TRANSCRIPTION_MATERIALIZATION_FAILED",
+                )
+
+        async def register(idempotency_key: str, group: dict[str, Any]) -> None:
+            try:
+                async with registration_limit:
                     started = await asyncio.wait_for(
                         service.start_provider_transcription(
                             owner_binding=owner_binding,
                             idempotency_key=idempotency_key,
-                            provider_fingerprint=fingerprint,
-                            content_loader=lambda ref=asset_ref: adapter.read_asset(
+                            provider_fingerprint=group["fingerprint"],
+                            content_loader=lambda ref=group["asset_ref"]: adapter.read_asset(
                                 ref,
                                 owner_binding=owner_binding,
                                 max_bytes=max_bytes,
                             ),
-                            mime_type=(
-                                str(attachment["mime_type"])
-                                if isinstance(attachment.get("mime_type"), str)
-                                else None
-                            ),
+                            mime_type=group["mime_type"],
                         ),
-                        timeout=max(
-                            0.001,
-                            enrichment_deadline
-                            - asyncio.get_running_loop().time(),
-                        ),
+                        timeout=self.provider_timeout_seconds,
                     )
-                    job_ref = str(started.get("job_ref") or "")
-                    status = await asyncio.wait_for(
-                        service.status(
-                            job_ref=job_ref, owner_binding=owner_binding
-                        ),
-                        timeout=max(
-                            0.001,
-                            enrichment_deadline
-                            - asyncio.get_running_loop().time(),
-                        ),
-                    )
-                    state = str(status.get("state") or started.get("state") or "queued")
-                    transcription: dict[str, Any] = {
-                        "status": (
-                            "ready"
-                            if state == "complete"
-                            else "failed"
-                            if state in {"failed", "cancelled"}
-                            else "queued"
-                            if state in {"queued", "dispatching"}
-                            else "running"
-                        ),
-                        "transcription_ref": job_ref,
-                        "cache_hit": not bool(started.get("created", False)),
-                        "trust": "untrusted_external_data",
-                    }
-                    if state == "complete":
-                        completed = await asyncio.wait_for(
-                            service.get_result(
-                                job_ref=job_ref,
-                                owner_binding=owner_binding,
-                                view="plain",
-                                offset=0,
-                                limit=60_000,
-                            ),
-                            timeout=max(
-                                0.001,
-                                enrichment_deadline
-                                - asyncio.get_running_loop().time(),
-                            ),
-                        )
-                        if completed.get("ready") and isinstance(completed.get("text"), str):
-                            transcription["text"] = completed["text"][:60_000]
-                        else:
-                            transcription["status"] = "failed"
-                            transcription["error_code"] = "TRANSCRIPTION_RESULT_EXPIRED"
-                    elif state in {"failed", "cancelled"}:
-                        code = status.get("error_code")
-                        transcription["error_code"] = (
-                            str(code)
-                            if isinstance(code, str) and re.fullmatch(r"[A-Z0-9_]{3,64}", code)
-                            else "TRANSCRIPTION_FAILED"
-                        )
-                    attachment["transcription"] = transcription
-                except asyncio.CancelledError:
-                    raise
-                except asyncio.TimeoutError:
-                    attachment["transcription"] = {
-                        "status": "failed",
-                        "cache_hit": False,
-                        "error_code": "TRANSCRIPTION_TIMEOUT",
-                        "trust": "untrusted_external_data",
-                    }
-                except Exception:  # noqa: BLE001 - isolate provider/audio failure per media
-                    attachment["transcription"] = {
-                        "status": "failed",
-                        "cache_hit": False,
-                        "error_code": "TRANSCRIPTION_FAILED",
-                        "trust": "untrusted_external_data",
-                    }
+                job_ref = str(started.get("job_ref") or "")
+                if re.fullmatch(r"atr_[A-Za-z0-9_-]{24,160}", job_ref) is None:
+                    raise ValueError("transcription service returned an invalid job")
+                group["job_ref"] = job_ref
+                group["created"] = bool(started.get("created", False))
+            except asyncio.CancelledError:
+                raise
+            except Exception:  # noqa: BLE001 - one media must not fail the social read
+                mark_registration_failed(group)
 
-        async def walk(node: Any) -> None:
-            if isinstance(node, dict):
-                if isinstance(node.get("item_ref"), str):
-                    await enrich_item(node)
-                for child in list(node.values()):
-                    await walk(child)
-            elif isinstance(node, list):
-                for child in node:
-                    await walk(child)
+        registration_tasks = {
+            asyncio.create_task(register(key, group)): group
+            for key, group in groups.items()
+        }
+        if registration_tasks:
+            try:
+                _done, pending = await asyncio.wait(
+                    registration_tasks,
+                    timeout=self.provider_timeout_seconds,
+                )
+            except asyncio.CancelledError:
+                for task in registration_tasks:
+                    task.cancel()
+                await asyncio.gather(*registration_tasks, return_exceptions=True)
+                raise
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+                for task in pending:
+                    mark_registration_failed(registration_tasks[task])
 
-        await walk(result)
-        return result
+        registered = [
+            group for group in groups.values() if isinstance(group.get("job_ref"), str)
+        ]
+        job_refs = [str(group["job_ref"]) for group in registered]
+        snapshot = None
+        jobs_by_ref: dict[str, Any] = {}
+        wait_expired = False
+        next_poll_after = normal_poll_after if registered else 0
+        wait_actual_seconds = 0.0
+        if job_refs:
+            snapshot = await service.wait_many(
+                owner_binding=owner_binding,
+                job_refs=job_refs,
+                wait_seconds=wait_seconds,
+            )
+            jobs_by_ref = {job.job_ref: job for job in snapshot.jobs}
+            wait_expired = bool(snapshot.wait_expired)
+            next_poll_after = int(snapshot.next_poll_after_seconds)
+            wait_actual_seconds = float(snapshot.wait_actual_seconds)
+
+        ready_groups: list[dict[str, Any]] = []
+        for group in registered:
+            job_ref = str(group["job_ref"])
+            job = jobs_by_ref.get(job_ref)
+            created = bool(group.get("created", False))
+            if job is None:
+                status = "failed"
+                error_code = "TRANSCRIPTION_STATE_UNAVAILABLE"
+                per_item_poll = normal_poll_after
+            elif job.state.value == "complete":
+                status = "ready"
+                error_code = None
+                per_item_poll = 0
+                ready_groups.append(group)
+            elif job.state.value in {"failed", "cancelled"}:
+                status = "failed"
+                code = job.error_code
+                error_code = (
+                    str(code)
+                    if isinstance(code, str) and re.fullmatch(r"[A-Z0-9_]{3,64}", code)
+                    else "TRANSCRIPTION_FAILED"
+                )
+                per_item_poll = 0
+            elif job.state.value in {"queued", "dispatching"}:
+                status = "queued"
+                error_code = None
+                per_item_poll = next_poll_after
+            else:
+                status = "running"
+                error_code = None
+                per_item_poll = next_poll_after
+            for attachment in group["attachments"]:
+                attachment["transcription"] = base_transcription(
+                    status=status,
+                    created=created,
+                    cache_hit=not created,
+                    next_poll_after_seconds=per_item_poll,
+                    job_ref=job_ref,
+                    error_code=error_code,
+                )
+
+        # Reserve space for outer opaque refs and projection before selecting a
+        # single reproducible plain-text prefix per ready job.
+        ready_attachments = sum(len(group["attachments"]) for group in ready_groups)
+        base_size = len(_json(result).encode("utf-8"))
+        inline_budget = max(0, self.response_cap_bytes - base_size - 16 * 1024)
+        inline_limit = (
+            min(60_000, inline_budget // max(1, ready_attachments * 4))
+            if ready_attachments
+            else 0
+        )
+        completed: dict[str, Mapping[str, Any]] = {}
+        if inline_limit > 0 and ready_groups:
+            completed = await service.get_many(
+                owner_binding=owner_binding,
+                job_refs=[str(group["job_ref"]) for group in ready_groups],
+                limit=max(1, inline_limit),
+            )
+        for group in ready_groups:
+            job_ref = str(group["job_ref"])
+            page = completed.get(job_ref)
+            for attachment in group["attachments"]:
+                transcription = attachment["transcription"]
+                if page is None or not page.get("ready"):
+                    if inline_limit <= 0:
+                        transcription["truncated"] = True
+                        transcription["next_offset"] = 0
+                    else:
+                        transcription["status"] = "failed"
+                        transcription["error_code"] = "TRANSCRIPTION_RESULT_UNAVAILABLE"
+                    continue
+                text = page.get("text")
+                if not isinstance(text, str):
+                    transcription["status"] = "failed"
+                    transcription["error_code"] = "TRANSCRIPTION_RESULT_UNAVAILABLE"
+                    continue
+                transcription["text"] = text
+                transcription["text_included"] = True
+                next_offset = page.get("next_offset")
+                transcription["truncated"] = next_offset is not None
+                transcription["next_offset"] = (
+                    int(next_offset) if type(next_offset) is int else None
+                )
+
+        status_counts = {"ready": 0, "queued": 0, "running": 0, "failed": 0}
+        for group in groups.values():
+            for attachment in group["attachments"]:
+                transcription = attachment.get("transcription")
+                status = (
+                    transcription.get("status")
+                    if isinstance(transcription, Mapping)
+                    else None
+                )
+                if status in status_counts:
+                    status_counts[str(status)] += 1
+        status_counts["failed"] += voice_total - sum(status_counts.values())
+        summary = {
+            "total": voice_total,
+            **status_counts,
+            "cache_hits": sum(
+                1 for group in registered if not bool(group.get("created", False))
+            ),
+            "created": sum(
+                1 for group in registered if bool(group.get("created", False))
+            ),
+            "wait_expired": wait_expired,
+            "next_poll_after_seconds": (
+                next_poll_after
+                if status_counts["queued"] or status_counts["running"]
+                else normal_poll_after
+                if materialization_failures
+                else 0
+            ),
+        }
+        result["transcription_summary"] = summary
+        return result, {
+            "voice_total": voice_total,
+            "jobs_created": summary["created"],
+            "cache_hits": summary["cache_hits"],
+            "ready": summary["ready"],
+            "queued": summary["queued"],
+            "running": summary["running"],
+            "failed": summary["failed"],
+            "wait_requested_ms": wait_seconds * 1000,
+            "wait_actual_ms": round(wait_actual_seconds * 1000),
+            "wait_expired": wait_expired,
+        }
 
     @staticmethod
     def _safe_provider_error() -> SocialWorkspaceRuntimeError:
@@ -1587,6 +1763,8 @@ class SocialWorkspaceRuntime:
     async def read(self, request: SocialReadRequest, context: ToolCallContext) -> dict[str, Any]:
         if request.operation is SocialReadOperation.RESOLVE_TARGET:
             return await self.resolve(request, context)
+        read_started = asyncio.get_running_loop().time()
+        batch_telemetry: dict[str, Any] | None = None
         principal = RuntimePrincipal.from_context(context)
         platform = request.platform.value
         target_ref = request.target_ref
@@ -1627,9 +1805,20 @@ class SocialWorkspaceRuntime:
             if (
                 platform == SocialPlatform.TELEGRAM.value
                 and request.transcribe_audio
+                and request.operation
+                in {
+                    SocialReadOperation.RESOLVE_ITEM,
+                    SocialReadOperation.LIST_ITEMS,
+                    SocialReadOperation.GET_ITEM,
+                    SocialReadOperation.LIST_COMMENTS,
+                }
                 and isinstance(raw, Mapping)
             ):
-                raw = await self._enrich_telegram_audio(raw, principal=principal)
+                raw, batch_telemetry = await self._enrich_telegram_audio(
+                    raw,
+                    principal=principal,
+                    wait_seconds=request.transcription_wait_seconds,
+                )
             safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
             if not isinstance(safe, dict):
                 raise SocialWorkspaceRuntimeError("provider response must be an object")
@@ -1689,6 +1878,24 @@ class SocialWorkspaceRuntime:
             self._audit(principal, platform=platform, operation=request.operation.value,
                         outcome="succeeded", reason=audit_reason, target_ref=target_ref,
                         response_bytes=size, media_items=media_count)
+            if batch_telemetry is not None:
+                logger.info(
+                    "social_voice_transcription_batch voice_total=%s jobs_created=%s "
+                    "cache_hits=%s ready=%s queued=%s running=%s failed=%s "
+                    "wait_requested_ms=%s wait_actual_ms=%s response_duration_ms=%s "
+                    "wait_expired=%s",
+                    batch_telemetry["voice_total"],
+                    batch_telemetry["jobs_created"],
+                    batch_telemetry["cache_hits"],
+                    batch_telemetry["ready"],
+                    batch_telemetry["queued"],
+                    batch_telemetry["running"],
+                    batch_telemetry["failed"],
+                    batch_telemetry["wait_requested_ms"],
+                    batch_telemetry["wait_actual_ms"],
+                    round((asyncio.get_running_loop().time() - read_started) * 1000),
+                    batch_telemetry["wait_expired"],
+                )
             return safe
         except Exception as exc:
             if provider_attempted:
