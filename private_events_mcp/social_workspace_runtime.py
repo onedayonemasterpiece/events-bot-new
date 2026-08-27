@@ -63,6 +63,13 @@ from .tool_catalog import ToolCallContext, ToolExecutionResult
 
 logger = logging.getLogger(__name__)
 
+# One read response can contain 25 logical items with up to 10 attachments
+# each.  Registration is deliberately small-bounded, but every attachment must
+# finish one individually bounded materialization attempt before the shared
+# durable-store wait begins.
+TRANSCRIPTION_REGISTRATION_CONCURRENCY = 3
+MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ = 250
+
 
 class SocialWorkspaceRuntimeError(SocialWorkspaceValidationError):
     """A fail-closed runtime policy or durable-state check failed."""
@@ -1358,6 +1365,10 @@ class SocialWorkspaceRuntime:
                         ):
                             continue
                         voice_total += 1
+                        if voice_total > MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ:
+                            raise SocialWorkspaceRuntimeError(
+                                "provider voice batch exceeds response cap"
+                            )
                         asset_ref = attachment.get("asset_ref")
                         fingerprint = attachment.pop("binding_fingerprint", None)
                         if (
@@ -1405,7 +1416,9 @@ class SocialWorkspaceRuntime:
 
         collect(result)
 
-        registration_limit = asyncio.Semaphore(3)
+        registration_limit = asyncio.Semaphore(
+            TRANSCRIPTION_REGISTRATION_CONCURRENCY
+        )
 
         def mark_registration_failed(group: dict[str, Any]) -> None:
             nonlocal materialization_failures
@@ -1449,27 +1462,18 @@ class SocialWorkspaceRuntime:
             except Exception:  # noqa: BLE001 - one media must not fail the social read
                 mark_registration_failed(group)
 
-        registration_tasks = {
-            asyncio.create_task(register(key, group)): group
+        registration_tasks = [
+            asyncio.create_task(register(key, group))
             for key, group in groups.items()
-        }
+        ]
         if registration_tasks:
             try:
-                _done, pending = await asyncio.wait(
-                    registration_tasks,
-                    timeout=self.provider_timeout_seconds,
-                )
+                await asyncio.gather(*registration_tasks)
             except asyncio.CancelledError:
                 for task in registration_tasks:
                     task.cancel()
                 await asyncio.gather(*registration_tasks, return_exceptions=True)
                 raise
-            for task in pending:
-                task.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
-                for task in pending:
-                    mark_registration_failed(registration_tasks[task])
 
         registered = [
             group for group in groups.values() if isinstance(group.get("job_ref"), str)

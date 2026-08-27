@@ -335,9 +335,14 @@ bounded wait for the entire response. The Telegram/VK provider call retains its
 separate `social_provider_timeout_seconds`; no attachment can consume the batch
 wait before the remaining voice/audio jobs are registered/found or explicitly
 localized as a materialization failure. The complete registration stage, not
-each concurrency wave, is bounded by one provider timeout; the MCP protocol
-deadline covers provider read, that registration budget, up to 30 seconds of
-store wait and a small projection margin.
+the transcription wait, may span several concurrency waves. Each attachment's
+provider-media attempt remains individually bounded; the four batch-read MCP
+deadlines cover the initial provider read, all schema-bounded waves, up to 30
+seconds of store wait and a small projection margin. Unrelated actions keep the
+short ordinary deadline.
+An untrusted provider result above the 250-attachment schema ceiling is rejected
+before any registration task, provider-media download or durable job side
+effect, so the deadline calculation is also an enforced runtime boundary.
 Materialization is capped at three concurrent ingress operations, while remote
 dispatch remains strictly serialized.
 

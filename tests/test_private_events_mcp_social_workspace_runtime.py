@@ -30,6 +30,8 @@ from private_events_mcp.social_workspace import (
     validate_read_request,
 )
 from private_events_mcp.social_workspace_runtime import (
+    MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ,
+    TRANSCRIPTION_REGISTRATION_CONCURRENCY,
     RuntimePrincipal,
     SocialBudgetLimits,
     SocialWorkspaceRuntime,
@@ -1345,7 +1347,7 @@ async def test_protocol_allows_slow_bounded_twenty_voice_registration_stage(
 ) -> None:
     class SlowRegistrationService(DeterministicBatchAudioService):
         async def start_provider_transcription(self, **values):
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.02)
             return await super().start_provider_transcription(**values)
 
     adapter = BatchTelegramAudioReadAdapter(20)
@@ -1354,7 +1356,9 @@ async def test_protocol_allows_slow_bounded_twenty_voice_registration_stage(
         store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
         adapters={"telegram": adapter},
         encryption_key="unit-test-key-that-is-long-enough",
-        provider_timeout_seconds=0.15,
+        # Seven concurrency waves take longer than this single-item provider
+        # budget.  Every item must still be attempted before the one batch wait.
+        provider_timeout_seconds=0.05,
     )
     runtime.enable_audio_transcription(transcriber)
     call_context = scoped_context("telegram:read", "telegram:read:private")
@@ -1399,6 +1403,44 @@ async def test_protocol_allows_slow_bounded_twenty_voice_registration_stage(
     ] == 20
     assert len(transcriber.jobs) == 20
     assert transcriber.wait_calls[0][2] == 20
+
+
+@pytest.mark.asyncio
+async def test_oversized_untrusted_voice_batch_fails_before_registration(
+    tmp_path: Path,
+) -> None:
+    adapter = BatchTelegramAudioReadAdapter(
+        MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ + 1
+    )
+    transcriber = DeterministicBatchAudioService(
+        [JobState.QUEUED] * (MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ + 1)
+    )
+    runtime = SocialWorkspaceRuntime(
+        store=OAuthStateStore(str(tmp_path / "auth.sqlite")),
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    runtime.enable_audio_transcription(transcriber)
+    call_context = scoped_context("telegram:read")
+
+    with pytest.raises(
+        SocialWorkspaceRuntimeError,
+        match="provider voice batch exceeds response cap",
+    ):
+        await runtime.read(
+            _batch_request(
+                runtime,
+                call_context,
+                MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ + 1,
+                wait_seconds=25,
+            ),
+            call_context,
+        )
+
+    assert adapter.downloads == []
+    assert transcriber.jobs == {}
+    assert transcriber.registrations == []
+    assert transcriber.wait_calls == []
 
 
 @pytest.mark.asyncio
@@ -1946,7 +1988,12 @@ def test_item_resolve_descriptor_publishes_only_the_exact_link_contract(runtime)
     }
     assert "expected_target_kinds" not in schema["properties"]
     assert "Use this first" in tool.description
-    assert tool.timeout_seconds >= service.provider_timeout_seconds * 2 + 35
+    waves = (
+        MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ
+        + TRANSCRIPTION_REGISTRATION_CONCURRENCY
+        - 1
+    ) // TRANSCRIPTION_REGISTRATION_CONCURRENCY
+    assert tool.timeout_seconds >= service.provider_timeout_seconds * (1 + waves) + 35
 
 
 def test_only_four_read_actions_advertise_batch_wait_and_summary(runtime) -> None:

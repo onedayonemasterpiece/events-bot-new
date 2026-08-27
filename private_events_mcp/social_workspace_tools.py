@@ -50,7 +50,11 @@ from .social_workspace import (
     validate_read_request,
     validate_status_request,
 )
-from .social_workspace_runtime import SocialWorkspaceRuntime
+from .social_workspace_runtime import (
+    MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ,
+    TRANSCRIPTION_REGISTRATION_CONCURRENCY,
+    SocialWorkspaceRuntime,
+)
 from .tool_catalog import ToolCallContext, ToolExecutionError, ToolSpec
 
 _PLATFORMS = ("telegram", "vk")
@@ -622,6 +626,20 @@ def build_social_workspace_tools(
             runtime.provider_timeout_seconds * 2.0 + 35.0,
         ),
     }
+    registration_waves = (
+        MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ
+        + TRANSCRIPTION_REGISTRATION_CONCURRENCY
+        - 1
+    ) // TRANSCRIPTION_REGISTRATION_CONCURRENCY
+    batch_read_common = {
+        **common,
+        # Initial provider read + every individually bounded registration wave
+        # + max 30-second store wait + projection/serialization margin.
+        "timeout_seconds": max(
+            5.0,
+            runtime.provider_timeout_seconds * (1 + registration_waves) + 35.0,
+        ),
+    }
     specs = [
         ToolSpec("social_capabilities", "Social capabilities",
                  "Inspect the capability-gated provider-neutral social surface.",
@@ -636,7 +654,7 @@ def build_social_workspace_tools(
                  "Use this first when the prompt contains an exact VK or Telegram message URL; resolve that canonical URL directly to bound item and source-target references instead of searching or listing a feed.",
                  read_schema(SocialReadOperation.RESOLVE_ITEM),
                  SOCIAL_WORKSPACE_ITEM_RESOLVE_OUTPUT_SCHEMA, handler=read,
-                 scope_selector=read_scope, **common),
+                 scope_selector=read_scope, **batch_read_common),
         ToolSpec("social_targets_search", "Search social targets",
                  "Search provider targets without exposing provider-native identifiers.",
                  read_schema(SocialReadOperation.SEARCH_TARGETS),
@@ -661,19 +679,19 @@ def build_social_workspace_tools(
                  "Read a bounded feed through an opaque target reference.",
                  read_schema(SocialReadOperation.LIST_ITEMS),
                  SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA, handler=read,
-                 scope_selector=read_scope, **common),
+                 scope_selector=read_scope, **batch_read_common),
         ToolSpec("social_content_item", "Read social item",
                  "Read one item through a bound opaque item reference.",
                  read_schema(SocialReadOperation.GET_ITEM),
                  SOCIAL_WORKSPACE_ITEM_GET_OUTPUT_SCHEMA, handler=read,
-                 scope_selector=read_scope, **common),
+                 scope_selector=read_scope, **batch_read_common),
         ToolSpec("social_content_thread", "Read social thread",
                  "Read comments or reaction summaries without native identifiers.",
                  thread_schema, _combined_output(
                      SOCIAL_WORKSPACE_THREAD_OUTPUT_SCHEMA,
                      SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
                  ),
-                 handler=read, scope_selector=read_scope, **common),
+                 handler=read, scope_selector=read_scope, **batch_read_common),
         ToolSpec("social_comment_hints_list", "List VK comment hints",
                  "Read a bounded recent VK comment/mention notification page as untrusted investigation hints.",
                  read_schema(SocialReadOperation.LIST_NOTIFICATIONS),
