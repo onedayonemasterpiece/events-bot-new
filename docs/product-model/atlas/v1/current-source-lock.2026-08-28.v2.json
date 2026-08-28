@@ -1,0 +1,193 @@
+{
+  "schema_version": "lovekgd-product-atlas-current-source-lock.v2",
+  "lock_id": "product-atlas-recovery-2026-08-28",
+  "generated_at": "2026-08-28",
+  "supersedes": {
+    "path": "docs/product-model/atlas/v1/source-lock.v1.json",
+    "blob_sha": "9088a084edbe337f99b3716667da5134848f34a1",
+    "scope": "currentness and post-2026-08-25 UI/product deltas only"
+  },
+  "effective_model": {
+    "stable_semantic_base": "docs/product-model/atlas/v1/*.v1.json",
+    "current_delta": "docs/product-model/atlas/v1/product-delta.2026-08-28.v2.json",
+    "visualization_handoff": "docs/product-model/atlas/v1/visualization-handoff.2026-08-28.v1.json",
+    "authority_rule": "base entities remain stable; this lock and delta supersede only changed facts and statuses"
+  },
+  "sources": [
+    {
+      "id": "src.owner-parallel-product-atlas-decision-20260828",
+      "repository": "onedayonemasterpiece/events-bot-new",
+      "repository_sha": "product/product-atlas-git-sot-v1-20260825",
+      "path": "docs/product-model/atlas/v1/recovery-2026-08-28.md",
+      "blob_sha": "59c084fb6a92c42d1cc7d44cd743efe40ff1f02d",
+      "date": "2026-08-28",
+      "authority_type": "owner_decision_record",
+      "proves": "Product visualization may proceed in parallel in a separate Penpot account while unfinished design-system work remains explicit.",
+      "status": "current"
+    },
+    {
+      "id": "src.product-main-20260828",
+      "repository": "onedayonemasterpiece/events-bot-new",
+      "ref": "main",
+      "repository_sha": "8710e56fa3685f6c30a90cd062d532dce0348cce",
+      "date": "2026-08-27",
+      "authority_type": "current_product_repository",
+      "proves": "Latest merged product, operations, release and runtime documentation available before this recovery.",
+      "status": "current"
+    },
+    {
+      "id": "src.product-atlas-v1-base",
+      "repository": "onedayonemasterpiece/events-bot-new",
+      "pull_request": 574,
+      "ref": "product/product-atlas-git-sot-v1-20260825",
+      "repository_sha_before_recovery": "00163f978082c1f5508dbcdd39fae5e2ebf87e07",
+      "path": "docs/product-model/atlas/v1/",
+      "date": "2026-08-25",
+      "authority_type": "stable_product_semantic_base",
+      "proves": "Stable IDs and the v1 product registries reconstructed from the earlier corpus.",
+      "status": "partially_current"
+    },
+    {
+      "id": "src.corrected-semantic-ui-base",
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "pull_request": 50,
+      "ref": "feature/global-archetype-sot-v1-corrective-20260824-r4",
+      "repository_sha": "9b8043f3bdb86fab4eee00bf94b0f10d4f029c50",
+      "manifest_sha256": "ac2cb64bbccb113dd7c81cdb8caec953d3d5e2f56ea10a1f54914d7a0ed46819",
+      "date": "2026-08-24",
+      "authority_type": "corrected_semantic_origin",
+      "proves": "Corrected semantic origin for 17 archetype contracts and the route/component graph.",
+      "status": "historical_base"
+    },
+    {
+      "id": "src.as-is-round-trip-baseline-20260825",
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "pull_request": 52,
+      "ref": "feature/round-trip-reconstruction-20260824",
+      "repository_sha": "b86bab3e91511b3d4bd7d953b22bceb847f02a51",
+      "path": "catalog/product-atlas-linkage-handoff/v1/design-system-linkage.v1.json",
+      "blob_sha": "6c5fe775e2bcc7c767a9a1c3509b61f1feafce77",
+      "date": "2026-08-25",
+      "authority_type": "source_proven_as_is_ui_baseline",
+      "proves": "17 archetypes, 34 boards, 97 regions, 97 patterns, 75 components, 180 states and zero orphan design IDs.",
+      "status": "source_proven_baseline",
+      "coverage": {
+        "archetypes": 17,
+        "boards": 34,
+        "regions": 97,
+        "patterns": 97,
+        "components": 75,
+        "states": 180,
+        "orphan_design_ids": 0
+      }
+    },
+    {
+      "id": "src.owner-review-delta-20260828",
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "pull_request": 53,
+      "ref": "fix/penpot-owner-comments-20260826",
+      "repository_sha": "47d0fef53c33200492d92f6a086d9b8813fe187e",
+      "path": "docs/reviews/penpot-owner-comments-resolution-20260826.md",
+      "blob_sha": "8157e074a882fdc03a7db2a043078870d75a2a88",
+      "date": "2026-08-28",
+      "authority_type": "active_owner_review_delta",
+      "proves": "Current source-grounded owner-review corrections, readbacks and remaining processed:NO gates.",
+      "status": "active_in_progress"
+    },
+    {
+      "id": "src.astro-owner-audit-candidate-20260828",
+      "repository": "onedayonemasterpiece/events-bot-new",
+      "pull_request": 596,
+      "ref": "fix/audio-audit-ui-20260828",
+      "repository_sha": "49c351873d40a2ea55f0a32837c7376e344d9c17",
+      "date": "2026-08-28",
+      "authority_type": "active_implementation_candidate",
+      "proves": "ListingDiscoveryRail@6, Weekend Floating Island, exact seven-artifact collection, Home HeroTalk and mobile rail media corrections exist as a Draft candidate.",
+      "status": "active_candidate",
+      "evidence": [
+        {
+          "path": "site/src/components/listings/ListingDiscoveryRail.astro",
+          "blob_sha": "beb7f6c650d69f2b9eec245a004ff264d01010e9"
+        },
+        {
+          "path": "docs/features/static-site-pages/artifacts/collection-1-inventory-2026-08-28.md",
+          "blob_sha": "3df5587c6c5766c5a3e18c1d6202cfb68795d895"
+        }
+      ]
+    },
+    {
+      "id": "src.agent-assisted-discovery-hypothesis-20260826",
+      "repository": "onedayonemasterpiece/events-bot-new",
+      "pull_request": 587,
+      "ref": "docs/agent-assisted-event-discovery-20260826",
+      "repository_sha": "f78e7c5974b4192bddf9eea901ee6d8b57f51560",
+      "date": "2026-08-26",
+      "authority_type": "product_research_candidate",
+      "proves": "Canonical location data and rescue-first agent-assisted event discovery are documented hypotheses, not production truth.",
+      "status": "research_only"
+    },
+    {
+      "id": "src.design-system-planning-20260826",
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "pull_request": 39,
+      "ref": "docs/design-system-progress-checklist-20260820",
+      "repository_sha": "2923eeb474f2c91189be3c3a2ba72f0db9e4ca89",
+      "date": "2026-08-26",
+      "authority_type": "planning_and_entry_gates",
+      "proves": "Product Atlas, post-baseline audit and agent-assisted discovery planning boundaries.",
+      "status": "partially_current"
+    },
+    {
+      "id": "src.ui-product-linkage-v1-before-recovery",
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "pull_request": 51,
+      "ref": "product/product-atlas-ui-linkage-v1-20260825",
+      "repository_sha_before_recovery": "42363adab9f4751caa8fb4613f835f439bdb9510",
+      "date": "2026-08-25",
+      "authority_type": "foreign_key_projection_base",
+      "proves": "The previous 17-archetype product foreign-key projection before the AS-IS and owner-review advances.",
+      "status": "superseded_in_changed_scope"
+    }
+  ],
+  "layering": [
+    {
+      "order": 1,
+      "layer": "product_semantics",
+      "source_id": "src.product-atlas-v1-base",
+      "rule": "stable IDs remain unless explicitly superseded"
+    },
+    {
+      "order": 2,
+      "layer": "as_is_ui_baseline",
+      "source_id": "src.as-is-round-trip-baseline-20260825",
+      "rule": "site-as-is visual substrate; no promotion or outcome claim"
+    },
+    {
+      "order": 3,
+      "layer": "active_owner_review",
+      "source_id": "src.owner-review-delta-20260828",
+      "rule": "show separately until processed:YES and accepted evidence"
+    },
+    {
+      "order": 4,
+      "layer": "active_astro_candidate",
+      "source_id": "src.astro-owner-audit-candidate-20260828",
+      "rule": "candidate delivery evidence; not merged/deployed/accepted"
+    },
+    {
+      "order": 5,
+      "layer": "product_hypotheses",
+      "source_id": "src.agent-assisted-discovery-hypothesis-20260826",
+      "rule": "render as hypothesis only"
+    }
+  ],
+  "penpot_target": {
+    "account": null,
+    "file_id": null,
+    "page_ids": [],
+    "binding_status": "binding_pending",
+    "reuse_existing_design_system_ids": false,
+    "read_calls": 0,
+    "write_calls": 0
+  }
+}
