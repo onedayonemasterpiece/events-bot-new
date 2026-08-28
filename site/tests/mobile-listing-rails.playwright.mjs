@@ -213,8 +213,8 @@ for (const width of [320, 390]) {
   const context = await contextFor(390);
   const page = await context.newPage();
   for (const canary of [
-    { route:'/date-2026-07-24/', id:'5296', width:140, reason:'single_safe_visual_landscape_5x4', mode:'visual_only' },
-    { route:'/vyhodnye/', id:'6939', width:90, reason:'reviewed_multi_visual_portrait_4x5', mode:'visual_only' },
+    { route:'/date-2026-07-24/', id:'5296', width:140, fit:'cover', reason:'single_safe_visual_landscape_5x4', mode:'visual_only' },
+    { route:'/vyhodnye/', id:'6939', width:76, fit:'contain', reason:'safe_visual_authored_geometry', mode:'visual_only' },
   ]) {
     await page.goto(`${baseUrl}${canary.route}`, { waitUntil:'domcontentloaded' });
     const row = page.locator(`[data-mobile-listing-row][data-event-id="${canary.id}"]`);
@@ -228,7 +228,7 @@ for (const width of [320, 390]) {
     }));
     closeEnough(media.width, canary.width);
     closeEnough(media.height, 112);
-    assert.equal(media.fit, 'cover');
+    assert.equal(media.fit, canary.fit);
     assert.equal(media.reason, canary.reason);
     assert.equal(media.mode, canary.mode);
   }

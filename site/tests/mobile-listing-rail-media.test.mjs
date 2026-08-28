@@ -98,6 +98,22 @@ test('an event-level OCR marker keeps a source-reviewed portrait fail-closed', (
   );
   assert.equal(result.fit, 'contain');
   assert.equal(result.reason, 'safe_visual_authored_geometry');
+  assert.equal(result.ratio, 828 / 1227);
+  assert.equal(result.width, 76);
+});
+
+test('contain geometry uses the physical asset ratio rather than a rejected selector crop window', () => {
+  const protectedPhoto = asset({ width:828, height:1227 });
+  const result = resolveMobileListingRailMedia(
+    { image_text_mode:'ocr_text', image_assets:[protectedPhoto] },
+    selected(protectedPhoto, { ratio:5 / 4, mode:'visual-crop', adaptiveCrop:true }),
+  );
+  assert.deepEqual(result, {
+    fit:'contain',
+    ratio:828 / 1227,
+    width:76,
+    reason:'safe_visual_authored_geometry',
+  });
 });
 
 test('generic crop review cannot override an event-level OCR protection marker', () => {

@@ -1,0 +1,40 @@
+---
+import EventLayout from '../../../../layouts/EventLayout.astro';
+import MobileListingRailSurface from '../../../../components/listings/MobileListingRailSurface.astro';
+import previewEvents from '../../../../data/preview-events.json';
+import type { PreviewEvent } from '../../../../lib/types';
+import { absoluteUrl } from '../../../../lib/events';
+
+const fixtureIds = [5374, 6936, 6652] as const;
+const events = fixtureIds.map((id) => (
+  (previewEvents.events as PreviewEvent[]).find((event) => event.id === id)
+));
+if (events.some((event) => !event)) {
+  throw new Error('mobile_listing_rail_media_fixture_event_missing');
+}
+const fixtureEvents = events as PreviewEvent[];
+const title = 'Mobile Rail · factual media geometry';
+const description = 'Real-data fixture for the production MobileListingRailSurface cover and authored-contain branches.';
+const canonicalUrl = absoluteUrl('/lab/design-system/mobile-listing-rail-media/');
+---
+<EventLayout title={title} description={description} canonicalUrl={canonicalUrl} structuredData={[]}>
+  <main id="main" data-mobile-rail-media-fixture data-fixture-events={fixtureIds.join(',')}>
+    <aside class="fixture-note">
+      <strong>Откройте в mobile viewport ≤ 720px.</strong>
+      <span><code>5374</code> и source-reviewed <code>6652</code> — crop-safe cover; <code>6936</code> — authored-ratio contain без внутренних полей.</span>
+    </aside>
+    <MobileListingRailSurface
+      sections={[{ id:'media-parity', events:fixtureEvents }]}
+      occurrenceMode="per-date"
+      title="Медиа в Rail"
+      meta="3 реальных события"
+      feedTitle="Cover и authored contain"
+      feedMeta="production component · source snapshot"
+      current="popular"
+    />
+  </main>
+</EventLayout>
+
+<style>
+  .fixture-note{width:min(720px,calc(100% - 24px));margin:84px auto 16px;padding:14px 16px;display:grid;gap:5px;border:1px solid rgba(121,48,20,.16);border-radius:14px;background:#fffaf2;color:#2d211b;font:600 14px/1.4 Inter,system-ui}.fixture-note strong{color:#a54821}.fixture-note code{font-weight:850}@media(max-width:720px){.fixture-note{margin-top:8px}}
+</style>
