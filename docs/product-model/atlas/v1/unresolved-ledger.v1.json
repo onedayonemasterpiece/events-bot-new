@@ -31,7 +31,7 @@
       "status": "partial",
       "title": "Public static root remains NO-GO",
       "definition": "Immutable candidates and default-off atomic publisher exist, but URL lifecycle, critical data progression, live ALB/SWS/DNS, rollback and full acceptance gates remain open.",
-      "affected_entity_ids": ["capability.current-event-catalog", "capability.listing-discovery", "capability.event-detail", "operator-job.review-release-candidate"],
+      "affected_entity_ids": ["capability.current-event-catalog", "capability.listing-discovery", "capability.event-detail", "operator-job.review-static-candidate"],
       "source_refs": ["src.static-release-plan", "src.acceptance-inventory"],
       "resolution_gate": "All P0 release gates and accepted root evidence on an exact main-reachable SHA.",
       "prohibited_shortcut": "Call a secret candidate or checked artifact a production root release."
@@ -131,7 +131,7 @@
       "status": "not_applicable",
       "title": "No active first-party action-map campaign",
       "definition": "The action-map contract is accepted, but active capture is optional, default-off and not required to materialize Product Atlas Git SoT.",
-      "affected_entity_ids": ["capability.product-measurement-and-evidence", "mq.ui-affordance-diagnostics"],
+      "affected_entity_ids": ["capability.product-evidence", "mq.ui-affordance-diagnostics"],
       "source_refs": ["src.first-party-action-map", "src.analytics-contract", "src.static-release-plan"],
       "resolution_gate": "Only a registered question and decision use may justify AM-1 through AM-4; otherwise the correct state remains off/not applicable.",
       "prohibited_shortcut": "Treat absence of an active campaign as a product failure or enable permanent clickstream collection."
