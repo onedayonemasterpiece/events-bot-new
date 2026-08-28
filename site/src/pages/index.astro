@@ -34,6 +34,7 @@ for (const event of [...popular, ...fallback]) {
   familyIds.forEach((id) => offeredFamilyIds.add(id));
   if (feed.length >= 30) break;
 }
+const heroEvent = feed[0] || null;
 const title = SITE_NAME;
 const description = 'Афиша Калининграда без шума: полезная статическая подборка событий, быстрые маршруты по датам и локальная персонализация.';
 ---
@@ -53,7 +54,7 @@ const description = 'Афиша Калининграда без шума: пол
   >
     <main id="main" class="home-page" data-home-page data-home-static-fallback-count={feed.length}>
       <div class="page-shell home-page__shell">
-        <HomeHeroTalk events={feed.slice(0, 3)} version={2} mode="photo-mosaic" />
+        <HomeHeroTalk event={heroEvent} />
         <HomeQuickNav />
         <HomeColdStartFeed events={feed} />
       </div>

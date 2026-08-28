@@ -6,8 +6,6 @@ import CopyAction from '../../../components/design-system/CopyAction.astro';
 import Field from '../../../components/design-system/Field.astro';
 import StatePanel from '../../../components/design-system/StatePanel.astro';
 import EventCard from '../../../components/EventCard.astro';
-import HomeHeroTalk from '../../../components/HomeHeroTalk.astro';
-import HomeHeroTalkLegacy from '../../../components/HomeHeroTalkLegacy.astro';
 import CalendarLink from '../../../components/CalendarLink.astro';
 import EventCtaPanel from '../../../components/EventCtaPanel.astro';
 import EventFacts from '../../../components/EventFacts.astro';
@@ -38,10 +36,6 @@ const baseEvent = events.find((event) => event.id === 5878) || events[0];
 const photoEvent = events.find((event) => event.image_media_role === 'event_photo')
   || events.find((event) => event.image_text_mode === 'visual_only')
   || baseEvent;
-const heroTalkEvents = [
-  photoEvent,
-  ...events.filter((event) => event.id !== photoEvent.id && Boolean(event.image_url)),
-].slice(0, 3);
 const medallionEvent = events.find((event) => event.pushkin_card) || baseEvent;
 const club = getInterestClubs()[0];
 const mediaAssets = photoEvent.image_assets || [];
@@ -279,16 +273,6 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
           </div>
 
           <article class="ds-component-block">
-            <div class="ds-component-block__head"><div><h3>Hero-talk</h3><p>v2 — общий renderer с typed fragments и Photo Mosaic; статический event-feature skeleton оставлен только как deprecated comparison.</p></div><Badge tone="warning">Candidate</Badge></div>
-            <div class="ds-component-stage ds-component-stage--wide">
-              <p class="eyebrow">v2 · mode=photo-mosaic · production Home candidate</p>
-              <HomeHeroTalk events={heroTalkEvents} version={2} mode="photo-mosaic" headingTag="h3" />
-              <p class="eyebrow">v1 · static event-feature · deprecated</p>
-              <HomeHeroTalkLegacy event={photoEvent} headingTag="h3" />
-            </div>
-          </article>
-
-          <article class="ds-component-block">
             <div class="ds-component-block__head"><div><h3>Hero события</h3><p>Актуальный default; все media-композиции вынесены в отдельный hero lab.</p></div><Badge tone="success">Approved</Badge></div>
             <div class="ds-component-stage ds-component-stage--wide">
               <EventHero event={photoEvent} headingTag="h3" />
@@ -389,8 +373,6 @@ const canonicalUrl = absoluteUrl('/lab/design-system/');
                 <tr data-ds-component="Field" data-ds-version="1"><td>Field</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/Field.astro</code></td><td>default/focus/error/disabled</td></tr>
                 <tr data-ds-component="StatePanel" data-ds-version="1"><td>StatePanel</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>design-system/StatePanel.astro</code></td><td>empty/loading/error/stale/success/offline</td></tr>
                 <tr data-ds-component="EventHero" data-ds-version="1"><td>EventHero</td><td><code>v1</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventHero.astro</code></td><td><a href={withBase('/lab/hero/')}>hero lab</a></td></tr>
-                <tr data-ds-component="HeroTalk" data-ds-version="2"><td>HeroTalk · Photo Mosaic</td><td><code>v2</code></td><td><Badge tone="warning">candidate</Badge></td><td><code>components/HomeHeroTalk.astro</code></td><td>Home production candidate: typed semantic fragments, exact event media tiles, atomic scene switch and no-JS/reduced-motion first scene</td></tr>
-                <tr data-ds-component="HeroTalk" data-ds-version="1" data-ds-replaced-by="HeroTalk@2"><td>HomeHeroTalk · static event-feature</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/HomeHeroTalkLegacy.astro</code></td><td>comparison only; the owner rejected this static legacy hero as the Home product mechanism</td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="2"><td>EventCard · split-actions</td><td><code>v2</code></td><td><Badge tone="success">approved</Badge></td><td><code>components/EventCard.astro</code></td><td>canonical card used directly by event-detail continuation and Popular large mode</td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="3" data-ds-replaced-by="EventCard@2"><td>EventCard · listing-proof fork</td><td><code>v3</code></td><td><Badge tone="danger">rejected</Badge></td><td><code>removed</code></td><td>rejected: branch-local variant imitated rather than reused the canonical split-actions card</td></tr>
                 <tr data-ds-component="EventCard" data-ds-version="1" data-ds-replaced-by="EventCard@2"><td>EventCard · overlay-controls</td><td><code>v1</code></td><td><Badge tone="danger">deprecated</Badge></td><td><code>components/EventCard.astro</code></td><td>replaced by EventCard v2; lab-only</td></tr>

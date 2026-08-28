@@ -79,21 +79,6 @@ shelf. `ListingDiscoveryRail@6` is the shared implementation of that contract:
 The same version and surface axes must be represented by the native Penpot
 component. A page-local rounded copy is not compatible evidence.
 
-## Owner-audit correction: HeroTalk v2 Photo Mosaic
-
-`HomeHeroTalk.astro` now owns the shared `HeroTalk@2` renderer with the explicit
-`mode=photo-mosaic` contract. The Home route passes up to three exact catalog
-events; the renderer derives only factual title/date/venue/admission text and
-exact event media from those fixtures. A `5×4` tile projection, semantic text
-fragments, atomic copy/CTA/media transitions, pause-on-interaction and a full
-static/reduced-motion first scene form the candidate contract.
-
-The rejected static event-feature implementation is preserved as
-`HomeHeroTalkLegacy.astro`, registered as deprecated `HeroTalk@1` with
-`data-ds-replaced-by="HeroTalk@2"`, and is forbidden in production consumers.
-Penpot must materialize v2 as the native master and may retain v1 only as an
-explicit deprecated comparison.
-
 ## Canonical documentation
 
 The normative design-system architecture lives in `onedayonemasterpiece/lovekgd-design-system`:

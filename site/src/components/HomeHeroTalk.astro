@@ -3,252 +3,98 @@ import type { PreviewEvent } from '../lib/types';
 import { displayDateTimeWithWeekday, eventAdmissionLabel, eventHref, withBase } from '../lib/events';
 import { eventImageUrl } from '../lib/assets';
 
-interface Props {
-  events?: PreviewEvent[];
-  version?: 2;
-  mode?: 'photo-mosaic';
-  headingTag?: 'h1' | 'h2' | 'h3';
-}
-
-const { events = [], version = 2, mode = 'photo-mosaic', headingTag = 'h1' } = Astro.props;
-const Heading = headingTag;
-const eligibleEvents = events
-  .filter((event) => Boolean(eventImageUrl(event.image_url)))
-  .sort((a, b) => Number(b.image_media_role === 'event_photo' || b.image_text_mode === 'visual_only') - Number(a.image_media_role === 'event_photo' || a.image_text_mode === 'visual_only'))
-  .slice(0, 3);
-
-const sceneFragments = [
-  ['Натюрморт.', 'Но со страстями.'],
-  ['Ещё один', 'вариант.'],
-  ['И ещё', 'одно событие.'],
-];
-const scenes = eligibleEvents.map((event, index) => ({
-  id: String(event.id),
-  eyebrow: 'Сейчас в афише',
-  fragments: sceneFragments[index] || ['Можно', 'начать отсюда.'],
-  details: [event.title, displayDateTimeWithWeekday(event), event.venue_name || event.city, eventAdmissionLabel(event)].filter(Boolean).join(' · '),
-  href: eventHref(event),
-  cta: 'Открыть событие',
-  image: eventImageUrl(event.image_url),
-  alt: event.image_alt || `Афиша события «${event.title}»`,
-  focalY: event.focal_point?.y == null ? 50 : Math.round(Math.max(0, Math.min(1, event.focal_point.y)) * 100),
-}));
-const fallbackScene = {
-  id: 'fallback',
-  eyebrow: 'Hero-talk · Афиша',
-  fragments: ['Показываем', 'сохранённую афишу.'],
-  details: 'События остаются доступны без входа и внешних сервисов.',
-  href: withBase('/segodnya/'),
-  cta: 'Что сегодня',
-  image: null,
-  alt: '',
-  focalY: 50,
-};
-const firstScene = scenes[0] || fallbackScene;
-const scenePayload = scenes.length ? scenes : [fallbackScene];
-const tiles = Array.from({ length: 20 }, (_, index) => ({
-  index,
-  x: index % 5,
-  y: Math.floor(index / 5),
-}));
+interface Props { event: PreviewEvent | null; }
+const { event } = Astro.props;
+const href = event ? eventHref(event) : withBase('/segodnya/');
+const image = event ? eventImageUrl(event.image_url) : null;
+const fit = event?.image_text_mode === 'visual_only' ? 'cover' : 'contain';
+const focalY = event?.focal_point?.y == null ? 50 : Math.round(Math.max(0, Math.min(1, event.focal_point.y)) * 100);
 ---
 
-<section
-  class="hero-talk hero-talk--photo-mosaic"
-  data-hero-talk
-  data-ds-component="HeroTalk"
-  data-ds-version={version}
-  data-hero-talk-version={version}
-  data-hero-talk-mode={mode}
-  data-hero-talk-scenes={JSON.stringify(scenePayload)}
-  aria-labelledby="hero-talk-title"
->
-  <div class="hero-talk__copy">
-    <p class="hero-talk__eyebrow" data-hero-talk-eyebrow>{firstScene.eyebrow}</p>
-    <Heading id="hero-talk-title" class="hero-talk__title" data-hero-talk-title>
-      {firstScene.fragments.map((fragment, index) => (
-        <span class="hero-talk__fragment" data-hero-talk-fragment style={`--fragment-index:${index}`}>{fragment} </span>
-      ))}
-      <span class="hero-talk__cursor" data-hero-talk-cursor aria-hidden="true">_</span>
-    </Heading>
-    <p class="hero-talk__details" data-hero-talk-details aria-live="polite">{firstScene.details}</p>
-    <div class="hero-talk__actions">
-      <a class="cta-button" data-hero-talk-cta href={firstScene.href}>{firstScene.cta}</a>
-      <div class="hero-talk__scene-controls" aria-label="Сцены Hero-talk">
-        <button type="button" data-hero-talk-prev aria-label="Предыдущая сцена">←</button>
-        <span data-hero-talk-position>{`1 / ${scenePayload.length}`}</span>
-        <button type="button" data-hero-talk-next aria-label="Следующая сцена">→</button>
-      </div>
+<section class="home-hero-talk" data-home-hero-talk aria-labelledby="home-hero-title">
+  <div class="home-hero-talk__copy">
+    <p class="eyebrow">Полюбить Калининград · Анонсы</p>
+    <h1 id="home-hero-title">Куда пойти — без лишнего шума</h1>
+    <p class="home-hero-talk__lead">Актуальные события города и области. Начните с общего выбора: лента уже полезна без входа и постепенно меняется только по вашим локальным оценкам.</p>
+    <div class="home-hero-talk__actions">
+      <a class="cta-button" href={withBase('/segodnya/')}>Что сегодня</a>
+      <a class="secondary-button" href={withBase('/poisk/')}>Найти событие</a>
     </div>
   </div>
-
-  <a
-    class:list={["hero-talk__mosaic", !firstScene.image && "hero-talk__mosaic--empty"]}
-    data-hero-talk-mosaic
-    href={firstScene.href}
-    aria-label={firstScene.alt || 'Открыть афишу'}
-    style={firstScene.image ? `--hero-talk-image:url("${firstScene.image}");--hero-talk-focal-y:${firstScene.focalY}%` : undefined}
-  >
-    {tiles.map(({ index, x, y }) => (
-      <span
-        class="hero-talk__tile"
-        data-hero-talk-tile
-        aria-hidden="true"
-        style={`--tile-index:${index};--tile-x:${x};--tile-y:${y}`}
-      ></span>
-    ))}
-    <span class="hero-talk__mosaic-fallback" data-hero-talk-fallback aria-hidden="true">Анонсы</span>
-  </a>
+  {event && (
+    <a class="home-hero-talk__event" href={href} aria-label={`Открыть событие: ${event.title}`}>
+      <span class={`home-hero-talk__media home-hero-talk__media--${fit}`} style={`--home-hero-focal-y:${focalY}%`}>
+        {image ? <img src={image} alt={event.image_alt || `Афиша события «${event.title}»`} loading="eager" decoding="async" /> : <span aria-hidden="true">Анонсы</span>}
+      </span>
+      <span class="home-hero-talk__event-copy">
+        <small>Ближайший заметный план</small>
+        <strong>{event.title}</strong>
+        <span>{displayDateTimeWithWeekday(event)}</span>
+        <span>{[event.venue_name || event.city, eventAdmissionLabel(event)].filter(Boolean).join(' · ')}</span>
+      </span>
+    </a>
+  )}
 </section>
 
-<script>
-  type HeroTalkScene = {
-    id: string;
-    eyebrow: string;
-    fragments: string[];
-    details: string;
-    href: string;
-    cta: string;
-    image: string | null;
-    alt: string;
-    focalY: number;
-  };
-
-  const roots = Array.from(document.querySelectorAll<HTMLElement>('[data-hero-talk]'));
-  for (const root of roots) {
-    if (root.dataset.heroTalkBound === 'true') continue;
-    root.dataset.heroTalkBound = 'true';
-    let scenes: HeroTalkScene[] = [];
-    try { scenes = JSON.parse(root.dataset.heroTalkScenes || '[]'); } catch {}
-    if (!scenes.length) continue;
-
-    const eyebrow = root.querySelector<HTMLElement>('[data-hero-talk-eyebrow]');
-    const title = root.querySelector<HTMLElement>('[data-hero-talk-title]');
-    const details = root.querySelector<HTMLElement>('[data-hero-talk-details]');
-    const cta = root.querySelector<HTMLAnchorElement>('[data-hero-talk-cta]');
-    const mosaic = root.querySelector<HTMLAnchorElement>('[data-hero-talk-mosaic]');
-    const position = root.querySelector<HTMLElement>('[data-hero-talk-position]');
-    const previous = root.querySelector<HTMLButtonElement>('[data-hero-talk-prev]');
-    const next = root.querySelector<HTMLButtonElement>('[data-hero-talk-next]');
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let index = 0;
-    let timer = 0;
-    let paused = reducedMotion.matches || scenes.length < 2;
-
-    const schedule = () => {
-      window.clearTimeout(timer);
-      root.classList.toggle('is-running', !paused);
-      if (!paused) timer = window.setTimeout(() => show(index + 1), 7200);
-    };
-
-    const render = (scene: HeroTalkScene) => {
-      if (eyebrow) eyebrow.textContent = scene.eyebrow;
-      if (title) {
-        title.querySelectorAll('[data-hero-talk-fragment]').forEach((node) => node.remove());
-        const cursor = title.querySelector('[data-hero-talk-cursor]');
-        scene.fragments.forEach((fragment, fragmentIndex) => {
-          const span = document.createElement('span');
-          span.className = 'hero-talk__fragment';
-          span.dataset.heroTalkFragment = '';
-          span.style.setProperty('--fragment-index', String(fragmentIndex));
-          span.textContent = `${fragment} `;
-          title.insertBefore(span, cursor);
-        });
-      }
-      if (details) details.textContent = scene.details;
-      if (cta) { cta.href = scene.href; cta.textContent = scene.cta; }
-      if (mosaic) {
-        mosaic.href = scene.href;
-        mosaic.setAttribute('aria-label', scene.alt || 'Открыть афишу');
-        mosaic.classList.toggle('hero-talk__mosaic--empty', !scene.image);
-        if (scene.image) mosaic.style.setProperty('--hero-talk-image', `url("${scene.image}")`);
-        else mosaic.style.removeProperty('--hero-talk-image');
-        mosaic.style.setProperty('--hero-talk-focal-y', `${scene.focalY}%`);
-      }
-      if (position) position.textContent = `${index + 1} / ${scenes.length}`;
-      root.dataset.heroTalkSceneId = scene.id;
-    };
-
-    const show = (nextIndex: number, stopAfter = false) => {
-      window.clearTimeout(timer);
-      index = (nextIndex + scenes.length) % scenes.length;
-      root.classList.remove('is-entering');
-      root.classList.add('is-exiting');
-      window.setTimeout(() => {
-        render(scenes[index]);
-        root.classList.remove('is-exiting');
-        root.classList.add('is-entering');
-        window.setTimeout(() => root.classList.remove('is-entering'), 560);
-        if (stopAfter) paused = true;
-        schedule();
-      }, reducedMotion.matches ? 0 : 260);
-    };
-
-    const pause = () => { paused = true; schedule(); };
-    root.addEventListener('pointerenter', pause, { once: true });
-    root.addEventListener('focusin', pause, { once: true });
-    root.addEventListener('pointerdown', pause, { once: true });
-    previous?.addEventListener('click', () => show(index - 1, true));
-    next?.addEventListener('click', () => show(index + 1, true));
-    reducedMotion.addEventListener('change', () => { paused = reducedMotion.matches || scenes.length < 2; schedule(); });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { window.clearTimeout(timer); root.classList.remove('is-running'); }
-      else schedule();
-    });
-    root.dataset.heroTalkSceneId = scenes[0].id;
-    schedule();
-  }
-</script>
-
 <style>
-  .hero-talk {
-    position: relative;
-    min-height: clamp(360px, 42vw, 520px);
+  .home-hero-talk {
     display: grid;
-    grid-template-columns: minmax(0, .88fr) minmax(360px, 1.12fr);
-    gap: clamp(1.25rem, 4vw, 4rem);
-    align-items: center;
+    grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr);
+    gap: clamp(1rem, 3vw, 2.4rem);
+    align-items: stretch;
+    padding: clamp(1.1rem, 4vw, 3rem);
+    border: 1px solid rgba(121,48,20,.13);
+    border-radius: clamp(24px, 4vw, 42px);
+    background: linear-gradient(135deg, #fffaf2 0%, #f5e4d0 100%);
+    box-shadow: 0 24px 65px rgba(72,45,25,.11);
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--ke-color-brand-800) 14%, transparent);
-    border-radius: clamp(26px, 4vw, 44px);
-    padding: clamp(1.35rem, 4vw, 3.5rem);
-    background:
-      radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--ke-color-accent-600) 18%, transparent), transparent 34%),
-      linear-gradient(135deg, var(--ke-color-surface-strong), var(--ke-color-canvas-soft));
-    color: var(--ke-color-ink);
-    box-shadow: var(--ke-shadow-2);
   }
-  .hero-talk__copy { position: relative; z-index: 2; min-width: 0; display: grid; align-content: center; }
-  .hero-talk__eyebrow { margin: 0; color: var(--ke-color-brand-700); font-size: var(--ke-font-size-100); font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
-  .hero-talk__title { max-width: 10ch; min-height: 1.9em; margin: .35rem 0 .9rem; color: var(--ke-color-ink); font-size: clamp(2.8rem, 5vw, 4.8rem); line-height: .87; letter-spacing: -.075em; }
-  .hero-talk__fragment { display: block; animation: hero-talk-fragment-in 520ms var(--ke-ease-standard) both; animation-delay: calc(var(--fragment-index) * 90ms); }
-  .hero-talk__fragment + .hero-talk__fragment { color: var(--ke-color-brand-800); }
-  .hero-talk__cursor { display: inline-block; margin-left: .08em; color: var(--ke-color-brand-600); font-weight: 500; opacity: 0; }
-  .hero-talk.is-running .hero-talk__cursor { opacity: 1; animation: hero-talk-cursor 920ms steps(1, end) infinite; }
-  .hero-talk__details { max-width: 52ch; min-height: 3em; margin: 0; color: var(--ke-color-muted); font-size: clamp(.98rem, 1.45vw, 1.12rem); font-weight: 650; line-height: 1.45; }
-  .hero-talk__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; margin-top: 1.25rem; }
-  .hero-talk__scene-controls { display: inline-flex; align-items: center; gap: .55rem; color: var(--ke-color-muted); font-size: var(--ke-font-size-100); font-weight: 850; font-variant-numeric: tabular-nums; }
-  .hero-talk__scene-controls button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--ke-color-line); border-radius: 50%; background: color-mix(in srgb, var(--ke-color-surface-strong) 86%, transparent); color: var(--ke-color-ink); font: inherit; cursor: pointer; }
-  .hero-talk__scene-controls button:hover { border-color: var(--ke-color-brand-600); color: var(--ke-color-brand-700); }
-  .hero-talk__scene-controls button:focus-visible { outline: 3px solid var(--ke-color-focus); outline-offset: 3px; }
-  .hero-talk__mosaic { position: relative; min-width: 0; aspect-ratio: 5 / 4; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: clamp(5px, .7vw, 10px); padding: clamp(5px, .7vw, 10px); border-radius: clamp(22px, 3vw, 36px); background: color-mix(in srgb, var(--ke-color-surface-inverse) 92%, var(--ke-color-brand-800)); box-shadow: var(--ke-shadow-3); isolation: isolate; text-decoration: none; }
-  .hero-talk__tile { min-width: 0; min-height: 0; border-radius: clamp(8px, 1.1vw, 16px); background-image: var(--hero-talk-image); background-size: 500% 400%; background-position: calc(var(--tile-x) * 25%) calc(var(--tile-y) * 33.333% + (var(--hero-talk-focal-y) - 50%) * .12); background-repeat: no-repeat; opacity: 1; transform: translate3d(0,0,0) scale(1); transition: opacity 240ms ease, transform 420ms var(--ke-ease-standard); transition-delay: calc(var(--tile-index) * 18ms); }
-  .hero-talk__mosaic--empty .hero-talk__tile { opacity: 0; }
-  .hero-talk__mosaic-fallback { position: absolute; inset: 0; z-index: -1; display: grid; place-items: center; color: var(--ke-color-surface-strong); font-size: clamp(2rem, 5vw, 5rem); font-weight: 950; letter-spacing: -.06em; }
-  .hero-talk.is-exiting .hero-talk__copy { opacity: .42; transform: translateY(8px); }
-  .hero-talk.is-exiting .hero-talk__tile { opacity: 0; transform: translate3d(0, 12px, 0) scale(.84); }
-  .hero-talk.is-entering .hero-talk__tile { animation: hero-talk-tile-in 520ms var(--ke-ease-standard) both; animation-delay: calc(var(--tile-index) * 18ms); }
-  .hero-talk__copy { transition: opacity 220ms ease, transform 320ms var(--ke-ease-standard); }
-  @keyframes hero-talk-fragment-in { from { opacity: 0; transform: translateY(.22em); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes hero-talk-tile-in { from { opacity: 0; transform: translate3d(0, -10px, 0) scale(.82); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
-  @keyframes hero-talk-cursor { 0%, 46% { opacity: 1; } 47%, 100% { opacity: 0; } }
+  .home-hero-talk__copy { display: grid; align-content: center; }
+  .home-hero-talk h1 {
+    max-width: 11ch;
+    margin: .15rem 0 .85rem;
+    font-size: clamp(3rem, 7.5vw, 7.2rem);
+    line-height: .86;
+    letter-spacing: -.075em;
+  }
+  .home-hero-talk__lead {
+    max-width: 54ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1rem, 1.8vw, 1.22rem);
+    line-height: 1.48;
+  }
+  .home-hero-talk__actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.2rem; }
+  .home-hero-talk__event {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: minmax(20rem, 1fr) auto;
+    border-radius: 28px;
+    overflow: hidden;
+    background: #17120f;
+    color: #fffaf3;
+    text-decoration: none;
+    box-shadow: 0 18px 46px rgba(35,24,18,.2);
+  }
+  .home-hero-talk__media {
+    position: relative;
+    min-height: 20rem;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #ac6240, #211712 72%);
+  }
+  .home-hero-talk__media img { width: 100%; height: 100%; }
+  .home-hero-talk__media--cover img { object-fit: cover; object-position: 50% var(--home-hero-focal-y); }
+  .home-hero-talk__media--contain img { object-fit: contain; object-position: 50% 50%; }
+  .home-hero-talk__media > span { font-size: 2rem; font-weight: 950; letter-spacing: -.05em; }
+  .home-hero-talk__event-copy { display: grid; gap: .24rem; padding: 1rem 1.1rem 1.15rem; }
+  .home-hero-talk__event-copy small { color: #e5c4ad; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
+  .home-hero-talk__event-copy strong { font-size: clamp(1.25rem, 2.2vw, 1.8rem); line-height: 1.05; }
+  .home-hero-talk__event-copy > span { color: rgba(255,250,243,.74); font-size: .9rem; font-weight: 720; }
   @media (max-width: 820px) {
-    .hero-talk { min-height: 0; grid-template-columns: minmax(0, 1fr); gap: 1.1rem; padding: 1rem; }
-    .hero-talk__title { min-height: 0; font-size: clamp(2.65rem, 14vw, 4.7rem); }
-    .hero-talk__mosaic { order: -1; width: 100%; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .hero-talk *, .hero-talk *::before, .hero-talk *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
-    .hero-talk__cursor { display: none; }
+    .home-hero-talk { grid-template-columns: minmax(0, 1fr); }
+    .home-hero-talk__event { grid-template-rows: minmax(18rem, 68vw) auto; }
+    .home-hero-talk__media { min-height: 18rem; }
   }
 </style>
