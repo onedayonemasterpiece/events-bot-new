@@ -4,10 +4,14 @@ import test from 'node:test';
 import {
   AMBER_ARTIFACT_ID,
   AMBER_ARTIFACT_PLACEMENT,
+  ARTIFACT_COLLECTION,
+  ARTIFACT_COLLECTION_IDS,
   ARTIFACT_COLLECTION_STORAGE_KEY,
   LEGACY_AMBER_STORAGE_KEY,
+  collectArtifact,
   collectAmberArtifact,
   hasAmberArtifact,
+  hasArtifact,
   isAmberArtifactResearchEnabled,
   readArtifactCollection,
   selectAmberArtifactEventId,
@@ -87,6 +91,24 @@ test('collection writes one structured device-local find and keeps repeated coll
   assert.equal(repeated.state.artifacts[AMBER_ARTIFACT_ID].eventId, 17);
 });
 
+test('owner reference collection is exactly seven real identities and generic finds preserve all seven', () => {
+  assert.equal(ARTIFACT_COLLECTION.authority.owner_decision_commit, 'f5ea5e497a3c137e350645e0f6c35304853a8908');
+  assert.equal(ARTIFACT_COLLECTION.authority.cardinality, 7);
+  assert.equal(ARTIFACT_COLLECTION_IDS.length, 7);
+  assert.equal(new Set(ARTIFACT_COLLECTION_IDS).size, 7);
+  assert.equal(ARTIFACT_COLLECTION.artifacts.length, 7);
+  assert.ok(ARTIFACT_COLLECTION.artifacts.every((artifact) => artifact.image.source_sha256?.length === 64));
+  assert.ok(ARTIFACT_COLLECTION.artifacts.every((artifact) => !/^future_/u.test(artifact.artifact_id)));
+
+  const storage = new MemoryStorage();
+  for (const artifactId of ARTIFACT_COLLECTION_IDS) {
+    collectArtifact(artifactId, { storage, placement: `test.${artifactId}` });
+  }
+  const state = readArtifactCollection(storage);
+  assert.equal(ARTIFACT_COLLECTION_IDS.filter((artifactId) => hasArtifact(state, artifactId)).length, 7);
+  assert.throws(() => collectArtifact('future_placeholder', { storage }), /Unknown collection-1 artifact/u);
+});
+
 test('legacy placement bit migrates without a server and storage failures keep current-page state usable', () => {
   const legacy = new MemoryStorage({ [LEGACY_AMBER_STORAGE_KEY]: 'found' });
   const migrated = readArtifactCollection(legacy, () => new Date('2026-07-27T12:05:00.000Z'));
@@ -108,7 +130,7 @@ test('legacy placement bit migrates without a server and storage failures keep c
   assert.equal(hasAmberArtifact(result.state), true);
 });
 
-test('collection surface has finite hints, accessible detail and a truly disabled coming-soon share', async () => {
+test('collection surface renders the exact seven-item registry with accessible per-artifact detail', async () => {
   const [component, page, rail, productionCheck] = await Promise.all([
     readFile(new URL('../src/components/artifacts/ArtifactCollection.astro', import.meta.url), 'utf8'),
     readFile(new URL('../src/pages/artefakty/index.astro', import.meta.url), 'utf8'),
@@ -118,8 +140,10 @@ test('collection surface has finite hints, accessible detail and a truly disable
   assert.match(component, /ARTIFACT_COLLECTION_SLOTS\.map/u);
   assert.match(component, /Только на этом устройстве/u);
   assert.match(component, /aria-haspopup="dialog"/u);
-  assert.match(component, /<dialog[\s\S]*aria-labelledby="artifact-detail-title"[\s\S]*aria-describedby="artifact-detail-copy"/u);
-  assert.match(component, /<button type="button" class="artifact-detail__share" disabled>Поделиться артефактом · скоро<\/button>/u);
+  assert.match(component, /data-artifact-count=\{artifacts\.length\}/u);
+  assert.match(component, /<dialog[\s\S]*aria-labelledby=\{`artifact-detail-title-\$\{artifact\.id\}`\}[\s\S]*aria-describedby=\{`artifact-detail-copy-\$\{artifact\.id\}`\}/u);
+  assert.match(component, /data-artifact-dialog=\{artifact\.id\}/u);
+  assert.doesNotMatch(component, /future_|Пустая ячейка|скоро/iu);
   assert.match(component, /lastTrigger\?\.focus\?\.\(\)/u);
   assert.doesNotMatch(component, /\bfetch\s*\(|supabase|XMLHttpRequest/iu);
   assert.match(page, /\bnoindex\b/u);

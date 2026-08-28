@@ -1,103 +1,99 @@
 ---
 import { withBase } from '../../lib/events';
-import {
-  AMBER_ARTIFACT_ID,
-  ARTIFACT_COLLECTION_SLOTS,
-} from '../../lib/artifacts.mjs';
+import { ARTIFACT_COLLECTION_SLOTS } from '../../lib/artifacts.mjs';
 
-const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
+const artifacts = ARTIFACT_COLLECTION_SLOTS.map((artifact) => ({
+  ...artifact,
+  imageSrc: withBase(artifact.image.src),
+}));
 ---
 <section
   class="artifact-collection"
   id="artefakty"
   aria-labelledby="artifact-collection-title"
   data-artifact-collection
+  data-artifact-count={artifacts.length}
   data-nosnippet
 >
   <header class="artifact-collection__head">
-    <p class="artifact-collection__eyebrow">Локальная коллекция</p>
+    <p class="artifact-collection__eyebrow">Первая коллекция · 7 артефактов</p>
     <h1 id="artifact-collection-title">Артефакты Калининградской области</h1>
-    <p>Находки появляются в афише редко. Собранные истории остаются здесь, а закрытые ячейки дают только небольшую подсказку.</p>
+    <p>Все семь находок входят в первую коллекцию. Открытые артефакты показывают исходный визуальный образ и его описание; закрытые сохраняют тайну места.</p>
     <p class="artifact-collection__device-note">
       <strong>Только на этом устройстве.</strong>
       Коллекция хранится в браузере, не отправляется на сервер и исчезнет после очистки данных сайта.
     </p>
     <p class="artifact-collection__progress" role="status" aria-live="polite" aria-atomic="true">
-      Найдено <strong data-artifact-found-count>0</strong> из {ARTIFACT_COLLECTION_SLOTS.length}
+      Найдено <strong data-artifact-found-count>0</strong> из {artifacts.length}
     </p>
   </header>
 
-  <ol class="artifact-collection__slots" aria-label="Ячейки коллекции">
-    {ARTIFACT_COLLECTION_SLOTS.map((slot, index) => slot.id === AMBER_ARTIFACT_ID ? (
-      <li class="artifact-slot artifact-slot--amber" data-artifact-slot={slot.id} data-artifact-state="empty">
+  <ol class="artifact-collection__slots" aria-label="Семь артефактов первой коллекции">
+    {artifacts.map((artifact, index) => (
+      <li class="artifact-slot" data-artifact-slot={artifact.id} data-artifact-state="empty">
         <div class="artifact-slot__empty" data-artifact-empty>
           <span class="artifact-slot__number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
           <span class="artifact-slot__mystery" aria-hidden="true">?</span>
           <strong>Пока не найден</strong>
-          <span>{slot.hint}</span>
+          <span>{artifact.hint}</span>
         </div>
         <button
           class="artifact-slot__found"
           type="button"
           data-artifact-open
-          data-artifact-id={slot.id}
+          data-artifact-id={artifact.id}
           aria-haspopup="dialog"
-          aria-controls={`artifact-detail-${slot.id}`}
+          aria-controls={`artifact-detail-${artifact.id}`}
           hidden
         >
           <img
-            src={`${amberAsset}-1x.webp`}
-            srcset={`${amberAsset}-1x.webp 1x, ${amberAsset}-2x.webp 2x, ${amberAsset}-3x.webp 3x`}
-            width="74"
-            height="96"
+            src={artifact.imageSrc}
+            width={artifact.image.width}
+            height={artifact.image.height}
             alt=""
             decoding="async"
           />
-          <span><small>Найдено</small><strong>{slot.title}</strong><em>Открыть историю</em></span>
+          <span><small>Найдено · {String(index + 1).padStart(2, '0')}</small><strong>{artifact.title}</strong><em>Открыть историю</em></span>
         </button>
-      </li>
-    ) : (
-      <li class="artifact-slot" data-artifact-slot={slot.id} data-artifact-state="empty">
-        <div class="artifact-slot__empty">
-          <span class="artifact-slot__number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-          <span class="artifact-slot__mystery" aria-hidden="true">?</span>
-          <strong>Пустая ячейка</strong>
-          <span>{slot.hint}</span>
-        </div>
       </li>
     ))}
   </ol>
 
-  <dialog
-    class="artifact-detail"
-    id={`artifact-detail-${AMBER_ARTIFACT_ID}`}
-    aria-labelledby="artifact-detail-title"
-    aria-describedby="artifact-detail-copy"
-    data-artifact-dialog
-  >
-    <div class="artifact-detail__panel">
-      <button class="artifact-detail__close" type="button" aria-label="Закрыть историю артефакта" data-artifact-close>×</button>
-      <p class="artifact-detail__eyebrow">Артефакт 01 · найдено</p>
-      <img
-        src={`${amberAsset}-2x.webp`}
-        width="149"
-        height="192"
-        alt="Янтарная фигурка космонавта в шлеме"
-        decoding="async"
-      />
-      <div>
-        <h2 id="artifact-detail-title">Янтарный космонавт</h2>
-        <p id="artifact-detail-copy">
-          Янтарный космонавт напоминает о калининградской связи моря и космоса:
-          в Музее Мирового океана сохраняют научно-исследовательское судно
-          «Космонавт Виктор Пацаев». Эта первая глава коллекции остаётся
-          небольшим знаком любопытства, а не призом или событием.
-        </p>
-        <p class="artifact-detail__local">История открыта только по локальной отметке этого браузера.</p>
-        <button type="button" class="artifact-detail__share" disabled>Поделиться артефактом · скоро</button>
+  {artifacts.map((artifact, index) => (
+    <dialog
+      class="artifact-detail"
+      id={`artifact-detail-${artifact.id}`}
+      aria-labelledby={`artifact-detail-title-${artifact.id}`}
+      aria-describedby={`artifact-detail-copy-${artifact.id}`}
+      data-artifact-dialog={artifact.id}
+    >
+      <div class="artifact-detail__panel">
+        <button class="artifact-detail__close" type="button" aria-label="Закрыть историю артефакта" data-artifact-close>×</button>
+        <div class="artifact-detail__visual">
+          <span aria-hidden="true">{String(index + 1).padStart(2, '0')} / {artifacts.length}</span>
+          <img
+            src={artifact.imageSrc}
+            width={artifact.image.width}
+            height={artifact.image.height}
+            alt={artifact.image.alt}
+            decoding="async"
+          />
+        </div>
+        <div>
+          <p class="artifact-detail__eyebrow">Артефакт найден</p>
+          <h2 id={`artifact-detail-title-${artifact.id}`}>{artifact.title}</h2>
+          <p class="artifact-detail__lead">{artifact.short_description}</p>
+          <p id={`artifact-detail-copy-${artifact.id}`}>{artifact.detail_copy}</p>
+          <dl class="artifact-detail__meta">
+            <div><dt>Коллекция</dt><dd>Первая · {artifacts.length} артефактов</dd></div>
+            <div><dt>Reference</dt><dd>{artifact.image.source_file}</dd></div>
+            <div><dt>Статус истории</dt><dd>Факты не дополняются без редакционной проверки</dd></div>
+          </dl>
+          <p class="artifact-detail__local">Находка сохранена только в этом браузере.</p>
+        </div>
       </div>
-    </div>
-  </dialog>
+    </dialog>
+  ))}
 </section>
 
 <style>
@@ -109,7 +105,7 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
   .artifact-collection__head>p:not(.artifact-collection__eyebrow){max-width:65ch;font-size:clamp(16px,2vw,19px);line-height:1.55}
   .artifact-collection__device-note{padding:13px 16px;border-left:4px solid #d08a31;background:#fff6df}
   .artifact-collection__progress{margin-top:20px!important;font-weight:750}
-  .artifact-collection__slots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:28px 0 0;padding:0;list-style:none}
+  .artifact-collection__slots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:28px 0 0;padding:0;list-style:none}
   .artifact-slot{min-width:0;min-height:244px;border:1px solid rgba(74,48,35,.16);border-radius:22px;background:#fffaf2;box-shadow:0 12px 30px rgba(68,39,24,.07)}
   .artifact-slot__empty{box-sizing:border-box;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center}
   .artifact-slot__number{align-self:flex-start;color:#a68e7e;font:800 11px/1 system-ui}
@@ -117,74 +113,92 @@ const amberAsset = withBase('/assets/gamification/amber-cosmonaut');
   .artifact-slot__empty strong{font-size:14px}
   .artifact-slot__empty>span:last-child{color:#76645a;font-size:12px;line-height:1.4}
   .artifact-slot__found{box-sizing:border-box;width:100%;height:100%;min-height:244px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;border:0;border-radius:21px;background:radial-gradient(circle at 50% 42%,#fff4bd 0,#fff9e9 42%,#fffaf2 75%);color:inherit;font:inherit;text-align:center;cursor:pointer}
-  .artifact-slot__found img{width:74px;height:96px;object-fit:contain;filter:drop-shadow(0 6px 8px rgba(157,78,0,.23))}
+  .artifact-slot__found img{width:auto;height:112px;max-width:150px;object-fit:contain;filter:drop-shadow(0 7px 9px rgba(91,49,18,.2))}
   .artifact-slot__found span{display:flex;flex-direction:column;gap:4px}
   .artifact-slot__found small{color:#6f6b2e;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
   .artifact-slot__found strong{font-size:15px}
   .artifact-slot__found em{color:#98401f;font-size:12px;font-style:normal;font-weight:800}
+  .artifact-slot__found:hover{box-shadow:inset 0 0 0 2px #d08a31;transform:translateY(-2px)}
   .artifact-slot__found:focus-visible,.artifact-detail button:focus-visible{outline:3px solid #0f766e;outline-offset:3px}
-  .artifact-detail{width:min(760px,calc(100% - 24px));max-width:none;padding:0;border:0;border-radius:26px;background:#fffaf2;color:#281d17;box-shadow:0 24px 80px rgba(31,18,12,.28)}
+  .artifact-detail{width:min(820px,calc(100% - 24px));max-width:none;padding:0;border:0;border-radius:26px;background:#fffaf2;color:#281d17;box-shadow:0 24px 80px rgba(31,18,12,.28)}
   .artifact-detail::backdrop{background:rgba(34,26,20,.58)}
-  .artifact-detail__panel{position:relative;display:grid;grid-template-columns:180px 1fr;gap:24px;align-items:center;padding:clamp(24px,5vw,46px)}
-  .artifact-detail__panel>img{width:149px;height:192px;object-fit:contain;filter:drop-shadow(0 10px 12px rgba(157,78,0,.24))}
+  .artifact-detail__panel{position:relative;display:grid;grid-template-columns:240px 1fr;gap:30px;align-items:center;padding:clamp(24px,5vw,46px)}
+  .artifact-detail__visual{min-height:270px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border-radius:20px;background:#f5ecdf}
+  .artifact-detail__visual>span{align-self:flex-start;margin-left:16px;color:#8a7466;font:800 11px/1 system-ui}
+  .artifact-detail__visual img{width:auto;height:210px;max-width:210px;object-fit:contain;filter:drop-shadow(0 10px 12px rgba(82,44,16,.2))}
   .artifact-detail__close{position:absolute;top:14px;right:14px;width:44px;height:44px;border:0;border-radius:50%;background:#eee2d5;color:#4a3024;font:400 29px/1 system-ui;cursor:pointer}
   .artifact-detail h2{margin:0 0 12px;font-size:clamp(30px,5vw,50px);line-height:.95;letter-spacing:-.04em}
   .artifact-detail p{font-size:15px;line-height:1.55}
+  .artifact-detail__lead{font-weight:800}
+  .artifact-detail__meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0}
+  .artifact-detail__meta div{padding:10px;border-radius:12px;background:#f2e8db}
+  .artifact-detail__meta dt{color:#8b7161;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+  .artifact-detail__meta dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:11px;line-height:1.35}
   .artifact-detail__local{color:#76645a;font-size:12px!important}
-  .artifact-detail__share{min-height:44px;padding:10px 16px;border:1px solid rgba(74,48,35,.15);border-radius:999px;background:#e9e1d8;color:#776c65;font:800 13px/1.2 system-ui}
-  .artifact-detail__share:disabled{cursor:not-allowed;opacity:1}
-  @media(max-width:850px){.artifact-collection__slots{grid-template-columns:repeat(2,minmax(0,1fr))}.artifact-slot:last-child{grid-column:1/-1}.artifact-detail__panel{grid-template-columns:1fr;justify-items:center;text-align:center}.artifact-detail__panel>div{display:flex;flex-direction:column;align-items:center}}
-  @media(max-width:430px){.artifact-collection__slots{grid-template-columns:1fr}.artifact-slot:last-child{grid-column:auto}.artifact-slot,.artifact-slot__found{min-height:190px}.artifact-slot__found{flex-direction:row;text-align:left}.artifact-detail{max-height:calc(100dvh - 24px);overflow:auto}.artifact-detail__panel{gap:8px;padding:58px 20px 24px}.artifact-detail__panel>img{width:112px;height:145px}}
+  @media(max-width:850px){.artifact-collection__slots{grid-template-columns:repeat(2,minmax(0,1fr))}.artifact-slot:last-child{grid-column:1/-1}.artifact-detail__panel{grid-template-columns:1fr;justify-items:stretch}.artifact-detail__visual{min-height:210px}.artifact-detail__visual img{height:150px}.artifact-detail__meta{grid-template-columns:1fr}}
+  @media(max-width:430px){.artifact-collection__slots{grid-template-columns:1fr}.artifact-slot:last-child{grid-column:auto}.artifact-slot,.artifact-slot__found{min-height:190px}.artifact-slot__found{flex-direction:row;text-align:left}.artifact-slot__found img{height:108px;max-width:110px}.artifact-detail{max-height:calc(100dvh - 24px);overflow:auto}.artifact-detail__panel{gap:14px;padding:58px 20px 24px}.artifact-detail__visual{min-height:180px}.artifact-detail__visual img{height:126px}}
   @media(prefers-reduced-motion:reduce){.artifact-collection *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 </style>
 
 <script>
   import {
-    AMBER_ARTIFACT_ID,
-    hasAmberArtifact,
+    ARTIFACT_COLLECTION_IDS,
+    ARTIFACT_COLLECTION_STORAGE_KEY,
+    foundArtifactIds,
+    hasArtifact,
     readArtifactCollection,
   } from '../../lib/artifacts.mjs';
 
   document.querySelectorAll('[data-artifact-collection]').forEach((root) => {
     if (root.dataset.artifactCollectionReady === 'true') return;
     root.dataset.artifactCollectionReady = 'true';
-    const slot = root.querySelector(`[data-artifact-slot="${AMBER_ARTIFACT_ID}"]`);
-    const empty = slot?.querySelector('[data-artifact-empty]');
-    const open = slot?.querySelector('[data-artifact-open]');
-    const dialog = root.querySelector('[data-artifact-dialog]');
     const count = root.querySelector('[data-artifact-found-count]');
     let lastTrigger = null;
 
     const render = () => {
-      const found = hasAmberArtifact(readArtifactCollection());
-      if (slot) slot.dataset.artifactState = found ? 'found' : 'empty';
-      if (empty) empty.hidden = found;
-      if (open) open.hidden = !found;
-      if (count) count.textContent = found ? '1' : '0';
-      return found;
+      const state = readArtifactCollection();
+      for (const artifactId of ARTIFACT_COLLECTION_IDS) {
+        const slot = root.querySelector(`[data-artifact-slot="${artifactId}"]`);
+        const found = hasArtifact(state, artifactId);
+        if (slot) slot.dataset.artifactState = found ? 'found' : 'empty';
+        const empty = slot?.querySelector('[data-artifact-empty]');
+        const open = slot?.querySelector('[data-artifact-open]');
+        if (empty) empty.hidden = found;
+        if (open) open.hidden = !found;
+      }
+      const foundIds = foundArtifactIds(state);
+      if (count) count.textContent = String(foundIds.length);
+      return foundIds;
     };
-    const openDialog = (trigger) => {
-      if (!render() || !dialog || typeof dialog.showModal !== 'function') return;
+
+    const openDialog = (artifactId, trigger) => {
+      if (!render().includes(artifactId)) return;
+      const dialog = root.querySelector(`[data-artifact-dialog="${artifactId}"]`);
+      if (!dialog || typeof dialog.showModal !== 'function') return;
       lastTrigger = trigger || document.activeElement;
       if (!dialog.open) dialog.showModal();
     };
-    open?.addEventListener('click', () => openDialog(open));
-    dialog?.querySelector('[data-artifact-close]')?.addEventListener('click', () => dialog.close());
-    dialog?.addEventListener('click', (event) => {
-      if (event.target === dialog) dialog.close();
+
+    root.querySelectorAll('[data-artifact-open]').forEach((trigger) => {
+      trigger.addEventListener('click', () => openDialog(trigger.dataset.artifactId, trigger));
     });
-    dialog?.addEventListener('close', () => {
-      if (location.hash === `#${AMBER_ARTIFACT_ID}`) {
-        history.replaceState(null, '', `${location.pathname}${location.search}`);
-      }
-      lastTrigger?.focus?.();
+    root.querySelectorAll('[data-artifact-dialog]').forEach((dialog) => {
+      dialog.querySelector('[data-artifact-close]')?.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+      dialog.addEventListener('close', () => {
+        if (location.hash === `#${dialog.dataset.artifactDialog}`) {
+          history.replaceState(null, '', `${location.pathname}${location.search}`);
+        }
+        lastTrigger?.focus?.();
+      });
     });
     addEventListener('kenigevents:artifact-collected', render);
-    addEventListener('storage', (event) => {
-      if (event.key === 'ke_artifact_collection_v1') render();
-    });
-    if (render() && location.hash === `#${AMBER_ARTIFACT_ID}`) {
-      requestAnimationFrame(() => openDialog(open));
+    addEventListener('storage', (event) => { if (event.key === ARTIFACT_COLLECTION_STORAGE_KEY) render(); });
+    const foundIds = render();
+    const hashId = decodeURIComponent(location.hash.slice(1));
+    if (foundIds.includes(hashId)) {
+      const trigger = root.querySelector(`[data-artifact-open][data-artifact-id="${hashId}"]`);
+      requestAnimationFrame(() => openDialog(hashId, trigger));
     }
   });
 </script>

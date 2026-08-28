@@ -16,7 +16,7 @@ try {
     const url = request.url();
     if (
       request.method() !== 'GET'
-      || /(?:\/api\/|supabase|artifact-(?:collect|progress)|telemetry)/iu.test(url)
+      || /(?:\/api\/|https:\/\/[^/]*supabase\.co\/|\/artifact-(?:collect|progress)(?:\/|\?|$)|\/telemetry(?:\/|\?|$))/iu.test(url)
     ) persistenceRequests.push(`${request.method()} ${url}`);
   });
 
@@ -49,22 +49,22 @@ try {
     .evaluate((node) => { node.scrollLeft = node.scrollWidth; });
   await foundArtifact.click();
   await page.waitForURL(/\/artefakty\/#amber_cosmonaut$/u);
-  const dialog = page.locator('[data-artifact-dialog]');
+  const dialog = page.locator('[data-artifact-dialog="amber_cosmonaut"]');
   await dialog.waitFor({ state: 'visible' });
   assert.equal(await page.locator('[data-artifact-found-count]').textContent(), '1');
   assert.equal(await page.locator('[data-artifact-state="found"]').count(), 1);
-  assert.equal(await page.locator('[data-artifact-state="empty"]').count(), 4);
-  const share = page.getByRole('button', { name: 'Поделиться артефактом · скоро' });
-  assert.equal(await share.isDisabled(), true);
+  assert.equal(await page.locator('[data-artifact-state="empty"]').count(), 6);
+  assert.equal(await page.locator('[data-artifact-slot]').count(), 7);
   assert.equal(persistenceRequests.length, 0, `unexpected persistence requests: ${persistenceRequests.join(', ')}`);
 
   await page.keyboard.press('Escape');
   assert.equal(await dialog.isVisible(), false);
-  await page.locator('[data-artifact-open]').focus();
+  const amberOpen = page.locator('[data-artifact-open][data-artifact-id="amber_cosmonaut"]');
+  await amberOpen.focus();
   await page.keyboard.press('Enter');
   assert.equal(await dialog.isVisible(), true);
   await page.getByRole('button', { name: 'Закрыть историю артефакта' }).click();
-  assert.equal(await page.locator('[data-artifact-open]').evaluate((node) => document.activeElement === node), true);
+  assert.equal(await amberOpen.evaluate((node) => document.activeElement === node), true);
   await context.close();
 
   const legacyContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -74,6 +74,26 @@ try {
   assert.equal(await legacyPage.locator('[data-artifact-found-count]').textContent(), '1');
   assert.ok(await legacyPage.evaluate(() => localStorage.getItem('ke_artifact_collection_v1')));
   await legacyContext.close();
+
+  const completeContext = await browser.newContext({ viewport: { width: 1280, height: 960 } });
+  const completePage = await completeContext.newPage();
+  await completePage.addInitScript(() => {
+    const artifactIds = ['amber_cosmonaut', 'baltic_light', 'luise_queen_bridge', 'marzipan_heart', 'sedov_bell', 'cosmonaut', 'old_brick'];
+    localStorage.setItem('ke_artifact_collection_v1', JSON.stringify({
+      schemaVersion: 1,
+      collectionId: 'kaliningrad_artifacts_v1',
+      artifacts: Object.fromEntries(artifactIds.map((artifactId) => [artifactId, {
+        status: 'found', foundAt: '2026-07-28T00:00:00.000Z', eventId: null, placement: 'test.all',
+      }])),
+    }));
+  });
+  await completePage.goto(`${baseUrl}/artefakty/`, { waitUntil: 'domcontentloaded' });
+  assert.equal(await completePage.locator('[data-artifact-found-count]').textContent(), '7');
+  assert.equal(await completePage.locator('[data-artifact-state="found"]').count(), 7);
+  await completePage.locator('[data-artifact-open][data-artifact-id="old_brick"]').focus();
+  await completePage.keyboard.press('Enter');
+  assert.equal(await completePage.locator('[data-artifact-dialog="old_brick"]').isVisible(), true);
+  await completeContext.close();
 } finally {
   await browser.close();
 }
