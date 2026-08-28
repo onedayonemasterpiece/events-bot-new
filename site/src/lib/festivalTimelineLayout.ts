@@ -74,7 +74,10 @@ function finalRowGeometry(rowSize: number, isOnlyRow: boolean): {
     };
   }
   if (rowSize === 2) {
-    return { widthFraction: 0.62, normalizedHeight: 0.195 };
+    // Two events are still a complete multi-event container. The owner review
+    // requires the pair to divide the full available row rather than leaving a
+    // page-local 38% hole. Only a true singleton may remain compact.
+    return { widthFraction: 1, normalizedHeight: FULL_ROW_HEIGHT[2] };
   }
   return { widthFraction: 1, normalizedHeight: FULL_ROW_HEIGHT[rowSize] };
 }
@@ -230,8 +233,8 @@ function isBetter(candidate: LayoutCandidate, current?: LayoutCandidate): boolea
 /**
  * Whole-month bitmask DP. It evaluates all legal 1–4-card formations and a
  * bounded set of order changes, then minimises the actual normalised strip
- * height plus crop, resolution and permutation costs. Every non-final row
- * fills 100%; a final one/two-card remainder may intentionally stay compact.
+ * height plus crop, resolution and permutation costs. Every multi-event row
+ * fills 100%; only a final singleton may intentionally stay compact.
  */
 export function packFestivalTimeline(items: FestivalTimelineItem[]): FestivalTimelineRow[] {
   if (items.length === 0) return [];

@@ -48,6 +48,18 @@ test('five items fill the first row and keep only the final solo compact', () =>
   assert.ok(rows[1].normalizedMediaHeight <= rows[1].widthFraction / (16 / 9));
 });
 
+test('two events form a full-width container instead of a compact remainder', () => {
+  const [row] = packFestivalTimeline([
+    item(0, { imageWidth:1600, imageHeight:900 }),
+    item(1, { imageWidth:900, imageHeight:1200 }),
+  ]);
+  assert.equal(row.items.length, 2);
+  assert.equal(row.widthFraction, 1);
+  assert.equal(row.isRemainder, false);
+  assert.equal(row.columnWeights.length, 2);
+  assert.ok(Math.abs(row.columnWeights.reduce((sum, value) => sum + value, 0) * row.normalizedMediaHeight - (1 - 0.014)) < 0.000001);
+});
+
 test('a document anchors its row at natural aspect without crop', () => {
   const items = [
     item(0),
