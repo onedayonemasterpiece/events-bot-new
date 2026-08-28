@@ -69,26 +69,12 @@
   },
   "visual_grammar": {
     "authority_layers": [
-      {
-        "id": "accepted_product",
-        "meaning": "accepted product meaning and owner decisions"
-      },
-      {
-        "id": "source_proven_as_is",
-        "meaning": "observed and linked current-site baseline"
-      },
-      {
-        "id": "active_owner_review",
-        "meaning": "implemented/read-back candidate still awaiting owner rereview"
-      },
-      {
-        "id": "hypothesis",
-        "meaning": "research or experiment candidate, not current product truth"
-      },
-      {
-        "id": "unresolved",
-        "meaning": "evidence, delivery, binding or decision gap"
-      }
+      "accepted_product",
+      "source_proven_as_is",
+      "active_owner_review",
+      "active_astro_candidate",
+      "hypothesis",
+      "unresolved"
     ],
     "entity_statuses": [
       "accepted",
@@ -113,7 +99,6 @@
     {
       "view_id": "view.product-system-overview",
       "title": "Product system overview",
-      "purpose": "Show the product logic from needs and Jobs to outcomes, journeys, capabilities, acceptance and evidence without centering User Stories.",
       "primary_entity_ids": [
         "need.discover-appropriate-event",
         "need.trust-current-event-information",
@@ -149,7 +134,8 @@
         "capability.saved-events",
         "capability.intent-actions",
         "capability.identity-and-session",
-        "capability.degraded-mode-and-recovery"
+        "capability.degraded-mode-and-recovery",
+        "capability.product-evidence"
       ],
       "page_binding": null,
       "binding_status": "binding_pending"
@@ -157,124 +143,106 @@
     {
       "view_id": "view.site-as-is-map",
       "title": "Site as-is product map",
-      "purpose": "Overlay product Jobs, outcomes, acceptance and problems on the 17 source-proven page archetypes without implying design completion.",
       "archetype_count": 17,
       "archetypes": [
         {
           "archetype_id": "archetype.home",
-          "route_patterns": ["/"],
           "product_entity_ids": ["job.discover-event", "capability.listing-discovery", "user-outcome.find-relevant-within-30-cards"],
           "current_layers": ["source_proven_as_is", "active_owner_review"],
           "active_gap_ids": ["ui-gap.home-hero-talk-photo-mosaic-owner-rereview", "ui-gap.global-component-lineage-owner-review"]
         },
         {
           "archetype_id": "archetype.listing.date",
-          "route_patterns": ["/segodnya/", "/zavtra/", "/date-:date/"],
           "product_entity_ids": ["job.discover-event", "capability.listing-discovery", "user-outcome.find-relevant-within-30-cards"],
-          "current_layers": ["source_proven_as_is", "active_owner_review", "astro_candidate_delta"],
+          "current_layers": ["source_proven_as_is", "active_owner_review", "active_astro_candidate"],
           "active_gap_ids": ["ui-gap.listing-discovery-rail-v6-owner-rereview", "ui-gap.global-component-lineage-owner-review"]
         },
         {
           "archetype_id": "archetype.listing.weekend",
-          "route_patterns": ["/vyhodnye/", "/vyhodnye/:date/"],
           "product_entity_ids": ["job.discover-event", "capability.listing-discovery", "user-outcome.find-relevant-within-30-cards"],
-          "current_layers": ["source_proven_as_is", "active_owner_review", "astro_candidate_delta"],
+          "current_layers": ["source_proven_as_is", "active_owner_review", "active_astro_candidate"],
           "active_gap_ids": ["ui-gap.listing-discovery-rail-v6-owner-rereview", "ui-gap.global-component-lineage-owner-review"]
         },
         {
           "archetype_id": "archetype.listing.popular",
-          "route_patterns": ["/populyarnoe/"],
           "product_entity_ids": ["job.discover-event", "capability.listing-discovery"],
-          "current_layers": ["source_proven_as_is", "active_owner_review", "astro_candidate_delta"],
+          "current_layers": ["source_proven_as_is", "active_owner_review", "active_astro_candidate"],
           "active_gap_ids": ["ui-gap.listing-discovery-rail-v6-owner-rereview", "ui-gap.global-component-lineage-owner-review"]
         },
         {
           "archetype_id": "archetype.listing.unusual",
-          "route_patterns": ["/neobychnoe/"],
           "product_entity_ids": ["job.discover-event", "capability.listing-discovery"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["problem.ui-system-not-promoted"]
         },
         {
           "archetype_id": "archetype.search",
-          "route_patterns": ["/poisk/"],
           "product_entity_ids": ["job.search-by-intent", "capability.smart-search", "user-outcome.receive-result-or-honest-recovery"],
           "current_layers": ["source_proven_as_is", "hypothesis"],
           "active_gap_ids": ["ui-gap.search-favorites-personal-normalization"]
         },
         {
           "archetype_id": "archetype.event-detail",
-          "route_patterns": ["/sobytiya/:slug/"],
           "product_entity_ids": ["job.evaluate-event", "job.plan-attendance", "capability.event-detail", "capability.intent-actions"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["ui-gap.event-detail-unresolved-states", "ui-gap.global-component-lineage-owner-review"]
         },
         {
           "archetype_id": "archetype.collections",
-          "route_patterns": ["/podborki/", "/podborki/:slug/"],
           "product_entity_ids": ["job.discover-event", "capability.curated-discovery"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["problem.ui-system-not-promoted"]
         },
         {
           "archetype_id": "archetype.festivals",
-          "route_patterns": ["/festivali/"],
           "product_entity_ids": ["job.discover-event", "capability.curated-discovery"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["problem.ui-system-not-promoted"]
         },
         {
           "archetype_id": "archetype.exhibitions",
-          "route_patterns": ["/vystavki/"],
           "product_entity_ids": ["job.discover-event", "capability.curated-discovery"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["problem.ui-system-not-promoted"]
         },
         {
           "archetype_id": "archetype.interest-clubs",
-          "route_patterns": ["/kluby-po-interesam/", "/kluby-po-interesam/:slug/"],
           "product_entity_ids": ["job.discover-event", "capability.curated-discovery"],
           "current_layers": ["source_proven_as_is", "unresolved"],
           "active_gap_ids": ["problem.ui-system-not-promoted"]
         },
         {
           "archetype_id": "archetype.favorites",
-          "route_patterns": ["/izbrannoe/"],
           "product_entity_ids": ["job.return-to-saved-event", "capability.saved-events", "user-outcome.recover-saved-state"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["ui-gap.search-favorites-personal-normalization"]
         },
         {
           "archetype_id": "archetype.personal-feed",
-          "route_patterns": ["/dlya-menya/"],
           "product_entity_ids": ["job.receive-personal-relevance", "capability.personalized-discovery"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["ui-gap.search-favorites-personal-normalization"]
         },
         {
           "archetype_id": "archetype.focus-group",
-          "route_patterns": ["/fokus-gruppa/", "/fokus-gruppa/:step/"],
-          "product_entity_ids": ["capability.product-measurement-and-evidence"],
+          "product_entity_ids": ["capability.product-evidence"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["ui-gap.loading-state-vocabulary"]
         },
         {
           "archetype_id": "archetype.artifacts",
-          "route_patterns": ["/artefakty/"],
           "product_entity_ids": ["capability.curated-discovery"],
-          "current_layers": ["source_proven_as_is", "active_owner_review", "astro_candidate_delta"],
+          "current_layers": ["source_proven_as_is", "active_owner_review", "active_astro_candidate"],
           "active_gap_ids": ["ui-gap.artifact-collection-exact-seven-owner-rereview"]
         },
         {
           "archetype_id": "archetype.information-pages",
-          "route_patterns": ["/partners/", "/partnerstvo/"],
           "product_entity_ids": ["decision.partner-needs-not-modeled"],
           "current_layers": ["source_proven_as_is", "unresolved"],
           "active_gap_ids": ["problem.partner-needs-unresearched"]
         },
         {
           "archetype_id": "archetype.special-state",
-          "route_patterns": ["/zakrytaya-afisha/"],
           "product_entity_ids": ["job.recover-discovery", "capability.degraded-mode-and-recovery"],
           "current_layers": ["source_proven_as_is"],
           "active_gap_ids": ["ui-gap.loading-state-vocabulary"]
@@ -286,7 +254,6 @@
     {
       "view_id": "view.product-problem-radar",
       "title": "Product problem and UI-gap radar",
-      "purpose": "Prioritize user/outcome risks and UI gaps without replacing evidence or owner decisions with visual severity alone.",
       "problem_entity_ids": [
         "problem.event-lifecycle-stale-publication-risk",
         "problem.ui-system-not-promoted",
@@ -306,21 +273,12 @@
         "ui-gap.home-hero-talk-photo-mosaic-owner-rereview",
         "ui-gap.global-component-lineage-owner-review"
       ],
-      "required_context": [
-        "affected Job/outcome/capability",
-        "source and confidence",
-        "independent facets",
-        "current owner-review state",
-        "resolution gate",
-        "prohibited shortcut"
-      ],
       "page_binding": null,
       "binding_status": "binding_pending"
     },
     {
       "view_id": "view.outcome-evidence-map",
       "title": "Outcome and evidence map",
-      "purpose": "Separate shipped UI, verified behavior, deployed health and measured user/owner outcomes.",
       "outcome_entity_ids": [
         "user-outcome.find-relevant-within-30-cards",
         "user-outcome.make-confident-event-decision",
@@ -348,7 +306,6 @@
     {
       "view_id": "view.journeys-and-recovery",
       "title": "Journeys and recovery paths",
-      "purpose": "Show normal paths and typed alternatives when Search, identity, media, data or dynamic runtime fails.",
       "journey_entity_ids": [
         "journey.browse-discovery-surfaces",
         "journey.event-detail-decision",
@@ -373,7 +330,6 @@
     {
       "view_id": "view.current-and-hypotheses",
       "title": "Current product versus product hypotheses",
-      "purpose": "Keep roadmap experiments visually separate from current product and accepted decisions.",
       "current_capability_ids": [
         "capability.current-event-catalog",
         "capability.listing-discovery",
@@ -385,7 +341,8 @@
         "capability.saved-events",
         "capability.intent-actions",
         "capability.identity-and-session",
-        "capability.degraded-mode-and-recovery"
+        "capability.degraded-mode-and-recovery",
+        "capability.product-evidence"
       ],
       "hypothesis_capability_ids": [
         "capability.agent-assisted-event-discovery",
@@ -399,11 +356,7 @@
     "fresh-read exact Git heads and stop on drift",
     "read or create the separate Product Atlas target file through Penpot MCP",
     "write a target receipt with real account/team/file identity",
-    "materialize product-system overview",
-    "materialize the site-as-is map with baseline/delta layers",
-    "materialize product-problem radar",
-    "materialize outcome/evidence map",
-    "materialize journeys/recovery and current/hypothesis views",
+    "materialize the declared views with baseline/delta layers",
     "read back every page and object identity",
     "commit the MCP receipt and only then replace binding_pending"
   ],
