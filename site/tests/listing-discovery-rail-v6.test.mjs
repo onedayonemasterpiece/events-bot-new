@@ -17,6 +17,8 @@ test('ListingDiscoveryRail v6 owns the plane and Floating Island surfaces', asyn
   assert.match(component, /data-listing-discovery-surface=\{resolvedSurface\}/u);
   assert.match(styles, /\.ke-listing-discovery-rail--floating-island \{[\s\S]*background: transparent;[\s\S]*pointer-events: none;/u);
   assert.match(styles, /\.ke-listing-discovery-rail--floating-island \.ke-listing-discovery-rail__inner \{[\s\S]*width: fit-content;[\s\S]*border-radius: var\(--ke-radius-pill\);[\s\S]*backdrop-filter: blur\(14px\);/u);
+  assert.match(styles, /\.ke-listing-discovery-rail--floating-island \.ke-listing-controls[\s\S]*?width: max-content;/u);
+  assert.match(styles, /\.ke-listing-discovery-rail--floating-island \.ke-city-filter[\s\S]*?overflow: visible;/u);
   assert.match(catalog, /data-ds-component="ListingDiscoveryRail" data-ds-version="6"/u);
   assert.match(catalog, /data-ds-version="5" data-ds-replaced-by="ListingDiscoveryRail@6"/u);
 });
