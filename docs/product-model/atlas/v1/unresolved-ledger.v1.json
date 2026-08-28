@@ -131,10 +131,10 @@
       "status": "not_applicable",
       "title": "No active first-party action-map campaign",
       "definition": "The action-map contract is accepted, but active capture is optional, default-off and not required to materialize Product Atlas Git SoT.",
-      "affected_entity_ids": ["capability.product-evidence", "mq.ui-affordance-diagnostics"],
+      "affected_entity_ids": ["capability.product-evidence"],
       "source_refs": ["src.first-party-action-map", "src.analytics-contract", "src.static-release-plan"],
       "resolution_gate": "Only a registered question and decision use may justify AM-1 through AM-4; otherwise the correct state remains off/not applicable.",
-      "prohibited_shortcut": "Treat absence of an active campaign as a product failure or enable permanent clickstream collection."
+      "prohibited_shortcut": "Treat absence of an active campaign as a product failure, invent a measurement question or enable permanent clickstream collection."
     }
   ]
 }
