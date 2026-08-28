@@ -15,6 +15,7 @@ const componentPaths = [
   'src/components/design-system/Badge.astro',
   'src/components/design-system/Field.astro',
   'src/components/design-system/StatePanel.astro',
+  'src/components/HomeHeroTalk.astro',
   'src/components/listings/ListingEventCard.astro',
   'src/components/listings/ListingDiscoveryRail.astro',
   'src/components/listings/ExactTimeTimeline.astro',
@@ -67,6 +68,9 @@ for (const component of ['AnnouncementsLockup', 'CalendarLink', 'EventHero', 'Ev
     && read('src/components/listings/ListingDiscoveryRail.astro').includes('<ListingControls');
   if (!renderedDirectly && !renderedThroughDiscovery) throw new Error(`Catalog misses real product component: ${component}`);
 }
+if (!catalog.includes('<HomeHeroTalk events={heroTalkEvents} version={2} mode="photo-mosaic"') || !catalog.includes('<HomeHeroTalkLegacy')) {
+  throw new Error('Catalog misses HeroTalk v2 and its deprecated v1 comparison');
+}
 if (!catalog.includes('AuthorizedEventSearch.astro')) throw new Error('Catalog registry misses conditional AuthorizedEventSearch surface');
 for (const section of ['foundations', 'actions', 'fields', 'states', 'product-components', 'registry']) {
   if (!catalog.includes(`id="${section}"`)) throw new Error(`Catalog misses section #${section}`);
@@ -100,6 +104,12 @@ if (!registryKeys.has('ListingDiscoveryRail@1') || !registryKeys.has('ListingDis
 if (!registryKeys.has('ListingEventCard@1') || !registryKeys.has('ListingEventCard@2') || !registryKeys.has('ListingEventCard@3') || !registryKeys.has('ListingEventCard@4') || !registryKeys.has('ListingEventCard@5') || !catalog.includes('data-ds-replaced-by="ListingEventCard@5"')) throw new Error('ListingEventCard v1 -> v2 -> v3 -> v4 -> v5 migration is missing from the registry');
 if (!registryKeys.has('EventCard@1') || !registryKeys.has('EventCard@2') || !catalog.includes('data-ds-replaced-by="EventCard@2"')) {
   throw new Error('EventCard v1 -> v2 migration is missing from the versioned registry');
+}
+if (!registryKeys.has('HeroTalk@1') || !registryKeys.has('HeroTalk@2') || !catalog.includes('data-ds-replaced-by="HeroTalk@2"')) {
+  throw new Error('HeroTalk static v1 -> Photo Mosaic v2 migration is missing from the versioned registry');
+}
+if (!rootPage.includes('<HomeHeroTalk events={feed.slice(0, 3)} version={2} mode="photo-mosaic"')) {
+  throw new Error('Home must consume HeroTalk v2 in Photo Mosaic mode');
 }
 const listingProductionSources = [
   'src/pages/segodnya/index.astro', 'src/pages/zavtra/index.astro', 'src/pages/vyhodnye/index.astro',

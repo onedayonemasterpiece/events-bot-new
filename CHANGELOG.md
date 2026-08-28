@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Changed: the rejected static Home event-feature hero is now the versioned
+  `HeroTalk@2` Photo Mosaic candidate: exact catalog-event scenes, semantic
+  fragments, a 5×4 tile projection, atomic scene transitions and static/
+  reduced-motion parity. The previous component is catalog-only
+  `HeroTalk@1` and explicitly deprecated.
+
 - Changed: `ListingDiscoveryRail@6` now exposes one shared `plane` /
   `floating-island` surface contract. All listing consumers use v6 and Weekend
   uses the content-sized translucent Floating Island requested in the owner
