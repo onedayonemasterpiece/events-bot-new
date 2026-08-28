@@ -53,7 +53,7 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
     } catch {}
   </script>
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={visibleEvents.length} current="popular" />
-  <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} />
+  <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} version={6} />
   <div class="ke-popular-desktop" data-popular-representation="desktop">
     <PopularBehaviorRows groups={desktop.groups}>
       <PopularPersonalizedRow events={desktopPersonalizationCandidates} />

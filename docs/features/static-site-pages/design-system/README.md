@@ -63,6 +63,22 @@ Astro source/generators
 
 Decoder must not match current Astro against removed/test Penpot components and must not change production UI.
 
+## Owner-audit correction: discovery rail v6
+
+The 2026-08-28 owner voice audit requires `61.10 Weekend Discovery rail` to be
+a content-sized, translucent Floating Island rather than a full-width visible
+shelf. `ListingDiscoveryRail@6` is the shared implementation of that contract:
+
+- `surface="plane"` preserves the shared Date and Popular presentation;
+- `surface="floating-island"` keeps the sticky outer plane transparent and
+  gives the shared inner control group a bounded, rounded, translucent surface;
+- Weekend is the first production Floating Island consumer;
+- every production caller is explicitly migrated to `version={6}`;
+- v5 remains only as a deprecated catalog comparison until owner sign-off.
+
+The same version and surface axes must be represented by the native Penpot
+component. A page-local rounded copy is not compatible evidence.
+
 ## Canonical documentation
 
 The normative design-system architecture lives in `onedayonemasterpiece/lovekgd-design-system`:

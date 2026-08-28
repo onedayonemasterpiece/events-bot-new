@@ -94,7 +94,9 @@ if (!registryKeys.has('ListingControls@1') || !registryKeys.has('ListingControls
 if (!registryKeys.has('ListingTimeNav@2') || !registryKeys.has('ListingTimeMarker@1') || !catalog.includes('data-ds-replaced-by="ListingTimeNav@2"')) throw new Error('Listing time navigation/marker v2 migration is missing from the registry');
 if (!registryKeys.has('ExactTimeTimeline@2') || !catalog.includes('data-ds-replaced-by="ExactTimeTimeline@2"')) throw new Error('ExactTimeTimeline v2 migration is missing from the registry');
 if (!registryKeys.has('WeekendEditorialTimeline@2') || !catalog.includes('data-ds-replaced-by="WeekendEditorialTimeline@2"')) throw new Error('WeekendTimeMatrix replacement is missing from the registry');
-if (!registryKeys.has('ListingDiscoveryRail@1')) throw new Error('ListingDiscoveryRail v1 is missing from the registry');
+if (!registryKeys.has('ListingDiscoveryRail@1') || !registryKeys.has('ListingDiscoveryRail@5') || !registryKeys.has('ListingDiscoveryRail@6') || !catalog.includes('data-ds-replaced-by="ListingDiscoveryRail@6"')) {
+  throw new Error('ListingDiscoveryRail v5 -> v6 migration is missing from the registry');
+}
 if (!registryKeys.has('ListingEventCard@1') || !registryKeys.has('ListingEventCard@2') || !registryKeys.has('ListingEventCard@3') || !registryKeys.has('ListingEventCard@4') || !registryKeys.has('ListingEventCard@5') || !catalog.includes('data-ds-replaced-by="ListingEventCard@5"')) throw new Error('ListingEventCard v1 -> v2 -> v3 -> v4 -> v5 migration is missing from the registry');
 if (!registryKeys.has('EventCard@1') || !registryKeys.has('EventCard@2') || !catalog.includes('data-ds-replaced-by="EventCard@2"')) {
   throw new Error('EventCard v1 -> v2 migration is missing from the versioned registry');
@@ -105,6 +107,17 @@ const listingProductionSources = [
   'src/components/listings/ListingControls.astro',
 ].map(read).join('\n');
 if (/<ListingPersonalFilter(?![^>]*version=\{2\})/u.test(listingProductionSources)) throw new Error('Deprecated ListingPersonalFilter v1 remains in a production consumer');
+const discoveryRailConsumers = [
+  'src/components/listings/DateListingSurface.astro',
+  'src/components/listings/PopularListingSurface.astro',
+  'src/components/listings/WeekendListingSurface.astro',
+].map(read).join('\n');
+if (/<ListingDiscoveryRail(?![^>]*version=\{6\})/u.test(discoveryRailConsumers)) {
+  throw new Error('Deprecated ListingDiscoveryRail v5 remains in a production consumer');
+}
+if (!read('src/components/listings/WeekendListingSurface.astro').includes('surface="floating-island"')) {
+  throw new Error('Weekend production consumer must use ListingDiscoveryRail v6 Floating Island');
+}
 
 const productionConsumerSources = [
   'src/pages/sobytiya/[slug].astro',

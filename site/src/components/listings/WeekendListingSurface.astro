@@ -30,7 +30,7 @@ function dayDateLabel(date: string): string {
 <div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="DATE-LISTING-V19" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate} data-amber-artifact-research={amberArtifactTailEventId ? 'tail' : 'off'} data-amber-artifact-event-id={amberArtifactTailEventId || undefined}>
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
   {ranges.length ? <WeekendRangeNav ranges={ranges} placement="top" /> : null}
-  <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных">
+  <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных" version={6} surface="floating-island">
     <ListingWeekendTimeNav days={days.map((day) => ({ key: day.key as 'sat' | 'sun', short: day.key === 'sat' ? 'Сб' : 'Вс', dateLabel: dayDateLabel(day.date), groups: day.groups }))} />
   </ListingDiscoveryRail>
   <MobileListingRailSurface

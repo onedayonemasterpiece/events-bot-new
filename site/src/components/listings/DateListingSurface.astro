@@ -62,6 +62,7 @@ const mobileMeta = `${mobileDate} · ${mobileWeekday} · ${events.length} ${even
     cities={cities}
     total={events.length}
     label={kind === 'today' ? 'сегодня' : kind === 'tomorrow' ? 'завтра' : dateLabel}
+    version={6}
     dateContext={{ date: mobileDate, weekday: mobileWeekday }}
   >
     <ListingTimeNav groups={upcomingGroups} idPrefix={idPrefix} earlierCount={earlierEvents.length} />

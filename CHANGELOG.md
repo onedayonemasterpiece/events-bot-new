@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Changed: `ListingDiscoveryRail@6` now exposes one shared `plane` /
+  `floating-island` surface contract. All listing consumers use v6 and Weekend
+  uses the content-sized translucent Floating Island requested in the owner
+  audio audit; v5 remains a deprecated design-system catalog comparison.
+
 - Fixed: private `eventsBot` MCP VK image publishing now decompresses VK's
   gzip-encoded multipart receipt and consumes fragmented JSON to EOF under the
   decoded-byte cap, separates the user-token media actor from the
