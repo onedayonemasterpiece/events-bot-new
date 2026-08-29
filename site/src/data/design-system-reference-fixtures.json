@@ -1,0 +1,318 @@
+{
+  "schema_version": "design-system-reference-fixtures.v3",
+  "profile_id": "design-system-reference-v3",
+  "authority": {
+    "ui_sot_registry_id": "design-system-reference-v2",
+    "ui_sot_contract": "lovekgd-design-system:catalog/fixtures/design-system-reference/v2/registry.v2.json",
+    "ui_sot_contract_sha256": "8b24b79701287b3ef6bb8356826282630f28f855ee7e1381c33341457e77b660",
+    "ui_sot_scenario": "lovekgd-design-system:catalog/fixtures/design-system-reference/v2/scenarios/archetype.collections.free.september.desktop-ready.v3.json",
+    "ui_sot_scenario_sha256": "31dbbe8f8df21e895bd2779dcb234beb5cfdf79bb71e9a96c28cd3faa2170545",
+    "golden_corpus_id": "ui-reference-events.v2",
+    "golden_corpus_content_sha256": "b1746f0cd68be6dd6060858fb765c6863535aefbcf4844b9b50c279d69e9306a",
+    "payload_source": "site/src/data/ui-reference-events-v2.json",
+    "rule": "Generated only by site/scripts/build-design-system-reference-fixtures-v3.py from exact UI SoT v2 payloads; routes select scenarios and never own IDs or payload fields."
+  },
+  "events": {
+    "component_conformance_fixture_ids": [
+      2182,
+      6711,
+      7609,
+      8006,
+      8200,
+      7907,
+      6942,
+      7020
+    ],
+    "archetype_fixture_ids": [
+      2182,
+      6711,
+      7609,
+      8006,
+      8200
+    ],
+    "fixtures": [
+      {
+        "event_id": 2182,
+        "preview_event_sha256": "421b186617e8c9eb3ed874b17d6f319f94508babc1022542f81ea608127d5f25",
+        "coverage": [
+          "active-september",
+          "landscape-crop-safe",
+          "visual-only",
+          "single-image",
+          "admission-free"
+        ]
+      },
+      {
+        "event_id": 6711,
+        "preview_event_sha256": "a54d8c4388335a0c4125467d001062775027e48c663e06cacab591a225947d8b",
+        "coverage": [
+          "active-september",
+          "four-three-visual",
+          "landscape-crop-safe",
+          "visual-only",
+          "multi-image",
+          "admission-free"
+        ]
+      },
+      {
+        "event_id": 7609,
+        "preview_event_sha256": "4603ed79e730952f6e37503db096988aac9fd2f5923b7008daa4900c4fafb692",
+        "coverage": [
+          "active-september",
+          "square-poster",
+          "ocr-protected",
+          "multi-image",
+          "admission-free"
+        ]
+      },
+      {
+        "event_id": 8006,
+        "preview_event_sha256": "ad1a836f259ed7c744ab1a314ea7a0d6924de1f0b6539cebaea3cc30ca39a403",
+        "coverage": [
+          "early-september",
+          "portrait-poster",
+          "ocr-protected",
+          "single-image",
+          "admission-free"
+        ]
+      },
+      {
+        "event_id": 8200,
+        "preview_event_sha256": "010b899a479ce9459becda0107791d848b65946e077e5586e67ad2ac25ac5078",
+        "coverage": [
+          "early-september",
+          "program-document",
+          "six-seven-poster",
+          "ocr-protected",
+          "single-image",
+          "admission-free"
+        ]
+      },
+      {
+        "event_id": 7907,
+        "preview_event_sha256": "af19354e1aa89ab505d9bbe57a7652950b3059fd3c5372822e9b9902dfd22ea9",
+        "coverage": [
+          "active-september",
+          "landscape-document",
+          "ocr-protected",
+          "multi-image",
+          "mixed-ocr-visual",
+          "admission-free",
+          "long-title"
+        ]
+      },
+      {
+        "event_id": 6942,
+        "preview_event_sha256": "8a89513dd27bdf038a5aab6ce84c0f1d1ba6d65e848b7c18ba8d49361227a1cb",
+        "coverage": [
+          "mid-september",
+          "four-five-poster",
+          "ocr-protected",
+          "legacy-cdn-bundled",
+          "admission-price"
+        ]
+      },
+      {
+        "event_id": 7020,
+        "preview_event_sha256": "becb9083c46643124148166b3b3ac1b7c5dc0540d7e9d123b1419cb52cefebdf",
+        "coverage": [
+          "late-september",
+          "portrait-poster",
+          "ocr-protected",
+          "multi-image",
+          "mixed-media-gallery",
+          "admission-price"
+        ]
+      }
+    ]
+  },
+  "festivals": {
+    "rows": [
+      {
+        "role": "single-wide",
+        "slugs": [
+          "city-jazz"
+        ]
+      },
+      {
+        "role": "packed-four-varied-framing",
+        "slugs": [
+          "sosedi",
+          "grozd",
+          "more-vnutri",
+          "bolshoy-kaup"
+        ]
+      },
+      {
+        "role": "paired-status-contrast",
+        "slugs": [
+          "v-edinstve",
+          "jazz-v-filarmonii"
+        ]
+      }
+    ]
+  },
+  "clubs": {
+    "fixture_slugs": [
+      "game-vibes",
+      "neural-researchers",
+      "technology-researchers"
+    ]
+  },
+  "container_families": {
+    "event_card_equal_height_grid": {
+      "runtime_owner": "site/src/components/OptimizedEventCardGrid.astro",
+      "card_family": "EventCard@2",
+      "purpose": "Large EventCard rows on related, recommendation and collection surfaces; preserve all source cards and equalize cards within each rendered desktop row."
+    },
+    "desktop_listing_rows": {
+      "runtime_owners": [
+        "site/src/components/listings/ExactTimeTimeline.astro",
+        "site/src/components/listings/PopularBehaviorRows.astro",
+        "site/src/components/listings/WeekendEditorialTimeline.astro"
+      ],
+      "card_family": "ListingEventCard@9",
+      "purpose": "Date, Popular and Weekend desktop listing rows. This is not an EventCard grid."
+    },
+    "festival_timeline_rows": {
+      "runtime_owner": "site/src/lib/festivalTimelineLayout.ts#packFestivalTimeline",
+      "card_family": "FestivalCard",
+      "purpose": "Festival rows with source-derived 1/4/2 packing."
+    },
+    "interest_club_grid": {
+      "runtime_owner": "site/src/pages/kluby-po-interesam/index.astro#.club-list",
+      "card_family": "InterestClubCard@1",
+      "purpose": "Interest-club grid; route-owned until its separate centralization task is certified."
+    }
+  },
+  "scenarios": {
+    "free-collection-september-desktop-v3": {
+      "route": "/podborki/besplatnye-sobytiya/",
+      "viewport": {
+        "width": 1280,
+        "height": 1200,
+        "dpr": 1
+      },
+      "reference_timestamp": "2026-08-29T14:00:00+02:00",
+      "reference_date": "2026-08-29",
+      "updated_date": "2026-08-29",
+      "event_ids": [
+        2182,
+        6711,
+        7609,
+        8006,
+        8200
+      ],
+      "expected_card_count": 5,
+      "container_family": "event_card_equal_height_grid",
+      "card_family": "EventCard@2",
+      "availability": "local-preview-only",
+      "expected_render_order": [
+        8006,
+        8200,
+        2182,
+        6711,
+        7609
+      ],
+      "expected_groups": {
+        "events": [
+          "event.real.8006",
+          "event.real.8200"
+        ],
+        "exhibitions": [
+          "event.real.2182",
+          "event.real.6711",
+          "event.real.7609"
+        ]
+      },
+      "coverage_requirements": [
+        "multiple-landscape-visual-aspect-ratios",
+        "square-ocr-poster",
+        "portrait-ocr-poster",
+        "program-document",
+        "single-and-multi-image",
+        "visual-only-and-ocr-protected"
+      ],
+      "explicit_exclusions": [
+        {
+          "reason": "Do not use the repeated green Chernyakhovsk programme poster: it makes unrelated cards look duplicated and destroys diagnostic diversity.",
+          "asset_keys": [
+            "3f02c57279fb894be9b734b9cf3f39de134d64292bf3cac43cc9506243b696f0",
+            "4717a8978f46b70f3c2a6220f83157c9f041375c936ba1e5c2e4863791cd923e",
+            "e76bd4b631c6c03700dcfef1817c65cfe8acc4f3212b74af747dbcd50a3593dd",
+            "41bf6f47f7c5e81fff221a2844d08fe3118e3f0f0c7499f4bf94c31ea96e0db8"
+          ]
+        }
+      ],
+      "review_states": [
+        "top",
+        "hero-passed-sticky-medallion",
+        "full-page"
+      ]
+    },
+    "free-collection-september-mobile-v3": {
+      "route": "/podborki/besplatnye-sobytiya/",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "reference_timestamp": "2026-08-29T14:00:00+02:00",
+      "reference_date": "2026-08-29",
+      "updated_date": "2026-08-29",
+      "event_ids": [
+        2182,
+        6711,
+        7609,
+        8006,
+        8200
+      ],
+      "expected_card_count": 5,
+      "container_family": "event_card_equal_height_grid",
+      "card_family": "EventCard@2",
+      "availability": "local-preview-only",
+      "expected_render_order": [
+        8006,
+        8200,
+        2182,
+        6711,
+        7609
+      ],
+      "expected_groups": {
+        "events": [
+          "event.real.8006",
+          "event.real.8200"
+        ],
+        "exhibitions": [
+          "event.real.2182",
+          "event.real.6711",
+          "event.real.7609"
+        ]
+      },
+      "coverage_requirements": [
+        "multiple-landscape-visual-aspect-ratios",
+        "square-ocr-poster",
+        "portrait-ocr-poster",
+        "program-document",
+        "single-and-multi-image",
+        "visual-only-and-ocr-protected"
+      ],
+      "explicit_exclusions": [
+        {
+          "reason": "Do not use the repeated green Chernyakhovsk programme poster: it makes unrelated cards look duplicated and destroys diagnostic diversity.",
+          "asset_keys": [
+            "3f02c57279fb894be9b734b9cf3f39de134d64292bf3cac43cc9506243b696f0",
+            "4717a8978f46b70f3c2a6220f83157c9f041375c936ba1e5c2e4863791cd923e",
+            "e76bd4b631c6c03700dcfef1817c65cfe8acc4f3212b74af747dbcd50a3593dd",
+            "41bf6f47f7c5e81fff221a2844d08fe3118e3f0f0c7499f4bf94c31ea96e0db8"
+          ]
+        }
+      ],
+      "review_states": [
+        "top",
+        "scrolled-fixed-navigation",
+        "full-page"
+      ]
+    }
+  }
+}

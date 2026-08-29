@@ -442,6 +442,62 @@ function optimizeRows(selected, rowSize, mediaTreatment) {
   return best?.groups || null;
 }
 
+function optimizeRowsPreservingAll(selected, rowSize, mediaTreatment) {
+  if (!selected.length) return [];
+  // Collection and page-result consumers have a cardinality contract: a
+  // heading derived from N source events must render N cards. The strict
+  // optimizer above may reject an otherwise factual card when one full row
+  // cannot share a safe document crop. This bounded fallback partitions the
+  // exact selected set into smaller feasible rows instead of selecting a
+  // visually convenient subset.
+  if (selected.length > 20) return null;
+  const fullMask = (1 << selected.length) - 1;
+  const memo = new Map();
+  const solve = (mask) => {
+    if (!mask) return { underfill:0, rows:0, cost:0, displacement:0, signature:'', groups:[] };
+    if (memo.has(mask)) return memo.get(mask);
+    let anchor = 0;
+    while (!(mask & (1 << anchor))) anchor += 1;
+    const available = [];
+    for (let index = 0; index < selected.length; index += 1) if (mask & (1 << index)) available.push(index);
+    let best = null;
+    for (let size = Math.min(rowSize, available.length); size >= 1; size -= 1) {
+      for (const indexes of combinationsIncludingAnchor(mask, anchor, size)) {
+        const entries = indexes.map((index) => selected[index]);
+        const plan = rowPlan(entries, mediaTreatment);
+        if (!plan) continue;
+        const groupMask = indexes.reduce((value, index) => value | (1 << index), 0);
+        const tail = solve(mask & ~groupMask);
+        if (!tail) continue;
+        const candidate = {
+          underfill:rowSize - size + tail.underfill,
+          rows:1 + tail.rows,
+          cost:plan.cost + tail.cost,
+          displacement:indexes.reduce((sum, value, index) => sum + Math.abs(value - (anchor + index)), 0) + tail.displacement,
+          signature:`${indexes.join('.')};${tail.signature}`,
+          groups:[{ entries, plan }, ...tail.groups],
+        };
+        const better = !best
+          || candidate.underfill < best.underfill
+          || (candidate.underfill === best.underfill && candidate.rows < best.rows)
+          || (candidate.underfill === best.underfill && candidate.rows === best.rows && candidate.cost < best.cost - EPSILON)
+          || (candidate.underfill === best.underfill && candidate.rows === best.rows && Math.abs(candidate.cost - best.cost) <= EPSILON && candidate.displacement < best.displacement)
+          || (candidate.underfill === best.underfill && candidate.rows === best.rows && Math.abs(candidate.cost - best.cost) <= EPSILON && candidate.displacement === best.displacement && candidate.signature < best.signature);
+        if (better) best = candidate;
+      }
+    }
+    memo.set(mask, best);
+    return best;
+  };
+  const solved = solve(fullMask);
+  if (!solved) return null;
+  // Larger rows stay first, so a singleton remains the final visual remainder.
+  return solved.groups
+    .map((group, sourceIndex) => ({ ...group, sourceIndex }))
+    .sort((left, right) => right.entries.length - left.entries.length || left.sourceIndex - right.sourceIndex)
+    .map(({ sourceIndex: _sourceIndex, ...group }) => group);
+}
+
 function selectionCombinations(length, exactSize) {
   const result = [];
   const choose = (start, selected) => {
@@ -496,6 +552,7 @@ export function packRelatedCardRows(items, options = {}) {
   const mediaTreatment = options.mediaTreatment || 'hybrid';
   const presentation = options.presentation === 'flow' ? 'flow' : 'related-grid';
   const geometry = options.geometry || relatedCardMediaGeometry;
+  const preserveAll = options.preserveAll === true;
   const targetCount = Math.min(limit, items.length);
   if (!targetCount) return [];
   // Usually the ranked prefix is feasible and takes the fast path. If its OCR
@@ -507,6 +564,7 @@ export function packRelatedCardRows(items, options = {}) {
     .map((item, originalIndex) => ({ item, originalIndex, ...geometry(item) }));
   let selected = pool.slice(0, targetCount);
   let rows = optimizeRows(selected, rowSize, mediaTreatment);
+  if (!rows && preserveAll) rows = optimizeRowsPreservingAll(selected, rowSize, mediaTreatment);
   if (!rows) {
     let winner = null;
     for (let count = targetCount; count >= 1 && !winner; count -= 1) {

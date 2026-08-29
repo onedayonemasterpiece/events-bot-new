@@ -1,5 +1,5 @@
 ---
-import EventCard from './EventCard.astro';
+import OptimizedEventCardGrid from './OptimizedEventCardGrid.astro';
 import Breadcrumbs from './Breadcrumbs.astro';
 import type { PreviewEvent } from '../lib/types';
 import { siteHomeHref, withBase } from '../lib/events';
@@ -10,15 +10,17 @@ interface Props {
   criteria: string;
   updatedDate: string;
   referenceDate: string;
+  referenceTimestamp?: string;
   events: PreviewEvent[];
+  fixtureScenarioId?: string;
 }
-const { title, description, criteria, updatedDate, referenceDate, events } = Astro.props;
+const { title, description, criteria, updatedDate, referenceDate, referenceTimestamp, events, fixtureScenarioId } = Astro.props;
 const isExhibition = (event: PreviewEvent) => (event.event_type || '').trim().toLocaleLowerCase('ru-RU') === 'выставка'
   || event.topics.includes('EXHIBITIONS');
 const exhibitionEvents = events.filter(isExhibition);
 const regularEvents = events.filter((event) => !isExhibition(event));
 ---
-<main id="main" class="free-collection" data-free-collection-surface>
+<main id="main" class="free-collection" data-free-collection-surface data-ui-fixture-scenario={fixtureScenarioId} data-reference-clock={referenceTimestamp}>
   <div class="page-shell free-collection__shell">
     <Breadcrumbs
       parents={[
@@ -54,8 +56,14 @@ const regularEvents = events.filter((event) => !isExhibition(event));
       </h2>
       {events.length ? (
         regularEvents.length ? (
-          <div class="cards-grid" data-search-collection-results>
-            {regularEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
+          <div data-search-collection-results>
+            <OptimizedEventCardGrid
+              events={regularEvents}
+              limit={regularEvents.length}
+              rowSize={3}
+              responsiveMobile
+              surface="free-collection-events"
+            />
           </div>
         ) : (
           <p class="free-collection__empty">Сейчас все актуальные варианты этой подборки — продолжающиеся выставки. Они собраны отдельно ниже.</p>
@@ -70,8 +78,14 @@ const regularEvents = events.filter((event) => !isExhibition(event));
         <p class="eyebrow">Можно посетить в течение дня</p>
         <h2 id="free-collection-exhibitions-title">Бесплатные выставки · {exhibitionEvents.length}</h2>
         <p class="free-collection__group-note">Продолжающиеся выставки отделены от событий с конкретным временем, чтобы их было проще просматривать.</p>
-        <div class="cards-grid" data-search-collection-exhibitions>
-          {exhibitionEvents.map((event) => <EventCard event={event} mobileFlowMedia />)}
+        <div data-search-collection-exhibitions>
+          <OptimizedEventCardGrid
+            events={exhibitionEvents}
+            limit={exhibitionEvents.length}
+            rowSize={3}
+            responsiveMobile
+            surface="free-collection-exhibitions"
+          />
         </div>
       </section>
     )}
@@ -136,7 +150,7 @@ const regularEvents = events.filter((event) => !isExhibition(event));
     .free-collection__sticky-identity { top:64px; z-index:35; padding-right:6px; }
     .free-collection__medallion--compact { width:50px; height:50px; }
     .free-collection__results { padding:20px 12px; border-radius:20px; }
-    .free-collection__results .cards-grid { grid-template-columns:minmax(0,1fr); }
+    .free-collection__results :global(.optimized-event-card-grid--responsive) { grid-template-columns:minmax(0,1fr); }
   }
   @media(prefers-reduced-motion:reduce) {
     .free-collection__medallion--compact { transition:none; }

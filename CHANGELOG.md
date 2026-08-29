@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-29 — bounded Free collection parity
+
+- Wired `/podborki/besplatnye-sobytiya/` to the generated Golden Event Corpus v2 scenario bridge with one exact reference clock and deterministic five-event order.
+- Routed both page groups through the shared `OptimizedEventCardGrid → EventCard` chain, preserving all records in bounded rows, and aligned the mobile floating navigation state used by this route.
+- Added deterministic desktop/mobile capture evidence contracts for top, scrolled, full-page, group, and individual-card roots.
+
 ## [Unreleased]
 
 - Fixed: private `eventsBot` MCP VK image publishing now decompresses VK's
