@@ -40,11 +40,16 @@ const popularGroupSubtitles = {
   frequently_shared: 'Ими чаще делятся',
   score_fallback: 'Популярное по совокупности сигналов',
 } as const;
-const cities = [...new Set(visibleEvents.map((event) => event.city || 'Калининградская область'))]
-  .map((name) => ({ name, count: visibleEvents.filter((event) => (event.city || 'Калининградская область') === name).length }))
+const popularCityLabel = (value?: string | null) => {
+  const city = (value || 'Калининградская область').trim();
+  return /^пос(?:ёлок|елок)?\.?\s+/iu.test(city) ? city.replace(/^пос(?:ёлок|елок)?\.?\s+/iu, '') : city;
+};
+const cityLabels = visibleEvents.map((event) => popularCityLabel(event.city));
+const cities = [...new Set(cityLabels)]
+  .map((name) => ({ name, count: cityLabels.filter((city) => city === name).length }))
   .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, 'ru'));
 ---
-<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V26" data-desktop-popular-version="V28" data-mobile-card-density="large">
+<div class="ke-listing-shell ke-popular-listing" data-date-listing="popular" data-listing-variant="POPULAR-V26" data-desktop-popular-version="V28" data-popular-shell-surface="floating-islands" data-mobile-card-density="large">
   <script is:inline>
     try {
       const surface = document.currentScript.closest('[data-date-listing="popular"]');
@@ -53,7 +58,7 @@ const cities = [...new Set(visibleEvents.map((event) => event.city || 'Кали�
     } catch {}
   </script>
   <ListingPageHeader title="Популярное" dateLabel="По реакции аудитории" count={visibleEvents.length} current="popular" />
-  <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} version={6} />
+  <ListingDiscoveryRail cities={cities} total={visibleEvents.length} label="популярное" hasTime={false} version={6} surface="floating-island" />
   <div class="ke-popular-desktop" data-popular-representation="desktop">
     <PopularBehaviorRows groups={desktop.groups}>
       <PopularPersonalizedRow events={desktopPersonalizationCandidates} />
