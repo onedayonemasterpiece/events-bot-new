@@ -1,7 +1,7 @@
-8e214b0ab7970519ec9ec44b4fff3bdc5bb91a23255ac6cbd1cbf84ff20d8dfb  site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-full.png
-b917d8b0094265bcbc39c485c7c84731ceaefcfaf340fcfed86e8ad6eb121d06  site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-sticky.png
-822e70c574d75274218c917c02dce99beef66563c85eadf65d6982a701491368  site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-top.png
-1c5d36946477520a83aa578500f89bdd2b0850430da5a1dabbb35fa148cc3cd4  site/evidence/recovery-20260829/free-collection-september-v2/astro-mobile-full.png
-59e7d33cb8ec33f1def2d72190aa9e31e231766bf6ad3ea99353a5a4161cd9a6  site/evidence/recovery-20260829/free-collection-september-v2/astro-mobile-sticky.png
-d5a6ebdf3cae0235f006d12eaffe466d096ed8d97e15e997717caaefaa762621  site/evidence/recovery-20260829/free-collection-september-v2/astro-mobile-top.png
-82732ac17199b94d3660e53b8b2127b80b21fb3dcc8c52e069a6a118529faeee  site/evidence/recovery-20260829/free-collection-september-v2/astro-browser-receipt.v2.json
+137532d3a5a0b5959a32bf55e2921398d4295e0af3d0e63dd0725c0c2855fc49  site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-full.png
+c0fe6e5cf5c126c06b0127320c10107c9ec262e9dfb3aff8eb13e08ad461b4b6  site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-sticky.png
+3dcd145fb1d007ce3d89c939823ea310dda0d0b3cdf257064043899fa425ebc4  site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-top.png
+4d15df62827efec2e26627b97730e4aac6ee4afe4a0c6d3068b1cad4efd43d50  site/evidence/recovery-20260829/free-collection-september-v2/astro-mobile-full.png
+794fc72b3665906f6a27e3892c67e78fb8ca93f66d0599224b64e3f8b0f0f7e7  site/evidence/recovery-20260829/free-collection-september-v2/astro-mobile-sticky.png
+2655e905a38324407731f0e83acd6d4ed1f0bcafb4246a7d9afe1fce00a3ce78  site/evidence/recovery-20260829/free-collection-september-v2/astro-mobile-top.png
+f4e712092a4cbce6f9934105bda5f549f39e4844f8f4e4dbc554d07e53cc74f5  site/evidence/recovery-20260829/free-collection-september-v2/astro-browser-receipt.v2.json
