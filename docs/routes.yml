@@ -298,6 +298,7 @@ features:
     event_comment_feedback: docs/features/event-comment-feedback/README.md
     kaggle_static_site_builder: docs/operations/kaggle-static-site-builder.md
     event_card_ui_ab_2026_06_27: docs/features/static-site-pages/event-card-ui-ab-2026-06-27.md
+    ui_reference_fixture_scenarios: docs/features/static-site-pages/design-system/reference-fixture-scenarios.md
     event_hero_lab_2026_06_27: docs/features/static-site-pages/event-hero-lab-2026-06-27.md
     reaction_counter_sync_script: scripts/sync_reaction_counters_to_supabase.py
     target_domain: https://kenigevents.ru/
@@ -327,6 +328,8 @@ features:
       - site/src/components/CalendarLink.astro
       - site/src/components/Icon.astro
       - site/src/data/preview-events.json
+      - site/src/data/design-system-reference-fixtures.json
+      - site/src/data/designSystemReferenceFixtures.ts
       - site/src/data/preview-related.json
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs

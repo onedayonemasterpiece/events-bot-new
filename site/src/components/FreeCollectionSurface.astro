@@ -11,14 +11,15 @@ interface Props {
   updatedDate: string;
   referenceDate: string;
   events: PreviewEvent[];
+  fixtureScenarioId?: string;
 }
-const { title, description, criteria, updatedDate, referenceDate, events } = Astro.props;
+const { title, description, criteria, updatedDate, referenceDate, events, fixtureScenarioId } = Astro.props;
 const isExhibition = (event: PreviewEvent) => (event.event_type || '').trim().toLocaleLowerCase('ru-RU') === 'выставка'
   || event.topics.includes('EXHIBITIONS');
 const exhibitionEvents = events.filter(isExhibition);
 const regularEvents = events.filter((event) => !isExhibition(event));
 ---
-<main id="main" class="free-collection" data-free-collection-surface>
+<main id="main" class="free-collection" data-free-collection-surface data-ui-fixture-scenario={fixtureScenarioId}>
   <div class="page-shell free-collection__shell">
     <Breadcrumbs
       parents={[
