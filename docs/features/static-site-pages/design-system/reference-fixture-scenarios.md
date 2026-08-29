@@ -1,62 +1,99 @@
 # Reference fixture scenarios
 
-Status: `ACTIVE_EXECUTABLE_BRIDGE / DRAFT_CONTOUR`
+Status: `ACTIVE_EXECUTABLE_BRIDGE / SOT_EVENT_CORPUS_UNIFICATION_OPEN`
 
-The durable fixture and archetype-scenario authority is
-`lovekgd-design-system/docs/ui-reference-fixture-registry.md` and its versioned
-registry under `catalog/fixtures/design-system-reference/` on the current head
-of Draft PR `lovekgd-design-system#53`.
+## Central authority
 
-This repository contains only the executable bridge:
+SoT UI owns the canonical fixture authority. This Astro repository contains
+only an executable projection.
 
-- `site/src/data/design-system-reference-fixtures.json` is a generated consumer
-  projection: it selects factual IDs from `preview-events.json`, records the
-  distinct container families and pins the SHA-256 of the canonical registry and
-  scenario files. A scenario change is incomplete until those pins and parity
-  tests are refreshed together;
-- `site/src/data/designSystemReferenceFixtures.ts` validates and resolves one
-  explicit local/preview scenario;
+Target:
+
+```text
+one canonical SoT UI fixture registry
+→ typed factual fixture records + payload/media hashes
+→ named versioned scenarios/subsets
+  ├─→ Astro projection
+  └─→ Penpot projection
+```
+
+Penpot owns no fixture list. Astro owns product-data resolution but not an
+independently editable design fixture authority.
+
+Current normative route on Draft PR `lovekgd-design-system#53`:
+
+- `docs/static-site-design-system-current-state.md`;
+- `docs/ui-reference-fixture-registry.md`;
+- `docs/reviews/owner-text-sot-ui-centrality-correction-20260829.md`;
+- `catalog/fixtures/design-system-reference/`.
+
+## Executable bridge
+
+- `site/src/data/design-system-reference-fixtures.json` is a generated ID-only
+  consumer projection. It selects factual payloads from `preview-events.json`
+  and pins the canonical registry/scenario hashes.
+- `site/src/data/designSystemReferenceFixtures.ts` validates and resolves an
+  explicit local/preview scenario.
 - a real route consumes that selection through its normal component tree and
-  emits `data-ui-fixture-scenario` for browser evidence.
+  emits the scenario identity for browser evidence.
 
-Do not put event payload copies or page-local ID arrays into a route. Production
-and secret-candidate builds must reject fixture mode.
+Do not copy payload fields or route-local ID arrays. Production and
+secret-candidate builds must reject fixture mode.
 
 ## One comparison — one exact scenario
 
-The owner requirement for a shared Golden Corpus means:
-
 ```text
 one bounded comparison
-= one named versioned scenario/pool
-+ the same fixture IDs and payload/media hashes in Astro and Penpot
-+ one frozen clock/locale/viewport/state manifest
+= one SoT registry/corpus version
++ one named scenario
++ same fixture IDs and payload/media hashes in Astro and Penpot
++ frozen clock/locale/viewport/DPR/fonts/state
 ```
 
-It does **not** mean that every component, archetype and product entity must use
-one universal list of events.
+Different named scenario subsets are allowed. Different typed entity pools are
+allowed under the same SoT authority. This does not permit parallel unlinked
+event authorities.
 
-Current executable bridge intentionally separates scopes:
+## Current event-corpus discrepancy
 
-| Scope | Current pool |
+Current bridge exposes two event scopes:
+
+| Scope | Current set |
 |---|---|
-| component conformance | 8 factual events: `3132, 4327, 6399, 6628, 7807, 7888, 7906, 8156` |
-| archetype core | 5 factual events: `7030, 7006, 6901, 6996, 6997` |
-| festival timeline | 7 factual festival slugs in bounded `1 / 4 / 2` rows |
-| interest clubs | 3 factual club slugs |
-| Artifact Collection 1 | 7 factual artifacts in the design-system registry |
+| component certification | `3132, 4327, 6399, 6628, 7807, 7888, 7906, 8156` |
+| archetype core | `7030, 7006, 6901, 6996, 6997` |
 
-The eight-event component corpus originated in the Golden Event Corpus pilot
-(Draft PR `lovekgd-design-system#42`). Its identity gates passed, while the
-pilot's visual conformance was explicitly recorded as FAIL. The five-event
-archetype pool is a later bounded scenario registry, not a replacement claim for
-that pilot.
+The 8-event set came from the immutable Golden Event Corpus pilot; the 5-event
+set came from the later archetype registry. They are disjoint. The current
+SoT documentation explicitly says the archetype registry does not replace the
+component corpus.
 
-A test, screenshot or Penpot board must always name which pool/scenario it uses.
-Mixing the eight-event component set with the five-event archetype set and still
-calling the comparison exact is invalid.
+Consequences:
 
-## First executable archetype scenario
+- exact parity inside either bounded scenario can be valid;
+- mixing IDs between scenarios is invalid;
+- calling the two contours one already unified Golden Corpus is also invalid;
+- component → group → archetype continuity through one fixture authority is not
+  yet proven.
+
+Status: `SOT_FIXTURE_AUTHORITY_UNIFICATION_OPEN`.
+
+Closure requires either registering both sets under one canonical SoT registry
+with exact hashes/provenance, or explicitly superseding and migrating one
+contour.
+
+## Other typed pools
+
+Current factual pools also include:
+
+- festival reference rows: 7 festival slugs;
+- interest clubs: 3 club slugs;
+- Artifact Collection 1: 7 artifacts.
+
+These may remain typed pools, but must be governed by the same central SoT
+fixture authority rather than page-local lists.
+
+## Current executable archetype scenario
 
 ```bash
 PUBLIC_DESIGN_FIXTURE_PROFILE=design-system-reference-v2 \
@@ -65,30 +102,30 @@ PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE=2026-07-23 \
 npm --prefix site run build
 ```
 
-This renders `/podborki/besplatnye-sobytiya/` with the factual IDs
-`7030, 7006, 6901, 6996, 6997` through `FreeCollectionSurface` →
-`OptimizedEventCardGrid` → canonical `EventCard`. The optimizer's actual DOM
-order is a separately asserted output; Penpot must follow that output rather
-than hand-arranging input order.
+This renders `/podborki/besplatnye-sobytiya/` with
+`7030, 7006, 6901, 6996, 6997` through
+`FreeCollectionSurface → OptimizedEventCardGrid → EventCard`.
 
-Exact parity requires the same:
+The actual optimizer order is separately asserted; Penpot must follow the
+rendered output rather than hand-arrange the input.
 
-- scenario ID and registry/scenario hashes;
-- event IDs and complete resolved payload hashes;
-- media bytes/framing decision;
+Exact bounded parity requires identical:
+
+- registry/corpus and scenario hashes;
+- fixture IDs and resolved payload hashes;
+- media bytes and framing decisions;
 - reference date, timezone and locale;
-- viewport, DPR, fonts, theme, auth/consent/personalization and interaction state;
+- viewport, DPR, fonts, theme, auth/consent/personalization and interaction
+  state;
 - component and container identities.
 
-Card identity and container identity remain separate. An equal-height EventCard
-grid, compact listing rows, festival timeline rows and interest-club grid must
-not be collapsed into a generic `PackedCardRow` merely because they contain
-multiple cards.
+Card and container identities remain separate. EventCard grids, compact listing
+rows, festival timeline rows and club grids must not be collapsed into one
+`PackedCardRow` solely because they contain multiple cards.
 
 ## Dense and production coverage
 
-The bounded pools keep Penpot review pages small and repeatable. They do not
-replace generated Astro validation over dense/full listings, negative states,
-long copy and production-scale data. Full production listings remain executable
-stress evidence and are not copied wholesale into Penpot unless a specific
-owner-review state requires them.
+Bounded fixtures keep Penpot review repeatable. They do not replace generated
+Astro validation over dense/full listings, negative states, long copy and
+production-scale data. Full listings remain executable stress evidence and are
+not copied wholesale into Penpot without an explicit review need.
