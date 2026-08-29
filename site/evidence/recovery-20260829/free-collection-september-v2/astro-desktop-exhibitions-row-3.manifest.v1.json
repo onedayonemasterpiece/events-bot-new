@@ -1,0 +1,36 @@
+{
+  "schema": "free-collection-bounded-three-card-capture.v1",
+  "source": {
+    "path": "site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-full.png",
+    "sha256": "137532d3a5a0b5959a32bf55e2921398d4295e0af3d0e63dd0725c0c2855fc49",
+    "width": 1280,
+    "height": 3338,
+    "astro_commit": "6faddb367d200f50dee0e5ac9fe7be47f657d0ae"
+  },
+  "crop": {
+    "path": "site/evidence/recovery-20260829/free-collection-september-v2/astro-desktop-exhibitions-row-3.png",
+    "sha256": "cc03ae4cb916992e9c1581b84f3201c012e8e5ef44ddb437f42e7ca266400cd1",
+    "pixel_box": {
+      "left": 99,
+      "top": 1921,
+      "right": 1181,
+      "bottom": 2544
+    },
+    "width": 1082,
+    "height": 623,
+    "css_target": {
+      "x": 99,
+      "y": 1921.390625,
+      "width": 1082,
+      "height": 622.09375
+    }
+  },
+  "fixtures": [
+    2182,
+    6711,
+    7609
+  ],
+  "component": "EventCard.astro",
+  "container": "OptimizedEventCardGrid.astro",
+  "derivation": "Pixel crop from the immutable full-page Astro capture after all five card images decoded; no markup or CSS was recreated."
+}
