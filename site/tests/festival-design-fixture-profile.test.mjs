@@ -8,8 +8,8 @@ const page=await readFile(new URL('../src/pages/festivali/index.astro',import.me
 const card=await readFile(new URL('../src/components/festivals/FestivalCard.astro',import.meta.url),'utf8');
 
 test('design-system fixture profile is a factual seven-festival 1/4/2 subset',()=>{
-  assert.equal(profile.schema_version,'design-system-reference-fixtures.v2');
-  assert.equal(profile.profile_id,'design-system-reference-v2');
+  assert.equal(profile.schema_version,'design-system-reference-fixtures.v3');
+  assert.equal(profile.profile_id,'design-system-reference-v3');
   assert.deepEqual(profile.festivals.rows.map(row=>row.slugs.length),[1,4,2]);
   const selected=profile.festivals.rows.flatMap(row=>row.slugs);
   assert.equal(selected.length,7);

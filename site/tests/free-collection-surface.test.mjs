@@ -23,7 +23,8 @@ test('materialized Free collection owns a large right identity then a transparen
   assert.doesNotMatch(surface, /<EventCard|mobileFlowMedia/u, 'Free collection must use the certified typical large-card grid rather than a page-local callsite');
   assert.match(surface, /parents=\{\[\s*\{ label:'Афиша', href:siteHomeHref\(\) \},\s*\]\}/u);
   assert.doesNotMatch(surface, /label:'Поиск'|\/poisk\//u, 'Free is a first-class collection, not a saved Search result');
-  assert.match(route, /mobileSection=\{collection\.slug === 'besplatnye-sobytiya' \? 'home' : 'search'\}/u);
+  assert.match(route, /mobileSection=\{collection\.slug === 'besplatnye-sobytiya' \? 'afisha' : 'search'\}/u);
+  assert.match(route, /activeFixture\?\.scenario\.updated_date \|\| getPreviewBuild\(\)\.current_date/u);
 });
 
 test('free collection separates ongoing exhibitions after timed events', async () => {

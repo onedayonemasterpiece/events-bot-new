@@ -48,13 +48,19 @@ for (let start = 0; start < sourceEvents.length; start += optimizationBatchSize)
     limit: batch.length,
     rowSize,
     mediaTreatment,
+    preserveAll: true,
   });
   packed.push(...batchPacked.map(({ item, layout }) => ({
     item,
     layout: { ...layout, rowIndex: layout.rowIndex + rowOffset },
   })));
-  rowOffset += Math.ceil(batch.length / rowSize);
+  rowOffset += batchPacked.length
+    ? Math.max(...batchPacked.map(({ layout }) => layout.rowIndex)) + 1
+    : 0;
 }
+const packedRows = [...new Set(packed.map(({ layout }) => layout.rowIndex))]
+  .sort((left, right) => left - right)
+  .map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex));
 ---
 
 <div
@@ -75,8 +81,23 @@ for (let start = 0; start < sourceEvents.length; start += optimizationBatchSize)
   data-discovery-src={discoverySrc}
   data-feed-card-variant="split-actions"
 >
-  {packed.map(({ item, layout }) => (
-    <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />
+  {packedRows.map((row, rowIndex) => (
+    <div
+      class="optimized-event-card-row"
+      data-optimized-event-card-row
+      data-row-index={rowIndex}
+      data-row-card-count={row.length}
+      style={`--row-card-count:${row.length}`}
+    >
+      {row.map(({ item, layout }, rowColumn) => (
+        <EventCard
+          event={item}
+          variant="split-actions"
+          desktopRelatedCrop
+          desktopRelatedLayout={{ ...layout, rowIndex:0, rowColumn }}
+        />
+      ))}
+    </div>
   ))}
 </div>
 
@@ -84,9 +105,20 @@ for (let start = 0; start < sourceEvents.length; start += optimizationBatchSize)
   .optimized-event-card-grid {
     min-width: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* `cards-grid` supplies shared tokens, but its multi-column template is
+       for direct cards. These children are complete rows and must be full. */
+    grid-template-columns: minmax(0, 1fr);
     gap: clamp(.85rem, 1.6vw, 1.25rem);
     align-items: stretch;
+  }
+  .optimized-event-card-row {
+    min-width:0;
+    width:100%;
+    grid-column:1 / -1;
+    display:grid;
+    grid-template-columns: repeat(var(--row-card-count), minmax(0, 1fr));
+    gap:clamp(.85rem, 1.6vw, 1.25rem);
+    align-items:stretch;
   }
 
   .optimized-event-card-grid :global([data-lab-related-card]) {
@@ -120,7 +152,7 @@ for (let start = 0; start < sourceEvents.length; start += optimizationBatchSize)
   .optimized-event-card-grid :global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px; }
 
   @media (max-width: 1023px) {
-    .optimized-event-card-grid--responsive {
+    .optimized-event-card-grid--responsive .optimized-event-card-row {
       grid-template-columns: minmax(0, 1fr);
     }
     .optimized-event-card-grid--responsive :global([data-lab-related-card]) {

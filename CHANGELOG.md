@@ -2,11 +2,19 @@
 
 ## [Unreleased]
 
-- Added: one local/preview-only `free-collection-5-desktop-v1` fixture
-  scenario now renders five factual events through the real Free collection
-  route, `OptimizedEventCardGrid` and canonical `EventCard`. The versioned
-  ID-only bridge, route documentation and contract tests prevent page-local
-  fixture copies and reject fixture mode in production/secret-candidate builds.
+- Added: Golden Event Corpus v2 now has a generated, hash-pinned Astro bridge
+  and the local/preview-only `free-collection-september-desktop-v2` scenario.
+  The real Free collection route renders the same five reviewed September
+  payloads (`2182, 6711, 7609, 8006, 8200`) through
+  `OptimizedEventCardGrid` and canonical `EventCard@2`; the set covers
+  visual/OCR, crop/preserve, varied aspect ratios and single/multi-image states
+  and explicitly excludes the repeated green Chernyakhovsk posters. Fixture
+  mode remains forbidden in production/secret-candidate builds.
+
+- Fixed: `OptimizedEventCardGrid` no longer silently drops a source card when
+  the strict row optimizer cannot fit the whole set into its preferred row.
+  It now preserves every card, partitions only at feasible row boundaries and
+  fills each resulting row while retaining equal height within that row.
 
 - Changed: `ListingDiscoveryRail@6` now exposes one shared `plane` /
   `floating-island` surface contract. All listing consumers use v6 and Weekend

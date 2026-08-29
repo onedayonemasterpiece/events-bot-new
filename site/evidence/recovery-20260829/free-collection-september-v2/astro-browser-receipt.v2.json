@@ -1,0 +1,168 @@
+{
+  "schema_version": "free-collection-browser-receipt.v2",
+  "route": "/podborki/besplatnye-sobytiya/",
+  "scenario": "free-collection-september-desktop-v2",
+  "captured_at": "2026-08-29T16:31:26.852Z",
+  "views": {
+    "desktop": {
+      "viewport": {
+        "width": 1280,
+        "height": 1200,
+        "dpr": 1
+      },
+      "document": {
+        "width": 1280,
+        "height": 3338,
+        "horizontal_overflow": 0
+      },
+      "scenario": "free-collection-september-desktop-v2",
+      "event_ids": [
+        8006,
+        8200,
+        2182,
+        6711,
+        7609
+      ],
+      "calendar_event_ids": [
+        8006,
+        8200
+      ],
+      "zero_count_labels": 0,
+      "updated_text": "Данные афиши обновлены 2026-08-29; подборка рассчитана на 2026-09-01. Это не личный сохранённый поиск.",
+      "mobile_current": "afisha",
+      "top_geometry": {
+        "hero": {
+          "x": 50,
+          "y": 141.796875,
+          "width": 1180,
+          "height": 500.78125
+        },
+        "results": {
+          "x": 50,
+          "y": 674.578125,
+          "width": 1180,
+          "height": 1029.984375
+        },
+        "exhibitions": {
+          "x": 50,
+          "y": 1724.5625,
+          "width": 1180,
+          "height": 867.921875
+        },
+        "nav": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        }
+      },
+      "sticky_geometry": {
+        "hero": {
+          "x": 50,
+          "y": -558.203125,
+          "width": 1180,
+          "height": 500.78125
+        },
+        "results": {
+          "x": 50,
+          "y": -25.421875,
+          "width": 1180,
+          "height": 1029.984375
+        },
+        "exhibitions": {
+          "x": 50,
+          "y": 1024.5625,
+          "width": 1180,
+          "height": 867.921875
+        },
+        "nav": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        }
+      },
+      "console_errors": []
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "document": {
+        "width": 390,
+        "height": 4270,
+        "horizontal_overflow": 0
+      },
+      "scenario": "free-collection-september-desktop-v2",
+      "event_ids": [
+        8006,
+        8200,
+        2182,
+        6711,
+        7609
+      ],
+      "calendar_event_ids": [
+        8006,
+        8200
+      ],
+      "zero_count_labels": 0,
+      "updated_text": "Данные афиши обновлены 2026-08-29; подборка рассчитана на 2026-09-01. Это не личный сохранённый поиск.",
+      "mobile_current": "afisha",
+      "top_geometry": {
+        "hero": {
+          "x": 12,
+          "y": 158.390625,
+          "width": 366,
+          "height": 436.25
+        },
+        "results": {
+          "x": 12,
+          "y": 626.640625,
+          "width": 366,
+          "height": 1421.59375
+        },
+        "exhibitions": {
+          "x": 12,
+          "y": 2068.234375,
+          "width": 366,
+          "height": 2038.203125
+        },
+        "nav": {
+          "x": 12,
+          "y": 770,
+          "width": 366,
+          "height": 64
+        }
+      },
+      "sticky_geometry": {
+        "hero": {
+          "x": 12,
+          "y": -524.609375,
+          "width": 366,
+          "height": 436.25
+        },
+        "results": {
+          "x": 12,
+          "y": -56.359375,
+          "width": 366,
+          "height": 1421.59375
+        },
+        "exhibitions": {
+          "x": 12,
+          "y": 1385.234375,
+          "width": 366,
+          "height": 2038.203125
+        },
+        "nav": {
+          "x": 12,
+          "y": 770,
+          "width": 366,
+          "height": 64
+        }
+      },
+      "console_errors": []
+    }
+  }
+}

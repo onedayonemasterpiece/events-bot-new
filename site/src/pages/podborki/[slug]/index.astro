@@ -34,13 +34,13 @@ const activeFixture = requestedFixture?.scenario.route === `/podborki/${collecti
   ? requestedFixture
   : null;
 const events = activeFixture
-  ? selectExactScenarioEvents(resolvedEvents, activeFixture.id, activeFixture.scenario)
+  ? selectExactScenarioEvents(activeFixture.id, activeFixture.scenario)
   : resolvedEvents;
 const collectionDateRange = getMaterializedSearchCollectionDateRange(collection.slug);
 const fallbackEvents = events.length ? [] : getMaterializedSearchCollectionFallbackEvents(collection.slug);
 const canonicalUrl = absoluteUrl(`/podborki/${collection.slug}/`);
 const title = `${collection.title} | ${SITE_NAME}`;
-const updatedDate = getPreviewBuild().current_date;
+const updatedDate = activeFixture?.scenario.updated_date || getPreviewBuild().current_date;
 const referenceDate = getMaterializedSearchCollectionReferenceDate();
 ---
 <EventLayout
@@ -48,7 +48,7 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
   description={collection.description}
   canonicalUrl={canonicalUrl}
   structuredData={[]}
-  mobileSection={collection.slug === 'besplatnye-sobytiya' ? 'home' : 'search'}
+  mobileSection={collection.slug === 'besplatnye-sobytiya' ? 'afisha' : 'search'}
   noindex
 >
   {collection.slug === 'besplatnye-sobytiya' ? (

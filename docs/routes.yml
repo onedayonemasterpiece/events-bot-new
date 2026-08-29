@@ -329,8 +329,13 @@ features:
       - site/src/components/Icon.astro
       - site/src/data/preview-events.json
       - site/src/data/design-system-reference-fixtures.json
+      - site/src/data/ui-reference-events-v2.json
       - site/src/data/designSystemReferenceFixtures.ts
+      - site/src/components/FreeCollectionSurface.astro
+      - site/src/components/OptimizedEventCardGrid.astro
+      - site/src/lib/relatedCardLayout.mjs
       - site/src/data/preview-related.json
+      - site/scripts/build-design-system-reference-fixtures-v3.py
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs
       - site/scripts/deploy-preview-yc.mjs

@@ -31,6 +31,18 @@
   versioned fixture scenario из канонического design-system registry, выводить
   его ID в DOM и доказывать одинаковый набор fixture IDs. Page-local массивы
   fixture IDs запрещены, кроме явно помеченной legacy characterization.
+- Golden Event Corpus v1 неизменяем. Новые фактические payload/media-наборы
+  выпускаются соседней версией корпуса в `lovekgd-design-system`, а Astro
+  получает их только через воспроизводимый генератор
+  `site/scripts/build-design-system-reference-fixtures-v3.py`. Нельзя брать
+  первые N записей, переиспользовать текущие данные роута или подбирать
+  однородные афиши. Подбор обязан фиксировать разные aspect ratios,
+  OCR/visual-only, crop/preserve и single/multi-image states, фактические
+  route predicates, явные exclusions и exact payload/asset hashes.
+- Для `free-collection-september-desktop-v2` повторяющиеся зелёные афиши
+  Черняховска запрещены asset-key exclusions из канонической projection.
+  Изменение ID, payload или исключений требует новой версии/сценария и
+  одновременного обновления UI SoT, Astro bridge, тестов, docs и Penpot.
 - Карточка и контейнер — разные контракты. Нельзя сводить equal-height
   `EventCard` grid, desktop listing rows, festival timeline rows и club grid к
   одному универсальному `PackedCardRow`.

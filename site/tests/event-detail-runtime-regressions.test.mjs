@@ -138,7 +138,7 @@ test('desktop static continuation emits stable initial skeleton geometry', async
 
   assert.match(desktop, /<OptimizedEventCardGrid/u);
   assert.match(optimizedGrid, /packRelatedCardRows/u);
-  assert.match(optimizedGrid, /desktopRelatedLayout=\{layout\}/u);
+  assert.match(optimizedGrid, /desktopRelatedLayout=\{\{ \.\.\.layout, rowIndex:0, rowColumn \}\}/u);
   assert.match(card, /--lab-row-media-ratio:/u);
   assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'event-card__media-shell--dynamic'/u);
   assert.match(card, /'is-image-loading'/u);

@@ -4,39 +4,70 @@ import test from 'node:test';
 
 const readJson = async (relative) => JSON.parse(await readFile(new URL(relative, import.meta.url), 'utf8'));
 const registry = await readJson('../src/data/design-system-reference-fixtures.json');
-const catalog = await readJson('../src/data/preview-events.json');
+const frozen = await readJson('../src/data/ui-reference-events-v2.json');
 const route = await readFile(new URL('../src/pages/podborki/[slug]/index.astro', import.meta.url), 'utf8');
 const surface = await readFile(new URL('../src/components/FreeCollectionSurface.astro', import.meta.url), 'utf8');
 const resolver = await readFile(new URL('../src/data/designSystemReferenceFixtures.ts', import.meta.url), 'utf8');
+const generator = await readFile(new URL('../scripts/build-design-system-reference-fixtures-v3.py', import.meta.url), 'utf8');
 
-test('free collection has one explicit five-event archetype scenario backed by factual payloads', () => {
-  const scenario = registry.scenarios['free-collection-5-desktop-v1'];
-  assert.equal(registry.schema_version, 'design-system-reference-fixtures.v2');
-  assert.equal(registry.profile_id, 'design-system-reference-v2');
-  assert.equal(registry.authority.ui_sot_registry_id, 'design-system-reference-v1');
-  assert.equal(registry.authority.ui_sot_contract, 'lovekgd-design-system:catalog/fixtures/design-system-reference/v1/registry.v1.json');
+test('September free collection consumes the exact diverse Golden Event Corpus v2 projection', () => {
+  const scenario = registry.scenarios['free-collection-september-desktop-v2'];
+  assert.equal(registry.schema_version, 'design-system-reference-fixtures.v3');
+  assert.equal(registry.profile_id, 'design-system-reference-v3');
+  assert.equal(registry.authority.ui_sot_registry_id, 'design-system-reference-v2');
+  assert.equal(registry.authority.ui_sot_contract, 'lovekgd-design-system:catalog/fixtures/design-system-reference/v2/registry.v2.json');
   assert.match(registry.authority.ui_sot_contract_sha256, /^[0-9a-f]{64}$/u);
   assert.match(registry.authority.ui_sot_scenario_sha256, /^[0-9a-f]{64}$/u);
-  assert.deepEqual(scenario.event_ids, [7030, 7006, 6901, 6996, 6997]);
+  assert.equal(frozen.authority.registry_sha256, registry.authority.ui_sot_contract_sha256);
+  assert.equal(frozen.authority.scenario_sha256, registry.authority.ui_sot_scenario_sha256);
+
+  assert.deepEqual(scenario.event_ids, [2182, 6711, 7609, 8006, 8200]);
+  assert.deepEqual(scenario.expected_render_order, [8006, 8200, 2182, 6711, 7609]);
   assert.equal(scenario.expected_card_count, 5);
   assert.equal(new Set(scenario.event_ids).size, 5);
   assert.equal(scenario.route, '/podborki/besplatnye-sobytiya/');
-  const byId = new Map(catalog.events.map((event) => [event.id, event]));
+  assert.equal(scenario.updated_date, '2026-08-29');
+  assert.deepEqual(frozen.projection.fixture_input_order, scenario.event_ids.map((id) => `event.real.${id}`));
+
+  const byId = new Map(frozen.fixtures.map((fixture) => [fixture.event_id, fixture]));
+  const registryById = new Map(registry.events.fixtures.map((fixture) => [fixture.event_id, fixture]));
   for (const id of scenario.event_ids) {
-    assert.ok(byId.has(id), `event ${id} exists in the frozen preview snapshot`);
-    assert.equal(byId.get(id).ticket.is_free, true, `event ${id} is factually free`);
+    const fixture = byId.get(id);
+    assert.ok(fixture, `event ${id} exists in the frozen generated consumer`);
+    assert.equal(fixture.preview_event.ticket.is_free, true, `event ${id} is factually free`);
+    assert.match(fixture.preview_event_sha256, /^[0-9a-f]{64}$/u);
+    assert.equal(fixture.preview_event_sha256, registryById.get(id).preview_event_sha256, `event ${id} payload pin is identical across generated consumers`);
   }
-  assert.equal(byId.get(6996).image_url, null, 'the set keeps one real missing-media fallback');
+
+  assert.equal(byId.get(2182).preview_event.image_text_mode, 'visual_only');
+  assert.equal(byId.get(2182).preview_event.safe_crop, true);
+  assert.equal(byId.get(6711).preview_event.image_assets.length, 4, 'one visual-only gallery is present');
+  assert.equal(byId.get(7609).preview_event.image_text_mode, 'ocr_text');
+  assert.equal(byId.get(7609).preview_event.image_assets[0].width, byId.get(7609).preview_event.image_assets[0].height, 'one square OCR poster is present');
+  assert.ok(byId.get(8006).preview_event.image_assets[0].height > byId.get(8006).preview_event.image_assets[0].width, 'one portrait OCR poster is present');
+  assert.ok(byId.get(8200).preview_event.image_assets[0].height > byId.get(8200).preview_event.image_assets[0].width, 'one program/document poster is present');
 });
 
-test('the real collection route activates the scenario through the shared resolver', () => {
+test('the repeated green Chernyakhovsk programme poster is an explicit fail-closed exclusion', () => {
+  const excluded = new Set(frozen.projection.explicit_exclusions.flatMap((row) => row.asset_keys));
+  assert.equal(excluded.size, 4);
+  for (const fixture of frozen.fixtures.filter((row) => registry.events.archetype_fixture_ids.includes(row.event_id))) {
+    for (const asset of fixture.preview_event.image_assets) {
+      assert.ok(![...excluded].some((key) => asset.src.includes(key)), `event ${fixture.event_id} does not use a rejected green poster`);
+    }
+  }
+});
+
+test('the real collection route activates the scenario through the generated bridge only', () => {
   assert.match(route, /getActiveDesignFixtureScenario/u);
   assert.match(route, /selectExactScenarioEvents/u);
   assert.match(route, /PUBLIC_UI_SOT_SCENARIO/u);
   assert.match(route, /fixtureScenarioId=\{activeFixture\?\.id\}/u);
   assert.match(surface, /data-ui-fixture-scenario=\{fixtureScenarioId\}/u);
+  assert.match(resolver, /ui-reference-events-v2\.json/u);
   assert.match(resolver, /\['production', 'secret_candidate', 'secret-candidate'\]\.includes\(siteMode\)/u);
-  assert.doesNotMatch(route, /\[7030,\s*7006,\s*6901,\s*6996,\s*6997\]/u, 'route must not own a page-local fixture array');
+  assert.doesNotMatch(route, /2182|6711|7609|8006|8200/u, 'route must not own fixture IDs');
+  assert.match(generator, /Routes select scenario IDs/u);
 });
 
 test('container families remain semantically distinct instead of collapsing into one generic packed row', () => {
