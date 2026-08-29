@@ -1,0 +1,26 @@
+{
+  "schema_version": "design-system-reference-fixtures.v1",
+  "profile_id": "design-system-reference-v1",
+  "events": {
+    "fixture_ids": [3132, 4327, 6399, 6628, 7807, 7888, 7906, 8156]
+  },
+  "festivals": {
+    "rows": [
+      {
+        "role": "single-wide",
+        "slugs": ["city-jazz"]
+      },
+      {
+        "role": "packed-four-varied-framing",
+        "slugs": ["sosedi", "grozd", "more-vnutri", "bolshoy-kaup"]
+      },
+      {
+        "role": "paired-status-contrast",
+        "slugs": ["v-edinstve", "jazz-v-filarmonii"]
+      }
+    ]
+  },
+  "clubs": {
+    "fixture_slugs": ["game-vibes", "neural-researchers", "technology-researchers"]
+  }
+}

@@ -2,6 +2,7 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import Icon from '../../components/Icon.astro';
 import festivalProjection from '../../data/festival-timeline.json';
+import designFixtureProfiles from '../../data/design-system-reference-fixtures.json';
 import {
   festivalTimelineMonths,
   type FestivalTimelineItem,
@@ -18,7 +19,13 @@ const canonicalUrl = absoluteUrl('/festivali/');
 const title = 'Фестивали Калининградской области 2026 — календарь | Анонсы';
 const description = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: даты, города, направления, статус программы и официальные источники.';
 const pageSummary = 'Календарь фестивалей Калининграда и Калининградской области на 2026 год: музыка, кино, гастрономия, театр, история и семейные праздники. Сравнивайте даты и города, проверяйте статус программы и переходите к официальным сайтам и сообществам организаторов.';
-const festivalTimeline = festivalProjection.festivals as FestivalTimelineItem[];
+const requestedFixtureProfile = import.meta.env.PUBLIC_DESIGN_FIXTURE_PROFILE || '';
+const activeFixtureProfile = requestedFixtureProfile === designFixtureProfiles.profile_id
+  ? designFixtureProfiles
+  : null;
+const festivalSlugSet = new Set(activeFixtureProfile?.festivals.rows.flatMap((row) => row.slugs) || []);
+const festivalTimeline = (festivalProjection.festivals as FestivalTimelineItem[])
+  .filter((item) => !activeFixtureProfile || festivalSlugSet.has(item.slug));
 if (festivalProjection.schema_version !== 'festival-timeline-static-v1') {
   throw new Error('Festival timeline projection schema is unsupported');
 }
@@ -213,7 +220,13 @@ const structuredData = [{
   structuredData={structuredData}
   headerCurrent="festivals"
 >
-  <main id="main" class="festival-page" data-festival-timeline data-festival-count={resolvedItems.length}>
+  <main
+    id="main"
+    class="festival-page"
+    data-festival-timeline
+    data-festival-count={resolvedItems.length}
+    data-design-fixture-profile={activeFixtureProfile?.profile_id || undefined}
+  >
     <section class="festival-hero" aria-labelledby="festival-title">
       <div class="festival-hero__copy">
         <p class="festival-eyebrow">Календарь на 2026 год · июль—декабрь</p>
