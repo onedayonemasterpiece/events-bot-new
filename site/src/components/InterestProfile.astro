@@ -26,34 +26,7 @@ const staticRecommendations = recommendations.slice(0, 3);
     <p><strong>Работает только в этом браузере.</strong> Без аккаунта, сервера и скрытого профилирования.</p>
   </div>
 
-  <section class="focus-consent" data-focus-consent aria-labelledby="focus-consent-title">
-    <div class="focus-consent__icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none">
-        <path d="M7.5 10V7.5a4.5 4.5 0 0 1 9 0V10m-10 0h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-        <path d="M12 14v3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-      </svg>
-    </div>
-    <div>
-      <p class="focus-kicker">Сначала — ваше решение</p>
-      <h2 id="focus-consent-title">Разрешить локальный профиль?</h2>
-      <p>Прототип сохранит выбранные темы и реакции в <code>localStorage</code> этого устройства. Он ничего не отправляет в интернет и не использует онлайн‑ML.</p>
-      <ul>
-        <li>Вы видите и меняете каждый сигнал.</li>
-        <li>Явный выбор не смешивается с индексом интереса и достаточностью данных.</li>
-        <li>Профиль можно удалить одной кнопкой.</li>
-      </ul>
-      <label class="focus-consent__check">
-        <input type="checkbox" data-focus-consent-check />
-        <span>Понимаю: данные останутся только в этом браузере</span>
-      </label>
-      <button class="focus-button focus-button--primary" type="button" data-focus-consent-accept disabled>
-        Разрешить локальный профиль
-      </button>
-      <p class="focus-status" data-focus-consent-status role="status" aria-live="polite"></p>
-    </div>
-  </section>
-
-  <div class="focus-workspace" data-focus-workspace hidden>
+  <div class="focus-workspace" data-focus-workspace>
     <header class="focus-workspace__head">
       <div>
         <p class="focus-kicker">Ваши настройки</p>
@@ -149,7 +122,7 @@ const staticRecommendations = recommendations.slice(0, 3);
         <p class="focus-digest__state" data-focus-digest-state>Выключено</p>
         <p data-focus-digest-eligibility>Для допуска нужны согласие, 3 явных сигнала темы (хотя бы один «Чаще») и 3 реакции на карточки.</p>
         <ul aria-label="Сигналы допуска">
-          <li data-focus-digest-consent>Согласие: есть</li>
+          <li data-focus-digest-consent>Правила сервиса: действуют</li>
           <li data-focus-digest-explicit>Явные сигналы «Чаще/Реже»: 0 из 3</li>
           <li data-focus-digest-reactions>Реакции: 0 из 3</li>
         </ul>
@@ -230,7 +203,7 @@ const staticRecommendations = recommendations.slice(0, 3);
 
   const emptyState = () => ({
     version: 1,
-    consent: false,
+    consent: true,
     interests: {},
     reactions: {},
     digestOptIn: false,
@@ -243,10 +216,11 @@ const staticRecommendations = recommendations.slice(0, 3);
   const readState = () => {
     try {
       const parsed = JSON.parse(localStorage.getItem(storageKey) || 'null');
-      if (parsed?.version === 1 && parsed?.consent === true) {
+      if (parsed?.version === 1) {
         return {
           ...emptyState(),
           ...parsed,
+          consent: true,
           interests: parsed.interests || {},
           reactions: parsed.reactions || {},
         };
@@ -375,7 +349,7 @@ const staticRecommendations = recommendations.slice(0, 3);
     const explicitCount = explicitOverrides.length;
     const hasPositive = explicitOverrides.some((interest) => state.interests[interest.id]?.stance === 'like');
     const reactionCount = Object.keys(state.reactions).length;
-    const eligible = state.consent && explicitCount >= 3 && hasPositive && reactionCount >= 3;
+    const eligible = explicitCount >= 3 && hasPositive && reactionCount >= 3;
     const panel = root.querySelector('[data-focus-digest]');
     const toggle = panel.querySelector('[data-focus-digest-toggle]');
     panel.querySelector('[data-focus-digest-explicit]').textContent = `Явные сигналы «Чаще/Реже»: ${Math.min(explicitCount, 3)} из 3${hasPositive ? ' · «Чаще» есть' : ' · нужен хотя бы один «Чаще»'}`;
@@ -430,32 +404,15 @@ const staticRecommendations = recommendations.slice(0, 3);
     renderRecommendations();
   };
 
-  const consent = root.querySelector('[data-focus-consent]');
   const workspace = root.querySelector('[data-focus-workspace]');
   const showWorkspace = () => {
-    consent.hidden = true;
     workspace.hidden = false;
     render();
   };
 
   state = readState();
-  if (state.consent) showWorkspace();
-
-  const consentCheck = root.querySelector('[data-focus-consent-check]');
-  const consentAccept = root.querySelector('[data-focus-consent-accept]');
-  consentCheck.addEventListener('change', () => {
-    consentAccept.disabled = !consentCheck.checked;
-  });
-  consentAccept.addEventListener('click', () => {
-    if (!consentCheck.checked) return;
-    state.consent = true;
-    persist();
-    showWorkspace();
-    root.querySelector('[data-focus-consent-status]').textContent = storageAvailable
-      ? 'Локальный профиль включён.'
-      : 'Профиль включён только до закрытия страницы: локальное хранилище недоступно.';
-    workspace.querySelector('h2')?.focus?.();
-  });
+  state.consent = true;
+  showWorkspace();
 
   root.addEventListener('change', (event) => {
     const card = event.target.closest('[data-focus-interest]');
@@ -506,12 +463,11 @@ const staticRecommendations = recommendations.slice(0, 3);
     if (event.target.closest('[data-focus-reset]')) {
       try { localStorage.removeItem(storageKey); } catch (_) {}
       state = emptyState();
-      workspace.hidden = true;
-      consent.hidden = false;
-      consentCheck.checked = false;
-      consentAccept.disabled = true;
-      root.querySelector('[data-focus-consent-status]').textContent = 'Локальный профиль удалён.';
-      consentAccept.focus();
+      persist();
+      workspace.hidden = false;
+      render();
+      root.querySelector('[data-focus-action-status]').textContent = 'Локальный профиль удалён. Можно настроить его заново.';
+      workspace.querySelector('h2')?.focus?.();
     }
   });
 </script>
