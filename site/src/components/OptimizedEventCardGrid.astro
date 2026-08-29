@@ -33,11 +33,28 @@ const {
   personalFeed = false,
 } = Astro.props;
 
-const packed = packRelatedCardRows(events, {
-  limit,
-  rowSize,
-  mediaTreatment,
-});
+// The global row optimizer is intentionally exponential over a small ranked
+// recommendation prefix. Collection pages are a different, unbounded
+// consumer: keep the same canonical large-card family and row rules, but pack
+// them in bounded three-row batches so a 20+ item collection cannot turn the
+// static build into a bitmask explosion.
+const sourceEvents = events.slice(0, Math.max(0, limit));
+const optimizationBatchSize = Math.max(rowSize, rowSize * 3);
+let rowOffset = 0;
+const packed = packRelatedCardRows([], { limit:0, rowSize, mediaTreatment });
+for (let start = 0; start < sourceEvents.length; start += optimizationBatchSize) {
+  const batch = sourceEvents.slice(start, start + optimizationBatchSize);
+  const batchPacked = packRelatedCardRows(batch, {
+    limit: batch.length,
+    rowSize,
+    mediaTreatment,
+  });
+  packed.push(...batchPacked.map(({ item, layout }) => ({
+    item,
+    layout: { ...layout, rowIndex: layout.rowIndex + rowOffset },
+  })));
+  rowOffset += Math.ceil(batch.length / rowSize);
+}
 ---
 
 <div
