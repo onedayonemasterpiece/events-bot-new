@@ -138,12 +138,20 @@ test('collection surface renders the exact seven-item registry with accessible p
     readFile(new URL('../scripts/check-production.mjs', import.meta.url), 'utf8'),
   ]);
   assert.match(component, /ARTIFACT_COLLECTION_SLOTS\.map/u);
+  assert.match(component, /data-artifact-visual-donor="008839b14598105d1fed5b4e386d6d6f29d93d1f"/u);
+  assert.match(component, /data-artifact-collection-hero/u);
+  assert.match(component, /Знаки Янтарного края/u);
+  assert.match(component, /data-artifact-progressbar/u);
+  assert.match(component, /data-artifact-threshold-copy/u);
+  assert.match(component, /Автоматические правила/u);
+  assert.match(component, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/u);
+  assert.match(component, /@media\(max-width:760px\)\{[\s\S]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/u);
   assert.match(component, /Только на этом устройстве/u);
   assert.match(component, /aria-haspopup="dialog"/u);
   assert.match(component, /data-artifact-count=\{artifacts\.length\}/u);
   assert.match(component, /<dialog[\s\S]*aria-labelledby=\{`artifact-detail-title-\$\{artifact\.id\}`\}[\s\S]*aria-describedby=\{`artifact-detail-copy-\$\{artifact\.id\}`\}/u);
   assert.match(component, /data-artifact-dialog=\{artifact\.id\}/u);
-  assert.doesNotMatch(component, /future_|Пустая ячейка|скоро/iu);
+  assert.doesNotMatch(component, /future_|Пустая ячейка|Поделиться артефактом · скоро/iu);
   assert.match(component, /lastTrigger\?\.focus\?\.\(\)/u);
   assert.doesNotMatch(component, /\bfetch\s*\(|supabase|XMLHttpRequest/iu);
   assert.match(page, /\bnoindex\b/u);
