@@ -1,93 +1,164 @@
-# Static-site design-system integration
+# Static-site ↔ LoveKGD Design System
 
-## Current status
+Status: `CURRENT_OPERATIONAL_BRIDGE / DRAFT_CONTOUR`
 
-```text
-Resource Graph TO-BE structure: PASS
-Penpot file_id: 3be9e5e1-190f-8090-8008-713c0fbe6260
-native design-system components: 0
-source-first decoder: not started
-promoted component families: 0
-```
+Последняя фактическая сверка: `2026-08-29`.
 
-Принятой компонентной дизайн-системы ранее не существовало. Предыдущие Penpot generations 003–005 являются technical experiments and historical evidence. Активный Resource Graph очищен и содержит только пустую TO-BE структуру.
+Это первая локальная точка входа для изменений интерфейса статического сайта,
+Astro ↔ Git UI SoT ↔ Penpot parity, reference fixtures и component lineage.
+Полный нормативный lifecycle и текущий owner-review status находятся в
+`onedayonemasterpiece/lovekgd-design-system`; этот репозиторий хранит короткий
+fail-closed bridge, executable Astro consumer и runtime evidence.
 
-## Authority during reconstruction
+## 1. Не путать целевую архитектуру с текущим состоянием
 
-До promotion каждого resource family текущий Astro source в этом репозитории является executable source of fact о существующей реализации. Его нельзя автоматически считать нормализованной дизайн-системой: decoder должен обнаружить component families, inline/CSS patterns, one-to-many/many-to-one relationships, states, consumers, local overrides и unresolved fragmentation.
+Старое утверждение `native design-system components: 0 / source-first decoder:
+not started` больше не описывает активную работу. Оно относилось к историческому
+`lovekgd-design-system/main` snapshot.
 
-## Target authority after promotion
+Текущие слои:
 
-После promotion семейства versioned component package в `onedayonemasterpiece/lovekgd-design-system` становится canonical для:
+| Слой | Точный источник | Что он означает |
+|---|---|---|
+| Опубликованный snapshot дизайн-системы | `lovekgd-design-system/main@c6419a62af3d73f53e81d95a518fbe62a4a1c942` | историческое состояние на 19 августа 2026; не текущий owner-review delta |
+| Source-proven AS-IS baseline | Draft PR `lovekgd-design-system#52@b86bab3e91511b3d4bd7d953b22bceb847f02a51` | 17 архетипов / 34 desktop+mobile cases; round-trip evidence; без acceptance/promotion |
+| Активный owner-review delta | Draft PR `lovekgd-design-system#53`, branch `fix/penpot-owner-comments-20260826` | текущие contracts, Penpot readbacks, fixtures и per-item review status; fresh-read head обязателен |
+| Golden Event Corpus pilot | Draft PR `lovekgd-design-system#42@7a26772828a5d74a9683c08e7e6774ff15ac61a5` | 8 exact-event identity gates PASS; визуальный conformance pilot зафиксирован как FAIL |
+| Текущий опубликованный Astro факт | `events-bot-new/main@8710e56fa3685f6c30a90cd062d532dce0348cce` | executable AS-IS до promotion семейства |
+| Активный Astro/UI candidate | этот Draft PR `#596`, branch `fix/audio-audit-ui-20260828` | изолированные owner-audit corrections; не merge, не deploy, не production authority |
 
-- `component_id`;
-- contract version/hash;
-- variants and states;
-- public props/slots;
-- canonical Astro presentation implementation;
-- fixtures/specimens/tests;
-- Penpot binding and accepted references.
+Перед любой работой агент обязан fresh-read heads PR `lovekgd-design-system#53`
+и `events-bot-new#596`. SHA в этом документе или PR body — checkpoint, а не
+вечный указатель.
 
-`events-bot-new` импортирует pinned package version и сохраняет продуктовую/domain-логику, которая преобразует event/user/runtime data в разрешённый component state.
+## 2. Фактический Source of Truth
 
-## Product/design plane routing
+Долговечный UI SoT — versioned contracts, registries, fixture scenarios,
+bindings и receipts в `lovekgd-design-system`.
 
-```text
-Product Atlas
-→ product meaning, Jobs, outcomes, journeys, capabilities and UI-gap identity
-
-UI Exploration
-→ visual alternatives, component/pattern candidates, compositions and shortlist
-
-Resource Graph
-→ mature components, patterns, archetypes, product representations,
-  evidence, accepted exports and promotion
-
-This repository
-→ current source during reconstruction, product/domain logic,
-  integration, release and runtime evidence
-```
-
-## Next bounded stage
-
-Source-first decoder:
+До promotion семейства:
 
 ```text
-Astro source/generators
-→ isolated generated specimens
-→ real-page verification
-→ candidate Component Contracts
-→ compact Git snapshot + heavy Actions artifact
-→ STOP before Penpot materialization/refactor
+pinned events-bot-new Astro/runtime
+→ executable факт текущего AS-IS
+→ candidate Git UI SoT
+→ native Penpot projection
+→ owner review
 ```
 
-Decoder must not match current Astro against removed/test Penpot components and must not change production UI.
+После bounded owner acceptance:
 
-## Owner-audit correction: discovery rail v6
+```text
+accepted Git UI SoT/package
+→ isolated Astro candidate
+→ Penpot ↔ Astro ↔ generated-route conformance
+→ browser/device approval
+→ promotion + production consumer migration
+```
 
-The 2026-08-28 owner voice audit requires `61.10 Weekend Discovery rail` to be
-a content-sized, translucent Floating Island rather than a full-width visible
-shelf. `ListingDiscoveryRail@6` is the shared implementation of that contract:
+Следовательно:
 
-- `surface="plane"` preserves the shared Date and Popular presentation;
-- `surface="floating-island"` keeps the sticky outer plane transparent and
-  gives the shared inner control group a bounded, rounded, translucent surface;
-- Weekend is the first production Floating Island consumer;
-- every production caller is explicitly migrated to `version={6}`;
-- v5 remains only as a deprecated catalog comparison until owner sign-off.
+- Penpot — нативная визуальная реализация и поверхность review, но не
+  самостоятельный долговечный источник решений;
+- синхронизация не автоматическая: contract/decision → implementation or
+  materialization → exact readback → tests → focused visual review;
+- page-local Astro fork утверждённого компонента и Penpot-only fix запрещены;
+- structural PASS, visual PASS, owner acceptance, promotion и deploy — разные
+  состояния.
 
-The same version and surface axes must be represented by the native Penpot
-component. A page-local rounded copy is not compatible evidence.
+## 3. Как читать последнее owner voice
 
-## Canonical documentation
+Последнее замечание правильно требует единой наследуемой системы, одинаковых
+fixture identities и многоуровневого parity. Но несколько формулировок являются
+целевым контрактом, а не описанием уже работающей автоматизации.
 
-The normative design-system architecture lives in `onedayonemasterpiece/lovekgd-design-system`:
+| Формулировка | Корректная операционная трактовка |
+|---|---|
+| «Penpot — центральная точка; изменение появляется на сайте» | Penpot может инициировать owner decision, но долговечное решение сначала фиксируется в Git UI SoT; затем отдельно материализуется в Penpot и интегрируется в Astro. |
+| «Один Golden Corpus» | Для каждого bounded сравнения используется один и тот же **именованный versioned scenario/pool** с точными fixture IDs и hashes. Универсального списка только из событий для всех сущностей нет. |
+| «Всё совпадает полностью» | Требование относится к одному route/state/viewport/scenario после фиксации clock, fonts, DPR и runtime state. Responsive/contextual variants могут различаться по явно записанному contract. |
+| «Компоненты отдельно от архетипов» | Component masters и state catalogs живут на малых библиотечных страницах; архетипы обязаны содержать linked instances. Запрещены page-local masters, detached copies и screenshot substitutes. |
+| «Визуально похожие разные реализации — ошибка» | Верно. Lineage доказывается source path/version, component/main IDs, bindings и census/readback, а не внешним сходством. |
 
-- `docs/resource-graph-004.md`;
-- `docs/component-contract-authority.md`;
-- `docs/source-first-component-decoder.md`;
-- `docs/penpot-product-design-operating-model.md`;
-- `contracts/resource-graph-scaffold.v1.json`;
-- `receipts/penpot/resource-graph-to-be-structure-v1.json`.
+## 4. Что уже реализовано в этом candidate
 
-The integrated Product Atlas/UI Exploration vision in this repository must reference these documents rather than duplicate the Resource Graph page schema or component authority rules.
+### Shared reference fixtures
+
+Executable bridge:
+
+- `site/src/data/design-system-reference-fixtures.json` — generated selection
+  bridge; factual payloads не копируются и не редактируются здесь;
+- `site/src/data/designSystemReferenceFixtures.ts` — runtime validation/resolution;
+- `docs/features/static-site-pages/design-system/reference-fixture-scenarios.md`
+  — правила запуска и parity;
+- tests reject fixture drift and production/secret-candidate fixture mode.
+
+Текущие пулы различаются по назначению:
+
+- 8 events — component-conformance corpus;
+- 5 events — archetype core scenario;
+- 7 festivals — bounded festival reference rows;
+- 3 clubs — complete factual club pool;
+- 7 artifacts — complete Collection 1 pool.
+
+Нельзя называть это одним универсальным payload corpus. Общим должен быть
+точный именованный pool/scenario **внутри конкретного сравнения**.
+
+### `ListingDiscoveryRail@6`
+
+Этот Draft PR вводит shared `plane` / `floating-island` surface axis:
+
+- Date and Popular сохраняют shared plane presentation;
+- Weekend использует прозрачный content-sized Floating Island;
+- production callers в candidate явно мигрированы на `version={6}`;
+- v5 остаётся deprecated catalog comparison до sign-off;
+- source-contract/regression tests и browser computed-style readback проходят.
+
+Это bounded candidate. Универсальная Floating Island navigation для всех
+архетипов ещё не принята и не промотирована.
+
+### Остальные owner-voice corrections
+
+Актуальные Event Detail portrait/parallax/keyboard/transport/related contracts,
+packed rows/ecological crop, FestivalCard centralization и Penpot lineage
+receipts принадлежат активному head `lovekgd-design-system#53`. Не дублировать
+их здесь как параллельную нормативную документацию.
+
+## 5. Маршрут для агента
+
+1. Здесь определить локальную Astro boundary.
+2. В `lovekgd-design-system#53` открыть:
+   - `docs/static-site-design-system-current-state.md`;
+   - `docs/ui-source-of-truth-roundtrip.md`;
+   - `docs/reviews/index.md`;
+   - affected family/archetype contract и самый новый receipt.
+3. Выбрать именованный scenario из
+   `catalog/fixtures/design-system-reference/` и проверить exact fixture-ID/hash
+   parity с executable bridge в этом репозитории.
+4. Менять source owner один раз; обновить catalog specimen, consumers, tests,
+   docs и `CHANGELOG.md` в одном bounded change.
+5. Не заявлять завершение без required structural readback, focused visual
+   evidence и корректного owner-review status.
+
+## 6. Запрещённые утверждения
+
+Пока PR `#53` и `#596` остаются Draft, нельзя писать:
+
+- «Penpot автоматически синхронизирован с Astro»;
+- «дизайн-система полностью принята или промотирована»;
+- «все визуально похожие карточки уже имеют одного технического предка»;
+- «Golden Corpus визуально прошёл весь сайт»;
+- «этот candidate уже находится в production»;
+- «зелёный test или `validate()=[]` означает owner acceptance».
+
+## Каноническая документация
+
+Normative/current authority lives in `onedayonemasterpiece/lovekgd-design-system`:
+
+- `docs/static-site-design-system-current-state.md` — current layered state and routing;
+- `docs/ui-source-of-truth-roundtrip.md` — lifecycle and parity gate;
+- `docs/reviews/index.md` — owner-review status;
+- `docs/component-contract-authority.md` — component authority;
+- `docs/normalization/design-system-family-lifecycle.md` — ordered promotion gates;
+- `catalog/fixtures/design-system-reference/v1/registry.v1.json` — reference pools;
+- latest source-bound family/archetype contracts and receipts on PR `#53`.
