@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import Icon from '../../components/Icon.astro';
+import FestivalCard from '../../components/festivals/FestivalCard.astro';
 import festivalProjection from '../../data/festival-timeline.json';
 import designFixtureProfiles from '../../data/design-system-reference-fixtures.json';
 import {
@@ -319,75 +320,13 @@ const structuredData = [{
                   const visibleStatusLabel = compactStatusRow
                     ? denseCompactStatus[item.status]
                     : item.compactStatusLabel;
-                  return (
-                    <article
-                      class:list={[
-                        'festival-card',
-                        `festival-card--${item.mediaMode}`,
-                        `festival-card--${item.status}`,
-                      ]}
-                      style={`--festival-card-aspect:${frameAspect.toFixed(5)};--festival-mobile-aspect:${item.mobileAspect.toFixed(5)};`}
-                      data-festival-card={item.slug}
-                      data-media-mode={item.mediaMode}
-                      data-crop-fraction={cropFraction.toFixed(4)}
-                      data-protected-crop-fit="cover"
-                      data-media-source-kind={item.mediaRecord.sourceKind}
-                      data-media-confidence={item.mediaRecord.classificationConfidence}
-                    >
-                      <a
-                        class="festival-card__link"
-                        href={item.href}
-                        target={item.isExternal ? '_blank' : undefined}
-                        rel={item.isExternal ? 'noreferrer' : undefined}
-                        aria-label={`${item.title}. ${item.dateLabel}. ${item.place}. ${item.statusLabel}. Источник: ${item.linkLabel}`}
-                      >
-                        <figure class="festival-card__media">
-                          <img
-                            src={withBase(item.image)}
-                            width={item.imageWidth}
-                            height={item.imageHeight}
-                            alt={`${item.title} — фестиваль, ${item.place}`}
-                            loading={item.slug === 'city-jazz' ? 'eager' : 'lazy'}
-                            fetchpriority={item.slug === 'city-jazz' ? 'high' : undefined}
-                            decoding="async"
-                            style={item.objectPosition ? `object-position:${item.objectPosition};` : undefined}
-                          />
-                        </figure>
-                        <div class="festival-card__veil" aria-hidden="true"></div>
-                        <div class="festival-card__topline">
-                          <span class="festival-card__date" title={item.dateLabel}>{visibleDateLabel}</span>
-                          <span class="festival-card__status" title={item.statusLabel}>{visibleStatusLabel}</span>
-                        </div>
-                        <div class="festival-card__caption">
-                          <h3>{item.title}</h3>
-                          <p class="festival-card__place" title={item.place}>{item.compactPlaceLabel}</p>
-                          <span class="festival-card__theme" title={item.category}>
-                            <span class="festival-card__theme-icons" aria-hidden="true">
-                              {item.categoryIcons.map((icon, iconIndex) => (
-                                <i
-                                  class:list={[iconIndex > 0 && 'festival-card__theme-icon--secondary']}
-                                  style={`--festival-category-icon:url("${withBase(icon)}");`}
-                                ></i>
-                              ))}
-                            </span>
-                            <span>{item.category}</span>
-                          </span>
-                        </div>
-                      </a>
-                      <button
-                        type="button"
-                        class="festival-card__like"
-                        data-festival-like
-                        data-festival-key={item.festivalEditionKey}
-                        data-festival-title={item.title}
-                        aria-pressed="false"
-                        aria-label={`Отметить как понравившийся фестиваль: ${item.title}`}
-                        title="Отметить как понравившийся"
-                      >
-                        <Icon name="heart" />
-                      </button>
-                    </article>
-                  );
+                  return <FestivalCard
+                    item={item}
+                    frameAspect={frameAspect}
+                    cropFraction={cropFraction}
+                    visibleDateLabel={visibleDateLabel}
+                    visibleStatusLabel={visibleStatusLabel}
+                  />;
                 })}
               </div>
             ))}
@@ -470,7 +409,7 @@ const structuredData = [{
   })();
 </script>
 
-<style>
+<style is:global>
   .festival-page {
     width: min(1240px, calc(100% - 2rem));
     margin: 0 auto;
