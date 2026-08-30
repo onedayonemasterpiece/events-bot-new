@@ -227,6 +227,36 @@ async def test_partner_eco_watchdog_dispatches_after_missed_slot(
 
 
 @pytest.mark.asyncio
+async def test_partner_eco_watchdog_defers_recent_busy_lane_skip(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(scheduling, "datetime", _FixedPartnerEcoMidday)
+    monkeypatch.setenv("V_TOMORROW_WATCHDOG_BUSY_RETRY_SECONDS", "900")
+    await _insert_partner_skip_ops_run(
+        db,
+        kind="video_partner_eco",
+        partner_track_id="partner_eco_nature_001",
+        skip_reason="video_lanes_busy",
+        started_at="2026-05-14 10:55:00",
+    )
+    calls: list[str] = []
+
+    async def fake_run(_db, _bot, partner_track_id, **_kwargs):
+        calls.append(partner_track_id)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_partner_track", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_partner_track_watchdog(
+        db, bot=object(), partner_track_id="partner_eco_nature_001"
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_partner_eco_watchdog_skips_if_session_already_published_today(
     tmp_path, monkeypatch
 ):

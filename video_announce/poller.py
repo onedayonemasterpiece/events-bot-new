@@ -30,6 +30,7 @@ from kaggle_status import (
     create_kaggle_run_config,
     enrich_kaggle_status_from_ledger,
     format_kaggle_status_label,
+    reconcile_kaggle_run_failure_from_host,
     write_kaggle_status_files,
 )
 from kaggle_registry import remove_job
@@ -221,6 +222,7 @@ async def _live_video_ledger_session_ids(
     *,
     now: datetime | None = None,
     grace_minutes: int = VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
+    raise_on_error: bool = False,
 ) -> set[int]:
     """Return video session ids whose Kaggle status ledger is freshly alive.
 
@@ -247,6 +249,8 @@ async def _live_video_ledger_session_ids(
             await cur.close()
     except Exception:
         logger.exception("video_announce: failed to read live Kaggle video ledgers")
+        if raise_on_error:
+            raise
         return set()
 
     live: set[int] = set()
@@ -454,6 +458,248 @@ async def reconcile_terminal_rendering_sessions(
                     logger.warning(
                         "video_announce: failed to notify terminal reconciliation session=%s",
                         updated.id,
+                        exc_info=True,
+                    )
+    return reconciled
+
+
+async def _active_video_lease_session_ids(
+    db: Database,
+    *,
+    now: datetime,
+) -> set[int] | None:
+    active: set[int] = set()
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT run_id
+                FROM kaggle_resource_lease
+                WHERE status='active' AND expires_at > ?
+                  AND run_id LIKE 'videoannounce:%'
+                """,
+                (now.isoformat(),),
+            )
+            rows = await cur.fetchall()
+            await cur.close()
+    except Exception:
+        logger.exception("video_announce: failed to read active video leases")
+        return None
+    for (run_id_raw,) in rows:
+        match = re.fullmatch(r"videoannounce:(\d+)", str(run_id_raw or "").strip())
+        if match:
+            active.add(int(match.group(1)))
+    return active
+
+
+async def _video_ledger_dataset_refs(db: Database) -> dict[int, str] | None:
+    refs: dict[int, str] = {}
+    try:
+        async with db.raw_conn() as conn:
+            cur = await conn.execute(
+                """
+                SELECT session_id, dataset_ref
+                FROM kaggle_run_ledger
+                WHERE run_id LIKE 'videoannounce:%'
+                  AND session_id IS NOT NULL
+                  AND dataset_ref IS NOT NULL
+                """
+            )
+            rows = await cur.fetchall()
+            await cur.close()
+    except Exception:
+        logger.exception("video_announce: failed to read video ledger dataset refs")
+        return None
+    for session_id_raw, dataset_ref_raw in rows:
+        try:
+            session_id = int(session_id_raw)
+        except (TypeError, ValueError):
+            continue
+        dataset_ref = str(dataset_ref_raw or "").strip()
+        if dataset_ref:
+            refs[session_id] = dataset_ref
+    return refs
+
+
+async def reconcile_expired_rendering_sessions(
+    db: Database,
+    bot=None,
+    *,
+    chat_id: int | None = None,
+    now: datetime | None = None,
+    client: KaggleClient | None = None,
+    absolute_timeout_minutes: int = VIDEO_KAGGLE_ABSOLUTE_TIMEOUT_MINUTES,
+) -> int:
+    """Release expired render locks without guessing publication success.
+
+    The reusable Kaggle kernel slug is not an exact run identity. Provider
+    failure is therefore projected to ``FAILED`` only when the current kernel
+    metadata still contains this session's exact dataset. All other sessions
+    are kept until the absolute timeout and then become ``PUBLISH_BLOCKED``;
+    this frees the lane but does not claim that delivery failed or succeeded.
+    """
+
+    now_utc = now or datetime.now(timezone.utc)
+    try:
+        live_session_ids = await _live_video_ledger_session_ids(
+            db,
+            now=now_utc,
+            grace_minutes=VIDEO_KAGGLE_REMOTE_ALIVE_GRACE_MINUTES,
+            raise_on_error=True,
+        )
+        active_lease_session_ids = await _active_video_lease_session_ids(
+            db,
+            now=now_utc,
+        )
+        ledger_dataset_refs = await _video_ledger_dataset_refs(db)
+    except Exception:
+        logger.error(
+            "video_announce: expired render reconciliation aborted: guard evidence unavailable"
+        )
+        return 0
+    if active_lease_session_ids is None or ledger_dataset_refs is None:
+        logger.error(
+            "video_announce: expired render reconciliation aborted: guard evidence unavailable"
+        )
+        return 0
+    async with db.get_session() as session:
+        result = await session.execute(
+            select(VideoAnnounceSession).where(
+                VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
+            )
+        )
+        candidates = list(result.scalars().all())
+
+    provider = client or KaggleClient()
+    reconciled = 0
+    for sess in candidates:
+        session_id = int(sess.id or 0)
+        kernel_ref = str(sess.kaggle_kernel_ref or "").strip()
+        if (
+            not session_id
+            or not kernel_ref
+            or _is_local_kernel_ref(kernel_ref)
+            or session_id in live_session_ids
+            or session_id in active_lease_session_ids
+            or _poller_active(session_id)
+        ):
+            continue
+        reference = sess.started_at or sess.created_at
+        if not isinstance(reference, datetime):
+            continue
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=timezone.utc)
+        age_seconds = (now_utc - reference.astimezone(timezone.utc)).total_seconds()
+        if age_seconds < max(60, int(absolute_timeout_minutes) * 60):
+            continue
+        expected_dataset = str(
+            sess.kaggle_dataset or ledger_dataset_refs.get(session_id) or ""
+        ).strip()
+        exact_current_version = False
+        provider_status: dict = {}
+        try:
+            if expected_dataset:
+                exact_current_version, _metadata = await asyncio.to_thread(
+                    provider.kernel_has_dataset_sources,
+                    kernel_ref,
+                    [expected_dataset],
+                )
+            if exact_current_version:
+                provider_status = await asyncio.to_thread(
+                    provider.get_kernel_status,
+                    kernel_ref,
+                )
+        except Exception:
+            logger.warning(
+                "video_announce: expired render exact provider probe failed session=%s kernel=%s dataset=%s",
+                session_id,
+                kernel_ref,
+                expected_dataset or "-",
+                exc_info=True,
+            )
+        state = str(provider_status.get("status") or "").strip().casefold()
+        provider_failed = exact_current_version and state in {
+            "error",
+            "failed",
+            "cancelled",
+            "canceled",
+        }
+        failure = str(
+            provider_status.get("failureMessage")
+            or provider_status.get("failure_message")
+            or ""
+        ).strip()
+        if provider_failed:
+            safe_error = f"Kaggle provider terminal status reconciled: {state.upper()}"
+        else:
+            safe_error = (
+                "rendering exceeded absolute timeout without a verified delivery; "
+                "publish recovery required"
+            )
+            if state:
+                safe_error = f"{safe_error} (current provider status={state.upper()})"
+        if provider_failed and failure:
+            safe_error = f"{safe_error}: {failure[:500]}"
+        if provider_failed:
+            try:
+                await reconcile_kaggle_run_failure_from_host(
+                    db,
+                    run_id=f"videoannounce:{session_id}",
+                    message=safe_error,
+                )
+            except Exception:
+                logger.exception(
+                    "video_announce: failed to reconcile expired provider ledger session=%s",
+                    session_id,
+                )
+                continue
+        target_status = (
+            VideoAnnounceSessionStatus.FAILED
+            if provider_failed
+            else VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+        )
+        updated = await _update_status(
+            db,
+            session_id,
+            status=target_status,
+            error=safe_error,
+            expected_status=VideoAnnounceSessionStatus.RENDERING,
+        )
+        if updated is None:
+            continue
+        reconciled += 1
+        logger.error(
+            "video_announce: reconciled expired render session=%s kernel=%s dataset=%s exact_current=%s state=%s target=%s age_sec=%.0f",
+            session_id,
+            kernel_ref,
+            expected_dataset or "-",
+            exact_current_version,
+            state or "unknown",
+            target_status.value,
+            age_seconds,
+        )
+        if bot is not None:
+            notify_chat_id = await _resolve_recovery_notify_chat_id(
+                db,
+                updated,
+                chat_id=chat_id,
+            )
+            if notify_chat_id:
+                try:
+                    await asyncio.wait_for(
+                        bot.send_message(
+                            notify_chat_id,
+                            (
+                                f"⚠️ Сессия #{session_id}: просроченный render-lock снят "
+                                f"со статусом {target_status.value}."
+                            ),
+                        ),
+                        timeout=15,
+                    )
+                except Exception:
+                    logger.warning(
+                        "video_announce: failed to notify provider reconciliation session=%s",
+                        session_id,
                         exc_info=True,
                     )
     return reconciled

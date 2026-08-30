@@ -662,6 +662,248 @@ async def test_resume_rendering_sessions_uses_superadmin_dm_not_channel_fallback
 
 
 @pytest.mark.asyncio
+async def test_provider_terminal_error_reconciles_stale_rendering_once(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        session.add(User(user_id=777, is_superadmin=True))
+        obj = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_dataset="zigomaro/video-afisha-session-1",
+            started_at=now - timedelta(hours=2),
+        )
+        session.add(obj)
+        await session.commit()
+        await session.refresh(obj)
+        session_id = int(obj.id)
+
+    class _Client:
+        calls = 0
+
+        def kernel_has_dataset_sources(
+            self, _kernel_ref: str, expected: list[str]
+        ) -> tuple[bool, dict]:
+            assert expected == ["zigomaro/video-afisha-session-1"]
+            return True, {}
+
+        def get_kernel_status(self, _kernel_ref: str) -> dict[str, str]:
+            self.calls += 1
+            return {"status": "ERROR"}
+
+    client = _Client()
+    bot = _DummyBot()
+    first = await poller_module.reconcile_expired_rendering_sessions(
+        db,
+        bot,
+        chat_id=777,
+        now=now,
+        client=client,
+        absolute_timeout_minutes=60,
+    )
+    second = await poller_module.reconcile_expired_rendering_sessions(
+        db,
+        bot,
+        chat_id=777,
+        now=now,
+        client=client,
+        absolute_timeout_minutes=60,
+    )
+
+    assert first == 1
+    assert second == 0
+    assert client.calls == 1
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert refreshed.finished_at is not None
+        assert "ERROR" in str(refreshed.error)
+    assert len(bot.messages) == 1
+    assert "render-lock снят" in bot.messages[0][1]
+
+
+@pytest.mark.asyncio
+async def test_fresh_ledger_heartbeat_prevents_provider_terminal_probe(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+
+    async with db.get_session() as session:
+        obj = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            started_at=now - timedelta(hours=2),
+        )
+        session.add(obj)
+        await session.commit()
+        await session.refresh(obj)
+        session_id = int(obj.id)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_run_ledger(
+                run_id, session_id, kind, notebook, status, phase, progress_json,
+                token_hash, last_heartbeat_at, created_at, updated_at
+            ) VALUES(?, ?, 'crumple', 'CrumpleVideo', 'alive', 'render', '{}',
+                     'token-hash', ?, ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                session_id,
+                now.isoformat(),
+                (now - timedelta(hours=2)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    class _Client:
+        def get_kernel_status(self, _kernel_ref: str) -> dict[str, str]:
+            raise AssertionError("fresh heartbeat must suppress provider probe")
+
+    assert await poller_module.reconcile_expired_rendering_sessions(
+        db,
+        _DummyBot(),
+        now=now,
+        client=_Client(),
+        absolute_timeout_minutes=60,
+    ) == 0
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+
+
+@pytest.mark.asyncio
+async def test_expired_render_with_reused_kernel_becomes_publish_blocked(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        obj = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            kaggle_dataset="zigomaro/video-afisha-session-old",
+            started_at=now - timedelta(hours=13),
+        )
+        session.add(obj)
+        await session.commit()
+        await session.refresh(obj)
+        session_id = int(obj.id)
+
+    class _Client:
+        def kernel_has_dataset_sources(
+            self, _kernel_ref: str, expected: list[str]
+        ) -> tuple[bool, dict]:
+            assert expected == ["zigomaro/video-afisha-session-old"]
+            return False, {"dataset_sources": ["zigomaro/video-afisha-session-new"]}
+
+        def get_kernel_status(self, _kernel_ref: str) -> dict[str, str]:
+            raise AssertionError("reused kernel status is not exact evidence for old session")
+
+    assert await poller_module.reconcile_expired_rendering_sessions(
+        db,
+        _DummyBot(),
+        now=now,
+        client=_Client(),
+    ) == 1
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.PUBLISH_BLOCKED
+
+
+@pytest.mark.asyncio
+async def test_expired_render_with_active_exact_lease_remains_rendering(tmp_path: Path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        obj = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            started_at=now - timedelta(hours=13),
+        )
+        session.add(obj)
+        await session.commit()
+        await session.refresh(obj)
+        session_id = int(obj.id)
+    async with db.raw_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO kaggle_resource_lease(
+                resource_key, run_id, holder_kind, status,
+                acquired_at, expires_at, updated_at
+            ) VALUES('telegram_session:env:TEST', ?, 'kaggle', 'active', ?, ?, ?)
+            """,
+            (
+                f"videoannounce:{session_id}",
+                (now - timedelta(minutes=5)).isoformat(),
+                (now + timedelta(minutes=30)).isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await conn.commit()
+
+    class _Client:
+        def kernel_has_dataset_sources(self, *_args, **_kwargs):
+            raise AssertionError("active exact lease must suppress provider probe")
+
+    assert await poller_module.reconcile_expired_rendering_sessions(
+        db,
+        _DummyBot(),
+        now=now,
+        client=_Client(),
+    ) == 0
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+
+
+@pytest.mark.asyncio
+async def test_expired_render_reconciliation_fails_closed_when_lease_read_unknown(
+    tmp_path: Path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    now = datetime.now(timezone.utc)
+    async with db.get_session() as session:
+        obj = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            kaggle_kernel_ref="zigomaro/crumple-video",
+            started_at=now - timedelta(hours=13),
+        )
+        session.add(obj)
+        await session.commit()
+        await session.refresh(obj)
+        session_id = int(obj.id)
+
+    async def _unknown(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(poller_module, "_active_video_lease_session_ids", _unknown)
+
+    class _Client:
+        def kernel_has_dataset_sources(self, *_args, **_kwargs):
+            raise AssertionError("unknown guard evidence must abort reconciliation")
+
+    assert await poller_module.reconcile_expired_rendering_sessions(
+        db,
+        _DummyBot(),
+        now=now,
+        client=_Client(),
+    ) == 0
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.RENDERING
+
+
+@pytest.mark.asyncio
 async def test_update_status_sets_published_at_for_published_test(tmp_path: Path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

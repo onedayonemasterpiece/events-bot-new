@@ -18,6 +18,14 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-30-video-lane-stale-render-alert-storm.md`
+  - Scope: Kaggle video render projection, Telegram video-lane ownership,
+    tomorrow/partner watchdog retry cadence and startup ordering.
+  - Must not regress: terminal provider failures cannot hold a lane through a
+    stale local `RENDERING` row; fresh heartbeats remain protected; busy retries
+    are persisted and cooled down; one scheduled slot cannot notify every
+    minute; startup catch-up and the first watchdog tick cannot race.
+
 - `INC-2026-08-30-mcp-scheduled-readback-routing.md`
   - Scope: private eventsBot MCP Telegram/VK scheduled-post namespace,
     exact read-after-write, postponed/live reconciliation and target-safe repair.

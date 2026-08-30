@@ -1394,6 +1394,27 @@ async def test_video_lane_assignment_fails_when_all_resource_leases_busy(
 
 
 @pytest.mark.asyncio
+async def test_video_lane_notice_is_deduplicated_per_scheduled_slot(tmp_path):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    bot = _DummyBot()
+    scenario = VideoAnnounceScenario(db=db, bot=bot, chat_id=123, user_id=123)
+    scenario_module._video_lane_notice_cache.clear()
+
+    await scenario._notify_video_lane_once(slot_key="tomorrow:2026-08-31", text="busy")
+    await scenario._notify_video_lane_once(
+        slot_key="tomorrow:2026-08-31", text="busy with changed detail"
+    )
+    await scenario._notify_video_lane_once(slot_key="tomorrow:2026-09-01", text="busy")
+
+    assert [(chat_id, text) for chat_id, text, _kwargs in bot.messages] == [
+        (123, "busy"),
+        (123, "busy"),
+    ]
+    scenario_module._video_lane_notice_cache.clear()
+
+
+@pytest.mark.asyncio
 async def test_fresh_kaggle_ledger_heartbeat_prevents_fixed_timeout_failure(tmp_path):
     db = Database(str(tmp_path / "db.sqlite"))
     await db.init()

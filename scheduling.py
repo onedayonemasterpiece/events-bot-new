@@ -480,6 +480,11 @@ async def _run_scheduled_video_tomorrow(
         return
 
     try:
+        notify_lane_error = not await _video_lane_busy_skip_since(
+            db,
+            kind="video_tomorrow",
+            since_utc=datetime.now(timezone.utc) - timedelta(hours=6),
+        )
         scenario = VideoAnnounceScenario(
             db,
             bot,
@@ -492,6 +497,7 @@ async def _run_scheduled_video_tomorrow(
             test_mode=test_mode,
             wait_for_handoff=True,
             trigger="startup_catchup" if startup_catchup else "scheduled",
+            notify_lane_error=notify_lane_error,
         )
         if session_id is None:
             skip_reason = str(getattr(scenario, "last_tomorrow_skip_reason", "") or "")
@@ -576,14 +582,34 @@ async def _run_scheduled_popular_review(
         return
 
     try:
+        notify_render_lock = not await _video_lane_busy_skip_since(
+            db,
+            kind="video_popular_review",
+            since_utc=datetime.now(timezone.utc) - timedelta(hours=6),
+        )
         scenario = VideoAnnounceScenario(
             db,
             bot,
             chat_id=int(target_chat_id),
             user_id=int(target_chat_id),
         )
-        session_id = await scenario.run_popular_review_pipeline(wait_for_handoff=True)
+        session_id = await scenario.run_popular_review_pipeline(
+            wait_for_handoff=True,
+            notify_render_lock=notify_render_lock,
+        )
         if session_id is None:
+            skip_reason = str(
+                getattr(scenario, "last_popular_review_skip_reason", "") or ""
+            )
+            if skip_reason in {"video_lanes_busy", "render_in_progress"}:
+                ops_details["skip_reason"] = skip_reason
+                await finish_ops_run(
+                    db,
+                    run_id=ops_run_id,
+                    status="skipped",
+                    details=ops_details,
+                )
+                return
             reason = "CherryFlash did not create a popular_review session"
             ops_details["error"] = reason
             raise RuntimeError(reason)
@@ -671,6 +697,12 @@ async def _run_scheduled_partner_track(
         return
 
     try:
+        notify_lane_error = not await _video_lane_busy_skip_since(
+            db,
+            kind=f"video_partner_{partner_track.callback_action}",
+            partner_track_id=partner_track.track_id,
+            since_utc=datetime.now(timezone.utc) - timedelta(hours=6),
+        )
         scenario = VideoAnnounceScenario(
             db,
             bot,
@@ -681,6 +713,7 @@ async def _run_scheduled_partner_track(
             partner_track,
             wait_for_handoff=True,
             trigger="startup_catchup" if startup_catchup else "scheduled",
+            notify_lane_error=notify_lane_error,
         )
         if session_id is None:
             skip_reason = str(
@@ -1098,6 +1131,15 @@ def _video_tomorrow_watchdog_grace_seconds() -> int:
     return max(60, value)
 
 
+def _video_tomorrow_watchdog_busy_retry_seconds() -> int:
+    raw = (os.getenv("V_TOMORROW_WATCHDOG_BUSY_RETRY_SECONDS") or "").strip()
+    try:
+        value = int(raw) if raw else 15 * 60
+    except ValueError:
+        value = 15 * 60
+    return max(60, value)
+
+
 def _utc_sql_text(dt: datetime) -> str:
     value = dt
     if value.tzinfo is None:
@@ -1164,6 +1206,55 @@ async def _video_tomorrow_dispatch_exists_today(
         )
         row = await cur.fetchone()
     return bool(row)
+
+
+async def _video_lane_busy_skip_since(
+    db: Any,
+    *,
+    kind: str,
+    since_utc: datetime,
+    partner_track_id: str | None = None,
+) -> bool:
+    """Return whether one scheduled product recently observed a busy lane."""
+
+    if db is None or not hasattr(db, "raw_conn"):
+        return False
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            """
+            SELECT details_json
+            FROM ops_run
+            WHERE kind = ?
+              AND trigger = 'scheduled'
+              AND status = 'skipped'
+              AND started_at >= ?
+            ORDER BY id DESC
+            """,
+            (str(kind), _utc_sql_text(since_utc)),
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+    for (details_raw,) in rows:
+        details: dict[str, Any] = {}
+        if isinstance(details_raw, str) and details_raw.strip():
+            try:
+                parsed = json.loads(details_raw)
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                details = parsed
+        elif isinstance(details_raw, dict):
+            details = details_raw
+        if partner_track_id and str(
+            details.get("partner_track_id") or ""
+        ).strip() != str(partner_track_id).strip():
+            continue
+        if str(details.get("skip_reason") or "").strip() in {
+            "video_lanes_busy",
+            "render_in_progress",
+        }:
+            return True
+    return False
 
 
 async def _guide_full_dispatch_exists_today(
@@ -2158,6 +2249,17 @@ async def _maybe_catch_up_video_tomorrow_on_startup(db: Any, bot: Any) -> bool:
         )
         return False
 
+    busy_retry_seconds = _video_tomorrow_watchdog_busy_retry_seconds()
+    if await _video_lane_busy_skip_since(
+        db,
+        kind="video_tomorrow",
+        since_utc=now_utc - timedelta(seconds=busy_retry_seconds),
+    ):
+        logging.info(
+            "SCHED startup catchup deferring video_tomorrow after recent busy-lane skip"
+        )
+        return False
+
     logging.warning(
         "SCHED startup catchup dispatching missed video_tomorrow slot scheduled_local=%s now_local=%s",
         scheduled_local.isoformat(),
@@ -2222,6 +2324,17 @@ async def _maybe_catch_up_popular_review_on_startup(db: Any, bot: Any) -> bool:
             target_date,
             failed_session_count,
             POPULAR_REVIEW_FAILED_SESSION_RETRY_CAP,
+        )
+        return False
+
+    busy_retry_seconds = _video_tomorrow_watchdog_busy_retry_seconds()
+    if await _video_lane_busy_skip_since(
+        db,
+        kind="video_popular_review",
+        since_utc=now_utc - timedelta(seconds=busy_retry_seconds),
+    ):
+        logging.info(
+            "SCHED startup catchup deferring video_popular_review after recent busy skip"
         )
         return False
 
@@ -2350,6 +2463,18 @@ async def maybe_dispatch_video_tomorrow_watchdog(db: Any, bot: Any) -> bool:
         profile_key=normalized_profile_key,
         target_date=target_date,
     ):
+        return False
+
+    busy_retry_seconds = _video_tomorrow_watchdog_busy_retry_seconds()
+    if await _video_lane_busy_skip_since(
+        db,
+        kind="video_tomorrow",
+        since_utc=now_utc - timedelta(seconds=busy_retry_seconds),
+    ):
+        logging.info(
+            "SCHED watchdog deferring video_tomorrow after recent busy-lane skip retry_in<=%ss",
+            busy_retry_seconds,
+        )
         return False
 
     logging.error(
@@ -2955,6 +3080,20 @@ async def maybe_dispatch_partner_track_watchdog(
             )
             return False
 
+    busy_retry_seconds = _video_tomorrow_watchdog_busy_retry_seconds()
+    if await _video_lane_busy_skip_since(
+        db,
+        kind=f"video_partner_{partner_track.callback_action}",
+        partner_track_id=partner_track.track_id,
+        since_utc=now_utc - timedelta(seconds=busy_retry_seconds),
+    ):
+        logging.info(
+            "SCHED partner_track watchdog deferring recent busy-lane skip track=%s retry_in<=%ss",
+            partner_track.track_id,
+            busy_retry_seconds,
+        )
+        return False
+
     logging.error(
         "SCHED partner_track watchdog dispatching missing slot track=%s "
         "scheduled_local=%s now_local=%s",
@@ -3014,6 +3153,17 @@ async def maybe_dispatch_popular_review_watchdog(db: Any, bot: Any) -> bool:
             target_date,
             failed_session_count,
             POPULAR_REVIEW_FAILED_SESSION_RETRY_CAP,
+        )
+        return False
+
+    busy_retry_seconds = _video_tomorrow_watchdog_busy_retry_seconds()
+    if await _video_lane_busy_skip_since(
+        db,
+        kind="video_popular_review",
+        since_utc=now_utc - timedelta(seconds=busy_retry_seconds),
+    ):
+        logging.info(
+            "SCHED video_popular_review watchdog deferring recent render/lane busy skip"
         )
         return False
 
@@ -4916,7 +5066,6 @@ def startup(
             )
     else:
         logging.info("SCHED skipping festival_queue (ENABLE_FESTIVAL_QUEUE!=1)")
-        _notify_admin_skip("festival_queue", "ENABLE_FESTIVAL_QUEUE!=1")
 
     enable_ticket_sites_queue = _env_enabled("ENABLE_TICKET_SITES_QUEUE", default=False)
     if enable_ticket_sites_queue:
@@ -4979,7 +5128,6 @@ def startup(
         )
     else:
         logging.info("SCHED skipping ticket_sites_queue (ENABLE_TICKET_SITES_QUEUE!=1)")
-        _notify_admin_skip("ticket_sites_queue", "ENABLE_TICKET_SITES_QUEUE!=1")
 
     enable_3di = _env_enabled("ENABLE_3DI_SCHEDULED", default=is_prod)
     if enable_3di:
@@ -5612,7 +5760,6 @@ def startup(
         )
     else:
         logging.info("SCHED skipping general_stats (ENABLE_GENERAL_STATS!=1)")
-        _notify_admin_skip("general_stats", "ENABLE_GENERAL_STATS!=1")
 
     enable_telegraph_cache = _env_enabled("ENABLE_TELEGRAPH_CACHE_SANITIZER", default=False)
     if enable_telegraph_cache:
@@ -5692,7 +5839,6 @@ def startup(
         )
     else:
         logging.info("SCHED skipping telegraph_cache_sanitize (ENABLE_TELEGRAPH_CACHE_SANITIZER!=1)")
-        _notify_admin_skip("telegraph_cache_sanitize", "ENABLE_TELEGRAPH_CACHE_SANITIZER!=1")
 
     enable_kaggle_recovery = _env_enabled("ENABLE_KAGGLE_RECOVERY", default=is_prod)
     if enable_kaggle_recovery:
@@ -5716,7 +5862,6 @@ def startup(
         )
     else:
         logging.info("SCHED skipping kaggle_recovery (ENABLE_KAGGLE_RECOVERY!=1)")
-        _notify_admin_skip("kaggle_recovery", "ENABLE_KAGGLE_RECOVERY!=1")
 
     if os.getenv("ENABLE_NIGHTLY_PAGE_SYNC") == "1":
         page_sync_time_raw = os.getenv("NIGHTLY_PAGE_SYNC_TIME_LOCAL", "02:30").strip()
