@@ -1,0 +1,87 @@
+{
+  "schema": "kenigevents.astro-runtime-font-manifest.g12.v1",
+  "browser": "playwright-chromium",
+  "font_ready": true,
+  "regions": [
+    {
+      "region_id": "eventcard.desktop-wide-calendar.8006",
+      "platform_fonts": []
+    },
+    {
+      "region_id": "eventcard.desktop-packed-calendar-absent.2182",
+      "platform_fonts": []
+    },
+    {
+      "region_id": "row.desktop.events",
+      "platform_fonts": [
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans-Bold",
+          "isCustomFont": false,
+          "glyphCount": 9
+        }
+      ]
+    },
+    {
+      "region_id": "row.desktop.exhibitions",
+      "platform_fonts": [
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans",
+          "isCustomFont": false,
+          "glyphCount": 100
+        },
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans-Bold",
+          "isCustomFont": false,
+          "glyphCount": 51
+        }
+      ]
+    },
+    {
+      "region_id": "eventcard.mobile-wide-calendar.8006",
+      "platform_fonts": []
+    },
+    {
+      "region_id": "eventcard.mobile-packed-calendar-absent.2182",
+      "platform_fonts": []
+    },
+    {
+      "region_id": "group.mobile.events",
+      "platform_fonts": [
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans-Bold",
+          "isCustomFont": false,
+          "glyphCount": 9
+        }
+      ]
+    },
+    {
+      "region_id": "group.mobile.exhibitions",
+      "platform_fonts": [
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans",
+          "isCustomFont": false,
+          "glyphCount": 99
+        },
+        {
+          "familyName": "DejaVu Sans",
+          "postScriptName": "DejaVuSans-Bold",
+          "isCustomFont": false,
+          "glyphCount": 51
+        }
+      ]
+    }
+  ],
+  "font_files": [
+    {
+      "family": "DejaVu Sans",
+      "file": "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "file_sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280",
+      "locally_hashable": true
+    }
+  ]
+}

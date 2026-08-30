@@ -1,0 +1,62 @@
+{
+  "schema": "kenigevents.astro-penpot-export-readback-map.g12.v1",
+  "authority": "ASTRO_CURRENT_A_USED_DOM",
+  "mappings": [
+    {
+      "astro_region_id": "eventcard.desktop-wide-calendar.8006",
+      "astro_selector": "[data-free-collection-event-group=\"events\"] [data-event-card][data-event-id=\"8006\"]",
+      "executor_semantic_root": "kenigevents.free-collection.eventcard.desktop-wide-calendar.8006",
+      "receipt_root_key": "root:eventcard.desktop-wide-calendar.8006",
+      "capture_path": "evidence/free-collection-g12/captures/eventcard.desktop-wide-calendar.8006/astro.png"
+    },
+    {
+      "astro_region_id": "eventcard.desktop-packed-calendar-absent.2182",
+      "astro_selector": "[data-free-collection-event-group=\"exhibitions\"] [data-event-card][data-event-id=\"2182\"]",
+      "executor_semantic_root": "kenigevents.free-collection.eventcard.desktop-packed-calendar-absent.2182",
+      "receipt_root_key": "root:eventcard.desktop-packed-calendar-absent.2182",
+      "capture_path": "evidence/free-collection-g12/captures/eventcard.desktop-packed-calendar-absent.2182/astro.png"
+    },
+    {
+      "astro_region_id": "eventcard.mobile-wide-calendar.8006",
+      "astro_selector": "[data-free-collection-event-group=\"events\"] [data-event-card][data-event-id=\"8006\"]",
+      "executor_semantic_root": "kenigevents.free-collection.eventcard.mobile-wide-calendar.8006",
+      "receipt_root_key": "root:eventcard.mobile-wide-calendar.8006",
+      "capture_path": "evidence/free-collection-g12/captures/eventcard.mobile-wide-calendar.8006/astro.png"
+    },
+    {
+      "astro_region_id": "eventcard.mobile-packed-calendar-absent.2182",
+      "astro_selector": "[data-free-collection-event-group=\"exhibitions\"] [data-event-card][data-event-id=\"2182\"]",
+      "executor_semantic_root": "kenigevents.free-collection.eventcard.mobile-packed-calendar-absent.2182",
+      "receipt_root_key": "root:eventcard.mobile-packed-calendar-absent.2182",
+      "capture_path": "evidence/free-collection-g12/captures/eventcard.mobile-packed-calendar-absent.2182/astro.png"
+    },
+    {
+      "astro_region_id": "row.desktop.events",
+      "astro_selector": "[data-free-collection-event-group=\"events\"]",
+      "executor_semantic_root": "kenigevents.free-collection.row.desktop.events",
+      "receipt_root_key": "root:row.desktop.events",
+      "capture_path": "evidence/free-collection-g12/captures/row.desktop.events/astro.png"
+    },
+    {
+      "astro_region_id": "row.desktop.exhibitions",
+      "astro_selector": "[data-free-collection-event-group=\"exhibitions\"]",
+      "executor_semantic_root": "kenigevents.free-collection.row.desktop.exhibitions",
+      "receipt_root_key": "root:row.desktop.exhibitions",
+      "capture_path": "evidence/free-collection-g12/captures/row.desktop.exhibitions/astro.png"
+    },
+    {
+      "astro_region_id": "group.mobile.events",
+      "astro_selector": "[data-free-collection-event-group=\"events\"]",
+      "executor_semantic_root": "kenigevents.free-collection.group.mobile.events",
+      "receipt_root_key": "root:group.mobile.events",
+      "capture_path": "evidence/free-collection-g12/captures/group.mobile.events/astro.png"
+    },
+    {
+      "astro_region_id": "group.mobile.exhibitions",
+      "astro_selector": "[data-free-collection-event-group=\"exhibitions\"]",
+      "executor_semantic_root": "kenigevents.free-collection.group.mobile.exhibitions",
+      "receipt_root_key": "root:group.mobile.exhibitions",
+      "capture_path": "evidence/free-collection-g12/captures/group.mobile.exhibitions/astro.png"
+    }
+  ]
+}

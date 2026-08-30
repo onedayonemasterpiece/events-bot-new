@@ -1,0 +1,1081 @@
+{
+  "schema": "kenigevents.astro-current-a-fixture-input.g12.v1",
+  "source_case": "catalog/ui-conformance/free-collection/g4/resolved/free-collection.desktop.full.resolved-render-case.json",
+  "source_case_sha256": "59d263d11ff1707742a1d78c60b7f3e4d950a2ee153c37cddb41a905c8308181",
+  "fixture_order": [
+    "event.real.8006",
+    "event.real.8200",
+    "event.real.2182",
+    "event.real.6711",
+    "event.real.7609"
+  ],
+  "groups": {
+    "events": [
+      "event.real.8006",
+      "event.real.8200"
+    ],
+    "exhibitions": [
+      "event.real.2182",
+      "event.real.6711",
+      "event.real.7609"
+    ]
+  },
+  "fixtures": [
+    {
+      "fixture_id": "event.real.8006",
+      "preview_event_sha256": "ad1a836f259ed7c744ab1a314ea7a0d6924de1f0b6539cebaea3cc30ca39a403",
+      "preview_event": {
+        "id": 8006,
+        "source_prod_id": 8006,
+        "title": "Донорская акция «Стань донором крови»",
+        "slug": "donorskaya-aktsiya-stan-donorom-krovi-gurevsk-8006",
+        "event_type": "встреча",
+        "festival": null,
+        "organizer_names": [],
+        "participants": [],
+        "status_label": "Бесплатно",
+        "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": null,
+        "silent": false,
+        "is_public": true,
+        "is_searchable": true,
+        "publication_status": "published",
+        "starts_at": "2026-09-02T09:00:00+02:00",
+        "start_date": "2026-09-02",
+        "start_time": "09:00",
+        "end_date": null,
+        "end_at": null,
+        "time_range_end": null,
+        "duration_forecast_minutes": null,
+        "timezone": "Europe/Kaliningrad",
+        "display_date": "2026-09-02",
+        "display_time": "09:00",
+        "city": "Гурьевск",
+        "venue_name": "Центр культуры и досуга",
+        "address": "Калининградское шоссе 4а",
+        "map_query": "Гурьевск, Центр культуры и досуга, Калининградское шоссе 4а",
+        "ticket": {
+          "kind": "phone",
+          "label": "Позвонить организатору",
+          "href": "tel:+74015139588",
+          "status": "registration",
+          "is_free": true,
+          "price_label": null,
+          "note": null
+        },
+        "age_restriction": "18+",
+        "age_restriction_status": "declared",
+        "age_restriction_provenance": "organizer_text",
+        "age_restriction_decision_version": "event-age-decision-v1",
+        "age_recommendation": null,
+        "age_recommendation_label": null,
+        "source_url": "https://vk.com/wall-69310304_50785",
+        "source_urls": [
+          "https://vk.com/wall-69310304_50785",
+          "https://vk.com/wall-231920894_9531",
+          "https://t.me/c/3954607218/3468",
+          "https://t.me/kldevents/3468",
+          "https://t.me/kenigeventscalendar/8495",
+          "https://vk.com/wall-231920894_9498"
+        ],
+        "source_count": 6,
+        "question_cta": {
+          "provider": "vk",
+          "url": "https://vk.com/wall-231920894_9531",
+          "source": "managed_afisha_post"
+        },
+        "telegraph_url": "https://telegra.ph/Donorskaya-akciya-Stan-donorom-krovi-08-19",
+        "image_url": "/g12-media/dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b.webp",
+        "image_alt": "Афиша события «Донорская акция «Стань донором крови»»",
+        "image_text_mode": "ocr_text",
+        "image_media_role": "event_identity_poster",
+        "image_assets": [
+          {
+            "src": "/g12-media/dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b.webp",
+            "width": 1440,
+            "height": 1920,
+            "alt": "Афиша события «Донорская акция «Стань донором крови»»",
+            "image_text_mode": "ocr_text",
+            "media_role": "event_identity_poster",
+            "media_role_confidence": 1,
+            "media_semantic_status": "classified",
+            "image_kind": "poster",
+            "recommended_hero_fit": "contain",
+            "safe_crop": false,
+            "source_order": 0,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/dd/dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b/256.webp",
+                "width": 192,
+                "height": 256
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/dd/dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b/512.webp",
+                "width": 384,
+                "height": 512
+              }
+            ],
+            "geometry_id": 1904,
+            "current_pixel_sha256": "6189faf63ef2789e73ace94aecdca2c369ff07e22f6ef9953afca676de6b1196",
+            "geometry_pixel_sha256": "6189faf63ef2789e73ace94aecdca2c369ff07e22f6ef9953afca676de6b1196",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 1440,
+            "geometry_source_height": 1920,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1,
+              "confidence": 1
+            },
+            "geometry_reason_code": "full_informative_poster",
+            "focal_point": {
+              "x": 0.75,
+              "y": 0.45
+            },
+            "recommended_object_position": "75% 45%",
+            "asset_key": "dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b",
+            "quality_score": 14.7525
+          }
+        ],
+        "video_assets": [],
+        "face_boxes": [],
+        "valuable_region": {
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "confidence": 1
+        },
+        "ocr_boxes": [],
+        "focal_point": {
+          "x": 0.75,
+          "y": 0.45
+        },
+        "image_object_position": "75% 45%",
+        "safe_crop": false,
+        "summary": "Специалисты станции переливания проводят акцию по пополнению регионального банка крови с выплатой денежной компенсации.",
+        "meta_description": "Специалисты станции переливания проводят акцию по пополнению регионального банка крови с выплатой денежной компенсации.",
+        "description_html": "<p>Донорская акция по пополнению регионального банка крови, в которой участвуют специалисты станции переливания 🩸.</p>\n<p>Для участия необходимо иметь паспорт и СНИЛС. Донору полагается:<br />- справка на 2 оплачиваемых выходных дня;<br />- денежная компенсация на питание в размере 1063 рублей.</p>",
+        "topics": [],
+        "pushkin_card": false,
+        "other_date_ids": [],
+        "data_quality_notes": [],
+        "updated_at": "2026-08-19 08:25:18.844578",
+        "likes_count": 9,
+        "source_likes_count": 9,
+        "service_likes_count": 0,
+        "source_views_count": 476,
+        "source_engagement_sources_count": 3,
+        "shares_count": 1,
+        "popularity_reason_codes": [],
+        "popularity_signal_score": 0
+      }
+    },
+    {
+      "fixture_id": "event.real.8200",
+      "preview_event_sha256": "010b899a479ce9459becda0107791d848b65946e077e5586e67ad2ac25ac5078",
+      "preview_event": {
+        "id": 8200,
+        "source_prod_id": 8200,
+        "title": "Музыкальная экспедиция Бориса Андрианова",
+        "slug": "muzykalnaya-ekspeditsiya-borisa-andrianova-hrabrovo-8200",
+        "event_type": "концерт",
+        "festival": "Музыкальная экспедиция",
+        "organizer_names": [
+          "Хранители руин"
+        ],
+        "participants": [],
+        "status_label": "Бесплатно",
+        "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": null,
+        "silent": false,
+        "is_public": true,
+        "is_searchable": true,
+        "publication_status": "published",
+        "starts_at": "2026-09-06T15:00:00+02:00",
+        "start_date": "2026-09-06",
+        "start_time": "15:00",
+        "end_date": null,
+        "end_at": null,
+        "time_range_end": null,
+        "duration_forecast_minutes": null,
+        "timezone": "Europe/Kaliningrad",
+        "display_date": "2026-09-06",
+        "display_time": "15:00",
+        "city": "Храброво",
+        "venue_name": "Кирха Святой Барбары",
+        "address": "п. Храброво, ул. Невского, 1",
+        "map_query": "Храброво, Кирха Святой Барбары, п. Храброво, ул. Невского, 1",
+        "ticket": {
+          "kind": "free",
+          "label": "Источник события",
+          "href": "https://ruin-keepers.timepad.ru/event/4150084",
+          "status": "free",
+          "is_free": true,
+          "price_label": null,
+          "note": null
+        },
+        "age_restriction": null,
+        "age_restriction_status": "insufficient_evidence",
+        "age_restriction_provenance": null,
+        "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+        "age_recommendation": null,
+        "age_recommendation_label": null,
+        "source_url": "https://vk.com/wall-190663987_9175",
+        "source_urls": [
+          "https://vk.com/wall-190663987_9175",
+          "https://vk.com/wall-231920894_9979",
+          "https://t.me/c/3954607218/3661",
+          "https://t.me/kulturnaya_chaika/8247",
+          "https://t.me/meowafisha/8402",
+          "https://vk.com/wall-231920894_9856"
+        ],
+        "source_count": 6,
+        "question_cta": {
+          "provider": "vk",
+          "url": "https://vk.com/wall-231920894_9979",
+          "source": "managed_afisha_post"
+        },
+        "telegraph_url": "https://telegra.ph/Koncert-Muzykalnaya-ehkspediciya-08-21-5",
+        "image_url": "/g12-media/56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e.webp",
+        "image_alt": "Расписание события «Музыкальная экспедиция Бориса Андрианова»",
+        "image_text_mode": "ocr_text",
+        "image_media_role": "program_or_schedule",
+        "image_assets": [
+          {
+            "src": "/g12-media/56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e.webp",
+            "width": 1200,
+            "height": 1400,
+            "alt": "Расписание события «Музыкальная экспедиция Бориса Андрианова»",
+            "image_text_mode": "ocr_text",
+            "media_role": "program_or_schedule",
+            "media_role_confidence": 0.95,
+            "media_semantic_status": "classified",
+            "image_kind": "mixed",
+            "recommended_hero_fit": "contain",
+            "safe_crop": false,
+            "source_order": 0,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/56/56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e/256.webp",
+                "width": 219,
+                "height": 256
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/56/56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e/512.webp",
+                "width": 439,
+                "height": 512
+              }
+            ],
+            "geometry_id": 2031,
+            "current_pixel_sha256": "4ec386166e0dcc233eabcfb51ee938ec1aface3d3de4dfd1f267f72206b00495",
+            "geometry_pixel_sha256": "4ec386166e0dcc233eabcfb51ee938ec1aface3d3de4dfd1f267f72206b00495",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 1200,
+            "geometry_source_height": 1400,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0.032,
+              "y": 0.027,
+              "w": 0.948,
+              "h": 0.938,
+              "confidence": 1
+            },
+            "geometry_reason_code": "full_poster_content",
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.3
+            },
+            "recommended_object_position": "50% 30%",
+            "asset_key": "56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e",
+            "quality_score": 14.3343
+          }
+        ],
+        "video_assets": [],
+        "face_boxes": [],
+        "valuable_region": {
+          "x": 0.032,
+          "y": 0.027,
+          "w": 0.948,
+          "h": 0.938,
+          "confidence": 1
+        },
+        "ocr_boxes": [],
+        "focal_point": {
+          "x": 0.5,
+          "y": 0.3
+        },
+        "image_object_position": "50% 30%",
+        "safe_crop": false,
+        "summary": "Концерт в рамках фестиваля Музыкальная экспедиция с участием оркестра SoloTango и группы солистов.",
+        "meta_description": "Концерт в рамках фестиваля Музыкальная экспедиция с участием оркестра SoloTango и группы солистов.",
+        "description_html": "<p>«Хранители руин» &amp; «Музыкальная экспедиция» Бориса Андрианова снова в Калининграде! 🎵</p>\n<p>4, 5 и 6 сентября [club220005980|«Музыкальная экспедиция»] Бориса Андрианова выступит на различных площадках Калининградской области с классной музыкальной программой.</p>\n<p>Красивые выступления «Музыкальной экспедиции» станут отличным дополнением к культурным событиям в рамках празднования 80-летия области!</p>\n<p>В прошлом году мы впервые стали частью этого проекта и убедились, насколько здорово музыка умеет раскрывать исторические пространства с совершенно неожиданной стороны. В этом году экспедиция возвращается, а «Хранители руин» вновь выступают ее соорганизаторами ❤</p>\n<p>Три дня, несколько колоритных локаций — от старинных кирх и городских достопримечательностей до морского побережья.</p>\n<p>🎻 4 сентября — Владимирово, кирха Тарау</p>\n<p>Днем — открытый концерт в парке у кирхи Тарау (поселок Владимирово). Начало в 16:00, вход свободный.</p>\n<p>Вечером — концерт непосредственно в знаменитой кирхе Тарау. Начало в 19:30. Билеты: ruin-keepers.timepad.ru.<br />Такое событие в кирхе Тарау уникально: это шанс не только услышать прекрасную музыку, но и увидеть исторический объект в новом свете 🔥<br />В рамках концерта пройдет экскурсия по историческому центру Владимирово и световое шоу в завершении мероприятия!</p>\n<p>🚂 5 сентября — Железнодорожные ворота и Кафедральный собор</p>\n<p>Днем — концерт в Железнодорожных воротах. Начало в 15:00. Стоимость билета — 1000 рублей. Билеты: ruin-keepers.timepad.ru.<br />☝ Покупка билета — это не только возможность попасть на необычный концерт, но и поддержка сохранения исторического наследия! ❤</p>\n<p>Вечером — концерт в Кафедральном соборе на острове Канта. Начало в 18:00. Билеты: sobor39.ru.<br />Величественное пространство собора, специальная программа и музыканты экспедиции сделают этот концерт одним из самых ярких событий трехдневного маршрута.</p>\n<p>🌊 6 сентября — музыка, море и руины</p>\n<p>Утро — концерт у моря. Мероприятие пройдет в живописном месте, координаты которого мы рассекретим за два дня до мероприятия. Билеты: ruin-keepers.timepad.ru.</p>\n<p>Днем — бесплатный концерт в кирхе Святой Барбары в Храброво (недавно храм отметил 700‑летний юбилей). Начало в 15:00.<br />Средневековые стены в этот день наполнятся музыкой — и это точно добавит энергии для сохранения древнего храма!</p>\n<p>Участники музыкальной программы:<br />Борис Андрианов (виолончель);<br />Анна Кошкина (виолончель);<br />Алиса Тен (вокал);<br />Ольга Волкова (скрипка);<br />Дмитрий Илларионов (гитара);<br />SoloTango Orchestra.</p>\n<p>Мы очень рады снова быть частью «Музыкальной экспедиции» и вместе с Борисом Андриановым открывать для вас исторические места Калининградской области с неожиданной стороны.</p>\n<p>Сохраняйте даты — 4, 5 и 6 сентября — и отправляйтесь в экспедицию вместе с нами! 🚀</p>",
+        "topics": [
+          "CONCERTS",
+          "KRAEVEDENIE_KALININGRAD_OBLAST"
+        ],
+        "pushkin_card": false,
+        "other_date_ids": [],
+        "data_quality_notes": [],
+        "updated_at": "2026-08-21 08:27:44.973310",
+        "likes_count": 17,
+        "source_likes_count": 17,
+        "service_likes_count": 0,
+        "source_views_count": 1833,
+        "source_engagement_sources_count": 5,
+        "shares_count": 5,
+        "popularity_reason_codes": [
+          "fast_growth",
+          "frequently_shared"
+        ],
+        "popularity_signal_score": 5.5
+      }
+    },
+    {
+      "fixture_id": "event.real.2182",
+      "preview_event_sha256": "421b186617e8c9eb3ed874b17d6f319f94508babc1022542f81ea608127d5f25",
+      "preview_event": {
+        "id": 2182,
+        "source_prod_id": 2182,
+        "title": "Песчаная палитра Куршской косы",
+        "slug": "peschanaya-palitra-kurshskoy-kosy-kaliningrad-2182",
+        "event_type": "выставка",
+        "festival": null,
+        "organizer_names": [],
+        "participants": [],
+        "status_label": "Бесплатно",
+        "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": null,
+        "silent": false,
+        "is_public": true,
+        "is_searchable": true,
+        "publication_status": "published",
+        "starts_at": "2026-01-11T14:00:00+02:00",
+        "start_date": "2026-01-11",
+        "start_time": "14:00",
+        "end_date": "2026-12-31",
+        "end_at": null,
+        "time_range_end": null,
+        "duration_forecast_minutes": null,
+        "timezone": "Europe/Kaliningrad",
+        "display_date": "2026-01-11",
+        "display_time": "14:00",
+        "city": "Калининград",
+        "venue_name": "Калининградская областная научная библиотека",
+        "address": "Мира 9/11",
+        "map_query": "Калининград, Калининградская областная научная библиотека, Мира 9/11",
+        "ticket": {
+          "kind": "free",
+          "label": "Источник события",
+          "href": null,
+          "status": null,
+          "is_free": true,
+          "price_label": null,
+          "note": null
+        },
+        "age_restriction": null,
+        "age_restriction_status": "insufficient_evidence",
+        "age_restriction_provenance": null,
+        "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+        "age_recommendation": null,
+        "age_recommendation_label": null,
+        "source_url": "https://vk.com/wall-231920894_944",
+        "source_urls": [
+          "https://vk.com/wall-231920894_944"
+        ],
+        "source_count": 1,
+        "question_cta": {
+          "provider": "vk",
+          "url": "https://vk.com/wall-231920894_944",
+          "source": "managed_afisha_post"
+        },
+        "telegraph_url": "https://telegra.ph/Peschanaya-palitra-Kurshskoj-kosy-01-08",
+        "image_url": "/g12-media/99d4b75ef3291c90e1457b6fdc3fe89e519b327f9d6c8ff56cd95f763e71ab1e.webp",
+        "image_alt": "Изображение события «Песчаная палитра Куршской косы»",
+        "image_text_mode": "visual_only",
+        "image_media_role": "event_photo",
+        "image_assets": [
+          {
+            "src": "/g12-media/99d4b75ef3291c90e1457b6fdc3fe89e519b327f9d6c8ff56cd95f763e71ab1e.webp",
+            "width": 1280,
+            "height": 853,
+            "alt": "Изображение события «Песчаная палитра Куршской косы»",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 0.95,
+            "media_semantic_status": "classified",
+            "image_kind": "photo",
+            "recommended_hero_fit": "cover",
+            "safe_crop": true,
+            "source_order": 0,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/99/99d4b75ef3291c90e1457b6fdc3fe89e519b327f9d6c8ff56cd95f763e71ab1e/256.webp",
+                "width": 256,
+                "height": 171
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/99/99d4b75ef3291c90e1457b6fdc3fe89e519b327f9d6c8ff56cd95f763e71ab1e/512.webp",
+                "width": 512,
+                "height": 341
+              }
+            ],
+            "geometry_id": 4,
+            "current_pixel_sha256": "b1949bc93eec39329dea488e58cb99885c65651c2452469642d486e234e29929",
+            "geometry_pixel_sha256": "b1949bc93eec39329dea488e58cb99885c65651c2452469642d486e234e29929",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 1280,
+            "geometry_source_height": 853,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0,
+              "y": 0.157,
+              "w": 1,
+              "h": 0.843,
+              "confidence": 1
+            },
+            "geometry_reason_code": "landscape_overview",
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "recommended_object_position": "50% 50%",
+            "asset_key": "8c0b90ac62a2a951baacf11fa32db159bbeb316952e7b909711822d2ae49d719",
+            "quality_score": 14.5034
+          }
+        ],
+        "video_assets": [],
+        "face_boxes": [],
+        "valuable_region": {
+          "x": 0,
+          "y": 0.157,
+          "w": 1,
+          "h": 0.843,
+          "confidence": 1
+        },
+        "ocr_boxes": [],
+        "focal_point": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "image_object_position": "50% 50%",
+        "safe_crop": true,
+        "summary": "Фотовыставка с удивительными снимками природы Куршской косы.",
+        "meta_description": "Фотовыставка с удивительными снимками природы Куршской косы.",
+        "description_html": "<p>Фотовыставка с удивительными снимками природы Куршской косы.</p>",
+        "topics": [
+          "EXHIBITIONS",
+          "KRAEVEDENIE_KALININGRAD_OBLAST"
+        ],
+        "pushkin_card": false,
+        "other_date_ids": [],
+        "data_quality_notes": [],
+        "updated_at": "2026-01-08 15:59:25.130836",
+        "likes_count": 0,
+        "source_likes_count": 0,
+        "service_likes_count": 0,
+        "source_views_count": 0,
+        "source_engagement_sources_count": 0,
+        "shares_count": 0,
+        "popularity_reason_codes": [],
+        "popularity_signal_score": 0
+      }
+    },
+    {
+      "fixture_id": "event.real.6711",
+      "preview_event_sha256": "a54d8c4388335a0c4125467d001062775027e48c663e06cacab591a225947d8b",
+      "preview_event": {
+        "id": 6711,
+        "source_prod_id": 6711,
+        "title": "Выставка «Под шум балтийского ветра»",
+        "slug": "vystavka-pod-shum-baltiyskogo-vetra-svetlogorsk-6711",
+        "event_type": "выставка",
+        "festival": null,
+        "organizer_names": [],
+        "participants": [],
+        "status_label": "Бесплатно",
+        "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": null,
+        "silent": false,
+        "is_public": true,
+        "is_searchable": true,
+        "publication_status": "published",
+        "starts_at": null,
+        "start_date": "2026-07-06",
+        "start_time": null,
+        "end_date": "2026-10-02",
+        "end_at": null,
+        "time_range_end": null,
+        "duration_forecast_minutes": null,
+        "timezone": "Europe/Kaliningrad",
+        "display_date": "2026-07-06",
+        "display_time": null,
+        "city": "Светлогорск",
+        "venue_name": "Информационно-туристический центр",
+        "address": "Карла Маркса 7а",
+        "map_query": "Светлогорск, Информационно-туристический центр, Карла Маркса 7а",
+        "ticket": {
+          "kind": "free",
+          "label": "Источник события",
+          "href": null,
+          "status": null,
+          "is_free": true,
+          "price_label": null,
+          "note": null
+        },
+        "age_restriction": null,
+        "age_restriction_status": "insufficient_evidence",
+        "age_restriction_provenance": null,
+        "age_restriction_decision_version": "event-age-bge-policy-v2:31390a623e84bc03afdc",
+        "age_recommendation": null,
+        "age_recommendation_label": null,
+        "source_url": "https://vk.com/wall-742892_4245",
+        "source_urls": [
+          "https://vk.com/wall-742892_4245",
+          "https://vk.com/wall-231920894_6351",
+          "https://t.me/c/3954607218/2035",
+          "https://vk.com/wall-231920894_6386"
+        ],
+        "source_count": 4,
+        "question_cta": {
+          "provider": "vk",
+          "url": "https://vk.com/wall-231920894_6386",
+          "source": "managed_afisha_post"
+        },
+        "telegraph_url": "https://telegra.ph/Vystavka-Pod-shum-baltijskogo-vetra-07-06",
+        "image_url": "/g12-media/34365f31af78b1a72aa271b0bc8b5a5300a5ed3d6e3cf8399068d2a2913f9a36.webp",
+        "image_alt": "Изображение события «Выставка «Под шум балтийского ветра»»",
+        "image_text_mode": "visual_only",
+        "image_media_role": "event_photo",
+        "image_assets": [
+          {
+            "src": "/g12-media/34365f31af78b1a72aa271b0bc8b5a5300a5ed3d6e3cf8399068d2a2913f9a36.webp",
+            "width": 2560,
+            "height": 1920,
+            "alt": "Изображение события «Выставка «Под шум балтийского ветра»»",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 0.9,
+            "media_semantic_status": "classified",
+            "image_kind": "photo",
+            "recommended_hero_fit": "cover",
+            "safe_crop": true,
+            "source_order": 0,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/34/34365f31af78b1a72aa271b0bc8b5a5300a5ed3d6e3cf8399068d2a2913f9a36/256.webp",
+                "width": 256,
+                "height": 192
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/34/34365f31af78b1a72aa271b0bc8b5a5300a5ed3d6e3cf8399068d2a2913f9a36/512.webp",
+                "width": 512,
+                "height": 384
+              }
+            ],
+            "geometry_id": 158,
+            "current_pixel_sha256": "1064441eb74e26ce3fd1c3a4b53f21f64273f75e53dfed2e42a979fe6baea7a5",
+            "geometry_pixel_sha256": "1064441eb74e26ce3fd1c3a4b53f21f64273f75e53dfed2e42a979fe6baea7a5",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 2560,
+            "geometry_source_height": 1920,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1,
+              "confidence": 1
+            },
+            "geometry_reason_code": "landscape_painting",
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "recommended_object_position": "50% 50%",
+            "asset_key": "c3909e397819322c8533e05cc7109131a1a8d2af4ffda292dbc96f2aad8c50e1",
+            "quality_score": 16.0078
+          },
+          {
+            "src": "https://static.kenigevents.ru/p/dh16/02/02193229b22c300e109410d513cd335d134905a0064412450563212b321b838f.webp",
+            "width": 2560,
+            "height": 1920,
+            "alt": "Изображение события «Выставка «Под шум балтийского ветра»»",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 0.95,
+            "media_semantic_status": "classified",
+            "image_kind": "photo",
+            "recommended_hero_fit": "cover",
+            "safe_crop": true,
+            "source_order": 1,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/43/43d963bbaa9ceaf2a496307965f1ffade16b429f6e163876ab56333a99a81d55/256.webp",
+                "width": 256,
+                "height": 192
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/43/43d963bbaa9ceaf2a496307965f1ffade16b429f6e163876ab56333a99a81d55/512.webp",
+                "width": 512,
+                "height": 384
+              }
+            ],
+            "geometry_id": 159,
+            "current_pixel_sha256": "01b45d80bfb9a213457b30f0e996cc2aabf6f344cef48444aa248f6d2547d96f",
+            "geometry_pixel_sha256": "01b45d80bfb9a213457b30f0e996cc2aabf6f344cef48444aa248f6d2547d96f",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 2560,
+            "geometry_source_height": 1920,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0.205,
+              "y": 0.015,
+              "w": 0.15,
+              "h": 0.628,
+              "confidence": 0.9
+            },
+            "geometry_reason_code": "main_architectural_subject",
+            "focal_point": {
+              "x": 0.28,
+              "y": 0.35
+            },
+            "recommended_object_position": "28% 35%",
+            "asset_key": "ad58a0e1bb7bf4a33f0f5243b0b6cad03e322969c8815bfc388da24dae6eb7b5",
+            "quality_score": 16.0078
+          },
+          {
+            "src": "https://static.kenigevents.ru/p/dh16/24/247a807a043e087c08f800e840e3c1c3a5c987a8e370b1f09bc6474719ab1329.webp",
+            "width": 2560,
+            "height": 1920,
+            "alt": "Изображение события «Выставка «Под шум балтийского ветра»»",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 0.95,
+            "media_semantic_status": "classified",
+            "image_kind": "photo",
+            "recommended_hero_fit": "cover",
+            "safe_crop": true,
+            "source_order": 2,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/76/769b5552ef3b8ee24df396df4c1fd94f072cdbd0d15a3730a36d1dc8047836d8/256.webp",
+                "width": 256,
+                "height": 192
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/76/769b5552ef3b8ee24df396df4c1fd94f072cdbd0d15a3730a36d1dc8047836d8/512.webp",
+                "width": 512,
+                "height": 384
+              }
+            ],
+            "geometry_id": 160,
+            "current_pixel_sha256": "b3bf708e214bc72e6142f8b70fdfc2af8d798b13e3b6d90a421b1ab9e08f762e",
+            "geometry_pixel_sha256": "b3bf708e214bc72e6142f8b70fdfc2af8d798b13e3b6d90a421b1ab9e08f762e",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 2560,
+            "geometry_source_height": 1920,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 1,
+              "confidence": 1
+            },
+            "geometry_reason_code": "landscape_painting",
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "recommended_object_position": "50% 50%",
+            "asset_key": "312d1290475b8702abf6f36cbc8e5143ca273abd533a431ba3e2b2707fd98ced",
+            "quality_score": 16.0078
+          },
+          {
+            "src": "https://static.kenigevents.ru/p/dh16/00/0076056e22e6667c1b6d359d08cc0a55025d0a58482641a5344b34faa3340041.webp",
+            "width": 1920,
+            "height": 2560,
+            "alt": "Изображение события «Выставка «Под шум балтийского ветра»»",
+            "image_text_mode": "visual_only",
+            "media_role": "event_photo",
+            "media_role_confidence": 0.9,
+            "media_semantic_status": "classified",
+            "image_kind": "photo",
+            "recommended_hero_fit": "cover",
+            "safe_crop": true,
+            "source_order": 3,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/b2/b29665c318a531f423f80d6b282db9ee1c7c5dc24101828a3c47e01e39436b57/256.webp",
+                "width": 192,
+                "height": 256
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/b2/b29665c318a531f423f80d6b282db9ee1c7c5dc24101828a3c47e01e39436b57/512.webp",
+                "width": 384,
+                "height": 512
+              }
+            ],
+            "geometry_id": 161,
+            "current_pixel_sha256": "f7045653d5e87b33ab198de0c49f8ef93abc80abc5b2b8577bd8d79a51258c18",
+            "geometry_pixel_sha256": "f7045653d5e87b33ab198de0c49f8ef93abc80abc5b2b8577bd8d79a51258c18",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 1920,
+            "geometry_source_height": 2560,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0.079,
+              "y": 0.114,
+              "w": 0.83,
+              "h": 0.884,
+              "confidence": 1
+            },
+            "geometry_reason_code": "main_subject",
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.4
+            },
+            "recommended_object_position": "50% 40%",
+            "asset_key": "c409421783b07edae4caf768da600af997d78f0cec873d3fe1c483b0781161d4",
+            "quality_score": 16.0078
+          }
+        ],
+        "video_assets": [],
+        "face_boxes": [],
+        "valuable_region": {
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1,
+          "confidence": 1
+        },
+        "ocr_boxes": [],
+        "focal_point": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "image_object_position": "50% 50%",
+        "safe_crop": true,
+        "summary": "Выставка представляет художественные работы Виталия Короткова, передающие уникальный колорит и красоту природы Калининградской области.",
+        "meta_description": "Выставка представляет художественные работы Виталия Короткова, передающие уникальный колорит и красоту природы Калининградской области.",
+        "description_html": "<p>Выставка «Под шум балтийского ветра» знакомит с художественными работами Виталия Короткова, члена Союза Художников России. Экспозиция передает уникальный колорит Калининградской области через живописные полотна, отражающие красоту региона.</p>\n<h3>Творчество автора</h3>\n<p>В работах Виталия Короткова преобладают следующие направления:<br />* Природный пейзаж<br />* Натюрморты</p>\n<h3>Музейное признание и коллекции</h3>\n<p>Произведения художника получили широкое признание и включены в собрания ведущих культурных институций:<br />* Музей изобразительных искусств (Калининград)<br />* Историко-художественный музей (Калининград)<br />* Музей Мирового океана (Калининград)<br />* Историко-краеведческий музей (Гусев)</p>\n<p>Помимо музейных фондов, работы автора представлены в частных коллекциях на территории России и за рубежом.</p>",
+        "topics": [
+          "EXHIBITIONS",
+          "KRAEVEDENIE_KALININGRAD_OBLAST"
+        ],
+        "pushkin_card": false,
+        "other_date_ids": [],
+        "data_quality_notes": [],
+        "updated_at": "2026-07-06 16:50:47.941652",
+        "likes_count": 35,
+        "source_likes_count": 35,
+        "service_likes_count": 0,
+        "source_views_count": 794,
+        "source_engagement_sources_count": 3,
+        "shares_count": 5,
+        "popularity_reason_codes": [
+          "frequently_shared"
+        ],
+        "popularity_signal_score": 2.5
+      }
+    },
+    {
+      "fixture_id": "event.real.7609",
+      "preview_event_sha256": "4603ed79e730952f6e37503db096988aac9fd2f5923b7008daa4900c4fafb692",
+      "preview_event": {
+        "id": 7609,
+        "source_prod_id": 7609,
+        "title": "Выставка «Живая нить традиций»",
+        "slug": "vystavka-zhivaya-nit-traditsiy-sovetsk-7609",
+        "event_type": "выставка",
+        "festival": null,
+        "organizer_names": [],
+        "participants": [],
+        "status_label": "Бесплатно",
+        "lifecycle_status": "active",
+        "semantic_record_version": "canonical-event-semantic-v1",
+        "record_kind": "event",
+        "eventness_status": "event",
+        "identity_status": "canonical",
+        "merged_into_event_id": null,
+        "silent": false,
+        "is_public": true,
+        "is_searchable": true,
+        "publication_status": "published",
+        "starts_at": "2026-08-15T11:00:00+02:00",
+        "start_date": "2026-08-15",
+        "start_time": "11:00",
+        "end_date": "2026-09-05",
+        "end_at": "2026-09-05T18:00:00+02:00",
+        "time_range_end": "18:00",
+        "duration_forecast_minutes": null,
+        "timezone": "Europe/Kaliningrad",
+        "display_date": "2026-08-15",
+        "display_time": "11:00–18:00",
+        "city": "Советск",
+        "venue_name": "ОКЦ ТеплоСеть",
+        "address": "Ленина 23",
+        "map_query": "Советск, ОКЦ ТеплоСеть, Ленина 23",
+        "ticket": {
+          "kind": "free",
+          "label": "Источник события",
+          "href": null,
+          "status": null,
+          "is_free": true,
+          "price_label": null,
+          "note": null
+        },
+        "age_restriction": "0+",
+        "age_restriction_status": "declared",
+        "age_restriction_provenance": "poster_ocr",
+        "age_restriction_decision_version": "event-age-decision-v1",
+        "age_recommendation": null,
+        "age_recommendation_label": null,
+        "source_url": "https://vk.com/wall-212233232_1944",
+        "source_urls": [
+          "https://vk.com/wall-212233232_1944",
+          "https://vk.com/wall-231920894_8994",
+          "https://t.me/c/3954607218/3298",
+          "https://t.me/kenigevents/4701",
+          "https://t.me/kldevents/3298",
+          "https://t.me/kenigeventscalendar/8170",
+          "https://t.me/kldevents/3330",
+          "https://t.me/kenigeventscalendar/8294",
+          "https://vk.com/wall-231920894_9017"
+        ],
+        "source_count": 9,
+        "question_cta": {
+          "provider": "vk",
+          "url": "https://vk.com/wall-231920894_9017",
+          "source": "managed_afisha_post"
+        },
+        "telegraph_url": "https://telegra.ph/Vystavka-ZHivaya-nit-tradicij-08-13",
+        "image_url": "/g12-media/1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2.webp",
+        "image_alt": "Афиша события «Выставка «Живая нить традиций»»",
+        "image_text_mode": "ocr_text",
+        "image_media_role": "event_identity_poster",
+        "image_assets": [
+          {
+            "src": "/g12-media/1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2.webp",
+            "width": 1254,
+            "height": 1254,
+            "alt": "Афиша события «Выставка «Живая нить традиций»»",
+            "image_text_mode": "ocr_text",
+            "media_role": "event_identity_poster",
+            "media_role_confidence": 1,
+            "media_semantic_status": "classified",
+            "image_kind": "poster",
+            "recommended_hero_fit": "contain",
+            "safe_crop": false,
+            "source_order": 0,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/1e/1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2/256.webp",
+                "width": 256,
+                "height": 256
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/1e/1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2/512.webp",
+                "width": 512,
+                "height": 512
+              }
+            ],
+            "geometry_id": 1607,
+            "current_pixel_sha256": "f6c63c89ec524e4cdcdc0a483dff9754cbf15fd2f6d0e88d355d51064796f972",
+            "geometry_pixel_sha256": "f6c63c89ec524e4cdcdc0a483dff9754cbf15fd2f6d0e88d355d51064796f972",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 1254,
+            "geometry_source_height": 1254,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0.113,
+              "y": 0.048,
+              "w": 0.642,
+              "h": 0.923,
+              "confidence": 1
+            },
+            "geometry_reason_code": "main_content",
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "recommended_object_position": "50% 50%",
+            "asset_key": "1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2",
+            "quality_score": 14.1882
+          },
+          {
+            "src": "https://static.kenigevents.ru/p/image/v2/09/091f2a14b42607df1a5aa2256a68dfd2cf63c61e1b3fdec63c6f5fe8ea0909cd.webp",
+            "width": 1254,
+            "height": 1254,
+            "alt": "Афиша события «Выставка «Живая нить традиций»»",
+            "image_text_mode": "ocr_text",
+            "media_role": "event_identity_poster",
+            "media_role_confidence": 1,
+            "media_semantic_status": "classified",
+            "image_kind": "poster",
+            "recommended_hero_fit": "contain",
+            "safe_crop": false,
+            "source_order": 1,
+            "thumbnail_sources": [
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/09/091f2a14b42607df1a5aa2256a68dfd2cf63c61e1b3fdec63c6f5fe8ea0909cd/256.webp",
+                "width": 256,
+                "height": 256
+              },
+              {
+                "src": "https://static.kenigevents.ru/p/thumb/v1/09/091f2a14b42607df1a5aa2256a68dfd2cf63c61e1b3fdec63c6f5fe8ea0909cd/512.webp",
+                "width": 512,
+                "height": 512
+              }
+            ],
+            "geometry_id": 1760,
+            "current_pixel_sha256": "e92a8b9e61d5050b674b0b38818fbe44834fd7e71e8686371fae0dc8d1d3ec45",
+            "geometry_pixel_sha256": "e92a8b9e61d5050b674b0b38818fbe44834fd7e71e8686371fae0dc8d1d3ec45",
+            "geometry_model": "gemma-4-31b-it",
+            "geometry_prompt_version": "event-image-geometry-v1",
+            "geometry_status": "classified",
+            "geometry_coordinate_space": "normalized_0_1",
+            "geometry_source_width": 1254,
+            "geometry_source_height": 1254,
+            "face_boxes": [],
+            "valuable_region": {
+              "x": 0.115,
+              "y": 0.048,
+              "w": 0.637,
+              "h": 0.926,
+              "confidence": 0.9
+            },
+            "geometry_reason_code": "main_text_and_info",
+            "focal_point": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "recommended_object_position": "50% 50%",
+            "asset_key": "091f2a14b42607df1a5aa2256a68dfd2cf63c61e1b3fdec63c6f5fe8ea0909cd",
+            "quality_score": 14.1882
+          }
+        ],
+        "video_assets": [],
+        "face_boxes": [],
+        "valuable_region": {
+          "x": 0.113,
+          "y": 0.048,
+          "w": 0.642,
+          "h": 0.923,
+          "confidence": 1
+        },
+        "ocr_boxes": [],
+        "focal_point": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "image_object_position": "50% 50%",
+        "safe_crop": false,
+        "summary": "Выставка представляет гобелены, вышитые картины и изделия из соломы, созданные мастерицей Ириной Шикас.",
+        "meta_description": "Выставка представляет гобелены, вышитые картины и изделия из соломы, созданные мастерицей Ириной Шикас.",
+        "description_html": "<p>На выставке представлены гобелены, в которые вплетены тепло и история, вышитые картины, ожившие под руками мастерицы, а также изделия из соломы, хранящие солнечную энергию полей. Ирина Шикас, уроженка Белоруссии, перенявшая навыки рукоделия от мамы и бабушки, представит свои работы. На открытии выставки Ирина Шикас исполнит музыкальные произведения на скрипке.</p>",
+        "topics": [
+          "EXHIBITIONS",
+          "HANDMADE",
+          "CONCERTS",
+          "MASTERCLASS",
+          "FAMILY"
+        ],
+        "pushkin_card": false,
+        "other_date_ids": [],
+        "data_quality_notes": [],
+        "updated_at": "2026-08-13 04:22:27.929465",
+        "likes_count": 48,
+        "source_likes_count": 48,
+        "service_likes_count": 0,
+        "source_views_count": 1716,
+        "source_engagement_sources_count": 3,
+        "shares_count": 6,
+        "popularity_reason_codes": [
+          "frequently_shared"
+        ],
+        "popularity_signal_score": 2.5
+      }
+    }
+  ],
+  "media": [
+    {
+      "fixture_id": "event.real.8006",
+      "canonical_url": "https://static.kenigevents.ru/p/image/v2/dd/dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b.webp",
+      "harness_url": "/g12-media/dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b.webp",
+      "sha256": "dd8834258d4a1ebde029aca1960bdd224bdf636d3fd8aee8fc7824012475de8b",
+      "bytes": 111072
+    },
+    {
+      "fixture_id": "event.real.8200",
+      "canonical_url": "https://static.kenigevents.ru/p/image/v2/56/56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e.webp",
+      "harness_url": "/g12-media/56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e.webp",
+      "sha256": "56aa670778d82f16b1d286e3449c1e25776c19c67a0012c12dd39f00dce61c6e",
+      "bytes": 152782
+    },
+    {
+      "fixture_id": "event.real.2182",
+      "canonical_url": "https://static.kenigevents.ru/p/dh16/12/12880864060507010fe0f8f4938a0bf3789c83cc09b91db03fe8b9d86d30cdb2.webp",
+      "harness_url": "/g12-media/99d4b75ef3291c90e1457b6fdc3fe89e519b327f9d6c8ff56cd95f763e71ab1e.webp",
+      "sha256": "99d4b75ef3291c90e1457b6fdc3fe89e519b327f9d6c8ff56cd95f763e71ab1e",
+      "bytes": 229072
+    },
+    {
+      "fixture_id": "event.real.6711",
+      "canonical_url": "https://static.kenigevents.ru/p/dh16/0d/0d23ce2c52cd61c98363c82258209ac28170011c7863f48186485944d942e063.webp",
+      "harness_url": "/g12-media/34365f31af78b1a72aa271b0bc8b5a5300a5ed3d6e3cf8399068d2a2913f9a36.webp",
+      "sha256": "34365f31af78b1a72aa271b0bc8b5a5300a5ed3d6e3cf8399068d2a2913f9a36",
+      "bytes": 711362
+    },
+    {
+      "fixture_id": "event.real.7609",
+      "canonical_url": "https://static.kenigevents.ru/p/image/v2/1e/1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2.webp",
+      "harness_url": "/g12-media/1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2.webp",
+      "sha256": "1e0fd5f604728ad96b4ec00ecb639e27b1a10acdc6565bfe14a4f83fa4195de2",
+      "bytes": 336436
+    }
+  ]
+}

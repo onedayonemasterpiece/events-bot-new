@@ -1,0 +1,109 @@
+{
+  "schema": "kenigevents.astro-captures-manifest.g12.v1",
+  "captures": [
+    {
+      "region_id": "eventcard.desktop-wide-calendar.8006",
+      "path": "evidence/free-collection-g12/captures/eventcard.desktop-wide-calendar.8006/astro.png",
+      "sha256": "75b27f298ef94a4fe3f3cc9e74bee44c015e0c0a3296d78eb33aac1f933786e1",
+      "bytes": 419471,
+      "width": 534,
+      "height": 948,
+      "viewport": {
+        "width": 1280,
+        "height": 1200,
+        "dpr": 1
+      }
+    },
+    {
+      "region_id": "eventcard.desktop-packed-calendar-absent.2182",
+      "path": "evidence/free-collection-g12/captures/eventcard.desktop-packed-calendar-absent.2182/astro.png",
+      "sha256": "3afdbbd2c082a22562eb7d19041489ad33075a8db531517a1dce4f0e7a65b809",
+      "bytes": 368145,
+      "width": 534,
+      "height": 657,
+      "viewport": {
+        "width": 1280,
+        "height": 1200,
+        "dpr": 1
+      }
+    },
+    {
+      "region_id": "row.desktop.events",
+      "path": "evidence/free-collection-g12/captures/row.desktop.events/astro.png",
+      "sha256": "ee909dc49dc4f1a154f92357397773a392ab86f298cfccc0f51e5d125bf6af2c",
+      "bytes": 810173,
+      "width": 1180,
+      "height": 1108,
+      "viewport": {
+        "width": 1280,
+        "height": 1200,
+        "dpr": 1
+      }
+    },
+    {
+      "region_id": "row.desktop.exhibitions",
+      "path": "evidence/free-collection-g12/captures/row.desktop.exhibitions/astro.png",
+      "sha256": "2a9b25340028243d66449faf96d68a8d60a95d7ef96c3d64b3a5c7f4b621dc41",
+      "bytes": 1398987,
+      "width": 1180,
+      "height": 1657,
+      "viewport": {
+        "width": 1280,
+        "height": 1200,
+        "dpr": 1
+      }
+    },
+    {
+      "region_id": "eventcard.mobile-wide-calendar.8006",
+      "path": "evidence/free-collection-g12/captures/eventcard.mobile-wide-calendar.8006/astro.png",
+      "sha256": "f66466ebbffc41352995492b82e9cc75371ee3e9bcd0d987baf2782a1d41285e",
+      "bytes": 214540,
+      "width": 340,
+      "height": 702,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      }
+    },
+    {
+      "region_id": "eventcard.mobile-packed-calendar-absent.2182",
+      "path": "evidence/free-collection-g12/captures/eventcard.mobile-packed-calendar-absent.2182/astro.png",
+      "sha256": "8b78a5e4395dd5b5eeb495d2c32094c9170adb732cce73c7a33cc07d586f05ec",
+      "bytes": 179666,
+      "width": 340,
+      "height": 515,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      }
+    },
+    {
+      "region_id": "group.mobile.events",
+      "path": "evidence/free-collection-g12/captures/group.mobile.events/astro.png",
+      "sha256": "a3a2436fbf528e11ba73358eac368a2a6ea9c6e9d4757b210b25369fdb57d546",
+      "bytes": 381379,
+      "width": 366,
+      "height": 1449,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      }
+    },
+    {
+      "region_id": "group.mobile.exhibitions",
+      "path": "evidence/free-collection-g12/captures/group.mobile.exhibitions/astro.png",
+      "sha256": "30675f5e02531bf5078af9b0b44b3fbbd50cca482609453e53ec7a03cc846976",
+      "bytes": 646221,
+      "width": 366,
+      "height": 1837,
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      }
+    }
+  ]
+}

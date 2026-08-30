@@ -1,0 +1,34 @@
+{
+  "schema": "kenigevents.astro-penpot-root-receipt-contract.g12.v1",
+  "required_region_ids": [
+    "eventcard.desktop-wide-calendar.8006",
+    "eventcard.desktop-packed-calendar-absent.2182",
+    "eventcard.mobile-wide-calendar.8006",
+    "eventcard.mobile-packed-calendar-absent.2182",
+    "row.desktop.events",
+    "row.desktop.exhibitions",
+    "group.mobile.events",
+    "group.mobile.exhibitions"
+  ],
+  "required_receipt_fields": [
+    "semantic_root",
+    "variant_identity",
+    "fixture_ids",
+    "source_region_sha256",
+    "created_or_reused_id",
+    "linked_component_id",
+    "descendant_geometry_proof",
+    "checkpoint_id"
+  ],
+  "rules": {
+    "one_master_identity": "component.event-card.free-collection",
+    "four_structural_variants": [
+      "eventcard.desktop-wide-calendar.8006",
+      "eventcard.desktop-packed-calendar-absent.2182",
+      "eventcard.mobile-wide-calendar.8006",
+      "eventcard.mobile-packed-calendar-absent.2182"
+    ],
+    "fixture_content_must_match_region": true,
+    "old_penpot_readback_is_authority": false
+  }
+}

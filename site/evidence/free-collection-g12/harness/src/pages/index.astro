@@ -1,0 +1,23 @@
+---
+import EventLayout from '@current-a/layouts/EventLayout.astro';
+import FreeCollectionSurface from '@current-a/components/FreeCollectionSurface.astro';
+import fixtureInput from '../../../fixture-input.json';
+
+const events = fixtureInput.fixtures.map((fixture) => fixture.preview_event);
+---
+<EventLayout
+  title="Бесплатные события"
+  description="Тестовый no-op harness текущей production-цепочки."
+  canonicalUrl="https://www.kenigevents.ru/podborki/besplatnye-sobytiya/"
+  mobileSection="search"
+  noindex
+>
+  <FreeCollectionSurface
+    title="Бесплатные события"
+    description="События с подтверждённым бесплатным входом — от встреч до выставок."
+    criteria="Только записи с каноническим признаком бесплатного входа."
+    updatedDate="30 августа 2026"
+    referenceDate="2 сентября 2026"
+    events={events}
+  />
+</EventLayout>
