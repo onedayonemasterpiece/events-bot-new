@@ -24,13 +24,15 @@ test('generated immutable research preview contains one real current-weekend art
   }
 });
 
-test('generated collection is noindex and retains local-only/detail/share contracts', async () => {
+test('generated collection is noindex and retains exact-seven local-only/detail contracts', async () => {
   const html = await readFile(path.join(root, 'artefakty/index.html'), 'utf8');
   const robots = /name="robots" content="([^"]+)"/u.exec(html)?.[1]?.split(',') || [];
   assert.ok(['noindex', 'nofollow', 'noarchive'].every((directive) => robots.includes(directive)));
   assert.match(html, /data-artifact-collection/u);
-  assert.equal((html.match(/data-artifact-slot=/gu) || []).length, 5);
+  assert.equal((html.match(/data-artifact-slot=/gu) || []).length, 7);
+  assert.match(html, /data-artifact-visual-donor="008839b14598105d1fed5b4e386d6d6f29d93d1f"/u);
+  assert.match(html, /Знаки Янтарного края/u);
   assert.match(html, /Только на этом устройстве/u);
   assert.match(html, /<dialog[^>]+data-artifact-dialog/u);
-  assert.match(html, /<button[^>]+artifact-detail__share[^>]+disabled(?:=""|)[^>]*>Поделиться артефактом · скоро<\/button>/u);
+  assert.doesNotMatch(html, /Поделиться артефактом · скоро/u);
 });

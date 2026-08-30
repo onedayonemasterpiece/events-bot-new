@@ -1,0 +1,152 @@
+{
+  "schema_version": "artifact-collection-v1",
+  "collection_id": "kaliningrad_artifacts_v1",
+  "collection_version": "2026-07-28-owner-reference-7",
+  "title": "Первая коллекция артефактов",
+  "summary": "Семь визуальных артефактов из owner reference-каталога первой коллекции.",
+  "authority": {
+    "owner_decision_commit": "f5ea5e497a3c137e350645e0f6c35304853a8908",
+    "owner_decision_path": "docs/features/static-site-pages/general-follow-up-code-agent-2026-08-04.md",
+    "reference_root": "docs/features/static-site-pages/references/artefact-collection-1",
+    "cardinality": 7,
+    "rights_status": "focus-candidate-only",
+    "editorial_status": "reference-provenance-only; historical stories require separate fact-check"
+  },
+  "artifact_ids": [
+    "amber_cosmonaut",
+    "baltic_light",
+    "luise_queen_bridge",
+    "marzipan_heart",
+    "sedov_bell",
+    "cosmonaut",
+    "old_brick"
+  ],
+  "artifacts": [
+    {
+      "artifact_id": "amber_cosmonaut",
+      "slug": "amber-cosmonaut",
+      "public_name": "Янтарный космонавт",
+      "short_description": "Янтарный образ космонавта — первая общая находка коллекции.",
+      "detail_copy": "Первый артефакт доступен всем в одном месте. Его исходный визуальный образ задан owner reference-файлом; историческая справка не подменяется неподтверждённым текстом.",
+      "image": {
+        "src": "/assets/gamification/artifact-collection-1/amber-cosmonavt-3.webp",
+        "width": 576,
+        "height": 720,
+        "alt": "Янтарный медальон с силуэтом космонавта",
+        "source_file": "amber-cosmonavt (3).png",
+        "source_width": 1122,
+        "source_height": 1402,
+        "source_sha256": "17821f70d1e9dc3cdf5acacc0f44b9a1bd023b72ba868e71aa560cd5a438dede"
+      },
+      "onboarding_role": "first"
+    },
+    {
+      "artifact_id": "baltic_light",
+      "slug": "baltic-light",
+      "public_name": "Балтийский маяк",
+      "short_description": "Маяк из owner reference-каталога первой коллекции.",
+      "detail_copy": "Визуальный образ показывает красно-белый маяк с фонарём и прилегающим зданием. Это описание изображения, а не неподтверждённая историческая атрибуция.",
+      "image": {
+        "src": "/assets/gamification/artifact-collection-1/Baltic-light.webp",
+        "width": 720,
+        "height": 480,
+        "alt": "Красно-белый маяк с включённым фонарём",
+        "source_file": "Baltic-light.png",
+        "source_width": 2528,
+        "source_height": 1684,
+        "source_sha256": "45a03a16288bb8fc8e51a1631b1c36fda93ec3f71b35e7c78b1cbe10b46f2f6c"
+      },
+      "onboarding_role": "continuation"
+    },
+    {
+      "artifact_id": "luise_queen_bridge",
+      "slug": "luise-queen-bridge",
+      "public_name": "Мост королевы Луизы",
+      "short_description": "Арочный мостовой образ из первой коллекции.",
+      "detail_copy": "Визуальный образ показывает мост с исторической аркой и башнями над водой. Подробная историческая справка требует отдельной редакционной проверки.",
+      "image": {
+        "src": "/assets/gamification/artifact-collection-1/Luise-queen-bridge.webp",
+        "width": 540,
+        "height": 720,
+        "alt": "Мост с монументальной аркой и двумя башнями",
+        "source_file": "Luise-queen-bridge.png",
+        "source_width": 1792,
+        "source_height": 2390,
+        "source_sha256": "0618f5e721848ab67b772a18de460f93398462164772aa70e5a87323daa9d579"
+      },
+      "onboarding_role": "continuation"
+    },
+    {
+      "artifact_id": "marzipan_heart",
+      "slug": "marzipan-heart",
+      "public_name": "Марципановое сердце",
+      "short_description": "Сердце с архитектурной миниатюрой из первой коллекции.",
+      "detail_copy": "Визуальный образ соединяет форму марципанового сердца и архитектурную миниатюру. История происхождения не додумывается без подтверждённого источника.",
+      "image": {
+        "src": "/assets/gamification/artifact-collection-1/Marzypan-heart.webp",
+        "width": 467,
+        "height": 720,
+        "alt": "Марципановое сердце с архитектурной миниатюрой",
+        "source_file": "Marzypan-heart.png",
+        "source_width": 1664,
+        "source_height": 2566,
+        "source_sha256": "7785ceaac1647d9704f3a6b7084b6bbacbcba8cc1017d46f51a72a1645d3d456"
+      },
+      "onboarding_role": "continuation"
+    },
+    {
+      "artifact_id": "sedov_bell",
+      "slug": "sedov-bell",
+      "public_name": "Колокол «Седов»",
+      "short_description": "Корабельный колокол с надписью «Седов».",
+      "detail_copy": "На исходном изображении — золотистый корабельный колокол с надписью «Седов». Дополнительные исторические утверждения требуют редакционной верификации.",
+      "image": {
+        "src": "/assets/gamification/artifact-collection-1/Sedov-bell.webp",
+        "width": 576,
+        "height": 720,
+        "alt": "Золотистый корабельный колокол с надписью Седов",
+        "source_file": "Sedov-bell.png",
+        "source_width": 1844,
+        "source_height": 2304,
+        "source_sha256": "7f5c55fcda3182fc7d5985a87c785f5611a84fe47d6f21d6ea43303b022e789e"
+      },
+      "onboarding_role": "continuation"
+    },
+    {
+      "artifact_id": "cosmonaut",
+      "slug": "cosmonaut",
+      "public_name": "Космонавт",
+      "short_description": "Фигура космонавта внутри круглой орбиты.",
+      "detail_copy": "Это отдельный, седьмой по owner cardinality визуальный reference: бронзовая фигура космонавта внутри круглой орбиты. Она не объединяется с янтарным медальоном.",
+      "image": {
+        "src": "/assets/gamification/artifact-collection-1/cosmonavt.webp",
+        "width": 720,
+        "height": 720,
+        "alt": "Бронзовая фигура космонавта внутри круглой орбиты",
+        "source_file": "cosmonavt.png",
+        "source_width": 2048,
+        "source_height": 2048,
+        "source_sha256": "b26645b3b3a48fc391e024f84213cbb2a2a6f0e6cb5b4bd8e5b4c821de7e18fb"
+      },
+      "onboarding_role": "continuation"
+    },
+    {
+      "artifact_id": "old_brick",
+      "slug": "old-brick",
+      "public_name": "Старый кирпич",
+      "short_description": "Кирпич со следами лап из первой коллекции.",
+      "detail_copy": "На исходном изображении — старый кирпич с двумя отпечатками лап. Это финальный визуальный reference первой коллекции; историческая атрибуция пока не заявляется.",
+      "image": {
+        "src": "/assets/gamification/artifact-collection-1/old-brick.webp",
+        "width": 576,
+        "height": 720,
+        "alt": "Старый кирпич с двумя отпечатками лап",
+        "source_file": "old-brick.png",
+        "source_width": 1844,
+        "source_height": 2304,
+        "source_sha256": "0554d358b37e73f75fc35d898a6c288a2d09f24fac12d00646013a699ba04625"
+      },
+      "onboarding_role": "completion"
+    }
+  ]
+}

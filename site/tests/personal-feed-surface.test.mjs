@@ -27,6 +27,24 @@ async function readBuilt(relativePath) {
   return readFile(path.join(buildRoot, relativePath), 'utf8');
 }
 
+test('personal feed offers email and Yandex auth without gating local personalization', async () => {
+  const [page, profile] = await Promise.all([
+    read('src/pages/dlya-menya/index.astro'),
+    read('src/components/InterestProfile.astro'),
+  ]);
+  assert.match(page, /Вход по почте или через Яндекс/u);
+  assert.match(page, /Персонализация работает локально без входа и отдельного согласия/u);
+  assert.match(page, /data-personal-email-open/u);
+  assert.match(page, /data-static-auth-login/u);
+  assert.match(page, /signInWithEmailOtp/u);
+  assert.match(page, /verifyEmailOtp/u);
+  assert.equal((page.match(/data-personal-otp-digit/g) || []).length, 7, 'six markup cells plus one script selector');
+  assert.match(page, /После шестой цифры продолжим автоматически/u);
+  assert.match(profile, /<div class="focus-workspace" data-focus-workspace>/u);
+  assert.doesNotMatch(profile, /Разрешить локальный профиль/u);
+  assert.match(profile, /state\.consent = true;\s*showWorkspace\(\)/u);
+});
+
 test('personal feed keeps listing hydration hidden and exposes a bounded event-detail continuation', async () => {
   const source = await read('src/components/PersonalFeedSlot.astro');
   assert.match(source, /'ke-personal-feed-slot'/u, 'mobile rail selector matches the generic personal-feed section');

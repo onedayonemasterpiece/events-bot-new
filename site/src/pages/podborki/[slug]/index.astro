@@ -11,6 +11,10 @@ import {
   getMaterializedSearchCollectionReferenceDate,
   materializedSearchCollections,
 } from '../../../data/searchCollections';
+import {
+  getActiveDesignFixtureScenario,
+  selectExactScenarioEvents,
+} from '../../../data/designSystemReferenceFixtures';
 import { absoluteUrl, displayDateValue, getPreviewBuild, siteHomeHref, SITE_NAME, withBase } from '../../../lib/events';
 
 export function getStaticPaths() {
@@ -20,7 +24,18 @@ export function getStaticPaths() {
 const { slug } = Astro.params;
 const collection = getMaterializedSearchCollection(String(slug));
 if (!collection) throw new Error(`Unknown materialized Search collection: ${slug}`);
-const events = getMaterializedSearchCollectionEvents(collection.slug);
+const resolvedEvents = getMaterializedSearchCollectionEvents(collection.slug);
+const requestedFixture = getActiveDesignFixtureScenario(
+  import.meta.env.PUBLIC_DESIGN_FIXTURE_PROFILE || '',
+  import.meta.env.PUBLIC_UI_SOT_SCENARIO || '',
+  import.meta.env.PUBLIC_SITE_MODE || '',
+);
+const activeFixture = requestedFixture?.scenario.route === `/podborki/${collection.slug}/`
+  ? requestedFixture
+  : null;
+const events = activeFixture
+  ? selectExactScenarioEvents(resolvedEvents, activeFixture.id, activeFixture.scenario)
+  : resolvedEvents;
 const collectionDateRange = getMaterializedSearchCollectionDateRange(collection.slug);
 const fallbackEvents = events.length ? [] : getMaterializedSearchCollectionFallbackEvents(collection.slug);
 const canonicalUrl = absoluteUrl(`/podborki/${collection.slug}/`);
@@ -44,6 +59,7 @@ const referenceDate = getMaterializedSearchCollectionReferenceDate();
       updatedDate={updatedDate}
       referenceDate={referenceDate}
       events={events}
+      fixtureScenarioId={activeFixture?.id}
     />
   ) : (
   <main id="main">

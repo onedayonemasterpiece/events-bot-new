@@ -6,21 +6,27 @@ interface Props {
   total: number;
   label: string;
   hasTime?: boolean;
+  version?: 5 | 6;
+  surface?: 'plane' | 'floating-island';
   dateContext?: {
     date: string;
     weekday: string;
   };
 }
-const { cities, total, label, hasTime = true, dateContext } = Astro.props;
+const { cities, total, label, hasTime = true, version = 6, surface = 'plane', dateContext } = Astro.props;
+const resolvedSurface = version === 6 ? surface : 'plane';
 ---
 <div
   class:list={[
     'ke-listing-discovery-rail',
+    `ke-listing-discovery-rail--v${version}`,
+    resolvedSurface === 'floating-island' && 'ke-listing-discovery-rail--floating-island',
     !hasTime && 'ke-listing-discovery-rail--cities-only',
     dateContext && 'ke-listing-discovery-rail--with-date-context',
   ]}
   data-ds-component="ListingDiscoveryRail"
-  data-ds-version="5"
+  data-ds-version={version}
+  data-listing-discovery-surface={resolvedSurface}
   data-listing-discovery-rail
   data-has-time={hasTime ? 'true' : 'false'}
 >

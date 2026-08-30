@@ -1,0 +1,122 @@
+---
+import EventLayout from '../../../../layouts/EventLayout.astro';
+import EventCard from '../../../../components/EventCard.astro';
+import previewEvents from '../../../../data/preview-events.json';
+import festivalProjection from '../../../../data/festival-timeline.json';
+import { packRelatedCardRows } from '../../../../lib/relatedCardLayout.mjs';
+import { packFestivalTimeline } from '../../../../lib/festivalTimelineLayout';
+import { absoluteUrl, withBase } from '../../../../lib/events';
+import type { PreviewEvent } from '../../../../lib/types';
+import type { FestivalTimelineItem } from '../../../../data/festivalTimeline';
+
+const title = 'Event card container — packed rows | Анонсы';
+const description = 'Source-bound design-system fixture for full-width event rows, shared height and measurable ecological crop.';
+const canonicalUrl = absoluteUrl('/lab/design-system/event-card-container/');
+
+const relatedIds = [3934, 6593, 5459];
+const relatedEvents = relatedIds
+  .map((id) => (previewEvents.events as PreviewEvent[]).find((event) => event.id === id))
+  .filter((event): event is PreviewEvent => Boolean(event));
+const relatedPacked = packRelatedCardRows(relatedEvents, {
+  limit:3,
+  rowSize:3,
+  mediaTreatment:'hybrid',
+  presentation:'related-grid',
+});
+if (relatedPacked.length !== 3) throw new Error('Packed-row design fixture requires three source-bound related events');
+
+const festivals = festivalProjection.festivals as FestivalTimelineItem[];
+const bySlug = new Map(festivals.map((festival) => [festival.slug, festival]));
+const festivalScenarios = [
+  { id:'festival-2', label:'2 события · полный ряд', slugs:['city-jazz', 'bolshoy-kaup'] },
+  { id:'festival-3', label:'3 события · полный ряд', slugs:['city-jazz', 'more-vnutri', 'bolshoy-kaup'] },
+  { id:'festival-4', label:'4 события · полный ряд', slugs:['city-jazz', 'more-vnutri', 'bolshoy-kaup', 'koroche'] },
+].map((scenario) => {
+  const items = scenario.slugs.map((slug) => bySlug.get(slug)).filter((item): item is FestivalTimelineItem => Boolean(item));
+  const rows = packFestivalTimeline(items);
+  if (rows.length !== 1 || rows[0].items.length !== items.length) {
+    throw new Error(`${scenario.id} must resolve to one source-bound row`);
+  }
+  return { ...scenario, row:rows[0] };
+});
+---
+
+<EventLayout
+  title={title}
+  description={description}
+  canonicalUrl={canonicalUrl}
+  ogType="website"
+  headerCurrent="popular"
+>
+  <main class="packed-page" data-event-card-container-fixture data-ui-sot-contract="event-card-container/packed-rows.v1">
+    <header class="packed-hero">
+      <p class="packed-eyebrow">UI SoT · OV-42 · production packers</p>
+      <h1>Карточки заполняют ряд,<br /><em>а не имитируют сетку</em></h1>
+      <p>Два действующих Astro-алгоритма показаны как один container-level pattern. Карточки сохраняют canonical family lineage; контейнер владеет шириной, общей высотой и измеримой потерей площади изображения.</p>
+      <dl>
+        <div><dt>Ширина заполненного ряда</dt><dd>100%</dd></div>
+        <div><dt>Document crop cap</dt><dd>≤ 20%</dd></div>
+        <div><dt>Растяжение</dt><dd>запрещено</dd></div>
+      </dl>
+    </header>
+
+    <section class="packed-section" aria-labelledby="related-title" data-packed-specimen="related-3">
+      <header>
+        <p class="packed-eyebrow">Event detail · реальные события · один EventCard root</p>
+        <h2 id="related-title">Три рекомендации · одна высота</h2>
+        <p>Источник: <code>packRelatedCardRows</code>. Общий target ratio выбирается после document/visual gates и оценки bounded copy chrome.</p>
+      </header>
+      <div class="related-row" data-packed-related-row>
+        {relatedPacked.map(({ item, layout }) => (
+          <div class="related-cell" data-packed-cell data-source-ratio={layout.mediaRatio.toFixed(5)} data-target-ratio={layout.rowRatio.toFixed(5)} data-crop-fraction={layout.coverCrop?.toFixed(4)}>
+            <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />
+            <p class="measure"><span>s {layout.mediaRatio.toFixed(3)}</span><span>t {layout.rowRatio.toFixed(3)}</span><strong>{layout.coverCrop == null ? 'crop —' : `crop ${(layout.coverCrop * 100).toFixed(1)}%`}</strong></p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    {festivalScenarios.map(({ id, label, row }) => (
+      <section class="packed-section" aria-labelledby={`${id}-title`} data-packed-specimen={id}>
+        <header>
+          <p class="packed-eyebrow">Festival timeline · production geometry</p>
+          <h2 id={`${id}-title`}>{label}</h2>
+          <p>Источник: <code>packFestivalTimeline</code>. Это measurement projection, не новый FestivalCard root.</p>
+        </header>
+        <div
+          class="festival-specimen-row"
+          style={`--row-width:${(row.widthFraction * 100).toFixed(2)}%;grid-template-columns:${row.columnWeights.map((weight) => `${weight.toFixed(4)}fr`).join(' ')}`}
+          data-packed-festival-row
+          data-row-width-fraction={row.widthFraction.toFixed(4)}
+          data-row-normalized-height={row.normalizedMediaHeight.toFixed(4)}
+        >
+          {row.items.map((item, index) => (
+            <article
+              class="festival-specimen-card"
+              style={`--frame-aspect:${row.columnWeights[index].toFixed(5)}`}
+              data-packed-cell
+              data-source-ratio={(item.imageWidth / item.imageHeight).toFixed(5)}
+              data-target-ratio={row.columnWeights[index].toFixed(5)}
+              data-column-weight={row.columnWeights[index].toFixed(5)}
+              data-crop-fraction={row.cropFractions[index].toFixed(4)}
+            >
+              <img src={withBase(item.image)} width={item.imageWidth} height={item.imageHeight} alt="" loading="eager" decoding="async" style={item.objectPosition ? `object-position:${item.objectPosition}` : undefined} />
+              <div><strong>{item.title}</strong><span>{item.dateLabel} · {item.place}</span></div>
+              <p class="measure"><span>w {row.columnWeights[index].toFixed(3)}</span><strong>crop {(row.cropFractions[index] * 100).toFixed(1)}%</strong></p>
+            </article>
+          ))}
+        </div>
+      </section>
+    ))}
+
+    <aside class="packed-note">
+      <strong>Экологичная обрезка — не визуальная метафора.</strong>
+      <code>loss = max(0, 1 − min(s / t, t / s))</code>
+      <p>Минимизируем процент потерянной площади только после semantic safety gates. Unknown/error остаётся contain; OCR/document не получает blind cover; protected regions обязательны.</p>
+    </aside>
+  </main>
+</EventLayout>
+
+<style>
+  :global(body){background:#f6f0e8;color:#241913}.packed-page{width:min(1320px,calc(100% - 32px));margin:0 auto;padding:clamp(2rem,5vw,5rem) 0 6rem}.packed-hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:2rem;padding:clamp(1.5rem,3vw,3rem);background:#fffaf2;border:1px solid #e7d7c8;border-radius:32px}.packed-hero>p,.packed-hero>h1{grid-column:1}.packed-eyebrow{margin:0 0 .55rem;color:#a54821;font-size:.76rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.packed-hero h1{margin:0;font-size:clamp(2.65rem,5vw,5rem);line-height:.94;letter-spacing:-.055em}.packed-hero h1 em{color:#a54821;font-style:normal}.packed-hero>p:last-of-type{font-size:1.08rem;line-height:1.5;color:#6f625a}.packed-hero dl{grid-column:2;grid-row:1/4;display:grid;align-content:center;gap:.7rem;margin:0}.packed-hero dl div{display:flex;justify-content:space-between;gap:1rem;padding:1rem 1.1rem;background:#f4e9de;border-radius:16px}.packed-hero dt{color:#6f625a}.packed-hero dd{margin:0;font-weight:900;color:#a54821}.packed-section{margin-top:2rem;padding:clamp(1rem,2vw,1.6rem);background:#fff;border:1px solid #e7d7c8;border-radius:28px}.packed-section>header{display:grid;grid-template-columns:1fr minmax(320px,.75fr);gap:.4rem 1.5rem;margin-bottom:1.25rem}.packed-section h2{grid-column:1;margin:0;font-size:clamp(2rem,3.4vw,3.5rem);line-height:1}.packed-section>header>p:last-child{grid-column:2;grid-row:1/3;align-self:end;margin:0;color:#6f625a;line-height:1.45}.packed-section code,.packed-note code{color:#a54821}.related-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:stretch}.related-cell{min-width:0;display:grid;grid-template-rows:1fr auto}.related-cell :global([data-event-card]){height:100%}.measure{display:flex;flex-wrap:wrap;gap:.45rem .75rem;justify-content:space-between;margin:.65rem 0 0;padding:.55rem .7rem;background:#f4e9de;border-radius:12px;font:700 .78rem/1.2 ui-monospace,monospace;color:#6f625a}.measure strong{color:#a54821}.festival-specimen-row{width:var(--row-width);display:grid;gap:18px;align-items:stretch}.festival-specimen-card{position:relative;min-width:0;aspect-ratio:var(--frame-aspect);overflow:hidden;border-radius:18px;background:#211b18;color:#fff}.festival-specimen-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.festival-specimen-card::after{content:"";position:absolute;inset:35% 0 0;background:linear-gradient(transparent,rgba(18,12,10,.94))}.festival-specimen-card>div{position:absolute;z-index:1;left:1rem;right:1rem;bottom:2.9rem;display:grid;gap:.3rem}.festival-specimen-card>div strong{font-size:clamp(1.05rem,1.7vw,1.6rem);line-height:1.03}.festival-specimen-card>div span{font-size:.82rem;color:#eadfd5}.festival-specimen-card>.measure{position:absolute;z-index:2;left:.7rem;right:.7rem;bottom:.65rem;margin:0;background:rgba(255,250,242,.92);color:#584b43}.packed-note{margin-top:2rem;padding:1.4rem 1.6rem;background:#241913;color:#fffaf2;border-radius:24px;display:grid;gap:.65rem}.packed-note strong{font-size:1.35rem}.packed-note p{margin:0;color:#d9cbc0;line-height:1.5}@media(max-width:900px){.packed-hero{grid-template-columns:1fr}.packed-hero dl{grid-column:1;grid-row:auto}.packed-section>header{grid-template-columns:1fr}.packed-section>header>p:last-child{grid-column:1;grid-row:auto}.related-row{grid-template-columns:1fr}.festival-specimen-row{width:100%;grid-template-columns:1fr!important}.festival-specimen-card{aspect-ratio:5/4}}
+</style>

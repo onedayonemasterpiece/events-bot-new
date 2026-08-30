@@ -802,6 +802,112 @@
 .ke-listing-discovery-rail .ke-time-nav__exact > summary:hover { background: transparent; color: var(--ke-color-brand-700); }
 .ke-listing-discovery-rail .ke-time-nav__popover { top: calc(100% + 2px); right: 0; left: auto; }
 
+/* v6 adds an explicit content-sized Floating Island surface without turning
+   every discovery rail into a page-local fork. The outer sticky plane stays
+   transparent and layout-stable; the shared inner component owns the visible
+   surface. Weekend is the first production consumer. */
+.ke-listing-discovery-rail--floating-island {
+  border-bottom: 0;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+.ke-listing-discovery-rail--floating-island .ke-listing-discovery-rail__inner {
+  width: fit-content;
+  max-width: calc(100vw - clamp(24px, 4vw, 64px));
+  grid-template-columns: minmax(0, max-content) max-content;
+  gap: 10px;
+  margin-inline: auto;
+  border: 1px solid color-mix(in srgb, var(--ke-color-line) 70%, transparent);
+  border-radius: var(--ke-radius-pill);
+  padding: 0 14px;
+  background: color-mix(in srgb, var(--ke-color-canvas) 88%, transparent);
+  box-shadow: var(--ke-shadow-2);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+.ke-listing-discovery-rail--floating-island .ke-listing-controls,
+.ke-listing-discovery-rail--floating-island > .ke-listing-controls,
+.ke-listing-discovery-rail--floating-island .ke-city-filter,
+.ke-listing-discovery-rail--floating-island .ke-city-filter--direct {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: none;
+}
+.ke-listing-discovery-rail--floating-island .ke-city-filter,
+.ke-listing-discovery-rail--floating-island .ke-city-filter--direct {
+  overflow: visible;
+}
+
+/* Popular desktop chrome uses the same layered-island model as its discovery
+   rail: the brand tag remains an independent left anchor, while the shared
+   navigation is a content-sized surface instead of a full-width white bar. */
+@media (min-width: 981px) {
+  body:has(.ke-popular-listing) {
+    --ke-site-header-bar-height: 72px;
+  }
+  body:has(.ke-popular-listing) .site-header {
+    height: var(--ke-site-header-bar-height);
+    min-height: var(--ke-site-header-bar-height);
+    border-bottom: 0;
+    padding-top: 8px;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+  }
+  body:has(.ke-popular-listing) .site-header__inner {
+    height: 56px;
+    min-height: 56px;
+    align-items: flex-start;
+  }
+  body:has(.ke-popular-listing) .site-header__brand-tag {
+    border-radius: 0 0 16px 16px;
+    box-shadow: 0 12px 30px rgba(69,45,28,.14);
+    pointer-events: auto;
+  }
+  body:has(.ke-popular-listing) .site-nav {
+    width: fit-content;
+    flex: 0 0 auto;
+    gap: 2px;
+    margin-top: 2px;
+    border: 1px solid color-mix(in srgb, var(--ke-color-line) 70%, transparent);
+    border-radius: 24px;
+    padding: 4px;
+    background: color-mix(in srgb, var(--ke-color-canvas) 88%, transparent);
+    box-shadow: var(--ke-shadow-2);
+    backdrop-filter: blur(14px);
+    pointer-events: auto;
+  }
+  body:has(.ke-popular-listing) .site-nav a {
+    min-height: 40px;
+    border-radius: 18px;
+    padding-inline: .78rem;
+  }
+  body:has(.ke-popular-listing) .site-nav a[aria-current="page"] {
+    background: color-mix(in srgb, var(--ke-color-brand-100) 72%, transparent);
+  }
+}
+
+@media (max-width: 1240px) {
+  .ke-listing-discovery-rail--floating-island .ke-listing-discovery-rail__inner {
+    width: calc(100% - 24px);
+    max-width: none;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    border-radius: 24px;
+    padding-inline: 10px;
+  }
+  .ke-listing-discovery-rail--floating-island .ke-listing-controls,
+  .ke-listing-discovery-rail--floating-island > .ke-listing-controls,
+  .ke-listing-discovery-rail--floating-island .ke-city-filter,
+  .ke-listing-discovery-rail--floating-island .ke-city-filter--direct {
+    min-width: 0;
+    width: auto;
+    max-width: none;
+  }
+  .ke-listing-discovery-rail--floating-island .ke-city-filter,
+  .ke-listing-discovery-rail--floating-island .ke-city-filter--direct { overflow-x: auto; }
+}
+
 /* Exact-time navigation stays pinned below the shared header without a plate. */
 .ke-time-group { scroll-margin-top: calc(var(--ke-listing-sticky-stack-height) + 12px); padding-block: 18px 26px; border-bottom: 0; }
 .ke-listing-time-marker,

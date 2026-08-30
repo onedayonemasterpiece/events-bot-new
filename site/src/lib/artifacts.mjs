@@ -1,32 +1,22 @@
+import ARTIFACT_COLLECTION from '../data/artifact-collection-1.json' with { type: 'json' };
+
 export const AMBER_ARTIFACT_ID = 'amber_cosmonaut';
 export const AMBER_ARTIFACT_COLLECTION_ID = 'kaliningrad_artifacts_v1';
 export const AMBER_ARTIFACT_PLACEMENT = 'weekend.rail.tail.v1';
 export const ARTIFACT_COLLECTION_STORAGE_KEY = 'ke_artifact_collection_v1';
 export const LEGACY_AMBER_STORAGE_KEY = 'ke_amber_artifact_prototype_v1:tail';
 
-export const ARTIFACT_COLLECTION_SLOTS = Object.freeze([
-  {
-    id: AMBER_ARTIFACT_ID,
-    title: 'Янтарный космонавт',
-    hint: 'Первый след прячется у самого края одного события на выходные.',
-  },
-  {
-    id: 'future_maritime',
-    hint: 'Что-то морское ещё ждёт своего маршрута.',
-  },
-  {
-    id: 'future_nature',
-    hint: 'Следующая история будет связана с природой области.',
-  },
-  {
-    id: 'future_city',
-    hint: 'Один городской символ появится в будущей главе.',
-  },
-  {
-    id: 'future_taste',
-    hint: 'Последняя ячейка пока хранит вкусный секрет.',
-  },
-]);
+export { ARTIFACT_COLLECTION };
+export const ARTIFACT_COLLECTION_SLOTS = Object.freeze(ARTIFACT_COLLECTION.artifacts.map((artifact) => Object.freeze({
+  ...artifact,
+  id: artifact.artifact_id,
+  title: artifact.public_name,
+  hint: artifact.artifact_id === AMBER_ARTIFACT_ID
+    ? 'Первый след доступен всем в одном месте.'
+    : 'Место этой находки назначается один раз для коллекции.',
+})));
+export const ARTIFACT_COLLECTION_IDS = Object.freeze([...ARTIFACT_COLLECTION.artifact_ids]);
+const ARTIFACT_COLLECTION_ID_SET = new Set(ARTIFACT_COLLECTION_IDS);
 
 function emptyCollectionState() {
   return {
@@ -36,7 +26,7 @@ function emptyCollectionState() {
   };
 }
 
-function normalizeFoundRecord(value) {
+function normalizeFoundRecord(value, fallbackPlacement = 'artifact.collection.v1') {
   if (!value || typeof value !== 'object' || value.status !== 'found') return null;
   const eventId = value.eventId == null ? null : Number(value.eventId);
   return {
@@ -45,15 +35,20 @@ function normalizeFoundRecord(value) {
     eventId: Number.isSafeInteger(eventId) && eventId > 0 ? eventId : null,
     placement: typeof value.placement === 'string' && value.placement
       ? value.placement
-      : AMBER_ARTIFACT_PLACEMENT,
+      : fallbackPlacement,
   };
 }
 
 export function normalizeArtifactCollectionState(value) {
   const state = emptyCollectionState();
   if (!value || typeof value !== 'object') return state;
-  const found = normalizeFoundRecord(value.artifacts?.[AMBER_ARTIFACT_ID]);
-  if (found) state.artifacts[AMBER_ARTIFACT_ID] = found;
+  for (const artifactId of ARTIFACT_COLLECTION_IDS) {
+    const found = normalizeFoundRecord(
+      value.artifacts?.[artifactId],
+      artifactId === AMBER_ARTIFACT_ID ? AMBER_ARTIFACT_PLACEMENT : 'artifact.collection.v1',
+    );
+    if (found) state.artifacts[artifactId] = found;
+  }
   return state;
 }
 
@@ -85,11 +80,23 @@ export function collectAmberArtifact({
   placement = AMBER_ARTIFACT_PLACEMENT,
   now = () => new Date(),
 } = {}) {
+  return collectArtifact(AMBER_ARTIFACT_ID, { storage, eventId, placement, now });
+}
+
+export function collectArtifact(artifactId, {
+  storage = globalThis.localStorage,
+  eventId = null,
+  placement = 'artifact.collection.v1',
+  now = () => new Date(),
+} = {}) {
+  if (!ARTIFACT_COLLECTION_ID_SET.has(artifactId)) {
+    throw new TypeError(`Unknown collection-1 artifact: ${String(artifactId)}`);
+  }
   const state = readArtifactCollection(storage, now);
-  if (state.artifacts[AMBER_ARTIFACT_ID]?.status === 'found') {
+  if (state.artifacts[artifactId]?.status === 'found') {
     return { state, collected: false };
   }
-  state.artifacts[AMBER_ARTIFACT_ID] = {
+  state.artifacts[artifactId] = {
     status: 'found',
     foundAt: now().toISOString(),
     eventId: Number.isSafeInteger(Number(eventId)) && Number(eventId) > 0 ? Number(eventId) : null,
@@ -102,7 +109,16 @@ export function collectAmberArtifact({
 }
 
 export function hasAmberArtifact(state) {
-  return state?.artifacts?.[AMBER_ARTIFACT_ID]?.status === 'found';
+  return hasArtifact(state, AMBER_ARTIFACT_ID);
+}
+
+export function hasArtifact(state, artifactId) {
+  return ARTIFACT_COLLECTION_ID_SET.has(artifactId)
+    && state?.artifacts?.[artifactId]?.status === 'found';
+}
+
+export function foundArtifactIds(state) {
+  return ARTIFACT_COLLECTION_IDS.filter((artifactId) => hasArtifact(state, artifactId));
 }
 
 export function isAmberArtifactResearchEnabled(siteMode, flag) {

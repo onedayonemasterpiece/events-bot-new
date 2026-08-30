@@ -70,10 +70,15 @@ export function resolveMobileListingRailMedia(event, selected) {
     };
   }
 
-  const sourceRatio = asset && Number(asset.height) > 0
+  // A listing selector may carry a crop-window ratio even when the event-level
+  // protection gate later rejects that crop (the source-reviewed Teremok photo
+  // is the regression canary). In the contain branch the physical source ratio
+  // is authoritative; otherwise the wrapper itself would manufacture side
+  // fields around a protected image.
+  const sourceRatio = asset && Number(asset.width) > 0 && Number(asset.height) > 0
     ? Number(asset.width) / Number(asset.height)
     : Number(selected?.ratio || 1);
-  const ratio = Math.max(62 / 112, Math.min(199 / 112, Number(selected?.ratio || sourceRatio || 1)));
+  const ratio = Math.max(62 / 112, Math.min(199 / 112, Number(sourceRatio || selected?.ratio || 1)));
   return {
     fit: 'contain',
     ratio,

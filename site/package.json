@@ -51,7 +51,8 @@
     "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --experimental-strip-types --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs",
     "test:transport-faults": "node --experimental-strip-types --test src/lib/transportFaultInjector.test.ts && node --test scripts/transport-fault-build-contract.test.mjs",
     "test:prelaunch-form": "node --experimental-strip-types --test src/lib/prelaunchEmail.test.ts tests/prelaunch-form-contract.test.mjs",
-    "check:prelaunch-form": "node scripts/check-prelaunch-form-security.mjs"
+    "check:prelaunch-form": "node scripts/check-prelaunch-form-security.mjs",
+    "test:home-hero-talk": "node --experimental-strip-types --test src/lib/homeHeroTalk.test.ts tests/home-hero-talk-donor.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",

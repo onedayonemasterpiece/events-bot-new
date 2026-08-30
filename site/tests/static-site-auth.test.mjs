@@ -46,8 +46,8 @@ test('account logout is explicit and cannot clear focus participation or persona
   assert.match(auth, /message: 'Вы вышли из аккаунта\.'/u);
   assert.doesNotMatch(auth, /clearFocusParticipationMarker|FOCUS_PARTICIPATION_STORAGE_KEY/u);
   assert.doesNotMatch(runtime, /clearFocusParticipationMarker|localStorage\.clear|sessionStorage\.clear/u);
-  assert.match(personal, /Выход завершает только[\s\S]*Supabase-сессию/u);
-  assert.match(personal, /30-дневное участие[\s\S]*остаются/u);
+  assert.match(personal, /Персонализация работает локально без входа и отдельного согласия/u);
+  assert.match(personal, /Выход завершает[\s\S]*Supabase-сессию[\s\S]*профиль «Для меня»[\s\S]*остаются/u);
 });
 
 test('focus identity supports real email OTP and Yandex linking through the shared controller', () => {

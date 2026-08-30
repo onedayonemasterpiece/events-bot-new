@@ -90,6 +90,18 @@ test('mobile event actions preserve a readable wide Share label', async () => {
   assert.doesNotMatch(mobileStyles, /\.event-hero__actions > \.secondary-button > span:not\(\.feedback-count\) \{ display: none; \}/u);
 });
 
+test('mobile event Like action grows with the factual counter instead of clipping it', async () => {
+  const mobileStyles = await read('src/components/MobileEventProductionStyles.astro');
+  const likeRule = mobileStyles.match(/\.event-hero__actions > \.feedback-button--like \{(?<body>[\s\S]*?)\n    \}/u)?.groups?.body || '';
+
+  assert.match(likeRule, /flex: 0 0 auto;/u);
+  assert.match(likeRule, /width: auto;/u);
+  assert.match(likeRule, /min-width: 56px;/u);
+  assert.match(likeRule, /overflow: visible;/u);
+  assert.doesNotMatch(likeRule, /(?:^|\n)\s*width: 56px;/u);
+  assert.doesNotMatch(likeRule, /overflow: hidden;/u);
+});
+
 test('free admission uses the dedicated inline medallion on mobile and desktop', async () => {
   const medallions = await read('src/components/EventTokenMedallions.astro');
   assert.match(medallions, /kind: 'badge',[\s\S]*key: 'free-admission'[\s\S]*imageUrl: '\/assets\/badges\/free-listing-medallion\.svg'/u);

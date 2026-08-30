@@ -1,0 +1,81 @@
+{
+  "schema_version": "design-system-reference-fixtures.v2",
+  "profile_id": "design-system-reference-v2",
+  "authority": {
+    "ui_sot_registry_id": "design-system-reference-v1",
+    "ui_sot_contract": "lovekgd-design-system:catalog/fixtures/design-system-reference/v1/registry.v1.json",
+    "ui_sot_contract_sha256": "246fa7e31d82ab6c5c212a01de5962cf5869bdbcfb2fa55f674c7b7332a3ac3e",
+    "ui_sot_scenario": "lovekgd-design-system:catalog/fixtures/design-system-reference/v1/scenarios/archetype.collections.free.desktop-ready.v1.json",
+    "ui_sot_scenario_sha256": "a388698e96d9a6b8180dbd73521fa464bd4844472dfa6815f9239f5bf44af6e7",
+    "payload_source": "site/src/data/preview-events.json",
+    "rule": "Generated consumer projection: select factual payloads by ID from the frozen preview snapshot, never edit payload fields here, and refresh both pinned SoT hashes whenever the canonical registry/scenario changes."
+  },
+  "events": {
+    "component_conformance_fixture_ids": [3132, 4327, 6399, 6628, 7807, 7888, 7906, 8156],
+    "archetype_fixture_ids": [7030, 7006, 6901, 6996, 6997],
+    "fixtures": [
+      { "event_id": 7030, "coverage": ["ocr-poster", "short-title", "free-entry"] },
+      { "event_id": 7006, "coverage": ["visual-media", "long-title", "registration"] },
+      { "event_id": 6901, "coverage": ["ocr-poster", "long-title", "free-entry"] },
+      { "event_id": 6996, "coverage": ["missing-media-fallback", "registration"] },
+      { "event_id": 6997, "coverage": ["portrait-ocr-poster", "long-title", "age-label"] }
+    ]
+  },
+  "festivals": {
+    "rows": [
+      {
+        "role": "single-wide",
+        "slugs": ["city-jazz"]
+      },
+      {
+        "role": "packed-four-varied-framing",
+        "slugs": ["sosedi", "grozd", "more-vnutri", "bolshoy-kaup"]
+      },
+      {
+        "role": "paired-status-contrast",
+        "slugs": ["v-edinstve", "jazz-v-filarmonii"]
+      }
+    ]
+  },
+  "clubs": {
+    "fixture_slugs": ["game-vibes", "neural-researchers", "technology-researchers"]
+  },
+  "container_families": {
+    "event_card_equal_height_grid": {
+      "runtime_owner": "site/src/components/OptimizedEventCardGrid.astro",
+      "card_family": "EventCard@2",
+      "purpose": "Large EventCard rows on related, recommendation and collection surfaces; all cards in a rendered desktop row share height."
+    },
+    "desktop_listing_rows": {
+      "runtime_owners": [
+        "site/src/components/listings/ExactTimeTimeline.astro",
+        "site/src/components/listings/PopularBehaviorRows.astro",
+        "site/src/components/listings/WeekendEditorialTimeline.astro"
+      ],
+      "card_family": "ListingEventCard@9",
+      "purpose": "Date, Popular and Weekend desktop listing rows. This is not an EventCard grid."
+    },
+    "festival_timeline_rows": {
+      "runtime_owner": "site/src/lib/festivalTimelineLayout.ts#packFestivalTimeline",
+      "card_family": "FestivalCard",
+      "purpose": "Festival rows with source-derived 1/4/2 packing."
+    },
+    "interest_club_grid": {
+      "runtime_owner": "site/src/pages/kluby-po-interesam/index.astro#.club-list",
+      "card_family": "InterestClubCard@1",
+      "purpose": "Interest-club grid. The container is still route-owned and is a named centralization gap."
+    }
+  },
+  "scenarios": {
+    "free-collection-5-desktop-v1": {
+      "route": "/podborki/besplatnye-sobytiya/",
+      "viewport": { "width": 1280, "height": 1200, "dpr": 1 },
+      "reference_date": "2026-07-23",
+      "event_ids": [7030, 7006, 6901, 6996, 6997],
+      "expected_card_count": 5,
+      "container_family": "event_card_equal_height_grid",
+      "card_family": "EventCard@2",
+      "availability": "local-preview-only"
+    }
+  }
+}

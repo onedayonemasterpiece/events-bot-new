@@ -27,6 +27,13 @@
 ## Static-site design system (critical)
 
 - Новые страницы обязаны собираться из зарегистрированных токенов и компонентов дизайн-системы; page-local визуальный fork утверждённого компонента запрещён.
+- Любое Astro ↔ UI SoT ↔ Penpot сравнение архетипа обязано называть
+  versioned fixture scenario из канонического design-system registry, выводить
+  его ID в DOM и доказывать одинаковый набор fixture IDs. Page-local массивы
+  fixture IDs запрещены, кроме явно помеченной legacy characterization.
+- Карточка и контейнер — разные контракты. Нельзя сводить equal-height
+  `EventCard` grid, desktop listing rows, festival timeline rows и club grid к
+  одному универсальному `PackedCardRow`.
 - Материальная переработка утверждённого компонента создаёт следующую явную версию (`vN+1`) в реестре и каталоге. Старая и новая версии показываются рядом до sign-off; старая получает `deprecated` и ссылку на замену.
 - Изменение не завершено, пока все production consumers не переведены на новую версию, либо временное сосуществование не оформлено feature flag, списком consumers, owner и сроком удаления. Тихая смесь версий блокирует release.
 - В том же commit обновляются runtime-компонент, `/lab/design-system/`, version/migration contract checks, каноническая документация, test scenarios, release evidence и `CHANGELOG.md`.

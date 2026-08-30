@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Added: one local/preview-only `free-collection-5-desktop-v1` fixture
+  scenario now renders five factual events through the real Free collection
+  route, `OptimizedEventCardGrid` and canonical `EventCard`. The versioned
+  ID-only bridge, route documentation and contract tests prevent page-local
+  fixture copies and reject fixture mode in production/secret-candidate builds.
+
+- Changed: `ListingDiscoveryRail@6` now exposes one shared `plane` /
+  `floating-island` surface contract. All listing consumers use v6 and Weekend
+  uses the content-sized translucent Floating Island requested in the owner
+  audio audit; v5 remains a deprecated design-system catalog comparison.
+
 - Fixed: private `eventsBot` MCP VK image publishing now decompresses VK's
   gzip-encoded multipart receipt and consumes fragmented JSON to EOF under the
   decoded-byte cap, separates the user-token media actor from the

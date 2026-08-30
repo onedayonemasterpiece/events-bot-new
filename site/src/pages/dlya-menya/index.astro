@@ -28,19 +28,46 @@ const description = 'Локальный прототип персонализа�
       <section class="personal-page__account" aria-labelledby="personal-account-title">
         <div>
           <p class="eyebrow">Аккаунт · отдельно от настроек</p>
-          <h2 id="personal-account-title">Вход через Яндекс</h2>
+          <h2 id="personal-account-title">Вход по почте или через Яндекс</h2>
           <p>
-            Аккаунт нужен для подтверждённых функций. Выход завершает только
-            Supabase-сессию: профиль «Для меня» и 30-дневное участие
+            Персонализация работает локально без входа и отдельного согласия.
+            Аккаунт нужен только для подтверждённых функций. Выход завершает
+            Supabase-сессию, но профиль «Для меня» и 30-дневное участие
             фокус-группы остаются в этом браузере.
           </p>
         </div>
         <div class="personal-page__account-actions">
           <div data-static-auth-signed-out>
             <span>Вы не вошли в аккаунт.</span>
-            <button class="ke-button ke-button--primary" type="button" data-static-auth-login>
-              Войти через Яндекс
-            </button>
+            <div class="personal-page__auth-choices" data-personal-auth-choices>
+              <button class="ke-button ke-button--primary" type="button" data-personal-email-open>
+                По электронной почте
+              </button>
+              <button class="ke-button ke-button--secondary" type="button" data-static-auth-login>
+                Через Яндекс
+              </button>
+            </div>
+            <div class="personal-page__email-auth" data-personal-email-auth hidden>
+              <form data-personal-email-form>
+                <label for="personal-email">
+                  <span>Электронная почта</span>
+                  <input id="personal-email" name="email" type="email" autocomplete="email" placeholder="name@example.ru" required />
+                </label>
+                <button class="ke-button ke-button--primary" type="submit">Получить код и ссылку</button>
+              </form>
+              <div data-personal-email-code hidden>
+                <p>Введите шестизначный код из письма.</p>
+                <label class="personal-page__otp" for="personal-email-otp">
+                  <span class="personal-page__otp-boxes" aria-hidden="true">
+                    <span data-personal-otp-digit></span><span data-personal-otp-digit></span><span data-personal-otp-digit></span>
+                    <span data-personal-otp-digit></span><span data-personal-otp-digit></span><span data-personal-otp-digit></span>
+                  </span>
+                  <input id="personal-email-otp" name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required />
+                </label>
+                <p data-personal-email-status role="status" aria-live="polite">После шестой цифры продолжим автоматически.</p>
+              </div>
+              <button class="personal-page__auth-back" type="button" data-personal-email-back>Выбрать другой способ</button>
+            </div>
           </div>
           <div data-static-auth-signed-in hidden>
             <span>
@@ -77,6 +104,95 @@ const description = 'Локальный прототип персонализа�
     } catch {
       tools.hidden = true;
     }
+  });
+</script>
+
+<script>
+  import { EMAIL_OTP_LENGTH, normalizeEmailOtp } from '../../lib/emailOtp';
+  import { cleanStaticAuthUrl, getStaticSiteAuth } from '../../lib/staticSiteAuth';
+
+  const runtime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
+  const auth = runtime?.dataset.authEnabled === 'true'
+    && runtime.dataset.supabaseUrl
+    && runtime.dataset.supabaseKey
+    ? getStaticSiteAuth({
+        supabaseUrl: runtime.dataset.supabaseUrl,
+        relayUrl: runtime.dataset.supabaseRelayUrl || '',
+        publishableKey: runtime.dataset.supabaseKey,
+        provider: runtime.dataset.yandexProvider || 'custom:yandex',
+      })
+    : null;
+
+  document.querySelectorAll<HTMLElement>('[data-personal-prototype]').forEach((root) => {
+    const choices = root.querySelector<HTMLElement>('[data-personal-auth-choices]');
+    const emailPanel = root.querySelector<HTMLElement>('[data-personal-email-auth]');
+    const emailOpen = root.querySelector<HTMLButtonElement>('[data-personal-email-open]');
+    const emailBack = root.querySelector<HTMLButtonElement>('[data-personal-email-back]');
+    const emailForm = root.querySelector<HTMLFormElement>('[data-personal-email-form]');
+    const emailInput = root.querySelector<HTMLInputElement>('#personal-email');
+    const codePanel = root.querySelector<HTMLElement>('[data-personal-email-code]');
+    const otpInput = root.querySelector<HTMLInputElement>('#personal-email-otp');
+    const otpDigits = Array.from(root.querySelectorAll<HTMLElement>('[data-personal-otp-digit]'));
+    const status = root.querySelector<HTMLElement>('[data-personal-email-status]');
+    let pendingEmail = '';
+    let verifying = false;
+
+    const showChoices = () => {
+      if (choices) choices.hidden = false;
+      if (emailPanel) emailPanel.hidden = true;
+      if (codePanel) codePanel.hidden = true;
+    };
+    const renderOtp = () => {
+      if (!otpInput) return;
+      const token = normalizeEmailOtp(otpInput.value);
+      otpInput.value = token;
+      otpDigits.forEach((digit, index) => {
+        digit.textContent = token[index] || '';
+        digit.toggleAttribute('data-filled', index < token.length);
+        digit.toggleAttribute('data-active', !verifying && index === Math.min(token.length, EMAIL_OTP_LENGTH - 1));
+      });
+    };
+    const verify = async () => {
+      if (!auth || !otpInput || verifying) return;
+      const token = normalizeEmailOtp(otpInput.value);
+      if (token.length !== EMAIL_OTP_LENGTH) return;
+      verifying = true;
+      renderOtp();
+      if (status) status.textContent = 'Проверяем код…';
+      const result = await auth.verifyEmailOtp(pendingEmail, token);
+      verifying = false;
+      if (status) status.textContent = result.ok ? 'Код подтверждён.' : result.message;
+      renderOtp();
+    };
+
+    emailOpen?.addEventListener('click', () => {
+      if (choices) choices.hidden = true;
+      if (emailPanel) emailPanel.hidden = false;
+      if (codePanel) codePanel.hidden = true;
+      window.setTimeout(() => emailInput?.focus(), 0);
+    });
+    emailBack?.addEventListener('click', showChoices);
+    emailForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!auth || !emailInput) {
+        if (status) status.textContent = 'Вход временно недоступен.';
+        return;
+      }
+      pendingEmail = emailInput.value.trim().toLocaleLowerCase('en-US');
+      const result = await auth.signInWithEmailOtp(pendingEmail, cleanStaticAuthUrl());
+      if (!result.accepted) {
+        if (status) status.textContent = result.message;
+        return;
+      }
+      if (codePanel) codePanel.hidden = false;
+      if (status) status.textContent = 'После шестой цифры продолжим автоматически.';
+      window.setTimeout(() => otpInput?.focus(), 0);
+    });
+    otpInput?.addEventListener('input', () => {
+      renderOtp();
+      if (normalizeEmailOtp(otpInput.value).length === EMAIL_OTP_LENGTH) void verify();
+    });
+    renderOtp();
   });
 </script>
 
@@ -128,6 +244,18 @@ const description = 'Локальный прототип персонализа�
   .personal-page__account-actions > div[hidden] { display: none; }
   .personal-page__account-actions span { min-width: 0; overflow-wrap: anywhere; font-size: .88rem; line-height: 1.4; }
   .personal-page__account-actions > p { min-height: 1.4em; margin: 0; color: #6d6259; font-size: .78rem; line-height: 1.4; }
+  .personal-page__auth-choices { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
+  .personal-page__email-auth { width: min(100%, 31rem); display: grid; gap: .65rem; }
+  .personal-page__email-auth[hidden], .personal-page__email-auth [hidden] { display: none; }
+  .personal-page__email-auth form, .personal-page__email-auth form label, .personal-page__email-auth [data-personal-email-code] { display: grid; gap: .55rem; }
+  .personal-page__email-auth input { width: 100%; min-height: 48px; border: 1px solid #cdbfad; border-radius: .8rem; padding: .65rem .8rem; background: #fff; color: #221a14; font: 1rem/1.2 var(--ke-font-sans); }
+  .personal-page__otp { position: relative; display: grid; }
+  .personal-page__otp-boxes { display: grid; grid-template-columns: repeat(6, minmax(2.4rem, 3rem)); justify-content: start; gap: .4rem; }
+  .personal-page__otp-boxes > span { display: grid; place-items: center; aspect-ratio: 1 / 1.15; border: 1.5px solid #cdbfad; border-radius: .75rem; background: #fff; color: #221a14; font: 850 1.25rem/1 var(--ke-font-sans); }
+  .personal-page__otp-boxes > span[data-active] { border-color: #0f766e; box-shadow: 0 0 0 3px rgb(15 118 110 / 20%); }
+  .personal-page__otp-boxes > span[data-filled] { background: #fffaf2; }
+  #personal-email-otp { position: absolute; inset: auto 0 0; height: 3.5rem; border: 0; padding: 0; opacity: .01; color: transparent; caret-color: transparent; }
+  .personal-page__auth-back { min-height: 40px; border: 0; background: transparent; color: #98401f; font: 800 .86rem/1.2 var(--ke-font-sans); text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
   .personal-page__focus-tools { display: grid; gap: .75rem; margin-top: 1rem; }
   .personal-page__focus-tools[hidden] { display: none; }
   .personal-page__focus-tools-note {
@@ -145,6 +273,8 @@ const description = 'Локальный прототип персонализа�
     .personal-page__account { grid-template-columns: 1fr; }
     .personal-page__account-actions > div { align-items: stretch; flex-direction: column; }
     .personal-page__account-actions .ke-button { width: 100%; }
+    .personal-page__auth-choices { flex-direction: column; }
+    .personal-page__otp-boxes { grid-template-columns: repeat(6, minmax(0, 1fr)); }
     .personal-page__focus-tools-note { align-items: flex-start; flex-direction: column; }
   }
   @media (prefers-reduced-motion: reduce) {

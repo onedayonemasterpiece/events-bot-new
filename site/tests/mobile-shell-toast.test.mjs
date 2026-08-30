@@ -48,12 +48,17 @@ test('shared bottom nav has one prop-owned current item and no scroll or :has ow
   assert.equal((nav.match(/aria-current=\{item\.key === current/gu) || []).length, 1);
   assert.match(nav, /item\.key === current \? 'page'/u);
   assert.doesNotMatch(nav, /body:has|backdrop-filter|scrollY|is-hidden/u);
-  assert.match(nav, /--mobile-bottom-stack-h/u);
+  assert.match(nav, /left:max\(12px,env\(safe-area-inset-left\)\);/u);
+  assert.match(nav, /right:max\(12px,env\(safe-area-inset-right\)\);/u);
+  assert.match(nav, /bottom:calc\(10px \+ env\(safe-area-inset-bottom\)\);/u);
+  assert.match(nav, /border-radius:20px;/u);
+  assert.doesNotMatch(nav, /inset:auto 0 0/u);
   assert.match(compatibility, /<MobileBottomNav current="search" \/>/u);
   for (const variable of ['--mobile-header-h', '--mobile-top-chrome-bottom', '--mobile-nav-h', '--mobile-bottom-stack-h']) {
     assert.match(layout, new RegExp(variable));
   }
   assert.match(layout, /body\[data-mobile-bottom-mode="nav"\] \{ padding-bottom: var\(--mobile-bottom-stack-h\); \}/u);
+  assert.match(layout, /--mobile-bottom-stack-h: calc\(var\(--mobile-nav-h\) \+ 20px \+ env\(safe-area-inset-bottom\)\);/u);
   assert.doesNotMatch(layout, /body:has\(\.mobile-(?:search-)?bottom-nav/u);
 });
 

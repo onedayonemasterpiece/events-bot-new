@@ -144,7 +144,9 @@
         "site/src/components/EventListItem.astro",
         "site/src/components/listings/ListingEventCard.astro",
         "site/src/components/listings/ListingDiscoveryRail.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro",
         "site/src/components/listings/MobileListingRailRow.astro",
+        "site/src/lib/mobileListingRailMedia.mjs",
         "site/src/components/listings/ExactTimeTimeline.astro",
         "site/src/components/listings/ListingTimeNav.astro",
         "site/src/components/listings/ListingTimeMarker.astro"
