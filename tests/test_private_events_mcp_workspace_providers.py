@@ -372,6 +372,38 @@ def test_telegram_bindings_survive_store_restart(config, tmp_path) -> None:
     assert second.resolve_target(binding.target_ref).title == "Exact person"
 
 
+def test_telegram_scheduled_item_namespace_survives_store_restart(
+    config, tmp_path
+) -> None:
+    isolated = replace(
+        config,
+        auth_database_path=str(tmp_path / "telegram-scheduled-auth.sqlite"),
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_post_enabled=True,
+    )
+    first = InMemoryTelegramOpaqueRefStore(isolated)
+    target = first.mint_target(
+        entity={"id": 42},
+        kind=SocialTargetKind.CHANNEL,
+        title="Scheduled channel",
+        canonical_handle="scheduled_channel",
+        profile_link="https://t.me/scheduled_channel",
+        is_self=False,
+    )
+    item = first.mint_item(
+        target_ref=target.target_ref,
+        message_id=777,
+        scheduled=True,
+    )
+
+    second = InMemoryTelegramOpaqueRefStore(isolated)
+    restored = second.resolve_item(item.item_ref)
+    assert restored.message_id == 777
+    assert restored.target_ref == target.target_ref
+    assert restored.scheduled is True
+
+
 def test_telegram_media_fingerprint_ignores_rotating_file_reference(
     config, tmp_path
 ) -> None:

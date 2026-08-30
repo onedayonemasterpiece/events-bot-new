@@ -21,6 +21,7 @@ from private_events_mcp.social_workspace import (
     RichEntityKind,
     SocialAction,
     SocialActionIntent,
+    SocialItemKind,
     SocialPlatform,
     SocialReactionPreset,
     SocialReadAccess,
@@ -41,6 +42,7 @@ from private_events_mcp_telegram_adapter import (
     TelegramItemBinding,
     TelegramLease,
     TelegramOperationClaim,
+    TelegramScheduledItemBinding,
     TelegramTargetBinding,
     TelegramVerifiedUpload,
     TelegramWorkspaceAdapter,
@@ -294,13 +296,31 @@ class FakeRefs:
         self.targets[ref] = binding
         return binding
 
-    def mint_item(self, *, target_ref, message_id, allowed_actions=None):
+    def mint_item(
+        self,
+        *,
+        target_ref,
+        message_id,
+        allowed_actions=None,
+        kind=SocialItemKind.MESSAGE,
+        scheduled=False,
+    ):
         for binding in self.items.values():
-            if binding.target_ref == target_ref and binding.message_id == message_id:
+            if (
+                binding.target_ref == target_ref
+                and binding.message_id == message_id
+                and bool(getattr(binding, "scheduled", False)) == scheduled
+                and binding.kind is kind
+            ):
                 return binding
         ref = f"itm_mintedmessage{self.next_item:08d}"
         self.next_item += 1
-        binding = TelegramItemBinding(ref, target_ref, message_id, allowed_actions)
+        binding_type = (
+            TelegramScheduledItemBinding if scheduled else TelegramItemBinding
+        )
+        binding = binding_type(
+            ref, target_ref, message_id, allowed_actions, kind
+        )
         self.items[ref] = binding
         return binding
 
@@ -430,6 +450,9 @@ class FakeClient:
             for target_ref, binding in refs.targets.items()
         }
         self.messages[CHANNEL_REF].append(Message(500, "root"))
+        self.scheduled_messages = {
+            target_ref: [] for target_ref in self.messages
+        }
         self.raise_on: str | None = None
         self.delay = 0.0
         self.global_search_messages = None
@@ -482,16 +505,20 @@ class FakeClient:
         )
         return current or self.entity_refs.get(id(entity)) or self.native_id_refs[entity.id]
 
-    async def iter_messages(self, entity, *, limit, offset_id=0, search=None):
-        values = self.messages[self._target_ref(entity)]
+    async def iter_messages(
+        self, entity, *, limit, offset_id=0, search=None, scheduled=False
+    ):
+        source = self.scheduled_messages if scheduled else self.messages
+        values = source[self._target_ref(entity)]
         selected = [m for m in values if (not offset_id or m.id < offset_id)]
         if search:
             selected = [m for m in selected if search.casefold() in m.message.casefold()]
         for value in selected[:limit]:
             yield value
 
-    async def get_messages(self, entity, *, ids):
-        for message in self.messages[self._target_ref(entity)]:
+    async def get_messages(self, entity, *, ids, scheduled=False):
+        source = self.scheduled_messages if scheduled else self.messages
+        for message in source[self._target_ref(entity)]:
             if message.id == ids:
                 return message
         return Message(ids, "read-back")
@@ -502,8 +529,12 @@ class FakeClient:
             raise TimeoutError("native details")
         if self.delay:
             await asyncio.sleep(self.delay)
-        message = Message(900 + len(self.calls), text)
-        self.messages[self._target_ref(entity)].append(message)
+        message = Message(900 + len(self.calls), text, entity=entity)
+        if kwargs.get("schedule") is not None:
+            message.date = kwargs["schedule"]
+            self.scheduled_messages[self._target_ref(entity)].append(message)
+        else:
+            self.messages[self._target_ref(entity)].append(message)
         return message
 
     async def send_file(self, entity, files, **kwargs):
@@ -517,6 +548,8 @@ class FakeClient:
         message = Message(
             910 + len(self.calls), kwargs.get("caption", ""), entity=entity
         )
+        if not isinstance(files, io.BytesIO):
+            message.media = SimpleNamespace(photo=SimpleNamespace(id=message.id))
         if isinstance(files, io.BytesIO) and kwargs.get("force_document") is True:
             file_name = getattr(files, "name", None)
             file_size = kwargs.get("file_size")
@@ -527,7 +560,11 @@ class FakeClient:
             message.media = SimpleNamespace(document=document)
             message.document = document
             message.file = SimpleNamespace(name=file_name, size=file_size)
-        self.messages[self._target_ref(entity)].append(message)
+        if kwargs.get("schedule") is not None:
+            message.date = kwargs["schedule"]
+            self.scheduled_messages[self._target_ref(entity)].append(message)
+        else:
+            self.messages[self._target_ref(entity)].append(message)
         return message
 
     async def edit_message(self, entity, message_id, text, **kwargs):
@@ -1611,6 +1648,44 @@ async def test_every_closed_mutation_family(harness, action, changes, provider_c
     assert receipt["retry_safe"] is False
     assert validate_action_status_response(receipt).value == "succeeded"
     assert provider_call in [name for name, _ in client.calls]
+
+
+@pytest.mark.asyncio
+async def test_schedule_readback_and_exact_item_use_scheduled_namespace(harness):
+    adapter, client, refs, _ = harness
+    scheduled_at = "2026-08-09T12:00:00Z"
+    receipt = await adapter.execute(
+        intent(
+            SocialAction.SCHEDULE,
+            target_ref=CHANNEL_REF,
+            content=content(
+                "Scheduled exact text",
+                media=(MediaAttachment(ASSET_REF, MediaRole.IMAGE),),
+            ),
+            schedule_at=scheduled_at,
+        ),
+        operation_ref=op_ref(191),
+    )
+
+    assert receipt["status"] == "succeeded"
+    assert receipt["read_after_write"]["verified"] is True
+    assert receipt["read_after_write"]["observed_item_ref"] == receipt["item_ref"]
+    binding = refs.items[receipt["item_ref"]]
+    assert isinstance(binding, TelegramScheduledItemBinding)
+
+    # Ordinary history may legally contain the same numeric id. The opaque
+    # binding must keep reads in Telegram's distinct scheduled namespace.
+    client.messages[CHANNEL_REF].append(
+        Message(binding.message_id, "wrong ordinary-history message")
+    )
+    exact = await adapter.read(
+        read_request(SocialReadOperation.GET_ITEM, item_ref=receipt["item_ref"])
+    )
+
+    assert exact["item"]["item_ref"] == receipt["item_ref"]
+    assert exact["item"]["text"] == "Scheduled exact text"
+    assert exact["item"]["published_at"] == scheduled_at
+    assert len(exact["item"]["media"]) == 1
 
 
 @pytest.mark.asyncio

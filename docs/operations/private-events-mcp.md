@@ -465,6 +465,18 @@ wall-post returned native identifiers before a later ambiguity, those values
 are encrypted in provider state and reconciliation uses the exact photo/post
 identifier rather than text alone.
 
+Scheduled items keep their provider queue namespace in the opaque binding.
+Telegram schedule success requires an exact `get_messages(..., scheduled=True)`
+readback for the same peer/message, schedule timestamp, text and media count;
+`social_content_item` reuses that same opaque item instead of resolving the
+numeric id from ordinary channel history. VK schedule success is read back from
+the intended community's postponed queue, not `wall.getById`. VK may re-own a
+saved user photo when attaching it to a community post, so reconciliation binds
+the exact wall owner/post id, normalized text, publish time and photo count but
+does not require the pre-wall photo owner/id pair to survive. A later status
+check inspects both postponed and live owner surfaces without replaying
+`wall.post`.
+
 The approval token is never pasted into ChatGPT. It is not an OAuth token and
 must not appear in model context, logs, PRs or artifacts. A provider timeout is
 `outcome_unknown` and `retry_safe=false`; do not retry with a new idempotency

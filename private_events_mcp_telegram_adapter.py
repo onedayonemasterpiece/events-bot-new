@@ -141,6 +141,18 @@ class TelegramItemBinding:
 
 
 @dataclass(frozen=True, slots=True)
+class TelegramScheduledItemBinding(TelegramItemBinding):
+    """Item binding whose message id belongs to Telegram's scheduled queue.
+
+    Scheduled message identifiers are scoped separately from ordinary channel
+    history.  Keeping this as a subclass preserves compatibility with durable
+    bindings created before the namespace was modelled explicitly.
+    """
+
+    scheduled: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class TelegramAssetBinding:
     """Server-side staged asset binding. Native media is deliberately private."""
 
@@ -211,6 +223,7 @@ class TelegramOpaqueRefStore(Protocol):
         message_id: int,
         allowed_actions: frozenset[SocialAction] | None = None,
         kind: SocialItemKind = SocialItemKind.MESSAGE,
+        scheduled: bool = False,
     ) -> TelegramItemBinding: ...
 
     def mint_read_asset(
@@ -865,10 +878,15 @@ class TelegramWorkspaceAdapter:
         message_id: int,
         kind: SocialItemKind,
         allowed_actions: frozenset[SocialAction] | None = None,
+        scheduled: bool = False,
     ) -> TelegramItemBinding:
         minter = self._refs.mint_item
         parameters = inspect.signature(minter).parameters
         supports_kind = "kind" in parameters or any(
+            value.kind is inspect.Parameter.VAR_KEYWORD
+            for value in parameters.values()
+        )
+        supports_scheduled = "scheduled" in parameters or any(
             value.kind is inspect.Parameter.VAR_KEYWORD
             for value in parameters.values()
         )
@@ -879,11 +897,17 @@ class TelegramWorkspaceAdapter:
         }
         if supports_kind:
             values["kind"] = kind
+        if supports_scheduled:
+            values["scheduled"] = scheduled
         binding = minter(**values)
         if not isinstance(binding, TelegramItemBinding):
             raise SocialWorkspaceValidationError("item minter returned invalid binding")
         if supports_kind and binding.kind is not kind:
             raise SocialWorkspaceValidationError("item minter returned wrong item kind")
+        if scheduled and not bool(getattr(binding, "scheduled", False)):
+            raise SocialWorkspaceValidationError(
+                "item minter lost scheduled namespace"
+            )
         validate_opaque_ref(binding.item_ref, "item")
         return binding
 
@@ -1846,6 +1870,7 @@ class TelegramWorkspaceAdapter:
         *,
         kind: SocialItemKind | None = None,
         album_messages: Sequence[Any] | None = None,
+        item_binding: TelegramItemBinding | None = None,
     ) -> dict[str, Any]:
         members = self._ordered_album_members(message, album_messages)
         representative = next(
@@ -1863,12 +1888,21 @@ class TelegramWorkspaceAdapter:
             if target.kind is SocialTargetKind.CHANNEL
             else SocialItemKind.MESSAGE
         )
-        item = self._mint_item_binding(
-            target_ref=target.target_ref,
-            message_id=message_id,
-            kind=selected_kind,
-            allowed_actions=None,
-        )
+        if item_binding is not None:
+            if (
+                item_binding.target_ref != target.target_ref
+                or item_binding.message_id
+                not in {_provider_message_id(member) for member in members}
+            ):
+                raise TelegramWorkspaceError("read_after_write_failed")
+            item = item_binding
+        else:
+            item = self._mint_item_binding(
+                target_ref=target.target_ref,
+                message_id=message_id,
+                kind=selected_kind,
+                allowed_actions=None,
+            )
         payload: dict[str, Any] = {
             "item_ref": item.item_ref,
             "target_ref": target.target_ref,
@@ -2016,21 +2050,28 @@ class TelegramWorkspaceAdapter:
         return results
 
     async def _album_messages_near(
-        self, client: Any, target: TelegramTargetBinding, message: Any
+        self,
+        client: Any,
+        target: TelegramTargetBinding,
+        message: Any,
+        *,
+        scheduled: bool = False,
     ) -> list[Any]:
         """Fetch at most one Telegram album around an already resolved member."""
 
         if self._message_grouped_id(message) is None:
             return [message]
         message_id = _provider_message_id(message)
-        iterator = client.iter_messages(
-            target.entity,
-            limit=21,
+        values: dict[str, Any] = {
+            "limit": 21,
             # Telegram media groups contain at most ten items with adjacent
-            # message ids.  Starting just above that window includes the
+            # message ids. Starting just above that window includes the
             # selected member and all possible siblings without a broad scan.
-            offset_id=message_id + 11,
-        )
+            "offset_id": message_id + 11,
+        }
+        if scheduled:
+            values["scheduled"] = True
+        iterator = client.iter_messages(target.entity, **values)
         nearby = await self._iterate(iterator)
         return self._ordered_album_members(message, nearby)
 
@@ -2679,11 +2720,22 @@ class TelegramWorkspaceAdapter:
                         client, lease, target, item.message_id
                     )
                     return {"item": self._story_payload(story, target), "trust": _TRUST}
-                message = await _await(client.get_messages(target.entity, ids=item.message_id))
-                album = await self._album_messages_near(client, target, message)
+                scheduled = bool(getattr(item, "scheduled", False))
+                get_values: dict[str, Any] = {"ids": item.message_id}
+                if scheduled:
+                    get_values["scheduled"] = True
+                message = await _await(
+                    client.get_messages(target.entity, **get_values)
+                )
+                album = await self._album_messages_near(
+                    client, target, message, scheduled=scheduled
+                )
                 return {
                     "item": self._item_payload(
-                        message, target, album_messages=album
+                        message,
+                        target,
+                        album_messages=album,
+                        item_binding=item,
                     ),
                     "trust": _TRUST,
                 }
@@ -3224,17 +3276,56 @@ class TelegramWorkspaceAdapter:
                         )
                     ),
                     allowed_actions=None,
+                    scheduled=intent.action is SocialAction.SCHEDULE,
                 )
                 receipt["item_ref"] = minted.item_ref
-                if intent.action is SocialAction.SEND_MESSAGE:
+                if intent.action in {
+                    SocialAction.SEND_MESSAGE,
+                    SocialAction.SCHEDULE,
+                }:
                     await self._fenced(lease)
-                    observed = await _await(client.get_messages(target.entity, ids=message_id))
+                    scheduled = intent.action is SocialAction.SCHEDULE
+                    get_values: dict[str, Any] = {"ids": message_id}
+                    if scheduled:
+                        get_values["scheduled"] = True
+                    observed = await _await(
+                        client.get_messages(target.entity, **get_values)
+                    )
                     if (
                         type(getattr(observed, "id", None)) is not int
                         or getattr(observed, "id", None) != message_id
                         or not self._message_matches_target(observed, target)
                     ):
                         raise TimeoutError("read-back mismatch")
+                    if scheduled:
+                        observed_date = getattr(observed, "date", None)
+                        expected_date = datetime.fromisoformat(
+                            (intent.schedule_at or "").replace("Z", "+00:00")
+                        )
+                        if (
+                            not isinstance(observed_date, datetime)
+                            or observed_date.tzinfo is None
+                            or abs(
+                                (
+                                    observed_date.astimezone(timezone.utc)
+                                    - expected_date.astimezone(timezone.utc)
+                                ).total_seconds()
+                            )
+                            > 1
+                            or _safe_text(
+                                getattr(observed, "message", None), 4096
+                            )
+                            != intent.content.text
+                        ):
+                            raise TimeoutError("scheduled message read-back mismatch")
+                        album = await self._album_messages_near(
+                            client, target, observed, scheduled=True
+                        )
+                        observed_media = sum(
+                            1 for member in album if getattr(member, "media", None) is not None
+                        )
+                        if observed_media != len(intent.content.media):
+                            raise TimeoutError("scheduled media read-back mismatch")
                     if document_send:
                         assets = self._compile_media(intent.content)
                         upload = assets[0].provider_media if len(assets) == 1 else None
@@ -3311,6 +3402,7 @@ __all__ = [
     "TelegramLease",
     "TelegramOpaqueRefStore",
     "TelegramOperationClaim",
+    "TelegramScheduledItemBinding",
     "TelegramTargetBinding",
     "TelegramVerifiedUpload",
     "TelegramWorkspaceAdapter",

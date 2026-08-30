@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed: private `eventsBot` MCP scheduled publishing now keeps Telegram's
+  scheduled-message namespace in durable item bindings, performs exact
+  peer/time/text/media read-after-write, and returns the committed opaque item
+  from `social_content_item` instead of reading a same-numbered ordinary
+  channel message. VK schedules are verified through the intended postponed
+  queue; reconciliation checks postponed and live owner surfaces, binds a
+  known post id when available, and accepts VK's documented community-photo
+  re-ownership without weakening text/time/photo-count checks. Regression
+  contract: `INC-2026-08-30-mcp-scheduled-readback-routing`.
+
 - Fixed: private `eventsBot` MCP VK image publishing now decompresses VK's
   gzip-encoded multipart receipt and consumes fragmented JSON to EOF under the
   decoded-byte cap, separates the user-token media actor from the
