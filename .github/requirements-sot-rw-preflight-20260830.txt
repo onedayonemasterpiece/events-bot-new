@@ -1,2 +1,0 @@
-RW preflight for adopting kenigevents.asp-conformance consumer lock on 2026-08-30.
-This temporary probe must be read back and deleted before governance files are written.
