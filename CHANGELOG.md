@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Fixed: stale `RENDERING` video sessions no longer hold every Telegram video
+  lane after their exact Kaggle kernel has terminally failed. Scheduled
+  `/v tomorrow` retries now use a persisted busy-lane cooldown, same-slot lane
+  alerts are deduplicated, and the watchdog waits one interval before its first
+  startup tick so it cannot race startup catch-up. In-flight video pollers are
+  recovered independently of the broad optional Kaggle recovery sweep, so a
+  deploy cannot orphan a healthy render. Intentionally disabled
+  festival, ticket, stats, cache-sanitizer and Kaggle-recovery jobs remain in
+  logs without sending a Telegram warning batch. Regression contract:
+  `INC-2026-08-30-video-lane-stale-render-alert-storm`.
+
 - Fixed: private `eventsBot` MCP scheduled publishing now keeps Telegram's
   scheduled-message namespace in durable item bindings, performs exact
   peer/time/text/media read-after-write, and returns the committed opaque item

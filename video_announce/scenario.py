@@ -94,6 +94,7 @@ from .story_publish import (
 from .poller import (
     VIDEO_MAX_MB,
     VIDEO_KAGGLE_TIMEOUT_MINUTES,
+    reconcile_expired_rendering_sessions,
     reconcile_terminal_rendering_sessions,
     remember_status_message,
     start_kernel_poller_task,
@@ -128,6 +129,10 @@ logger = logging.getLogger(__name__)
 
 _RENDERING_NOTICE_TTL_SECONDS = 6 * 60 * 60
 _rendering_notice_cache: TTLCache = TTLCache(
+    maxsize=256,
+    ttl=_RENDERING_NOTICE_TTL_SECONDS,
+)
+_video_lane_notice_cache: TTLCache = TTLCache(
     maxsize=256,
     ttl=_RENDERING_NOTICE_TTL_SECONDS,
 )
@@ -333,6 +338,7 @@ class VideoAnnounceScenario:
         self.user_id = user_id
         self.last_tomorrow_skip_reason = ""
         self.last_partner_track_skip_reason = ""
+        self.last_popular_review_skip_reason = ""
 
     async def _load_admin_channels(self) -> list[Channel]:
         async with self.db.get_session() as session:
@@ -1258,6 +1264,11 @@ class VideoAnnounceScenario:
             self.bot,
             chat_id=self.chat_id,
         )
+        await reconcile_expired_rendering_sessions(
+            self.db,
+            self.bot,
+            chat_id=self.chat_id,
+        )
         async with self.db.get_session() as session:
             query = select(VideoAnnounceSession).where(
                 VideoAnnounceSession.status == VideoAnnounceSessionStatus.RENDERING
@@ -1276,6 +1287,18 @@ class VideoAnnounceScenario:
             if sess_slug and sess_slug.casefold() == target:
                 return sess
         return None
+
+    async def _notify_video_lane_once(self, *, slot_key: str, text: str) -> None:
+        key = (int(self.chat_id), str(slot_key or "video_lane").strip())
+        if key in _video_lane_notice_cache:
+            logger.info(
+                "video_announce: suppressed duplicate video-lane notice slot=%s chat=%s",
+                slot_key,
+                self.chat_id,
+            )
+            return
+        _video_lane_notice_cache[key] = True
+        await self.bot.send_message(self.chat_id, text)
 
     async def _notify_rendering_once(self, existing: VideoAnnounceSession) -> None:
         key = (int(self.chat_id), int(existing.id or 0))
@@ -1565,6 +1588,7 @@ class VideoAnnounceScenario:
         test_mode: bool = False,
         wait_for_handoff: bool = False,
         trigger: str | None = None,
+        notify_lane_error: bool = True,
     ) -> int | None:
         self.last_tomorrow_skip_reason = ""
         normalized_profile_key = (profile_key or "default").strip() or "default"
@@ -1574,10 +1598,13 @@ class VideoAnnounceScenario:
         existing = await self.has_rendering()
         if existing and not self._video_parallel_lanes_enabled():
             self.last_tomorrow_skip_reason = "render_in_progress"
-            await self.bot.send_message(
-                self.chat_id,
-                f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
-            )
+            if notify_lane_error:
+                await self._notify_rendering_once(existing)
+            else:
+                logger.info(
+                    "video_announce: persisted suppression of tomorrow render notice session=%s",
+                    existing.id,
+                )
             return None
 
         tomorrow, params, render_scene_limit = self._tomorrow_selection_setup(
@@ -1608,10 +1635,16 @@ class VideoAnnounceScenario:
         )
         if lane_error:
             self.last_tomorrow_skip_reason = self._lane_error_skip_reason(lane_error)
-            await self.bot.send_message(
-                self.chat_id,
-                f"Плановый /v tomorrow не стартовал: {lane_error}",
-            )
+            if notify_lane_error:
+                await self._notify_video_lane_once(
+                    slot_key=str(params.get(SCHEDULED_SLOT_KEY) or slot_kind),
+                    text=f"Плановый /v tomorrow не стартовал: {lane_error}",
+                )
+            else:
+                logger.info(
+                    "video_announce: persisted suppression of tomorrow lane notice slot=%s",
+                    params.get(SCHEDULED_SLOT_KEY) or slot_kind,
+                )
             return None
 
         test_chat_id, main_chat_id = await self._get_profile_channels(normalized_profile_key)
@@ -2182,6 +2215,7 @@ class VideoAnnounceScenario:
         *,
         wait_for_handoff: bool = False,
         trigger: str | None = None,
+        notify_lane_error: bool = True,
     ) -> int | None:
         self.last_partner_track_skip_reason = ""
         if not await self.ensure_access():
@@ -2206,10 +2240,13 @@ class VideoAnnounceScenario:
         )
         if existing and not self._kernel_lane_refs_configured(prospective_kernel_ref):
             self.last_partner_track_skip_reason = "render_in_progress"
-            await self.bot.send_message(
-                self.chat_id,
-                f"Сессия #{existing.id} уже рендерится, дождитесь завершения",
-            )
+            if notify_lane_error:
+                await self._notify_rendering_once(existing)
+            else:
+                logger.info(
+                    "video_announce: persisted suppression of partner render notice session=%s",
+                    existing.id,
+                )
             return None
         publish_mode = await self._resolve_partner_publish_mode(partner_track)
         business_selector = await self._resolve_partner_business_selector(partner_track)
@@ -2287,13 +2324,19 @@ class VideoAnnounceScenario:
         )
         if lane_error:
             self.last_partner_track_skip_reason = self._lane_error_skip_reason(lane_error)
-            await self.bot.send_message(
-                self.chat_id,
-                (
-                    f"Партнёрский трек «{partner_track.display_name}» не стартовал: "
-                    f"{lane_error}"
-                ),
-            )
+            if notify_lane_error:
+                await self._notify_video_lane_once(
+                    slot_key=str(params.get(SCHEDULED_SLOT_KEY) or partner_track.track_id),
+                    text=(
+                        f"Партнёрский трек «{partner_track.display_name}» не стартовал: "
+                        f"{lane_error}"
+                    ),
+                )
+            else:
+                logger.info(
+                    "video_announce: persisted suppression of partner lane notice slot=%s",
+                    params.get(SCHEDULED_SLOT_KEY) or partner_track.track_id,
+                )
             return None
         event_filter = self._build_event_filter_for_partner_track(partner_track)
         try:
@@ -2506,12 +2549,26 @@ class VideoAnnounceScenario:
             valid=True,
         )
 
-    async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False) -> int | None:
+    async def run_popular_review_pipeline(
+        self,
+        *,
+        wait_for_handoff: bool = False,
+        notify_render_lock: bool = True,
+    ) -> int | None:
+        self.last_popular_review_skip_reason = ""
         if not await self.ensure_access():
+            self.last_popular_review_skip_reason = "access_denied"
             return None
         existing = await self.has_rendering()
         if existing:
-            await self._notify_rendering_once(existing)
+            self.last_popular_review_skip_reason = "render_in_progress"
+            if notify_render_lock:
+                await self._notify_rendering_once(existing)
+            else:
+                logger.info(
+                    "video_announce: persisted suppression of popular-review render notice session=%s",
+                    existing.id,
+                )
             return None
 
         try:

@@ -1,10 +1,10 @@
 # INC-2026-08-30 eventsBot MCP scheduled readback and routing
 
-Status: mitigated
+Status: closed
 Severity: sev2
 Service: private eventsBot MCP / Telegram and VK Social Workspace scheduling
 Opened: 2026-08-30
-Closed: —
+Closed: 2026-08-30
 Owners: events-bot
 Related incidents: `INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown.md`
 Related docs: `docs/operations/private-events-mcp.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -147,7 +147,7 @@ community (`klgdevents`, owner `-231920894`) instead of
 - [x] Read VK schedules from postponed queue and reconcile postponed plus live.
 - [x] Bind VK reconciliation to known post id but compare stable photo count,
   not the provider-reowned photo owner/id pair.
-- [ ] Deploy exact main and repair/verify the requested Telegram/VK schedules.
+- [x] Deploy exact main and repair/verify the requested Telegram/VK schedules.
 
 ## Follow-up Actions
 
@@ -156,13 +156,20 @@ community (`klgdevents`, owner `-231920894`) instead of
 
 ## Release And Closure Evidence
 
-- implementation SHA: pending
-- deployed SHA: pending
-- deploy path: pending
+- implementation SHAs: `7b1f0f300cd5d17408d5356fab2ad7e87a2ceab7`,
+  `6459b81eaf57b021fcdcb745ea658b3cbc7b87aa`
+- deployed SHA: `6459b81eaf57b021fcdcb745ea658b3cbc7b87aa`
+- deploy path: clean detached worktree from exact `origin/main`; Fly release
+  health returned ready/ok and the running repository SHA matched
 - regression checks: targeted Telegram/VK/provider-store tests `126 passed`;
   complete Private Events MCP suite `519 passed` with three existing aiohttp
   `NotAppKeyWarning` warnings; compileall and diff-check passed
-- post-deploy verification: pending
+- post-deploy verification: MCP exact `get_item` retained
+  `itm_F1X-Ct9FWtw6-fqcWI4qdylmpSIhCHH_` and returned the exact
+  `Светлый JAZZ` text, one photo and `2026-08-30T17:00:00Z`;
+  Telegram raw scheduled history contained only original message `2632` after
+  duplicate `2633` was deleted; VK postponed owner `-231828790` contained exact
+  post `1765` while wrong owner `-231920894` had no exact copy
 
 ## Prevention
 

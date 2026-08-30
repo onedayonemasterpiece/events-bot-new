@@ -6,7 +6,7 @@ import sys
 import time
 from types import SimpleNamespace
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
@@ -1008,6 +1008,45 @@ async def test_scheduled_video_tomorrow_lane_busy_is_explicit_skip(
 
 
 @pytest.mark.asyncio
+async def test_scheduled_video_tomorrow_suppresses_busy_notice_from_persisted_receipt(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    async with db.get_session() as session:
+        session.add(User(user_id=1, is_superadmin=True))
+        await session.commit()
+    prior = await start_ops_run(
+        db,
+        kind="video_tomorrow",
+        trigger="scheduled",
+        started_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+    )
+    await finish_ops_run(
+        db,
+        run_id=prior,
+        status="skipped",
+        details={"skip_reason": "video_lanes_busy"},
+    )
+
+    class FakeScenario:
+        last_tomorrow_skip_reason = "video_lanes_busy"
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def run_tomorrow_pipeline(self, **kwargs):
+            assert kwargs["notify_lane_error"] is False
+            return None
+
+    monkeypatch.setattr(scenario_module, "VideoAnnounceScenario", FakeScenario)
+
+    await scheduling._run_scheduled_video_tomorrow(
+        db, bot=object(), profile_key="default"
+    )
+
+
+@pytest.mark.asyncio
 async def test_video_tomorrow_startup_catchup_retries_single_recoverable_failed_session(
     tmp_path, monkeypatch
 ):
@@ -1087,6 +1126,75 @@ async def test_video_tomorrow_watchdog_retries_single_recoverable_failed_session
     assert calls == [
         {"profile_key": "default", "test_mode": False, "startup_catchup": False}
     ]
+
+
+@pytest.mark.asyncio
+async def test_video_tomorrow_watchdog_defers_after_recent_busy_lane_skip(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_video_tomorrow_env(monkeypatch)
+    monkeypatch.setenv("V_TOMORROW_WATCHDOG_BUSY_RETRY_SECONDS", "900")
+
+    run_id = await start_ops_run(
+        db,
+        kind="video_tomorrow",
+        trigger="scheduled",
+        operator_id=0,
+        started_at=datetime(2026, 4, 12, 15, 25, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="skipped",
+        details={"skip_reason": "video_lanes_busy"},
+    )
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_video_tomorrow", fake_run)
+
+    dispatched = await scheduling.maybe_dispatch_video_tomorrow_watchdog(
+        db, bot=object()
+    )
+
+    assert dispatched is False
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_popular_busy_skip_does_not_defer_tomorrow_watchdog(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_video_tomorrow_env(monkeypatch)
+    run_id = await start_ops_run(
+        db,
+        kind="video_popular_review",
+        trigger="scheduled",
+        started_at=datetime(2026, 4, 12, 15, 25, tzinfo=timezone.utc),
+    )
+    await finish_ops_run(
+        db,
+        run_id=run_id,
+        status="skipped",
+        details={"skip_reason": "render_in_progress"},
+    )
+    calls: list[dict] = []
+
+    async def fake_run(_db, _bot, **kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(scheduling, "_run_scheduled_video_tomorrow", fake_run)
+
+    assert await scheduling.maybe_dispatch_video_tomorrow_watchdog(
+        db, bot=object()
+    ) is True
+    assert len(calls) == 1
 
 
 @pytest.mark.asyncio
@@ -1233,7 +1341,9 @@ async def test_scheduled_popular_review_waits_for_confirmed_kaggle_handoff(
             self.chat_id = chat_id
             self.user_id = user_id
 
-        async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False):
+        async def run_popular_review_pipeline(
+            self, *, wait_for_handoff: bool = False, notify_render_lock: bool = True
+        ):
             assert wait_for_handoff is True
             return await _insert_popular_review_session(
                 self.db,
@@ -1275,7 +1385,9 @@ async def test_scheduled_popular_review_fails_ops_run_without_kaggle_handoff(
         def __init__(self, db_obj, bot_obj, *, chat_id: int, user_id: int):
             self.db = db_obj
 
-        async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False):
+        async def run_popular_review_pipeline(
+            self, *, wait_for_handoff: bool = False, notify_render_lock: bool = True
+        ):
             assert wait_for_handoff is True
             return await _insert_popular_review_session(
                 self.db,
@@ -1318,7 +1430,9 @@ async def test_scheduled_popular_review_fails_ops_run_without_created_session(
         def __init__(self, db_obj, bot_obj, *, chat_id: int, user_id: int):
             self.db = db_obj
 
-        async def run_popular_review_pipeline(self, *, wait_for_handoff: bool = False):
+        async def run_popular_review_pipeline(
+            self, *, wait_for_handoff: bool = False, notify_render_lock: bool = True
+        ):
             assert wait_for_handoff is True
             return None
 
@@ -1339,6 +1453,36 @@ async def test_scheduled_popular_review_fails_ops_run_without_created_session(
     assert status == "failed"
     assert details["error"] == "CherryFlash did not create a popular_review session"
     assert "session_id" not in details
+
+
+@pytest.mark.asyncio
+async def test_scheduled_popular_review_render_busy_is_explicit_skip(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setenv("ADMIN_CHAT_ID", "123")
+
+    class FakeScenario:
+        last_popular_review_skip_reason = "render_in_progress"
+
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def run_popular_review_pipeline(self, **_kwargs):
+            return None
+
+    monkeypatch.setattr("video_announce.scenario.VideoAnnounceScenario", FakeScenario)
+
+    await scheduling._run_scheduled_popular_review(db, bot=object())
+
+    async with db.raw_conn() as conn:
+        cur = await conn.execute(
+            "SELECT status, details_json FROM ops_run WHERE kind='video_popular_review'"
+        )
+        status, details_raw = await cur.fetchone()
+    assert status == "skipped"
+    assert json.loads(details_raw)["skip_reason"] == "render_in_progress"
 
 
 @pytest.mark.asyncio

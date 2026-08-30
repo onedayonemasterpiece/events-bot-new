@@ -9240,6 +9240,14 @@ async def init_db_and_scheduler(
             )
         else:
             logging.info("SCHED skipping kaggle_recovery_once (ENABLE_KAGGLE_RECOVERY!=1)")
+            # Video renders own scarce Telegram/Kaggle lanes and can outlive a
+            # Fly process. Keep their exact pollers recoverable even when the
+            # broad multi-product recovery sweep is intentionally disabled.
+            from video_announce.poller import resume_rendering_sessions
+
+            app["video_render_recovery_once"] = asyncio.create_task(
+                resume_rendering_sessions(db, bot)
+            )
     except Exception:
         logging.exception("kaggle_recovery startup failed")
     app["daily_scheduler"] = asyncio.create_task(daily_scheduler(db, bot))
@@ -9326,6 +9334,10 @@ async def _runtime_health_heartbeat(app: Mapping[str, Any]) -> None:
 
 async def _video_tomorrow_watchdog_loop(db: Database, bot: Bot) -> None:
     interval = _video_tomorrow_watchdog_interval_sec()
+    # Startup catch-up is dispatched during application boot.  Let it finish
+    # before the first watchdog probe so both paths cannot launch/notify for the
+    # same missed slot concurrently.
+    await asyncio.sleep(interval)
     while True:
         try:
             await scheduler_video_tomorrow_watchdog_tick(db, bot)
