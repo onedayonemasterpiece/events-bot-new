@@ -1,0 +1,27 @@
+schema_version: kenigevents.requirements-lock.v1
+status: ACTIVE
+mode: FAIL_CLOSED
+consumer_repository: onedayonemasterpiece/events-bot-new
+
+requirements_contract:
+  id: kenigevents.asp-conformance
+  version: 1.0.0
+  repository: onedayonemasterpiece/lovekgd-design-system
+  path: docs/product-governance/astro-sot-penpot-conformance.md
+  commit: 7607143afc240b9f96abd51270ab82735aabf9bc
+  git_blob_sha1: 1facf0b2ae80b114d9c8b028b5c22769982e3fb7
+  sha256: 75c70629f01f8d60fb98290fa2e6e8abc201fc84885339c16010bcd75ddd4289
+
+page_profile:
+  id: free-collection.owner-review.v1
+  version: 1.0.0
+  repository: onedayonemasterpiece/lovekgd-design-system
+  path: contracts/page-profiles/free-collection.owner-review.v1.yaml
+  commit: a1aa7c84fcaf6fd9a6be02dd30a492ce8e683de3
+  git_blob_sha1: 9713fe3cea3dba8da5403cb6124498ba60b5c621
+  sha256: 6a1e5e6a8e90b46c277d6d01df85094f02143414767fb7ba45b0da3724c3c8b3
+
+routing:
+  global_requirements_must_not_be_copied: true
+  lower_layers_may_not_silently_override: true
+  conflict_protocol: БЫЛО → БУДЕТ → ЗАЧЕМ → ПОСЛЕДСТВИЯ → ТИП → СОГЛАСОВАНО
