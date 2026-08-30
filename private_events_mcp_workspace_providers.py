@@ -984,11 +984,13 @@ class InMemoryTelegramOpaqueRefStore:
             TelegramAssetBinding,
             TelegramItemBinding,
             TelegramOperationClaim,
+            TelegramScheduledItemBinding,
             TelegramTargetBinding,
         )
 
         self._Target = TelegramTargetBinding
         self._Item = TelegramItemBinding
+        self._ScheduledItem = TelegramScheduledItemBinding
         self._Asset = TelegramAssetBinding
         self._Claim = TelegramOperationClaim
         self._state = SQLiteProviderCoordinator(config.auth_database_path)
@@ -1080,10 +1082,12 @@ class InMemoryTelegramOpaqueRefStore:
         message_id: int,
         allowed_actions: frozenset[SocialAction] | None = None,
         kind: Any | None = None,
+        scheduled: bool = False,
     ) -> Any:
         self._targets.get(target_ref)
         ref = _bounded_ref("itm")
-        binding = self._Item(
+        binding_type = self._ScheduledItem if scheduled else self._Item
+        binding = binding_type(
             ref,
             target_ref,
             message_id,

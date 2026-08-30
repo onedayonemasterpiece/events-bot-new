@@ -2102,25 +2102,56 @@ class VKWorkspaceAdapter:
                     )
                 new_item_native = self._wall_native(target["owner_id"], post_id)
                 try:
-                    readback = await self._call(
-                        "wall_item",
-                        {
-                            "posts": f"{target['owner_id']}_{post_id}",
-                            "extended": 0,
-                        },
-                    )
+                    if intent.action is SocialAction.SCHEDULE:
+                        readback = await self._call(
+                            "wall_feed_editor",
+                            {
+                                "owner_id": target["owner_id"],
+                                "count": 100,
+                                "offset": 0,
+                                "filter": "postponed",
+                            },
+                        )
+                    else:
+                        readback = await self._call(
+                            "wall_item",
+                            {
+                                "posts": f"{target['owner_id']}_{post_id}",
+                                "extended": 0,
+                            },
+                        )
                 except VKWorkspaceError:
                     raise VKWorkspaceError(
                         "read_after_write_failed",
                         outcome_unknown=True,
                         stage="wall_item",
                     ) from None
+                expected_publish_date = (
+                    int(
+                        datetime.fromisoformat(
+                            (intent.schedule_at or "").replace("Z", "+00:00")
+                        ).timestamp()
+                    )
+                    if intent.action is SocialAction.SCHEDULE
+                    else None
+                )
                 observed = next(
                     (
                         raw
                         for raw in _items(readback)
                         if _int(raw.get("id")) == post_id
                         and _int(raw.get("owner_id")) == target["owner_id"]
+                        and (
+                            expected_publish_date is None
+                            or (
+                                _int(raw.get("date")) is not None
+                                and abs(
+                                    int(_int(raw.get("date")))
+                                    - expected_publish_date
+                                )
+                                <= 60
+                            )
+                        )
                     ),
                     None,
                 )
@@ -2382,24 +2413,43 @@ class VKWorkspaceAdapter:
                     "extended": 0,
                 },
             )
+            responses = [response]
+        elif intent.action is SocialAction.SCHEDULE:
+            responses = [
+                await self._call(
+                    "wall_feed_editor",
+                    {
+                        "owner_id": target["owner_id"],
+                        "count": 100,
+                        "offset": 0,
+                        "filter": "postponed",
+                    },
+                )
+            ]
+            # Once VK has published the item it leaves the postponed queue.
+            # A later status reconciliation must inspect the live owner wall
+            # without ever replaying wall.post.
+            responses.append(
+                await self._call(
+                    "wall_feed",
+                    {
+                        "owner_id": target["owner_id"],
+                        "count": 100,
+                        "offset": 0,
+                        "filter": "owner",
+                    },
+                )
+            )
         else:
-            response = await self._call(
-                (
-                    "wall_feed_editor"
-                    if intent.action is SocialAction.SCHEDULE
-                    else "wall_feed"
-                ),
+            responses = [await self._call(
+                "wall_feed",
                 {
                     "owner_id": target["owner_id"],
                     "count": 100,
                     "offset": 0,
-                    "filter": (
-                        "postponed"
-                        if intent.action is SocialAction.SCHEDULE
-                        else "owner"
-                    ),
+                    "filter": "owner",
                 },
-            )
+            )]
         claimed_seconds = claimed_at_ms // 1000
         scheduled_seconds = (
             int(
@@ -2411,11 +2461,20 @@ class VKWorkspaceAdapter:
             else None
         )
         matches: list[Mapping[str, Any]] = []
-        for raw in _items(response):
+        seen_posts: set[tuple[int, int]] = set()
+        for raw in (
+            item for response in responses for item in _items(response)
+        ):
             post_id = _int(raw.get("id"))
             owner_id = _int(raw.get("owner_id"))
             published = _int(raw.get("date"))
             if post_id is None or owner_id != target["owner_id"]:
+                continue
+            post_key = (owner_id, post_id)
+            if post_key in seen_posts:
+                continue
+            seen_posts.add(post_key)
+            if provider_post_id is not None and post_id != provider_post_id:
                 continue
             expected_seconds = (
                 scheduled_seconds
@@ -2432,14 +2491,6 @@ class VKWorkspaceAdapter:
             if self._match_text(str(raw.get("text") or "")) != expected_text:
                 continue
             attachments = raw.get("attachments")
-            observed_photo_refs = {
-                (_int(photo.get("owner_id")), _int(photo.get("id")))
-                for attachment in (attachments if isinstance(attachments, list) else [])
-                if isinstance(attachment, Mapping)
-                and attachment.get("type") == "photo"
-                and isinstance(attachment.get("photo"), Mapping)
-                for photo in (attachment["photo"],)
-            }
             photo_count = sum(
                 1
                 for attachment in (attachments if isinstance(attachments, list) else [])
@@ -2448,9 +2499,11 @@ class VKWorkspaceAdapter:
             )
             if photo_count < expected_photos:
                 continue
-            if provider_photo_refs and not set(provider_photo_refs).issubset(
-                observed_photo_refs
-            ):
+            # VK re-owns a saved user photo when it becomes a community wall
+            # attachment, so its owner/id pair is not stable across
+            # photos.saveWallPhoto -> postponed/live post readback.  Cardinality
+            # and the exact post/text/time binding remain stable.
+            if photo_count < max(expected_photos, len(provider_photo_refs)):
                 continue
             matches.append(raw)
         if len(matches) == 1:

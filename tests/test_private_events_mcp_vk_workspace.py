@@ -130,6 +130,32 @@ class FakeTransport:
                 {"id": 333, "name": "Common", "screen_name": "common", "members_count": 20},
             ]}
         if method == "wall.get":
+            if (
+                params.get("filter") == "postponed"
+                and self.last_wall_post.get("publish_date") is not None
+            ):
+                attachments = [
+                    {
+                        "type": "photo",
+                        # VK re-owns the saved photo on the community wall.
+                        "photo": {"owner_id": -101, "id": 9876},
+                    }
+                    for value in str(
+                        self.last_wall_post.get("attachments") or ""
+                    ).split(",")
+                    if value.startswith("photo")
+                ]
+                return {
+                    "items": [
+                        {
+                            "id": 801,
+                            "owner_id": -101,
+                            "date": self.last_wall_post["publish_date"],
+                            "text": self.last_wall_post.get("message", ""),
+                            "attachments": attachments,
+                        }
+                    ]
+                }
             offset, count = params.get("offset", 0), params["count"]
             posts = [self._post(offset + index + 1) for index in range(count)]
             if self.flagged_wall and posts:
@@ -1090,6 +1116,115 @@ async def test_scheduled_reconciliation_binds_publish_date_and_editor_actor(
     assert result["status"] == "outcome_unknown"
     assert result["error_code"] == "reconciliation_not_observed"
     assert transport.calls[0]["actor"] is VKActor.COMMUNITY_EDITOR
+
+
+@pytest.mark.asyncio
+async def test_scheduled_reconciliation_accepts_exact_post_with_reowned_photo(
+    workspace,
+) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    scheduled = _timestamp("2026-08-29", 12)
+
+    async def postponed_invoke(**call: Any) -> Any:
+        transport.calls.append(call)
+        assert call["method"] == "wall.get"
+        if call["params"]["filter"] == "owner":
+            return {"items": []}
+        assert call["params"]["filter"] == "postponed"
+        return {
+            "items": [
+                {
+                    "id": 1902,
+                    "owner_id": -101,
+                    "date": scheduled,
+                    "text": "Scheduled image text",
+                    "attachments": [
+                        {
+                            "type": "photo",
+                            "photo": {"owner_id": -101, "id": 9999},
+                        }
+                    ],
+                }
+            ]
+        }
+
+    transport.invoke = postponed_invoke  # type: ignore[method-assign]
+    image = refs.mint(
+        "asset", {"role": "image", "attachment": "photo868977531_457259767"}
+    )
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "schedule",
+            "idempotency_key": "scheduled-reconcile-reowned-photo-001",
+            "target_ref": community,
+            "schedule_at": "2026-08-29T12:00:00Z",
+            "content": {
+                "text": "Scheduled image text",
+                "media": [{"asset_ref": image, "role": "image"}],
+            },
+        }
+    )
+    result = await adapter.reconcile_intent(
+        "op_" + "p" * 24,
+        intent,
+        claimed_at_ms=_timestamp("2026-08-27", 15) * 1000,
+        provider_post_id=1902,
+        provider_photo_refs=((868977531, 457259767),),
+    )
+
+    assert result["status"] == "succeeded"
+    assert result["read_after_write"]["verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_scheduled_reconciliation_finds_item_after_live_publication(
+    workspace,
+) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    scheduled = _timestamp("2026-08-29", 12)
+
+    async def wall_surfaces(**call: Any) -> Any:
+        transport.calls.append(call)
+        if call["params"]["filter"] == "postponed":
+            return {"items": []}
+        return {
+            "items": [
+                {
+                    "id": 1903,
+                    "owner_id": -101,
+                    "date": scheduled,
+                    "text": "Already live scheduled text",
+                    "attachments": [],
+                }
+            ]
+        }
+
+    transport.invoke = wall_surfaces  # type: ignore[method-assign]
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "schedule",
+            "idempotency_key": "scheduled-reconcile-live-001",
+            "target_ref": community,
+            "schedule_at": "2026-08-29T12:00:00Z",
+            "content": {"text": "Already live scheduled text"},
+        }
+    )
+    result = await adapter.reconcile_intent(
+        "op_" + "l" * 24,
+        intent,
+        claimed_at_ms=_timestamp("2026-08-27", 15) * 1000,
+        provider_post_id=1903,
+    )
+
+    assert result["status"] == "succeeded"
+    assert [call["params"]["filter"] for call in transport.calls] == [
+        "postponed",
+        "owner",
+    ]
 
 
 @pytest.mark.asyncio

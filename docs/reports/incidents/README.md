@@ -18,6 +18,15 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-30-mcp-scheduled-readback-routing.md`
+  - Scope: private eventsBot MCP Telegram/VK scheduled-post namespace,
+    exact read-after-write, postponed/live reconciliation and target-safe repair.
+  - Must not regress: Telegram scheduled ids never resolve through ordinary
+    history; exact item read preserves the committed opaque item and verifies
+    peer/time/text/media; VK schedule readback uses the postponed queue and
+    tolerates provider photo re-ownership while retaining exact wall/post/time;
+    a wrong-target unknown is reconciled before any retry or compensating write.
+
 - `INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown.md`
   - Scope: private eventsBot MCP VK text+image action lifecycle, durable
     preparation→operation mapping, provider-stage outcome classification,
