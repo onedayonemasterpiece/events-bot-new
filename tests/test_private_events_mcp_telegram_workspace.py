@@ -516,8 +516,20 @@ class FakeClient:
         for value in selected[:limit]:
             yield value
 
-    async def get_messages(self, entity, *, ids, scheduled=False):
+    async def get_messages(
+        self, entity, *, ids=None, limit=None, scheduled=False
+    ):
+        if scheduled:
+            self.calls.append(
+                (
+                    "get_messages",
+                    {"ids": ids, "limit": limit, "scheduled": scheduled},
+                )
+            )
         source = self.scheduled_messages if scheduled else self.messages
+        if ids is None:
+            values = list(source[self._target_ref(entity)])
+            return values if limit is None else values[:limit]
         for message in source[self._target_ref(entity)]:
             if message.id == ids:
                 return message
@@ -601,6 +613,14 @@ class FakeClient:
         if name == "comments":
             return SimpleNamespace(
                 messages=self.comment_messages or [Message(701, "comment")]
+            )
+        if name == "scheduled_history":
+            return SimpleNamespace(
+                messages=list(
+                    self.scheduled_messages[
+                        self._target_ref(request.values["peer"])
+                    ]
+                )
             )
         if name == "peer_stories":
             story = Message(601, "")
@@ -1686,6 +1706,14 @@ async def test_schedule_readback_and_exact_item_use_scheduled_namespace(harness)
     assert exact["item"]["text"] == "Scheduled exact text"
     assert exact["item"]["published_at"] == scheduled_at
     assert len(exact["item"]["media"]) == 1
+    scheduled_reads = [
+        value
+        for name, value in client.calls
+        if name == "scheduled_history"
+    ]
+    assert scheduled_reads
+    assert all(set(value) == {"peer"} for value in scheduled_reads)
+    assert all(value["peer"].id == refs.targets[CHANNEL_REF].entity.id for value in scheduled_reads)
 
 
 @pytest.mark.asyncio
