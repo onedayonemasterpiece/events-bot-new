@@ -5,23 +5,38 @@ consumer_repository: onedayonemasterpiece/events-bot-new
 
 requirements_contract:
   id: kenigevents.asp-conformance
-  version: 1.0.0
+  version: 1.1.0
   repository: onedayonemasterpiece/lovekgd-design-system
   path: docs/product-governance/astro-sot-penpot-conformance.md
-  commit: 7607143afc240b9f96abd51270ab82735aabf9bc
-  git_blob_sha1: 1facf0b2ae80b114d9c8b028b5c22769982e3fb7
-  sha256: 75c70629f01f8d60fb98290fa2e6e8abc201fc84885339c16010bcd75ddd4289
+  commit: f134001382f547cebe8b025da24065128b174ffb
+  git_blob_sha1: 24e02d3048f2feba912cb990f8226b23006e8c2c
+  sha256: 54002c01430d48d836af491a09f493526c309e0779c2c6f0deedbf434975cf72
 
 page_profile:
   id: free-collection.owner-review.v1
-  version: 1.0.0
+  version: 1.1.0
+  status: BLOCKED_OWNER_REJECTED
   repository: onedayonemasterpiece/lovekgd-design-system
   path: contracts/page-profiles/free-collection.owner-review.v1.yaml
-  commit: a1aa7c84fcaf6fd9a6be02dd30a492ce8e683de3
-  git_blob_sha1: 9713fe3cea3dba8da5403cb6124498ba60b5c621
-  sha256: 6a1e5e6a8e90b46c277d6d01df85094f02143414767fb7ba45b0da3724c3c8b3
+  commit: b3567cb72d81a7aad4b47a68e220325f055697a2
+  git_blob_sha1: 0d279aeeb55a31d9ebbb5d6896c13f59479d3275
+  sha256: 2359082956b9bb3bc0003103045a7a1c169dd0d13c7cee187b2b6c671a60cee3
+
+asset_registry:
+  id: kenigevents.ui-assets.v1
+  version: 1.0.0
+  status: ACTIVE_FAIL_CLOSED
+  repository: onedayonemasterpiece/lovekgd-design-system
+  path: contracts/assets/ui-asset-registry.v1.yaml
+  commit: a0d66b832e97689536329fad4f0684cfe1001ca1
+  git_blob_sha1: cef9ec2ae159027267e8ec1e8e6a20686f995ff9
+  sha256: 03e0209794b58c59dcb04edba8593d25866a9d701df1b8671861c0cc79ebb7bc
 
 routing:
   global_requirements_must_not_be_copied: true
   lower_layers_may_not_silently_override: true
   conflict_protocol: БЫЛО → БУДЕТ → ЗАЧЕМ → ПОСЛЕДСТВИЯ → ТИП → СОГЛАСОВАНО
+  unresolved_assets_or_geometry: BLOCKED
+  fallback_materialization_allowed: false
+  current_free_collection_penpot_frame_approved: false
+  astro_consumer_migration_allowed_before_bindings_resolve: false
