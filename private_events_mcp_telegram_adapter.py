@@ -429,6 +429,7 @@ class _DefaultTelethonTypes:
                 (functions.channels, "GetChannelRecommendationsRequest"),
                 (functions.channels, "GetFullChannelRequest"),
                 (functions.messages, "SearchGlobalRequest"),
+                (functions.messages, "GetScheduledHistoryRequest"),
                 (functions.messages, "GetRepliesRequest"),
                 (functions.messages, "SendReactionRequest"),
                 (functions.stories, "GetPeerStoriesRequest"),
@@ -569,6 +570,10 @@ class _DefaultTelethonTypes:
                 max_id=0,
                 min_id=0,
                 hash=0,
+            )
+        if name == "scheduled_history":
+            return functions.messages.GetScheduledHistoryRequest(
+                peer=values["peer"], hash=0
             )
         if name == "reaction":
             reaction = (
@@ -2061,6 +2066,11 @@ class TelegramWorkspaceAdapter:
 
         if self._message_grouped_id(message) is None:
             return [message]
+        if scheduled:
+            # Telethon ignores every selector except the peer for scheduled
+            # history. Read that namespace, then select exact IDs locally.
+            nearby = await self._scheduled_messages(client, target)
+            return self._ordered_album_members(message, nearby)
         message_id = _provider_message_id(message)
         values: dict[str, Any] = {
             "limit": 21,
@@ -2069,11 +2079,54 @@ class TelegramWorkspaceAdapter:
             # selected member and all possible siblings without a broad scan.
             "offset_id": message_id + 11,
         }
-        if scheduled:
-            values["scheduled"] = True
         iterator = client.iter_messages(target.entity, **values)
         nearby = await self._iterate(iterator)
         return self._ordered_album_members(message, nearby)
+
+    async def _scheduled_messages(
+        self,
+        client: Any,
+        target: TelegramTargetBinding,
+    ) -> list[Any]:
+        """Return Telegram's complete scheduled queue for one exact peer."""
+
+        request = self._types.request(
+            "scheduled_history", peer=target.entity
+        )
+        response = await _await(client(request))
+        values = getattr(response, "messages", None)
+        if not isinstance(values, Sequence) or isinstance(
+            values, (str, bytes, bytearray)
+        ):
+            raise TelegramWorkspaceError("invalid_provider_response")
+        messages = list(values)
+        if len(messages) > _MAX_GLOBAL_SCAN:
+            raise TelegramWorkspaceError("provider_result_too_large")
+        return [
+            candidate
+            for candidate in messages
+            if candidate is not None
+            and self._message_matches_target(candidate, target)
+        ]
+
+    async def _scheduled_message_by_id(
+        self,
+        client: Any,
+        target: TelegramTargetBinding,
+        message_id: int,
+    ) -> tuple[Any | None, list[Any]]:
+        messages = await self._scheduled_messages(client, target)
+        return (
+            next(
+                (
+                    candidate
+                    for candidate in messages
+                    if _provider_message_id(candidate) == message_id
+                ),
+                None,
+            ),
+            messages,
+        )
 
     @staticmethod
     def _story_metrics(story_or_views: Any) -> dict[str, int]:
@@ -2721,15 +2774,24 @@ class TelegramWorkspaceAdapter:
                     )
                     return {"item": self._story_payload(story, target), "trust": _TRUST}
                 scheduled = bool(getattr(item, "scheduled", False))
-                get_values: dict[str, Any] = {"ids": item.message_id}
                 if scheduled:
-                    get_values["scheduled"] = True
-                message = await _await(
-                    client.get_messages(target.entity, **get_values)
-                )
-                album = await self._album_messages_near(
-                    client, target, message, scheduled=scheduled
-                )
+                    message, scheduled_messages = await self._scheduled_message_by_id(
+                        client, target, item.message_id
+                    )
+                    if message is None:
+                        raise TelegramWorkspaceError("item_not_found")
+                    album = self._ordered_album_members(
+                        message, scheduled_messages
+                    )
+                else:
+                    message = await _await(
+                        client.get_messages(target.entity, ids=item.message_id)
+                    )
+                    if message is None:
+                        raise TelegramWorkspaceError("item_not_found")
+                    album = await self._album_messages_near(
+                        client, target, message
+                    )
                 return {
                     "item": self._item_payload(
                         message,
@@ -3285,12 +3347,17 @@ class TelegramWorkspaceAdapter:
                 }:
                     await self._fenced(lease)
                     scheduled = intent.action is SocialAction.SCHEDULE
-                    get_values: dict[str, Any] = {"ids": message_id}
                     if scheduled:
-                        get_values["scheduled"] = True
-                    observed = await _await(
-                        client.get_messages(target.entity, **get_values)
-                    )
+                        observed, scheduled_messages = (
+                            await self._scheduled_message_by_id(
+                                client, target, message_id
+                            )
+                        )
+                    else:
+                        observed = await _await(
+                            client.get_messages(target.entity, ids=message_id)
+                        )
+                        scheduled_messages = []
                     if (
                         type(getattr(observed, "id", None)) is not int
                         or getattr(observed, "id", None) != message_id
@@ -3318,8 +3385,8 @@ class TelegramWorkspaceAdapter:
                             != intent.content.text
                         ):
                             raise TimeoutError("scheduled message read-back mismatch")
-                        album = await self._album_messages_near(
-                            client, target, observed, scheduled=True
+                        album = self._ordered_album_members(
+                            observed, scheduled_messages
                         )
                         observed_media = sum(
                             1 for member in album if getattr(member, "media", None) is not None

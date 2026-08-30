@@ -51,21 +51,37 @@ community (`klgdevents`, owner `-231920894`) instead of
 - 2026-08-30 14:16 UTC — status reconciliation still returned unknown.
 - 2026-08-30 14:29 UTC — exact wrong-target postponed post `10388` was deleted;
   a second authenticated postponed read confirmed it absent.
+- 2026-08-30 14:43 UTC — the intended VK schedule was created on owner
+  `-231828790` as postponed post `1765`; exact text, 17:00 UTC and one photo
+  were read back while the wrong owner remained empty.
+- 2026-08-30 14:51 UTC — direct Telegram scheduled-history inspection showed
+  that Telethon's high-level `get_messages(..., scheduled=True)` exposed only
+  one of five provider results. Raw `messages.getScheduledHistory` proved the
+  original exact post `2632` was present at 17:00 UTC with one image.
+- 2026-08-30 14:55 UTC — one corrective duplicate `2633`, created while the
+  incomplete high-level read falsely reported absence, was deleted through
+  `messages.deleteScheduledMessages`; raw readback proved only original
+  `2632` remained.
 
 ## Root Cause
 
 1. `TelegramItemBinding` modelled only `(target_ref, message_id)` although
    Telegram scheduled ids occupy a separate queue namespace. Both immediate
-   schedule handling and `GET_ITEM` lacked `scheduled=True` provider reads.
-2. Telegram exact item projection minted a new inner item from the fetched
+   schedule handling and `GET_ITEM` initially read ordinary history.
+2. Telethon 1.44's high-level scheduled iterator returned an incomplete queue
+   in production. Passing `ids` also takes precedence over `scheduled`; even
+   `get_messages(..., limit=None, scheduled=True)` returned one of five raw
+   results. Exact verification must therefore use the raw bounded
+   `messages.getScheduledHistory` result and select the id locally.
+3. Telegram exact item projection minted a new inner item from the fetched
    message instead of retaining the requested binding, obscuring contract
    divergence.
-3. VK schedule execution used `wall.getById`, which does not prove a postponed
+4. VK schedule execution used `wall.getById`, which does not prove a postponed
    queue item.
-4. VK reconciliation required the `photos.saveWallPhoto` owner/id pair to
+5. VK reconciliation required the `photos.saveWallPhoto` owner/id pair to
    appear unchanged on the wall, but VK re-owned the attachment from user
    photo `868977531_457259767` to community photo `-231920894_456248829`.
-5. Target selection was a caller routing error, independent of transport: the
+6. Target selection was a caller routing error, independent of transport: the
    committed opaque target resolved exactly to `klgdevents`.
 
 ## Contributing Factors
@@ -116,12 +132,17 @@ community (`klgdevents`, owner `-231920894`) instead of
 
 - The wrong-target VK postponed post `wall-231920894_10388` was deleted after
   exact owner/id/text-hash/photo verification and confirmed absent.
-- Telegram was not blindly retried or deleted before scheduled-queue support.
+- The correct VK postponed post `wall-231828790_1765` was created and verified.
+- Raw Telegram scheduled history proved the original requested post existed.
+  The single corrective duplicate was deleted and exact raw readback proved
+  one remaining post (`2632`) with the requested text, image, target and time.
 
 ## Corrective Actions
 
 - [x] Model Telegram scheduled items in a durable namespace-compatible binding.
 - [x] Require exact Telegram scheduled peer/time/text/media read-after-write.
+- [x] Bypass Telethon's incomplete scheduled iterator with the raw scheduled
+  history request and select exact ids locally.
 - [x] Reuse the requested Telegram opaque item during exact reads.
 - [x] Read VK schedules from postponed queue and reconcile postponed plus live.
 - [x] Bind VK reconciliation to known post id but compare stable photo count,
