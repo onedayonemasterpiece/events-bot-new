@@ -2533,8 +2533,9 @@ async def test_schedule_reconciliation_zero_window_then_ambiguous_is_bounded(har
         duplicate.date = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
         client.scheduled_messages[CHANNEL_REF].append(duplicate)
     ambiguous = await adapter.reconcile(operation_ref)
-    assert ambiguous["status"] == "outcome_unknown"
+    assert ambiguous["status"] == "failed"
     assert ambiguous["error_code"] == "reconciliation_ambiguous"
+    assert ambiguous["retry_safe"] is False
     assert ambiguous["exact_match_count"] == 2
     assert len(ambiguous["item_refs"]) == 2
 
@@ -2556,6 +2557,9 @@ async def test_schedule_reconciliation_terminal_zero_does_not_poll_forever(harne
         intent=adapter._operation_intent(request),
     )
     refs.mark_operation_mutation(operation_ref=operation_ref, action_digest=digest)
+    pending = await adapter.reconcile(operation_ref)
+    assert pending["status"] == "outcome_unknown"
+    assert pending["error_code"] == "reconciliation_pending"
     original_note = refs.note_reconciliation_attempt
 
     def expired(**kwargs):
@@ -2568,9 +2572,94 @@ async def test_schedule_reconciliation_terminal_zero_does_not_poll_forever(harne
     replay = await adapter.reconcile(operation_ref)
 
     assert terminal == replay
+    assert terminal["status"] == "failed"
     assert terminal["error_code"] == "reconciliation_no_match"
     assert terminal["retry_safe"] is False
+    assert terminal["exact_match_count"] == 0
+    assert terminal["mutation_boundary_reached"] is True
+    assert terminal["final_readback"]["verified"] is True
+    assert terminal["final_readback"]["absence_verified"] is True
+    assert terminal["final_readback"]["exact_match_count"] == 0
     assert [name for name, _ in client.calls].count("scheduled_history") == reads
+
+
+@pytest.mark.asyncio
+async def test_schedule_reconciliation_scheduled_live_collision_is_terminal(harness):
+    adapter, client, refs, _ = harness
+    operation_ref = "op_namespacecollision000000000001"
+    request = intent(
+        SocialAction.SCHEDULE,
+        target_ref=CHANNEL_REF,
+        content=content("Namespace collision"),
+        schedule_at="2026-08-31T12:00:00Z",
+    )
+    digest = telegram_adapter_module.compute_action_digest(request)
+    refs.claim_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        intent=adapter._operation_intent(request),
+    )
+    refs.mark_operation_mutation(operation_ref=operation_ref, action_digest=digest)
+    scheduled = Message(1700, "Namespace collision")
+    scheduled.date = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+    live = Message(1701, "Namespace collision")
+    live.date = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+    client.scheduled_messages[CHANNEL_REF] = [scheduled]
+    client.messages[CHANNEL_REF] = [live]
+
+    terminal = await adapter.reconcile(operation_ref)
+    replay = await adapter.reconcile(operation_ref)
+
+    assert terminal == replay
+    assert terminal["status"] == "failed"
+    assert terminal["error_code"] == "reconciliation_ambiguous"
+    assert terminal["retry_safe"] is False
+    assert terminal["exact_match_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_legacy_unknown_no_match_is_durably_normalized_without_provider_read(harness):
+    adapter, client, refs, _ = harness
+    operation_ref = "op_legacynomatch000000000000001"
+    request = intent(
+        SocialAction.SCHEDULE,
+        target_ref=CHANNEL_REF,
+        content=content("Legacy missing exact"),
+        schedule_at="2026-08-31T12:00:00Z",
+    )
+    digest = telegram_adapter_module.compute_action_digest(request)
+    refs.claim_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        intent=adapter._operation_intent(request),
+    )
+    refs.mark_operation_mutation(operation_ref=operation_ref, action_digest=digest)
+    refs.complete_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        result={
+            "platform": "telegram",
+            "operation_ref": operation_ref,
+            "action": "schedule",
+            "status": "outcome_unknown",
+            "retry_safe": False,
+            "target_ref": CHANNEL_REF,
+            "error_code": "reconciliation_no_match",
+            "reconciliation_attempt": 2,
+        },
+    )
+
+    terminal = await adapter.reconcile(operation_ref)
+    replay = await adapter.reconcile(operation_ref)
+
+    assert terminal == replay
+    assert terminal["status"] == "failed"
+    assert terminal["error_code"] == "reconciliation_no_match"
+    assert terminal["retry_safe"] is False
+    assert terminal["exact_match_count"] == 0
+    assert "final_readback" not in terminal
+    assert client.calls == []
+    assert refs.resolve_operation(operation_ref).result == terminal
 
 
 @pytest.mark.asyncio

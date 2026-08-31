@@ -3399,10 +3399,33 @@ class TelegramWorkspaceAdapter:
             validated = dict(
                 self._recordless_operation_validation(operation_ref, claim.result)
             )
-            if validated["status"] in {"succeeded", "failed"} or validated.get(
-                "error_code"
-            ) in {"reconciliation_ambiguous", "reconciliation_no_match"}:
+            if validated["status"] in {"succeeded", "failed"}:
                 return validated
+            if validated.get("error_code") in {
+                "reconciliation_ambiguous",
+                "reconciliation_no_match",
+            }:
+                # PR #600 persisted these bounded reconciliation outcomes as
+                # outcome_unknown even though no further provider read could
+                # change them.  Normalize legacy rows durably and return them
+                # without another provider session.
+                terminal = {
+                    **validated,
+                    "status": "failed",
+                    "retry_safe": False,
+                }
+                if validated.get("error_code") == "reconciliation_no_match":
+                    terminal.update(
+                        {
+                            "exact_match_count": 0,
+                            "mutation_boundary_reached": (
+                                claim.mutation_started_at_ms is not None
+                            ),
+                        }
+                    )
+                return await self._complete_operation(
+                    operation_ref, claim.action_digest, terminal
+                )
         if claim.intent is None:
             raise TelegramWorkspaceError(
                 "operation_intent_unavailable", retry_safe=False
@@ -3517,7 +3540,7 @@ class TelegramWorkspaceAdapter:
                 "platform": "telegram",
                 "operation_ref": operation_ref,
                 "action": SocialAction.SCHEDULE.value,
-                "status": "outcome_unknown",
+                "status": "failed",
                 "retry_safe": False,
                 "target_ref": target.target_ref,
                 "error_code": "reconciliation_ambiguous",
@@ -3560,15 +3583,30 @@ class TelegramWorkspaceAdapter:
                 "reconciliation_attempt": claim.reconciliation_attempt,
             }
         else:
+            observed_at = datetime.now(timezone.utc).isoformat().replace(
+                "+00:00", "Z"
+            )
             result = {
                 "platform": "telegram",
                 "operation_ref": operation_ref,
                 "action": SocialAction.SCHEDULE.value,
-                "status": "outcome_unknown",
+                "status": "failed",
                 "retry_safe": False,
                 "target_ref": target.target_ref,
                 "error_code": "reconciliation_no_match",
                 "reconciliation_attempt": claim.reconciliation_attempt,
+                "exact_match_count": 0,
+                "mutation_boundary_reached": (
+                    claim.mutation_started_at_ms is not None
+                ),
+                "final_readback": {
+                    "verified": True,
+                    "absence_verified": True,
+                    "observed_at": observed_at,
+                    "scheduled_at": _utc(expected_at),
+                    "media_count": evidence["media_count"],
+                    "exact_match_count": 0,
+                },
             }
         return await self._complete_operation(operation_ref, claim.action_digest, result)
 

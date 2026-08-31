@@ -172,9 +172,12 @@ class SecureVKMultipartTransport:
         return raw if raw in allowed else ("identity" if not raw and not content_type else "other")
 
     @staticmethod
-    def _field_observation(value: Any, *, cap: int) -> dict[str, Any]:
+    def _field_observation(
+        value: Any, *, present: bool, cap: int
+    ) -> dict[str, Any]:
         length = len(value) if isinstance(value, str) else None
         return {
+            "present": present,
             "type": type(value).__name__,
             "length": min(length, cap) if length is not None else None,
             "length_capped": bool(length is not None and length > cap),
@@ -182,7 +185,14 @@ class SecureVKMultipartTransport:
 
     @staticmethod
     def _key_names(value: Mapping[str, Any]) -> tuple[list[str], int]:
-        allowed = {"response", "server", "photo", "hash", "upload_result"}
+        allowed = {
+            "error",
+            "response",
+            "server",
+            "photo",
+            "hash",
+            "upload_result",
+        }
         names = sorted(str(key) for key in value if str(key) in allowed)
         return names[:8], max(0, len(value) - len(names))
 
@@ -304,17 +314,37 @@ class SecureVKMultipartTransport:
                 raw = b"".join(chunks)
         finally:
             await session.close()
+        observation["json_parse_succeeded"] = False
         try:
             payload = json.loads(raw)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise VKMediaTransportError(
                 "VK upload response is invalid", observation=observation
             ) from exc
+        observation.update(
+            {
+                "json_parse_succeeded": True,
+                "json_top_level_type": type(payload).__name__,
+            }
+        )
         if not isinstance(payload, Mapping):
             raise VKMediaTransportError(
                 "VK upload response is invalid", observation=observation
             )
+        response_present = "response" in payload
         nested = payload.get("response")
+        observation.update(
+            {
+                "response_present": response_present,
+                "response_mapping": isinstance(nested, Mapping)
+                if response_present
+                else False,
+            }
+        )
+        if response_present and not isinstance(nested, Mapping):
+            raise VKMediaTransportError(
+                "VK upload response is invalid", observation=observation
+            )
         data: Mapping[str, Any] = nested if isinstance(nested, Mapping) else payload
         top_keys, top_unknown = self._key_names(payload)
         nested_keys, nested_unknown = self._key_names(data)
@@ -324,6 +354,10 @@ class SecureVKMultipartTransport:
                 "top_level_unknown_key_count": top_unknown,
                 "nested_key_names": nested_keys if data is not payload else [],
                 "nested_unknown_key_count": nested_unknown if data is not payload else 0,
+                "provider_error_present": "error" in payload or "error" in data,
+                "provider_error_mapping": isinstance(
+                    payload.get("error", data.get("error")), Mapping
+                ),
             }
         )
         if purpose is VKUploadPurpose.WALL_PHOTO:
@@ -332,9 +366,16 @@ class SecureVKMultipartTransport:
             upload_hash = data.get("hash")
             observation.update(
                 {
-                    "server_field": self._field_observation(server, cap=32),
-                    "photo_field": self._field_observation(photo, cap=65536),
-                    "hash_field": self._field_observation(upload_hash, cap=8192),
+                    "server_field": self._field_observation(
+                        server, present="server" in data, cap=32
+                    ),
+                    "photo_field": self._field_observation(
+                        photo, present="photo" in data, cap=65536
+                    ),
+                    "hash_field": self._field_observation(
+                        upload_hash, present="hash" in data, cap=8192
+                    ),
+                    "server_numeric_range_valid": type(server) is int,
                 }
             )
             valid = (

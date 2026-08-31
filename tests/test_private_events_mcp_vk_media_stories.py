@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import gzip
+import io
 import json
+import random
+import struct
+import zlib
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -46,7 +50,34 @@ OWNER_BINDING = "a" * 64
 IMAGE_BYTES = b"verified-image-bytes"
 VIDEO_BYTES = b"verified-video-bytes"
 PNG_STORAGE_REFS = tuple("ing_" + character * 24 for character in "pqrs")
-PNG_BYTES = tuple(f"verified-png-{index}".encode() for index in range(4))
+
+
+def _production_sized_png(seed: int) -> bytes:
+    """Build a valid 1122x1402 PNG in the production 2.1-2.3 MB size band."""
+
+    from PIL import Image
+
+    rng = random.Random(seed)
+    image = Image.frombytes("P", (1122, 1402), rng.randbytes(1122 * 1402))
+    image.putpalette(bytes(range(256)) * 3)
+    output = io.BytesIO()
+    image.save(output, format="PNG", compress_level=6)
+    encoded = output.getvalue()
+    target_size = 2_200_000 + seed * 10_000
+    payload_size = target_size - len(encoded) - 12
+    assert payload_size > 0
+    payload = rng.randbytes(payload_size)
+    chunk_type = b"raNd"
+    chunk = (
+        struct.pack(">I", len(payload))
+        + chunk_type
+        + payload
+        + struct.pack(">I", zlib.crc32(chunk_type + payload) & 0xFFFFFFFF)
+    )
+    return encoded[:-12] + chunk + encoded[-12:]
+
+
+PNG_BYTES = tuple(_production_sized_png(index) for index in range(4))
 
 
 class FakeRefs:
@@ -244,12 +275,16 @@ class FakeMultipart:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
         self.fail = False
+        self.failure_observation: Mapping[str, Any] | None = None
         self.wall_result: VKMultipartUploadResult | None = None
 
     async def upload(self, **call: Any) -> VKMultipartUploadResult:
         self.calls.append(call)
         if self.fail:
-            raise VKMediaTransportError("sanitized multipart failure")
+            raise VKMediaTransportError(
+                "sanitized multipart failure",
+                observation=self.failure_observation,
+            )
         if call["purpose"] is VKUploadPurpose.WALL_PHOTO:
             if self.wall_result is not None:
                 return self.wall_result
@@ -468,15 +503,49 @@ async def test_multipart_failure_before_wall_post_is_definite_and_retry_safe() -
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "invalid_result",
+    ("invalid_result", "expected_error"),
     [
-        VKMultipartUploadResult(server=321, photo="", upload_hash="upload-hash"),
-        VKMultipartUploadResult(server=321, photo="opaque-photo", upload_hash=""),
-        VKMultipartUploadResult(server=None, photo="opaque-photo", upload_hash="upload-hash"),
+        (
+            VKMultipartUploadResult(server=321, photo="", upload_hash="upload-hash"),
+            "media_upload_empty_photo",
+        ),
+        (
+            VKMultipartUploadResult(server=321, photo="opaque-photo", upload_hash=""),
+            "media_upload_empty_hash",
+        ),
+        (
+            VKMultipartUploadResult(server=None, photo="opaque-photo", upload_hash="upload-hash"),
+            "media_upload_missing_server",
+        ),
+        (
+            VKMultipartUploadResult(server=321, photo=None, upload_hash="upload-hash"),
+            "media_upload_missing_photo",
+        ),
+        (
+            VKMultipartUploadResult(server=321, photo="opaque-photo", upload_hash=None),
+            "media_upload_missing_hash",
+        ),
+        (
+            VKMultipartUploadResult(
+                server=None,
+                photo="opaque-photo",
+                upload_hash="upload-hash",
+                observation={
+                    "server_field": {
+                        "present": True,
+                        "type": "str",
+                        "length": 3,
+                        "length_capped": False,
+                    }
+                },
+            ),
+            "media_upload_server_type_invalid",
+        ),
     ],
 )
 async def test_invalid_wall_receipt_is_exact_safe_prewall_failure(
     invalid_result: VKMultipartUploadResult,
+    expected_error: str,
 ) -> None:
     class Recorder:
         def __init__(self) -> None:
@@ -513,7 +582,7 @@ async def test_invalid_wall_receipt_is_exact_safe_prewall_failure(
 
     assert result["status"] == "failed"
     assert result["retry_safe"] is True
-    assert result["error_code"] == "media_upload_response_invalid"
+    assert result["error_code"] == expected_error
     assert result["stage"] == "wall_photo_multipart"
     assert [call["method"] for call in transport.calls] == [
         "photos.getWallUploadServer"
@@ -526,6 +595,15 @@ async def test_invalid_wall_receipt_is_exact_safe_prewall_failure(
     )
     evidence = finished["provider_result"]
     assert evidence["image_ordinal"] == 1
+    assert evidence["image_count"] == 1
+    assert evidence["input_byte_length"] == len(IMAGE_BYTES)
+    assert evidence["input_content_digest"] == "sha256:" + hashlib.sha256(IMAGE_BYTES).hexdigest()
+    assert evidence["input_mime_type"] == "image/jpeg"
+    assert evidence["input_width"] == 1080
+    assert evidence["input_height"] == 1920
+    assert evidence["actor_role"] == "media_editor"
+    assert evidence["reached_photos_save_wall_photo"] is False
+    assert evidence["reached_wall_post"] is False
     assert evidence["mutation_boundary_reached"] is False
     assert evidence["photo_field"]["type"] in {"str", "NoneType"}
     assert evidence["hash_field"]["type"] in {"str", "NoneType"}
@@ -573,6 +651,12 @@ async def test_four_pngs_upload_and_save_sequentially_before_one_scheduled_wall_
     receipt = await adapter.execute(intent)
 
     assert receipt["status"] == "succeeded"
+    assert all(2_100_000 <= len(content) <= 2_300_000 for content in PNG_BYTES)
+    from PIL import Image
+    for content in PNG_BYTES:
+        with Image.open(io.BytesIO(content)) as image:
+            assert image.size == (1122, 1402)
+            image.verify()
     methods = [call["method"] for call in transport.calls]
     assert methods == [
         "photos.getWallUploadServer",
@@ -598,6 +682,14 @@ async def test_four_pngs_upload_and_save_sequentially_before_one_scheduled_wall_
         and event["phase"] == "finished"
     ]
     assert [event["image_ordinal"] for event in finished] == [1, 2, 3, 4]
+    assert [event["image_count"] for event in finished] == [4, 4, 4, 4]
+    assert [event["reached_photos_save_wall_photo"] for event in finished] == [
+        False,
+        True,
+        True,
+        True,
+    ]
+    assert all(event["reached_wall_post"] is False for event in finished)
     assert [event["expected_digest_prefix"] for event in finished] == [
         hashlib.sha256(content).hexdigest()[:12] for content in PNG_BYTES
     ]
@@ -815,14 +907,202 @@ async def test_multipart_transport_decodes_actual_fragmented_gzip_nested_receipt
         "compressed_bytes": len(compressed),
         "decoded_bytes": len(decoded),
         "consumed_to_eof": True,
+        "json_parse_succeeded": True,
+        "json_top_level_type": "dict",
+        "response_present": True,
+        "response_mapping": True,
         "top_level_key_names": ["response"],
         "top_level_unknown_key_count": 0,
         "nested_key_names": ["hash", "photo", "server"],
         "nested_unknown_key_count": 0,
-        "server_field": {"type": "int", "length": None, "length_capped": False},
-        "photo_field": {"type": "str", "length": 12, "length_capped": False},
-        "hash_field": {"type": "str", "length": 11, "length_capped": False},
+        "provider_error_present": False,
+        "provider_error_mapping": False,
+        "server_field": {"present": True, "type": "int", "length": None, "length_capped": False},
+        "photo_field": {"present": True, "type": "str", "length": 12, "length_capped": False},
+        "hash_field": {"present": True, "type": "str", "length": 11, "length_capped": False},
+        "server_numeric_range_valid": True,
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("nested", "content_type", "content_encoding"),
+    [
+        (False, "text/plain; charset=utf-8", "identity"),
+        (True, "application/json", "deflate"),
+    ],
+)
+async def test_multipart_transport_accepts_documented_structural_variants(
+    monkeypatch,
+    nested: bool,
+    content_type: str,
+    content_encoding: str,
+) -> None:
+    receipt = {"server": 321, "photo": "opaque-photo", "hash": "upload-hash"}
+    decoded = json.dumps(
+        {"response": receipt} if nested else receipt,
+        separators=(",", ":"),
+    ).encode()
+    encoded = zlib.compress(decoded) if content_encoding == "deflate" else decoded
+
+    class Content:
+        async def iter_chunked(self, _size: int):
+            yield encoded[:5]
+            yield encoded[5:]
+
+    class Response:
+        status = 200
+        headers = {
+            "Content-Type": content_type,
+            "Content-Encoding": content_encoding,
+        }
+        content = Content()
+
+    class RequestContext:
+        async def __aenter__(self):
+            return Response()
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class Session:
+        def post(self, *_args, **_kwargs):
+            return RequestContext()
+
+        async def close(self):
+            return None
+
+    async def fake_session_for(_url: str, _timeout: float):
+        return Session(), object()
+
+    monkeypatch.setattr(vk_transport_module, "_session_for", fake_session_for)
+    result = await SecureVKMultipartTransport().upload(
+        purpose=VKUploadPurpose.WALL_PHOTO,
+        upload_url="https://pu.vk.com/upload.php?sig=signed",
+        content=b"image-bytes",
+        filename="asset.png",
+        mime_type="image/png",
+        timeout_seconds=5,
+    )
+
+    assert result.response_valid is True
+    assert result.server == 321
+    assert result.photo == "opaque-photo"
+    assert result.upload_hash == "upload-hash"
+    assert result.observation["content_type"] == content_type.split(";", 1)[0]
+    assert result.observation["content_encoding"] == content_encoding
+    assert result.observation["consumed_to_eof"] is True
+
+
+@pytest.mark.asyncio
+async def test_http_200_provider_error_shape_gets_exact_safe_error(monkeypatch) -> None:
+    body = b'{"error":{"error_code":5,"error_msg":"secret provider detail"}}'
+
+    class Content:
+        async def iter_chunked(self, _size: int):
+            yield body
+
+    class Response:
+        status = 200
+        headers = {"Content-Type": "application/json"}
+        content = Content()
+
+    class RequestContext:
+        async def __aenter__(self):
+            return Response()
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class Session:
+        def post(self, *_args, **_kwargs):
+            return RequestContext()
+
+        async def close(self):
+            return None
+
+    async def fake_session_for(_url: str, _timeout: float):
+        return Session(), object()
+
+    monkeypatch.setattr(vk_transport_module, "_session_for", fake_session_for)
+    upload = await SecureVKMultipartTransport().upload(
+        purpose=VKUploadPurpose.WALL_PHOTO,
+        upload_url="https://pu.vk.com/upload.php?sig=signed",
+        content=b"image-bytes",
+        filename="asset.png",
+        mime_type="image/png",
+        timeout_seconds=5,
+    )
+    assert upload.response_valid is False
+    assert upload.observation["provider_error_present"] is True
+    assert "secret provider detail" not in json.dumps(upload.observation)
+
+    adapter, _refs, _transport, _reader, multipart, _story_reader, target_ref = build_adapter()
+    multipart.wall_result = upload
+    asset_ref = await adapter.stage_asset(
+        verified_asset("ing_" + "i" * 24, IMAGE_BYTES, "image/jpeg"),
+        role=MediaRole.IMAGE,
+    )
+    result = await adapter.execute(
+        validate_prepare_request(
+            {
+                "platform": "vk",
+                "action": "schedule",
+                "idempotency_key": "http-200-provider-error-shape-001",
+                "target_ref": target_ref,
+                "schedule_at": "2030-01-01T12:00:00Z",
+                "content": {"media": [{"asset_ref": asset_ref, "role": "image"}]},
+            }
+        )
+    )
+    assert result["error_code"] == "media_upload_provider_error_shape"
+
+
+@pytest.mark.asyncio
+async def test_non_mapping_json_gets_exact_safe_json_shape_error(monkeypatch) -> None:
+    body = b'[321,"opaque-photo","upload-hash"]'
+
+    class Content:
+        async def iter_chunked(self, _size: int):
+            yield body
+
+    class Response:
+        status = 200
+        headers = {"Content-Type": "application/json"}
+        content = Content()
+
+    class RequestContext:
+        async def __aenter__(self):
+            return Response()
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class Session:
+        def post(self, *_args, **_kwargs):
+            return RequestContext()
+
+        async def close(self):
+            return None
+
+    async def fake_session_for(_url: str, _timeout: float):
+        return Session(), object()
+
+    monkeypatch.setattr(vk_transport_module, "_session_for", fake_session_for)
+    with pytest.raises(VKMediaTransportError) as caught:
+        await SecureVKMultipartTransport().upload(
+            purpose=VKUploadPurpose.WALL_PHOTO,
+            upload_url="https://pu.vk.com/upload.php?sig=signed",
+            content=b"image-bytes",
+            filename="asset.png",
+            mime_type="image/png",
+            timeout_seconds=5,
+        )
+    assert caught.value.observation["json_top_level_type"] == "list"
+    assert (
+        VKWorkspaceAdapter._multipart_response_error(caught.value.observation)
+        == "media_upload_json_shape_invalid"
+    )
 
 
 @pytest.mark.asyncio
