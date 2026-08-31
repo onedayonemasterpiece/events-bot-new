@@ -1,0 +1,120 @@
+mode: worktree_worker
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main
+base_sha: 64f75d10f7aff33fa616cee212878bd9d03673b1
+base_branch: main
+integration_branch: fix/eventsbot-scheduled-readback-reschedule-20260831
+integration_worktree: /home/dev/.codex/worktrees/events-bot-new/eventsbot-scheduled-readback-20260831
+global_constraints:
+  - do not publish, schedule, delete, or alter social content from Codex
+  - do not alter the supplied caption or images
+  - do not use browser automation or GitHub Actions as a publication substitute
+  - never expose provider-native identifiers, secrets, paths, upload URLs, or payload bodies
+verification_owner: root integrator
+stop_conditions:
+  - any read-only reconciliation cannot distinguish an old exact Telegram copy
+  - provider mutation would be required before code review/merge/deploy authorization
+  - deploy candidate is not exact clean origin/main
+lanes:
+  - id: telegram-ledger
+    role: worker
+    effort: high
+    requirement_ids: [R1, R2, R3, R5]
+    target: Telegram deadline ownership, durable intent, reconciliation, scheduled delete
+    depends_on: []
+    execution_mode: serial_after_read_only_mapping
+    branch: agent/eventsbot-scheduled-readback/telegram-ledger
+    worktree: /home/dev/.codex/worktrees/events-bot-new/eventsbot-readback-telegram
+    writable_files:
+      - private_events_mcp_telegram_adapter.py
+      - private_events_mcp_workspace_providers.py
+      - tests/test_private_events_mcp_telegram_workspace.py
+      - tests/test_private_events_mcp_workspace_providers.py
+    forbidden_files:
+      - private_events_mcp/social_workspace_runtime.py
+      - private_events_mcp/social_workspace_tools.py
+      - private_events_mcp_vk_adapter.py
+    expected_output: committed implementation, tests, and RESULTS.md
+    verification_scope: targeted
+    status: planned
+  - id: tools-runtime
+    role: worker
+    effort: high
+    requirement_ids: [R4, R6]
+    target: scheduled-list public contract and single-flight safe retry
+    depends_on: []
+    execution_mode: parallel_with_provider_interface_stub
+    branch: agent/eventsbot-scheduled-readback/tools-runtime
+    worktree: /home/dev/.codex/worktrees/events-bot-new/eventsbot-readback-tools
+    writable_files:
+      - private_events_mcp/social_workspace.py
+      - private_events_mcp/social_workspace_runtime.py
+      - private_events_mcp/social_workspace_tools.py
+      - tests/test_private_events_mcp_social_workspace_contract.py
+      - tests/test_private_events_mcp_social_workspace_runtime.py
+    forbidden_files:
+      - private_events_mcp_telegram_adapter.py
+      - private_events_mcp_vk_adapter.py
+      - private_events_mcp_workspace_providers.py
+    expected_output: committed implementation, tests, and RESULTS.md
+    verification_scope: targeted
+    status: planned
+  - id: vk-diagnostics
+    role: worker
+    effort: high
+    requirement_ids: [R7]
+    target: multipart validation/observability and postponed/live logical readback
+    depends_on: []
+    execution_mode: parallel
+    branch: agent/eventsbot-scheduled-readback/vk-diagnostics
+    worktree: /home/dev/.codex/worktrees/events-bot-new/eventsbot-readback-vk
+    writable_files:
+      - private_events_mcp_vk_adapter.py
+      - private_events_mcp_vk_transport.py
+      - private_events_mcp_vk_upload.py
+      - tests/test_private_events_mcp_vk_workspace.py
+      - tests/test_private_events_mcp_vk_media_stories.py
+    forbidden_files:
+      - private_events_mcp/social_workspace_runtime.py
+      - private_events_mcp_telegram_adapter.py
+      - private_events_mcp_workspace_providers.py
+    expected_output: committed implementation, tests, and RESULTS.md
+    verification_scope: targeted
+    status: planned
+  - id: docs-ops
+    role: worker
+    effort: high
+    requirement_ids: [R8, O1]
+    target: incident/regression contract, canonical ops docs, changelog and acceptance checklist
+    depends_on: [telegram-ledger, tools-runtime, vk-diagnostics]
+    execution_mode: read_only_until_dependency
+    branch: agent/eventsbot-scheduled-readback/docs-ops
+    worktree: /home/dev/.codex/worktrees/events-bot-new/eventsbot-readback-docs
+    writable_files:
+      - docs/reports/incidents/INC-2026-08-31-mcp-scheduled-readback-reschedule.md
+      - docs/reports/incidents/README.md
+      - docs/operations/private-events-mcp.md
+      - docs/README.md
+      - docs/routes.yml
+      - CHANGELOG.md
+    forbidden_files:
+      - private_events_mcp
+      - private_events_mcp_telegram_adapter.py
+      - private_events_mcp_vk_adapter.py
+    expected_output: committed docs synchronized to integrated behavior and RESULTS.md
+    verification_scope: inspection_only
+    status: planned
+  - id: integration-review
+    role: merge_reviewer
+    effort: max
+    requirement_ids: [R1, R2, R3, R4, R5, R6, R7, R8, O1]
+    target: cherry-pick, conflict resolution, full verification, exact-main release evidence
+    depends_on: [telegram-ledger, tools-runtime, vk-diagnostics, docs-ops]
+    execution_mode: serial
+    branch: fix/eventsbot-scheduled-readback-reschedule-20260831
+    worktree: /home/dev/.codex/worktrees/events-bot-new/eventsbot-scheduled-readback-20260831
+    writable_files: [integration-only conflict resolutions and reports]
+    forbidden_files: []
+    expected_output: clean pushed branch, integration report, closure audit, operational handoff
+    verification_scope: full_local
+    status: planned
