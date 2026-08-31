@@ -2251,6 +2251,106 @@ async def test_total_session_deadline_bounds_connect_and_disconnect_cleanup():
 
 
 @pytest.mark.asyncio
+async def test_session_deadline_includes_serialized_queue_wait():
+    refs = FakeRefs()
+    client = FakeClient(refs)
+    client.disconnect_delay = 60
+
+    async def mutates_then_blocks(entity, text, **kwargs):
+        client.calls.append(("send_message", {"entity": entity, "text": text, **kwargs}))
+        await asyncio.sleep(60)
+
+    client.send_message = mutates_then_blocks
+    adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: client,
+        refs=refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=0.03,
+    )
+    first_operation = "op_serialqueuefirst000000000001"
+    second_operation = "op_serialqueuesecond00000000001"
+    first = asyncio.create_task(
+        adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content(),
+            ),
+            operation_ref=first_operation,
+        )
+    )
+    while first_operation not in refs.mutation_started:
+        await asyncio.sleep(0)
+
+    with pytest.raises(TelegramWorkspaceError) as queued_timeout:
+        await adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content("second must not send"),
+            ),
+            operation_ref=second_operation,
+        )
+    first_receipt = await first
+
+    assert queued_timeout.value.code == "provider_timeout"
+    assert queued_timeout.value.retry_safe is True
+    assert second_operation not in refs.operations
+    assert first_receipt["status"] == "outcome_unknown"
+    assert len([name for name, _ in client.calls if name == "send_message"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_cancellation_always_releases_local_session_lock():
+    refs = FakeRefs()
+    client = FakeClient(refs)
+    disconnect_started = asyncio.Event()
+
+    async def blocked_disconnect():
+        disconnect_started.set()
+        await asyncio.sleep(60)
+
+    client.disconnect = blocked_disconnect
+    adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: client,
+        refs=refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=1,
+    )
+    first_operation = "op_cleanupcancelled000000000001"
+    first = asyncio.create_task(
+        adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content(),
+            ),
+            operation_ref=first_operation,
+        )
+    )
+    await disconnect_started.wait()
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+
+    async def immediate_disconnect():
+        return None
+
+    client.disconnect = immediate_disconnect
+    second = await adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=USER_REF,
+            content=content("lock is reusable"),
+        ),
+        operation_ref="op_cleanupfollowup0000000000001",
+    )
+    assert second["status"] == "succeeded"
+
+
+@pytest.mark.asyncio
 async def test_caller_operation_ref_is_the_only_receipt_and_reconciliation_key(harness):
     adapter, _, refs, _ = harness
     operation_ref = "op_callerissued000000000000001"
