@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KenigEvents UI conformance receipt v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "file_hash_algorithm",
+    "canonical_hash_algorithm",
+    "files",
+    "files_manifest_sha256",
+    "source_projection_binding_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kenigevents.ui-conformance.receipt.v1"
+    },
+    "receipt_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "file_hash_algorithm": {
+      "const": "sha256-bytes-v1"
+    },
+    "canonical_hash_algorithm": {
+      "const": "sha256-jcs-lite-v1"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "files_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_projection_binding_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,13 +1,113 @@
 {
   "schema_version": "kenigevents.ui-conformance.shared-event-corpus.v1",
-  "corpus_id": "ui-reference-events.c1-priority-listings",
+  "corpus_id": "ui-reference-events.c2-priority-listings",
   "append_only": true,
+  "hash_algorithm": "sha256-jcs-lite-v1",
   "entities": [
-    {"fixture_id":"event.real.8006","source":{"kind":"frozen-current-a-fixture","commit":"c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1","path":"site/evidence/free-collection-g12/fixture-input.json"},"event":{"id":8006,"title":"Донорская акция «Стань донором крови»","slug":"donorskaya-aktsiya-stan-donorom-krovi-gurevsk-8006","event_type":"встреча","start_date":"2026-09-02","start_time":"09:00","status_label":"Бесплатно","city":"Гурьевск","venue_name":"Центр культуры и досуга","is_public":true,"is_searchable":true,"publication_status":"published"}},
-    {"fixture_id":"event.real.8200","source":{"kind":"frozen-current-a-fixture","commit":"c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1","path":"site/evidence/free-collection-g12/fixture-input.json"},"event":{"id":8200,"title":"Музыкальная экспедиция Бориса Андрианова","slug":"muzykalnaya-ekspeditsiya-borisa-andrianova-hrabrovo-8200","event_type":"концерт","start_date":"2026-09-06","start_time":"15:00","status_label":"Бесплатно","city":"Храброво","venue_name":"Кирха Святой Барбары","is_public":true,"is_searchable":true,"publication_status":"published"}},
-    {"fixture_id":"event.real.2182","source":{"kind":"frozen-current-a-fixture","commit":"c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1","path":"site/evidence/free-collection-g12/fixture-input.json"},"event":{"id":2182,"title":"Песчаная палитра Куршской косы","slug":"peschanaya-palitra-kurshskoy-kosy-kaliningrad-2182","event_type":"выставка","start_date":"2026-01-11","start_time":"14:00","status_label":"Бесплатно","city":"Калининград","venue_name":"Калининградская областная научная библиотека","is_public":true,"is_searchable":true,"publication_status":"published"}},
-    {"fixture_id":"event.real.6711","source":{"kind":"frozen-current-a-fixture","commit":"c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1","path":"site/evidence/free-collection-g12/fixture-input.json"},"event":{"id":6711,"title":"Выставка «Под шум балтийского ветра»","slug":"vystavka-pod-shum-baltiyskogo-vetra-svetlogorsk-6711","event_type":"выставка","start_date":"2026-07-06","start_time":null,"status_label":"Бесплатно","city":"Светлогорск","venue_name":"Информационно-туристический центр","is_public":true,"is_searchable":true,"publication_status":"published"}},
-    {"fixture_id":"event.real.7609","source":{"kind":"frozen-current-a-fixture","commit":"c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1","path":"site/evidence/free-collection-g12/fixture-input.json"},"event":{"id":7609,"title":"Выставка «Живая нить традиций»","slug":"vystavka-zhivaya-nit-traditsiy-sovetsk-7609","event_type":"выставка","start_date":"2026-08-15","start_time":"11:00","status_label":"Бесплатно","city":"Советск","venue_name":"ОКЦ ТеплоСеть","is_public":true,"is_searchable":true,"publication_status":"published"}},
-    {"fixture_id":"event.real.4240","append_only_addition":true,"addition_reason":"The frozen free-collection fixture set has no entity dated 2026-09-01; this observed public exhibition provides the smallest real fixture for the deterministic today/date projection.","source":{"kind":"current-astro-preview-fixture","commit":"64f75d10f7aff33fa616cee212878bd9d03673b1","path":"site/src/data/preview-events.json"},"event":{"id":4240,"title":"Классика русского искусства","slug":"klassika-russkogo-iskusstva-kaliningrad-4240","event_type":"выставка","start_date":"2026-09-01","start_time":null,"status_label":"Условия уточняются","city":"Калининград","venue_name":null,"is_public":true,"is_searchable":true,"publication_status":"published"}}
+    {
+      "fixture_id": "event.real.8006",
+      "record_mode": "immutable_source_reference",
+      "source_ref": {
+        "kind": "frozen-current-a-fixture",
+        "commit": "c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1",
+        "path": "site/evidence/free-collection-g12/fixture-input.json",
+        "json_pointer": "/fixtures/0/preview_event",
+        "source_file_sha256": "af3b93c815f544aec6b25c0c00b6b85418d61c8c560bea2fc6f83608c8e8ee2c",
+        "source_record_sha256": "8461a32e160fe090544f7b5cae79763141de0748aee2f36bf26d8680144ec100",
+        "hash_algorithm": "sha256-jcs-lite-v1"
+      }
+    },
+    {
+      "fixture_id": "event.real.8200",
+      "record_mode": "immutable_source_reference",
+      "source_ref": {
+        "kind": "frozen-current-a-fixture",
+        "commit": "c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1",
+        "path": "site/evidence/free-collection-g12/fixture-input.json",
+        "json_pointer": "/fixtures/1/preview_event",
+        "source_file_sha256": "af3b93c815f544aec6b25c0c00b6b85418d61c8c560bea2fc6f83608c8e8ee2c",
+        "source_record_sha256": "3c720029e5521f371f069bfa01d8b3e53efe51a7781b67a441b405ce6b70c61b",
+        "hash_algorithm": "sha256-jcs-lite-v1"
+      }
+    },
+    {
+      "fixture_id": "event.real.2182",
+      "record_mode": "immutable_source_reference",
+      "source_ref": {
+        "kind": "frozen-current-a-fixture",
+        "commit": "c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1",
+        "path": "site/evidence/free-collection-g12/fixture-input.json",
+        "json_pointer": "/fixtures/2/preview_event",
+        "source_file_sha256": "af3b93c815f544aec6b25c0c00b6b85418d61c8c560bea2fc6f83608c8e8ee2c",
+        "source_record_sha256": "f9797c79616ca10ed2cce32628d22740c3114b550aecf65f5a169ed1f22f160c",
+        "hash_algorithm": "sha256-jcs-lite-v1"
+      }
+    },
+    {
+      "fixture_id": "event.real.6711",
+      "record_mode": "immutable_source_reference",
+      "source_ref": {
+        "kind": "frozen-current-a-fixture",
+        "commit": "c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1",
+        "path": "site/evidence/free-collection-g12/fixture-input.json",
+        "json_pointer": "/fixtures/3/preview_event",
+        "source_file_sha256": "af3b93c815f544aec6b25c0c00b6b85418d61c8c560bea2fc6f83608c8e8ee2c",
+        "source_record_sha256": "d12c1e8abf3615b84714051d3c534f9e6cfe9aad72bf49eed693e35d62a82d32",
+        "hash_algorithm": "sha256-jcs-lite-v1"
+      }
+    },
+    {
+      "fixture_id": "event.real.7609",
+      "record_mode": "immutable_source_reference",
+      "source_ref": {
+        "kind": "frozen-current-a-fixture",
+        "commit": "c7c3e2367db8fd8865a735c8b9f5df1ef2b6efd1",
+        "path": "site/evidence/free-collection-g12/fixture-input.json",
+        "json_pointer": "/fixtures/4/preview_event",
+        "source_file_sha256": "af3b93c815f544aec6b25c0c00b6b85418d61c8c560bea2fc6f83608c8e8ee2c",
+        "source_record_sha256": "f4c4afc58a26f5e9414018f0127ab12bed2a8248b420b934fcce3e1f826fa9f4",
+        "hash_algorithm": "sha256-jcs-lite-v1"
+      }
+    },
+    {
+      "fixture_id": "event.real.4240",
+      "record_mode": "derived_projection",
+      "append_only_addition": true,
+      "addition_reason": "The frozen free-collection fixture set has no entity dated 2026-09-01; this observed public exhibition provides the smallest real fixture for the deterministic today/date projection.",
+      "source_ref": {
+        "kind": "current-astro-preview-fixture",
+        "commit": "64f75d10f7aff33fa616cee212878bd9d03673b1",
+        "path": "site/src/data/preview-events.json",
+        "json_pointer": "/events/251",
+        "source_file_sha256": "b9ff7eb0357ad603b9621391810355319e299500ac76f9c9d967a72b26a79d85",
+        "source_record_sha256": "0c9761534f688eccd9cdf74c0d8b6ec08e892ad2e4f22755567155115e008cc3",
+        "hash_algorithm": "sha256-jcs-lite-v1"
+      },
+      "projection_name": "priority-listing-fields.v1",
+      "projection_fields": [
+        "id",
+        "title",
+        "slug",
+        "event_type",
+        "start_date",
+        "end_date",
+        "start_time",
+        "status_label",
+        "city",
+        "venue_name"
+      ],
+      "projected_event": {
+        "id": 4240,
+        "title": "Классика русского искусства",
+        "slug": "klassika-russkogo-iskusstva-kaliningrad-4240",
+        "event_type": "выставка",
+        "start_date": "2026-09-01",
+        "end_date": "2026-10-01",
+        "start_time": null,
+        "status_label": "Условия уточняются",
+        "city": "Калининград",
+        "venue_name": "Филиал Третьяковской галереи, Парадная наб. 3, Калининград"
+      }
+    }
   ]
 }

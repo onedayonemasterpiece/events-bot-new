@@ -1,0 +1,58 @@
+{
+  "schema_version": "kenigevents.ui-conformance.receipt.v1",
+  "receipt_id": "c2-corpus-projection-generation-19",
+  "file_hash_algorithm": "sha256-bytes-v1",
+  "canonical_hash_algorithm": "sha256-jcs-lite-v1",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "ba3e138b69b6f006719c54fb645f10903eeffbd0d3fd5b7798751e6c56fb6cd6"
+    },
+    {
+      "path": "corpus/shared-event-corpus.v1.json",
+      "sha256": "04ad2013339cb94ebecb4aa32e936bf16c4ca24d64aed8bedf9b9f3dda15495c"
+    },
+    {
+      "path": "projections/priority-listings.v1.json",
+      "sha256": "cd3041416bd555cca835dde97cb403337f5b9ea2f888d1f85aa3c1f800b862f2"
+    },
+    {
+      "path": "route-archetype-registry.v1.json",
+      "sha256": "854721c5f30bd31a138d563e6f38a14d136ed8a977c52b6880cde6ca7fbce873"
+    },
+    {
+      "path": "scenarios/priority-listings.desktop.v1.json",
+      "sha256": "76d4f6c285eeb4bda8d4b81d5fe005c5f60e47a8671df63e23cdf1978263d09b"
+    },
+    {
+      "path": "scenarios/priority-listings.mobile.v1.json",
+      "sha256": "339a26ecbc389b4c041198de0148c61ff426c656adaa801d596bdb7f021f6fb2"
+    },
+    {
+      "path": "schemas/contract-receipt.v1.schema.json",
+      "sha256": "04767f2370e67a6c741c83c64e39d348e527d42506524121756267d8b407bc01"
+    },
+    {
+      "path": "schemas/route-archetype-registry.v1.schema.json",
+      "sha256": "01e3cd38b0d1c168cbf160c37447db3dfd0d58b35a8199de5a093e5f43312490"
+    },
+    {
+      "path": "schemas/route-projections.v1.schema.json",
+      "sha256": "47b114d346e26b14ff7dd9f4f24f8609028108953f51bdc8aece61f7474f5355"
+    },
+    {
+      "path": "schemas/shared-event-corpus.v1.schema.json",
+      "sha256": "785fcd1154edc9d0f57fef910d27e1b9f420f4cd47548310fa221318de57452d"
+    },
+    {
+      "path": "state-packets/priority-listings.v1.json",
+      "sha256": "da0c3bc326d0293d1e626fe2a468d3d3b7bcbdd5cfead8e4bafbc3296f94503b"
+    },
+    {
+      "path": "tests/corpus-contract.test.mjs",
+      "sha256": "bbd4764cfa1e0079bc12190b1c2fdcd042d1a8f623326e3e4e7204cf1e614fc3"
+    }
+  ],
+  "files_manifest_sha256": "35bb82b27c4324aadb6206c47a8a82c569adef9023b5c1f27157e7837f80be69",
+  "source_projection_binding_sha256": "84b970645a9ac06dcec0fde3506a551b065d40d1e40fea4894c3f3a303659568"
+}

@@ -1,1 +1,246 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"KenigEvents shared event corpus v1","type":"object","required":["schema_version","corpus_id","append_only","entities"],"properties":{"schema_version":{"const":"kenigevents.ui-conformance.shared-event-corpus.v1"},"append_only":{"const":true},"entities":{"type":"array","minItems":1,"items":{"type":"object","required":["fixture_id","source","event"],"properties":{"fixture_id":{"type":"string","pattern":"^event\\.real\\.[0-9]+$"},"source":{"type":"object","required":["kind","commit","path"]},"event":{"type":"object","required":["id","title","slug","event_type","start_date","is_public","is_searchable","publication_status"]}}}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KenigEvents shared event corpus v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "corpus_id",
+    "append_only",
+    "hash_algorithm",
+    "entities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "kenigevents.ui-conformance.shared-event-corpus.v1"
+    },
+    "corpus_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "append_only": {
+      "const": true
+    },
+    "hash_algorithm": {
+      "const": "sha256-jcs-lite-v1"
+    },
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "fixture_id",
+              "record_mode",
+              "source_ref"
+            ],
+            "properties": {
+              "fixture_id": {
+                "type": "string",
+                "pattern": "^event\\.real\\.[0-9]+$"
+              },
+              "record_mode": {
+                "const": "immutable_source_reference"
+              },
+              "source_ref": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "commit",
+                  "path",
+                  "json_pointer",
+                  "source_file_sha256",
+                  "source_record_sha256",
+                  "hash_algorithm"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "frozen-current-a-fixture",
+                      "current-astro-preview-fixture"
+                    ]
+                  },
+                  "commit": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "json_pointer": {
+                    "type": "string",
+                    "pattern": "^/"
+                  },
+                  "source_file_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source_record_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "hash_algorithm": {
+                    "const": "sha256-jcs-lite-v1"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "fixture_id",
+              "record_mode",
+              "append_only_addition",
+              "addition_reason",
+              "source_ref",
+              "projection_name",
+              "projection_fields",
+              "projected_event"
+            ],
+            "properties": {
+              "fixture_id": {
+                "type": "string",
+                "pattern": "^event\\.real\\.[0-9]+$"
+              },
+              "record_mode": {
+                "const": "derived_projection"
+              },
+              "append_only_addition": {
+                "const": true
+              },
+              "addition_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_ref": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "commit",
+                  "path",
+                  "json_pointer",
+                  "source_file_sha256",
+                  "source_record_sha256",
+                  "hash_algorithm"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "frozen-current-a-fixture",
+                      "current-astro-preview-fixture"
+                    ]
+                  },
+                  "commit": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}$"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "json_pointer": {
+                    "type": "string",
+                    "pattern": "^/"
+                  },
+                  "source_file_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source_record_sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "hash_algorithm": {
+                    "const": "sha256-jcs-lite-v1"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "projection_name": {
+                "type": "string",
+                "pattern": "^[a-z0-9.-]+\\.v[0-9]+$"
+              },
+              "projection_fields": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "projected_event": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "title",
+                  "slug",
+                  "event_type",
+                  "start_date",
+                  "end_date",
+                  "start_time",
+                  "status_label",
+                  "city",
+                  "venue_name"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "integer"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "start_date": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                  },
+                  "end_date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "start_time": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "status_label": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "venue_name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": "kenigevents.ui-conformance.route-projections.v1",
-  "corpus_id": "ui-reference-events.c1-priority-listings",
+  "corpus_id": "ui-reference-events.c2-priority-listings",
   "state_packet": "priority-listings-september-2026-v1",
   "projections": [
     {"id":"date-2026-09-01","archetype_id":"date-listing","route":"/date-2026-09-01/","entity_refs":["event.real.4240"]},
