@@ -180,6 +180,7 @@ _REF_PREFIXES = {"target": "tgt", "item": "itm", "asset": "ast"}
 _OPAQUE_REF_RE = re.compile(r"^(tgt|itm|ast)_[A-Za-z0-9_-]{16,160}$")
 _PREPARATION_REF_RE = re.compile(r"^prep_[A-Za-z0-9_-]{24,160}$")
 _OPERATION_REF_RE = re.compile(r"^op_[A-Za-z0-9_-]{24,160}$")
+_LOGICAL_ACTION_REF_RE = re.compile(r"^act_[A-Za-z0-9_-]{24,160}$")
 _SAMPLE_REF_RE = re.compile(r"^smp_[A-Za-z0-9_-]{24,160}$")
 _APPROVAL_REF_RE = re.compile(r"^apr_[A-Za-z0-9_-]{24,160}$")
 _APPROVAL_RECEIPT_RE = re.compile(r"^arc_[A-Za-z0-9_-]{24,160}$")
@@ -399,6 +400,23 @@ class SocialReadRequest:
     @property
     def required_scopes(self) -> frozenset[str]:
         return required_scope_for_read(self.platform, self.operation, self.read_access)
+
+
+@dataclass(frozen=True, slots=True)
+class SocialScheduledItemsRequest:
+    """Exact, bounded scheduled-queue read independent of ordinary feeds."""
+
+    platform: SocialPlatform
+    target_ref: str
+    scheduled_from: str | None
+    scheduled_to: str | None
+    text_sha256: str | None
+    media_count: int | None
+    limit: int
+
+    @property
+    def required_scopes(self) -> frozenset[str]:
+        return required_scope_for_action(self.platform, SocialAction.SCHEDULE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1161,6 +1179,75 @@ def validate_read_request(payload: Mapping[str, Any]) -> SocialReadRequest:
     )
 
 
+def validate_scheduled_items_request(
+    payload: Mapping[str, Any],
+) -> SocialScheduledItemsRequest:
+    data = _object(payload, "request")
+    _only_fields(
+        data,
+        {
+            "platform",
+            "target_ref",
+            "scheduled_from",
+            "scheduled_to",
+            "text_sha256",
+            "media_count",
+            "limit",
+        },
+        "request",
+    )
+    platform = _enum(data.get("platform"), SocialPlatform, "platform")
+    target_ref = validate_opaque_ref(data.get("target_ref"), "target")
+    scheduled_from = (
+        _validate_rfc3339(data["scheduled_from"], "scheduled_from")
+        if "scheduled_from" in data
+        else None
+    )
+    scheduled_to = (
+        _validate_rfc3339(data["scheduled_to"], "scheduled_to")
+        if "scheduled_to" in data
+        else None
+    )
+    if scheduled_from is not None and scheduled_to is not None:
+        start = datetime.fromisoformat(
+            scheduled_from[:-1] + "+00:00"
+            if scheduled_from.endswith("Z")
+            else scheduled_from
+        )
+        end = datetime.fromisoformat(
+            scheduled_to[:-1] + "+00:00"
+            if scheduled_to.endswith("Z")
+            else scheduled_to
+        )
+        if start > end:
+            raise SocialWorkspaceValidationError("scheduled range is reversed")
+    text_sha256 = data.get("text_sha256")
+    if text_sha256 is not None and (
+        not isinstance(text_sha256, str)
+        or re.fullmatch(r"[a-f0-9]{64}", text_sha256) is None
+    ):
+        raise SocialWorkspaceValidationError("text_sha256 is invalid")
+    media_count = data.get("media_count")
+    if media_count is not None and (
+        type(media_count) is not int or not 0 <= media_count <= 10
+    ):
+        raise SocialWorkspaceValidationError(
+            "media_count must be an integer from 0 to 10"
+        )
+    limit = data.get("limit", 10)
+    if type(limit) is not int or not 1 <= limit <= 25:
+        raise SocialWorkspaceValidationError("limit must be an integer from 1 to 25")
+    return SocialScheduledItemsRequest(
+        platform=platform,
+        target_ref=target_ref,
+        scheduled_from=scheduled_from,
+        scheduled_to=scheduled_to,
+        text_sha256=text_sha256,
+        media_count=media_count,
+        limit=limit,
+    )
+
+
 def validate_resolved_target_preview(
     request: SocialReadRequest, payload: Mapping[str, Any]
 ) -> str:
@@ -1561,6 +1648,17 @@ def validate_status_request(payload: Mapping[str, Any]) -> tuple[str, str]:
     return "operation", operation_ref
 
 
+def validate_retry_request(payload: Mapping[str, Any]) -> str:
+    data = _object(payload, "request")
+    _only_fields(data, {"operation_ref"}, "request")
+    operation_ref = data.get("operation_ref")
+    if not isinstance(operation_ref, str) or not _OPERATION_REF_RE.fullmatch(
+        operation_ref
+    ):
+        raise SocialWorkspaceValidationError("operation_ref is invalid")
+    return operation_ref
+
+
 def validate_send_message_receipt(payload: Mapping[str, Any]) -> tuple[str, str]:
     """Validate the mandatory read-after-write proof for an exact-person DM."""
 
@@ -1602,7 +1700,12 @@ def validate_action_status_response(payload: Mapping[str, Any]) -> SocialActionS
         data,
         {
             "platform", "operation_ref", "action", "status", "retry_safe", "target_ref",
-            "item_ref", "error_code", "read_after_write",
+            "item_ref", "error_code", "read_after_write", "preparation_ref",
+            "logical_action_ref", "attempt_number", "stage",
+            "mutation_boundary_reached", "scheduled_at", "media_count",
+            "reconciliation_attempt", "next_poll_after_seconds",
+            "reconciliation_deadline", "exact_match_count", "item_refs",
+            "final_readback", "deletion_evidence",
         },
         "status response",
     )
@@ -1616,8 +1719,72 @@ def validate_action_status_response(payload: Mapping[str, Any]) -> SocialActionS
         raise SocialWorkspaceValidationError("retry_safe must be boolean")
     if status is SocialActionStatus.OUTCOME_UNKNOWN and data.get("retry_safe") is not False:
         raise SocialWorkspaceValidationError("outcome_unknown must not be retried")
+    preparation_ref = data.get("preparation_ref")
+    if preparation_ref is not None and (
+        not isinstance(preparation_ref, str)
+        or not _PREPARATION_REF_RE.fullmatch(preparation_ref)
+    ):
+        raise SocialWorkspaceValidationError("preparation_ref is invalid")
+    logical_action_ref = data.get("logical_action_ref")
+    if logical_action_ref is not None and (
+        not isinstance(logical_action_ref, str)
+        or not _LOGICAL_ACTION_REF_RE.fullmatch(logical_action_ref)
+    ):
+        raise SocialWorkspaceValidationError("logical_action_ref is invalid")
+    for field, minimum, maximum in (
+        ("attempt_number", 1, 16),
+        ("media_count", 0, 10),
+        ("reconciliation_attempt", 1, 100),
+        ("next_poll_after_seconds", 0, 3600),
+        ("exact_match_count", 0, 100),
+    ):
+        value = data.get(field)
+        if value is not None and (
+            type(value) is not int or not minimum <= value <= maximum
+        ):
+            raise SocialWorkspaceValidationError(f"{field} is invalid")
+    if "mutation_boundary_reached" in data and type(
+        data["mutation_boundary_reached"]
+    ) is not bool:
+        raise SocialWorkspaceValidationError(
+            "mutation_boundary_reached must be boolean"
+        )
+    stage = data.get("stage")
+    if stage is not None and (
+        not isinstance(stage, str)
+        or re.fullmatch(r"[a-z][a-z0-9_]{1,63}", stage) is None
+    ):
+        raise SocialWorkspaceValidationError("stage is invalid")
+    for field in ("scheduled_at", "reconciliation_deadline"):
+        if field in data:
+            _validate_rfc3339(data[field], field)
+    item_refs = data.get("item_refs")
+    if item_refs is not None:
+        if (
+            not isinstance(item_refs, list)
+            or len(item_refs) > 10
+            or len(item_refs) != len(set(item_refs))
+        ):
+            raise SocialWorkspaceValidationError("item_refs is invalid")
+        for item_ref in item_refs:
+            validate_opaque_ref(item_ref, "item")
     if action is SocialAction.SEND_MESSAGE and status is SocialActionStatus.SUCCEEDED:
-        validate_send_message_receipt(data)
+        validate_send_message_receipt(
+            {
+                key: data[key]
+                for key in (
+                    "platform",
+                    "action",
+                    "status",
+                    "operation_ref",
+                    "target_ref",
+                    "item_ref",
+                    "retry_safe",
+                    "read_after_write",
+                )
+                if key in data
+            }
+        )
     return status
 
 
@@ -2081,6 +2248,85 @@ SOCIAL_WORKSPACE_READ_SCHEMA: Mapping[str, Any] = {
     ],
 }
 
+SOCIAL_WORKSPACE_SCHEDULED_ITEMS_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["platform", "target_ref"],
+    "properties": {
+        "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
+        "target_ref": {"$ref": "#/$defs/target_ref"},
+        "scheduled_from": {"type": "string", "format": "date-time"},
+        "scheduled_to": {"type": "string", "format": "date-time"},
+        "text_sha256": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
+        "media_count": {"type": "integer", "minimum": 0, "maximum": 10},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 25, "default": 10},
+    },
+}
+
+SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": _DEFS,
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "platform",
+        "target_ref",
+        "queue",
+        "items",
+        "exact_match_count",
+        "trust",
+    ],
+    "properties": {
+        "platform": {"type": "string", "enum": _enum_values(SocialPlatform)},
+        "target_ref": {"$ref": "#/$defs/target_ref"},
+        "queue": {"const": "scheduled"},
+        "items": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "item_ref",
+                    "target_ref",
+                    "queue",
+                    "scheduled_at",
+                    "text_sha256",
+                    "media_count",
+                    "media_roles",
+                    "trust",
+                ],
+                "properties": {
+                    "item_ref": {"$ref": "#/$defs/item_ref"},
+                    "target_ref": {"$ref": "#/$defs/target_ref"},
+                    "queue": {"const": "scheduled"},
+                    "scheduled_at": {"type": "string", "format": "date-time"},
+                    "text_sha256": {
+                        "type": "string",
+                        "pattern": r"^[a-f0-9]{64}$",
+                    },
+                    "media_count": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 10,
+                    },
+                    "media_roles": {
+                        "type": "array",
+                        "maxItems": 10,
+                        "items": {"type": "string", "enum": _enum_values(MediaRole)},
+                    },
+                    "trust": {"const": "untrusted_external_data"},
+                },
+            },
+        },
+        "exact_match_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "has_more": {"type": "boolean"},
+        "trust": {"const": "untrusted_external_data"},
+    },
+}
+
 SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA: Mapping[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$defs": _DEFS,
@@ -2260,6 +2506,9 @@ SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA: Mapping[str, Any] = {
         "preparation_ref": {
             "type": "string", "pattern": r"^prep_[A-Za-z0-9_-]{24,160}$"
         },
+        "logical_action_ref": {
+            "type": "string", "pattern": r"^act_[A-Za-z0-9_-]{24,160}$"
+        },
         "action": {"type": "string", "enum": _enum_values(SocialAction)},
         "status": {
             "type": "string",
@@ -2358,6 +2607,35 @@ SOCIAL_WORKSPACE_STATUS_SCHEMA: Mapping[str, Any] = {
     },
 }
 
+SOCIAL_WORKSPACE_RETRY_SCHEMA: Mapping[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["operation_ref"],
+    "properties": {
+        "operation_ref": {
+            "type": "string",
+            "pattern": r"^op_[A-Za-z0-9_-]{24,160}$",
+        }
+    },
+}
+
+_STATUS_READBACK_SCHEMA: Mapping[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["verified", "observed_at"],
+    "properties": {
+        "verified": {"type": "boolean"},
+        "absence_verified": {"type": "boolean"},
+        "observed_item_ref": {"$ref": "#/$defs/item_ref"},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "queue": {"type": "string", "enum": ["scheduled", "live"]},
+        "scheduled_at": {"type": "string", "format": "date-time"},
+        "media_count": {"type": "integer", "minimum": 0, "maximum": 10},
+        "exact_match_count": {"type": "integer", "minimum": 0, "maximum": 100},
+    },
+}
+
 SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$defs": _DEFS,
@@ -2370,19 +2648,43 @@ SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
         "action": {"type": "string", "enum": _enum_values(SocialAction)},
         "status": {"type": "string", "enum": _enum_values(SocialActionStatus)},
         "retry_safe": {"type": "boolean"},
+        "preparation_ref": {
+            "type": "string",
+            "pattern": r"^prep_[A-Za-z0-9_-]{24,160}$",
+        },
+        "logical_action_ref": {
+            "type": "string",
+            "pattern": r"^act_[A-Za-z0-9_-]{24,160}$",
+        },
+        "attempt_number": {"type": "integer", "minimum": 1, "maximum": 16},
+        "stage": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,63}$"},
+        "mutation_boundary_reached": {"type": "boolean"},
         "target_ref": {"$ref": "#/$defs/target_ref"},
         "item_ref": {"$ref": "#/$defs/item_ref"},
-        "error_code": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,63}$"},
-        "read_after_write": {
-            "type": "object",
-            "additionalProperties": False,
-            "required": ["verified", "observed_item_ref", "observed_at"],
-            "properties": {
-                "verified": {"type": "boolean"},
-                "observed_item_ref": {"$ref": "#/$defs/item_ref"},
-                "observed_at": {"type": "string", "format": "date-time"},
-            },
+        "scheduled_at": {"type": "string", "format": "date-time"},
+        "media_count": {"type": "integer", "minimum": 0, "maximum": 10},
+        "reconciliation_attempt": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
         },
+        "next_poll_after_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3600,
+        },
+        "reconciliation_deadline": {"type": "string", "format": "date-time"},
+        "exact_match_count": {"type": "integer", "minimum": 0, "maximum": 100},
+        "item_refs": {
+            "type": "array",
+            "maxItems": 10,
+            "uniqueItems": True,
+            "items": {"$ref": "#/$defs/item_ref"},
+        },
+        "error_code": {"type": "string", "pattern": r"^[a-z][a-z0-9_]{1,63}$"},
+        "read_after_write": _STATUS_READBACK_SCHEMA,
+        "final_readback": _STATUS_READBACK_SCHEMA,
+        "deletion_evidence": _STATUS_READBACK_SCHEMA,
     },
     "allOf": [
         {
@@ -2975,6 +3277,9 @@ __all__ = [
     "SOCIAL_WORKSPACE_PREPARE_SCHEMA",
     "SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA",
     "SOCIAL_WORKSPACE_READ_SCHEMA",
+    "SOCIAL_WORKSPACE_RETRY_SCHEMA",
+    "SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA",
+    "SOCIAL_WORKSPACE_SCHEDULED_ITEMS_SCHEMA",
     "SOCIAL_WORKSPACE_SCOPES",
     "SOCIAL_WORKSPACE_SEND_MESSAGE_RECEIPT_SCHEMA",
     "SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA",
@@ -3022,6 +3327,7 @@ __all__ = [
     "SocialReadOperation",
     "SocialReadPurpose",
     "SocialReadRequest",
+    "SocialScheduledItemsRequest",
     "SocialTargetKind",
     "SocialWorkspaceValidationError",
     "TargetLocator",
@@ -3044,6 +3350,8 @@ __all__ = [
     "validate_opaque_ref",
     "validate_prepare_request",
     "validate_read_request",
+    "validate_retry_request",
+    "validate_scheduled_items_request",
     "validate_resolved_target_preview",
     "validate_send_message_receipt",
     "validate_status_request",

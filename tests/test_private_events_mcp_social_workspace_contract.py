@@ -30,6 +30,9 @@ from private_events_mcp.social_workspace import (
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_READ_SCHEMA,
+    SOCIAL_WORKSPACE_RETRY_SCHEMA,
+    SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_SCHEDULED_ITEMS_SCHEMA,
     SOCIAL_WORKSPACE_SCOPES,
     SOCIAL_WORKSPACE_SEND_MESSAGE_RECEIPT_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
@@ -73,6 +76,8 @@ from private_events_mcp.social_workspace import (
     validate_opaque_ref,
     validate_prepare_request,
     validate_read_request,
+    validate_retry_request,
+    validate_scheduled_items_request,
     validate_resolved_target_preview,
     validate_send_message_receipt,
     validate_status_request,
@@ -92,6 +97,9 @@ UPLOAD_REF = "upl_" + "f" * 24
 
 ALL_SCHEMAS = (
     SOCIAL_WORKSPACE_READ_SCHEMA,
+    SOCIAL_WORKSPACE_SCHEDULED_ITEMS_SCHEMA,
+    SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_RETRY_SCHEMA,
     SOCIAL_WORKSPACE_TARGET_PREVIEW_SCHEMA,
     SOCIAL_WORKSPACE_EDITORIAL_SAMPLE_SCHEMA,
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
@@ -956,6 +964,87 @@ def test_status_contract_models_provider_uncertainty_and_disallows_blind_retry()
     assert validate_action_status_response(unknown) is SocialActionStatus.OUTCOME_UNKNOWN
     with pytest.raises(ValidationError):
         validate({**unknown, "retry_safe": True}, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA)
+
+
+def test_scheduled_items_contract_is_exact_bounded_and_provider_neutral() -> None:
+    request = validate_scheduled_items_request(
+        {
+            "platform": "telegram",
+            "target_ref": TARGET_REF,
+            "scheduled_from": "2026-08-31T08:00:00Z",
+            "scheduled_to": "2026-08-31T13:00:00+02:00",
+            "text_sha256": "a" * 64,
+            "media_count": 4,
+            "limit": 10,
+        }
+    )
+    assert request.required_scopes == {"telegram:schedule"}
+    assert request.limit == 10
+    response = {
+        "platform": "telegram",
+        "target_ref": TARGET_REF,
+        "queue": "scheduled",
+        "items": [
+            {
+                "item_ref": ITEM_REF,
+                "target_ref": TARGET_REF,
+                "queue": "scheduled",
+                "scheduled_at": "2026-08-31T12:00:00Z",
+                "text_sha256": "a" * 64,
+                "media_count": 4,
+                "media_roles": ["image", "image", "image", "image"],
+                "trust": "untrusted_external_data",
+            }
+        ],
+        "exact_match_count": 1,
+        "has_more": False,
+        "trust": "untrusted_external_data",
+    }
+    validate(response, SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA)
+    for mutation in (
+        {"limit": 26},
+        {"media_count": 11},
+        {"text_sha256": "not-a-digest"},
+        {"scheduled_from": "2026-08-31T12:00:00Z", "scheduled_to": "2026-08-31T11:00:00Z"},
+        {"provider_id": 42},
+    ):
+        with pytest.raises(SocialWorkspaceValidationError):
+            validate_scheduled_items_request(
+                {"platform": "telegram", "target_ref": TARGET_REF, **mutation}
+            )
+
+
+def test_retry_and_extended_status_contracts_are_closed() -> None:
+    assert validate_retry_request({"operation_ref": OPERATION_REF}) == OPERATION_REF
+    with pytest.raises(SocialWorkspaceValidationError):
+        validate_retry_request({"operation_ref": OPERATION_REF, "force": True})
+    validate(
+        {
+            "platform": "telegram",
+            "operation_ref": OPERATION_REF,
+            "preparation_ref": PREPARATION_REF,
+            "logical_action_ref": "act_" + "c" * 24,
+            "action": "schedule",
+            "status": "outcome_unknown",
+            "retry_safe": False,
+            "attempt_number": 2,
+            "stage": "scheduled_history_readback",
+            "mutation_boundary_reached": True,
+            "scheduled_at": "2026-08-31T12:00:00Z",
+            "media_count": 4,
+            "reconciliation_attempt": 3,
+            "next_poll_after_seconds": 10,
+            "reconciliation_deadline": "2026-08-31T12:05:00Z",
+            "exact_match_count": 0,
+            "item_refs": [],
+            "read_after_write": {
+                "verified": False,
+                "absence_verified": False,
+                "observed_at": "2026-08-31T12:00:10Z",
+            },
+        },
+        SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
+    )
 
 
 def test_exact_person_send_success_requires_read_after_write_receipt() -> None:
