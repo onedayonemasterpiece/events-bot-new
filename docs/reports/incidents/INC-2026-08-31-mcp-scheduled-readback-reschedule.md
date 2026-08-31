@@ -95,10 +95,10 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   mutation and retained `BLOCKED_OLD_TELEGRAM_OUTCOME`.
 - 2026-08-31 — the isolated integration branch implemented the durable
   cancellation/readback repair. Its focused integration suite passed 308 tests;
-  the complete Private Events MCP suite passed 543 tests with three unrelated
+  the final complete Private Events MCP suite passed 546 tests with three unrelated
   existing aiohttp warnings; `compileall` and `git diff --check` passed. The
-  incident remains open pending review, exact-main merge/deploy and operational
-  readback.
+  independent checklist review found no remaining code blocker. The incident
+  remains open pending PR CI, exact-main merge/deploy and operational readback.
 
 ## Root Cause
 
