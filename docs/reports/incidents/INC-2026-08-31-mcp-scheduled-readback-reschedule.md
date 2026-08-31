@@ -1,6 +1,6 @@
 # INC-2026-08-31 eventsBot MCP scheduled readback blocked a safe reschedule
 
-Status: mitigating — residual terminal-state/diagnostic fix in release; ChatGPT publication pending
+Status: mitigating — residual server fix deployed; ChatGPT/VK publication acceptance pending
 Severity: sev2
 Service: private eventsBot MCP / Telegram and VK scheduled publication
 Opened: 2026-08-31
@@ -355,14 +355,30 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - post-deploy health: `/healthz ok=true ready=true db=ok`; both SQLite
   `PRAGMA quick_check=ok`; runtime file mirror enabled and fresh; immutable
   in-image SHA matched the deployed implementation SHA
-- machine handoff: `READY_FOR_14_00_PUBLICATION`
+- historical machine handoff before the requested slot passed:
+  `READY_FOR_14_00_PUBLICATION`; that handoff is no longer an authorization to
+  publish late, and Codex performed no catch-up or silent reschedule
 - residual closure gate: an administrator must refresh/review/publish the
   changed ChatGPT action snapshot and verify it in a genuinely new chat; server
   catalogue inspection alone does not close that separate client-control gate
-- residual implementation base/deployed SHA before the new patch:
-  `ab289db1750d60242fde37f07af305a6e67b84fa`, Fly `v2055`; merge/CI/deploy
-  evidence for the residual patch is pending and must be appended before
-  closure
+- residual implementation base: `ab289db1750d60242fde37f07af305a6e67b84fa`
+  (Fly `v2055`); commits `59296ccd5` and `0e91636e8`; PR `#602`; merged and
+  deployed exact-main SHA `6b43c043bf3c59dacb8e8f1ee7e2bcdee2e91a09`
+  as Fly release/machine version `v2056` / `2056`
+- residual regression evidence: focused `17 passed`; complete
+  `tests/test_private_events_mcp_*.py` `555 passed` with the same three aiohttp
+  warnings; Ruff, `compileall` and `git diff --check` passed; PR `#602`
+  `python-ci`, `smart-update-identity-state-machine` and
+  `static-browser-release-gate` passed
+- residual post-deploy evidence: `/healthz ok=true ready=true db=ok`; Fly check
+  passing; both SQLite `PRAGMA quick_check=ok`; runtime file mirror enabled,
+  present and fresh; immutable image SHA exactly
+  `6b43c043bf3c59dacb8e8f1ee7e2bcdee2e91a09`
+- no historical operation ref was repeated after this deploy. No Telegram/VK
+  publication, scheduling, delete, retry or diagnostic provider mutation was
+  performed. The specific VK image-2 provider rejection still needs a fresh
+  ChatGPT-owned production action/readback; the server now reports its exact
+  safe structural failure if VK repeats it.
 
 ## Prevention
 
