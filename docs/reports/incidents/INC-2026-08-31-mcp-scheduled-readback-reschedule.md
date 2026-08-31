@@ -1,6 +1,6 @@
 # INC-2026-08-31 eventsBot MCP scheduled readback blocked a safe reschedule
 
-Status: mitigating — exact-main server fix/readback complete; refreshed ChatGPT action acceptance pending
+Status: mitigating — residual terminal-state/diagnostic fix in release; ChatGPT publication pending
 Severity: sev2
 Service: private eventsBot MCP / Telegram and VK scheduled publication
 Opened: 2026-08-31
@@ -16,12 +16,19 @@ A four-image publication was prepared for Telegram `@lovekenig` and VK owner
 operation `op_h5whKgjfe2rXj24zWU1yF5ynU9iEKt0T` crossed the runtime deadline,
 then remained `outcome_unknown / reconciliation_pending` because its provider
 claim had no terminal result and status reconciliation did not query Telegram.
-Two VK operations failed definitely at the first image before any wall write.
+Two historical VK operations failed definitely at the first image before any
+wall write. After PRs `#600` and `#601`, fresh acceptance operations exposed two
+residual defects: Telegram correctly proved zero scheduled/live matches but
+persisted `reconciliation_no_match` as `outcome_unknown`; VK successfully
+uploaded and saved image 1, then received an HTTP 200 receipt with an empty
+`photo` for image 2 on both the initial attempt and its one permitted retry.
 
 The requested move to 14:00 could not be performed safely while the old
 Telegram album might already have been scheduled or published. The incident is
-therefore fail-closed as `BLOCKED_OLD_TELEGRAM_OUTCOME`. Codex did not publish,
-delete, retry, alter the caption, or regenerate the four images.
+therefore fail-closed for Codex publication. Codex did not publish, schedule,
+delete, retry, alter the caption, or regenerate the four images; the explicit
+handoff leaves any later production publication to ChatGPT through eventsBot
+MCP.
 
 ## User / Business Impact
 
@@ -109,6 +116,20 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   `reconciliation_no_match`. Exact counts were Telegram scheduled/live `0 / 0`
   and VK postponed/live `0 / 0`. No publication, retry, cancellation or other
   provider-content mutation was performed.
+- 2026-08-31 — PR `#601` merged and exact `origin/main`
+  `ab289db1750d60242fde37f07af305a6e67b84fa` was deployed as Fly release
+  `v2055` / machine version `2055`; `/healthz` remained ready.
+- 2026-08-31 — fresh Telegram operation
+  `op_XYhsfK0LxnCL7Qt8dm339S3HREWC6OQW` reached bounded zero scheduled/live
+  matches but persisted the contradictory terminal-looking receipt
+  `outcome_unknown / reconciliation_no_match / retry_safe=false`.
+- 2026-08-31 11:35 UTC — fresh VK operation
+  `op_rZ7orGaOgGbzsNmf6zl6NZsanxzaylOs` and its single permitted retry each
+  uploaded image 1 and reached `photos.saveWallPhoto`; image 2 then returned
+  HTTP 200 JSON with integer `server`, non-empty `hash`, and present string
+  `photo` of length zero. Both attempts stopped before `wall.post`. Read-only
+  postponed/live checks remained `0 / 0`. No additional provider mutation was
+  performed for diagnosis.
 
 ## Root Cause
 
@@ -134,6 +155,22 @@ plus these ordered 1122×1402 PNG SHA-256 values:
    upstream cause would be a hypothesis. Existing gzip decompression and
    read-to-EOF handling were already deployed and are not an evidenced root
    cause for these two attempts.
+5. **Residual Telegram state bug:** the adapter's post-deadline zero-match
+   branch explicitly constructed `status=outcome_unknown` together with
+   `error_code=reconciliation_no_match`, and its early-return branch then
+   treated that error as terminal. Runtime preserved the adapter receipt; it
+   did not remap a correct terminal status. Thus repeated status calls stopped
+   polling but exposed the wrong public state.
+6. **Residual VK provider rejection plus diagnostic gap:** the fresh deployed
+   transport correctly decoded gzip/JSON to EOF. Image 1 completed multipart
+   and `photos.saveWallPhoto`; for image 2 VK itself returned the flat expected
+   keys with `photo=""` twice. The adapter correctly refused to call
+   `photos.saveWallPhoto` with that invalid receipt, but collapsed the exact
+   structure into generic `media_upload_response_invalid`. Compression,
+   ChatGPT ingress, PNG validity and actor routing are therefore not supported
+   root causes. Why VK rejected that particular image remains provider-side
+   and unproven; automatic metadata stripping or re-encoding is not justified
+   by current evidence.
 
 ## Contributing Factors
 
@@ -264,6 +301,12 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - [x] Persist safe VK multipart/stage observability sufficient to distinguish
   response shape and empty-field failures without bodies, credentials, hashes
   or upload URLs.
+- [x] Make post-deadline Telegram zero-match and duplicate-match outcomes
+  terminal `failed`, normalize legacy no-match rows without provider I/O, and
+  preserve fail-closed retry safety after a mutation attempt.
+- [x] Classify VK multipart structural failures with exact safe subcodes and
+  persist image count/input identity/JSON shape/field presence/reached-stage
+  evidence without accepting empty provider fields.
 - [x] Complete code review, tests, merge, exact-main deploy and operational
   reconciliation before changing the incident status.
 
@@ -294,8 +337,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   `static-browser-release-gate` all passed; `compileall`/diff checks passed
 - action-definition review/publication and new-chat acceptance: pending
 - old Telegram operation reconciliation: terminal
-  `outcome_unknown / reconciliation_no_match / retry_safe=false`, attempt `1`;
-  the outer status ledger was converged to the same terminal receipt
+  legacy receipt `outcome_unknown / reconciliation_no_match / retry_safe=false`,
+  attempt `1`; the residual fix normalizes that combination to terminal
+  `failed` on its next read without provider I/O
 - exact Telegram scheduled/live counts: `0 / 0` (12 scheduled logical items and
   77 live logical items scanned); no old item existed, so no cancellation was
   attempted or required
@@ -315,6 +359,10 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - residual closure gate: an administrator must refresh/review/publish the
   changed ChatGPT action snapshot and verify it in a genuinely new chat; server
   catalogue inspection alone does not close that separate client-control gate
+- residual implementation base/deployed SHA before the new patch:
+  `ab289db1750d60242fde37f07af305a6e67b84fa`, Fly `v2055`; merge/CI/deploy
+  evidence for the residual patch is pending and must be appended before
+  closure
 
 ## Prevention
 

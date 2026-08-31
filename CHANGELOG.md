@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Fixed: bounded Telegram schedule reconciliation now persists zero exact
+  scheduled/live matches as terminal
+  `failed / reconciliation_no_match / retry_safe=false` with absence proof;
+  duplicate exact matches are terminal ambiguous failures, and legacy
+  `outcome_unknown / reconciliation_no_match` receipts converge durably
+  without another provider read or send. VK wall-photo multipart failures now
+  retain safe input/HTTP/JSON/field/stage structure and return exact missing,
+  empty, type, provider-error or JSON-shape codes. A provider HTTP 200 with an
+  empty `photo` remains a definite retry-safe pre-wall failure rather than being
+  accepted or attributed speculatively to compression. No MCP tool name,
+  input schema, output schema or OAuth scope changed. Regression contract:
+  `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
+
 - Changed: defined the Private `eventsBot` MCP recovery contract for scheduled
   multi-image actions: provider-owned deadlines and durable cancellation
   finalization, restart-safe raw Telegram scheduled/live reconciliation, a
