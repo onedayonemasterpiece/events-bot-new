@@ -472,12 +472,14 @@ wall-post returned native identifiers before a later ambiguity, those values
 are encrypted in provider state and reconciliation uses the exact photo/post
 identifier rather than text alone.
 
-#### Scheduled recovery contract (release acceptance pending)
+#### Scheduled recovery contract
 
-The following is the required contract for the open
-`INC-2026-08-31-mcp-scheduled-readback-reschedule` repair. Its presence in this
-document is not evidence that a production deployment or refreshed ChatGPT
-action snapshot has passed acceptance.
+The following is the regression contract for
+`INC-2026-08-31-mcp-scheduled-readback-reschedule`. PRs `#600` and `#601`
+delivered its server-side scheduled queue, retry and readback surfaces. A
+refreshed ChatGPT action snapshot is a separate client-control acceptance gate;
+server deployment by itself is not evidence that a frozen action definition was
+reviewed and published.
 
 Scheduled items keep their provider queue namespace in the opaque binding.
 Telegram schedule success and recovery use bounded raw
@@ -518,12 +520,18 @@ Telegram restart recovery reconstructs the exact encrypted intent and checks
 the raw scheduled queue. Once the scheduled time passes, it checks ordinary/live
 history as well. Exactly one exact logical match succeeds with a stable opaque
 item, exact time/media count and `read_after_write.verified=true`. Multiple
-matches are terminal `outcome_unknown / reconciliation_ambiguous` with only a
-bounded count and opaque refs and are never auto-deleted. Zero matches within
+matches are terminal `failed / reconciliation_ambiguous / retry_safe=false`
+with only a bounded count and opaque refs and are never auto-deleted. Zero matches within
 the consistency window remain outcome-unknown with a bounded attempt number,
 `next_poll_after_seconds` and `reconciliation_deadline`. Zero matches after that
-deadline become terminal `outcome_unknown / reconciliation_no_match` and remain
-non-retryable after the mutation boundary. Evidence that mutation never started
+deadline become terminal `failed / reconciliation_no_match / retry_safe=false`,
+carry `exact_match_count=0` plus an absence-verified final readback, and remain
+non-retryable after the mutation boundary. Repeated status calls return that
+durable terminal result without another provider read. Legacy persisted
+`outcome_unknown / reconciliation_no_match` rows are normalized once to the
+same terminal state without replaying the provider mutation or readback; the
+normalizer does not fabricate a new observation timestamp or readback proof.
+Evidence that mutation never started
 may instead terminate as `failed / provider_mutation_not_started` with
 `retry_safe=true`.
 
@@ -697,13 +705,26 @@ sanitized code. For `wall_photo_multipart`, the bounded finished
 `provider_result` additionally records `http_status`, `content_type`,
 `content_encoding`, `compressed_bytes`, `decoded_bytes`, `consumed_to_eof`,
 top-level/nested key names and unknown-key counts,
-`server_field`/`photo_field`/`hash_field` type plus capped length,
-`image_ordinal`, `expected_digest_prefix`, and `mutation_boundary_reached`.
+JSON top-level type, response/provider-error presence and mapping flags,
+`server_field`/`photo_field`/`hash_field` presence, type and capped length,
+server numeric-type validity, `image_ordinal`/`image_count`, input byte length,
+SHA-256 digest, MIME/format/dimensions, actor role, whether a prior
+`photos.saveWallPhoto` was reached, whether `wall.post` was reached, and
+`mutation_boundary_reached`.
 Existing `stage` and `phase=started|finished` plus the durable attempt recorder
 supply stage timing/attempt evidence. It never records a response body, field
 value/hash, upload URL, token or cookie.
 A missing/invalid receipt before `photos.saveWallPhoto` is definite
-`failed / retry_safe=true`; uncertainty after `wall.post` remains
+`failed / retry_safe=true`. Structural failures use bounded codes such as
+`media_upload_missing_photo`, `media_upload_empty_photo`,
+`media_upload_missing_hash`, `media_upload_empty_hash`,
+`media_upload_missing_server`, `media_upload_server_type_invalid`,
+`media_upload_photo_type_invalid`, `media_upload_hash_type_invalid`,
+`media_upload_provider_error_shape` and `media_upload_json_shape_invalid`
+instead of collapsing every case into `media_upload_response_invalid`.
+An HTTP 200 response with an empty `photo` is a provider-side rejection shape,
+not a valid upload receipt; it is never forwarded to `photos.saveWallPhoto`.
+Uncertainty after `wall.post` remains
 `outcome_unknown / retry_safe=false`. A durable attempt row records the attempt
 number, fixed method/stage, start/finish, available HTTP status, normalized
 outcome/error and an encrypted envelope for native photo/post results;

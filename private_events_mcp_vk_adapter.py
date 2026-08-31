@@ -689,6 +689,10 @@ class VKWorkspaceAdapter:
         materialized: VKAssetMaterialization,
         attempt_hook: Any,
         image_ordinal: int = 1,
+        image_count: int = 1,
+        input_width: int | None = None,
+        input_height: int | None = None,
+        reached_photos_save_wall_photo: bool = False,
     ) -> VKMultipartUploadResult:
         if self._multipart_transport is None:
             raise VKWorkspaceError("multipart_transport_unavailable")
@@ -710,7 +714,26 @@ class VKWorkspaceAdapter:
         digest_prefix = materialized.content_digest.removeprefix("sha256:")[:12]
         safe_context = {
             "image_ordinal": image_ordinal,
+            "image_count": image_count,
             "expected_digest_prefix": digest_prefix,
+            "input_byte_length": materialized.byte_length,
+            "input_content_digest": materialized.content_digest,
+            "input_mime_type": materialized.mime_type,
+            "input_format": {
+                "image/jpeg": "JPEG",
+                "image/png": "PNG",
+                "image/webp": "WEBP",
+                "video/mp4": "MP4",
+            }[materialized.mime_type],
+            "input_width": input_width,
+            "input_height": input_height,
+            "actor_role": (
+                VKActor.MEDIA_EDITOR.value
+                if purpose is VKUploadPurpose.WALL_PHOTO
+                else VKActor.STORY_EDITOR.value
+            ),
+            "reached_photos_save_wall_photo": reached_photos_save_wall_photo,
+            "reached_wall_post": False,
         }
         attempt_hook(
             {
@@ -738,19 +761,22 @@ class VKWorkspaceAdapter:
             observation = self._safe_multipart_observation(
                 getattr(exc, "observation", None)
             )
+            error_code = self._multipart_response_error(observation)
+            if error_code is None:
+                error_code = "media_upload_failed"
             attempt_hook(
                 {
                     "stage": multipart_stage,
                     "method": "multipart.upload",
                     "phase": "finished",
-                    "error_class": "media_upload_failed",
+                    "error_class": error_code,
                     "outcome": "failed",
                     **safe_context,
                     **observation,
                 }
             )
             raise VKWorkspaceError(
-                "media_upload_failed", retry_safe=True, stage=multipart_stage
+                error_code, retry_safe=True, stage=multipart_stage
             ) from None
         if not isinstance(result, VKMultipartUploadResult):
             attempt_hook(
@@ -758,24 +784,24 @@ class VKWorkspaceAdapter:
                     "stage": multipart_stage,
                     "method": "multipart.upload",
                     "phase": "finished",
-                    "error_class": "media_upload_response_invalid",
+                    "error_class": "media_upload_json_shape_invalid",
                     "outcome": "failed",
                     **safe_context,
                 }
             )
             raise VKWorkspaceError(
-                "media_upload_response_invalid",
+                "media_upload_json_shape_invalid",
                 retry_safe=purpose is VKUploadPurpose.WALL_PHOTO,
                 stage=multipart_stage,
             )
         observation = self._safe_multipart_observation(result.observation)
         observation.setdefault("http_status", 200)
         if purpose is VKUploadPurpose.WALL_PHOTO:
-            observation.update(
-                self._multipart_field_observation(
-                    result.server, result.photo, result.upload_hash
-                )
+            normalized_fields = self._multipart_field_observation(
+                result.server, result.photo, result.upload_hash
             )
+            for key, value in normalized_fields.items():
+                observation.setdefault(key, value)
             if (
                 result.response_valid is not True
                 or type(result.server) is not int
@@ -784,19 +810,22 @@ class VKWorkspaceAdapter:
                 or not isinstance(result.upload_hash, str)
                 or not 1 <= len(result.upload_hash) <= 8192
             ):
+                error_code = self._multipart_response_error(observation)
+                if error_code is None:
+                    error_code = "media_upload_response_invalid"
                 attempt_hook(
                     {
                         "stage": multipart_stage,
                         "method": "multipart.upload",
                         "phase": "finished",
-                        "error_class": "media_upload_response_invalid",
+                        "error_class": error_code,
                         "outcome": "failed",
                         **safe_context,
                         **observation,
                     }
                 )
                 raise VKWorkspaceError(
-                    "media_upload_response_invalid",
+                    error_code,
                     retry_safe=True,
                     stage=multipart_stage,
                 )
@@ -819,6 +848,7 @@ class VKWorkspaceAdapter:
         def field(value: Any, cap: int) -> dict[str, Any]:
             length = len(value) if isinstance(value, str) else None
             return {
+                "present": value is not None,
                 "type": type(value).__name__,
                 "length": min(length, cap) if length is not None else None,
                 "length_capped": bool(length is not None and length > cap),
@@ -828,7 +858,45 @@ class VKWorkspaceAdapter:
             "server_field": field(server, 32),
             "photo_field": field(photo, 65536),
             "hash_field": field(upload_hash, 8192),
+            "server_numeric_range_valid": type(server) is int,
         }
+
+    @staticmethod
+    def _multipart_response_error(observation: Mapping[str, Any]) -> str | None:
+        if observation.get("provider_error_present") is True:
+            return "media_upload_provider_error_shape"
+        if observation.get("json_parse_succeeded") is False:
+            return "media_upload_json_shape_invalid"
+        if (
+            observation.get("json_top_level_type") not in {None, "dict"}
+            or observation.get("response_present") is True
+            and observation.get("response_mapping") is not True
+        ):
+            return "media_upload_json_shape_invalid"
+
+        server = observation.get("server_field")
+        photo = observation.get("photo_field")
+        upload_hash = observation.get("hash_field")
+        if isinstance(server, Mapping):
+            if server.get("present") is False:
+                return "media_upload_missing_server"
+            if server.get("type") != "int":
+                return "media_upload_server_type_invalid"
+        if isinstance(photo, Mapping):
+            if photo.get("present") is False:
+                return "media_upload_missing_photo"
+            if photo.get("type") != "str":
+                return "media_upload_photo_type_invalid"
+            if photo.get("length") == 0:
+                return "media_upload_empty_photo"
+        if isinstance(upload_hash, Mapping):
+            if upload_hash.get("present") is False:
+                return "media_upload_missing_hash"
+            if upload_hash.get("type") != "str":
+                return "media_upload_hash_type_invalid"
+            if upload_hash.get("length") == 0:
+                return "media_upload_empty_hash"
+        return None
 
     @staticmethod
     def _safe_multipart_observation(value: Any) -> dict[str, Any]:
@@ -853,13 +921,33 @@ class VKWorkspaceAdapter:
             "decoded_bytes",
             "top_level_unknown_key_count",
             "nested_unknown_key_count",
+            "input_byte_length",
+            "input_width",
+            "input_height",
+            "image_ordinal",
+            "image_count",
         ):
             observed = value.get(key)
             if type(observed) is int and 0 <= observed <= 256 * 1024:
                 safe[key] = observed
         if type(value.get("consumed_to_eof")) is bool:
             safe["consumed_to_eof"] = value["consumed_to_eof"]
-        allowed_names = {"response", "server", "photo", "hash", "upload_result"}
+        for key in (
+            "json_parse_succeeded",
+            "response_present",
+            "response_mapping",
+            "provider_error_present",
+            "provider_error_mapping",
+            "server_numeric_range_valid",
+            "reached_photos_save_wall_photo",
+            "reached_wall_post",
+        ):
+            if type(value.get(key)) is bool:
+                safe[key] = value[key]
+        top_level_type = value.get("json_top_level_type")
+        if top_level_type in {"dict", "list", "str", "int", "float", "bool", "NoneType"}:
+            safe["json_top_level_type"] = top_level_type
+        allowed_names = {"error", "response", "server", "photo", "hash", "upload_result"}
         for key in ("top_level_key_names", "nested_key_names"):
             observed = value.get(key)
             if isinstance(observed, Sequence) and not isinstance(observed, (str, bytes)):
@@ -877,6 +965,11 @@ class VKWorkspaceAdapter:
             if field_type not in allowed_types:
                 continue
             safe[key] = {
+                "present": (
+                    observed.get("present")
+                    if type(observed.get("present")) is bool
+                    else False
+                ),
                 "type": field_type,
                 "length": (
                     length
@@ -885,6 +978,19 @@ class VKWorkspaceAdapter:
                 ),
                 "length_capped": bool(capped) if type(capped) is bool else False,
             }
+        for key, pattern in (
+            ("input_content_digest", _CONTENT_DIGEST),
+            ("expected_digest_prefix", re.compile(r"[0-9a-f]{12}")),
+        ):
+            observed = value.get(key)
+            if isinstance(observed, str) and pattern.fullmatch(observed):
+                safe[key] = observed
+        if value.get("input_mime_type") in {"image/jpeg", "image/png", "image/webp"}:
+            safe["input_mime_type"] = value["input_mime_type"]
+        if value.get("input_format") in {"JPEG", "PNG", "WEBP", "MP4"}:
+            safe["input_format"] = value["input_format"]
+        if value.get("actor_role") in {VKActor.MEDIA_EDITOR.value, VKActor.STORY_EDITOR.value}:
+            safe["actor_role"] = value["actor_role"]
         return safe
 
     async def read_asset(
@@ -2173,6 +2279,7 @@ class VKWorkspaceAdapter:
         attempt_hook: Any,
     ) -> str | None:
         attachments: list[str] = []
+        saved_photo_count = 0
         for image_ordinal, binding in enumerate(bindings, start=1):
             if binding.get("binding_kind") != "verified_asset":
                 attachment = binding.get("attachment")
@@ -2197,6 +2304,10 @@ class VKWorkspaceAdapter:
                 materialized=materialized,
                 attempt_hook=attempt_hook,
                 image_ordinal=image_ordinal,
+                image_count=len(bindings),
+                input_width=_int(binding.get("width")),
+                input_height=_int(binding.get("height")),
+                reached_photos_save_wall_photo=saved_photo_count > 0,
             )
             if (
                 type(upload.server) is not int
@@ -2240,6 +2351,7 @@ class VKWorkspaceAdapter:
             if isinstance(access_key, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,256}", access_key):
                 attachment += "_" + access_key
             attachments.append(attachment)
+            saved_photo_count += 1
         return ",".join(attachments) if attachments else None
 
     @staticmethod
@@ -2380,7 +2492,24 @@ class VKWorkspaceAdapter:
                     "photo_field",
                     "hash_field",
                     "image_ordinal",
+                    "image_count",
                     "expected_digest_prefix",
+                    "input_byte_length",
+                    "input_content_digest",
+                    "input_mime_type",
+                    "input_format",
+                    "input_width",
+                    "input_height",
+                    "json_parse_succeeded",
+                    "json_top_level_type",
+                    "response_present",
+                    "response_mapping",
+                    "provider_error_present",
+                    "provider_error_mapping",
+                    "server_numeric_range_valid",
+                    "actor_role",
+                    "reached_photos_save_wall_photo",
+                    "reached_wall_post",
                 }
                 safe_event["provider_result"] = {
                     key: safe_event[key]
