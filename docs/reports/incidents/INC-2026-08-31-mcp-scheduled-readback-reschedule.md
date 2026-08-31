@@ -1,6 +1,6 @@
 # INC-2026-08-31 eventsBot MCP scheduled readback blocked a safe reschedule
 
-Status: mitigating — residual server fix deployed; ChatGPT/VK publication acceptance pending
+Status: mitigating — Telegram album timeout hotfix in progress; ChatGPT acceptance pending
 Severity: sev2
 Service: private eventsBot MCP / Telegram and VK scheduled publication
 Opened: 2026-08-31
@@ -130,6 +130,14 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   `photo` of length zero. Both attempts stopped before `wall.post`. Read-only
   postponed/live checks remained `0 / 0`. No additional provider mutation was
   performed for diagnosis.
+- 2026-08-31 17:14:15–17:14:27 UTC — ChatGPT operation
+  `op_BH5WmDcJ37MuxCOz6h6tT6wVvHuwUzhM` attempted the requested 20:00
+  Telegram schedule. Runtime evidence shows four sequential uploads of about
+  2.1–2.3 MiB; the fixed 12-second session deadline disconnected during the
+  fourth upload. No final Telegram album/send request was emitted. Bounded
+  scheduled/live readback found zero exact copies, but the upload path had
+  already set `mutation_started_at_ms`, so the receipt incorrectly became
+  `reconciliation_no_match / retry_safe=false`.
 
 ## Root Cause
 
@@ -171,6 +179,18 @@ plus these ordered 1122×1402 PNG SHA-256 values:
    root causes. Why VK rejected that particular image remains provider-side
    and unproven; automatic metadata stripping or re-encoding is not justified
    by current evidence.
+7. **Proven Telegram album timeout/boundary defect:** one scalar 12-second
+   deadline covered connection, rights checks, every file upload, the final
+   scheduled album request and read-after-write. The four verified PNG uploads
+   alone consumed that budget. `_provider_media()` also marked each
+   preparatory `upload_file` as the irreversible content mutation, even though
+   Telegram had not yet received the final album scheduling call. This both
+   prevented completion and falsely prohibited the safe retry.
+8. **Residual Telegram retry wiring gap:** the public runtime exposed
+   `social_action_retry`, but the Telegram adapter/provider store had no
+   provider-side retry/rearm method; only VK implemented that half of the
+   contract. A future correctly classified Telegram pre-mutation failure would
+   therefore still be rejected as `provider retry is unavailable`.
 
 ## Contributing Factors
 
@@ -309,6 +329,20 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   evidence without accepting empty provider fields.
 - [x] Complete code review, tests, merge, exact-main deploy and operational
   reconciliation before changing the incident status.
+- [x] Derive Telegram mutation deadlines from total verified media bytes and
+  item count for the complete one-to-ten attachment envelope; keep the outer
+  MCP commit/retry deadline above that bounded envelope.
+- [x] Move the durable Telegram content-mutation marker from preparatory file
+  upload to immediately before the final message/album/story send, and cover
+  pre-send upload timeout as `provider_mutation_not_started / retry_safe=true`.
+- [x] Implement Telegram provider-ledger CAS rearm and adapter retry so the
+  existing `social_action_retry` tool can actually perform attempt 2 or 3 for a
+  proven pre-content-mutation failure.
+- [ ] Deploy from exact `origin/main` and prove zero exact Telegram
+  scheduled/live copies. The final four-image publication remains owned by
+  ChatGPT through eventsBot MCP; Codex must not publish it. If a provider
+  mutation smoke is still necessary, use a separate test payload and delete it
+  immediately with verified absence.
 
 ## Follow-up Actions
 

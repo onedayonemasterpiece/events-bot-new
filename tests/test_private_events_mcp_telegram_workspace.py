@@ -441,6 +441,29 @@ class FakeRefs:
         self.operations[operation_ref] = completed
         return completed
 
+    def rearm_operation(
+        self,
+        *,
+        operation_ref,
+        action_digest,
+        claim_ttl_seconds,
+        reconciliation_deadline_ms,
+    ):
+        del claim_ttl_seconds, reconciliation_deadline_ms
+        current = self.operations[operation_ref]
+        assert current.action_digest == action_digest
+        assert current.result["status"] == "failed"
+        assert current.result["retry_safe"] is True
+        assert current.mutation_started_at_ms is None
+        rearmed = TelegramOperationClaim(
+            operation_ref,
+            action_digest,
+            True,
+            intent=self.operation_intents.get(operation_ref),
+        )
+        self.operations[operation_ref] = rearmed
+        return rearmed
+
     def resolve_operation(self, operation_ref):
         existing = self.operations[operation_ref]
         return TelegramOperationClaim(
@@ -2214,18 +2237,19 @@ async def test_total_session_deadline_bounds_connect_and_disconnect_cleanup():
         operation_timeout_seconds=0.01,
     )
     connect_operation = "op_connectdeadline00000000000001"
-    with pytest.raises(TelegramWorkspaceError) as timed_out:
-        await connect_adapter.execute(
-            intent(
-                SocialAction.SEND_MESSAGE,
-                target_ref=USER_REF,
-                content=content(),
-            ),
-            operation_ref=connect_operation,
-        )
-    assert timed_out.value.code == "provider_timeout"
-    assert timed_out.value.retry_safe is True
-    assert connect_operation not in connect_refs.operations
+    timed_out = await connect_adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=USER_REF,
+            content=content(),
+        ),
+        operation_ref=connect_operation,
+    )
+    assert timed_out["status"] == "failed"
+    assert timed_out["error_code"] == "provider_mutation_not_started"
+    assert timed_out["retry_safe"] is True
+    assert timed_out["mutation_boundary_reached"] is False
+    assert connect_refs.resolve_operation(connect_operation).result == timed_out
 
     disconnect_refs = FakeRefs()
     disconnect_client = FakeClient(disconnect_refs)
@@ -2283,20 +2307,21 @@ async def test_session_deadline_includes_serialized_queue_wait():
     while first_operation not in refs.mutation_started:
         await asyncio.sleep(0)
 
-    with pytest.raises(TelegramWorkspaceError) as queued_timeout:
-        await adapter.execute(
-            intent(
-                SocialAction.SEND_MESSAGE,
-                target_ref=USER_REF,
-                content=content("second must not send"),
-            ),
-            operation_ref=second_operation,
-        )
+    queued_timeout = await adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=USER_REF,
+            content=content("second must not send"),
+        ),
+        operation_ref=second_operation,
+    )
     first_receipt = await first
 
-    assert queued_timeout.value.code == "provider_timeout"
-    assert queued_timeout.value.retry_safe is True
-    assert second_operation not in refs.operations
+    assert queued_timeout["status"] == "failed"
+    assert queued_timeout["error_code"] == "provider_mutation_not_started"
+    assert queued_timeout["retry_safe"] is True
+    assert queued_timeout["mutation_boundary_reached"] is False
+    assert refs.resolve_operation(second_operation).result == queued_timeout
     assert first_receipt["status"] == "outcome_unknown"
     assert len([name for name, _ in client.calls if name == "send_message"]) == 1
 
@@ -2768,7 +2793,8 @@ def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch()
         "capabilities",
         "resolve",
         "read",
-        "execute",
+            "execute",
+            "retry",
             "reconcile",
             "scheduled_items",
             "stage_asset",

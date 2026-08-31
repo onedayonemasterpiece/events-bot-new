@@ -680,6 +680,13 @@ def build_social_workspace_tools(
             runtime.provider_timeout_seconds * (1 + registration_waves) + 35.0,
         ),
     }
+    mutation_common = {
+        **common,
+        # Telegram albums can upload up to ten immutable assets before the
+        # final content mutation. The adapter derives the tighter byte/item
+        # deadline; the MCP layer must not cancel that safe upload phase.
+        "timeout_seconds": max(650.0, runtime.provider_timeout_seconds + 35.0),
+    }
     specs = [
         ToolSpec("social_capabilities", "Social capabilities",
                  "Inspect the capability-gated provider-neutral social surface.",
@@ -807,7 +814,8 @@ def build_social_workspace_tools(
                      SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
                  ),
                  handler=commit, scope_selector=commit_scope,
-                 read_only=False, destructive=True, idempotent=False, **common),
+                 read_only=False, destructive=True, idempotent=False,
+                 **mutation_common),
         ToolSpec("social_action_status", "Get social action status",
                  "Read or reconcile durable action state; unknown outcomes are never retry-safe.",
                  SOCIAL_WORKSPACE_STATUS_SCHEMA, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
@@ -823,7 +831,7 @@ def build_social_workspace_tools(
             read_only=False,
             destructive=True,
             idempotent=True,
-            **common,
+            **mutation_common,
         ),
     ]
     action_tool_names = {
