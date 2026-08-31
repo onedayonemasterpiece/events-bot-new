@@ -28,7 +28,7 @@ published, scheduled, retried, deleted, or altered provider content.
 | R6 | Done | Same logical action/preparation/operation bounded retry, max three attempts, `BEGIN IMMEDIATE` single-flight guard, provider safe-failure revalidation. |
 | R7 | Done | Old failures proven at image 1 before save/post; new safe observations distinguish receipt shape/type/length/decoding without payloads or secrets. Exact old empty field remains unrecoverable. |
 | R8 | Done locally | Focused integration: 308 passed. Final complete `tests/test_private_events_mcp_*.py`: 546 passed, 3 existing aiohttp warnings. `compileall` and `git diff --check`: pass. Independent checklist review found no remaining code blocker. |
-| O1 | Partial | Incident/docs complete; merge, exact-main deploy, historical Telegram provider readback and refreshed ChatGPT action-catalogue acceptance remain release/operational gates. |
+| O1 | Partial | PR `#600`, exact-main Fly `v2054`, health/DB/log checks and historical Telegram/VK readbacks are complete with zero exact copies. Refreshed ChatGPT action-catalogue acceptance remains the incident closure gate. |
 
 ## Integration corrections
 
@@ -59,11 +59,17 @@ git diff --check: pass
 The three warnings are pre-existing aiohttp `NotAppKeyWarning` instances from
 the disabled-provider `create_app` test. They are unrelated to this change.
 
-## Remaining integration-owned gates
+## Production acceptance
 
-1. Merge to `origin/main` after PR CI and deploy only a clean exact-main checkout.
-2. Verify runtime SHA, health, databases, runtime-log mirror and tool catalogue.
-3. Reconcile the three historical operation refs and exact provider queues by
-   read-only provider calls; Codex must not perform a provider content mutation.
-4. Keep the incident open unless the refreshed ChatGPT action definition is
-   accepted in a genuinely new chat and the exact operational handoff is safe.
+- PR `#600` merged as `5cb1fbc9e870890770ca89dfd44917feef0c40f1`;
+  all required CI jobs passed.
+- Clean exact-main deploy produced Fly release `v2054`; `/healthz`, both SQLite
+  quick checks, immutable image SHA and runtime-log mirror passed.
+- Read-only provider reconciliation found Telegram scheduled/live `0 / 0` and
+  VK postponed/live `0 / 0`. Historical Telegram status converged terminally to
+  `reconciliation_no_match`; both VK attempts remain definite pre-wall failures.
+- Server catalogue exposes scheduled-list and bounded retry under existing
+  scopes. No provider content was published, retried, deleted or altered.
+- Machine handoff is `READY_FOR_14_00_PUBLICATION`; refreshed ChatGPT
+  action-control publication and a genuinely new-chat canary remain the only
+  incident closure gate.
