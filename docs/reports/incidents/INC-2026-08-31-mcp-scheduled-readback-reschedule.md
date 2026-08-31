@@ -1,6 +1,6 @@
 # INC-2026-08-31 eventsBot MCP scheduled readback blocked a safe reschedule
 
-Status: open
+Status: mitigating — exact-main server fix/readback complete; refreshed ChatGPT action acceptance pending
 Severity: sev2
 Service: private eventsBot MCP / Telegram and VK scheduled publication
 Opened: 2026-08-31
@@ -99,6 +99,16 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   existing aiohttp warnings; `compileall` and `git diff --check` passed. The
   independent checklist review found no remaining code blocker. The incident
   remains open pending PR CI, exact-main merge/deploy and operational readback.
+- 2026-08-31 10:17 UTC — PR `#600` merged after all three required CI jobs
+  passed. Clean exact `origin/main` SHA
+  `5cb1fbc9e870890770ca89dfd44917feef0c40f1` was deployed as Fly release
+  `v2054`.
+- 2026-08-31 10:23–10:27 UTC — production health and both SQLite databases
+  passed; the runtime mirror was fresh. Read-only provider-backed reconciliation
+  terminalized the historical Telegram operation as
+  `reconciliation_no_match`. Exact counts were Telegram scheduled/live `0 / 0`
+  and VK postponed/live `0 / 0`. No publication, retry, cancellation or other
+  provider-content mutation was performed.
 
 ## Root Cause
 
@@ -229,6 +239,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   exact postponed and zero exact live copies at the audited owner.
 - Performed no publication, cancellation, retry, image regeneration or caption
   change from Codex.
+- After exact-main deploy, confirmed zero exact old copies on both providers and
+  produced the fail-closed machine handoff `READY_FOR_14_00_PUBLICATION`. The
+  requested 14:00 Europe/Kaliningrad slot had not passed at readback time.
 
 ## Corrective Actions
 
@@ -251,38 +264,57 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - [x] Persist safe VK multipart/stage observability sufficient to distinguish
   response shape and empty-field failures without bodies, credentials, hashes
   or upload URLs.
-- [ ] Complete code review, tests, merge, exact-main deploy and operational
+- [x] Complete code review, tests, merge, exact-main deploy and operational
   reconciliation before changing the incident status.
 
 ## Follow-up Actions
 
-- [ ] eventsBot MCP owner — reconcile the historical Telegram operation through
+- [x] eventsBot MCP owner — reconcile the historical Telegram operation through
   provider-backed scheduled/live reads after the fixed exact-main release.
 - [ ] ChatGPT workspace administrator — review and publish the changed action
   catalogue, then verify scheduled-list/retry availability in a new chat.
-- [ ] incident owner — produce a machine-readable operational handoff with one
+- [x] incident owner — produce a machine-readable operational handoff with one
   allowed status: `READY_FOR_14_00_PUBLICATION`,
   `BLOCKED_OLD_TELEGRAM_OUTCOME`, `BLOCKED_PROVIDER_READBACK`, or
   `BLOCKED_DEPLOYMENT`.
-- [ ] incident owner — if the requested slot has passed, stop rather than
+- [x] incident owner — if the requested slot has passed, stop rather than
   publishing immediately or silently changing the time.
 
 ## Release And Closure Evidence
 
-- implementation SHA(s): pending
-- merged `origin/main` SHA: pending
-- deployed SHA / Fly release: pending
-- deploy path: pending; must be a clean exact-`origin/main` release
-- regression checks: pending
+- implementation branch head: `632b9c056085b74e337ee46ecb137e2172c58e31`
+- merged/deployed implementation `origin/main` SHA:
+  `5cb1fbc9e870890770ca89dfd44917feef0c40f1`
+- deployed Fly release: `v2054`, machine version `2054`, one passing check
+- deploy path: clean detached worktree at exact `origin/main` through
+  `scripts/deploy_fly_main.sh --remote-only --depot=false`
+- regression checks: final local Private Events MCP suite `546 passed`, three
+  existing aiohttp warnings; independent focused review `168 passed`; PR CI
+  `python-ci`, `smart-update-identity-state-machine` and
+  `static-browser-release-gate` all passed; `compileall`/diff checks passed
 - action-definition review/publication and new-chat acceptance: pending
-- old Telegram operation reconciliation: pending
-- exact Telegram scheduled/live counts: pending
-- exact VK postponed/live counts at audit: `0 / 0`; post-deploy recheck pending
-- old 10:30 exact item existence/cancellation/absence proof: pending
-- live duplicate check: VK `0` in latest 100 audited owner-wall items; Telegram
-  pending
-- post-deploy health/runtime mirror/SQLite verification: pending
-- current handoff: `BLOCKED_OLD_TELEGRAM_OUTCOME`
+- old Telegram operation reconciliation: terminal
+  `outcome_unknown / reconciliation_no_match / retry_safe=false`, attempt `1`;
+  the outer status ledger was converged to the same terminal receipt
+- exact Telegram scheduled/live counts: `0 / 0` (12 scheduled logical items and
+  77 live logical items scanned); no old item existed, so no cancellation was
+  attempted or required
+- exact VK postponed/live counts: `0 / 0` (latest 100 live owner items scanned);
+  both historical failures remain definite pre-wall
+  `media_upload_response_invalid / retry_safe=true`, image ordinal 1, mutation
+  boundary not reached
+- live duplicate check: zero exact copies on both platforms
+- deployed catalogue: `social_scheduled_items_list` read-only under the existing
+  Telegram/VK schedule/publish scopes; `social_action_retry`, status and the
+  existing prepare/commit delete path present. Scheduled namespace/absence
+  behavior is covered by the deployed code and regression suite.
+- post-deploy health: `/healthz ok=true ready=true db=ok`; both SQLite
+  `PRAGMA quick_check=ok`; runtime file mirror enabled and fresh; immutable
+  in-image SHA matched the deployed implementation SHA
+- machine handoff: `READY_FOR_14_00_PUBLICATION`
+- residual closure gate: an administrator must refresh/review/publish the
+  changed ChatGPT action snapshot and verify it in a genuinely new chat; server
+  catalogue inspection alone does not close that separate client-control gate
 
 ## Prevention
 
