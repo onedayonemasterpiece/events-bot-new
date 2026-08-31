@@ -134,6 +134,7 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_dialogs_list` | VK-only metadata list of all or unread dialogs: opaque target, display name, kind and unread count, with no message body/native peer ID |
 | `social_content_search` | bounded keyword search |
 | `social_content_feed` | bounded target feed/history |
+| `social_scheduled_items_list` | bounded provider-backed scheduled queue for one exact target, projected as logical opaque publications |
 | `social_content_item` | fetch one bound item |
 | `social_content_thread` | comments or reaction summaries |
 | `social_comment_hints_list` | bounded recent VK comment/mention notifications as untrusted investigation hints |
@@ -146,6 +147,12 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_action_prepare` | freeze exact typed action/content/target/media digest; explicitly requested outbound actions return `approved` with no provider call, while edit/delete wait for external approval |
 | `social_action_commit` | atomically consume the exact preparation authorization, then make the sole provider attempt |
 | `social_action_status` | reconcile durable success/failure/outcome-unknown state |
+| `social_action_retry` | make one bounded single-flight retry of a terminal operation only when durable evidence says `retry_safe=true` |
+
+The `social_scheduled_items_list` and `social_action_retry` rows are the target
+contract of the open August 31 recovery incident. They must not be treated as
+production-available until exact-main deploy, authenticated catalogue readback,
+administrator action review/publication and a real new-chat probe all pass.
 
 ### Targeted editorial research
 
@@ -465,17 +472,85 @@ wall-post returned native identifiers before a later ambiguity, those values
 are encrypted in provider state and reconciliation uses the exact photo/post
 identifier rather than text alone.
 
+#### Scheduled recovery contract (release acceptance pending)
+
+The following is the required contract for the open
+`INC-2026-08-31-mcp-scheduled-readback-reschedule` repair. Its presence in this
+document is not evidence that a production deployment or refreshed ChatGPT
+action snapshot has passed acceptance.
+
 Scheduled items keep their provider queue namespace in the opaque binding.
-Telegram schedule success requires an exact `get_messages(..., scheduled=True)`
-readback for the same peer/message, schedule timestamp, text and media count;
-`social_content_item` reuses that same opaque item instead of resolving the
-numeric id from ordinary channel history. VK schedule success is read back from
-the intended community's postponed queue, not `wall.getById`. VK may re-own a
-saved user photo when attaching it to a community post, so reconciliation binds
-the exact wall owner/post id, normalized text, publish time and photo count but
-does not require the pre-wall photo owner/id pair to survive. A later status
-check inspects both postponed and live owner surfaces without replaying
-`wall.post`.
+Telegram schedule success and recovery use bounded raw
+`messages.GetScheduledHistoryRequest`, never Telethon's incomplete high-level
+scheduled iterator. Physical members with one `grouped_id` collapse into one
+logical album in Telegram order. Exact verification binds the target,
+UTC-equivalent schedule time, normalized-text SHA-256, expected logical media
+count and ordered media roles; source-file digests remain encrypted evidence
+because Telegram may re-encode uploaded photos. `social_content_item` reuses the
+same opaque scheduled binding instead of resolving a numeric id from ordinary
+channel history.
+
+`social_scheduled_items_list` is the narrow read-only queue surface. It requires
+an exact `platform` and `target_ref`; accepts optional bounded
+`scheduled_from`, `scheduled_to`, exact `text_sha256` and `media_count` filters;
+and uses `limit=10` with a hard maximum of 25. Telegram reads raw scheduled
+history; VK reads the exact owner through `wall.get(filter="postponed")`.
+Results contain `platform`, opaque `target_ref`, `queue=scheduled`, a bounded
+`items` array, `exact_match_count`, optional `has_more`, and trust. Each logical
+item contains only opaque `item_ref`/`target_ref`, `queue`, normalized
+`scheduled_at`, `text_sha256`, `media_count`, ordered `media_roles` and trust.
+Native message/post/peer IDs, access hashes, provider payloads, tokens and
+upload URLs never cross the public boundary. The tool reuses the existing
+`telegram:schedule` / `vk:schedule` scope families; it does not require a new
+OAuth consent family.
+
+Provider adapters own their transport/session deadlines and durable uncertainty
+classification. Runtime must not use an equal outer deadline that cancels an
+adapter before it finalizes its claimed provider operation. Any outer protocol
+deadline must leave a documented finalization/readback margin or shield the
+provider task. `asyncio.CancelledError` at the provider-operation boundary must
+durably complete success, definite failure, or outcome-unknown with
+reconciliation evidence; release is allowed only when no provider mutation
+could have occurred. A NULL provider result has a bounded lease/deadline and
+cannot remain `operation_in_progress` indefinitely.
+
+Telegram restart recovery reconstructs the exact encrypted intent and checks
+the raw scheduled queue. Once the scheduled time passes, it checks ordinary/live
+history as well. Exactly one exact logical match succeeds with a stable opaque
+item, exact time/media count and `read_after_write.verified=true`. Multiple
+matches are terminal `outcome_unknown / reconciliation_ambiguous` with only a
+bounded count and opaque refs and are never auto-deleted. Zero matches within
+the consistency window remain outcome-unknown with a bounded attempt number,
+`next_poll_after_seconds` and `reconciliation_deadline`. Zero matches after that
+deadline become terminal `outcome_unknown / reconciliation_no_match` and remain
+non-retryable after the mutation boundary. Evidence that mutation never started
+may instead terminate as `failed / provider_mutation_not_started` with
+`retry_safe=true`.
+
+Exact scheduled deletion retains the existing approval and item-binding checks.
+A Telegram scheduled album uses
+`messages.DeleteScheduledMessagesRequest` for every bound physical member,
+then raw scheduled history must prove all members absent. VK deletion targets
+the exact bound owner/post and must prove absence from the postponed queue. The
+ordinary delete namespace and a text-only match are not acceptable substitutes,
+and direct-delete authorization is not broadened.
+
+`social_action_retry(operation_ref)` is bounded to a terminal operation whose
+durable receipt has `retry_safe=true`, normally a definite failure before the
+provider mutation boundary. It keeps the logical action and preparation
+identity, creates a new opaque operation attempt with an incremented number,
+records the public `stage`, mutation-boundary state and final readback, and uses
+an atomic single-flight
+guard so concurrent retries cannot execute. It never retries a pending,
+succeeded, ambiguous or outcome-unknown action and never asks the caller to
+invent a replacement idempotency key.
+
+VK schedule success is read back from the intended community's postponed queue,
+not `wall.getById`. VK may re-own a saved user photo when attaching it to a
+community post, so reconciliation binds the exact wall owner/post id, normalized
+text, publish time and photo count but does not require the pre-wall photo
+owner/id pair to survive. A later status check inspects both postponed and live
+owner surfaces without replaying `wall.post`.
 
 The approval token is never pasted into ChatGPT. It is not an OAuth token and
 must not appear in model context, logs, PRs or artifacts. A provider timeout is
@@ -617,12 +692,23 @@ verified local asset stream and never exposes or accepts a raw VK upload-server
 URL/method. Multipart responses enable bounded HTTP content decompression
 because VK may return the upload receipt as gzip, then consume decoded bytes to
 EOF under the cap; one short network chunk is not treated as the whole JSON
-response. Safe logs
-record only opaque operation, fixed stage, status and sanitized code. A durable
-attempt row records the attempt number, fixed method/stage, start/finish,
-available HTTP status, normalized outcome/error and an encrypted envelope for
-native photo/post results; target/content/media fingerprints remain bounded and
-tokens, upload URLs and bodies are never stored. Ordinary VK item/feed reads
+response. Safe logs record only opaque operation, fixed stage, status and
+sanitized code. For `wall_photo_multipart`, the bounded finished
+`provider_result` additionally records `http_status`, `content_type`,
+`content_encoding`, `compressed_bytes`, `decoded_bytes`, `consumed_to_eof`,
+top-level/nested key names and unknown-key counts,
+`server_field`/`photo_field`/`hash_field` type plus capped length,
+`image_ordinal`, `expected_digest_prefix`, and `mutation_boundary_reached`.
+Existing `stage` and `phase=started|finished` plus the durable attempt recorder
+supply stage timing/attempt evidence. It never records a response body, field
+value/hash, upload URL, token or cookie.
+A missing/invalid receipt before `photos.saveWallPhoto` is definite
+`failed / retry_safe=true`; uncertainty after `wall.post` remains
+`outcome_unknown / retry_safe=false`. A durable attempt row records the attempt
+number, fixed method/stage, start/finish, available HTTP status, normalized
+outcome/error and an encrypted envelope for native photo/post results;
+target/content/media fingerprints remain bounded and tokens, upload URLs and
+bodies are never stored. Ordinary VK item/feed reads
 project wall photos as principal-bound opaque `media[]`/attachment refs, so
 MCP readback can attest image presence without exposing native IDs. Story
 metrics are aggregate views/likes/replies/shares where VK
@@ -1119,6 +1205,21 @@ Record all of the following without secrets:
     sibling audio failures stay isolated, and response/log/audit contain no
     native/provider/session/path data. The existing connector reconnects only
     through the normal service restart path and is never deleted/re-added.
+24. a cancelled/restarted scheduled Telegram operation with a claimed provider
+    row converges through raw scheduled/live readback; no NULL result or
+    `reconciliation_pending` loop survives its finite deadline;
+25. `social_scheduled_items_list` is present only under the existing schedule
+    scope families, returns one logical item for a Telegram album and the exact
+    VK postponed owner queue, enforces filters/limits/redaction, and remains
+    distinct from ordinary feed/history;
+26. exact scheduled deletion uses the Telegram scheduled namespace or exact VK
+    postponed owner/post and verifies queue absence; ambiguous matches are not
+    auto-deleted;
+27. bounded retry accepts one terminal pre-mutation `retry_safe=true` attempt,
+    rejects concurrent/unknown/pending retries, preserves logical action and
+    preparation refs, and records the new attempt plus final readback. The
+    changed actions are administrator-reviewed/published and exercised from a
+    genuinely new ChatGPT conversation.
 
 Rollback order: first turn
 `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=0` for a document-only

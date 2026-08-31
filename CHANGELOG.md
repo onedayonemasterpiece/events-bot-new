@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Changed: defined the Private `eventsBot` MCP recovery contract for scheduled
+  multi-image actions: provider-owned deadlines and durable cancellation
+  finalization, restart-safe raw Telegram scheduled/live reconciliation, a
+  logical Telegram/VK scheduled-queue read, exact namespace-aware cancellation,
+  bounded single-flight retry of proven pre-mutation failures, and safe VK
+  multipart diagnostics. Production deploy, historical Telegram reconciliation
+  and refreshed ChatGPT action acceptance remain gated by the open regression
+  contract `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
+
 - Fixed: stale `RENDERING` video sessions no longer hold every Telegram video
   lane after their exact Kaggle kernel has terminally failed. Scheduled
   `/v tomorrow` retries now use a persisted busy-lane cooldown, same-slot lane
