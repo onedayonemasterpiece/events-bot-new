@@ -1406,7 +1406,8 @@ class InMemoryTelegramOpaqueRefStore:
             conn.execute("BEGIN IMMEDIATE")
             changed = conn.execute(
                 """UPDATE social_provider_tg_operation
-                   SET reconciliation_attempt=reconciliation_attempt+1,updated_at_ms=?
+                   SET reconciliation_attempt=MIN(reconciliation_attempt+1,100),
+                       updated_at_ms=?
                    WHERE operation_ref=? AND action_digest=?""",
                 (self._state.now_ms(), operation_ref, action_digest),
             ).rowcount
