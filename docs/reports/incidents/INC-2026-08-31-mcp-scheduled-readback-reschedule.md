@@ -1,6 +1,6 @@
 # INC-2026-08-31 eventsBot MCP scheduled readback blocked a safe reschedule
 
-Status: mitigating — Telegram album timeout hotfix in progress; ChatGPT acceptance pending
+Status: mitigated — exact-main Telegram album timeout hotfix deployed; ChatGPT acceptance pending
 Severity: sev2
 Service: private eventsBot MCP / Telegram and VK scheduled publication
 Opened: 2026-08-31
@@ -138,6 +138,14 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   scheduled/live readback found zero exact copies, but the upload path had
   already set `mutation_started_at_ms`, so the receipt incorrectly became
   `reconciliation_no_match / retry_safe=false`.
+- 2026-08-31 17:49–17:55 UTC — PR `#604` merged as exact `origin/main`
+  `30376f702342cd3fe57ee837800a58e01dc0cbec` and was deployed as Fly release
+  `v2058` / machine version `2058`. All health, database and runtime-mirror
+  checks passed. Post-deploy readback found zero exact scheduled copies, and
+  repeated public channel read at 18:03:31 UTC still ended at message `12631`
+  from 16:25:05 UTC, with no four-image album at or after the requested 18:00
+  UTC slot. Codex did not call commit, retry, delete or any other
+  provider-content mutation.
 
 ## Root Cause
 
@@ -338,7 +346,7 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - [x] Implement Telegram provider-ledger CAS rearm and adapter retry so the
   existing `social_action_retry` tool can actually perform attempt 2 or 3 for a
   proven pre-content-mutation failure.
-- [ ] Deploy from exact `origin/main` and prove zero exact Telegram
+- [x] Deploy from exact `origin/main` and prove zero exact Telegram
   scheduled/live copies. The final four-image publication remains owned by
   ChatGPT through eventsBot MCP; Codex must not publish it. If a provider
   mutation smoke is still necessary, use a separate test payload and delete it
@@ -408,6 +416,26 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   passing; both SQLite `PRAGMA quick_check=ok`; runtime file mirror enabled,
   present and fresh; immutable image SHA exactly
   `6b43c043bf3c59dacb8e8f1ee7e2bcdee2e91a09`
+- Telegram album timeout/retry hotfix: commits `a1b89a938` and `993fe660d`, PR
+  `#604`; merged/deployed exact-main SHA
+  `30376f702342cd3fe57ee837800a58e01dc0cbec` as Fly release/machine version
+  `v2058` / `2058`
+- hotfix regression evidence: focused `173 passed`; complete
+  `tests/test_private_events_mcp_*.py` `558 passed` with the same three
+  existing aiohttp warnings; `compileall` and `git diff --check` passed; PR
+  `#604` `python-ci`, `smart-update-identity-state-machine` and
+  `static-browser-release-gate` all passed
+- hotfix post-deploy evidence: immutable in-image SHA exactly
+  `30376f702342cd3fe57ee837800a58e01dc0cbec`; `/healthz ok=true ready=true
+  db=ok`; one Fly check passing; both SQLite `PRAGMA quick_check=ok`; runtime
+  mirror fresh; authenticated exact scheduled count `0`; repeated public live
+  feed read at 18:03:31 UTC had no new four-image album at/after 18:00 UTC
+- operation `op_BH5WmDcJ37MuxCOz6h6tT6wVvHuwUzhM` remains the immutable
+  historical failed receipt `reconciliation_no_match / retry_safe=false`.
+  Because its requested 20:00 Europe/Kaliningrad slot has passed, it was not
+  reclassified or retried. ChatGPT must stage/prepare a new action after the
+  user supplies a new publication time; Codex is not authorized to publish the
+  real album.
 - no historical operation ref was repeated after this deploy. No Telegram/VK
   publication, scheduling, delete, retry or diagnostic provider mutation was
   performed. The specific VK image-2 provider rejection still needs a fresh
