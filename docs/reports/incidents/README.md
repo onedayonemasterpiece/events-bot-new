@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-08-31-mcp-scheduled-readback-reschedule.md`
+  - Scope: private eventsBot MCP provider deadline/finalization, restart-safe
+    Telegram scheduled/live reconciliation, logical scheduled-queue reads,
+    exact scheduled deletion, bounded safe retry and VK multipart diagnostics.
+  - Must not regress: no cancelled provider claim may remain indefinitely with
+    a NULL result; status must converge through exact provider-backed readback;
+    scheduled albums remain one logical item and use their own delete namespace;
+    only definite pre-mutation failures are retryable; closure requires exact
+    Telegram/VK queue counts plus refreshed ChatGPT action acceptance.
+
 - `INC-2026-08-30-video-lane-stale-render-alert-storm.md`
   - Scope: Kaggle video render projection, Telegram video-lane ownership,
     tomorrow/partner watchdog retry cadence and startup ordering.
