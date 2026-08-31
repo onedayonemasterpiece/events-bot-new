@@ -696,6 +696,9 @@ class DurableVKWorkspaceAdapter:
     async def read(self, request: Any) -> Mapping[str, Any]:
         return await self.delegate.read(request)
 
+    async def scheduled_items(self, **kwargs: Any) -> Mapping[str, Any]:
+        return await self.delegate.scheduled_items(**kwargs)
+
     async def stage_asset(self, asset: Any, *, role: MediaRole) -> str:
         return await self.delegate.stage_asset(asset, role=role)
 
@@ -801,6 +804,69 @@ class DurableVKWorkspaceAdapter:
                     raise ProviderBindingError("VK operation completion conflict")
                 if row["result_json"] != encoded:
                     raise ProviderBindingError("VK operation result conflict")
+        return result
+
+    async def retry(
+        self,
+        intent: Any,
+        *,
+        operation_ref: str,
+        attempt_number: int,
+    ) -> Mapping[str, Any]:
+        """Rearm only a durable definite pre-mutation VK failure.
+
+        The public runtime owns the transactional single-flight attempt CAS.
+        This provider boundary independently verifies the same operation,
+        idempotency key and action digest before allowing the delegate to bypass
+        its cached safe failure.
+        """
+
+        digest = compute_action_digest(intent)
+        idem = hashlib.sha256(intent.idempotency_key.encode()).hexdigest()
+        with self.state._lock, self.state._connect() as conn:
+            row = conn.execute(
+                """SELECT operation_ref,idempotency_hash,action_digest,result_json
+                   FROM social_provider_vk_operation WHERE operation_ref=?""",
+                (operation_ref,),
+            ).fetchone()
+        if (
+            row is None
+            or row["operation_ref"] != operation_ref
+            or row["idempotency_hash"] != idem
+            or row["action_digest"] != digest
+            or not row["result_json"]
+        ):
+            raise ProviderBindingError("VK retry binding mismatch")
+        prior = json.loads(str(row["result_json"]))
+        if (
+            not isinstance(prior, Mapping)
+            or prior.get("status") != SocialActionStatus.FAILED.value
+            or prior.get("retry_safe") is not True
+        ):
+            raise ProviderBindingError("VK operation is not retry safe")
+        result = dict(
+            await self.delegate.retry(
+                intent,
+                operation_ref=operation_ref,
+                attempt_number=attempt_number,
+            )
+        )
+        encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
+        with self.state._lock, self.state._connect() as conn:
+            changed = conn.execute(
+                """UPDATE social_provider_vk_operation
+                   SET result_json=?,updated_at_ms=?
+                   WHERE operation_ref=? AND action_digest=? AND result_json=?""",
+                (
+                    encoded,
+                    self.state.now_ms(),
+                    operation_ref,
+                    digest,
+                    str(row["result_json"]),
+                ),
+            ).rowcount
+        if changed != 1:
+            raise ProviderBindingError("VK retry completion conflict")
         return result
 
     async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:

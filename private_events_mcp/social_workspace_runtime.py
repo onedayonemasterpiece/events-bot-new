@@ -1074,6 +1074,95 @@ class SocialWorkspaceRuntime:
         return replace(intent, target_ref=target, item_ref=item,
                        destination_target_ref=destination, content=media)
 
+    def _resolve_ref_for_reconciliation(
+        self,
+        public_ref: str,
+        kind: str,
+        platform: str,
+        principal: RuntimePrincipal,
+    ) -> str:
+        """Resolve an expired ref only for an already-bound operation readback.
+
+        Scheduled reconciliation may happen after short-lived staged assets have
+        expired.  It never reopens or uploads those bytes; the provider adapter
+        needs only the durable encrypted binding to reconstruct the original
+        text/media fingerprint.  Principal/resource/policy binding remains exact.
+        """
+
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            row = conn.execute(
+                """SELECT provider_ref_ciphertext FROM social_workspace_ref
+                   WHERE ref_hash=? AND ref_kind=? AND client_hash=?
+                     AND subject_hash=? AND resource_hash=? AND platform=?
+                     AND policy_version=?""",
+                (
+                    self._hash(public_ref),
+                    kind,
+                    client,
+                    subject,
+                    resource,
+                    platform,
+                    self.policy_version,
+                ),
+            ).fetchone()
+        if row is None:
+            raise SocialWorkspaceRuntimeError(
+                "historical opaque reference is unknown or not bound"
+            )
+        return self._decrypt(str(row["provider_ref_ciphertext"]))
+
+    def _native_reconciliation_intent(
+        self, intent: SocialActionIntent, principal: RuntimePrincipal
+    ) -> SocialActionIntent:
+        """Recover provider refs without re-authorizing an expired mutation.
+
+        This path is deliberately reachable only from ``reconcile`` after the
+        operation/preparation has been matched to the current principal.  It is
+        evidence recovery, not a retry or provider mutation authorization.
+        """
+
+        platform = intent.platform.value
+        resolve = lambda value, kind: (  # noqa: E731 - local closed resolver
+            self._resolve_ref_for_reconciliation(
+                value, kind, platform, principal
+            )
+            if value
+            else None
+        )
+        content = intent.content
+        if content is not None:
+            content = replace(
+                content,
+                entities=tuple(
+                    replace(
+                        entity,
+                        custom_emoji_asset_ref=resolve(
+                            entity.custom_emoji_asset_ref, "asset"
+                        ),
+                    )
+                    if entity.custom_emoji_asset_ref is not None
+                    else entity
+                    for entity in content.entities
+                ),
+                media=tuple(
+                    replace(
+                        attachment,
+                        asset_ref=str(resolve(attachment.asset_ref, "asset")),
+                    )
+                    for attachment in content.media
+                ),
+            )
+        return replace(
+            intent,
+            target_ref=resolve(intent.target_ref, "target"),
+            item_ref=resolve(intent.item_ref, "item"),
+            destination_target_ref=resolve(
+                intent.destination_target_ref, "target"
+            ),
+            content=content,
+        )
+
     def _sanitize_provider_output(
         self, value: Any, platform: str, principal: RuntimePrincipal,
         *, known_refs: Mapping[tuple[str, str], str] | None = None,
@@ -3167,7 +3256,9 @@ class SocialWorkspaceRuntime:
             )
         if prep is not None:
             original_intent = self._intent_from_row(prep)
-            native_intent = self._native_intent(original_intent, principal)
+            native_intent = self._native_reconciliation_intent(
+                original_intent, principal
+            )
             if native_intent.target_ref and original_intent.target_ref:
                 known[("target", native_intent.target_ref)] = original_intent.target_ref
             if native_intent.item_ref and original_intent.item_ref:

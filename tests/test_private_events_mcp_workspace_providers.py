@@ -351,6 +351,73 @@ async def test_vk_unknown_receipt_reconciles_from_encrypted_intent_after_restart
     assert second_delegate.reconciliations == 1
 
 
+@pytest.mark.asyncio
+async def test_durable_vk_wrapper_proxies_scheduled_read_and_safe_retry(
+    tmp_path,
+) -> None:
+    class Delegate:
+        def __init__(self) -> None:
+            self.retry_calls = 0
+
+        async def execute(self, intent, *, operation_ref):
+            return {
+                "platform": "vk",
+                "operation_ref": operation_ref,
+                "action": intent.action.value,
+                "status": "failed",
+                "retry_safe": True,
+                "error_code": "media_upload_response_invalid",
+            }
+
+        async def scheduled_items(self, **kwargs):
+            return {"platform": "vk", "target_ref": kwargs["target_ref"], "items": []}
+
+        async def retry(self, intent, *, operation_ref, attempt_number):
+            self.retry_calls += 1
+            return {
+                "platform": "vk",
+                "operation_ref": operation_ref,
+                "action": intent.action.value,
+                "status": "succeeded",
+                "retry_safe": False,
+                "attempt_number": attempt_number,
+            }
+
+    delegate = Delegate()
+    adapter = DurableVKWorkspaceAdapter(
+        delegate,
+        SQLiteProviderCoordinator(str(tmp_path / "vk-wrapper.sqlite")),
+        "vk-test-signing-key",
+    )
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "schedule",
+            "idempotency_key": "durable-safe-retry-001",
+            "target_ref": "tgt_" + "a" * 24,
+            "content": {"text": "Exact scheduled post"},
+            "schedule_at": "2026-08-31T12:00:00Z",
+        }
+    )
+    operation_ref = "op_" + "b" * 24
+    failed = await adapter.execute(intent, operation_ref=operation_ref)
+    assert failed["retry_safe"] is True
+    assert await adapter.scheduled_items(target_ref=intent.target_ref) == {
+        "platform": "vk",
+        "target_ref": intent.target_ref,
+        "items": [],
+    }
+
+    retried = await adapter.retry(
+        intent, operation_ref=operation_ref, attempt_number=2
+    )
+    assert retried["status"] == "succeeded"
+    assert delegate.retry_calls == 1
+    assert (await adapter.reconcile(operation_ref))["status"] == "succeeded"
+    with pytest.raises(ProviderBindingError, match="not retry safe"):
+        await adapter.retry(intent, operation_ref=operation_ref, attempt_number=3)
+
+
 def test_telegram_bindings_survive_store_restart(config, tmp_path) -> None:
     isolated = replace(
         config,

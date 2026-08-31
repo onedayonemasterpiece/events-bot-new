@@ -2055,6 +2055,15 @@ async def test_reconcile_passes_recovered_native_intent_and_evidence_when_suppor
         context(),
     )
 
+    # Historical reconciliation is evidence recovery, not a new mutation.
+    # It must still recover the exact encrypted provider binding after the
+    # public ref TTL has elapsed.
+    with store._lock, store._connect() as conn:
+        conn.execute(
+            "UPDATE social_workspace_ref SET expires_at=? WHERE ref_hash=?",
+            (service._now() - 1, service._hash(target)),
+        )
+
     await service.reconcile(result["operation_ref"], context())
 
     assert adapter.recovered is not None
