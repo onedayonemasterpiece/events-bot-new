@@ -238,6 +238,7 @@ class OAuthStateStore:
                     idempotency_hash TEXT NOT NULL,
                     intent_ciphertext TEXT NOT NULL,
                     operation_ref TEXT,
+                    logical_action_ref TEXT,
                     status TEXT NOT NULL,
                     expires_at INTEGER NOT NULL,
                     created_at INTEGER NOT NULL,
@@ -276,6 +277,9 @@ class OAuthStateStore:
                     result_json TEXT,
                     error_code TEXT,
                     provider_attempted_at INTEGER,
+                    attempt_number INTEGER NOT NULL DEFAULT 1,
+                    retry_in_progress INTEGER NOT NULL DEFAULT 0,
+                    retry_started_at INTEGER,
                     created_at INTEGER NOT NULL,
                     updated_at INTEGER NOT NULL
                 );
@@ -340,12 +344,35 @@ class OAuthStateStore:
                 conn.execute(
                     "ALTER TABLE social_workspace_preparation ADD COLUMN operation_ref TEXT"
                 )
+            if "logical_action_ref" not in columns:
+                conn.execute(
+                    "ALTER TABLE social_workspace_preparation ADD COLUMN logical_action_ref TEXT"
+                )
             conn.execute(
                 """CREATE UNIQUE INDEX IF NOT EXISTS
                    ux_social_workspace_preparation_operation_ref
                    ON social_workspace_preparation(operation_ref)
                    WHERE operation_ref IS NOT NULL"""
             )
+            conn.execute(
+                """CREATE UNIQUE INDEX IF NOT EXISTS
+                   ux_social_workspace_preparation_logical_action_ref
+                   ON social_workspace_preparation(logical_action_ref)
+                   WHERE logical_action_ref IS NOT NULL"""
+            )
+            operation_columns = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(social_workspace_operation)")
+            }
+            for name, definition in (
+                ("attempt_number", "INTEGER NOT NULL DEFAULT 1"),
+                ("retry_in_progress", "INTEGER NOT NULL DEFAULT 0"),
+                ("retry_started_at", "INTEGER"),
+            ):
+                if name not in operation_columns:
+                    conn.execute(
+                        f"ALTER TABLE social_workspace_operation ADD COLUMN {name} {definition}"
+                    )
 
     @staticmethod
     def _scopes_to_text(scopes: set[str] | frozenset[str]) -> str:

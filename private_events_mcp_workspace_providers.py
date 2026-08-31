@@ -302,6 +302,11 @@ class SQLiteProviderCoordinator:
                     operation_ref TEXT PRIMARY KEY,
                     action_digest TEXT NOT NULL,
                     result_json TEXT,
+                    intent_ciphertext TEXT,
+                    claim_expires_at_ms INTEGER,
+                    mutation_started_at_ms INTEGER,
+                    reconciliation_attempt INTEGER NOT NULL DEFAULT 0,
+                    reconciliation_deadline_ms INTEGER,
                     claimed_at_ms INTEGER NOT NULL,
                     updated_at_ms INTEGER NOT NULL
                 );
@@ -357,6 +362,22 @@ class SQLiteProviderCoordinator:
                 conn.execute(
                     "ALTER TABLE social_provider_vk_operation ADD COLUMN media_digests_json TEXT"
                 )
+            telegram_columns = {
+                str(row[1])
+                for row in conn.execute("PRAGMA table_info(social_provider_tg_operation)")
+            }
+            telegram_migrations = {
+                "intent_ciphertext": "TEXT",
+                "claim_expires_at_ms": "INTEGER",
+                "mutation_started_at_ms": "INTEGER",
+                "reconciliation_attempt": "INTEGER NOT NULL DEFAULT 0",
+                "reconciliation_deadline_ms": "INTEGER",
+            }
+            for column, declaration in telegram_migrations.items():
+                if column not in telegram_columns:
+                    conn.execute(
+                        f"ALTER TABLE social_provider_tg_operation ADD COLUMN {column} {declaration}"
+                    )
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=3.0, isolation_level=None)
@@ -675,6 +696,9 @@ class DurableVKWorkspaceAdapter:
     async def read(self, request: Any) -> Mapping[str, Any]:
         return await self.delegate.read(request)
 
+    async def scheduled_items(self, **kwargs: Any) -> Mapping[str, Any]:
+        return await self.delegate.scheduled_items(**kwargs)
+
     async def stage_asset(self, asset: Any, *, role: MediaRole) -> str:
         return await self.delegate.stage_asset(asset, role=role)
 
@@ -780,6 +804,69 @@ class DurableVKWorkspaceAdapter:
                     raise ProviderBindingError("VK operation completion conflict")
                 if row["result_json"] != encoded:
                     raise ProviderBindingError("VK operation result conflict")
+        return result
+
+    async def retry(
+        self,
+        intent: Any,
+        *,
+        operation_ref: str,
+        attempt_number: int,
+    ) -> Mapping[str, Any]:
+        """Rearm only a durable definite pre-mutation VK failure.
+
+        The public runtime owns the transactional single-flight attempt CAS.
+        This provider boundary independently verifies the same operation,
+        idempotency key and action digest before allowing the delegate to bypass
+        its cached safe failure.
+        """
+
+        digest = compute_action_digest(intent)
+        idem = hashlib.sha256(intent.idempotency_key.encode()).hexdigest()
+        with self.state._lock, self.state._connect() as conn:
+            row = conn.execute(
+                """SELECT operation_ref,idempotency_hash,action_digest,result_json
+                   FROM social_provider_vk_operation WHERE operation_ref=?""",
+                (operation_ref,),
+            ).fetchone()
+        if (
+            row is None
+            or row["operation_ref"] != operation_ref
+            or row["idempotency_hash"] != idem
+            or row["action_digest"] != digest
+            or not row["result_json"]
+        ):
+            raise ProviderBindingError("VK retry binding mismatch")
+        prior = json.loads(str(row["result_json"]))
+        if (
+            not isinstance(prior, Mapping)
+            or prior.get("status") != SocialActionStatus.FAILED.value
+            or prior.get("retry_safe") is not True
+        ):
+            raise ProviderBindingError("VK operation is not retry safe")
+        result = dict(
+            await self.delegate.retry(
+                intent,
+                operation_ref=operation_ref,
+                attempt_number=attempt_number,
+            )
+        )
+        encoded = json.dumps(result, ensure_ascii=False, sort_keys=True)
+        with self.state._lock, self.state._connect() as conn:
+            changed = conn.execute(
+                """UPDATE social_provider_vk_operation
+                   SET result_json=?,updated_at_ms=?
+                   WHERE operation_ref=? AND action_digest=? AND result_json=?""",
+                (
+                    encoded,
+                    self.state.now_ms(),
+                    operation_ref,
+                    digest,
+                    str(row["result_json"]),
+                ),
+            ).rowcount
+        if changed != 1:
+            raise ProviderBindingError("VK retry completion conflict")
         return result
 
     async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:
@@ -994,6 +1081,7 @@ class InMemoryTelegramOpaqueRefStore:
         self._Asset = TelegramAssetBinding
         self._Claim = TelegramOperationClaim
         self._state = SQLiteProviderCoordinator(config.auth_database_path)
+        self._operation_signing_key = config.signing_key
         self._targets = _DurableEncryptedMap(
             self._state, kind="tg_target", signing_key=config.signing_key
         )
@@ -1179,8 +1267,110 @@ class InMemoryTelegramOpaqueRefStore:
             raise ProviderBindingError("Telegram cursor context mismatch")
         return copy.deepcopy(state)
 
-    def claim_operation(self, *, operation_ref: str, action_digest: str) -> Any:
+    @staticmethod
+    def _validate_operation_intent(intent: Mapping[str, Any]) -> dict[str, Any]:
+        value = copy.deepcopy(dict(intent))
+        if set(value) != {
+            "action",
+            "target_ref",
+            "schedule_at",
+            "text_sha256",
+            "media_count",
+            "media_digests",
+        }:
+            raise ProviderBindingError("Telegram operation intent is invalid")
+        if not isinstance(value["action"], str) or not re.fullmatch(
+            r"[a-z][a-z0-9_]{1,31}", value["action"]
+        ):
+            raise ProviderBindingError("Telegram operation intent is invalid")
+        if not isinstance(value["target_ref"], str) or not re.fullmatch(
+            r"tgt_[A-Za-z0-9_-]{16,160}", value["target_ref"]
+        ):
+            raise ProviderBindingError("Telegram operation intent is invalid")
+        if value["schedule_at"] is not None and (
+            not isinstance(value["schedule_at"], str)
+            or len(value["schedule_at"]) > 40
+        ):
+            raise ProviderBindingError("Telegram operation intent is invalid")
+        if not isinstance(value["text_sha256"], str) or not re.fullmatch(
+            r"[0-9a-f]{64}", value["text_sha256"]
+        ):
+            raise ProviderBindingError("Telegram operation intent is invalid")
+        if type(value["media_count"]) is not int or not 0 <= value["media_count"] <= 10:
+            raise ProviderBindingError("Telegram operation intent is invalid")
+        digests = value["media_digests"]
+        if (
+            not isinstance(digests, list)
+            or len(digests) != value["media_count"]
+            or any(
+                not isinstance(digest, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                for digest in digests
+            )
+        ):
+            raise ProviderBindingError("Telegram operation intent is invalid")
+        return value
+
+    def _encode_operation_intent(self, intent: Mapping[str, Any]) -> str:
+        encoded = _seal_binding(
+            self._operation_signing_key,
+            self._validate_operation_intent(intent),
+        )
+        if len(encoded.encode("ascii")) > _MAX_PROVIDER_BINDING_ENVELOPE_BYTES:
+            raise ProviderBindingError("Telegram operation intent exceeds size limit")
+        return encoded
+
+    def _claim_from_row(self, operation_ref: str, row: sqlite3.Row, *, claimed_now: bool) -> Any:
+        intent = (
+            _open_binding(self._operation_signing_key, str(row["intent_ciphertext"]))
+            if row["intent_ciphertext"]
+            else None
+        )
+        if intent is not None:
+            intent = self._validate_operation_intent(intent)
+        return self._Claim(
+            operation_ref,
+            str(row["action_digest"]),
+            claimed_now,
+            json.loads(row["result_json"]) if row["result_json"] else None,
+            intent=intent,
+            claimed_at_ms=int(row["claimed_at_ms"]),
+            claim_expires_at_ms=(
+                int(row["claim_expires_at_ms"])
+                if row["claim_expires_at_ms"] is not None
+                else None
+            ),
+            mutation_started_at_ms=(
+                int(row["mutation_started_at_ms"])
+                if row["mutation_started_at_ms"] is not None
+                else None
+            ),
+            reconciliation_attempt=int(row["reconciliation_attempt"] or 0),
+            reconciliation_deadline_ms=(
+                int(row["reconciliation_deadline_ms"])
+                if row["reconciliation_deadline_ms"] is not None
+                else None
+            ),
+        )
+
+    def claim_operation(
+        self,
+        *,
+        operation_ref: str,
+        action_digest: str,
+        intent: Mapping[str, Any] | None = None,
+        claim_ttl_seconds: int | None = None,
+        reconciliation_deadline_ms: int | None = None,
+    ) -> Any:
         now = self._state.now_ms()
+        ttl = 150 if claim_ttl_seconds is None else int(claim_ttl_seconds)
+        if not 1 <= ttl <= 600:
+            raise ProviderBindingError("Telegram operation lease is invalid")
+        if reconciliation_deadline_ms is None:
+            reconciliation_deadline_ms = now + max(60_000, ttl * 1000)
+        if not now <= reconciliation_deadline_ms <= now + 24 * 60 * 60 * 1000:
+            raise ProviderBindingError("Telegram reconciliation deadline is invalid")
+        intent_ciphertext = self._encode_operation_intent(intent) if intent is not None else None
         with self._operation_lock, self._state._lock, self._state._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
@@ -1190,17 +1380,112 @@ class InMemoryTelegramOpaqueRefStore:
             if row is None:
                 conn.execute(
                     """INSERT INTO social_provider_tg_operation(
-                       operation_ref,action_digest,claimed_at_ms,updated_at_ms)
-                       VALUES(?,?,?,?)""",
-                    (operation_ref, action_digest, now, now),
+                       operation_ref,action_digest,intent_ciphertext,
+                       claim_expires_at_ms,reconciliation_deadline_ms,
+                       claimed_at_ms,updated_at_ms)
+                       VALUES(?,?,?,?,?,?,?)""",
+                    (
+                        operation_ref,
+                        action_digest,
+                        intent_ciphertext,
+                        now + ttl * 1000,
+                        reconciliation_deadline_ms,
+                        now,
+                        now,
+                    ),
                 )
+                row = conn.execute(
+                    "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
+                    (operation_ref,),
+                ).fetchone()
                 conn.execute("COMMIT")
-                return self._Claim(operation_ref, action_digest, True, None)
+                return self._claim_from_row(operation_ref, row, claimed_now=True)
             conn.execute("COMMIT")
         if row["action_digest"] != action_digest:
             raise ProviderBindingError("Telegram operation reference conflict")
-        result = json.loads(row["result_json"]) if row["result_json"] else None
-        return self._Claim(operation_ref, action_digest, False, result)
+        if intent is not None and row["intent_ciphertext"] is not None:
+            stored = self._validate_operation_intent(
+                _open_binding(self._operation_signing_key, str(row["intent_ciphertext"]))
+            )
+            if not hmac.compare_digest(
+                hashlib.sha256(json.dumps(stored, sort_keys=True).encode()).digest(),
+                hashlib.sha256(json.dumps(self._validate_operation_intent(intent), sort_keys=True).encode()).digest(),
+            ):
+                raise ProviderBindingError("Telegram operation intent conflict")
+        return self._claim_from_row(operation_ref, row, claimed_now=False)
+
+    def adopt_operation_intent(
+        self,
+        *,
+        operation_ref: str,
+        action_digest: str,
+        intent: Mapping[str, Any],
+    ) -> Any:
+        encoded = self._encode_operation_intent(intent)
+        with self._operation_lock, self._state._lock, self._state._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
+                (operation_ref,),
+            ).fetchone()
+            if row is None or row["action_digest"] != action_digest:
+                conn.execute("ROLLBACK")
+                raise ProviderBindingError("Telegram operation reference conflict")
+            if row["intent_ciphertext"] is None:
+                conn.execute(
+                    """UPDATE social_provider_tg_operation
+                       SET intent_ciphertext=?,updated_at_ms=? WHERE operation_ref=?""",
+                    (encoded, self._state.now_ms(), operation_ref),
+                )
+            else:
+                stored = self._validate_operation_intent(
+                    _open_binding(
+                        self._operation_signing_key, str(row["intent_ciphertext"])
+                    )
+                )
+                if stored != self._validate_operation_intent(intent):
+                    conn.execute("ROLLBACK")
+                    raise ProviderBindingError("Telegram operation intent conflict")
+            row = conn.execute(
+                "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
+                (operation_ref,),
+            ).fetchone()
+            conn.execute("COMMIT")
+        return self._claim_from_row(operation_ref, row, claimed_now=False)
+
+    def mark_operation_mutation(self, *, operation_ref: str, action_digest: str) -> bool:
+        now = self._state.now_ms()
+        with self._operation_lock, self._state._lock, self._state._connect() as conn:
+            changed = conn.execute(
+                """UPDATE social_provider_tg_operation
+                   SET mutation_started_at_ms=COALESCE(mutation_started_at_ms,?),
+                       updated_at_ms=?
+                   WHERE operation_ref=? AND action_digest=? AND result_json IS NULL""",
+                (now, now, operation_ref, action_digest),
+            ).rowcount
+        return changed == 1
+
+    def note_reconciliation_attempt(
+        self, *, operation_ref: str, action_digest: str
+    ) -> Any:
+        with self._operation_lock, self._state._lock, self._state._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            changed = conn.execute(
+                """UPDATE social_provider_tg_operation
+                   SET reconciliation_attempt=MIN(reconciliation_attempt+1,100),
+                       updated_at_ms=?
+                   WHERE operation_ref=? AND action_digest=?""",
+                (self._state.now_ms(), operation_ref, action_digest),
+            ).rowcount
+            row = conn.execute(
+                "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
+                (operation_ref,),
+            ).fetchone()
+            if changed != 1 or row is None:
+                conn.execute("ROLLBACK")
+                raise ProviderBindingError("Telegram operation reference conflict")
+            conn.execute("COMMIT")
+        return self._claim_from_row(operation_ref, row, claimed_now=False)
 
     def release_operation(self, *, operation_ref: str, action_digest: str) -> bool:
         with self._operation_lock, self._state._lock, self._state._connect() as conn:
@@ -1229,32 +1514,27 @@ class InMemoryTelegramOpaqueRefStore:
                 conn.execute("ROLLBACK")
                 raise ProviderBindingError("Telegram operation reference conflict")
             if row["result_json"] is not None and row["result_json"] != encoded:
-                conn.execute("ROLLBACK")
-                raise ProviderBindingError("Telegram operation result conflict")
+                previous = json.loads(row["result_json"])
+                if previous.get("status") != "outcome_unknown":
+                    conn.execute("ROLLBACK")
+                    raise ProviderBindingError("Telegram operation result conflict")
             conn.execute(
                 """UPDATE social_provider_tg_operation SET result_json=?,updated_at_ms=?
                    WHERE operation_ref=? AND action_digest=?""",
                 (encoded, self._state.now_ms(), operation_ref, action_digest),
             )
             conn.execute("COMMIT")
-        return self._Claim(
-            operation_ref, action_digest, False, copy.deepcopy(dict(result))
-        )
+        return self.resolve_operation(operation_ref)
 
     def resolve_operation(self, operation_ref: str) -> Any:
         with self._state._lock, self._state._connect() as conn:
             row = conn.execute(
-                "SELECT action_digest,result_json FROM social_provider_tg_operation WHERE operation_ref=?",
+                "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
                 (operation_ref,),
             ).fetchone()
         if row is None:
             raise ProviderBindingError("Telegram operation is unknown")
-        return self._Claim(
-            operation_ref,
-            row["action_digest"],
-            False,
-            json.loads(row["result_json"]) if row["result_json"] else None,
-        )
+        return self._claim_from_row(operation_ref, row, claimed_now=False)
 
 
 class DurableTelegramGovernor:

@@ -273,6 +273,8 @@ class FakeRefs:
         self.operations = {}
         self.complete_attempts = 0
         self.fail_complete_operation = False
+        self.operation_intents = {}
+        self.mutation_started = set()
         self.asset_reader = FakeAssetReader()
 
     def resolve_target(self, target_ref):
@@ -357,7 +359,16 @@ class FakeRefs:
         assert stored_family == family
         return state
 
-    def claim_operation(self, *, operation_ref, action_digest):
+    def claim_operation(
+        self,
+        *,
+        operation_ref,
+        action_digest,
+        intent=None,
+        claim_ttl_seconds=None,
+        reconciliation_deadline_ms=None,
+    ):
+        del claim_ttl_seconds, reconciliation_deadline_ms
         existing = self.operations.get(operation_ref)
         if existing is not None:
             return TelegramOperationClaim(
@@ -368,7 +379,41 @@ class FakeRefs:
             )
         claim = TelegramOperationClaim(operation_ref, action_digest, True, None)
         self.operations[operation_ref] = claim
+        if intent is not None:
+            self.operation_intents[operation_ref] = dict(intent)
         return claim
+
+    def adopt_operation_intent(self, *, operation_ref, action_digest, intent):
+        existing = self.operations[operation_ref]
+        assert existing.action_digest == action_digest
+        self.operation_intents.setdefault(operation_ref, dict(intent))
+        return TelegramOperationClaim(
+            operation_ref,
+            action_digest,
+            False,
+            existing.result,
+            intent=self.operation_intents[operation_ref],
+        )
+
+    def mark_operation_mutation(self, *, operation_ref, action_digest):
+        assert self.operations[operation_ref].action_digest == action_digest
+        self.mutation_started.add(operation_ref)
+        return True
+
+    def note_reconciliation_attempt(self, *, operation_ref, action_digest):
+        existing = self.operations[operation_ref]
+        assert existing.action_digest == action_digest
+        return TelegramOperationClaim(
+            operation_ref,
+            action_digest,
+            False,
+            existing.result,
+            intent=self.operation_intents.get(operation_ref),
+            mutation_started_at_ms=(1 if operation_ref in self.mutation_started else None),
+            reconciliation_attempt=1,
+            reconciliation_deadline_ms=int(datetime.now(timezone.utc).timestamp() * 1000)
+            + 60_000,
+        )
 
     def release_operation(self, *, operation_ref, action_digest):
         existing = self.operations.get(operation_ref)
@@ -388,7 +433,7 @@ class FakeRefs:
         existing = self.operations[operation_ref]
         if existing.action_digest != action_digest:
             return existing
-        if existing.result is not None:
+        if existing.result is not None and existing.result.get("status") != "outcome_unknown":
             return existing
         completed = TelegramOperationClaim(
             operation_ref, action_digest, False, dict(result)
@@ -397,7 +442,18 @@ class FakeRefs:
         return completed
 
     def resolve_operation(self, operation_ref):
-        return self.operations[operation_ref]
+        existing = self.operations[operation_ref]
+        return TelegramOperationClaim(
+            existing.operation_ref,
+            existing.action_digest,
+            False,
+            existing.result,
+            intent=self.operation_intents.get(operation_ref),
+            mutation_started_at_ms=(1 if operation_ref in self.mutation_started else None),
+            reconciliation_attempt=0,
+            reconciliation_deadline_ms=int(datetime.now(timezone.utc).timestamp() * 1000)
+            + 60_000,
+        )
 
 
 class FakeGovernor:
@@ -455,16 +511,22 @@ class FakeClient:
         }
         self.raise_on: str | None = None
         self.delay = 0.0
+        self.connect_delay = 0.0
+        self.disconnect_delay = 0.0
         self.global_search_messages = None
         self.comment_messages = None
 
     async def connect(self):
+        if self.connect_delay:
+            await asyncio.sleep(self.connect_delay)
         self.connected = True
 
     async def is_user_authorized(self):
         return True
 
     async def disconnect(self):
+        if self.disconnect_delay:
+            await asyncio.sleep(self.disconnect_delay)
         self.disconnected = True
 
     async def get_me(self):
@@ -622,6 +684,15 @@ class FakeClient:
                     ]
                 )
             )
+        if name == "delete_scheduled":
+            target_ref = self._target_ref(request.values["peer"])
+            ids = set(request.values["message_ids"])
+            self.scheduled_messages[target_ref] = [
+                message
+                for message in self.scheduled_messages[target_ref]
+                if message.id not in ids
+            ]
+            return True
         if name == "peer_stories":
             story = Message(601, "")
             story.caption = "story"
@@ -1418,7 +1489,6 @@ async def test_telegram_message_link_rejects_malformed_and_unavailable(harness):
 
     async def unavailable(_entity, *, ids):
         del ids
-        return None
 
     client.get_messages = unavailable
     with pytest.raises(TelegramWorkspaceError) as caught:
@@ -2132,6 +2202,155 @@ async def test_real_wait_for_expiry_and_post_mutation_fence_loss_are_unknown():
 
 
 @pytest.mark.asyncio
+async def test_total_session_deadline_bounds_connect_and_disconnect_cleanup():
+    connect_refs = FakeRefs()
+    connect_client = FakeClient(connect_refs)
+    connect_client.connect_delay = 60
+    connect_adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: connect_client,
+        refs=connect_refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=0.01,
+    )
+    connect_operation = "op_connectdeadline00000000000001"
+    with pytest.raises(TelegramWorkspaceError) as timed_out:
+        await connect_adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content(),
+            ),
+            operation_ref=connect_operation,
+        )
+    assert timed_out.value.code == "provider_timeout"
+    assert timed_out.value.retry_safe is True
+    assert connect_operation not in connect_refs.operations
+
+    disconnect_refs = FakeRefs()
+    disconnect_client = FakeClient(disconnect_refs)
+    disconnect_client.disconnect_delay = 60
+    disconnect_adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: disconnect_client,
+        refs=disconnect_refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=0.01,
+    )
+    disconnect_operation = "op_disconnectdeadline00000000001"
+    receipt = await disconnect_adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=USER_REF,
+            content=content(),
+        ),
+        operation_ref=disconnect_operation,
+    )
+    assert receipt["status"] == "succeeded"
+    assert disconnect_refs.resolve_operation(disconnect_operation).result == receipt
+
+
+@pytest.mark.asyncio
+async def test_session_deadline_includes_serialized_queue_wait():
+    refs = FakeRefs()
+    client = FakeClient(refs)
+    client.disconnect_delay = 60
+
+    async def mutates_then_blocks(entity, text, **kwargs):
+        client.calls.append(("send_message", {"entity": entity, "text": text, **kwargs}))
+        await asyncio.sleep(60)
+
+    client.send_message = mutates_then_blocks
+    adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: client,
+        refs=refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=0.03,
+    )
+    first_operation = "op_serialqueuefirst000000000001"
+    second_operation = "op_serialqueuesecond00000000001"
+    first = asyncio.create_task(
+        adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content(),
+            ),
+            operation_ref=first_operation,
+        )
+    )
+    while first_operation not in refs.mutation_started:
+        await asyncio.sleep(0)
+
+    with pytest.raises(TelegramWorkspaceError) as queued_timeout:
+        await adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content("second must not send"),
+            ),
+            operation_ref=second_operation,
+        )
+    first_receipt = await first
+
+    assert queued_timeout.value.code == "provider_timeout"
+    assert queued_timeout.value.retry_safe is True
+    assert second_operation not in refs.operations
+    assert first_receipt["status"] == "outcome_unknown"
+    assert len([name for name, _ in client.calls if name == "send_message"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_cancellation_always_releases_local_session_lock():
+    refs = FakeRefs()
+    client = FakeClient(refs)
+    disconnect_started = asyncio.Event()
+
+    async def blocked_disconnect():
+        disconnect_started.set()
+        await asyncio.sleep(60)
+
+    client.disconnect = blocked_disconnect
+    adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: client,
+        refs=refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=1,
+    )
+    first_operation = "op_cleanupcancelled000000000001"
+    first = asyncio.create_task(
+        adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content(),
+            ),
+            operation_ref=first_operation,
+        )
+    )
+    await disconnect_started.wait()
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+
+    async def immediate_disconnect():
+        return None
+
+    client.disconnect = immediate_disconnect
+    second = await adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=USER_REF,
+            content=content("lock is reusable"),
+        ),
+        operation_ref="op_cleanupfollowup0000000000001",
+    )
+    assert second["status"] == "succeeded"
+
+
+@pytest.mark.asyncio
 async def test_caller_operation_ref_is_the_only_receipt_and_reconciliation_key(harness):
     adapter, _, refs, _ = harness
     operation_ref = "op_callerissued000000000000001"
@@ -2145,6 +2364,213 @@ async def test_caller_operation_ref_is_the_only_receipt_and_reconciliation_key(h
     with pytest.raises(TelegramWorkspaceError) as missing:
         await adapter.reconcile("op_missingoperation000000000001")
     assert missing.value.code == "operation_not_found"
+
+
+@pytest.mark.asyncio
+async def test_scheduled_items_returns_one_logical_four_image_album(harness):
+    adapter, client, _, _ = harness
+    messages = []
+    for index in range(4):
+        message = Message(1200 + index, "Exact album" if index == 0 else "")
+        message.grouped_id = 77
+        message.date = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message.id))
+        messages.append(message)
+    client.scheduled_messages[CHANNEL_REF] = messages
+
+    result = await adapter.scheduled_items(
+        target_ref=CHANNEL_REF,
+        scheduled_from="2026-08-31T11:59:00Z",
+        scheduled_to="2026-08-31T12:01:00Z",
+        text_sha256=hashlib.sha256(b"Exact album").hexdigest(),
+        media_count=4,
+        limit=10,
+    )
+
+    assert result["exact_match_count"] == 1
+    assert len(result["items"]) == 1
+    assert result["items"][0]["media_count"] == 4
+    assert result["items"][0]["media_roles"] == ["image"] * 4
+    assert result["items"][0]["queue"] == "scheduled"
+
+
+@pytest.mark.asyncio
+async def test_schedule_reconciliation_converges_from_unknown_to_exact_raw_match(harness):
+    adapter, client, refs, _ = harness
+    operation_ref = "op_restartreconcile000000000001"
+    request = intent(
+        SocialAction.SCHEDULE,
+        target_ref=CHANNEL_REF,
+        content=content(
+            "Restart exact text",
+            media=(MediaAttachment(ASSET_REF, MediaRole.IMAGE),) * 4,
+        ),
+        schedule_at="2026-08-31T12:00:00Z",
+    )
+    action_digest = telegram_adapter_module.compute_action_digest(request)
+    evidence = adapter._operation_intent(request)
+    refs.claim_operation(
+        operation_ref=operation_ref,
+        action_digest=action_digest,
+        intent=evidence,
+    )
+    refs.mark_operation_mutation(
+        operation_ref=operation_ref, action_digest=action_digest
+    )
+    refs.complete_operation(
+        operation_ref=operation_ref,
+        action_digest=action_digest,
+        result={
+            "platform": "telegram",
+            "operation_ref": operation_ref,
+            "action": "schedule",
+            "status": "outcome_unknown",
+            "retry_safe": False,
+            "error_code": "provider_timeout",
+        },
+    )
+    for index in range(4):
+        message = Message(1300 + index, "Restart exact text" if index == 0 else "")
+        message.grouped_id = 88
+        message.date = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message.id))
+        client.scheduled_messages[CHANNEL_REF].append(message)
+
+    result = await adapter.reconcile(operation_ref, intent=request)
+
+    assert result["status"] == "succeeded"
+    assert result["media_count"] == 4
+    assert result["read_after_write"]["verified"] is True
+    assert [name for name, _ in client.calls].count("scheduled_history") >= 1
+
+
+@pytest.mark.asyncio
+async def test_outer_cancellation_after_mutation_durably_finalizes_claim(harness):
+    adapter, client, refs, _ = harness
+    operation_ref = "op_cancelledmutation00000000001"
+
+    async def mutates_then_blocks(entity, text, **kwargs):
+        client.calls.append(("send_message", {"entity": entity, "text": text, **kwargs}))
+        client.messages[USER_REF].append(Message(1400, text, entity=entity))
+        await asyncio.sleep(60)
+
+    client.send_message = mutates_then_blocks
+    task = asyncio.create_task(
+        adapter.execute(
+            intent(SocialAction.SEND_MESSAGE, target_ref=USER_REF, content=content()),
+            operation_ref=operation_ref,
+        )
+    )
+    while operation_ref not in refs.mutation_started:
+        await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    claim = refs.resolve_operation(operation_ref)
+    assert claim.result is not None
+    assert claim.result["status"] == "outcome_unknown"
+    assert claim.result["error_code"] == "provider_cancelled"
+
+
+@pytest.mark.asyncio
+async def test_scheduled_delete_uses_raw_namespace_and_verifies_album_absence(harness):
+    adapter, client, refs, _ = harness
+    scheduled_ref = "itm_scheduledalbum000001"
+    refs.items[scheduled_ref] = TelegramScheduledItemBinding(
+        scheduled_ref,
+        CHANNEL_REF,
+        1500,
+        frozenset({SocialAction.DELETE}),
+        SocialItemKind.POST,
+    )
+    for index in range(4):
+        message = Message(1500 + index, "Delete exact" if index == 0 else "")
+        message.grouped_id = 99
+        message.media = SimpleNamespace(photo=SimpleNamespace(id=message.id))
+        client.scheduled_messages[CHANNEL_REF].append(message)
+
+    result = await adapter.execute(
+        intent(SocialAction.DELETE, item_ref=scheduled_ref),
+        operation_ref="op_deletescheduledalbum000000001",
+    )
+
+    assert result["status"] == "succeeded"
+    assert result["read_after_write"]["verified"] is True
+    assert result["read_after_write"]["absence_verified"] is True
+    assert [name for name, _ in client.calls].count("delete_scheduled") == 1
+    assert [name for name, _ in client.calls].count("delete_messages") == 0
+    assert client.scheduled_messages[CHANNEL_REF] == []
+
+
+@pytest.mark.asyncio
+async def test_schedule_reconciliation_zero_window_then_ambiguous_is_bounded(harness):
+    adapter, client, refs, _ = harness
+    operation_ref = "op_boundedreconcile000000000001"
+    request = intent(
+        SocialAction.SCHEDULE,
+        target_ref=CHANNEL_REF,
+        content=content("Bounded exact"),
+        schedule_at="2026-08-31T12:00:00Z",
+    )
+    digest = telegram_adapter_module.compute_action_digest(request)
+    refs.claim_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        intent=adapter._operation_intent(request),
+    )
+    refs.mark_operation_mutation(operation_ref=operation_ref, action_digest=digest)
+
+    pending = await adapter.reconcile(operation_ref)
+    assert pending["status"] == "outcome_unknown"
+    assert pending["error_code"] == "reconciliation_pending"
+    assert pending["reconciliation_attempt"] == 1
+    assert 1 <= pending["next_poll_after_seconds"] <= 15
+    assert pending["reconciliation_deadline"].endswith("Z")
+
+    for index in range(2):
+        duplicate = Message(1600 + index, "Bounded exact")
+        duplicate.date = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+        client.scheduled_messages[CHANNEL_REF].append(duplicate)
+    ambiguous = await adapter.reconcile(operation_ref)
+    assert ambiguous["status"] == "outcome_unknown"
+    assert ambiguous["error_code"] == "reconciliation_ambiguous"
+    assert ambiguous["exact_match_count"] == 2
+    assert len(ambiguous["item_refs"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_schedule_reconciliation_terminal_zero_does_not_poll_forever(harness):
+    adapter, client, refs, _ = harness
+    operation_ref = "op_terminalreconcile00000000001"
+    request = intent(
+        SocialAction.SCHEDULE,
+        target_ref=CHANNEL_REF,
+        content=content("Missing exact"),
+        schedule_at="2026-08-31T12:00:00Z",
+    )
+    digest = telegram_adapter_module.compute_action_digest(request)
+    refs.claim_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        intent=adapter._operation_intent(request),
+    )
+    refs.mark_operation_mutation(operation_ref=operation_ref, action_digest=digest)
+    original_note = refs.note_reconciliation_attempt
+
+    def expired(**kwargs):
+        claim = original_note(**kwargs)
+        return replace(claim, reconciliation_deadline_ms=0)
+
+    refs.note_reconciliation_attempt = expired
+    terminal = await adapter.reconcile(operation_ref)
+    reads = [name for name, _ in client.calls].count("scheduled_history")
+    replay = await adapter.reconcile(operation_ref)
+
+    assert terminal == replay
+    assert terminal["error_code"] == "reconciliation_no_match"
+    assert terminal["retry_safe"] is False
+    assert [name for name, _ in client.calls].count("scheduled_history") == reads
 
 
 @pytest.mark.asyncio
@@ -2254,8 +2680,9 @@ def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch()
         "resolve",
         "read",
         "execute",
-        "reconcile",
-        "stage_asset",
+            "reconcile",
+            "scheduled_items",
+            "stage_asset",
         "read_asset",
     }
     source = Path("private_events_mcp_telegram_adapter.py").read_text()

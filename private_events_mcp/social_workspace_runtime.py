@@ -39,6 +39,7 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_ITEM_SEARCH_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_NOTIFICATIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STORIES_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_TARGET_LIST_OUTPUT_SCHEMA,
@@ -51,6 +52,7 @@ from .social_workspace import (
     SocialPlatform,
     SocialReadOperation,
     SocialReadRequest,
+    SocialScheduledItemsRequest,
     SocialWorkspaceValidationError,
     compute_action_digest,
     validate_action_status_response,
@@ -85,6 +87,23 @@ class SocialWorkspaceAdapter(Protocol):
         self, intent: SocialActionIntent, *, operation_ref: str
     ) -> Mapping[str, Any]: ...
     async def reconcile(self, operation_ref: str) -> Mapping[str, Any]: ...
+    async def scheduled_items(
+        self,
+        *,
+        target_ref: str,
+        scheduled_from: str | None = None,
+        scheduled_to: str | None = None,
+        text_sha256: str | None = None,
+        media_count: int | None = None,
+        limit: int = 10,
+    ) -> Mapping[str, Any]: ...
+    async def retry(
+        self,
+        intent: SocialActionIntent,
+        *,
+        operation_ref: str,
+        attempt_number: int,
+    ) -> Mapping[str, Any]: ...
     async def stage_asset(
         self, asset: VerifiedAsset, *, role: MediaRole
     ) -> str: ...
@@ -806,6 +825,7 @@ class SocialWorkspaceRuntime:
         allowed_operations = {
             *(item.value for item in SocialReadOperation),
             "capabilities", "prepare", "commit", "reconcile",
+            "scheduled_items_list", "retry",
             "asset_stage", "asset_status", "asset_preview", "social_tool", "invalid",
         }
         operation = operation if operation in allowed_operations else "invalid"
@@ -839,6 +859,7 @@ class SocialWorkspaceRuntime:
             operation=operation if operation in {
                 *(item.value for item in SocialReadOperation),
                 "capabilities", "prepare", "commit", "reconcile",
+                "scheduled_items_list", "retry",
                 "asset_stage", "asset_status", "asset_preview", "social_tool",
             } else "invalid",
             outcome="denied",
@@ -1053,6 +1074,95 @@ class SocialWorkspaceRuntime:
         return replace(intent, target_ref=target, item_ref=item,
                        destination_target_ref=destination, content=media)
 
+    def _resolve_ref_for_reconciliation(
+        self,
+        public_ref: str,
+        kind: str,
+        platform: str,
+        principal: RuntimePrincipal,
+    ) -> str:
+        """Resolve an expired ref only for an already-bound operation readback.
+
+        Scheduled reconciliation may happen after short-lived staged assets have
+        expired.  It never reopens or uploads those bytes; the provider adapter
+        needs only the durable encrypted binding to reconstruct the original
+        text/media fingerprint.  Principal/resource/policy binding remains exact.
+        """
+
+        client, subject, resource = self._binding(principal)
+        with self.store._lock, self.store._connect() as conn:
+            row = conn.execute(
+                """SELECT provider_ref_ciphertext FROM social_workspace_ref
+                   WHERE ref_hash=? AND ref_kind=? AND client_hash=?
+                     AND subject_hash=? AND resource_hash=? AND platform=?
+                     AND policy_version=?""",
+                (
+                    self._hash(public_ref),
+                    kind,
+                    client,
+                    subject,
+                    resource,
+                    platform,
+                    self.policy_version,
+                ),
+            ).fetchone()
+        if row is None:
+            raise SocialWorkspaceRuntimeError(
+                "historical opaque reference is unknown or not bound"
+            )
+        return self._decrypt(str(row["provider_ref_ciphertext"]))
+
+    def _native_reconciliation_intent(
+        self, intent: SocialActionIntent, principal: RuntimePrincipal
+    ) -> SocialActionIntent:
+        """Recover provider refs without re-authorizing an expired mutation.
+
+        This path is deliberately reachable only from ``reconcile`` after the
+        operation/preparation has been matched to the current principal.  It is
+        evidence recovery, not a retry or provider mutation authorization.
+        """
+
+        platform = intent.platform.value
+        resolve = lambda value, kind: (  # noqa: E731 - local closed resolver
+            self._resolve_ref_for_reconciliation(
+                value, kind, platform, principal
+            )
+            if value
+            else None
+        )
+        content = intent.content
+        if content is not None:
+            content = replace(
+                content,
+                entities=tuple(
+                    replace(
+                        entity,
+                        custom_emoji_asset_ref=resolve(
+                            entity.custom_emoji_asset_ref, "asset"
+                        ),
+                    )
+                    if entity.custom_emoji_asset_ref is not None
+                    else entity
+                    for entity in content.entities
+                ),
+                media=tuple(
+                    replace(
+                        attachment,
+                        asset_ref=str(resolve(attachment.asset_ref, "asset")),
+                    )
+                    for attachment in content.media
+                ),
+            )
+        return replace(
+            intent,
+            target_ref=resolve(intent.target_ref, "target"),
+            item_ref=resolve(intent.item_ref, "item"),
+            destination_target_ref=resolve(
+                intent.destination_target_ref, "target"
+            ),
+            content=content,
+        )
+
     def _sanitize_provider_output(
         self, value: Any, platform: str, principal: RuntimePrincipal,
         *, known_refs: Mapping[tuple[str, str], str] | None = None,
@@ -1075,7 +1185,12 @@ class SocialWorkspaceRuntime:
                 if ("target", raw) not in known:
                     known[("target", raw)] = self._mint_ref("target", raw, platform, principal)
                 return known[("target", raw)]
-            if key in {"item_ref", "observed_item_ref", "root_item_ref"} and node is not None:
+            if key in {
+                "item_ref",
+                "item_refs",
+                "observed_item_ref",
+                "root_item_ref",
+            } and node is not None:
                 raw = str(node)
                 if ("item", raw) not in known:
                     known[("item", raw)] = self._mint_ref("item", raw, platform, principal)
@@ -1914,6 +2029,114 @@ class SocialWorkspaceRuntime:
                         outcome="denied", reason=type(exc).__name__, target_ref=target_ref)
             raise
 
+    async def scheduled_items(
+        self,
+        request: SocialScheduledItemsRequest,
+        context: ToolCallContext,
+    ) -> dict[str, Any]:
+        principal = RuntimePrincipal.from_context(context)
+        platform = request.platform.value
+        if not social_scopes_authorized(request.required_scopes, principal.scopes):
+            self._audit(
+                principal,
+                platform=platform,
+                operation="scheduled_items_list",
+                outcome="denied",
+                reason="missing_scope",
+                target_ref=request.target_ref,
+            )
+            raise SocialWorkspaceRuntimeError(
+                "required social schedule scope is missing"
+            )
+        native_target = self._resolve_ref(
+            request.target_ref, "target", platform, principal
+        )
+        adapter = self._adapter(platform)
+        list_scheduled = getattr(adapter, "scheduled_items", None)
+        if not callable(list_scheduled):
+            raise SocialWorkspaceRuntimeError(
+                "scheduled queue read is unavailable"
+            )
+        try:
+            raw = await asyncio.wait_for(
+                list_scheduled(
+                    target_ref=native_target,
+                    scheduled_from=request.scheduled_from,
+                    scheduled_to=request.scheduled_to,
+                    text_sha256=request.text_sha256,
+                    media_count=request.media_count,
+                    limit=request.limit,
+                ),
+                self.provider_timeout_seconds,
+            )
+            safe = self._sanitize_provider_output(
+                raw,
+                platform,
+                principal,
+                known_refs={("target", native_target): request.target_ref},
+            )
+            if not isinstance(safe, dict):
+                raise SocialWorkspaceRuntimeError(
+                    "scheduled queue response must be an object"
+                )
+            safe.update(
+                {
+                    "platform": platform,
+                    "target_ref": request.target_ref,
+                    "queue": "scheduled",
+                    "trust": "untrusted_external_data",
+                }
+            )
+            projected = self._project_contract_value(
+                safe, SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA
+            )
+            if not isinstance(projected, dict):
+                raise SocialWorkspaceRuntimeError(
+                    "scheduled queue response must be an object"
+                )
+            size = len(_json(projected).encode("utf-8"))
+            self._consume_budget(
+                principal,
+                platform,
+                request.target_ref,
+                SocialAction.SCHEDULE.value,
+                "egress",
+                size,
+            )
+            self._audit(
+                principal,
+                platform=platform,
+                operation="scheduled_items_list",
+                outcome="succeeded",
+                reason="scheduled_queue_read",
+                target_ref=request.target_ref,
+                response_bytes=size,
+                media_items=self._count_media(projected),
+            )
+            return projected
+        except asyncio.TimeoutError:
+            self._audit(
+                principal,
+                platform=platform,
+                operation="scheduled_items_list",
+                outcome="failed",
+                reason="provider_timeout",
+                target_ref=request.target_ref,
+            )
+            raise SocialWorkspaceRuntimeError(
+                "social provider operation timed out"
+            ) from None
+        except Exception as exc:
+            self._audit(
+                principal,
+                platform=platform,
+                operation="scheduled_items_list",
+                outcome="failed",
+                reason=type(exc).__name__,
+                target_ref=request.target_ref,
+            )
+            raise
+
     @staticmethod
     def _count_media(value: Any) -> int:
         if isinstance(value, Mapping):
@@ -2094,11 +2317,22 @@ class SocialWorkspaceRuntime:
                                WHERE preparation_hash=? AND operation_ref IS NULL""",
                             (operation, existing["preparation_hash"]),
                         )
+                    logical_action = existing["logical_action_ref"]
+                    if not logical_action:
+                        logical_action = "act_" + secrets.token_urlsafe(24)
+                        conn.execute(
+                            """UPDATE social_workspace_preparation
+                               SET logical_action_ref=?
+                               WHERE preparation_hash=? AND logical_action_ref IS NULL""",
+                            (logical_action, existing["preparation_hash"]),
+                        )
                     conn.execute("COMMIT")
                     return self._preparation_result(existing["preparation_ref"], intent,
-                        digest, int(existing["expires_at"]), str(existing["status"]))
+                        digest, int(existing["expires_at"]), str(existing["status"]),
+                        logical_action_ref=str(logical_action))
                 prep = "prep_" + secrets.token_urlsafe(24)
                 operation = "op_" + secrets.token_urlsafe(24)
+                logical_action = "act_" + secrets.token_urlsafe(24)
                 expires = now + self.preparation_ttl_seconds
                 if verified_assets:
                     expires = min(
@@ -2118,11 +2352,13 @@ class SocialWorkspaceRuntime:
                 conn.execute(
                     """INSERT INTO social_workspace_preparation(preparation_hash,preparation_ref,
                        client_hash,subject_hash,resource_hash,platform,action,target_ref_hash,
-                       action_digest,idempotency_hash,intent_ciphertext,operation_ref,status,expires_at,created_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       action_digest,idempotency_hash,intent_ciphertext,operation_ref,
+                       logical_action_ref,status,expires_at,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (self._hash(prep), prep, client, subject, resource, platform,
                      intent.action.value, self._hash(intent.target_ref) if intent.target_ref else None,
                      digest, idem, self._encrypt(_json(persisted_intent)), operation,
+                     logical_action,
                      status, expires, now),
                 )
                 conn.execute("COMMIT")
@@ -2148,11 +2384,18 @@ class SocialWorkspaceRuntime:
                     reason=("direct_user_authorized" if status == SocialActionStatus.APPROVED.value
                             else "awaiting_approval"),
                     target_ref=intent.target_ref, action_digest=digest)
-        return self._preparation_result(prep, intent, digest, expires, status)
+        return self._preparation_result(
+            prep,
+            intent,
+            digest,
+            expires,
+            status,
+            logical_action_ref=logical_action,
+        )
 
     def _preparation_result(
         self, prep: str, intent: SocialActionIntent, digest: str, expires: int,
-        status: str,
+        status: str, *, logical_action_ref: str | None = None,
     ) -> dict[str, Any]:
         result = {"preparation_ref": prep, "action": intent.action.value,
                   "status": status,
@@ -2160,6 +2403,8 @@ class SocialWorkspaceRuntime:
                   "summary": f"{intent.action.value} on approved opaque reference",
                   "expires_at": _now_rfc3339(expires),
                   "required_scopes": sorted(intent.required_scopes)}
+        if logical_action_ref is not None:
+            result["logical_action_ref"] = logical_action_ref
         if intent.target_ref is not None:
             result["target_ref"] = intent.target_ref
         if intent.item_ref is not None:
@@ -2442,6 +2687,15 @@ class SocialWorkspaceRuntime:
                     ).fetchone()
                 if prep is None:
                     raise SocialWorkspaceRuntimeError("approval or preparation is invalid")
+                logical_action = prep["logical_action_ref"]
+                if not logical_action:
+                    logical_action = "act_" + secrets.token_urlsafe(24)
+                    conn.execute(
+                        """UPDATE social_workspace_preparation
+                           SET logical_action_ref=?
+                           WHERE preparation_hash=? AND logical_action_ref IS NULL""",
+                        (logical_action, self._hash(prep_ref)),
+                    )
                 prep_binding = (
                     prep["client_hash"],
                     prep["subject_hash"],
@@ -2568,16 +2822,21 @@ class SocialWorkspaceRuntime:
                 known[("target", native.target_ref)] = intent.target_ref
             if native.item_ref and intent.item_ref:
                 known[("item", native.item_ref)] = intent.item_ref
-            raw = await asyncio.wait_for(
-                self._adapter(platform).execute(native, operation_ref=operation),
-                self.provider_timeout_seconds,
+            # Mutating adapters own their transport deadline and durable
+            # provider-ledger finalization.  An equal runtime wait_for used to
+            # cancel Telegram after its claim but before completion/release.
+            raw = await self._adapter(platform).execute(
+                native, operation_ref=operation
             )
             provider_returned = True
             safe = self._sanitize_provider_output(raw, platform, principal, known_refs=known)
             if not isinstance(safe, dict):
                 raise SocialWorkspaceRuntimeError("provider action result must be an object")
             safe.update({"platform": platform, "operation_ref": operation,
-                         "action": intent.action.value})
+                         "action": intent.action.value,
+                         "preparation_ref": prep_ref,
+                         "logical_action_ref": str(logical_action),
+                         "attempt_number": 1})
             safe.setdefault("status", SocialActionStatus.SUCCEEDED.value)
             safe.setdefault("retry_safe", False)
             validate_action_status_response(safe)
@@ -2600,10 +2859,41 @@ class SocialWorkspaceRuntime:
                         reason=audit_reason, target_ref=target_ref,
                         action_digest=digest, response_bytes=size, media_items=media_count)
             return safe
+        except asyncio.CancelledError:
+            # The adapter has already observed cancellation at its durable
+            # provider-operation boundary.  Persist conservative outer state
+            # and let protocol cancellation propagate; status can reconcile.
+            unknown = {
+                "platform": platform,
+                "operation_ref": operation,
+                "preparation_ref": prep_ref,
+                "logical_action_ref": str(logical_action),
+                "action": intent.action.value,
+                "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                "retry_safe": False,
+                "attempt_number": 1,
+                "mutation_boundary_reached": True,
+                "error_code": "provider_cancelled",
+            }
+            self._finish_operation(operation, unknown, "provider_cancelled")
+            self._audit(
+                principal,
+                platform=platform,
+                operation="commit",
+                outcome="outcome_unknown",
+                reason="provider_cancelled",
+                target_ref=target_ref,
+                action_digest=digest,
+            )
+            raise
         except asyncio.TimeoutError:
             unknown = {"platform": platform, "operation_ref": operation,
+                       "preparation_ref": prep_ref,
+                       "logical_action_ref": str(logical_action),
                        "action": intent.action.value, "status": "outcome_unknown",
-                       "retry_safe": False, "error_code": "provider_timeout"}
+                       "retry_safe": False, "attempt_number": 1,
+                       "mutation_boundary_reached": True,
+                       "error_code": "provider_timeout"}
             self._finish_operation(operation, unknown, "provider_timeout")
             self._record_provider_result(principal, platform, target_ref, success=False)
             self._audit(principal, platform=platform, operation="commit", outcome="outcome_unknown",
@@ -2631,8 +2921,11 @@ class SocialWorkspaceRuntime:
                 )
                 return withheld
             failed = {"platform": platform, "operation_ref": operation,
+                      "preparation_ref": prep_ref,
+                      "logical_action_ref": str(logical_action),
                       "action": intent.action.value, "status": "failed",
-                      "retry_safe": False, "error_code": "provider_failure"}
+                      "retry_safe": False, "attempt_number": 1,
+                      "error_code": "provider_failure"}
             self._finish_operation(operation, failed, "provider_failure")
             self._record_provider_result(principal, platform, target_ref, success=False,
                                          flood_seconds=int(getattr(exc, "retry_after", 0) or 0))
@@ -2660,7 +2953,8 @@ class SocialWorkspaceRuntime:
     def _finish_operation(self, operation: str, result: Mapping[str, Any], error: str | None) -> None:
         with self.store._lock, self.store._connect() as conn:
             conn.execute("""UPDATE social_workspace_operation SET status=?,retry_safe=?,
-                result_json=?,error_code=?,updated_at=? WHERE operation_hash=?""",
+                result_json=?,error_code=?,retry_in_progress=0,updated_at=?
+                WHERE operation_hash=?""",
                 (result["status"], int(bool(result.get("retry_safe"))), _json(result), error,
                  self._now(), self._hash(operation)))
 
@@ -2676,10 +2970,25 @@ class SocialWorkspaceRuntime:
                     return json.loads(row["result_json"])
                 return {"platform": row["platform"], "operation_ref": reference,
                         "action": row["action"], "status": row["status"],
-                        "retry_safe": bool(row["retry_safe"])}
+                        "retry_safe": bool(row["retry_safe"]),
+                        "attempt_number": int(row["attempt_number"] or 1)}
             prep = conn.execute("SELECT * FROM social_workspace_preparation WHERE preparation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?", (self._hash(reference), client, subject, resource)).fetchone()
             if prep is None:
                 raise SocialWorkspaceRuntimeError("preparation is unknown or not bound")
+            if not prep["logical_action_ref"]:
+                logical_action_ref = "act_" + secrets.token_urlsafe(24)
+                conn.execute(
+                    """UPDATE social_workspace_preparation
+                       SET logical_action_ref=?
+                       WHERE preparation_hash=? AND logical_action_ref IS NULL""",
+                    (logical_action_ref, self._hash(reference)),
+                )
+                prep = conn.execute(
+                    """SELECT * FROM social_workspace_preparation
+                       WHERE preparation_hash=?""",
+                    (self._hash(reference),),
+                ).fetchone()
+                assert prep is not None
             linked = conn.execute(
                 """SELECT * FROM social_workspace_operation
                    WHERE preparation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?""",
@@ -2690,7 +2999,10 @@ class SocialWorkspaceRuntime:
                     return json.loads(linked["result_json"])
                 return {"platform": linked["platform"], "operation_ref": linked["operation_ref"],
                         "action": linked["action"], "status": linked["status"],
-                        "retry_safe": bool(linked["retry_safe"])}
+                        "retry_safe": bool(linked["retry_safe"]),
+                        "preparation_ref": str(prep["preparation_ref"]),
+                        "logical_action_ref": str(prep["logical_action_ref"]),
+                        "attempt_number": int(linked["attempt_number"] or 1)}
             operation_ref = prep["operation_ref"]
             if not operation_ref:
                 operation_ref = "op_" + secrets.token_urlsafe(24)
@@ -2701,6 +3013,197 @@ class SocialWorkspaceRuntime:
                 )
             return {"platform": prep["platform"], "operation_ref": operation_ref,
                     "action": prep["action"], "status": prep["status"], "retry_safe": False}
+
+    async def retry(
+        self, operation_ref: str, context: ToolCallContext
+    ) -> dict[str, Any]:
+        """Run one bounded CAS-guarded retry for a proven safe terminal failure."""
+
+        principal = RuntimePrincipal.from_context(context)
+        client, subject, resource = self._binding(principal)
+        now = self._now()
+        with self.store._lock, self.store._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    """SELECT o.*,p.preparation_ref,p.logical_action_ref,
+                              p.intent_ciphertext,p.action_digest
+                       FROM social_workspace_operation o
+                       JOIN social_workspace_preparation p
+                         ON p.preparation_hash=o.preparation_hash
+                       WHERE o.operation_hash=? AND o.client_hash=?
+                         AND o.subject_hash=? AND o.resource_hash=?""",
+                    (self._hash(operation_ref), client, subject, resource),
+                ).fetchone()
+                if row is None:
+                    raise SocialWorkspaceRuntimeError(
+                        "operation is unknown or not bound"
+                    )
+                if (
+                    row["status"] != SocialActionStatus.FAILED.value
+                    or not bool(row["retry_safe"])
+                    or not row["result_json"]
+                ):
+                    raise SocialWorkspaceRuntimeError(
+                        "operation is not a terminal retry-safe failure"
+                    )
+                attempt_number = int(row["attempt_number"] or 1) + 1
+                if attempt_number > 3:
+                    raise SocialWorkspaceRuntimeError("retry attempt limit reached")
+                intent = self._intent_from_row(row)
+                adapter_retry = getattr(
+                    self._adapter(intent.platform.value), "retry", None
+                )
+                if not callable(adapter_retry):
+                    raise SocialWorkspaceRuntimeError(
+                        "provider retry is unavailable"
+                    )
+                if not social_scopes_authorized(
+                    intent.required_scopes, principal.scopes
+                ):
+                    raise SocialWorkspaceRuntimeError(
+                        "required social action scope is missing"
+                    )
+                target_ref = self._action_budget_target_ref(intent, conn)
+                self._consume_budget_on_conn(
+                    conn,
+                    principal,
+                    intent.platform.value,
+                    target_ref,
+                    intent.action.value,
+                    "attempts",
+                    1,
+                    now,
+                )
+                changed = conn.execute(
+                    """UPDATE social_workspace_operation
+                       SET status=?,retry_safe=0,result_json=NULL,error_code=NULL,
+                           retry_in_progress=1,retry_started_at=?,attempt_number=?,
+                           provider_attempted_at=?,updated_at=?
+                       WHERE operation_hash=? AND status='failed'
+                         AND retry_safe=1 AND retry_in_progress=0
+                         AND attempt_number=?""",
+                    (
+                        SocialActionStatus.PROVIDER_ATTEMPTED.value,
+                        now,
+                        attempt_number,
+                        now,
+                        now,
+                        self._hash(operation_ref),
+                        attempt_number - 1,
+                    ),
+                ).rowcount
+                if changed != 1:
+                    raise SocialWorkspaceRuntimeError(
+                        "retry is already in progress"
+                    )
+                logical_action_ref = row["logical_action_ref"]
+                if not logical_action_ref:
+                    logical_action_ref = "act_" + secrets.token_urlsafe(24)
+                    conn.execute(
+                        """UPDATE social_workspace_preparation
+                           SET logical_action_ref=?
+                           WHERE preparation_hash=? AND logical_action_ref IS NULL""",
+                        (logical_action_ref, row["preparation_hash"]),
+                    )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+        platform = intent.platform.value
+        native = self._native_intent(intent, principal)
+        known: dict[tuple[str, str], str] = {}
+        if native.target_ref and intent.target_ref:
+            known[("target", native.target_ref)] = intent.target_ref
+        if native.item_ref and intent.item_ref:
+            known[("item", native.item_ref)] = intent.item_ref
+        provider_returned = False
+        try:
+            parameters = inspect.signature(adapter_retry).parameters
+            accepts_kwargs = any(
+                parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters.values()
+            )
+            kwargs: dict[str, Any] = {"operation_ref": operation_ref}
+            if "attempt_number" in parameters or accepts_kwargs:
+                kwargs["attempt_number"] = attempt_number
+            raw = await adapter_retry(native, **kwargs)
+            provider_returned = True
+            safe = self._sanitize_provider_output(
+                raw, platform, principal, known_refs=known
+            )
+            if not isinstance(safe, dict):
+                raise SocialWorkspaceRuntimeError(
+                    "provider retry result must be an object"
+                )
+            safe.update(
+                {
+                    "platform": platform,
+                    "operation_ref": operation_ref,
+                    "preparation_ref": str(row["preparation_ref"]),
+                    "logical_action_ref": str(logical_action_ref),
+                    "action": intent.action.value,
+                    "attempt_number": attempt_number,
+                }
+            )
+            safe.setdefault("retry_safe", False)
+            validate_action_status_response(safe)
+            self._finish_operation(
+                operation_ref, safe, safe.get("error_code")
+            )
+            succeeded = safe["status"] == SocialActionStatus.SUCCEEDED.value
+            self._record_provider_result(
+                principal, platform, target_ref, success=succeeded
+            )
+            self._audit(
+                principal,
+                platform=platform,
+                operation="retry",
+                outcome=str(safe["status"]),
+                reason=(
+                    "provider_succeeded"
+                    if succeeded
+                    else str(safe.get("error_code") or "provider_returned_non_success")
+                ),
+                target_ref=target_ref,
+                action_digest=str(row["action_digest"]),
+            )
+            return safe
+        except asyncio.CancelledError:
+            unknown = {
+                "platform": platform,
+                "operation_ref": operation_ref,
+                "preparation_ref": str(row["preparation_ref"]),
+                "logical_action_ref": str(logical_action_ref),
+                "action": intent.action.value,
+                "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                "retry_safe": False,
+                "attempt_number": attempt_number,
+                "mutation_boundary_reached": True,
+                "error_code": "provider_cancelled",
+            }
+            self._finish_operation(operation_ref, unknown, "provider_cancelled")
+            raise
+        except Exception:
+            result = {
+                "platform": platform,
+                "operation_ref": operation_ref,
+                "preparation_ref": str(row["preparation_ref"]),
+                "logical_action_ref": str(logical_action_ref),
+                "action": intent.action.value,
+                "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                "retry_safe": False,
+                "attempt_number": attempt_number,
+                "error_code": (
+                    "response_withheld" if provider_returned else "provider_failure"
+                ),
+            }
+            self._finish_operation(operation_ref, result, result["error_code"])
+            self._record_provider_result(
+                principal, platform, target_ref, success=provider_returned
+            )
+            return result
 
     async def reconcile(self, operation_ref: str, context: ToolCallContext) -> dict[str, Any]:
         principal = RuntimePrincipal.from_context(context)
@@ -2724,28 +3227,63 @@ class SocialWorkspaceRuntime:
         if not callable(reconcile):
             self._finish_operation(operation_ref, unknown, unknown["error_code"])
             return unknown
+        known: dict[tuple[str, str], str] = {}
+        native_intent: SocialActionIntent | None = None
+        prep: sqlite3.Row | None = None
+        operation_row: sqlite3.Row | None = None
+        with self.store._lock, self.store._connect() as conn:
+            operation_row = conn.execute(
+                """SELECT o.* FROM social_workspace_operation o
+                   WHERE o.operation_hash=? AND o.client_hash=?
+                     AND o.subject_hash=? AND o.resource_hash=?""",
+                (self._hash(operation_ref), *self._binding(principal)),
+            ).fetchone()
+            prep = conn.execute(
+                """SELECT p.* FROM social_workspace_preparation p
+                   JOIN social_workspace_operation o
+                     ON o.preparation_hash=p.preparation_hash
+                   WHERE o.operation_hash=? AND o.client_hash=?
+                     AND o.subject_hash=? AND o.resource_hash=?""",
+                (self._hash(operation_ref), *self._binding(principal)),
+            ).fetchone()
+        if prep is not None:
+            unknown["preparation_ref"] = str(prep["preparation_ref"])
+            if prep["logical_action_ref"]:
+                unknown["logical_action_ref"] = str(prep["logical_action_ref"])
+        if operation_row is not None:
+            unknown["attempt_number"] = int(
+                operation_row["attempt_number"] or 1
+            )
+        if prep is not None:
+            original_intent = self._intent_from_row(prep)
+            native_intent = self._native_reconciliation_intent(
+                original_intent, principal
+            )
+            if native_intent.target_ref and original_intent.target_ref:
+                known[("target", native_intent.target_ref)] = original_intent.target_ref
+            if native_intent.item_ref and original_intent.item_ref:
+                known[("item", native_intent.item_ref)] = original_intent.item_ref
         try:
-            raw = await asyncio.wait_for(reconcile(operation_ref), self.provider_timeout_seconds)
-            known: dict[tuple[str, str], str] = {}
-            with self.store._lock, self.store._connect() as conn:
-                prep = conn.execute(
-                    """SELECT p.* FROM social_workspace_preparation p
-                       JOIN social_workspace_operation o
-                         ON o.preparation_hash=p.preparation_hash
-                       WHERE o.operation_hash=? AND o.client_hash=?
-                         AND o.subject_hash=? AND o.resource_hash=?""",
-                    (
-                        self._hash(operation_ref),
-                        *self._binding(principal),
-                    ),
-                ).fetchone()
-            if prep is not None:
-                original_intent = self._intent_from_row(prep)
-                native_intent = self._native_intent(original_intent, principal)
-                if native_intent.target_ref and original_intent.target_ref:
-                    known[("target", native_intent.target_ref)] = original_intent.target_ref
-                if native_intent.item_ref and original_intent.item_ref:
-                    known[("item", native_intent.item_ref)] = original_intent.item_ref
+            parameters = inspect.signature(reconcile).parameters
+            accepts_kwargs = any(
+                parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters.values()
+            )
+            kwargs: dict[str, Any] = {}
+            if native_intent is not None and (
+                "intent" in parameters or accepts_kwargs
+            ):
+                kwargs["intent"] = native_intent
+            if operation_row is not None and (
+                "evidence" in parameters or accepts_kwargs
+            ):
+                kwargs["evidence"] = {
+                    "provider_attempted_at": operation_row["provider_attempted_at"],
+                    "attempt_number": int(operation_row["attempt_number"] or 1),
+                }
+            # Reconciliation is also provider-deadline-owned.  It may need
+            # durable readback/finalization beyond the former equal timeout.
+            raw = await reconcile(operation_ref, **kwargs)
             safe = self._sanitize_provider_output(
                 raw, current["platform"], principal, known_refs=known
             )
@@ -2753,6 +3291,16 @@ class SocialWorkspaceRuntime:
                 raise SocialWorkspaceRuntimeError("provider status must be an object")
             safe.update({"platform": current["platform"], "operation_ref": operation_ref,
                          "action": current["action"]})
+            if prep is not None:
+                safe.setdefault("preparation_ref", str(prep["preparation_ref"]))
+                if prep["logical_action_ref"]:
+                    safe.setdefault(
+                        "logical_action_ref", str(prep["logical_action_ref"])
+                    )
+            if operation_row is not None:
+                safe.setdefault(
+                    "attempt_number", int(operation_row["attempt_number"] or 1)
+                )
             safe.setdefault("retry_safe", False)
             validate_action_status_response(safe)
             self._finish_operation(operation_ref, safe, safe.get("error_code"))
@@ -2765,6 +3313,15 @@ class SocialWorkspaceRuntime:
                             else str(safe.get("error_code") or "reconciliation_pending")
                         ))
             return safe
+        except asyncio.CancelledError:
+            self._audit(
+                principal,
+                platform=current["platform"],
+                operation="reconcile",
+                outcome="outcome_unknown",
+                reason="reconciliation_cancelled",
+            )
+            raise
         except Exception:  # noqa: BLE001 - provider exception text is untrusted
             self._finish_operation(operation_ref, unknown, unknown["error_code"])
             self._audit(

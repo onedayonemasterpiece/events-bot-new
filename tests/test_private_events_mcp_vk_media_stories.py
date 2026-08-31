@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -44,6 +45,8 @@ from private_events_mcp_vk_upload import (
 OWNER_BINDING = "a" * 64
 IMAGE_BYTES = b"verified-image-bytes"
 VIDEO_BYTES = b"verified-video-bytes"
+PNG_STORAGE_REFS = tuple("ing_" + character * 24 for character in "pqrs")
+PNG_BYTES = tuple(f"verified-png-{index}".encode() for index in range(4))
 
 
 class FakeRefs:
@@ -110,6 +113,24 @@ class FakeTransport:
                 "text": self.last_wall_post.get("message", ""),
                 "attachments": [{"type": "photo", "photo": {"id": 55}}],
             }]
+        if method == "wall.get" and call["params"].get("filter") == "postponed":
+            return {
+                "items": [
+                    {
+                        "id": 501,
+                        "owner_id": -101,
+                        "date": self.last_wall_post.get("publish_date"),
+                        "text": self.last_wall_post.get("message", ""),
+                        "attachments": [
+                            {"type": "photo", "photo": {"id": 55}}
+                            for attachment in str(
+                                self.last_wall_post.get("attachments") or ""
+                            ).split(",")
+                            if attachment.startswith("photo")
+                        ],
+                    }
+                ]
+            }
         if method in {"stories.getPhotoUploadServer", "stories.getVideoUploadServer"}:
             return {"upload_url": "https://pu.vk.com/story-upload?sig=signed"}
         if method == "stories.save":
@@ -193,14 +214,22 @@ class FakeTransport:
 
 
 class FakeAssetReader:
-    def __init__(self, by_storage_ref: Mapping[str, bytes]) -> None:
+    def __init__(
+        self,
+        by_storage_ref: Mapping[str, bytes],
+        mime_by_storage_ref: Mapping[str, str] | None = None,
+    ) -> None:
         self.by_storage_ref = dict(by_storage_ref)
+        self.mime_by_storage_ref = dict(mime_by_storage_ref or {})
         self.calls: list[tuple[str, str]] = []
 
     async def open_verified(self, storage_ref: str, owner_binding: str) -> VKAssetMaterialization:
         self.calls.append((storage_ref, owner_binding))
         content = self.by_storage_ref[storage_ref]
-        mime = "video/mp4" if storage_ref.endswith("video") else "image/jpeg"
+        mime = self.mime_by_storage_ref.get(
+            storage_ref,
+            "video/mp4" if storage_ref.endswith("video") else "image/jpeg",
+        )
         return VKAssetMaterialization(
             storage_ref=storage_ref,
             owner_binding=owner_binding,
@@ -215,12 +244,15 @@ class FakeMultipart:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
         self.fail = False
+        self.wall_result: VKMultipartUploadResult | None = None
 
     async def upload(self, **call: Any) -> VKMultipartUploadResult:
         self.calls.append(call)
         if self.fail:
             raise VKMediaTransportError("sanitized multipart failure")
         if call["purpose"] is VKUploadPurpose.WALL_PHOTO:
+            if self.wall_result is not None:
+                return self.wall_result
             return VKMultipartUploadResult(server=321, photo="opaque-photo-json", upload_hash="upload-hash")
         return VKMultipartUploadResult(story_upload_result='{"upload_result":"opaque"}')
 
@@ -260,7 +292,9 @@ def build_adapter(*, attempt_recorder=None):
         {
             "ing_" + "i" * 24: IMAGE_BYTES,
             "ing_" + "v" * 19 + "video": VIDEO_BYTES,
-        }
+            **dict(zip(PNG_STORAGE_REFS, PNG_BYTES, strict=True)),
+        },
+        {storage_ref: "image/png" for storage_ref in PNG_STORAGE_REFS},
     )
     multipart = FakeMultipart()
     story_reader = FakeStoryMediaReader()
@@ -427,7 +461,198 @@ async def test_multipart_failure_before_wall_post_is_definite_and_retry_safe() -
         "status": "failed",
         "retry_safe": True,
         "error_code": "media_upload_failed",
+        "stage": "wall_photo_multipart",
+        "mutation_boundary_reached": False,
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_result",
+    [
+        VKMultipartUploadResult(server=321, photo="", upload_hash="upload-hash"),
+        VKMultipartUploadResult(server=321, photo="opaque-photo", upload_hash=""),
+        VKMultipartUploadResult(server=None, photo="opaque-photo", upload_hash="upload-hash"),
+    ],
+)
+async def test_invalid_wall_receipt_is_exact_safe_prewall_failure(
+    invalid_result: VKMultipartUploadResult,
+) -> None:
+    class Recorder:
+        def __init__(self) -> None:
+            self.events: list[dict[str, Any]] = []
+
+        def record(self, _operation_ref: str, event: Mapping[str, Any]) -> None:
+            self.events.append(dict(event))
+
+    recorder = Recorder()
+    adapter, _refs, transport, _reader, multipart, _story_reader, target_ref = (
+        build_adapter(attempt_recorder=recorder)
+    )
+    asset_ref = await adapter.stage_asset(
+        verified_asset("ing_" + "i" * 24, IMAGE_BYTES, "image/jpeg"),
+        role=MediaRole.IMAGE,
+    )
+    multipart.wall_result = invalid_result
+
+    result = await adapter.execute(
+        validate_prepare_request(
+            {
+                "platform": "vk",
+                "action": "schedule",
+                "idempotency_key": "invalid-wall-receipt-" + str(len(recorder.events)),
+                "target_ref": target_ref,
+                "schedule_at": "2030-01-01T12:00:00Z",
+                "content": {
+                    "text": "Four photos later",
+                    "media": [{"asset_ref": asset_ref, "role": "image"}],
+                },
+            }
+        )
+    )
+
+    assert result["status"] == "failed"
+    assert result["retry_safe"] is True
+    assert result["error_code"] == "media_upload_response_invalid"
+    assert result["stage"] == "wall_photo_multipart"
+    assert [call["method"] for call in transport.calls] == [
+        "photos.getWallUploadServer"
+    ]
+    finished = next(
+        event
+        for event in recorder.events
+        if event["stage"] == "wall_photo_multipart"
+        and event["phase"] == "finished"
+    )
+    evidence = finished["provider_result"]
+    assert evidence["image_ordinal"] == 1
+    assert evidence["mutation_boundary_reached"] is False
+    assert evidence["photo_field"]["type"] in {"str", "NoneType"}
+    assert evidence["hash_field"]["type"] in {"str", "NoneType"}
+    assert "opaque-photo" not in json.dumps(evidence)
+    assert "upload-hash" not in json.dumps(evidence)
+
+
+@pytest.mark.asyncio
+async def test_four_pngs_upload_and_save_sequentially_before_one_scheduled_wall_post() -> None:
+    class Recorder:
+        def __init__(self) -> None:
+            self.events: list[dict[str, Any]] = []
+
+        def record(self, _operation_ref: str, event: Mapping[str, Any]) -> None:
+            self.events.append(dict(event))
+
+    recorder = Recorder()
+    adapter, _refs, transport, _reader, multipart, _story_reader, target_ref = (
+        build_adapter(attempt_recorder=recorder)
+    )
+    asset_refs = [
+        await adapter.stage_asset(
+            verified_asset(storage_ref, content, "image/png"),
+            role=MediaRole.IMAGE,
+        )
+        for storage_ref, content in zip(PNG_STORAGE_REFS, PNG_BYTES, strict=True)
+    ]
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "schedule",
+            "idempotency_key": "four-png-scheduled-wall-001",
+            "target_ref": target_ref,
+            "schedule_at": "2030-01-01T12:00:00Z",
+            "content": {
+                "text": "Four ordered PNGs",
+                "media": [
+                    {"asset_ref": asset_ref, "role": "image"}
+                    for asset_ref in asset_refs
+                ],
+            },
+        }
+    )
+
+    receipt = await adapter.execute(intent)
+
+    assert receipt["status"] == "succeeded"
+    methods = [call["method"] for call in transport.calls]
+    assert methods == [
+        "photos.getWallUploadServer",
+        "photos.saveWallPhoto",
+        "photos.getWallUploadServer",
+        "photos.saveWallPhoto",
+        "photos.getWallUploadServer",
+        "photos.saveWallPhoto",
+        "photos.getWallUploadServer",
+        "photos.saveWallPhoto",
+        "wall.post",
+        "wall.get",
+    ]
+    assert [call["content"] for call in multipart.calls] == list(PNG_BYTES)
+    assert transport.last_wall_post["publish_date"] == int(
+        datetime.fromisoformat("2030-01-01T12:00:00+00:00").timestamp()
+    )
+    assert len(transport.last_wall_post["attachments"].split(",")) == 4
+    finished = [
+        event
+        for event in recorder.events
+        if event["stage"] == "wall_photo_multipart"
+        and event["phase"] == "finished"
+    ]
+    assert [event["image_ordinal"] for event in finished] == [1, 2, 3, 4]
+    assert [event["expected_digest_prefix"] for event in finished] == [
+        hashlib.sha256(content).hexdigest()[:12] for content in PNG_BYTES
+    ]
+    assert all(
+        event["provider_result"]["mutation_boundary_reached"] is False
+        for event in finished
+    )
+    wall_started = next(
+        event
+        for event in recorder.events
+        if event["stage"] == "wall_post" and event["phase"] == "started"
+    )
+    assert wall_started["mutation_boundary_reached"] is True
+
+
+@pytest.mark.asyncio
+async def test_retry_reuses_logical_operation_only_after_safe_prewall_failure() -> None:
+    adapter, _refs, transport, _reader, multipart, _story_reader, target_ref = build_adapter()
+    asset_ref = await adapter.stage_asset(
+        verified_asset("ing_" + "i" * 24, IMAGE_BYTES, "image/jpeg"),
+        role=MediaRole.IMAGE,
+    )
+    intent = validate_prepare_request(
+        {
+            "platform": "vk",
+            "action": "publish",
+            "idempotency_key": "retry-safe-same-logical-operation-001",
+            "target_ref": target_ref,
+            "content": {
+                "text": "Retry one safe pre-wall failure",
+                "media": [{"asset_ref": asset_ref, "role": "image"}],
+            },
+        }
+    )
+    multipart.fail = True
+    failed = await adapter.execute(intent)
+    assert failed["status"] == "failed" and failed["retry_safe"] is True
+
+    multipart.fail = False
+    succeeded = await adapter.retry(
+        intent,
+        operation_ref=failed["operation_ref"],
+        attempt_number=2,
+    )
+
+    assert succeeded["operation_ref"] == failed["operation_ref"]
+    assert succeeded["attempt_number"] == 2
+    assert succeeded["status"] == "succeeded"
+    assert len([call for call in transport.calls if call["method"] == "wall.post"]) == 1
+    with pytest.raises(VKWorkspaceError, match="retry_not_safe"):
+        await adapter.retry(
+            intent,
+            operation_ref=failed["operation_ref"],
+            attempt_number=3,
+        )
 
 
 @pytest.mark.asyncio
@@ -517,10 +742,91 @@ async def test_multipart_transport_reads_fragmented_json_until_eof(monkeypatch) 
     assert result == VKMultipartUploadResult(
         server=321, photo="opaque-photo", upload_hash="upload-hash"
     )
+    assert result.observation["consumed_to_eof"] is True
+    assert result.observation["decoded_bytes"] == len(
+        b'{"server":321,"photo":"opaque-photo","hash":"upload-hash"}'
+    )
+    assert result.observation["top_level_key_names"] == [
+        "hash",
+        "photo",
+        "server",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_multipart_transport_enables_bounded_content_decompression(monkeypatch) -> None:
+async def test_multipart_transport_decodes_actual_fragmented_gzip_nested_receipt(
+    monkeypatch,
+) -> None:
+    decoded = (
+        b'{"response":{"server":321,"photo":"opaque-photo",'
+        b'"hash":"upload-hash"}}'
+    )
+    compressed = gzip.compress(decoded)
+
+    class FragmentedContent:
+        async def iter_chunked(self, _size: int):
+            yield compressed[:7]
+            yield compressed[7:19]
+            yield compressed[19:]
+
+    class Response:
+        status = 200
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Content-Encoding": "gzip",
+            "Content-Length": str(len(compressed)),
+        }
+        content = FragmentedContent()
+
+    class RequestContext:
+        async def __aenter__(self):
+            return Response()
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class Session:
+        def post(self, *_args, **_kwargs):
+            return RequestContext()
+
+        async def close(self):
+            return None
+
+    async def fake_session_for(_url: str, _timeout: float):
+        return Session(), object()
+
+    monkeypatch.setattr(vk_transport_module, "_session_for", fake_session_for)
+    result = await SecureVKMultipartTransport().upload(
+        purpose=VKUploadPurpose.WALL_PHOTO,
+        upload_url="https://pu.vk.com/upload.php?sig=signed",
+        content=b"image-bytes",
+        filename="asset.png",
+        mime_type="image/png",
+        timeout_seconds=5,
+    )
+
+    assert result == VKMultipartUploadResult(
+        server=321, photo="opaque-photo", upload_hash="upload-hash"
+    )
+    assert result.observation == {
+        "http_status": 200,
+        "content_type": "application/json",
+        "content_encoding": "gzip",
+        "compressed_bytes": len(compressed),
+        "decoded_bytes": len(decoded),
+        "consumed_to_eof": True,
+        "top_level_key_names": ["response"],
+        "top_level_unknown_key_count": 0,
+        "nested_key_names": ["hash", "photo", "server"],
+        "nested_unknown_key_count": 0,
+        "server_field": {"type": "int", "length": None, "length_capped": False},
+        "photo_field": {"type": "str", "length": 12, "length_capped": False},
+        "hash_field": {"type": "str", "length": 11, "length_capped": False},
+    }
+
+
+@pytest.mark.asyncio
+async def test_multipart_transport_uses_explicit_bounded_content_decompression(monkeypatch) -> None:
     captured: dict[str, Any] = {}
 
     class Connector:
@@ -543,7 +849,7 @@ async def test_multipart_transport_enables_bounded_content_decompression(monkeyp
     )
 
     assert isinstance(session, Session)
-    assert captured["session"]["auto_decompress"] is True
+    assert captured["session"]["auto_decompress"] is False
 
 
 @pytest.mark.asyncio
