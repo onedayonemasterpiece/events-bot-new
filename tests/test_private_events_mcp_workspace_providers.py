@@ -18,8 +18,8 @@ from private_events_mcp_vk_adapter import VKActor
 from private_events_mcp_workspace_providers import (
     DedicatedVKActorTransport,
     DurableTelegramGovernor,
-    DurableVKCooldown,
     DurableVKAttemptRecorder,
+    DurableVKCooldown,
     DurableVKGovernor,
     DurableVKOpaqueRefStore,
     DurableVKWorkspaceAdapter,
@@ -524,3 +524,116 @@ def test_telegram_operation_claim_is_atomic_across_store_instances(config) -> No
         result=receipt,
     )
     assert second.resolve_operation(operation_ref).result == receipt
+
+
+def test_telegram_operation_persists_encrypted_intent_and_attempt_state(config) -> None:
+    store = InMemoryTelegramOpaqueRefStore(config)
+    operation_ref = "op_" + "e" * 24
+    digest = "c" * 64
+    intent = {
+        "action": "schedule",
+        "target_ref": "tgt_encryptedtarget000001",
+        "schedule_at": "2026-08-31T12:00:00Z",
+        "text_sha256": "d" * 64,
+        "media_count": 4,
+        "media_digests": ["e" * 64] * 4,
+    }
+
+    claim = store.claim_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        intent=intent,
+        claim_ttl_seconds=30,
+        reconciliation_deadline_ms=store._state.now_ms() + 60_000,
+    )
+    assert claim.intent == intent
+    assert claim.claim_expires_at_ms > claim.claimed_at_ms
+    assert claim.mutation_started_at_ms is None
+    assert store.mark_operation_mutation(
+        operation_ref=operation_ref, action_digest=digest
+    ) is True
+    attempted = store.note_reconciliation_attempt(
+        operation_ref=operation_ref, action_digest=digest
+    )
+    assert attempted.mutation_started_at_ms is not None
+    assert attempted.reconciliation_attempt == 1
+
+    with store._state._connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
+            (operation_ref,),
+        ).fetchone()
+    assert row["intent_ciphertext"]
+    rendered = repr(dict(row))
+    assert intent["target_ref"] not in rendered
+    assert intent["text_sha256"] not in rendered
+
+
+def test_telegram_legacy_null_claim_can_adopt_exact_intent_once(config) -> None:
+    store = InMemoryTelegramOpaqueRefStore(config)
+    operation_ref = "op_" + "l" * 24
+    digest = "f" * 64
+    now = store._state.now_ms()
+    with store._state._connect() as conn:
+        conn.execute(
+            """INSERT INTO social_provider_tg_operation(
+               operation_ref,action_digest,result_json,claimed_at_ms,updated_at_ms)
+               VALUES(?,?,?,?,?)""",
+            (operation_ref, digest, None, now - 120_000, now - 120_000),
+        )
+    intent = {
+        "action": "schedule",
+        "target_ref": "tgt_legacytarget0000001",
+        "schedule_at": "2026-08-31T08:30:00Z",
+        "text_sha256": "a" * 64,
+        "media_count": 4,
+        "media_digests": ["b" * 64] * 4,
+    }
+
+    adopted = store.adopt_operation_intent(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        intent=intent,
+    )
+    assert adopted.intent == intent
+    assert store.resolve_operation(operation_ref).intent == intent
+    with pytest.raises(ProviderBindingError, match="intent conflict"):
+        store.adopt_operation_intent(
+            operation_ref=operation_ref,
+            action_digest=digest,
+            intent={**intent, "media_count": 3, "media_digests": ["b" * 64] * 3},
+        )
+
+
+def test_telegram_unknown_result_can_converge_once_to_terminal(config) -> None:
+    store = InMemoryTelegramOpaqueRefStore(config)
+    operation_ref = "op_" + "r" * 24
+    digest = "1" * 64
+    store.claim_operation(operation_ref=operation_ref, action_digest=digest)
+    unknown = {
+        "platform": "telegram",
+        "operation_ref": operation_ref,
+        "action": "schedule",
+        "status": "outcome_unknown",
+        "retry_safe": False,
+        "error_code": "provider_timeout",
+    }
+    store.complete_operation(
+        operation_ref=operation_ref, action_digest=digest, result=unknown
+    )
+    terminal = {
+        **unknown,
+        "status": "failed",
+        "retry_safe": True,
+        "error_code": "provider_mutation_not_started",
+    }
+    store.complete_operation(
+        operation_ref=operation_ref, action_digest=digest, result=terminal
+    )
+    assert store.resolve_operation(operation_ref).result == terminal
+    with pytest.raises(ProviderBindingError, match="result conflict"):
+        store.complete_operation(
+            operation_ref=operation_ref,
+            action_digest=digest,
+            result={**terminal, "error_code": "different_terminal"},
+        )

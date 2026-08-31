@@ -194,6 +194,12 @@ class TelegramOperationClaim:
     action_digest: str
     claimed_now: bool
     result: Mapping[str, Any] | None = None
+    intent: Mapping[str, Any] | None = field(default=None, repr=False)
+    claimed_at_ms: int | None = None
+    claim_expires_at_ms: int | None = None
+    mutation_started_at_ms: int | None = None
+    reconciliation_attempt: int = 0
+    reconciliation_deadline_ms: int | None = None
 
 
 class TelegramOpaqueRefStore(Protocol):
@@ -246,6 +252,28 @@ class TelegramOpaqueRefStore(Protocol):
     def resolve_cursor(self, *, family: str, cursor: str) -> Mapping[str, Any]: ...
 
     def claim_operation(
+        self,
+        *,
+        operation_ref: str,
+        action_digest: str,
+        intent: Mapping[str, Any] | None = None,
+        claim_ttl_seconds: int | None = None,
+        reconciliation_deadline_ms: int | None = None,
+    ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
+
+    def adopt_operation_intent(
+        self,
+        *,
+        operation_ref: str,
+        action_digest: str,
+        intent: Mapping[str, Any],
+    ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
+
+    def mark_operation_mutation(
+        self, *, operation_ref: str, action_digest: str
+    ) -> bool | Awaitable[bool]: ...
+
+    def note_reconciliation_attempt(
         self, *, operation_ref: str, action_digest: str
     ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
 
@@ -430,6 +458,7 @@ class _DefaultTelethonTypes:
                 (functions.channels, "GetFullChannelRequest"),
                 (functions.messages, "SearchGlobalRequest"),
                 (functions.messages, "GetScheduledHistoryRequest"),
+                (functions.messages, "DeleteScheduledMessagesRequest"),
                 (functions.messages, "GetRepliesRequest"),
                 (functions.messages, "SendReactionRequest"),
                 (functions.stories, "GetPeerStoriesRequest"),
@@ -575,6 +604,10 @@ class _DefaultTelethonTypes:
             return functions.messages.GetScheduledHistoryRequest(
                 peer=values["peer"], hash=0
             )
+        if name == "delete_scheduled":
+            return functions.messages.DeleteScheduledMessagesRequest(
+                peer=values["peer"], id=list(values["message_ids"])
+            )
         if name == "reaction":
             reaction = (
                 types.ReactionCustomEmoji(document_id=values["custom_emoji_id"])
@@ -669,6 +702,15 @@ class _DefaultTelethonTypes:
 @dataclass(slots=True)
 class _Attempt:
     provider_mutation_attempted: bool = False
+    mutation_hook: Callable[[], Awaitable[None]] | None = field(
+        default=None, repr=False
+    )
+
+    async def mark_mutation(self) -> None:
+        if not self.provider_mutation_attempted:
+            if self.mutation_hook is not None:
+                await self.mutation_hook()
+            self.provider_mutation_attempted = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -775,6 +817,8 @@ class TelegramWorkspaceAdapter:
         self,
         operation: str,
         body: Callable[[Any, TelegramLease, _Attempt], Awaitable[Any]],
+        *,
+        attempt: _Attempt | None = None,
     ) -> Any:
         async with self._lock:
             remaining = await _await(self._governor.cooldown_remaining())
@@ -788,7 +832,7 @@ class TelegramWorkspaceAdapter:
             if not isinstance(lease, TelegramLease):
                 raise TelegramWorkspaceError("lease_unavailable", retry_safe=False)
             client: Any | None = None
-            attempt = _Attempt()
+            attempt = attempt or _Attempt()
             try:
                 await self._fenced(lease)
                 client = await _await(self._client_factory())
@@ -1261,7 +1305,7 @@ class TelegramWorkspaceAdapter:
         }[upload.mime_type]
         stream = io.BytesIO(data)
         stream.name = f"verified-asset.{extension}"
-        attempt.provider_mutation_attempted = True
+        await attempt.mark_mutation()
         uploaded = await _await(
             client.upload_file(
                 stream,
@@ -2129,6 +2173,136 @@ class TelegramWorkspaceAdapter:
         )
 
     @staticmethod
+    def _normalized_text_sha256(value: Any) -> str:
+        text = _safe_text(value, 4096)
+        normalized = unicodedata.normalize("NFC", text)
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _logical_group_identity(cls, members: Sequence[Any]) -> tuple[Any, str, int, list[str]]:
+        if not members:
+            raise TelegramWorkspaceError("invalid_provider_response")
+        representative = next(
+            (
+                member
+                for member in members
+                if _safe_text(getattr(member, "message", None), 4096)
+            ),
+            members[0],
+        )
+        media_roles: list[str] = []
+        for member in members[:10]:
+            detail = cls._message_media_detail(member)
+            if detail is not None:
+                media_roles.append(detail["role"].value)
+        return (
+            representative,
+            cls._normalized_text_sha256(getattr(representative, "message", None)),
+            len(media_roles),
+            media_roles,
+        )
+
+    @staticmethod
+    def _parse_bound(value: str | None, field_name: str) -> datetime | None:
+        if value is None:
+            return None
+        if not isinstance(value, str) or len(value) > 40:
+            raise SocialWorkspaceValidationError(f"{field_name} is invalid")
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            raise SocialWorkspaceValidationError(f"{field_name} is invalid") from None
+        if parsed.tzinfo is None:
+            raise SocialWorkspaceValidationError(f"{field_name} needs timezone")
+        return parsed.astimezone(timezone.utc)
+
+    async def scheduled_items(
+        self,
+        *,
+        target_ref: str,
+        scheduled_from: str | None = None,
+        scheduled_to: str | None = None,
+        text_sha256: str | None = None,
+        media_count: int | None = None,
+        limit: int = 10,
+    ) -> Mapping[str, Any]:
+        """Read one exact peer's raw scheduled queue as logical publications."""
+
+        target = self._target(target_ref)
+        date_from = self._parse_bound(scheduled_from, "scheduled_from")
+        date_to = self._parse_bound(scheduled_to, "scheduled_to")
+        if date_from is not None and date_to is not None and date_from > date_to:
+            raise SocialWorkspaceValidationError("scheduled bounds are invalid")
+        if text_sha256 is not None and (
+            not isinstance(text_sha256, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", text_sha256)
+        ):
+            raise SocialWorkspaceValidationError("text_sha256 is invalid")
+        if media_count is not None and (
+            type(media_count) is not int or not 0 <= media_count <= 10
+        ):
+            raise SocialWorkspaceValidationError("media_count is invalid")
+        if type(limit) is not int or not 1 <= limit <= 25:
+            raise SocialWorkspaceValidationError("limit is invalid")
+
+        async def run(
+            client: Any, _lease: TelegramLease, _attempt: _Attempt
+        ) -> Mapping[str, Any]:
+            messages = await self._scheduled_messages(client, target)
+            matched: list[dict[str, Any]] = []
+            for members in self._logical_message_groups(messages):
+                representative, fingerprint, observed_count, roles = (
+                    self._logical_group_identity(members)
+                )
+                scheduled_at = getattr(representative, "date", None)
+                if not isinstance(scheduled_at, datetime):
+                    raise TelegramWorkspaceError("invalid_provider_response")
+                if scheduled_at.tzinfo is None:
+                    scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+                scheduled_at = scheduled_at.astimezone(timezone.utc)
+                if date_from is not None and scheduled_at < date_from:
+                    continue
+                if date_to is not None and scheduled_at > date_to:
+                    continue
+                if text_sha256 is not None and fingerprint != text_sha256:
+                    continue
+                if media_count is not None and observed_count != media_count:
+                    continue
+                binding = self._mint_item_binding(
+                    target_ref=target.target_ref,
+                    message_id=_provider_message_id(representative),
+                    kind=(
+                        SocialItemKind.POST
+                        if target.kind is SocialTargetKind.CHANNEL
+                        else SocialItemKind.MESSAGE
+                    ),
+                    allowed_actions=None,
+                    scheduled=True,
+                )
+                matched.append(
+                    {
+                        "item_ref": binding.item_ref,
+                        "target_ref": target.target_ref,
+                        "queue": "scheduled",
+                        "scheduled_at": _utc(scheduled_at),
+                        "text_sha256": fingerprint,
+                        "media_count": observed_count,
+                        "media_roles": roles,
+                        "trust": _TRUST,
+                    }
+                )
+            return {
+                "platform": "telegram",
+                "target_ref": target.target_ref,
+                "queue": "scheduled",
+                "items": matched[:limit],
+                "exact_match_count": len(matched),
+                "trust": _TRUST,
+            }
+
+        return await self._session("scheduled_items", run)
+
+    @staticmethod
     def _story_metrics(story_or_views: Any) -> dict[str, int]:
         views = getattr(story_or_views, "views", None)
         source = views if views is not None and not isinstance(views, int) else story_or_views
@@ -2948,7 +3122,7 @@ class TelegramWorkspaceAdapter:
             stream = io.BytesIO(data)
             stream.name = upload.display_name
             attributes = [compile_filename(upload.display_name)]
-            attempt.provider_mutation_attempted = True
+            await attempt.mark_mutation()
             try:
                 return await _await(
                     client.send_file(
@@ -2982,7 +3156,7 @@ class TelegramWorkspaceAdapter:
                         attempt=attempt,
                     )
                 )
-            attempt.provider_mutation_attempted = True
+            await attempt.mark_mutation()
             return await _await(
                 client.send_file(
                     target.entity,
@@ -2994,7 +3168,7 @@ class TelegramWorkspaceAdapter:
                     reply_to=reply_to,
                 )
             )
-        attempt.provider_mutation_attempted = True
+        await attempt.mark_mutation()
         return await _await(
             client.send_message(
                 target.entity,
@@ -3009,12 +3183,22 @@ class TelegramWorkspaceAdapter:
         )
 
     async def _claim_operation(
-        self, operation_ref: str, action_digest: str
+        self,
+        operation_ref: str,
+        action_digest: str,
+        operation_intent: Mapping[str, Any],
     ) -> Mapping[str, Any] | None:
         try:
             claim = await _await(
                 self._refs.claim_operation(
-                    operation_ref=operation_ref, action_digest=action_digest
+                    operation_ref=operation_ref,
+                    action_digest=action_digest,
+                    intent=operation_intent,
+                    claim_ttl_seconds=max(1, min(600, int(self._timeout) + 30)),
+                    reconciliation_deadline_ms=int(
+                        datetime.now(timezone.utc).timestamp() * 1000
+                    )
+                    + max(60_000, int((self._timeout + 30) * 1000)),
                 )
             )
         except Exception:  # noqa: BLE001 - opaque durable ledger boundary
@@ -3035,6 +3219,56 @@ class TelegramWorkspaceAdapter:
         if claim.claimed_now is not True:
             raise TelegramWorkspaceError("operation_in_progress", retry_safe=False)
         return None
+
+    def _operation_intent(self, intent: SocialActionIntent) -> Mapping[str, Any]:
+        if intent.item_ref is not None:
+            target_ref = self._item(intent.item_ref).target_ref
+        else:
+            target_ref = intent.destination_target_ref or intent.target_ref or ""
+        validate_opaque_ref(target_ref, "target")
+        media_digests: list[str] = []
+        if intent.content is not None:
+            for attachment in intent.content.media:
+                asset = self._asset(attachment.asset_ref)
+                upload = asset.provider_media
+                digest = (
+                    upload.content_digest.removeprefix("sha256:")
+                    if isinstance(upload, TelegramVerifiedUpload)
+                    else hashlib.sha256(attachment.asset_ref.encode("utf-8")).hexdigest()
+                )
+                media_digests.append(digest)
+            text = intent.content.text
+        else:
+            text = ""
+        schedule_at = None
+        if intent.schedule_at is not None:
+            scheduled = self._parse_bound(intent.schedule_at, "schedule_at")
+            assert scheduled is not None
+            schedule_at = _utc(scheduled)
+        return {
+            "action": intent.action.value,
+            "target_ref": target_ref,
+            "schedule_at": schedule_at,
+            "text_sha256": self._normalized_text_sha256(text),
+            "media_count": len(media_digests),
+            "media_digests": media_digests,
+        }
+
+    async def _mark_operation_mutation(
+        self, operation_ref: str, action_digest: str
+    ) -> None:
+        try:
+            marked = await _await(
+                self._refs.mark_operation_mutation(
+                    operation_ref=operation_ref, action_digest=action_digest
+                )
+            )
+        except Exception:  # noqa: BLE001 - opaque durable ledger boundary
+            raise TelegramWorkspaceError(
+                "operation_ledger_failed", retry_safe=False
+            ) from None
+        if marked is not True:
+            raise TelegramWorkspaceError("operation_ledger_failed", retry_safe=False)
 
     async def _release_operation(self, operation_ref: str, action_digest: str) -> None:
         try:
@@ -3078,7 +3312,12 @@ class TelegramWorkspaceAdapter:
             raise SocialWorkspaceValidationError("operation completion binding mismatch")
         return dict(self._recordless_operation_validation(operation_ref, claim.result))
 
-    async def reconcile(self, operation_ref: str) -> Mapping[str, Any]:
+    async def reconcile(
+        self,
+        operation_ref: str,
+        *,
+        intent: SocialActionIntent | None = None,
+    ) -> Mapping[str, Any]:
         if not isinstance(operation_ref, str) or not re.fullmatch(
             r"op_[A-Za-z0-9_-]{24,160}", operation_ref
         ):
@@ -3092,9 +3331,206 @@ class TelegramWorkspaceAdapter:
             or claim.operation_ref != operation_ref
         ):
             raise SocialWorkspaceValidationError("operation ledger binding mismatch")
-        if claim.result is None:
+        if intent is not None:
+            if intent.platform is not SocialPlatform.TELEGRAM:
+                raise SocialWorkspaceValidationError(
+                    "Telegram adapter requires telegram platform"
+                )
+            digest = compute_action_digest(intent)
+            if digest != claim.action_digest:
+                raise SocialWorkspaceValidationError("operation_ref intent conflict")
+            recovered = self._operation_intent(intent)
+            if claim.intent is None:
+                try:
+                    claim = await _await(
+                        self._refs.adopt_operation_intent(
+                            operation_ref=operation_ref,
+                            action_digest=claim.action_digest,
+                            intent=recovered,
+                        )
+                    )
+                except Exception:  # noqa: BLE001 - opaque durable ledger boundary
+                    raise TelegramWorkspaceError(
+                        "operation_ledger_failed", retry_safe=False
+                    ) from None
+            elif dict(claim.intent) != dict(recovered):
+                raise SocialWorkspaceValidationError("operation_ref intent conflict")
+        if claim.result is not None:
+            validated = dict(
+                self._recordless_operation_validation(operation_ref, claim.result)
+            )
+            if validated["status"] in {"succeeded", "failed"} or validated.get(
+                "error_code"
+            ) in {"reconciliation_ambiguous", "reconciliation_no_match"}:
+                return validated
+        if claim.intent is None:
+            raise TelegramWorkspaceError(
+                "operation_intent_unavailable", retry_safe=False
+            )
+        evidence = dict(claim.intent)
+        if evidence.get("action") != SocialAction.SCHEDULE.value:
+            if claim.result is not None:
+                return dict(
+                    self._recordless_operation_validation(operation_ref, claim.result)
+                )
             raise TelegramWorkspaceError("operation_in_progress", retry_safe=False)
-        return dict(self._recordless_operation_validation(operation_ref, claim.result))
+        try:
+            claim = await _await(
+                self._refs.note_reconciliation_attempt(
+                    operation_ref=operation_ref, action_digest=claim.action_digest
+                )
+            )
+        except Exception:  # noqa: BLE001 - opaque durable ledger boundary
+            raise TelegramWorkspaceError("operation_ledger_failed", retry_safe=False) from None
+        target = self._target(str(evidence["target_ref"]))
+        expected_at = self._parse_bound(evidence.get("schedule_at"), "schedule_at")
+        if expected_at is None:
+            raise SocialWorkspaceValidationError("scheduled intent is incomplete")
+
+        async def readback(
+            client: Any, _lease: TelegramLease, _attempt: _Attempt
+        ) -> list[tuple[str, list[Any]]]:
+            matches: list[tuple[str, list[Any]]] = []
+            scheduled_messages = await self._scheduled_messages(client, target)
+            queues: list[tuple[str, Sequence[Any]]] = [
+                ("scheduled", scheduled_messages)
+            ]
+            if datetime.now(timezone.utc) >= expected_at:
+                live = await self._iterate(
+                    client.iter_messages(target.entity, limit=_MAX_GLOBAL_SCAN)
+                )
+                queues.append(("live", live))
+            for queue, messages in queues:
+                for members in self._logical_message_groups(messages):
+                    representative, fingerprint, count, _roles = (
+                        self._logical_group_identity(members)
+                    )
+                    observed_at = getattr(representative, "date", None)
+                    if not isinstance(observed_at, datetime):
+                        continue
+                    if observed_at.tzinfo is None:
+                        observed_at = observed_at.replace(tzinfo=timezone.utc)
+                    if (
+                        abs(
+                            (
+                                observed_at.astimezone(timezone.utc) - expected_at
+                            ).total_seconds()
+                        )
+                        <= 1
+                        and fingerprint == evidence["text_sha256"]
+                        and count == evidence["media_count"]
+                    ):
+                        matches.append((queue, members))
+            return matches
+
+        matches = await self._session("reconcile_schedule", readback)
+        if len(matches) == 1:
+            queue, members = matches[0]
+            representative, _fingerprint, count, _roles = self._logical_group_identity(
+                members
+            )
+            binding = self._mint_item_binding(
+                target_ref=target.target_ref,
+                message_id=_provider_message_id(representative),
+                kind=(
+                    SocialItemKind.POST
+                    if target.kind is SocialTargetKind.CHANNEL
+                    else SocialItemKind.MESSAGE
+                ),
+                allowed_actions=None,
+                scheduled=queue == "scheduled",
+            )
+            result = {
+                "platform": "telegram",
+                "operation_ref": operation_ref,
+                "action": SocialAction.SCHEDULE.value,
+                "status": "succeeded",
+                "retry_safe": False,
+                "target_ref": target.target_ref,
+                "item_ref": binding.item_ref,
+                "scheduled_at": _utc(expected_at),
+                "media_count": count,
+                "read_after_write": {
+                    "verified": True,
+                    "observed_item_ref": binding.item_ref,
+                    "observed_at": datetime.now(timezone.utc).isoformat().replace(
+                        "+00:00", "Z"
+                    ),
+                },
+            }
+            return await self._complete_operation(
+                operation_ref, claim.action_digest, result
+            )
+        if len(matches) > 1:
+            refs: list[str] = []
+            for queue, members in matches[:5]:
+                representative = self._logical_group_identity(members)[0]
+                binding = self._mint_item_binding(
+                    target_ref=target.target_ref,
+                    message_id=_provider_message_id(representative),
+                    kind=SocialItemKind.POST,
+                    allowed_actions=None,
+                    scheduled=queue == "scheduled",
+                )
+                refs.append(binding.item_ref)
+            result = {
+                "platform": "telegram",
+                "operation_ref": operation_ref,
+                "action": SocialAction.SCHEDULE.value,
+                "status": "outcome_unknown",
+                "retry_safe": False,
+                "target_ref": target.target_ref,
+                "error_code": "reconciliation_ambiguous",
+                "exact_match_count": len(matches),
+                "item_refs": refs,
+                "reconciliation_attempt": claim.reconciliation_attempt,
+            }
+            return await self._complete_operation(
+                operation_ref, claim.action_digest, result
+            )
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        deadline_ms = claim.reconciliation_deadline_ms or now_ms
+        if now_ms < deadline_ms:
+            result = {
+                "platform": "telegram",
+                "operation_ref": operation_ref,
+                "action": SocialAction.SCHEDULE.value,
+                "status": "outcome_unknown",
+                "retry_safe": False,
+                "target_ref": target.target_ref,
+                "error_code": "reconciliation_pending",
+                "reconciliation_attempt": claim.reconciliation_attempt,
+                "next_poll_after_seconds": min(15, max(1, (deadline_ms - now_ms) // 1000)),
+                "reconciliation_deadline": datetime.fromtimestamp(
+                    deadline_ms / 1000, tz=timezone.utc
+                ).isoformat().replace("+00:00", "Z"),
+            }
+        elif (
+            claim.mutation_started_at_ms is None
+            and claim.claim_expires_at_ms is not None
+        ):
+            result = {
+                "platform": "telegram",
+                "operation_ref": operation_ref,
+                "action": SocialAction.SCHEDULE.value,
+                "status": "failed",
+                "retry_safe": True,
+                "target_ref": target.target_ref,
+                "error_code": "provider_mutation_not_started",
+                "reconciliation_attempt": claim.reconciliation_attempt,
+            }
+        else:
+            result = {
+                "platform": "telegram",
+                "operation_ref": operation_ref,
+                "action": SocialAction.SCHEDULE.value,
+                "status": "outcome_unknown",
+                "retry_safe": False,
+                "target_ref": target.target_ref,
+                "error_code": "reconciliation_no_match",
+                "reconciliation_attempt": claim.reconciliation_attempt,
+            }
+        return await self._complete_operation(operation_ref, claim.action_digest, result)
 
     def _recordless_operation_validation(
         self, operation_ref: str, result: Mapping[str, Any]
@@ -3111,7 +3547,32 @@ class TelegramWorkspaceAdapter:
             or not re.fullmatch(r"[a-z][a-z0-9_]{1,63}", error_code)
         ):
             raise SocialWorkspaceValidationError("operation error_code is invalid")
-        validate_action_status_response(result)
+        # Public schema owns the optional bounded reconciliation/readback fields.
+        # Validate the stable action-status core here so adapter/store deployments
+        # can be rolled out in either order without weakening the provider boundary.
+        core = {
+                key: value
+                for key, value in result.items()
+                if key
+                in {
+                    "platform",
+                    "operation_ref",
+                    "action",
+                    "status",
+                    "retry_safe",
+                    "target_ref",
+                    "item_ref",
+                    "error_code",
+                    "read_after_write",
+                }
+            }
+        if isinstance(core.get("read_after_write"), Mapping):
+            core["read_after_write"] = {
+                key: value
+                for key, value in core["read_after_write"].items()
+                if key in {"verified", "observed_item_ref", "observed_at"}
+            }
+        validate_action_status_response(core)
         return result
 
     def _operation_ledger_unknown(
@@ -3161,15 +3622,24 @@ class TelegramWorkspaceAdapter:
         ):
             raise SocialWorkspaceValidationError("operation_ref is invalid")
         action_digest = compute_action_digest(intent)
-        replay = await self._claim_operation(operation_ref, action_digest)
+        operation_intent = self._operation_intent(intent)
+        replay = await self._claim_operation(
+            operation_ref, action_digest, operation_intent
+        )
         if replay is not None:
             return replay
+        attempt = _Attempt(
+            mutation_hook=lambda: self._mark_operation_mutation(
+                operation_ref, action_digest
+            )
+        )
 
         async def run(client: Any, lease: TelegramLease, attempt: _Attempt) -> Mapping[str, Any]:
             snapshot = await self._preflight(client, lease, intent)
             target, source, item = snapshot.target, snapshot.source, snapshot.item
             await self._fenced(lease)
             result: Any = None
+            delete_absence_verified = False
             if intent.action in {SocialAction.SEND_MESSAGE, SocialAction.PUBLISH}:
                 assert intent.content is not None
                 result = await self._send_content(
@@ -3205,7 +3675,7 @@ class TelegramWorkspaceAdapter:
                 if intent.content.media:
                     raise SocialWorkspaceValidationError("media replacement is unsupported")
                 compiled_entities = self._compile_entities(intent.content)
-                attempt.provider_mutation_attempted = True
+                await attempt.mark_mutation()
                 result = await _await(
                     client.edit_message(
                         source.entity,
@@ -3218,12 +3688,44 @@ class TelegramWorkspaceAdapter:
                 target = source
             elif intent.action is SocialAction.DELETE:
                 assert item is not None and source is not None
-                attempt.provider_mutation_attempted = True
-                await _await(client.delete_messages(source.entity, [item.message_id], revoke=True))
+                if isinstance(item, TelegramScheduledItemBinding) or bool(
+                    getattr(item, "scheduled", False)
+                ):
+                    observed, scheduled_messages = await self._scheduled_message_by_id(
+                        client, source, item.message_id
+                    )
+                    if observed is None:
+                        raise TelegramWorkspaceError("item_not_found")
+                    album = self._ordered_album_members(observed, scheduled_messages)
+                    message_ids = [_provider_message_id(member) for member in album]
+                    await attempt.mark_mutation()
+                    await self._call(
+                        client,
+                        lease,
+                        self._types.request(
+                            "delete_scheduled",
+                            peer=source.entity,
+                            message_ids=message_ids,
+                        ),
+                    )
+                    remaining = await self._scheduled_messages(client, source)
+                    if any(
+                        _provider_message_id(candidate) in set(message_ids)
+                        for candidate in remaining
+                    ):
+                        raise TimeoutError("scheduled delete read-back mismatch")
+                    delete_absence_verified = True
+                else:
+                    await attempt.mark_mutation()
+                    await _await(
+                        client.delete_messages(
+                            source.entity, [item.message_id], revoke=True
+                        )
+                    )
                 target = source
             elif intent.action is SocialAction.FORWARD:
                 assert item is not None and source is not None
-                attempt.provider_mutation_attempted = True
+                await attempt.mark_mutation()
                 result = await _await(
                     client.forward_messages(
                         target.entity, [item.message_id], from_peer=source.entity
@@ -3247,7 +3749,7 @@ class TelegramWorkspaceAdapter:
                     reaction=intent.reaction,
                     custom_emoji_id=custom_emoji_id,
                 )
-                attempt.provider_mutation_attempted = True
+                await attempt.mark_mutation()
                 result = await self._call(
                     client,
                     lease,
@@ -3276,7 +3778,7 @@ class TelegramWorkspaceAdapter:
                     caption=intent.content.text,
                     entities=self._compile_entities(intent.content),
                 )
-                attempt.provider_mutation_attempted = True
+                await attempt.mark_mutation()
                 result = await self._call(
                     client,
                     lease,
@@ -3307,6 +3809,17 @@ class TelegramWorkspaceAdapter:
                 "target_ref": target.target_ref,
             }
             if intent.action is SocialAction.DELETE:
+                if delete_absence_verified:
+                    assert item is not None
+                    receipt["item_ref"] = item.item_ref
+                    receipt["read_after_write"] = {
+                        "verified": True,
+                        "absence_verified": True,
+                        "observed_item_ref": item.item_ref,
+                        "observed_at": datetime.now(timezone.utc).isoformat().replace(
+                            "+00:00", "Z"
+                        ),
+                    }
                 return receipt
             if intent.action is SocialAction.REACTION:
                 assert item is not None
@@ -3416,11 +3929,33 @@ class TelegramWorkspaceAdapter:
 
         provider_completed = False
         try:
-            result = await self._session(intent.action.value, run)
+            result = await self._session(intent.action.value, run, attempt=attempt)
             provider_completed = True
             return await self._complete_operation(
                 operation_ref, action_digest, result
             )
+        except asyncio.CancelledError:
+            if attempt.provider_mutation_attempted:
+                cancelled = {
+                    "platform": "telegram",
+                    "operation_ref": operation_ref,
+                    "action": intent.action.value,
+                    "status": "outcome_unknown",
+                    "retry_safe": False,
+                    "error_code": "provider_cancelled",
+                }
+                try:
+                    await self._complete_operation(
+                        operation_ref, action_digest, cancelled
+                    )
+                except (SocialWorkspaceValidationError, TelegramWorkspaceError):
+                    pass
+            else:
+                try:
+                    await self._release_operation(operation_ref, action_digest)
+                except TelegramWorkspaceError:
+                    pass
+            raise
         except SocialWorkspaceValidationError:
             if provider_completed:
                 return self._operation_ledger_unknown(operation_ref, intent.action)
