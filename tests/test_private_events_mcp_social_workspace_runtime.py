@@ -28,6 +28,7 @@ from private_events_mcp.social_workspace import (
     validate_asset_stage_request,
     validate_prepare_request,
     validate_read_request,
+    validate_scheduled_items_request,
 )
 from private_events_mcp.social_workspace_runtime import (
     MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ,
@@ -85,6 +86,8 @@ class FakeAdapter:
         self.capability_calls = 0
         self.asset_bytes: bytes | None = None
         self.forced_result: dict[str, Any] | None = None
+        self.scheduled_calls: list[dict[str, Any]] = []
+        self.retry_calls: list[tuple[str, int]] = []
 
     async def capabilities(self, target_ref):
         self.capability_calls += 1
@@ -168,6 +171,48 @@ class FakeAdapter:
         self.reconcile_refs.append(operation_ref)
         return {"status": "failed", "retry_safe": False,
                 "error_code": "provider_not_observed"}
+
+    async def scheduled_items(self, **kwargs):
+        self.scheduled_calls.append(dict(kwargs))
+        return {
+            "platform": "telegram",
+            "target_ref": kwargs["target_ref"],
+            "queue": "scheduled",
+            "items": [
+                {
+                    "item_ref": "native-scheduled-album-42",
+                    "target_ref": kwargs["target_ref"],
+                    "queue": "scheduled",
+                    "scheduled_at": "2026-08-31T12:00:00Z",
+                    "text_sha256": "a" * 64,
+                    "media_count": 4,
+                    "media_roles": ["image"] * 4,
+                    "provider_id": 999,
+                    "trust": "untrusted_external_data",
+                }
+            ],
+            "exact_match_count": 1,
+            "has_more": False,
+            "native": {"peer_id": 123},
+            "trust": "untrusted_external_data",
+        }
+
+    async def retry(self, intent, *, operation_ref, attempt_number):
+        self.retry_calls.append((operation_ref, attempt_number))
+        await asyncio.sleep(0)
+        return {
+            "target_ref": intent.target_ref,
+            "item_ref": "native-retried-99",
+            "status": "succeeded",
+            "retry_safe": False,
+            "stage": "readback_verified",
+            "mutation_boundary_reached": True,
+            "read_after_write": {
+                "verified": True,
+                "observed_item_ref": "native-retried-99",
+                "observed_at": "2026-08-31T12:00:00Z",
+            },
+        }
 
     async def read_asset(self, asset_ref, *, owner_binding, max_bytes):
         assert asset_ref.startswith("provider-asset-")
@@ -639,6 +684,25 @@ def runtime(tmp_path: Path):
         provider_timeout_seconds=0.02,
     )
     return value, adapter, store
+
+
+def test_retry_state_schema_is_additive_and_idempotent(tmp_path: Path) -> None:
+    path = tmp_path / "auth.sqlite"
+    OAuthStateStore(str(path))
+    OAuthStateStore(str(path))
+    with sqlite3.connect(path) as conn:
+        preparation_columns = {
+            row[1] for row in conn.execute(
+                "PRAGMA table_info(social_workspace_preparation)"
+            )
+        }
+        operation_columns = {
+            row[1] for row in conn.execute(
+                "PRAGMA table_info(social_workspace_operation)"
+            )
+        }
+    assert "logical_action_ref" in preparation_columns
+    assert {"attempt_number", "retry_in_progress", "retry_started_at"} <= operation_columns
 
 
 @pytest.mark.asyncio
@@ -1821,7 +1885,7 @@ def test_publish_attempt_budget_uses_utc_day_not_hour(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_timeout_is_unknown_not_retry_safe_and_status_reconciles(runtime) -> None:
+async def test_mutating_adapter_owns_deadline_without_equal_outer_timeout(runtime) -> None:
     service, adapter, _store = runtime
     adapter.timeout = True
     service.provider_timeout_seconds = 0.01
@@ -1839,11 +1903,167 @@ async def test_timeout_is_unknown_not_retry_safe_and_status_reconciles(runtime) 
     )
     result = await service.commit({"preparation_ref": prep["preparation_ref"],
         **approval, "action_digest": prep["action_digest"]}, context())
-    assert result["status"] == "outcome_unknown" and result["retry_safe"] is False
-    reconciled = await service.reconcile(result["operation_ref"], context())
-    assert reconciled["status"] == "failed" and reconciled["retry_safe"] is False
+    assert result["status"] == "succeeded" and result["retry_safe"] is False
     assert adapter.operation_refs == [result["operation_ref"]]
-    assert adapter.reconcile_refs == [result["operation_ref"]]
+    assert adapter.reconcile_refs == []
+
+
+@pytest.mark.asyncio
+async def test_scheduled_items_read_is_scope_bound_logical_and_redacted(runtime) -> None:
+    service, adapter, _store = runtime
+    call_context = scoped_context("telegram:schedule")
+    principal = RuntimePrincipal.from_context(call_context)
+    target = service._mint_ref(
+        "target", "native-scheduled-target", "telegram", principal
+    )
+    request = validate_scheduled_items_request(
+        {
+            "platform": "telegram",
+            "target_ref": target,
+            "scheduled_from": "2026-08-31T08:00:00Z",
+            "scheduled_to": "2026-08-31T14:00:00Z",
+            "text_sha256": "a" * 64,
+            "media_count": 4,
+            "limit": 10,
+        }
+    )
+
+    result = await service.scheduled_items(request, call_context)
+
+    assert adapter.scheduled_calls == [
+        {
+            "target_ref": "native-scheduled-target",
+            "scheduled_from": "2026-08-31T08:00:00Z",
+            "scheduled_to": "2026-08-31T14:00:00Z",
+            "text_sha256": "a" * 64,
+            "media_count": 4,
+            "limit": 10,
+        }
+    ]
+    assert result["target_ref"] == target
+    assert len(result["items"]) == 1
+    assert result["items"][0]["item_ref"].startswith("itm_")
+    assert result["items"][0]["target_ref"] == target
+    assert result["items"][0]["media_roles"] == ["image"] * 4
+    encoded = json.dumps(result)
+    assert "native-scheduled" not in encoded
+    assert "provider_id" not in encoded
+    assert "peer_id" not in encoded
+
+
+@pytest.mark.asyncio
+async def test_retry_reuses_logical_operation_and_is_single_flight(runtime) -> None:
+    service, adapter, store = runtime
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-user", "telegram", principal)
+    intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "publish",
+            "idempotency_key": "retry-safe-publish-123",
+            "target_ref": target,
+            "content": {"text": "retry", "entities": [], "media": []},
+        }
+    )
+    prepared = await service.prepare(intent, context())
+    adapter.forced_result = {
+        "status": "failed",
+        "retry_safe": True,
+        "error_code": "media_upload_response_invalid",
+        "stage": "wall_photo_multipart",
+        "mutation_boundary_reached": False,
+    }
+    failed = await service.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        context(),
+    )
+    adapter.forced_result = None
+
+    first, second = await asyncio.gather(
+        service.retry(failed["operation_ref"], context()),
+        service.retry(failed["operation_ref"], context()),
+        return_exceptions=True,
+    )
+    successes = [value for value in (first, second) if isinstance(value, dict)]
+    failures = [value for value in (first, second) if isinstance(value, Exception)]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert "retry" in str(failures[0]).lower()
+    retried = successes[0]
+    assert retried["operation_ref"] == failed["operation_ref"]
+    assert retried["preparation_ref"] == prepared["preparation_ref"]
+    assert retried["logical_action_ref"].startswith("act_")
+    assert retried["attempt_number"] == 2
+    assert adapter.retry_calls == [(failed["operation_ref"], 2)]
+    with sqlite3.connect(store.path) as conn:
+        row = conn.execute(
+            "SELECT attempt_number,retry_in_progress FROM social_workspace_operation"
+        ).fetchone()
+    assert row == (2, 0)
+
+
+@pytest.mark.asyncio
+async def test_reconcile_passes_recovered_native_intent_and_evidence_when_supported(
+    tmp_path: Path,
+) -> None:
+    class IntentAwareAdapter(FakeAdapter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.recovered = None
+
+        async def reconcile(self, operation_ref, *, intent, evidence):
+            self.recovered = (operation_ref, intent, evidence)
+            return {
+                "status": "failed",
+                "retry_safe": False,
+                "error_code": "provider_not_observed",
+            }
+
+    adapter = IntentAwareAdapter()
+    store = OAuthStateStore(str(tmp_path / "auth.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="unit-test-key-that-is-long-enough",
+    )
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "native-user", "telegram", principal)
+    intent = validate_prepare_request(
+        {
+            "platform": "telegram",
+            "action": "schedule",
+            "idempotency_key": "reconcile-native-intent-123",
+            "target_ref": target,
+            "content": {"text": "scheduled", "entities": [], "media": []},
+            "schedule_at": "2026-08-31T12:00:00Z",
+        }
+    )
+    prepared = await service.prepare(intent, context())
+    adapter.forced_result = {
+        "status": "outcome_unknown",
+        "retry_safe": False,
+        "error_code": "provider_timeout",
+    }
+    result = await service.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        context(),
+    )
+
+    await service.reconcile(result["operation_ref"], context())
+
+    assert adapter.recovered is not None
+    operation_ref, recovered_intent, evidence = adapter.recovered
+    assert operation_ref == result["operation_ref"]
+    assert recovered_intent.target_ref == "native-user"
+    assert recovered_intent.schedule_at == "2026-08-31T12:00:00Z"
+    assert evidence["attempt_number"] == 1
+    assert isinstance(evidence["provider_attempted_at"], int)
 
 
 @pytest.mark.asyncio
@@ -1902,6 +2122,23 @@ def test_tools_are_private_noncacheable_granular_and_feature_hidden(runtime) -> 
     assert all(tool.scope_selector is not None for tool in tools)
     assert all(all(any(scope.startswith(p + ":") for p in ("telegram", "vk"))
                    for scope in option) for tool in tools for option in tool.scope_options)
+
+
+def test_scheduled_read_and_retry_tools_reuse_schedule_and_legacy_publish_scopes(
+    runtime,
+) -> None:
+    service, _adapter, _store = runtime
+    tools = {tool.name: tool for tool in build_social_workspace_tools(service)}
+    scheduled = tools["social_scheduled_items_list"]
+    assert scheduled.read_only is True
+    assert scheduled.scope_selector(
+        {"platform": "telegram", "target_ref": "tgt_" + "a" * 16}
+    ) == {"telegram:schedule"}
+    assert frozenset({"telegram:schedule"}) in scheduled.scope_options
+    assert frozenset({"telegram:publish"}) in scheduled.scope_options
+    retry = tools["social_action_retry"]
+    assert retry.read_only is False
+    assert retry.idempotent is True
 
 
 def test_vk_item_and_notification_tools_are_provider_and_scope_isolated(runtime) -> None:

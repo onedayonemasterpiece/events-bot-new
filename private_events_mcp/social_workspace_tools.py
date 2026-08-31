@@ -31,6 +31,9 @@ from .social_workspace import (
     SOCIAL_WORKSPACE_PREPARE_SCHEMA,
     SOCIAL_WORKSPACE_REACTIONS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_READ_SCHEMA,
+    SOCIAL_WORKSPACE_RETRY_SCHEMA,
+    SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA,
+    SOCIAL_WORKSPACE_SCHEDULED_ITEMS_SCHEMA,
     SOCIAL_WORKSPACE_STATISTICS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
     SOCIAL_WORKSPACE_STATUS_SCHEMA,
@@ -48,6 +51,8 @@ from .social_workspace import (
     validate_asset_status_request,
     validate_prepare_request,
     validate_read_request,
+    validate_retry_request,
+    validate_scheduled_items_request,
     validate_status_request,
 )
 from .social_workspace_runtime import (
@@ -394,6 +399,14 @@ def build_social_workspace_tools(
         except Exception as exc:  # noqa: BLE001 - normalize untrusted request errors
             raise rejected(exc) from None
 
+    def scheduled_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
+        try:
+            request = validate_scheduled_items_request(arguments)
+            require_platform(request.platform.value)
+            return request.required_scopes
+        except Exception as exc:  # noqa: BLE001 - normalize request errors
+            raise rejected(exc) from None
+
     def capabilities_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
         platform = arguments.get("platform")
         platform = require_platform(platform)
@@ -454,6 +467,15 @@ def build_social_workspace_tools(
         require_action_feature(runtime._intent_from_row(stored))
         return required_scope_for_action(row["platform"], row["action"])
 
+    def retry_scope(arguments: Mapping[str, Any]) -> frozenset[str]:
+        try:
+            ref = validate_retry_request(arguments)
+            return status_scope({"operation_ref": ref})
+        except InvalidArgumentsError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - normalize state errors
+            raise rejected(exc) from None
+
     async def denial(arguments: Mapping[str, Any], context: ToolCallContext, reason: str) -> None:
         runtime.audit_denial(
             context,
@@ -488,6 +510,16 @@ def build_social_workspace_tools(
         payload["operation"] = SocialReadOperation.SEARCH_TARGETS.value
         return await read(payload, context)
 
+    async def scheduled_items(
+        arguments: Mapping[str, Any], context: ToolCallContext
+    ) -> dict[str, Any]:
+        try:
+            request = validate_scheduled_items_request(arguments)
+            require_platform(request.platform.value)
+            return await runtime.scheduled_items(request, context)
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
+            raise rejected(exc) from None
+
     async def prepare(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
             request = validate_prepare_request(arguments)
@@ -511,6 +543,14 @@ def build_social_workspace_tools(
             if kind == "operation":
                 return await runtime.reconcile(ref, context)
             return await runtime.status(kind, ref, context)
+        except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
+            raise rejected(exc) from None
+
+    async def retry(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
+        try:
+            ref = validate_retry_request(arguments)
+            retry_scope(arguments)
+            return await runtime.retry(ref, context)
         except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
             raise rejected(exc) from None
 
@@ -680,6 +720,16 @@ def build_social_workspace_tools(
                  read_schema(SocialReadOperation.LIST_ITEMS),
                  SOCIAL_WORKSPACE_ITEM_LIST_OUTPUT_SCHEMA, handler=read,
                  scope_selector=read_scope, **batch_read_common),
+        ToolSpec(
+            "social_scheduled_items_list",
+            "Read scheduled social publications",
+            "Read one exact target's bounded scheduled queue as logical publications; Telegram albums are returned once, never as physical members.",
+            SOCIAL_WORKSPACE_SCHEDULED_ITEMS_SCHEMA,
+            SOCIAL_WORKSPACE_SCHEDULED_ITEMS_OUTPUT_SCHEMA,
+            handler=scheduled_items,
+            scope_selector=scheduled_scope,
+            **common,
+        ),
         ToolSpec("social_content_item", "Read social item",
                  "Read one item through a bound opaque item reference.",
                  read_schema(SocialReadOperation.GET_ITEM),
@@ -762,14 +812,29 @@ def build_social_workspace_tools(
                  "Read or reconcile durable action state; unknown outcomes are never retry-safe.",
                  SOCIAL_WORKSPACE_STATUS_SCHEMA, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
                  handler=status, scope_selector=status_scope, **common),
+        ToolSpec(
+            "social_action_retry",
+            "Retry safe failed social action",
+            "Retry the same logical action once at a time only after a terminal provider result explicitly proves retry_safe=true.",
+            SOCIAL_WORKSPACE_RETRY_SCHEMA,
+            SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
+            handler=retry,
+            scope_selector=retry_scope,
+            read_only=False,
+            destructive=True,
+            idempotent=True,
+            **common,
+        ),
     ]
     action_tool_names = {
         "social_action_prepare",
         "social_action_commit",
         "social_action_status",
+        "social_action_retry",
     }
     feature_tools = {
         "social_dialogs_list": "private_read",
+        "social_scheduled_items_list": "post",
         "social_content_stories": "media_story",
         "social_asset_stage": "asset_ingress",
         "social_asset_status": "asset_ingress",
@@ -835,6 +900,14 @@ def build_social_workspace_tools(
         ),
         "social_content_search": read_options,
         "social_content_feed": read_options,
+        "social_scheduled_items_list": tuple(
+            option
+            for platform in enabled_platforms
+            for option in (
+                frozenset({f"{platform}:schedule"}),
+                frozenset({f"{platform}:publish"}),
+            )
+        ),
         "social_content_item": read_options,
         "social_content_thread": read_options,
         "social_comment_hints_list": notification_options,
@@ -849,6 +922,7 @@ def build_social_workspace_tools(
         "social_action_prepare": mutation_options,
         "social_action_commit": mutation_options,
         "social_action_status": mutation_options,
+        "social_action_retry": mutation_options,
     }
     return tuple(
         replace(spec, scope_options=scoped_options[spec.name])
