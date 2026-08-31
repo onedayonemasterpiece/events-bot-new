@@ -462,6 +462,7 @@ async def test_multipart_failure_before_wall_post_is_definite_and_retry_safe() -
         "retry_safe": True,
         "error_code": "media_upload_failed",
         "stage": "wall_photo_multipart",
+        "mutation_boundary_reached": False,
     }
 
 

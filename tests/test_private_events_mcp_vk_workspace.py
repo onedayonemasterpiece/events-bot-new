@@ -1338,7 +1338,16 @@ async def test_postponed_queue_list_and_queue_bound_delete_verify_exact_absence(
 
     assert receipt["status"] == "succeeded"
     assert receipt["item_ref"] == page["items"][0]["item_ref"]
+    assert receipt["mutation_boundary_reached"] is True
     assert receipt["read_after_write"]["verified"] is True
+    assert receipt["final_readback"] == receipt["read_after_write"]
+    assert receipt["deletion_evidence"] == {
+        "verified": True,
+        "absence_verified": True,
+        "observed_at": receipt["deletion_evidence"]["observed_at"],
+        "queue": "scheduled",
+        "exact_match_count": 0,
+    }
     assert [call["method"] for call in transport.calls] == [
         "wall.delete",
         "wall.get",

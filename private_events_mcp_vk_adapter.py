@@ -2356,6 +2356,7 @@ class VKWorkspaceAdapter:
         new_item_native: Mapping[str, Any] | None = None
         write_verified = False
         mutation_may_have_happened = False
+        deletion_evidence: Mapping[str, Any] | None = None
 
         def mark_provider_attempted(event: Mapping[str, Any]) -> None:
             safe_event = dict(event)
@@ -2611,6 +2612,15 @@ class VKWorkspaceAdapter:
                                 stage="wall_delete",
                             )
                         write_verified = True
+                        deletion_evidence = {
+                            "verified": True,
+                            "absence_verified": True,
+                            "observed_at": datetime.now(timezone.utc)
+                            .isoformat()
+                            .replace("+00:00", "Z"),
+                            "queue": "scheduled",
+                            "exact_match_count": 0,
+                        }
             elif intent.action is SocialAction.FORWARD:
                 if item is None or destination is None:
                     raise VKWorkspaceError("destination_required")
@@ -2712,12 +2722,12 @@ class VKWorkspaceAdapter:
                 error_code,
                 retry_safe if not unknown else False,
             )
-            result = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": status.value, "retry_safe": (retry_safe if not unknown else False), "error_code": error_code}
+            result = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": status.value, "retry_safe": (retry_safe if not unknown else False), "error_code": error_code, "mutation_boundary_reached": mutation_may_have_happened}
             if exc.stage:
                 result["stage"] = exc.stage
             self._operations[operation_ref] = result
             return dict(result)
-        result: dict[str, Any] = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": "succeeded", "retry_safe": False}
+        result: dict[str, Any] = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": "succeeded", "retry_safe": False, "mutation_boundary_reached": mutation_may_have_happened}
         if intent.target_ref:
             result["target_ref"] = intent.target_ref
         if new_item_native is not None:
@@ -2735,6 +2745,9 @@ class VKWorkspaceAdapter:
                 "observed_item_ref": result["item_ref"],
                 "observed_at": observed_at,
             }
+            result["final_readback"] = dict(result["read_after_write"])
+        if deletion_evidence is not None:
+            result["deletion_evidence"] = dict(deletion_evidence)
         self._operations[operation_ref] = result
         return dict(result)
 
