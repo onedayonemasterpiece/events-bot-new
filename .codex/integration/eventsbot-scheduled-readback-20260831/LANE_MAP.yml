@@ -36,7 +36,7 @@ lanes:
       - private_events_mcp_vk_adapter.py
     expected_output: committed implementation, tests, and RESULTS.md
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: tools-runtime
     role: worker
     effort: high
@@ -58,7 +58,7 @@ lanes:
       - private_events_mcp_workspace_providers.py
     expected_output: committed implementation, tests, and RESULTS.md
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: vk-diagnostics
     role: worker
     effort: high
@@ -80,7 +80,7 @@ lanes:
       - private_events_mcp_workspace_providers.py
     expected_output: committed implementation, tests, and RESULTS.md
     verification_scope: targeted
-    status: planned
+    status: completed
   - id: docs-ops
     role: worker
     effort: high
@@ -103,7 +103,7 @@ lanes:
       - private_events_mcp_vk_adapter.py
     expected_output: committed docs synchronized to integrated behavior and RESULTS.md
     verification_scope: inspection_only
-    status: planned
+    status: completed
   - id: integration-review
     role: merge_reviewer
     effort: max
@@ -117,4 +117,4 @@ lanes:
     forbidden_files: []
     expected_output: clean pushed branch, integration report, closure audit, operational handoff
     verification_scope: full_local
-    status: planned
+    status: in_progress

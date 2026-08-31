@@ -93,6 +93,12 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - 2026-08-31 — a read-only production audit verified release/health/runtime
   evidence and zero exact VK postponed/live copies. It performed no provider
   mutation and retained `BLOCKED_OLD_TELEGRAM_OUTCOME`.
+- 2026-08-31 — the isolated integration branch implemented the durable
+  cancellation/readback repair. Its focused integration suite passed 308 tests;
+  the complete Private Events MCP suite passed 543 tests with three unrelated
+  existing aiohttp warnings; `compileall` and `git diff --check` passed. The
+  incident remains open pending review, exact-main merge/deploy and operational
+  readback.
 
 ## Root Cause
 
@@ -226,23 +232,23 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 
 ## Corrective Actions
 
-- [ ] Make the provider adapter the owner of its transport/session deadline;
+- [x] Make the provider adapter the owner of its transport/session deadline;
   runtime must not cancel before durable finalization. Handle
   `asyncio.CancelledError` at the provider-operation boundary.
-- [ ] Persist encrypted/sanitized Telegram intent, mutation timestamps, bounded
+- [x] Persist encrypted/sanitized Telegram intent, mutation timestamps, bounded
   attempt/lease state and enough exact target/time/text/media evidence for
   restart-safe reconciliation, including a migration-safe legacy adoption path.
-- [ ] Reconcile scheduled Telegram operations against raw scheduled history and
+- [x] Reconcile scheduled Telegram operations against raw scheduled history and
   later live history, with exact, ambiguous, bounded-pending and terminal
   zero-match outcomes.
-- [ ] Add the narrow logical `social_scheduled_items_list` read for Telegram raw
+- [x] Add the narrow logical `social_scheduled_items_list` read for Telegram raw
   scheduled history and VK `wall.get(filter="postponed")` without a new OAuth
   scope family.
-- [ ] Make scheduled deletion namespace-aware and require exact absence
+- [x] Make scheduled deletion namespace-aware and require exact absence
   readback for Telegram album members and VK postponed items.
-- [ ] Add one bounded, single-flight retry path for terminal
+- [x] Add one bounded, single-flight retry path for terminal
   `retry_safe=true` attempts under the same logical action/preparation.
-- [ ] Persist safe VK multipart/stage observability sufficient to distinguish
+- [x] Persist safe VK multipart/stage observability sufficient to distinguish
   response shape and empty-field failures without bodies, credentials, hashes
   or upload URLs.
 - [ ] Complete code review, tests, merge, exact-main deploy and operational
