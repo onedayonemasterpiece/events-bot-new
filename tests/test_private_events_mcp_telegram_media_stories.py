@@ -228,6 +228,26 @@ class FakeRefs:
         self.operations[operation_ref] = completed
         return completed
 
+    def rearm_operation(
+        self,
+        *,
+        operation_ref,
+        action_digest,
+        claim_ttl_seconds,
+        reconciliation_deadline_ms,
+    ):
+        del claim_ttl_seconds, reconciliation_deadline_ms
+        current = self.operations[operation_ref]
+        assert current.action_digest == action_digest
+        assert current.result["status"] == "failed"
+        assert current.result["retry_safe"] is True
+        assert current.mutation_started_at_ms is None
+        rearmed = TelegramOperationClaim(
+            operation_ref, action_digest, True, intent=current.intent
+        )
+        self.operations[operation_ref] = rearmed
+        return rearmed
+
     def resolve_operation(self, operation_ref):
         return self.operations[operation_ref]
 
@@ -488,6 +508,19 @@ async def test_story_upload_timeout_is_retry_safe_before_content_mutation(harnes
     assert timeout["mutation_boundary_reached"] is False
     assert refs.mutation_marks == []
     assert client.events == ["can_send_story", "upload_file"]
+
+    client.upload_delay = 0
+    retry = await adapter.retry(
+        story_intent(),
+        operation_ref="op_telegramstorytimeout000001",
+        attempt_number=2,
+    )
+
+    assert retry["status"] == "succeeded"
+    assert retry["attempt_number"] == 2
+    assert refs.mutation_marks == ["op_telegramstorytimeout000001"]
+    assert client.events.count("upload_file") == 2
+    assert client.events.count("send_story") == 1
 
 
 @pytest.mark.asyncio

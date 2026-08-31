@@ -706,3 +706,51 @@ def test_telegram_unknown_result_can_converge_once_to_terminal(config) -> None:
             action_digest=digest,
             result={**terminal, "error_code": "different_terminal"},
         )
+
+
+def test_telegram_retry_rearms_only_a_durable_pre_mutation_failure(config) -> None:
+    store = InMemoryTelegramOpaqueRefStore(config)
+    operation_ref = "op_" + "s" * 24
+    digest = "2" * 64
+    claim = store.claim_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        claim_ttl_seconds=30,
+    )
+    safe = {
+        "platform": "telegram",
+        "operation_ref": operation_ref,
+        "action": "schedule",
+        "status": "failed",
+        "retry_safe": True,
+        "error_code": "provider_mutation_not_started",
+        "mutation_boundary_reached": False,
+    }
+    store.complete_operation(
+        operation_ref=operation_ref, action_digest=digest, result=safe
+    )
+    now = store._state.now_ms()
+
+    rearmed = store.rearm_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        claim_ttl_seconds=630,
+        reconciliation_deadline_ms=now + 660_000,
+    )
+
+    assert rearmed.claimed_now is True
+    assert rearmed.result is None
+    assert rearmed.mutation_started_at_ms is None
+    assert rearmed.claim_expires_at_ms - rearmed.claimed_at_ms == 630_000
+    store.complete_operation(
+        operation_ref=operation_ref,
+        action_digest=digest,
+        result={**safe, "retry_safe": False},
+    )
+    with pytest.raises(ProviderBindingError, match="not retry safe"):
+        store.rearm_operation(
+            operation_ref=operation_ref,
+            action_digest=digest,
+            claim_ttl_seconds=630,
+            reconciliation_deadline_ms=store._state.now_ms() + 660_000,
+        )

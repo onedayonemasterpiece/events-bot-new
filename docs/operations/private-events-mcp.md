@@ -1238,7 +1238,8 @@ Record all of the following without secrets:
     auto-deleted;
 27. bounded retry accepts one terminal pre-mutation `retry_safe=true` attempt,
     rejects concurrent/unknown/pending retries, preserves logical action and
-    preparation refs, and records the new attempt plus final readback. The
+    preparation refs, rearms the Telegram or VK provider ledger through its own
+    compare-and-set guard, and records the new attempt plus final readback. The
     changed actions are administrator-reviewed/published and exercised from a
     genuinely new ChatGPT conversation.
 28. Telegram media publication exercises the full supported one-to-ten item

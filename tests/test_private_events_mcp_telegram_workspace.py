@@ -441,6 +441,29 @@ class FakeRefs:
         self.operations[operation_ref] = completed
         return completed
 
+    def rearm_operation(
+        self,
+        *,
+        operation_ref,
+        action_digest,
+        claim_ttl_seconds,
+        reconciliation_deadline_ms,
+    ):
+        del claim_ttl_seconds, reconciliation_deadline_ms
+        current = self.operations[operation_ref]
+        assert current.action_digest == action_digest
+        assert current.result["status"] == "failed"
+        assert current.result["retry_safe"] is True
+        assert current.mutation_started_at_ms is None
+        rearmed = TelegramOperationClaim(
+            operation_ref,
+            action_digest,
+            True,
+            intent=self.operation_intents.get(operation_ref),
+        )
+        self.operations[operation_ref] = rearmed
+        return rearmed
+
     def resolve_operation(self, operation_ref):
         existing = self.operations[operation_ref]
         return TelegramOperationClaim(
@@ -2770,7 +2793,8 @@ def test_surface_is_closed_lazy_and_contains_no_credential_or_raw_escape_hatch()
         "capabilities",
         "resolve",
         "read",
-        "execute",
+            "execute",
+            "retry",
             "reconcile",
             "scheduled_items",
             "stage_asset",

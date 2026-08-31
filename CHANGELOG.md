@@ -8,8 +8,9 @@
   uploads. Preparatory `upload_file` calls no longer cross the content-mutation
   boundary; only the final send/schedule request does. A timeout while assets
   are still uploading is therefore terminal `provider_mutation_not_started`
-  with `retry_safe=true`, while timeouts after the album send remain
-  fail-closed. Regression contract:
+  with `retry_safe=true`, and the Telegram adapter/store now implement the
+  bounded CAS rearm consumed by `social_action_retry`. Timeouts after the album
+  send remain fail-closed. Regression contract:
   `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
 
 - Fixed: bounded Telegram schedule reconciliation now persists zero exact

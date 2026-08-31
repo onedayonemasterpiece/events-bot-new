@@ -293,6 +293,15 @@ class TelegramOpaqueRefStore(Protocol):
         result: Mapping[str, Any],
     ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
 
+    def rearm_operation(
+        self,
+        *,
+        operation_ref: str,
+        action_digest: str,
+        claim_ttl_seconds: int,
+        reconciliation_deadline_ms: int,
+    ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
+
     def resolve_operation(
         self, operation_ref: str
     ) -> TelegramOperationClaim | Awaitable[TelegramOperationClaim]: ...
@@ -766,6 +775,7 @@ class TelegramWorkspaceAdapter:
             "claim_operation",
             "release_operation",
             "complete_operation",
+            "rearm_operation",
             "resolve_operation",
         ):
             if not callable(getattr(refs, method, None)):
@@ -800,6 +810,7 @@ class TelegramWorkspaceAdapter:
             raise ValueError("reaction preset binding is invalid")
         self._timeout = float(operation_timeout_seconds)
         self._lock = asyncio.Lock()
+        self._preclaimed_retries: set[str] = set()
 
     def __repr__(self) -> str:
         return "<TelegramWorkspaceAdapter platform='telegram'>"
@@ -3295,7 +3306,10 @@ class TelegramWorkspaceAdapter:
             return dict(
                 self._recordless_operation_validation(operation_ref, claim.result)
             )
-        if claim.claimed_now is not True:
+        if (
+            claim.claimed_now is not True
+            and operation_ref not in self._preclaimed_retries
+        ):
             raise TelegramWorkspaceError("operation_in_progress", retry_safe=False)
         return None
 
@@ -4130,6 +4144,59 @@ class TelegramWorkspaceAdapter:
                     operation_ref, action_digest, result
                 )
             raise
+
+    async def retry(
+        self,
+        intent: SocialActionIntent,
+        *,
+        operation_ref: str,
+        attempt_number: int,
+    ) -> Mapping[str, Any]:
+        """Rearm one durable, definite pre-content-mutation failure."""
+
+        if intent.platform is not SocialPlatform.TELEGRAM:
+            raise SocialWorkspaceValidationError("Telegram action is required")
+        if not isinstance(operation_ref, str) or not re.fullmatch(
+            r"op_[A-Za-z0-9_-]{24,160}", operation_ref
+        ):
+            raise SocialWorkspaceValidationError("operation_ref is invalid")
+        if type(attempt_number) is not int or not 2 <= attempt_number <= 3:
+            raise SocialWorkspaceValidationError("attempt_number is invalid")
+        action_digest = compute_action_digest(intent)
+        timeout = self._mutation_timeout(intent)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        try:
+            claim = await _await(
+                self._refs.rearm_operation(
+                    operation_ref=operation_ref,
+                    action_digest=action_digest,
+                    claim_ttl_seconds=max(1, min(900, int(timeout) + 30)),
+                    reconciliation_deadline_ms=now_ms
+                    + max(60_000, int((timeout + 30) * 1000)),
+                )
+            )
+        except Exception:  # noqa: BLE001 - opaque durable ledger boundary
+            raise TelegramWorkspaceError(
+                "operation_retry_not_safe", retry_safe=False
+            ) from None
+        if (
+            not isinstance(claim, TelegramOperationClaim)
+            or claim.operation_ref != operation_ref
+            or claim.action_digest != action_digest
+            or claim.claimed_now is not True
+            or claim.result is not None
+            or claim.mutation_started_at_ms is not None
+        ):
+            raise SocialWorkspaceValidationError("operation retry binding mismatch")
+        self._preclaimed_retries.add(operation_ref)
+        try:
+            result = dict(
+                await self.execute(intent, operation_ref=operation_ref)
+            )
+        finally:
+            self._preclaimed_retries.discard(operation_ref)
+        result["attempt_number"] = attempt_number
+        return result
 
 
 __all__ = [

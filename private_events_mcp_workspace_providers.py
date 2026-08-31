@@ -1526,6 +1526,72 @@ class InMemoryTelegramOpaqueRefStore:
             conn.execute("COMMIT")
         return self.resolve_operation(operation_ref)
 
+    def rearm_operation(
+        self,
+        *,
+        operation_ref: str,
+        action_digest: str,
+        claim_ttl_seconds: int,
+        reconciliation_deadline_ms: int,
+    ) -> Any:
+        """CAS-reset one terminal Telegram failure proven pre-mutation."""
+
+        now = self._state.now_ms()
+        ttl = int(claim_ttl_seconds)
+        if not 1 <= ttl <= 900:
+            raise ProviderBindingError("Telegram operation lease is invalid")
+        if not now <= reconciliation_deadline_ms <= now + 24 * 60 * 60 * 1000:
+            raise ProviderBindingError("Telegram reconciliation deadline is invalid")
+        with self._operation_lock, self._state._lock, self._state._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
+                (operation_ref,),
+            ).fetchone()
+            if (
+                row is None
+                or row["action_digest"] != action_digest
+                or row["mutation_started_at_ms"] is not None
+                or not row["result_json"]
+            ):
+                conn.execute("ROLLBACK")
+                raise ProviderBindingError("Telegram operation is not retry safe")
+            result = json.loads(str(row["result_json"]))
+            if (
+                not isinstance(result, Mapping)
+                or result.get("status") != "failed"
+                or result.get("retry_safe") is not True
+                or result.get("mutation_boundary_reached") is not False
+            ):
+                conn.execute("ROLLBACK")
+                raise ProviderBindingError("Telegram operation is not retry safe")
+            changed = conn.execute(
+                """UPDATE social_provider_tg_operation
+                   SET result_json=NULL,claim_expires_at_ms=?,
+                       mutation_started_at_ms=NULL,reconciliation_attempt=0,
+                       reconciliation_deadline_ms=?,claimed_at_ms=?,updated_at_ms=?
+                   WHERE operation_ref=? AND action_digest=?
+                     AND result_json=? AND mutation_started_at_ms IS NULL""",
+                (
+                    now + ttl * 1000,
+                    reconciliation_deadline_ms,
+                    now,
+                    now,
+                    operation_ref,
+                    action_digest,
+                    str(row["result_json"]),
+                ),
+            ).rowcount
+            if changed != 1:
+                conn.execute("ROLLBACK")
+                raise ProviderBindingError("Telegram retry claim conflict")
+            updated = conn.execute(
+                "SELECT * FROM social_provider_tg_operation WHERE operation_ref=?",
+                (operation_ref,),
+            ).fetchone()
+            conn.execute("COMMIT")
+        return self._claim_from_row(operation_ref, updated, claimed_now=True)
+
     def resolve_operation(self, operation_ref: str) -> Any:
         with self._state._lock, self._state._connect() as conn:
             row = conn.execute(
