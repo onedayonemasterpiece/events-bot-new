@@ -8,9 +8,10 @@ method name or multipart field name.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class VKUploadPurpose(str, Enum):
@@ -47,6 +48,11 @@ class VKMultipartUploadResult:
     photo: str | None = None
     upload_hash: str | None = None
     story_upload_result: str | None = None
+    response_valid: bool = True
+    # Safe structural receipt metadata only. Implementations must never place
+    # response bodies, field values, upload URLs, tokens, hashes, or cookies in
+    # this mapping.
+    observation: Mapping[str, Any] = field(default_factory=dict, compare=False)
 
 
 class VKMultipartTransport(Protocol):

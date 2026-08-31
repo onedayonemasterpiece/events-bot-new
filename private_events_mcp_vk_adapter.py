@@ -197,6 +197,7 @@ _CALLS: Mapping[str, _CallPolicy] = {
     "search_groups": _policy(VKActor.PUBLIC_READER, "discover", "groups.search", ["q", "count"], ["offset", "type"]),
     "wall_feed": _policy(VKActor.PUBLIC_READER, "read_public", "wall.get", ["owner_id", "count", "filter"], ["offset"]),
     "wall_feed_editor": _policy(VKActor.COMMUNITY_EDITOR, "post_publish", "wall.get", ["owner_id", "count", "filter"], ["offset"]),
+    "wall_postponed_delete_verify": _policy(VKActor.COMMUNITY_EDITOR, "delete", "wall.get", ["owner_id", "count", "filter"], ["offset"]),
     "wall_item": _policy(VKActor.PUBLIC_READER, "read_public", "wall.getById", ["posts"], ["extended"]),
     "wall_search": _policy(VKActor.PUBLIC_READER, "search_public", "wall.search", ["owner_id", "query", "count"], ["offset", "owners_only"]),
     "newsfeed_search": _policy(VKActor.PUBLIC_READER, "search_public", "newsfeed.search", ["q", "count"], ["start_from"]),
@@ -687,6 +688,7 @@ class VKWorkspaceAdapter:
         upload_url: Any,
         materialized: VKAssetMaterialization,
         attempt_hook: Any,
+        image_ordinal: int = 1,
     ) -> VKMultipartUploadResult:
         if self._multipart_transport is None:
             raise VKWorkspaceError("multipart_transport_unavailable")
@@ -705,11 +707,17 @@ class VKWorkspaceAdapter:
             VKUploadPurpose.STORY_PHOTO: "story_photo_multipart",
             VKUploadPurpose.STORY_VIDEO: "story_video_multipart",
         }[purpose]
+        digest_prefix = materialized.content_digest.removeprefix("sha256:")[:12]
+        safe_context = {
+            "image_ordinal": image_ordinal,
+            "expected_digest_prefix": digest_prefix,
+        }
         attempt_hook(
             {
                 "stage": multipart_stage,
                 "method": "multipart.upload",
                 "phase": "started",
+                **safe_context,
             }
         )
         try:
@@ -726,7 +734,10 @@ class VKWorkspaceAdapter:
             )
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001 - multipart payloads/errors are provider-private
+        except Exception as exc:  # noqa: BLE001 - multipart payloads/errors are provider-private
+            observation = self._safe_multipart_observation(
+                getattr(exc, "observation", None)
+            )
             attempt_hook(
                 {
                     "stage": multipart_stage,
@@ -734,10 +745,12 @@ class VKWorkspaceAdapter:
                     "phase": "finished",
                     "error_class": "media_upload_failed",
                     "outcome": "failed",
+                    **safe_context,
+                    **observation,
                 }
             )
             raise VKWorkspaceError(
-                "media_upload_failed", retry_safe=True, stage="wall_photo_upload"
+                "media_upload_failed", retry_safe=True, stage=multipart_stage
             ) from None
         if not isinstance(result, VKMultipartUploadResult):
             attempt_hook(
@@ -745,21 +758,134 @@ class VKWorkspaceAdapter:
                     "stage": multipart_stage,
                     "method": "multipart.upload",
                     "phase": "finished",
-                    "error_class": "provider_response_invalid",
+                    "error_class": "media_upload_response_invalid",
                     "outcome": "failed",
+                    **safe_context,
                 }
             )
-            raise VKWorkspaceError("provider_unavailable")
+            raise VKWorkspaceError(
+                "media_upload_response_invalid",
+                retry_safe=purpose is VKUploadPurpose.WALL_PHOTO,
+                stage=multipart_stage,
+            )
+        observation = self._safe_multipart_observation(result.observation)
+        observation.setdefault("http_status", 200)
+        if purpose is VKUploadPurpose.WALL_PHOTO:
+            observation.update(
+                self._multipart_field_observation(
+                    result.server, result.photo, result.upload_hash
+                )
+            )
+            if (
+                result.response_valid is not True
+                or type(result.server) is not int
+                or not isinstance(result.photo, str)
+                or not 1 <= len(result.photo) <= 65536
+                or not isinstance(result.upload_hash, str)
+                or not 1 <= len(result.upload_hash) <= 8192
+            ):
+                attempt_hook(
+                    {
+                        "stage": multipart_stage,
+                        "method": "multipart.upload",
+                        "phase": "finished",
+                        "error_class": "media_upload_response_invalid",
+                        "outcome": "failed",
+                        **safe_context,
+                        **observation,
+                    }
+                )
+                raise VKWorkspaceError(
+                    "media_upload_response_invalid",
+                    retry_safe=True,
+                    stage=multipart_stage,
+                )
         attempt_hook(
             {
                 "stage": multipart_stage,
                 "method": "multipart.upload",
                 "phase": "finished",
-                "http_status": 200,
                 "outcome": "succeeded",
+                **safe_context,
+                **observation,
             }
         )
         return result
+
+    @staticmethod
+    def _multipart_field_observation(
+        server: Any, photo: Any, upload_hash: Any
+    ) -> dict[str, Any]:
+        def field(value: Any, cap: int) -> dict[str, Any]:
+            length = len(value) if isinstance(value, str) else None
+            return {
+                "type": type(value).__name__,
+                "length": min(length, cap) if length is not None else None,
+                "length_capped": bool(length is not None and length > cap),
+            }
+
+        return {
+            "server_field": field(server, 32),
+            "photo_field": field(photo, 65536),
+            "hash_field": field(upload_hash, 8192),
+        }
+
+    @staticmethod
+    def _safe_multipart_observation(value: Any) -> dict[str, Any]:
+        if not isinstance(value, Mapping):
+            return {}
+        safe: dict[str, Any] = {}
+        status = value.get("http_status")
+        if type(status) is int and 100 <= status <= 599:
+            safe["http_status"] = status
+        for key, allowed in (
+            (
+                "content_type",
+                {"application/json", "text/json", "text/plain", "application/octet-stream", "other"},
+            ),
+            ("content_encoding", {"identity", "gzip", "deflate", "other"}),
+        ):
+            observed = value.get(key)
+            if observed in allowed:
+                safe[key] = observed
+        for key in (
+            "compressed_bytes",
+            "decoded_bytes",
+            "top_level_unknown_key_count",
+            "nested_unknown_key_count",
+        ):
+            observed = value.get(key)
+            if type(observed) is int and 0 <= observed <= 256 * 1024:
+                safe[key] = observed
+        if type(value.get("consumed_to_eof")) is bool:
+            safe["consumed_to_eof"] = value["consumed_to_eof"]
+        allowed_names = {"response", "server", "photo", "hash", "upload_result"}
+        for key in ("top_level_key_names", "nested_key_names"):
+            observed = value.get(key)
+            if isinstance(observed, Sequence) and not isinstance(observed, (str, bytes)):
+                safe[key] = sorted(
+                    {str(name) for name in observed if str(name) in allowed_names}
+                )[:8]
+        allowed_types = {"NoneType", "str", "int", "float", "bool", "dict", "list"}
+        for key in ("server_field", "photo_field", "hash_field"):
+            observed = value.get(key)
+            if not isinstance(observed, Mapping):
+                continue
+            field_type = observed.get("type")
+            length = observed.get("length")
+            capped = observed.get("length_capped")
+            if field_type not in allowed_types:
+                continue
+            safe[key] = {
+                "type": field_type,
+                "length": (
+                    length
+                    if type(length) is int and 0 <= length <= 65536
+                    else None
+                ),
+                "length_capped": bool(capped) if type(capped) is bool else False,
+            }
+        return safe
 
     async def read_asset(
         self, asset_ref: str, *, owner_binding: str, max_bytes: int
@@ -1865,6 +1991,129 @@ class VKWorkspaceAdapter:
             return {"target_ref": request.target_ref, "period_from": start, "period_to": end, "basic_metrics": metrics, "trust": _TRUST}
         raise SocialWorkspaceValidationError("unsupported VK read operation")
 
+    @staticmethod
+    def _scheduled_bound(value: str | None, field: str) -> int | None:
+        if value is None:
+            return None
+        if not isinstance(value, str) or len(value) > 64:
+            raise SocialWorkspaceValidationError(f"{field} is invalid")
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            raise SocialWorkspaceValidationError(f"{field} is invalid") from None
+        if parsed.tzinfo is None:
+            raise SocialWorkspaceValidationError(f"{field} is invalid")
+        return int(parsed.timestamp())
+
+    @staticmethod
+    def _postponed_items(response: Any) -> list[Mapping[str, Any]]:
+        if not isinstance(response, Mapping) or not isinstance(
+            response.get("items"), list
+        ):
+            raise VKWorkspaceError("provider_response_invalid")
+        return [
+            item for item in response["items"] if isinstance(item, Mapping)
+        ]
+
+    async def scheduled_items(
+        self,
+        *,
+        target_ref: str,
+        scheduled_from: str | None = None,
+        scheduled_to: str | None = None,
+        text_sha256: str | None = None,
+        media_count: int | None = None,
+        limit: int = 10,
+    ) -> Mapping[str, Any]:
+        """Return bounded logical items from one exact VK postponed queue."""
+
+        if type(limit) is not int or not 1 <= limit <= _MAX_RESULT_PAGE:
+            raise SocialWorkspaceValidationError("limit is invalid")
+        if text_sha256 is not None and (
+            not isinstance(text_sha256, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", text_sha256)
+        ):
+            raise SocialWorkspaceValidationError("text_sha256 is invalid")
+        if media_count is not None and (
+            type(media_count) is not int or not 0 <= media_count <= 10
+        ):
+            raise SocialWorkspaceValidationError("media_count is invalid")
+        start = self._scheduled_bound(scheduled_from, "scheduled_from")
+        end = self._scheduled_bound(scheduled_to, "scheduled_to")
+        if start is not None and end is not None and start > end:
+            raise SocialWorkspaceValidationError("scheduled range is invalid")
+        target = self._resolve_ref("target", target_ref)
+        if not self._valid_community_binding(target):
+            raise VKWorkspaceError("community_binding_invalid")
+        response = await self._call(
+            "wall_feed_editor",
+            {
+                "owner_id": target["owner_id"],
+                "count": 100,
+                "offset": 0,
+                "filter": "postponed",
+            },
+        )
+        logical: list[dict[str, Any]] = []
+        role_by_type = {
+            "photo": MediaRole.IMAGE.value,
+            "video": MediaRole.VIDEO.value,
+            "doc": MediaRole.DOCUMENT.value,
+            "audio": MediaRole.AUDIO.value,
+        }
+        for raw in self._postponed_items(response)[:100]:
+            post_id = _int(raw.get("id"))
+            owner_id = _int(raw.get("owner_id"))
+            scheduled = _int(raw.get("date"))
+            if (
+                post_id is None
+                or post_id <= 0
+                or owner_id != target["owner_id"]
+                or scheduled is None
+                or (start is not None and scheduled < start)
+                or (end is not None and scheduled > end)
+            ):
+                continue
+            digest = hashlib.sha256(
+                self._match_text(str(raw.get("text") or "")).encode("utf-8")
+            ).hexdigest()
+            attachments = raw.get("attachments")
+            roles = [
+                role_by_type[str(attachment.get("type"))]
+                for attachment in (
+                    attachments if isinstance(attachments, list) else []
+                )[:10]
+                if isinstance(attachment, Mapping)
+                and str(attachment.get("type")) in role_by_type
+            ]
+            if text_sha256 is not None and digest != text_sha256:
+                continue
+            if media_count is not None and len(roles) != media_count:
+                continue
+            native = self._wall_native(owner_id, post_id)
+            native["queue"] = "postponed"
+            logical.append(
+                {
+                    "item_ref": self._mint("item", native),
+                    "target_ref": target_ref,
+                    "queue": "scheduled",
+                    "scheduled_at": _utc(scheduled),
+                    "text_sha256": digest,
+                    "media_count": len(roles),
+                    "media_roles": roles,
+                    "trust": _TRUST,
+                }
+            )
+        return {
+            "platform": "vk",
+            "target_ref": target_ref,
+            "queue": "scheduled",
+            "items": logical[:limit],
+            "exact_match_count": len(logical),
+            "has_more": len(logical) > limit,
+            "trust": _TRUST,
+        }
+
     def _content(self, intent: SocialActionIntent) -> tuple[str, list[Mapping[str, Any]]]:
         content = intent.content
         if content is None:
@@ -1924,7 +2173,7 @@ class VKWorkspaceAdapter:
         attempt_hook: Any,
     ) -> str | None:
         attachments: list[str] = []
-        for binding in bindings:
+        for image_ordinal, binding in enumerate(bindings, start=1):
             if binding.get("binding_kind") != "verified_asset":
                 attachment = binding.get("attachment")
                 if not isinstance(attachment, str):
@@ -1947,6 +2196,7 @@ class VKWorkspaceAdapter:
                 upload_url=upload_url,
                 materialized=materialized,
                 attempt_hook=attempt_hook,
+                image_ordinal=image_ordinal,
             )
             if (
                 type(upload.server) is not int
@@ -2029,8 +2279,68 @@ class VKWorkspaceAdapter:
             except VKWorkspaceError as exc:
                 status = SocialActionStatus.OUTCOME_UNKNOWN if exc.outcome_unknown else SocialActionStatus.FAILED
                 receipt = {"platform": "vk", "operation_ref": claimed_ref, "action": intent.action.value, "status": status.value, "retry_safe": exc.retry_safe, "error_code": exc.code}
+                if exc.stage:
+                    receipt["stage"] = exc.stage
                 self._operations[claimed_ref] = receipt
                 return dict(receipt)
+
+    async def retry(
+        self,
+        intent: SocialActionIntent,
+        *,
+        operation_ref: str,
+        attempt_number: int,
+    ) -> Mapping[str, Any]:
+        """Retry one proven-safe pre-wall failure under its logical operation.
+
+        The durable runtime owns attempt allocation/CAS. This in-process guard
+        independently prevents concurrent adapter retries and rejects any
+        replay after the VK wall mutation boundary may have been crossed.
+        """
+
+        if intent.platform is not SocialPlatform.VK:
+            raise SocialWorkspaceValidationError("VK action is required")
+        if not re.fullmatch(r"op_[A-Za-z0-9_-]{24,160}", operation_ref):
+            raise SocialWorkspaceValidationError("operation_ref is invalid")
+        if type(attempt_number) is not int or not 2 <= attempt_number <= 100:
+            raise SocialWorkspaceValidationError("attempt_number is invalid")
+        digest = compute_action_digest(intent)
+        async with self._action_lock:
+            existing = self._idempotency.get(intent.idempotency_key)
+            claim = (intent.idempotency_key, digest)
+            prior_claim = self._operation_claims.get(operation_ref)
+            prior = self._operations.get(operation_ref)
+            if existing is None and prior_claim is None and prior is None:
+                # A process restart legitimately loses the delegate's memory;
+                # the durable wrapper has already proved retry safety and
+                # allocated attempt_number with a transactional CAS.
+                self._idempotency[intent.idempotency_key] = (
+                    digest,
+                    operation_ref,
+                )
+                self._operation_claims[operation_ref] = claim
+            elif existing != (digest, operation_ref):
+                raise VKWorkspaceError("retry_binding_mismatch")
+            if self._operation_claims.get(operation_ref) != claim:
+                raise VKWorkspaceError("retry_binding_mismatch")
+            if prior is not None and (
+                not isinstance(prior, Mapping)
+                or prior.get("status") != SocialActionStatus.FAILED.value
+                or prior.get("retry_safe") is not True
+            ):
+                raise VKWorkspaceError("retry_not_safe")
+            # Mark in progress before yielding to provider I/O. A concurrent
+            # retry cannot enter because _action_lock covers the whole attempt.
+            self._operations.pop(operation_ref, None)
+            try:
+                result = dict(await self._execute_once(intent, operation_ref))
+            except BaseException:
+                if isinstance(prior, Mapping):
+                    self._operations[operation_ref] = dict(prior)
+                raise
+            result["attempt_number"] = attempt_number
+            self._operations[operation_ref] = dict(result)
+            return result
 
     async def _execute_once(self, intent: SocialActionIntent, operation_ref: str) -> Mapping[str, Any]:
         if intent.expected_revision is not None:
@@ -2048,8 +2358,39 @@ class VKWorkspaceAdapter:
         mutation_may_have_happened = False
 
         def mark_provider_attempted(event: Mapping[str, Any]) -> None:
+            safe_event = dict(event)
+            safe_event["mutation_boundary_reached"] = mutation_may_have_happened
+            if (
+                safe_event.get("stage") == "wall_photo_multipart"
+                and safe_event.get("phase") == "finished"
+            ):
+                diagnostic_keys = {
+                    "http_status",
+                    "content_type",
+                    "content_encoding",
+                    "compressed_bytes",
+                    "decoded_bytes",
+                    "consumed_to_eof",
+                    "top_level_key_names",
+                    "top_level_unknown_key_count",
+                    "nested_key_names",
+                    "nested_unknown_key_count",
+                    "server_field",
+                    "photo_field",
+                    "hash_field",
+                    "image_ordinal",
+                    "expected_digest_prefix",
+                }
+                safe_event["provider_result"] = {
+                    key: safe_event[key]
+                    for key in diagnostic_keys
+                    if key in safe_event
+                }
+                safe_event["provider_result"]["mutation_boundary_reached"] = (
+                    mutation_may_have_happened
+                )
             if self._attempt_recorder is not None:
-                self._attempt_recorder.record(operation_ref, event)
+                self._attempt_recorder.record(operation_ref, safe_event)
 
         async def action_call(operation: str, params: Mapping[str, Any]) -> Any:
             nonlocal mutation_may_have_happened
@@ -2241,6 +2582,35 @@ class VKWorkspaceAdapter:
                     if not self._valid_community_post(item):
                         raise VKWorkspaceError("community_post_required")
                     await action_call("wall_delete", {"owner_id": item.get("owner_id"), "post_id": item.get("post_id")})
+                    if item.get("queue") == "postponed":
+                        try:
+                            readback = await self._call(
+                                "wall_postponed_delete_verify",
+                                {
+                                    "owner_id": item["owner_id"],
+                                    "count": 100,
+                                    "offset": 0,
+                                    "filter": "postponed",
+                                },
+                            )
+                            postponed = self._postponed_items(readback)
+                        except VKWorkspaceError:
+                            raise VKWorkspaceError(
+                                "read_after_write_failed",
+                                outcome_unknown=True,
+                                stage="wall_delete",
+                            ) from None
+                        if any(
+                            _int(raw.get("owner_id")) == item["owner_id"]
+                            and _int(raw.get("id")) == item["post_id"]
+                            for raw in postponed
+                        ):
+                            raise VKWorkspaceError(
+                                "read_after_write_failed",
+                                outcome_unknown=True,
+                                stage="wall_delete",
+                            )
+                        write_verified = True
             elif intent.action is SocialAction.FORWARD:
                 if item is None or destination is None:
                     raise VKWorkspaceError("destination_required")
@@ -2343,6 +2713,8 @@ class VKWorkspaceAdapter:
                 retry_safe if not unknown else False,
             )
             result = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": status.value, "retry_safe": (retry_safe if not unknown else False), "error_code": error_code}
+            if exc.stage:
+                result["stage"] = exc.stage
             self._operations[operation_ref] = result
             return dict(result)
         result: dict[str, Any] = {"platform": "vk", "operation_ref": operation_ref, "action": intent.action.value, "status": "succeeded", "retry_safe": False}
@@ -2351,11 +2723,18 @@ class VKWorkspaceAdapter:
         if new_item_native is not None:
             item_ref = self._mint("item", new_item_native)
             result["item_ref"] = item_ref
-            if intent.action is SocialAction.SEND_MESSAGE or write_verified:
-                observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-                result["read_after_write"] = {"verified": True, "observed_item_ref": item_ref, "observed_at": observed_at}
         elif intent.item_ref:
             result["item_ref"] = intent.item_ref
+        if (
+            (intent.action is SocialAction.SEND_MESSAGE or write_verified)
+            and isinstance(result.get("item_ref"), str)
+        ):
+            observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            result["read_after_write"] = {
+                "verified": True,
+                "observed_item_ref": result["item_ref"],
+                "observed_at": observed_at,
+            }
         self._operations[operation_ref] = result
         return dict(result)
 

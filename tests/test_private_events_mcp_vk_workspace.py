@@ -1228,6 +1228,134 @@ async def test_scheduled_reconciliation_finds_item_after_live_publication(
 
 
 @pytest.mark.asyncio
+async def test_postponed_queue_list_and_queue_bound_delete_verify_exact_absence(
+    workspace,
+) -> None:
+    adapter, transport, refs, _governor, _cooldown = workspace
+    community = mint_target(refs)
+    scheduled = _timestamp("2030-01-01", 12)
+    text = "Four exact scheduled photos"
+    text_sha256 = hashlib.sha256(text.encode()).hexdigest()
+    deleted = False
+
+    async def postponed_queue(**call: Any) -> Any:
+        nonlocal deleted
+        transport.calls.append(call)
+        assert call["actor"] is VKActor.COMMUNITY_EDITOR
+        if call["method"] == "wall.delete":
+            assert call["params"] == {"owner_id": -101, "post_id": 2201}
+            deleted = True
+            return {"success": 1}
+        assert call["method"] == "wall.get"
+        assert call["params"] == {
+            "owner_id": -101,
+            "count": 100,
+            "offset": 0,
+            "filter": "postponed",
+        }
+        items = [
+            {
+                "id": 2202,
+                "owner_id": -101,
+                "date": scheduled + 60,
+                "text": "Another item remains",
+                "attachments": [],
+            }
+        ]
+        if not deleted:
+            items.insert(
+                0,
+                {
+                    "id": 2201,
+                    "owner_id": -101,
+                    "date": scheduled,
+                    "text": text,
+                    "attachments": [
+                        {"type": "photo", "photo": {"id": 3000 + index}}
+                        for index in range(4)
+                    ],
+                },
+            )
+        # A different owner's same numeric post must never be projected or
+        # considered during exact absence verification.
+        items.append(
+            {
+                "id": 2201,
+                "owner_id": -999,
+                "date": scheduled,
+                "text": text,
+                "attachments": [],
+            }
+        )
+        return {"items": items}
+
+    transport.invoke = postponed_queue  # type: ignore[method-assign]
+    page = await adapter.scheduled_items(
+        target_ref=community,
+        scheduled_from="2030-01-01T12:00:00Z",
+        scheduled_to="2030-01-01T12:00:00Z",
+        text_sha256=text_sha256,
+        media_count=4,
+        limit=5,
+    )
+
+    assert page["platform"] == "vk"
+    assert page["queue"] == "scheduled"
+    assert page["exact_match_count"] == 1
+    assert page["has_more"] is False
+    assert page["items"] == [
+        {
+            "item_ref": page["items"][0]["item_ref"],
+            "target_ref": community,
+            "queue": "scheduled",
+            "scheduled_at": "2030-01-01T12:00:00Z",
+            "text_sha256": text_sha256,
+            "media_count": 4,
+            "media_roles": ["image", "image", "image", "image"],
+            "trust": "untrusted_external_data",
+        }
+    ]
+    scheduled_binding = refs.resolve("item", page["items"][0]["item_ref"])
+    assert scheduled_binding == {
+        "kind": "post",
+        "owner_id": -101,
+        "post_id": 2201,
+        "group_id": 101,
+        "queue": "postponed",
+    }
+
+    transport.calls.clear()
+    receipt = await adapter.execute(
+        validate_prepare_request(
+            {
+                "platform": "vk",
+                "action": "delete",
+                "idempotency_key": "delete-exact-postponed-item-001",
+                "item_ref": page["items"][0]["item_ref"],
+            }
+        )
+    )
+
+    assert receipt["status"] == "succeeded"
+    assert receipt["item_ref"] == page["items"][0]["item_ref"]
+    assert receipt["read_after_write"]["verified"] is True
+    assert [call["method"] for call in transport.calls] == [
+        "wall.delete",
+        "wall.get",
+    ]
+    assert transport.calls[1]["params"]["filter"] == "postponed"
+
+    after = await adapter.scheduled_items(
+        target_ref=community,
+        text_sha256=text_sha256,
+        media_count=4,
+        limit=5,
+    )
+    assert after["exact_match_count"] == 0
+    assert after["items"] == []
+
+
+@pytest.mark.asyncio
 async def test_idempotency_binds_full_intent_and_rejects_conflict_before_provider(workspace) -> None:
     adapter, transport, refs, _, _ = workspace
     community = mint_target(refs)
