@@ -1241,6 +1241,14 @@ Record all of the following without secrets:
     preparation refs, and records the new attempt plus final readback. The
     changed actions are administrator-reviewed/published and exercised from a
     genuinely new ChatGPT conversation.
+28. Telegram media publication exercises the full supported one-to-ten item
+    envelope. Its adapter deadline is derived from total verified bytes and
+    item count (bounded to ten minutes), and the MCP commit/retry deadline
+    covers that adapter envelope. Provider file uploads are preparatory only:
+    the durable content-mutation boundary is crossed immediately before the
+    final message/album/story send. A timeout during upload must be terminal
+    `provider_mutation_not_started / retry_safe=true`; a timeout after the final
+    send remains `outcome_unknown / retry_safe=false` until readback resolves it.
 
 Rollback order: first turn
 `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=0` for a document-only

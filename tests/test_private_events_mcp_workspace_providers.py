@@ -610,11 +610,13 @@ def test_telegram_operation_persists_encrypted_intent_and_attempt_state(config) 
         operation_ref=operation_ref,
         action_digest=digest,
         intent=intent,
-        claim_ttl_seconds=30,
+        # Ten-asset Telegram albums may legitimately need the full adaptive
+        # upload envelope plus a durable-finalization margin.
+        claim_ttl_seconds=630,
         reconciliation_deadline_ms=store._state.now_ms() + 60_000,
     )
     assert claim.intent == intent
-    assert claim.claim_expires_at_ms > claim.claimed_at_ms
+    assert claim.claim_expires_at_ms - claim.claimed_at_ms == 630_000
     assert claim.mutation_started_at_ms is None
     assert store.mark_operation_mutation(
         operation_ref=operation_ref, action_digest=digest

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed: Telegram MCP publication now budgets the provider session from the
+  total verified bytes and item count for the complete supported album of up
+  to ten attachments instead of applying the 12-second scalar timeout to all
+  uploads. Preparatory `upload_file` calls no longer cross the content-mutation
+  boundary; only the final send/schedule request does. A timeout while assets
+  are still uploading is therefore terminal `provider_mutation_not_started`
+  with `retry_safe=true`, while timeouts after the album send remain
+  fail-closed. Regression contract:
+  `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
+
 - Fixed: bounded Telegram schedule reconciliation now persists zero exact
   scheduled/live matches as terminal
   `failed / reconciliation_no_match / retry_safe=false` with absence proof;

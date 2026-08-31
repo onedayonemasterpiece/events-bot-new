@@ -28,6 +28,7 @@ from private_events_mcp_telegram_adapter import (
     TelegramLease,
     TelegramOperationClaim,
     TelegramTargetBinding,
+    TelegramVerifiedUpload,
     TelegramWorkspaceAdapter,
 )
 
@@ -141,6 +142,7 @@ class FakeRefs:
             )
         }
         self.operations: dict[str, TelegramOperationClaim] = {}
+        self.mutation_marks: list[str] = []
         self.read_asset_bindings: list[dict] = []
 
     def resolve_target(self, target_ref):
@@ -209,6 +211,7 @@ class FakeRefs:
         self.operations[operation_ref] = replace(
             existing, mutation_started_at_ms=1
         )
+        self.mutation_marks.append(operation_ref)
         return True
 
     def release_operation(self, *, operation_ref, action_digest):
@@ -471,16 +474,25 @@ async def test_stage_and_commit_reject_untrusted_metadata_and_byte_substitution(
 
 
 @pytest.mark.asyncio
-async def test_story_upload_timeout_and_update_id_mismatch_are_outcome_unknown(harness):
-    adapter, client, _, _ = harness
+async def test_story_upload_timeout_is_retry_safe_before_content_mutation(harness):
+    adapter, client, refs, _ = harness
     await adapter.stage_asset(verified(), role=MediaRole.IMAGE)
     client.upload_delay = 0.05
-    adapter._timeout = 0.01
+    adapter._mutation_timeout = lambda _intent: 0.01
     timeout = await adapter.execute(
         story_intent(), operation_ref="op_telegramstorytimeout000001"
     )
-    assert timeout["status"] == "outcome_unknown"
-    assert timeout["retry_safe"] is False
+    assert timeout["status"] == "failed"
+    assert timeout["error_code"] == "provider_mutation_not_started"
+    assert timeout["retry_safe"] is True
+    assert timeout["mutation_boundary_reached"] is False
+    assert refs.mutation_marks == []
+    assert client.events == ["can_send_story", "upload_file"]
+
+
+@pytest.mark.asyncio
+async def test_story_update_id_mismatch_after_content_mutation_is_unknown(harness):
+    del harness
 
     refs = FakeRefs()
     mismatch_client = FakeClient()
@@ -497,7 +509,52 @@ async def test_story_upload_timeout_and_update_id_mismatch_are_outcome_unknown(h
         story_intent(), operation_ref="op_telegramstoryidmismatch0001"
     )
     assert result["status"] == "outcome_unknown"
+    assert result["retry_safe"] is False
+    assert refs.mutation_marks == ["op_telegramstoryidmismatch0001"]
     assert "stories_by_id" not in mismatch_client.events
+
+
+def test_mutation_timeout_scales_for_the_full_ten_asset_album(harness):
+    adapter, _, refs, reader = harness
+    data = reader.data
+    media = []
+    for index in range(10):
+        asset_ref = f"ast_albumupload{index:02d}00000000000001"
+        upload = TelegramVerifiedUpload(
+            storage_ref=f"ing_albumupload{index:02d}0000000000001",
+            owner_binding=OWNER,
+            content_digest="sha256:" + hashlib.sha256(data).hexdigest(),
+            mime_type="image/jpeg",
+            byte_length=2_300_000,
+            width=1080,
+            height=1350,
+            duration=None,
+            expires_at=NOW + timedelta(hours=1),
+            display_name=None,
+            classification=None,
+        )
+        refs.assets[asset_ref] = TelegramAssetBinding(
+            asset_ref, MediaRole.IMAGE, upload
+        )
+        media.append(MediaAttachment(asset_ref, MediaRole.IMAGE))
+    album = SocialActionIntent(
+        platform=SocialPlatform.TELEGRAM,
+        action=SocialAction.SCHEDULE,
+        idempotency_key="telegram-ten-image-album-0001",
+        target_ref=TARGET_REF,
+        item_ref=None,
+        destination_target_ref=None,
+        content=RichContent("caption", (), tuple(media)),
+        reaction=None,
+        reaction_preset=None,
+        schedule_at="2026-08-31T18:00:00Z",
+        expected_revision=None,
+    )
+
+    timeout = adapter._mutation_timeout(album)
+
+    assert timeout > 120
+    assert timeout <= 600
 
 
 @pytest.mark.asyncio

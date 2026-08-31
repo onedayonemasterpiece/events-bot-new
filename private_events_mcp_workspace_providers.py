@@ -1364,7 +1364,7 @@ class InMemoryTelegramOpaqueRefStore:
     ) -> Any:
         now = self._state.now_ms()
         ttl = 150 if claim_ttl_seconds is None else int(claim_ttl_seconds)
-        if not 1 <= ttl <= 600:
+        if not 1 <= ttl <= 900:
             raise ProviderBindingError("Telegram operation lease is invalid")
         if reconciliation_deadline_ms is None:
             reconciliation_deadline_ms = now + max(60_000, ttl * 1000)
