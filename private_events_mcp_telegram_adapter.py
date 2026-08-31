@@ -813,6 +813,24 @@ class TelegramWorkspaceAdapter:
         except Exception:  # noqa: BLE001, S110 - best-effort secret-free disconnect
             pass
 
+    async def _bounded_cleanup(self, factory: Callable[[], Any]) -> None:
+        """Bound best-effort session cleanup outside the provider deadline.
+
+        `asyncio.wait_for` is safe here because both built-in cleanup adapters
+        propagate cancellation.  A broken provider disconnect/release must not
+        prevent the already-classified operation from reaching its durable
+        ledger state.
+        """
+
+        try:
+            await asyncio.wait_for(
+                _await(factory()), timeout=max(0.05, min(2.0, self._timeout))
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001, S110 - best-effort bounded cleanup
+            pass
+
     async def _session(
         self,
         operation: str,
@@ -821,32 +839,46 @@ class TelegramWorkspaceAdapter:
         attempt: _Attempt | None = None,
     ) -> Any:
         async with self._lock:
-            remaining = await _await(self._governor.cooldown_remaining())
-            if type(remaining) is not int or remaining < 0:
-                raise TelegramWorkspaceError("governor_invalid", retry_safe=False)
-            if remaining:
-                raise TelegramWorkspaceError(
-                    "provider_cooldown", retry_after_seconds=remaining
-                )
-            lease = await _await(self._governor.acquire(operation))
-            if not isinstance(lease, TelegramLease):
-                raise TelegramWorkspaceError("lease_unavailable", retry_safe=False)
+            lease: TelegramLease | None = None
             client: Any | None = None
             attempt = attempt or _Attempt()
             try:
-                await self._fenced(lease)
-                client = await _await(self._client_factory())
-                if client is None:
-                    raise TelegramWorkspaceError("provider_unavailable")
-                if callable(getattr(client, "connect", None)):
-                    await _await(client.connect())
-                if (
-                    callable(getattr(client, "is_user_authorized", None))
-                    and not await _await(client.is_user_authorized())
-                ):
-                    raise TelegramWorkspaceError("provider_unauthorized", retry_safe=False)
-                await self._fenced(lease)
-                return await asyncio.wait_for(body(client, lease, attempt), self._timeout)
+                # One coherent absolute deadline owns governor acquisition,
+                # client construction/connect/auth and the provider body.  The
+                # runtime deliberately does not impose an equal outer timeout.
+                async with asyncio.timeout(self._timeout):
+                    remaining = await _await(self._governor.cooldown_remaining())
+                    if type(remaining) is not int or remaining < 0:
+                        raise TelegramWorkspaceError(
+                            "governor_invalid", retry_safe=False
+                        )
+                    if remaining:
+                        raise TelegramWorkspaceError(
+                            "provider_cooldown", retry_after_seconds=remaining
+                        )
+                    acquired = await _await(self._governor.acquire(operation))
+                    if not isinstance(acquired, TelegramLease):
+                        raise TelegramWorkspaceError(
+                            "lease_unavailable", retry_safe=False
+                        )
+                    lease = acquired
+                    await self._fenced(lease)
+                    client = await _await(self._client_factory())
+                    if client is None:
+                        raise TelegramWorkspaceError("provider_unavailable")
+                    if callable(getattr(client, "connect", None)):
+                        await _await(client.connect())
+                    if (
+                        callable(getattr(client, "is_user_authorized", None))
+                        and not await _await(client.is_user_authorized())
+                    ):
+                        raise TelegramWorkspaceError(
+                            "provider_unauthorized", retry_safe=False
+                        )
+                    await self._fenced(lease)
+                    result = await body(client, lease, attempt)
+                    await self._fenced(lease)
+                return result
             except asyncio.CancelledError:
                 raise
             except SocialWorkspaceValidationError:
@@ -876,11 +908,11 @@ class TelegramWorkspaceAdapter:
                 ) from None
             finally:
                 if client is not None:
-                    await self._disconnect(client)
-                try:
-                    await _await(self._governor.release(lease))
-                except Exception:  # noqa: BLE001, S110 - best-effort lease cleanup
-                    pass
+                    await self._bounded_cleanup(lambda: self._disconnect(client))
+                if lease is not None:
+                    await self._bounded_cleanup(
+                        lambda: self._governor.release(lease)
+                    )
 
     async def _call(self, client: Any, lease: TelegramLease, value: Any) -> Any:
         await self._fenced(lease)

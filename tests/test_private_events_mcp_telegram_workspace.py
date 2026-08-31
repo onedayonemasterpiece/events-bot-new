@@ -511,16 +511,22 @@ class FakeClient:
         }
         self.raise_on: str | None = None
         self.delay = 0.0
+        self.connect_delay = 0.0
+        self.disconnect_delay = 0.0
         self.global_search_messages = None
         self.comment_messages = None
 
     async def connect(self):
+        if self.connect_delay:
+            await asyncio.sleep(self.connect_delay)
         self.connected = True
 
     async def is_user_authorized(self):
         return True
 
     async def disconnect(self):
+        if self.disconnect_delay:
+            await asyncio.sleep(self.disconnect_delay)
         self.disconnected = True
 
     async def get_me(self):
@@ -2193,6 +2199,55 @@ async def test_real_wait_for_expiry_and_post_mutation_fence_loss_are_unknown():
     assert lost["status"] == "outcome_unknown"
     assert lost["error_code"] == "lease_lost"
     assert len(fence_client.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_total_session_deadline_bounds_connect_and_disconnect_cleanup():
+    connect_refs = FakeRefs()
+    connect_client = FakeClient(connect_refs)
+    connect_client.connect_delay = 60
+    connect_adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: connect_client,
+        refs=connect_refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=0.01,
+    )
+    connect_operation = "op_connectdeadline00000000000001"
+    with pytest.raises(TelegramWorkspaceError) as timed_out:
+        await connect_adapter.execute(
+            intent(
+                SocialAction.SEND_MESSAGE,
+                target_ref=USER_REF,
+                content=content(),
+            ),
+            operation_ref=connect_operation,
+        )
+    assert timed_out.value.code == "provider_timeout"
+    assert timed_out.value.retry_safe is True
+    assert connect_operation not in connect_refs.operations
+
+    disconnect_refs = FakeRefs()
+    disconnect_client = FakeClient(disconnect_refs)
+    disconnect_client.disconnect_delay = 60
+    disconnect_adapter = TelegramWorkspaceAdapter(
+        client_factory=lambda: disconnect_client,
+        refs=disconnect_refs,
+        governor=FakeGovernor(),
+        telethon_types=FakeTypes(),
+        operation_timeout_seconds=0.01,
+    )
+    disconnect_operation = "op_disconnectdeadline00000000001"
+    receipt = await disconnect_adapter.execute(
+        intent(
+            SocialAction.SEND_MESSAGE,
+            target_ref=USER_REF,
+            content=content(),
+        ),
+        operation_ref=disconnect_operation,
+    )
+    assert receipt["status"] == "succeeded"
+    assert disconnect_refs.resolve_operation(disconnect_operation).result == receipt
 
 
 @pytest.mark.asyncio
