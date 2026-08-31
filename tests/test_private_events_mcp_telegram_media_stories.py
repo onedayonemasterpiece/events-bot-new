@@ -185,13 +185,31 @@ class FakeRefs:
     def resolve_cursor(self, *, family, cursor):
         raise AssertionError((family, cursor))
 
-    def claim_operation(self, *, operation_ref, action_digest):
+    def claim_operation(
+        self,
+        *,
+        operation_ref,
+        action_digest,
+        intent=None,
+        claim_ttl_seconds=None,
+        reconciliation_deadline_ms=None,
+    ):
+        del intent, claim_ttl_seconds, reconciliation_deadline_ms
         existing = self.operations.get(operation_ref)
         if existing:
             return replace(existing, claimed_now=False)
         claim = TelegramOperationClaim(operation_ref, action_digest, True)
         self.operations[operation_ref] = claim
         return claim
+
+    def mark_operation_mutation(self, *, operation_ref, action_digest):
+        existing = self.operations.get(operation_ref)
+        if existing is None or existing.action_digest != action_digest:
+            return False
+        self.operations[operation_ref] = replace(
+            existing, mutation_started_at_ms=1
+        )
+        return True
 
     def release_operation(self, *, operation_ref, action_digest):
         existing = self.operations.get(operation_ref)
