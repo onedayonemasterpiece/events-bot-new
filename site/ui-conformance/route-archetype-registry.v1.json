@@ -1,0 +1,31 @@
+{
+  "schema_version": "kenigevents.ui-conformance.route-archetype-registry.v1",
+  "source_repository": "onedayonemasterpiece/events-bot-new",
+  "source_sha": "64f75d10f7aff33fa616cee212878bd9d03673b1",
+  "census_method": "current Astro page-source inspection; C0 coverage marker 5471453474",
+  "archetypes": [
+    {"id":"home","route_patterns":["/"],"source_files":["src/pages/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"date-listing","route_patterns":["/date-{date}/"],"source_files":["src/pages/date-[date].astro"],"corpus_status":"READY_C1"},
+    {"id":"today-listing","route_patterns":["/segodnya/"],"source_files":["src/pages/segodnya/index.astro"],"corpus_status":"READY_C1"},
+    {"id":"tomorrow-listing","route_patterns":["/zavtra/"],"source_files":["src/pages/zavtra/index.astro"],"corpus_status":"READY_C1"},
+    {"id":"weekend-listing","route_patterns":["/vyhodnye/","/vyhodnye/{start}/"],"source_files":["src/pages/vyhodnye/index.astro","src/pages/vyhodnye/[start].astro"],"corpus_status":"READY_C1"},
+    {"id":"popular","route_patterns":["/populyarnoe/"],"source_files":["src/pages/populyarnoe/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"unusual","route_patterns":["/neobychnoe/"],"source_files":["src/pages/neobychnoe/index.astro"],"corpus_status":"BLOCKED_DATA_QUALITY","blocker":"C0: unavailable empty quality gate"},
+    {"id":"collections-index","route_patterns":["/podborki/"],"source_files":["src/pages/podborki/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"collection-detail","route_patterns":["/podborki/{slug}/"],"source_files":["src/pages/podborki/[slug]/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"gastronomy-collection","route_patterns":["/podborki/gastronomiya/"],"source_files":["src/pages/podborki/gastronomiya/index.astro"],"corpus_status":"BLOCKED_DATA_CONTRACT","blocker":"C0: accepted empty state has no last-good corpus"},
+    {"id":"search","route_patterns":["/poisk/"],"source_files":["src/pages/poisk/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"favorites","route_patterns":["/izbrannoe/"],"source_files":["src/pages/izbrannoe/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"personal-feed","route_patterns":["/dlya-menya/"],"source_files":["src/pages/dlya-menya/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"exhibitions","route_patterns":["/vystavki/"],"source_files":["src/pages/vystavki/index.astro"],"corpus_status":"READY_C1"},
+    {"id":"festivals","route_patterns":["/festivali/"],"source_files":["src/pages/festivali/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"interest-clubs-index","route_patterns":["/kluby-po-interesam/"],"source_files":["src/pages/kluby-po-interesam/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"interest-club-detail","route_patterns":["/kluby-po-interesam/{slug}/"],"source_files":["src/pages/kluby-po-interesam/[slug]/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"event-detail","route_patterns":["/sobytiya/{slug}/"],"source_files":["src/pages/sobytiya/[slug].astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"artifacts","route_patterns":["/artefakty/"],"source_files":["src/pages/artefakty/index.astro"],"corpus_status":"BLOCKED_DATA_IDENTITY","blocker":"C0: identity reconciliation required before corpus extension"},
+    {"id":"information-pages","route_patterns":["/partners/","/partnerstvo/"],"source_files":["src/pages/partners/index.astro","src/pages/partnerstvo/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"focus-program","route_patterns":["/fokus-gruppa/","/fokus-gruppa/{state}/"],"source_files":["src/pages/fokus-gruppa/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"special-state-pages","route_patterns":["/zakrytaya-afisha/"],"source_files":["src/pages/zakrytaya-afisha/index.astro"],"corpus_status":"PENDING_PRIORITY_WAVE"},
+    {"id":"volunteer","route_patterns":[],"source_files":[],"corpus_status":"BLOCKED_CORPUS_GAP","blocker":"C0: no production route and no authoritative product contract"}
+  ]
+}

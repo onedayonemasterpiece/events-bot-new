@@ -1,0 +1,11 @@
+{
+  "schema_version": "kenigevents.ui-conformance.state-packets.v1",
+  "packet_id": "priority-listings-september-2026-v1",
+  "clock": {"id":"clock.v1","now":"2026-09-01T12:00:00+02:00","timezone":"Europe/Kaliningrad","today":"2026-09-01","tomorrow":"2026-09-02","weekend_start":"2026-09-05","weekend_end":"2026-09-06"},
+  "site_mode": {"id":"site-mode.v1","mode":"public"},
+  "auth": {"id":"auth.v1","state":"anonymous"},
+  "query": {"id":"query.v1","value":"","filters":[]},
+  "favorites": {"id":"favorites.v1","event_ids":[]},
+  "personalization": {"id":"personalization.v1","state":"neutral-no-profile"},
+  "network": {"id":"network.v1","state":"online","data_mode":"fixture-only"}
+}

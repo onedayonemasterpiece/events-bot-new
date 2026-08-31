@@ -1,0 +1,12 @@
+{
+  "schema_version": "kenigevents.ui-conformance.route-projections.v1",
+  "corpus_id": "ui-reference-events.c1-priority-listings",
+  "state_packet": "priority-listings-september-2026-v1",
+  "projections": [
+    {"id":"date-2026-09-01","archetype_id":"date-listing","route":"/date-2026-09-01/","entity_refs":["event.real.4240"]},
+    {"id":"today-2026-09-01","archetype_id":"today-listing","route":"/segodnya/","entity_refs":["event.real.4240"]},
+    {"id":"tomorrow-2026-09-02","archetype_id":"tomorrow-listing","route":"/zavtra/","entity_refs":["event.real.8006"]},
+    {"id":"weekend-2026-09-05","archetype_id":"weekend-listing","route":"/vyhodnye/2026-09-05/","entity_refs":["event.real.8200"]},
+    {"id":"exhibitions-reference","archetype_id":"exhibitions","route":"/vystavki/","entity_refs":["event.real.4240","event.real.7609","event.real.6711","event.real.2182"],"ordering":"start_date_desc_then_fixture_id","evidence_mode":"reference-corpus; not a claim of live availability"}
+  ]
+}
