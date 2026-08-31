@@ -1,0 +1,106 @@
+mode: serial_integrator
+repo: onedayonemasterpiece/events-bot-new
+base_ref: origin/main@ab289db1750d60242fde37f07af305a6e67b84fa
+base_branch: main
+integration_branch: fix/eventsbot-scheduled-readback-acceptance-20260831
+global_constraints:
+  - preserve the dirty primary checkout and all parallel user work
+  - use the already-existing clean scheduled-readback worktree; create no clone or new worktree
+  - never read .env, credentials, tokens, cookies, upload URLs, raw provider bodies, or personal sessions
+  - make no social provider mutation and never publish the historical carousel
+  - do not deploy before merge, green CI, and a clean exact origin/main checkout
+verification_owner: acceptance-integrator
+stop_conditions:
+  - production evidence is insufficient to identify a safe VK fix
+  - PR cannot be merged safely or required CI is not green
+  - exact-main deploy preconditions fail
+lanes:
+  - id: tg-reconcile-map
+    role: planner
+    supporting_requirement_ids: [R1, R3]
+    target: exact-main Telegram reconciliation and delete audit
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence-backed gap map
+    verification_scope: inspection_only
+    effort: medium
+    status: completed
+  - id: list-retry-map
+    role: planner
+    supporting_requirement_ids: [R2, R4]
+    target: exact-main scheduled-list and retry contract audit
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence-backed gap map
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: vk-upload-map
+    role: planner
+    supporting_requirement_ids: [R5]
+    target: exact-main VK upload contract and regression audit
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: evidence-backed code-path map
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: prod-evidence
+    role: planner
+    supporting_requirement_ids: [R1, R5, R6]
+    target: read-only Fly operation/release/health evidence
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: sanitized factual production evidence
+    verification_scope: inspection_only
+    effort: high
+    status: spawned
+  - id: tests-release-map
+    role: planner
+    supporting_requirement_ids: [R6]
+    target: suite and release-gate inventory
+    execution_mode: read_only_parallel
+    branch: null
+    worktree: null
+    writable_files: []
+    forbidden_files: ['*']
+    expected_output: exact commands and coverage gaps
+    verification_scope: inspection_only
+    effort: medium
+    status: spawned
+  - id: acceptance-integrator
+    role: merge_reviewer
+    requirement_ids: [R1, R2, R3, R4, R5, R6]
+    target: implement and integrate all acceptance deltas serially
+    depends_on: [tg-reconcile-map, list-retry-map, vk-upload-map, prod-evidence, tests-release-map]
+    execution_mode: serial_after_dependency
+    branch: fix/eventsbot-scheduled-readback-acceptance-20260831
+    worktree: /home/dev/.codex/worktrees/events-bot-new/eventsbot-scheduled-readback-deploy
+    writable_files:
+      - private_events_mcp/**
+      - private_events_mcp_*.py
+      - tests/test_private_events_mcp_*.py
+      - docs/operations/private-events-mcp.md
+      - docs/reports/incidents/INC-2026-08-31-mcp-scheduled-readback-reschedule.md
+      - CHANGELOG.md
+      - .codex/integration/eventsbot-scheduled-readback-acceptance-20260831/**
+    forbidden_files:
+      - .env
+      - artifacts/**
+      - provider credentials or session files
+    expected_output: committed and pushed feature branch, PR, green local/CI evidence, gated release evidence
+    verification_scope: full_local
+    effort: high
+    status: planned
