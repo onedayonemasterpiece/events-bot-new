@@ -3,7 +3,7 @@
 - Lane: `tools-runtime`
 - Requirements: R1 runtime half, R4, R6
 - Base SHA: `64f75d10f7aff33fa616cee212878bd9d03673b1`
-- Head SHA: pending commit (recorded below after commit by commit history)
+- Head SHA: `9ff10be9d` (implementation commit; RESULTS metadata follow-up is the branch tip reported to the integrator)
 
 ## Outcome
 
