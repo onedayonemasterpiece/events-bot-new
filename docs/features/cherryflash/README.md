@@ -118,7 +118,15 @@ The icon layer uses the approved SVG Repo-derived assets packaged in `video_anno
   - the general `popular_review` startup catch-up and watchdog share a persisted
     same-day cap of two failed sessions (scheduled attempt plus one recovery); an
     external CDN/render failure must not create a new Kaggle session every ten
-    minutes or after each process restart.
+    minutes or after each process restart. A runtime/deploy orphan that never
+    persisted a Kaggle dataset (or still has a `local:*` kernel ref) is not a
+    remote render attempt and does not consume this cap.
+  - startup handoff grace is not a one-shot recovery decision: the periodic
+    popular-review watchdog runs the same idempotent rendering-session recovery
+    sweep after the grace window. A stale pre-handoff `RENDERING` row is failed
+    closed even when no operator notification destination can be resolved, so a
+    deploy between local session creation and dataset persistence cannot leave
+    the slot orphaned forever.
   - launcher-side prefetch keeps strict TLS and, for canonical
     `static.kenigevents.ru/<object-path>` posters only, may retry the identical
     object path via `storage.yandexcloud.net/kenigevents.ru/<object-path>` when
@@ -137,6 +145,13 @@ The icon layer uses the approved SVG Repo-derived assets packaged in `video_anno
     story preflight/publish report names a deterministic target blocker such as
     `BOOSTS_REQUIRED`, use `PUBLISH_BLOCKED`. Explicit operator cancellation
     stays cancelled/failed and is not output-recovered.
+  - a callback transport timeout during story-resource acquisition is
+    ambiguous, not an authoritative busy result. The Kaggle client retries the
+    same-run acquire with one stable `event_uid`; the host's same-owner lease
+    operation is idempotent. A real `blocked` response is authoritative and is
+    not retried. When the poller accepts an exact provider `ERROR`/`FAILED` or
+    cancellation with no video, it must also close the matching
+    `videoannounce:<session_id>` ledger and release only that run's leases.
   - CherryFlash story fanout is target-independent: an unavailable or unauthorized Telethon session may fail Telegram story/channel targets, but it must not abort configured VK wall or VK story targets that can publish with VK credentials.
   - public CherryFlash captions must carry the release/session number and the target date in `D month` form: `Видеоанонс #<session_id> · <D month>` (for example, `Видеоанонс #677 · 15 июня`). The `telegram_chat` post target receives this exact caption; the VK wall target may expand it with the normal VK hashtag/date block, but must keep the same numbered/date title.
   - if CherryFlash fails or leaves no local-day `ops_run` because SQLite reports `database or disk is full`, treat it as `INC-2026-05-05-cherryflash-disk-full`: collect Fly `/data` evidence, restore free space and SQLite write health first, verify `/healthz`, then perform the same-day compensating CherryFlash run and collect dataset/kernel/story evidence.

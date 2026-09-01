@@ -250,13 +250,41 @@ class KaggleStatusClient:
         return response or {"ok": False, "error": error}
 
     def acquire_resource(self, key: str, *, ttl_seconds: int = 7200) -> bool:
-        result = self.event(
-            "resource_acquire",
-            phase="preflight",
-            status="running",
-            resource={"key": key, "action": "acquire", "ttl_seconds": ttl_seconds},
-        )
-        return result.get("resource_action") == "acquired"
+        # Resource acquisition is idempotent for the same run on the host.  A
+        # callback can therefore time out after the host has committed the
+        # lease (for example while SQLite has another writer) even though the
+        # notebook received no response.  Retry with one stable event UID so
+        # the notebook does not turn that successful lease into a false
+        # ``resource busy`` failure and leak it until TTL expiry.
+        raw_attempts = os.getenv("KAGGLE_STATUS_RESOURCE_ACQUIRE_ATTEMPTS", "3")
+        try:
+            attempts = max(1, min(5, int(raw_attempts)))
+        except ValueError:
+            attempts = 3
+        event_uid = f"resource_acquire:{key}"
+        result: dict[str, Any] = {"ok": False}
+        for attempt in range(1, attempts + 1):
+            result = self.event(
+                "resource_acquire",
+                event_uid=event_uid,
+                phase="preflight",
+                status="running",
+                resource={"key": key, "action": "acquire", "ttl_seconds": ttl_seconds},
+            )
+            action = result.get("resource_action")
+            if action == "acquired":
+                return True
+            # A real holder response is authoritative; retry only ambiguous
+            # transport/callback failures where no resource decision arrived.
+            if action == "blocked" or result.get("ok") is True:
+                return False
+            if attempt < attempts:
+                self.log(
+                    f"[kaggle_status] resource_acquire ambiguous response; "
+                    f"retrying attempt={attempt + 1}/{attempts}"
+                )
+                time.sleep(min(2, attempt))
+        return False
 
     def release_resource(self, key: str) -> None:
         self.event(

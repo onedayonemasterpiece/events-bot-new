@@ -957,3 +957,52 @@ def test_kaggle_status_client_redacts_token_in_local_jsonl(tmp_path):
     ]
     assert rows[0]["payload"]["token"] == "<redacted>"
     assert "secret-token" not in json.dumps(rows, ensure_ascii=False)
+
+
+def test_kaggle_status_client_retries_ambiguous_resource_acquire_with_stable_uid(
+    tmp_path, monkeypatch
+):
+    KaggleStatusClient = _load_status_client_class()
+    client = KaggleStatusClient({}, output_dir=tmp_path, log=lambda _message: None)
+    calls: list[dict] = []
+    responses = iter(
+        [
+            {"ok": False, "error": "TimeoutError: timed out"},
+            {"ok": True, "resource_action": "acquired"},
+        ]
+    )
+
+    def fake_event(event, **kwargs):  # noqa: ANN001
+        calls.append({"event": event, **kwargs})
+        return next(responses)
+
+    sleeps: list[int] = []
+    monkeypatch.setattr(client, "event", fake_event)
+    monkeypatch.setattr(
+        client.acquire_resource.__func__.__globals__["time"],
+        "sleep",
+        lambda delay: sleeps.append(delay),
+    )
+
+    assert client.acquire_resource("telegram_session:story") is True
+    assert len(calls) == 2
+    assert calls[0]["event_uid"] == calls[1]["event_uid"]
+    assert calls[0]["resource"] == calls[1]["resource"]
+    assert sleeps == [1]
+
+
+def test_kaggle_status_client_does_not_retry_authoritative_resource_block(
+    tmp_path, monkeypatch
+):
+    KaggleStatusClient = _load_status_client_class()
+    client = KaggleStatusClient({}, output_dir=tmp_path, log=lambda _message: None)
+    calls: list[dict] = []
+
+    def fake_event(event, **kwargs):  # noqa: ANN001
+        calls.append({"event": event, **kwargs})
+        return {"ok": True, "resource_action": "blocked", "holder_run_id": "other"}
+
+    monkeypatch.setattr(client, "event", fake_event)
+
+    assert client.acquire_resource("telegram_session:story") is False
+    assert len(calls) == 1

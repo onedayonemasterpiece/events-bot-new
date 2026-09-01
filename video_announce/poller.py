@@ -2522,6 +2522,17 @@ async def run_kernel_poller(
                 kernel_ref,
                 error_detail,
             )
+            try:
+                await reconcile_kaggle_run_failure_from_host(
+                    db,
+                    run_id=f"videoannounce:{session_obj.id}",
+                    message=f"Kaggle provider terminal status: {error_detail}",
+                )
+            except Exception:
+                logger.exception(
+                    "video_announce: failed to reconcile cancelled provider ledger session=%s",
+                    session_obj.id,
+                )
             session_obj = await _update_status(
                 db,
                 session_obj.id,
@@ -2722,6 +2733,21 @@ async def run_kernel_poller(
                 if expected_video_name
                 else "missing video output"
             )
+            provider_state = str(
+                (output_probe_status or {}).get("status") or ""
+            ).strip().casefold()
+            if provider_state in {"error", "failed", "cancelled", "canceled"}:
+                try:
+                    await reconcile_kaggle_run_failure_from_host(
+                        db,
+                        run_id=f"videoannounce:{session_obj.id}",
+                        message=f"Kaggle provider terminal status: {missing_video_error}",
+                    )
+                except Exception:
+                    logger.exception(
+                        "video_announce: failed to reconcile terminal provider ledger session=%s",
+                        session_obj.id,
+                    )
             session_obj = await _update_status(
                 db,
                 session_obj.id,
@@ -3084,8 +3110,6 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
             sess,
             chat_id=chat_id,
         )
-        if not notify_chat_id:
-            continue
         dataset_slug = str(sess.kaggle_dataset or "").strip()
         if not dataset_slug:
             grace_deadline = _local_handoff_grace_deadline(sess)
@@ -3110,7 +3134,7 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
                 status=VideoAnnounceSessionStatus.FAILED,
                 error="runtime restart before Kaggle handoff; rerun required",
             )
-            if failed:
+            if failed and notify_chat_id:
                 await bot.send_message(
                     notify_chat_id,
                     (
@@ -3160,7 +3184,7 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
                 status=VideoAnnounceSessionStatus.FAILED,
                 error="runtime restart before Kaggle handoff; rerun required",
             )
-            if failed:
+            if failed and notify_chat_id:
                 await bot.send_message(
                     notify_chat_id,
                     (
@@ -3168,6 +3192,15 @@ async def resume_rendering_sessions(db: Database, bot, *, chat_id: int | None = 
                         "Сессия переведена в FAILED; нужен повторный запуск."
                     ),
                 )
+            continue
+        if not notify_chat_id:
+            logger.error(
+                "video_announce: cannot resume remote session without operator notify target "
+                "session_id=%s kernel_ref=%s dataset=%s",
+                sess.id,
+                kernel_ref,
+                dataset_slug,
+            )
             continue
         if _poller_active(sess.id):
             continue

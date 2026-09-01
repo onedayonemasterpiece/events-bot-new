@@ -1582,6 +1582,41 @@ async def test_popular_review_watchdog_retries_failed_remote_handoff(
 
 
 @pytest.mark.asyncio
+async def test_popular_review_retry_cap_ignores_deploy_orphan_before_remote_handoff(
+    tmp_path, monkeypatch
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    _configure_popular_review_env(monkeypatch)
+    await _insert_popular_review_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 07:44:00",
+        kaggle_dataset="zigomaro/cherryflash-session-181",
+        kaggle_kernel_ref="zigomaro/cherryflash",
+        error="{'status': 'ERROR'}",
+    )
+    await _insert_popular_review_session(
+        db,
+        status="FAILED",
+        target_date="2026-04-12",
+        created_at="2026-04-12 08:17:00",
+        kaggle_kernel_ref="zigomaro/cherryflash-video-lane-1",
+        error="runtime restart before Kaggle handoff; rerun required",
+    )
+
+    count = await scheduling._popular_review_failed_session_count_today(
+        db,
+        day_start_utc=datetime(2026, 4, 11, 22, 0, tzinfo=timezone.utc),
+        day_end_utc=datetime(2026, 4, 12, 22, 0, tzinfo=timezone.utc),
+        target_date="2026-04-12",
+    )
+
+    assert count == 1
+
+
+@pytest.mark.asyncio
 async def test_popular_review_watchdog_skips_failed_session_with_video_output(
     tmp_path, monkeypatch
 ):

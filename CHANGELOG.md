@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed: systemic post-redeploy recovery for the 2026-09-01 production
+  incident. Ambiguous Kaggle resource-acquire timeouts now retry idempotently
+  with a stable event UID; accepted terminal provider failures close the exact
+  run ledger and release its leases; the popular-review watchdog revisits
+  startup-grace pre-handoff sessions; notification-less deploy orphans fail
+  closed; and pre-handoff rows no longer consume the bounded remote renderer
+  retry budget. Restored VK storage admission by fingerprinting and removing an
+  obsolete 339.8 MB predeploy incident snapshot. Regression contract:
+  `INC-2026-09-01-prod-redeploy-systemic-recovery`.
+
 - Fixed: Telegram Saved Messages scheduled-history and scheduled-delete calls
   now use the canonical MTProto `InputPeerSelf` instead of replaying a detached
   stored `User` entity into raw scheduled-message methods. Provider-boundary
