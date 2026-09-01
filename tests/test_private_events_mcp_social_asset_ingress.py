@@ -104,6 +104,17 @@ def test_media_allowed_hosts_supports_only_safe_leading_wildcards(monkeypatch) -
             _hosts("PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS")
 
 
+def test_media_allowed_hosts_accepts_official_openai_upload_family(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS",
+        "*.oaiusercontent.com,*.blob.core.windows.net",
+    )
+    assert _hosts("PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS") == (
+        "*.oaiusercontent.com",
+        "*.blob.core.windows.net",
+    )
+
+
 def test_disabled_mcp_ignores_malformed_media_host_policy(monkeypatch) -> None:
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_ENABLED", "0")
     monkeypatch.setenv("PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS", "bad.*.host")

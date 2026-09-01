@@ -98,6 +98,14 @@ was not scheduled or published.
   global ceiling was `100`. The later commits therefore failed the principal
   `attempts budget exceeded` guard. Transaction rollback left both new
   operation tables and Telegram provider ledgers empty.
+- After the commit fix reached Fly release `v2059`, a real Codex-selected
+  deterministic PNG crossed the connector `fileParams` rewrite and was denied
+  before download as `FILE_HOST_NOT_ALLOWED`. The audit fingerprint proved a
+  three-label host under the stable `oaiusercontent.com` boundary, while
+  production still allowed only `files.oaiusercontent.com` plus the Azure Blob
+  family. OpenAI's current network guidance explicitly documents
+  `*.oaiusercontent.com` for ChatGPT and Codex file traffic. No bytes were
+  retained and no Telegram provider call occurred on the denied probe.
 
 The exact audited payload identity was caption SHA-256
 `b2bb4a7413b1cb63b2913a630a5cc6f1bce477fb9258a193fe4f14d7125328cd`
@@ -113,6 +121,22 @@ plus these ordered 1122×1402 PNG SHA-256 values:
    (`03_1946_settlers.png`).
 
 ## Timeline
+
+- 2026-09-01 06:27 UTC — PR `#606` merged the commit orchestration fix after
+  all three required CI jobs passed. Exact `origin/main` SHA
+  `9607e1977090729875b5f809d0465825246806c2` was deployed as Fly release
+  `v2059`; the in-container SHA matched, `/healthz` was ready, both SQLite
+  databases passed `quick_check`, and the runtime file mirror was fresh.
+- 2026-09-01 06:34 UTC — the authenticated connector resolved Telegram Saved
+  Messages and reported `schedule`, `delete`, images and `max_media_items=10`.
+  A real locally selected canary PNG was materialized by the Codex tool host,
+  but ingress returned `FILE_HOST_NOT_ALLOWED`; audit suffix fingerprints
+  bound the new three-label host to `oaiusercontent.com`. This was a definite
+  pre-download, pre-provider failure, so no scheduled item required cleanup.
+- 2026-09-01 — OpenAI's official network guidance was compared with the live
+  configuration. It requires the `*.oaiusercontent.com` family for ChatGPT and
+  Codex features, establishing the narrow configuration correction; no generic
+  URL downloader or non-OpenAI wildcard is introduced.
 
 - 2026-08-31, before 10:30 Europe/Kaliningrad — the four-image Telegram and VK
   schedules were prepared for the original slot.
