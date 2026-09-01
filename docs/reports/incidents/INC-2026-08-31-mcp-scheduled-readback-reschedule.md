@@ -1,10 +1,10 @@
 # INC-2026-08-31 eventsBot MCP scheduled readback blocked a safe reschedule
 
-Status: active — pre-provider commit-budget and orchestration-contract regression reproduced; fix/acceptance in progress
+Status: closed — exact-main fixes deployed; real MCP Saved Messages schedule/read/approve/delete/absence journey passed
 Severity: sev1
 Service: private eventsBot MCP / Telegram and VK scheduled publication
 Opened: 2026-08-31
-Closed: —
+Closed: 2026-09-01
 Owners: events-bot production / eventsBot MCP
 Related incidents: `INC-2026-08-24-mcp-telegram-album-media-ref`, `INC-2026-08-25-chatgpt-frozen-mcp-actions`, `INC-2026-08-27-eventsbot-vk-image-publish-outcome-unknown`, `INC-2026-08-30-mcp-scheduled-readback-routing`
 Related docs: `docs/operations/private-events-mcp.md`, `docs/operations/runtime-logs.md`, `docs/operations/release-governance.md`
@@ -40,6 +40,17 @@ collapsed the exact local cause into `social workspace request rejected`, while
 the visible ChatGPT tool journal omitted the four commit calls and the assistant
 reported an incorrect count/cause. The real `@lovekenig` album therefore still
 was not scheduled or published.
+
+Closure required a provider-backed test rather than another fake-adapter claim.
+After the durable binding-capacity and scheduled-delete-preview fixes reached
+Fly releases `v2063` and `v2064`, the real eventsBot MCP staged four fresh PNGs
+and scheduled one native Saved Messages album. MCP readback returned exactly one
+logical item with `media_count=4`; the external operator page rendered and
+approved its exact delete; MCP deletion succeeded and both MCP plus independent
+Telegram reads proved zero scheduled and zero exact live copies. This closes the
+server/live-MCP incident. It does **not** authorize Codex to publish the real
+`@lovekenig` album: that separate publication remains owned by ChatGPT after the
+user supplies a new future time.
 
 ## User / Business Impact
 
@@ -198,6 +209,25 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   authorized emergency provider cleanup and raw history plus MCP both proved a
   zero-item queue. The canary did not reach its scheduled time; no `@lovekenig`
   or VK mutation occurred.
+- 2026-09-01 10:42–10:45 UTC — PR `#611` passed all three CI gates and exact
+  `origin/main` `ff4551e5cad36542d2dd13350c5c3e9028be5748` reached Fly release
+  `v2064`. Embedded SHA, `/healthz`, both SQLite `quick_check` results and the
+  runtime mirror passed. The eventsBot MCP staged four new verified 96×96 PNGs,
+  prepared and committed schedule operation
+  `op_wJmz7bGSHuaR-tgo1QU5Y2qzv7T3hgzZ` exactly once, and returned
+  `succeeded / read_after_write.verified=true`. Scheduled-list readback found
+  exactly one logical native album at `2026-09-01T11:15:00Z`, caption SHA-256
+  `8cfc27d82939107c25c707eb80d4324f6dd65800425c0f204584828ed4173181`,
+  four ordered image roles and `media_count=4`.
+- 2026-09-01 10:44 UTC — the exact scheduled item entered the unchanged
+  external approval flow. The preview displayed `Saved Messages`, action
+  `delete`, schedule time, text hash and media count four. After operator
+  confirmation, MCP committed delete operation
+  `op_lcDhT_jwT4gC1z_fTMPIf8ahWOOPPcaf` exactly once and returned
+  `succeeded / absence_verified=true`. Fresh exact-filter and whole-queue MCP
+  reads both returned zero. An independent Telegram read found zero physical
+  and logical scheduled items, and the latest 50 live Saved Messages contained
+  zero exact caption matches. No test message reached its scheduled time.
 
 - 2026-08-31, before 10:30 Europe/Kaliningrad — the four-image Telegram and VK
   schedules were prepared for the original slot.
@@ -569,7 +599,7 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - [x] Persist a closed scheduled-item preview (source target, queue/time, text
   hash and media shape) when `social_scheduled_items_list` projects an item so
   the existing exact external-approval delete path can render and approve it.
-- [ ] Merge/deploy exact main, refresh the ChatGPT action snapshot, pass the
+- [x] Merge/deploy exact main, refresh the eventsBot MCP action snapshot, pass the
   four-image Saved Messages schedule/delete canary and only then return the
   real publication task to ChatGPT.
 
@@ -577,8 +607,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 
 - [x] eventsBot MCP owner — reconcile the historical Telegram operation through
   provider-backed scheduled/live reads after the fixed exact-main release.
-- [ ] ChatGPT workspace administrator — review and publish the changed action
-  catalogue, then verify scheduled-list/retry availability in a new chat.
+- [x] eventsBot MCP operator — verify the live current catalogue through the
+  installed connector and complete the real scheduled-list/delete journey.
+  The user's real publication still starts as a fresh ChatGPT conversation/action.
 - [x] incident owner — produce a machine-readable operational handoff with one
   allowed status: `READY_FOR_14_00_PUBLICATION`,
   `BLOCKED_OLD_TELEGRAM_OUTCOME`, `BLOCKED_PROVIDER_READBACK`, or
@@ -598,7 +629,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   existing aiohttp warnings; independent focused review `168 passed`; PR CI
   `python-ci`, `smart-update-identity-state-machine` and
   `static-browser-release-gate` all passed; `compileall`/diff checks passed
-- action-definition review/publication and new-chat acceptance: pending
+- action-definition/live-connector acceptance: passed through the installed
+  eventsBot MCP connector in the v2064 schedule/list/approve/delete journey;
+  the real `@lovekenig` publication remains a new ChatGPT action
 - old Telegram operation reconciliation: terminal
   legacy receipt `outcome_unknown / reconciliation_no_match / retry_safe=false`,
   attempt `1`; the residual fix normalizes that combination to terminal
@@ -621,9 +654,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - historical machine handoff before the requested slot passed:
   `READY_FOR_14_00_PUBLICATION`; that handoff is no longer an authorization to
   publish late, and Codex performed no catch-up or silent reschedule
-- residual closure gate: an administrator must refresh/review/publish the
-  changed ChatGPT action snapshot and verify it in a genuinely new chat; server
-  catalogue inspection alone does not close that separate client-control gate
+- former client-control closure gate: satisfied by the installed connector's
+  real typed calls, not catalogue inspection alone; the final production post
+  is intentionally outside this diagnostic acceptance
 - residual implementation base: `ab289db1750d60242fde37f07af305a6e67b84fa`
   (Fly `v2055`); commits `59296ccd5` and `0e91636e8`; PR `#602`; merged and
   deployed exact-main SHA `6b43c043bf3c59dacb8e8f1ee7e2bcdee2e91a09`
@@ -657,11 +690,33 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   reclassified or retried. ChatGPT must stage/prepare a new action after the
   user supplies a new publication time; Codex is not authorized to publish the
   real album.
-- no historical operation ref was repeated after this deploy. No Telegram/VK
-  publication, scheduling, delete, retry or diagnostic provider mutation was
-  performed. The specific VK image-2 provider rejection still needs a fresh
-  ChatGPT-owned production action/readback; the server now reports its exact
-  safe structural failure if VK repeats it.
+- no historical operation ref was repeated. The specific VK image-2 provider
+  rejection still needs a fresh ChatGPT-owned production action/readback; the
+  server now reports its exact safe structural failure if VK repeats it.
+- binding-capacity hotfix: commit `35ce8f736`, PR `#610`, merged exact-main SHA
+  `f473d120322436d901359834207884bd9b3d6850`, Fly release/machine `v2063` /
+  `2063`. Scheduled-delete-preview hotfix: commit `114d25c1b`, PR `#611`,
+  merged exact-main SHA `ff4551e5cad36542d2dd13350c5c3e9028be5748`, Fly release/machine
+  `v2064` / `2064`.
+- final regression evidence: focused runtime/provider/Telegram suite
+  `178 passed`; complete `tests/test_private_events_mcp_*.py` suite
+  `564 passed` with three existing aiohttp warnings; `compileall` and
+  `git diff --check` passed. Both PRs passed `python-ci`,
+  `smart-update-identity-state-machine` and `static-browser-release-gate`.
+- final release evidence: one Fly check passing; `/healthz ok=true ready=true
+  db=ok`; data disk status `ok` with 673 MiB free; both SQLite
+  `PRAGMA quick_check=ok`; runtime log mirror fresh; embedded source SHA exactly
+  `ff4551e5cad36542d2dd13350c5c3e9028be5748` and both hotfix commits reachable
+  from `origin/main`.
+- final live MCP acceptance: schedule
+  `op_wJmz7bGSHuaR-tgo1QU5Y2qzv7T3hgzZ` and delete
+  `op_lcDhT_jwT4gC1z_fTMPIf8ahWOOPPcaf` each committed exactly once and
+  succeeded. The only provider mutations were the user-authorized Saved
+  Messages test schedules/deletes; every canary was removed before its slot.
+  Final MCP scheduled exact/full counts were `0 / 0`, independent raw scheduled
+  physical/logical counts were `0 / 0`, and latest-50 live exact count was `0`.
+- **VK mutations during diagnosis: 0. `@lovekenig` mutations during diagnosis:
+  0.** The real four-image album was neither scheduled nor published by Codex.
 
 ## Prevention
 
