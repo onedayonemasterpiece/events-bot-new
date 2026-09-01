@@ -18,6 +18,13 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-01-yandex-storage-cdn-media-outage.md`
+  - Scope: Yandex bucket capacity, immutable secret-candidate retention,
+    event-media materialization, VK/TG media gates and public CDN TLS recovery.
+  - Must not regress: storage provider codes remain observable; a known poster
+    cannot silently become a text-only VK post; current secret candidate is
+    protected during cleanup; closure requires strict CDN plus VK/TG catch-up.
+
 - `INC-2026-09-01-prod-redeploy-systemic-recovery.md`
   - Scope: Fly redeploy/restart recovery, CherryFlash Kaggle resource callbacks,
     terminal ledger/lease reconciliation, pre-handoff watchdog recovery, VK

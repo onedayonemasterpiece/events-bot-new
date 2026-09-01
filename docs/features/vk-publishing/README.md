@@ -32,6 +32,16 @@
   captcha-паузы.
 - Для нового managed `klgdevents` поста Telegram-origin события (`source_post_url=t.me/...`, Telegram chat/message fields или `event_source.source_type=telegram`) silent text-only fallback запрещён. Если после `event.photo_urls`, Telegraph fallback и upload попыток нет ни одного `photo...` attachment, `sync_vk_source_post` должен вернуть ошибку `vk_sync_missing_media_for_telegram_event`, а не создавать `wall.post` с `attachments=0`. Emergency override: `VK_REQUIRE_MEDIA_FOR_TG_SOURCE_POSTS=0`.
 - Для любого нового managed `klgdevents` поста, если после нормализации `event.photo_urls` есть хотя бы одна картинка для upload, но VK photo upload вернул 0 attachments, `sync_vk_source_post` должен fail closed до `wall.post`. Это предотвращает postponed/text-only посты для VK-origin событий с уже доступной media, например когда canonical managed image не загрузилась в VK.
+- Тот же fail-closed boundary распространяется на VK-origin события, у которых
+  уже существует не-дубликатный `EventPoster` в статусе `approved` или
+  `pending_review`, но `event.photo_urls` пуст из-за сбоя materialization/storage:
+  новый `wall.post` блокируется с `vk_sync_missing_materialized_media`. Подлинно
+  text-only VK event без poster candidate по-прежнему разрешён.
+- Catch-up/edit не может объявить старый text-only managed post исправленным,
+  если `photo_urls` уже есть, но повторная VK upload дала ноль attachments:
+  `wall.edit` блокируется с `vk_sync_missing_media_for_existing_post`. Для
+  конкретного инцидента разрешена отдельная проверенная компенсация исходным
+  публичным VK photo attachment с обязательным readback.
 - Для любого нового managed `klgdevents` поста, если часть нормализованных картинок загрузилась, а часть нет, `sync_vk_source_post` тоже fail closed до `wall.post` с `vk_sync_partial_media_upload`. Лучше повторить job и сохранить parity с Telegram/Telegraph, чем создать новый отложенный VK-пост с 2/4 фото. Для редактирования уже существующего поста поведение мягче: частичная неудача re-upload сохраняет прежние вложения и не сжимает медиагруппу.
 - Если public-mode Afisha Engagement успешно генерирует CTA media для нового managed `klgdevents` поста, этот CTA-вариант является единственной primary VK-публикацией этого прохода: один `wall.post` с CTA media. `sync_vk_source_post` не должен сначала создавать обычный пост, а затем вторым действием создавать CTA-вариант; при неуспешном CTA preflight он возвращается к обычной публикации. Уже существующий managed VK URL не является fresh-publication boundary и не должен запускать заднее превращение plain-поста в CTA.
 - Тот же fail-closed contract обязателен для promo `vk_publication`, но отсутствие картинки у промо не считается успешным решением. Runner сначала делает best-effort Telegraph recovery для пустого `event.photo_urls`; если после recovery/upload нет `photo...` attachments, он пишет `FAILED_NO_MEDIA` audit row с `event_id`, `campaign_id`, `activity_id`, `source_post_url`, `photo_urls_count`, `attachments_count` и action для расследования, затем завершает действие `vk_sync_missing_media_for_telegram_event`, а не создаёт text-only promo wall post. Компенсация должна восстанавливать media исходного промо-события и публиковать replacement с картинкой, а не просто удалять/замещать его нерелевантным событием.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -280,7 +281,20 @@ def upload_yandex_public_bytes(
             ContentType=str(content_type or "application/octet-stream"),
             CacheControl=str(cache_control or "public, max-age=31536000"),
         )
-    except Exception:
+    except Exception as exc:
+        response = getattr(exc, "response", {}) or {}
+        metadata = response.get("ResponseMetadata", {}) if isinstance(response, dict) else {}
+        error = response.get("Error", {}) if isinstance(response, dict) else {}
+        status = metadata.get("HTTPStatusCode") if isinstance(metadata, dict) else None
+        code = error.get("Code") if isinstance(error, dict) else None
+        logging.warning(
+            "yandex_storage.put failed bucket=%s path=%s error_type=%s http_status=%s error_code=%s",
+            b,
+            p,
+            type(exc).__name__,
+            status,
+            str(code or "unknown")[:120],
+        )
         return None
     return build_yandex_public_url(bucket=b, object_path=p)
 

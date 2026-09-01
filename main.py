@@ -297,6 +297,7 @@ from static_site_release import (
     max_attempts as static_site_max_attempts,
     merge_request_payload as _merge_static_site_request_payload,
     publish_secret_candidate_archive,
+    prune_secret_candidate_objects,
     prune_immutable_snapshots,
     prune_static_site_outputs,
     request_watermark as _static_site_request_watermark,
@@ -24353,6 +24354,34 @@ async def _finish_static_site_candidate(
             }
             if not required_env["bucket"] or not required_env["access_key_id"] or not required_env["secret_access_key"]:
                 raise StaticSitePermanentError("secret_candidate_publisher_credentials_missing")
+            previous_candidate = await asyncio.to_thread(
+                resolve_current_secret_candidate, db.path
+            )
+            if previous_candidate is not None and _env_flag(
+                "STATIC_SITE_SECRET_CANDIDATE_PRUNE_ENABLED", default=True
+            ):
+                prune_receipt = await asyncio.to_thread(
+                    prune_secret_candidate_objects,
+                    current_token_sha256=previous_candidate.token_sha256,
+                    retain_noncurrent=max(
+                        0,
+                        _env_int("STATIC_SITE_SECRET_CANDIDATE_RETAIN_NONCURRENT", 2),
+                    ),
+                    min_age_hours=max(
+                        1,
+                        _env_int("STATIC_SITE_SECRET_CANDIDATE_PRUNE_MIN_AGE_HOURS", 48),
+                    ),
+                    apply=True,
+                    **required_env,
+                )
+                logging.info(
+                    "static_site_build: secret candidate prune candidates=%s retained=%s deleted_candidates=%s deleted_objects=%s deleted_bytes=%s",
+                    prune_receipt["candidate_count"],
+                    prune_receipt["retained_candidate_count"],
+                    prune_receipt["deleted_candidate_count"],
+                    prune_receipt["deleted_object_count"],
+                    prune_receipt["deleted_bytes"],
+                )
             publication_workspace = _static_site_publication_workspace()
             publication_root = Path(publication_workspace.name)
             publication_receipt = await asyncio.to_thread(

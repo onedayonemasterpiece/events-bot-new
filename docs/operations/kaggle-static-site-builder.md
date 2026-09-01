@@ -321,11 +321,22 @@ ENABLE_STATIC_SITE_KAGGLE_BUILDER=0
 ENABLE_STATIC_SITE_SECRET_PUBLISH=0
 ENABLE_STATIC_SITE_ROOT_PROMOTION=0
 STATIC_SITE_ROOT_PROMOTION_MODE=plan
+STATIC_SITE_SECRET_CANDIDATE_PRUNE_ENABLED=1
+STATIC_SITE_SECRET_CANDIDATE_RETAIN_NONCURRENT=2
+STATIC_SITE_SECRET_CANDIDATE_PRUNE_MIN_AGE_HOURS=48
 # local-only fallback; production identity is baked into the Fly image
 STATIC_SITE_REPO_SHA=<exact clean pushed SHA>
 STATIC_SITE_SECRET_CANDIDATE_ARTIFACT_RESEARCH=0
 STATIC_SITE_SECRET_CANDIDATE_REQUIRE_AUTHORIZED_SEARCH=0
 ```
+
+Before a new secret candidate upload, the publisher inventories `_review/`
+and applies durable-current-pointer-aware retention only when a valid current-candidate
+receipt exists. It protects that exact prefix by token SHA-256, keeps the two
+newest non-current rollback candidates and every candidate younger than 48
+hours, and deletes only older non-current prefixes. Logs and receipts contain
+only hashes/counts/bytes, never bearer tokens. Missing current-prefix evidence
+fails closed before any deletion.
 
 The Kaggle production-candidate invocation must include
 `--profile production-candidate --catalog-mode full --snapshot-manifest ...

@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
+  error codes instead of silently collapsing to `None`, and new managed VK
+  posts fail closed when an accepted/pending poster exists but storage failed
+  to materialize its public URL. Secret-candidate publication now prunes only
+  safely superseded `_review/` trees while protecting the durable current token
+  hash, two rollback candidates and a 48-hour grace cohort. This prevents the
+  50 GiB bucket-capacity outage from silently producing text-only VK posts or
+  recurring through unbounded immutable-candidate accumulation. Existing
+  text-only posts also remain failed (rather than falsely repaired) when a
+  non-empty canonical media set yields zero VK attachments. Regression contract:
+  `INC-2026-09-01-yandex-storage-cdn-media-outage`.
+
 - Fixed: durable Telegram provider bindings no longer consume a new encrypted
   SQLite row every time the same target, message, scheduled item or provider
   media is read. Secret-bound stable refs now upsert the latest detached

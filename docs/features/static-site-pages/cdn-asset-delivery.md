@@ -206,4 +206,13 @@ exact WebPs, prompt and review remain under ignored
 - CDN/static-site bucket: `kenigevents.ru`.
 - New server-side media uploads prefer `YC_STORAGE_BUCKET`; if it is unset they fall back to `KENIGEVENTS_SITE_YC_BUCKET`, then `kenigevents.ru`.
 - New persisted Yandex media URLs use `YC_STORAGE_PUBLIC_BASE_URL` / `PUBLIC_ASSET_BASE_URL`; for bucket `kenigevents.ru` the default public URL is `https://static.kenigevents.ru/<path>`.
+- Provider write exceptions must retain a bounded error type, HTTP status and
+  provider code in runtime logs. Returning only `None` without this evidence is
+  forbidden because capacity errors such as `BucketMaxSizeExceeded` otherwise
+  look like ordinary source-media misses.
+- The bucket's immutable `_review/` trees use durable-current-pointer-aware retention before a
+  new secret-candidate upload. The durable current candidate is protected by
+  token hash; the two newest non-current candidates and every tree younger than
+  48 hours are retained. Missing current-prefix evidence fails closed, and no
+  bearer token is logged.
 - Cleanup remains dual-compatible: stored URLs/paths from both `kenigevents` and `kenigevents.ru` are queued in `supabase_delete_queue`, and `flush_supabase_delete_queue()` deletes Yandex objects from both buckets before falling back to Supabase removal for Supabase buckets.
