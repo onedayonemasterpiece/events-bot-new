@@ -157,6 +157,29 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   A second exact Telethon sequence reproduced the four-upload, album-send,
   raw-history and group-delete operations with IDs `5–8`; it also finished at
   zero queue items. No `@lovekenig` or VK mutation was made.
+- 2026-09-01 08:09–08:18 UTC — PR `#608` merged and exact `origin/main`
+  `ad5bac0d94bce506f20280adf6757954f80c4208` reached Fly release `v2061`.
+  The embedded SHA, `/healthz`, both SQLite `quick_check` results and runtime
+  mirror passed. Empty Saved Messages scheduled history now read successfully
+  through MCP with canonical `InputPeerSelf`.
+- 2026-09-01 08:18 UTC — a second four-image MCP canary reserved
+  `op_kUmgPCArGPWR6bd2gqdGimh2jOWSahww` and crossed the Telegram mutation
+  boundary exactly once. Telegram created one native scheduled album at
+  `2026-09-01T08:45:00Z`, physical IDs `9–12`, caption SHA-256
+  `68e9c7e168bad0e84271f8d736d2e5561a85f1016f2ac7407b37a843fa27e519`
+  and `media_count=4`, but MCP again returned
+  `outcome_unknown / provider_error`. The now-safe provider log classified the
+  failure as `ProviderBindingError` after mutation; a non-empty scheduled-list
+  call failed with the same class before mutation. The exact canary group was
+  immediately deleted by the authorized provider cleanup and a fresh raw read
+  proved zero scheduled items. No `@lovekenig` or VK mutation was made.
+- 2026-09-01 08:25 UTC — isolated auth-DB forensics proved `tg_item` was exactly
+  at its hard 20,000-row ceiling. Decryption/counting found only 11,552 unique
+  native item coordinates and 8,448 duplicate bindings (up to 24 copies for one
+  identity). `tg_asset` contained 15,435 rows: 7,522 immutable verified uploads
+  plus 7,913 read bindings representing only 1,018 unique read identities
+  (6,895 duplicates, up to 92 copies). The album mutation succeeded; minting
+  its readback item ref then raised `provider reference capacity exhausted`.
 
 - 2026-08-31, before 10:30 Europe/Kaliningrad — the four-image Telegram and VK
   schedules were prepared for the original slot.
@@ -309,6 +332,16 @@ plus these ordered 1122×1402 PNG SHA-256 values:
     canonical `InputPeerSelf` completed schedule, read and delete. Raw Saved
     Messages scheduled-history/delete now construct `InputPeerSelf` explicitly;
     ordinary send/capability behavior is unchanged.
+14. **Proven durable provider-binding capacity defect:** every Telegram
+    target/item/read-media projection minted a random inner ref even when the
+    native identity was unchanged. Production `tg_item` reached its fixed
+    20,000-row ceiling with 8,448 duplicate rows. After Telegram successfully
+    scheduled the v2061 canary, read-after-write failed while minting its item
+    binding; the same full map made every non-empty scheduled-list projection
+    fail. The opaque error boundary then represented the post-mutation binding
+    failure as `outcome_unknown / provider_error`. This was not a four-image
+    limit: target capabilities continued to report `max_media_items=10` and
+    Telegram created the native four-image album correctly.
 
 ## Contributing Factors
 
@@ -333,6 +366,11 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - Fake-provider tests represented Saved Messages with the same generic entity
   shape as normal peers, so they did not enforce the provider's canonical
   `InputPeerSelf` constructor for raw scheduled-history/delete methods.
+- Durable binding tests covered restart survival but not repeated projection of
+  one native identity or operation when a per-kind map was already at capacity.
+  Random refs turned ordinary reads into storage growth and obscured the exact
+  local `provider reference capacity exhausted` cause behind the public safe
+  error boundary.
 
 ## Automation Contract
 
@@ -348,6 +386,8 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   bounds, redaction or action-definition publication;
 - changing attempt-budget dimensions, prepare/commit/status state semantics,
   commit idempotence, safe pre-provider errors or ingress audit stages;
+- changing Telegram opaque target/item/read-media identity, retention or
+  capacity behavior;
 - reconciling or retrying an outcome-unknown scheduled publication.
 
 ### Affected surfaces
@@ -411,6 +451,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - prove the exact two-field commit creates one operation/provider attempt,
   replay returns the same durable receipt without another provider call, and a
   pre-provider budget denial exposes a bounded code plus exact audit stages;
+- repeatedly project the same Telegram target, ordinary/scheduled item and
+  read-media identity across store restarts; prove stable refs and bounded row
+  counts while staged upload refs remain immutable and distinct;
 - after exact-main deploy and action refresh, run one four-fresh-image Saved
   Messages/test-channel schedule canary through the same MCP, prove one logical
   album, delete it immediately and prove scheduled/live absence. Never use
@@ -494,6 +537,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   state; make exact commit replay idempotent without a second adapter call.
 - [x] Preserve bounded pre-provider error codes and commit-ingress audit stages
   instead of collapsing every rejection to a generic invalid argument.
+- [x] Replace random high-churn Telegram target/item/read-media inner refs with
+  secret-bound stable native-identity refs, retain random immutable upload-stage
+  refs, and add immediate capacity headroom plus repeat-read row-count tests.
 - [ ] Merge/deploy exact main, refresh the ChatGPT action snapshot, pass the
   four-image Saved Messages schedule/delete canary and only then return the
   real publication task to ChatGPT.

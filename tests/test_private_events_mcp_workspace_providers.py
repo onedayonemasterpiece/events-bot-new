@@ -471,6 +471,108 @@ def test_telegram_scheduled_item_namespace_survives_store_restart(
     assert restored.scheduled is True
 
 
+def test_telegram_high_churn_bindings_have_headroom_and_stable_native_refs(
+    config, tmp_path
+) -> None:
+    path = tmp_path / "telegram-binding-capacity.sqlite"
+    isolated = replace(
+        config,
+        auth_database_path=str(path),
+        universal_social_enabled=True,
+        universal_social_telegram_enabled=True,
+        universal_social_post_enabled=True,
+    )
+    refs = InMemoryTelegramOpaqueRefStore(isolated)
+    targets = {
+        refs.mint_target(
+            entity={"id": 42},
+            kind=SocialTargetKind.CHANNEL,
+            title="Capacity channel",
+            canonical_handle="capacity_channel",
+            profile_link="https://t.me/capacity_channel",
+            is_self=False,
+        ).target_ref
+        for _ in range(25)
+    }
+    assert len(targets) == 1
+    target = refs.resolve_target(next(iter(targets)))
+
+    ordinary_refs = {
+        refs.mint_item(target_ref=target.target_ref, message_id=777).item_ref
+        for _ in range(25)
+    }
+    scheduled = refs.mint_item(
+        target_ref=target.target_ref,
+        message_id=777,
+        scheduled=True,
+    )
+    assert len(ordinary_refs) == 1
+    assert scheduled.item_ref not in ordinary_refs
+    assert refs._items.maximum == 100_000
+    assert refs._assets.maximum == 100_000
+
+    media = SimpleNamespace(
+        photo=SimpleNamespace(id=9001, access_hash=12345)
+    )
+    asset_refs = {
+        refs.mint_read_asset(
+            target_ref=target.target_ref,
+            media=media,
+            role=MediaRole.IMAGE,
+            media_kind="photo",
+            item_message_id=777,
+        )
+        for _ in range(25)
+    }
+    assert len(asset_refs) == 1
+
+    restarted = InMemoryTelegramOpaqueRefStore(isolated)
+    restarted_target = restarted.mint_target(
+        entity={"id": 42},
+        kind=SocialTargetKind.CHANNEL,
+        title="Capacity channel",
+        canonical_handle="capacity_channel",
+        profile_link="https://t.me/capacity_channel",
+        is_self=False,
+    )
+    assert restarted_target.target_ref == target.target_ref
+    assert (
+        restarted.mint_item(
+            target_ref=target.target_ref, message_id=777
+        ).item_ref
+        in ordinary_refs
+    )
+    assert (
+        restarted.mint_read_asset(
+            target_ref=target.target_ref,
+            media=media,
+            role=MediaRole.IMAGE,
+            media_kind="photo",
+            item_message_id=777,
+        )
+        in asset_refs
+    )
+    uploads = {
+        restarted.mint_upload_asset(
+            role=MediaRole.IMAGE,
+            upload=SimpleNamespace(expires_at=None),
+        ).asset_ref
+        for _ in range(2)
+    }
+    assert len(uploads) == 2
+
+    with sqlite3.connect(path) as conn:
+        counts = dict(
+            conn.execute(
+                "SELECT binding_kind, COUNT(*) FROM social_provider_binding "
+                "GROUP BY binding_kind"
+            )
+        )
+    assert counts["tg_target"] == 1
+    assert counts["tg_item"] == 2
+    assert counts["tg_asset"] == 3
+
+
 def test_telegram_media_fingerprint_ignores_rotating_file_reference(
     config, tmp_path
 ) -> None:
