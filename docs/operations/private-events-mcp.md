@@ -826,7 +826,7 @@ allow both the exact OpenAI host and the Azure Blob suffix:
 
 ```text
 PRIVATE_EVENTS_MCP_MEDIA_ROOT=/data/private-events-mcp-media
-PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS=files.oaiusercontent.com,*.blob.core.windows.net
+PRIVATE_EVENTS_MCP_MEDIA_ALLOWED_HOSTS=*.oaiusercontent.com,*.blob.core.windows.net
 PRIVATE_EVENTS_MCP_MEDIA_MAX_ASSET_BYTES=31457280
 PRIVATE_EVENTS_MCP_DOCUMENT_MAX_ASSET_BYTES=50331648
 PRIVATE_EVENTS_MCP_MEDIA_MAX_STORE_BYTES=134217728

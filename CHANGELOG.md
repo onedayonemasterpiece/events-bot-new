@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Fixed: Private `eventsBot` MCP media ingress now follows OpenAI's documented
+  ChatGPT/Codex upload-domain family (`*.oaiusercontent.com`) instead of the
+  obsolete single-host assumption `files.oaiusercontent.com`. The existing
+  HTTPS-only, public-DNS, no-redirect, bounded streaming and byte-type checks
+  remain mandatory; Azure ChatGPT uploads retain the stricter read-only SAS
+  validation. Regression contract:
+  `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
+
 - Fixed: Private `eventsBot` MCP no longer lets unrelated Telegram/VK incident
   attempts exhaust the caller-wide daily bucket while the intended target and
   action remain below their configured limit: global/principal abuse ceilings
