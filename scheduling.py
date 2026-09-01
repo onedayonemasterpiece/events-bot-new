@@ -1930,7 +1930,7 @@ async def _popular_review_failed_session_count_today(
     async with db.raw_conn() as conn:
         cur = await conn.execute(
             """
-            SELECT status, selection_params
+            SELECT status, selection_params, kaggle_dataset, kaggle_kernel_ref
             FROM videoannounce_session
             WHERE profile_key = 'popular_review'
               AND created_at >= ?
@@ -1941,8 +1941,12 @@ async def _popular_review_failed_session_count_today(
         )
         rows = await cur.fetchall()
     count = 0
-    for status, selection_params_raw in rows:
+    for status, selection_params_raw, dataset, kernel_ref in rows:
         if str(status or "").strip() != "FAILED":
+            continue
+        # Runtime/deploy loss before a real Kaggle handoff is not a renderer
+        # attempt and must not consume the bounded remote retry budget.
+        if not str(dataset or "").strip() or str(kernel_ref or "").strip().startswith("local:"):
             continue
         params: dict[str, Any] = {}
         if isinstance(selection_params_raw, str) and selection_params_raw.strip():
@@ -3128,6 +3132,17 @@ async def maybe_dispatch_popular_review_watchdog(db: Any, bot: Any) -> bool:
     )
     if now_local <= scheduled_local + timedelta(seconds=_popular_review_watchdog_grace_seconds()):
         return False
+
+    # Startup recovery deliberately gives a just-created pre-handoff session
+    # a grace window.  A deploy can end after that one startup pass, so run the
+    # idempotent recovery sweep from the watchdog as well; otherwise the local
+    # RENDERING row can remain orphaned forever.
+    try:
+        from video_announce.poller import resume_rendering_sessions
+
+        await resume_rendering_sessions(db, bot)
+    except Exception:
+        logging.exception("SCHED video_popular_review watchdog recovery sweep failed")
 
     day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
     day_end_local = day_start_local + timedelta(days=1)

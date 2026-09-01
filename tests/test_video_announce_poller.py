@@ -89,7 +89,18 @@ async def test_error_kernel_with_intro_only_output_does_not_false_green_cherryfl
     async def noop_status_message(*args, **kwargs):  # noqa: ANN002,ANN003
         return None
 
+    reconciled: list[tuple[str, str]] = []
+
+    async def fake_reconcile(_db, *, run_id: str, message: str):  # noqa: ANN001
+        reconciled.append((run_id, message))
+        return {"status": "failed_reconciled", "released_resource_count": 1}
+
     monkeypatch.setattr(poller_module, "update_status_message", noop_status_message)
+    monkeypatch.setattr(
+        poller_module,
+        "reconcile_kaggle_run_failure_from_host",
+        fake_reconcile,
+    )
 
     await poller_module.run_kernel_poller(
         db,
@@ -115,6 +126,12 @@ async def test_error_kernel_with_intro_only_output_does_not_false_green_cherryfl
         assert refreshed.status == VideoAnnounceSessionStatus.FAILED
         assert refreshed.video_url is None
         assert "true3d renderer dependency missing" in (refreshed.error or "")
+    assert reconciled == [
+        (
+            f"videoannounce:{session_id}",
+            "Kaggle provider terminal status: error: approved true3d renderer dependency missing",
+        )
+    ]
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -162,6 +179,43 @@ async def test_resume_rendering_sessions_fails_local_kernel_refs(monkeypatch, tm
             "Сессия переведена в FAILED; нужен повторный запуск.",
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_resume_rendering_sessions_fails_stale_pre_handoff_without_notify_target(
+    monkeypatch, tmp_path: Path
+):
+    db = Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+
+    async with db.get_session() as session:
+        sess = VideoAnnounceSession(
+            status=VideoAnnounceSessionStatus.RENDERING,
+            profile_key="popular_review",
+            kaggle_kernel_ref="zigomaro/cherryflash-video-lane-1",
+            kaggle_dataset=None,
+            started_at=datetime.now(timezone.utc) - timedelta(minutes=30),
+        )
+        session.add(sess)
+        await session.commit()
+        await session.refresh(sess)
+        session_id = int(sess.id)
+
+    def _should_not_poll(*args, **kwargs):  # noqa: ANN002,ANN003
+        raise AssertionError("pre-handoff orphan must not start a Kaggle poller")
+
+    monkeypatch.setattr(poller_module, "start_kernel_poller_task", _should_not_poll)
+    bot = _DummyBot()
+
+    recovered = await poller_module.resume_rendering_sessions(db, bot)
+
+    assert recovered == 0
+    async with db.get_session() as session:
+        refreshed = await session.get(VideoAnnounceSession, session_id)
+        assert refreshed is not None
+        assert refreshed.status == VideoAnnounceSessionStatus.FAILED
+        assert refreshed.error == "runtime restart before Kaggle handoff; rerun required"
+    assert bot.messages == []
 
 
 @pytest.mark.asyncio

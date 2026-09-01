@@ -18,6 +18,16 @@
 
 ## Активные regression contracts
 
+- `INC-2026-09-01-prod-redeploy-systemic-recovery.md`
+  - Scope: Fly redeploy/restart recovery, CherryFlash Kaggle resource callbacks,
+    terminal ledger/lease reconciliation, pre-handoff watchdog recovery, VK
+    storage admission and same-day compensating delivery.
+  - Must not regress: an ambiguous resource-acquire timeout must be retried
+    idempotently, terminal provider failure must release its exact lease, a
+    startup grace skip must be revisited periodically, deploy orphans must not
+    consume the remote retry budget, and closure requires verified CherryFlash
+    plus VK catch-up after restoring the volume above subsystem admission.
+
 - `INC-2026-08-31-mcp-scheduled-readback-reschedule.md`
   - Scope: private eventsBot MCP provider deadline/finalization, restart-safe
     Telegram scheduled/live reconciliation, logical scheduled-queue reads,
