@@ -2201,6 +2201,15 @@ async def test_scheduled_items_read_is_scope_bound_logical_and_redacted(runtime)
     target = service._mint_ref(
         "target", "native-scheduled-target", "telegram", principal
     )
+    service._store_target_preview(
+        target,
+        {
+            "platform": "telegram",
+            "target_ref": target,
+            "kind": "self",
+            "display_name": "Saved messages",
+        },
+    )
     request = validate_scheduled_items_request(
         {
             "platform": "telegram",
@@ -2234,6 +2243,33 @@ async def test_scheduled_items_read_is_scope_bound_logical_and_redacted(runtime)
     assert "native-scheduled" not in encoded
     assert "provider_id" not in encoded
     assert "peer_id" not in encoded
+
+    prepared = await service.prepare(
+        validate_prepare_request(
+            {
+                "platform": "telegram",
+                "action": "delete",
+                "idempotency_key": "scheduled-album-delete-preview-123",
+                "item_ref": result["items"][0]["item_ref"],
+            }
+        ),
+        context(),
+    )
+    preview = service.approval_preview(
+        preparation_ref=prepared["preparation_ref"],
+        action_digest=prepared["action_digest"],
+    )
+    assert preview["source_target"]["display_name"] == "Saved messages"
+    assert preview["item"] == {
+        "item_ref": result["items"][0]["item_ref"],
+        "target_ref": target,
+        "kind": "scheduled_message",
+        "scheduled_at": "2026-08-31T12:00:00Z",
+        "queue": "scheduled",
+        "text_sha256": "a" * 64,
+        "media_count": 4,
+        "media_roles": ["image"] * 4,
+    }
 
 
 @pytest.mark.asyncio

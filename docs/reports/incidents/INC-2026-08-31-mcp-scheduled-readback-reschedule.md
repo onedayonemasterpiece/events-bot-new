@@ -180,6 +180,24 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   plus 7,913 read bindings representing only 1,018 unique read identities
   (6,895 duplicates, up to 92 copies). The album mutation succeeded; minting
   its readback item ref then raised `provider reference capacity exhausted`.
+- 2026-09-01 10:27–10:31 UTC — PR `#610` passed all three CI gates; exact
+  `origin/main` `f473d120322436d901359834207884bd9b3d6850` reached Fly release
+  `v2063`. Health, exact embedded SHA, both SQLite `quick_check` results and the
+  runtime mirror passed. The real MCP then staged four fresh verified PNGs,
+  prepared and committed `op_Gzo2EsTLuy4AIGUQlUYg0eSgKj3qcW_F` exactly once,
+  and returned `succeeded` with verified read-after-write. A fresh scheduled
+  read found exactly one native logical album at `2026-09-01T11:00:00Z`, caption
+  SHA-256 `854c8b80d74ebda76f8a3742c98e047572c1d0c6390e3dec50977def4877d082`
+  and `media_count=4`.
+- 2026-09-01 10:31 UTC — the typed MCP delete preparation correctly required
+  external operator approval, but its approval preview failed closed as
+  `human item preview is unavailable`. Root-cause tracing proved
+  `social_scheduled_items_list` minted a usable outer item ref but, unlike the
+  ordinary read path, never stored the corresponding closed item preview. The
+  exact canary group (physical IDs `13–16`) was immediately removed through the
+  authorized emergency provider cleanup and raw history plus MCP both proved a
+  zero-item queue. The canary did not reach its scheduled time; no `@lovekenig`
+  or VK mutation occurred.
 
 - 2026-08-31, before 10:30 Europe/Kaliningrad — the four-image Telegram and VK
   schedules were prepared for the original slot.
@@ -342,6 +360,14 @@ plus these ordered 1122×1402 PNG SHA-256 values:
     failure as `outcome_unknown / provider_error`. This was not a four-image
     limit: target capabilities continued to report `max_media_items=10` and
     Telegram created the native four-image album correctly.
+15. **Proven scheduled-delete approval-preview gap:** scheduled-list projection
+    minted and returned principal-bound item refs but did not call the preview
+    persistence used by ordinary item reads. Delete preparation therefore
+    resolved the exact scheduled binding, while the independent browser
+    approval correctly refused to render an opaque-only destructive action as
+    `human item preview is unavailable`. The provider delete method itself was
+    not reached by MCP; the canary was cleaned through the separately authorized
+    exact provider path before its slot.
 
 ## Contributing Factors
 
@@ -540,6 +566,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - [x] Replace random high-churn Telegram target/item/read-media inner refs with
   secret-bound stable native-identity refs, retain random immutable upload-stage
   refs, and add immediate capacity headroom plus repeat-read row-count tests.
+- [x] Persist a closed scheduled-item preview (source target, queue/time, text
+  hash and media shape) when `social_scheduled_items_list` projects an item so
+  the existing exact external-approval delete path can render and approve it.
 - [ ] Merge/deploy exact main, refresh the ChatGPT action snapshot, pass the
   four-image Saved Messages schedule/delete canary and only then return the
   real publication task to ChatGPT.

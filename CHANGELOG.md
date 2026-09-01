@@ -11,7 +11,10 @@
   can recover immediately; 35-day expiry cleanup remains enforced. This fixes
   false `provider_error` / `outcome_unknown` receipts after Telegram had
   successfully created a scheduled album and makes non-empty scheduled queue
-  readback available again. Regression contract:
+  readback available again. Scheduled-list projections now also persist a
+  closed human approval preview containing the source target, schedule time,
+  text hash and media shape, so their returned item refs can pass the existing
+  externally approved exact-delete flow. Regression contract:
   `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
 
 - Fixed: systemic post-redeploy recovery for the 2026-09-01 production

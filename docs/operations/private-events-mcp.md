@@ -514,6 +514,13 @@ upload URLs never cross the public boundary. The tool reuses the existing
 `telegram:schedule` / `vk:schedule` scope families; it does not require a new
 OAuth consent family.
 
+Each projected scheduled item also stores an encrypted, closed human-approval
+preview for the same principal: source target, scheduled queue/time, text
+SHA-256, media count and ordered roles. This is the minimum exact evidence that
+lets the returned `item_ref` enter the existing externally approved delete
+flow. It adds no delete permission and does not store or disclose provider
+native IDs or an otherwise hidden caption.
+
 Provider adapters own their transport/session deadlines and durable uncertainty
 classification. Runtime must not use an equal outer deadline that cancels an
 adapter before it finalizes its claimed provider operation. Any outer protocol
