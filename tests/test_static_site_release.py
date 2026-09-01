@@ -31,6 +31,7 @@ from static_site_release import (
     make_request_payload,
     merge_request_payload,
     publish_secret_candidate_archive,
+    prune_secret_candidate_objects,
     prune_immutable_snapshots,
     prune_static_site_outputs,
     resolve_build_clock,
@@ -40,6 +41,71 @@ from static_site_release import (
     validate_snapshot,
     validate_vector_barrier,
 )
+
+
+def test_secret_candidate_prune_protects_current_recent_and_rollback() -> None:
+    current = "A" * 43
+    rollback = "B" * 43
+    recent = "C" * 43
+    old = "D" * 43
+    now = datetime(2026, 9, 1, 20, 0, tzinfo=timezone.utc)
+
+    class Client:
+        def __init__(self) -> None:
+            self.deleted: list[str] = []
+
+        def list_objects_v2(self, **_kwargs):
+            return {
+                "IsTruncated": False,
+                "Contents": [
+                    {"Key": f"_review/{current}/index.html", "Size": 10, "LastModified": now - timedelta(days=10)},
+                    {"Key": f"_review/{rollback}/index.html", "Size": 20, "LastModified": now - timedelta(days=3)},
+                    {"Key": f"_review/{recent}/index.html", "Size": 30, "LastModified": now - timedelta(hours=12)},
+                    {"Key": f"_review/{old}/index.html", "Size": 40, "LastModified": now - timedelta(days=20)},
+                    {"Key": f"_review/{old}/asset.js", "Size": 50, "LastModified": now - timedelta(days=20)},
+                ],
+            }
+
+        def delete_objects(self, **kwargs):
+            self.deleted.extend(item["Key"] for item in kwargs["Delete"]["Objects"])
+            return {}
+
+    client = Client()
+    receipt = prune_secret_candidate_objects(
+        bucket="kenigevents.ru",
+        current_token_sha256=hashlib.sha256(current.encode()).hexdigest(),
+        retain_noncurrent=2,
+        min_age_hours=48,
+        now=now,
+        apply=True,
+        s3_client=client,
+    )
+
+    assert sorted(client.deleted) == [
+        f"_review/{old}/asset.js",
+        f"_review/{old}/index.html",
+    ]
+    assert receipt["deleted_candidate_count"] == 1
+    assert receipt["deleted_object_count"] == 2
+    assert receipt["deleted_bytes"] == 90
+    assert current not in json.dumps(receipt)
+
+
+def test_secret_candidate_prune_refuses_missing_current_prefix() -> None:
+    class Client:
+        def list_objects_v2(self, **_kwargs):
+            return {"IsTruncated": False, "Contents": []}
+
+        def delete_objects(self, **_kwargs):
+            raise AssertionError("delete must not run without the durable current prefix")
+
+    with pytest.raises(StaticSitePermanentError, match="current_prefix_missing"):
+        prune_secret_candidate_objects(
+            bucket="kenigevents.ru",
+            current_token_sha256="a" * 64,
+            apply=True,
+            s3_client=Client(),
+        )
 
 
 def _current_candidate_receipt(

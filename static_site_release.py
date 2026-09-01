@@ -20,7 +20,7 @@ import tarfile
 import time as unix_time
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timezone, timedelta
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote, urlsplit
@@ -2855,6 +2855,134 @@ def publish_secret_candidate_archive(
         public_url=public_url,
         verified_at=iso_utc(),
     )
+
+
+def prune_secret_candidate_objects(
+    *,
+    bucket: str,
+    current_token_sha256: str,
+    retain_noncurrent: int = 2,
+    min_age_hours: int = 48,
+    now: datetime | None = None,
+    apply: bool = False,
+    endpoint: str = "https://storage.yandexcloud.net",
+    region: str = "ru-central1",
+    access_key_id: str = "",
+    secret_access_key: str = "",
+    s3_client: Any | None = None,
+) -> dict[str, Any]:
+    """Prune old immutable review trees without exposing bearer tokens.
+
+    The durable current candidate is selected only by its token SHA-256.  Two
+    recent rollback candidates and every candidate inside the grace interval
+    are retained.  No deletion is possible without a valid current pointer.
+    """
+
+    if not re.fullmatch(r"[0-9a-f]{64}", str(current_token_sha256 or "")):
+        raise StaticSitePermanentError("secret_candidate_prune_current_hash_invalid")
+    keep_count = max(0, min(20, int(retain_noncurrent)))
+    grace_hours = max(1, min(24 * 30, int(min_age_hours)))
+    current_time = now or utc_now()
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+    current_time = current_time.astimezone(timezone.utc)
+    if s3_client is None:
+        import boto3
+
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            region_name=region,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+        )
+
+    candidates: dict[str, dict[str, Any]] = {}
+    continuation: str | None = None
+    while True:
+        kwargs: dict[str, Any] = {"Bucket": bucket, "Prefix": "_review/", "MaxKeys": 1000}
+        if continuation:
+            kwargs["ContinuationToken"] = continuation
+        response = s3_client.list_objects_v2(**kwargs)
+        for item in response.get("Contents") or []:
+            key = str(item.get("Key") or "")
+            match = re.match(rf"^_review/({SECRET_CANDIDATE_TOKEN_RE})/", key)
+            if not match:
+                continue
+            token = match.group(1)
+            modified = item.get("LastModified")
+            if not isinstance(modified, datetime):
+                raise StaticSiteRetryableError("secret_candidate_prune_last_modified_missing")
+            if modified.tzinfo is None:
+                modified = modified.replace(tzinfo=timezone.utc)
+            entry = candidates.setdefault(
+                token,
+                {"keys": [], "bytes": 0, "last_modified": modified.astimezone(timezone.utc)},
+            )
+            entry["keys"].append(key)
+            entry["bytes"] += int(item.get("Size") or 0)
+            entry["last_modified"] = max(
+                entry["last_modified"], modified.astimezone(timezone.utc)
+            )
+        if not response.get("IsTruncated"):
+            break
+        continuation = str(response.get("NextContinuationToken") or "")
+        if not continuation:
+            raise StaticSiteRetryableError("secret_candidate_prune_listing_token_missing")
+
+    current_tokens = [
+        token
+        for token in candidates
+        if hashlib.sha256(token.encode()).hexdigest() == current_token_sha256
+    ]
+    if len(current_tokens) != 1:
+        raise StaticSitePermanentError("secret_candidate_prune_current_prefix_missing")
+    current_token = current_tokens[0]
+    ordered_noncurrent = sorted(
+        (item for item in candidates.items() if item[0] != current_token),
+        key=lambda item: item[1]["last_modified"],
+        reverse=True,
+    )
+    retained_tokens = {current_token}
+    retained_tokens.update(token for token, _entry in ordered_noncurrent[:keep_count])
+    cutoff = current_time - timedelta(hours=grace_hours)
+    retained_tokens.update(
+        token
+        for token, entry in ordered_noncurrent
+        if entry["last_modified"] >= cutoff
+    )
+    deleted_objects = 0
+    deleted_bytes = 0
+    deleted_candidate_hashes: list[str] = []
+    for token, entry in ordered_noncurrent:
+        if token in retained_tokens:
+            continue
+        keys = list(entry["keys"])
+        if apply:
+            for start in range(0, len(keys), 1000):
+                response = s3_client.delete_objects(
+                    Bucket=bucket,
+                    Delete={
+                        "Objects": [{"Key": key} for key in keys[start : start + 1000]],
+                        "Quiet": True,
+                    },
+                )
+                if response.get("Errors"):
+                    raise StaticSiteRetryableError("secret_candidate_prune_delete_failed")
+        deleted_objects += len(keys)
+        deleted_bytes += int(entry["bytes"])
+        deleted_candidate_hashes.append(hashlib.sha256(token.encode()).hexdigest())
+    return {
+        "schema_version": "static_secret_candidate_prune_v1",
+        "applied": bool(apply),
+        "candidate_count": len(candidates),
+        "retained_candidate_count": len(retained_tokens),
+        "deleted_candidate_count": len(deleted_candidate_hashes),
+        "deleted_object_count": deleted_objects,
+        "deleted_bytes": deleted_bytes,
+        "deleted_candidate_hashes": deleted_candidate_hashes,
+        "current_token_sha256": current_token_sha256,
+    }
 
 
 def classify_failure(exc: BaseException) -> FailureDisposition:

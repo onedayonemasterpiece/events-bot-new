@@ -7259,6 +7259,34 @@ async def _event_has_telegram_origin(event: Event, db: Database | None) -> bool:
         return False
 
 
+async def _event_has_unmaterialized_poster_candidate(
+    event: Event, db: Database | None
+) -> bool:
+    """Return whether canonical candidate media exists but has no public URL yet.
+
+    A VK-origin event is allowed to be genuinely text-only.  It must not be
+    published text-only when the media gate already knows about an approved or
+    pending poster whose public materialization was lost to a storage outage.
+    """
+
+    event_id = getattr(event, "id", None)
+    if not db or not event_id or list(getattr(event, "photo_urls", None) or []):
+        return False
+    async with db.get_session() as session:
+        candidate = (
+            await session.execute(
+                select(EventPoster.id)
+                .where(
+                    EventPoster.event_id == int(event_id),
+                    EventPoster.review_status.in_(("approved", "pending_review")),
+                    EventPoster.duplicate_of_id.is_(None),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    return candidate is not None
+
+
 async def sync_vk_source_post(
     event: Event,
     text: str,
@@ -7494,6 +7522,7 @@ async def sync_vk_source_post(
             event, db, bot=bot, vk_api_fn=_vk_api
         )
         existing = ""
+        existing_has_photos = False
         try:
             ids = _vk_owner_and_post_id(existing_vk_post_url)
             if ids:
@@ -7503,8 +7532,23 @@ async def sync_vk_source_post(
                 items = _vk_wall_get_by_id_items(response)
                 if items:
                     existing = items[0].get("text", "")
+                    existing_has_photos = _vk_wall_item_has_photo(items[0])
         except Exception as e:
             logging.error("failed to fetch existing VK post: %s", e)
+
+        if (
+            photo_upload_expected
+            and not attachments
+            and not existing_has_photos
+            and not photo_upload_skipped_missing_user_token
+        ):
+            logging.error(
+                "sync_vk_source_post blocked text-only existing post event_id=%s source_url=%s expected_photos=%s",
+                event.id,
+                getattr(event, "source_post_url", None),
+                len(photo_urls_for_publish),
+            )
+            raise RuntimeError("vk_sync_missing_media_for_existing_post")
 
         # Extract previous text versions
         existing_main = existing.split(VK_SOURCE_FOOTER)[0].rstrip()
@@ -7583,6 +7627,9 @@ async def sync_vk_source_post(
         message = build_vk_source_message(
             event, text, festival=festival, calendar_url=calendar_line_value
         )
+        has_unmaterialized_candidate = (
+            await _event_has_unmaterialized_poster_candidate(event, db)
+        )
         if (
             not attachments
             and (
@@ -7591,6 +7638,7 @@ async def sync_vk_source_post(
                     and await _event_has_telegram_origin(event, db)
                 )
                 or (photo_upload_expected and not photo_upload_skipped_missing_user_token)
+                or has_unmaterialized_candidate
             )
         ):
             logging.error(
@@ -7599,6 +7647,8 @@ async def sync_vk_source_post(
                 getattr(event, "source_post_url", None),
                 photo_upload_expected,
             )
+            if has_unmaterialized_candidate:
+                raise RuntimeError("vk_sync_missing_materialized_media")
             raise RuntimeError("vk_sync_missing_media_for_telegram_event")
         coauthor = None
         try:

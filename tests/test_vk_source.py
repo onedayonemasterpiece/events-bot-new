@@ -756,6 +756,51 @@ async def test_sync_vk_source_post_allows_vk_origin_with_source_ids(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_sync_vk_source_post_blocks_vk_origin_with_unmaterialized_poster_candidate(
+    tmp_path, monkeypatch
+):
+    db = main.Database(str(tmp_path / "db.sqlite"))
+    await db.init()
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+
+    async with db.get_session() as session:
+        event = main.Event(
+            title="Title",
+            description="",
+            date="2026-09-10",
+            time="18:30",
+            location_name="Place",
+            source_text="Text",
+            source_post_url="https://vk.com/wall-30777579_15383",
+            photo_urls=[],
+        )
+        session.add(event)
+        await session.commit()
+        await session.refresh(event)
+        session.add(
+            main.EventPoster(
+                event_id=int(event.id),
+                poster_hash="incident-poster",
+                catbox_url="https://source.example/poster.jpg",
+                review_status="pending_review",
+            )
+        )
+        await session.commit()
+
+    async def fake_post(*_args, **_kwargs):
+        raise AssertionError("VK must not publish while candidate media is unmaterialized")
+
+    monkeypatch.setattr(main, "post_to_vk", fake_post)
+
+    with pytest.raises(RuntimeError, match="vk_sync_missing_materialized_media"):
+        await main.sync_vk_source_post(event, "Text", db, None)
+
+    await db.close()
+
+
+@pytest.mark.asyncio
 async def test_sync_vk_source_post_blocks_vk_origin_when_available_media_uploads_empty(monkeypatch):
     monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
     monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
@@ -786,6 +831,52 @@ async def test_sync_vk_source_post_blocks_vk_origin_when_available_media_uploads
     monkeypatch.setattr(main, "post_to_vk", fake_post)
 
     with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_telegram_event"):
+        await main.sync_vk_source_post(event, "Text", None, None)
+
+
+@pytest.mark.asyncio
+async def test_sync_vk_source_post_does_not_mark_text_only_existing_post_repaired(
+    monkeypatch,
+):
+    monkeypatch.setattr(main, "VK_AFISHA_GROUP_ID", "1")
+    monkeypatch.setattr(main, "VK_EVENTS_GROUP_ID", "")
+    monkeypatch.setattr(main, "VK_PHOTOS_ENABLED", True)
+    monkeypatch.setattr(main, "VK_USER_TOKEN", "user-token")
+
+    event = main.Event(
+        id=8631,
+        title="Title",
+        description="",
+        date="2026-09-05",
+        time="10:00",
+        location_name="Place",
+        source_text="Text",
+        source_post_url="https://vk.com/wall-2_3",
+        source_vk_post_url="https://vk.com/wall-1_4",
+        photo_urls=["https://static.example/poster.webp"],
+    )
+
+    async def fake_vk_api(method, *args, **kwargs):
+        if method == "wall.getById":
+            return {"response": [{"text": "existing", "attachments": []}]}
+        raise AssertionError(method)
+
+    async def fake_upload(*_args, **_kwargs):
+        return None
+
+    async def fake_edit(*_args, **_kwargs):
+        raise AssertionError("text-only existing post must remain a failed repair")
+
+    # Keep the existing managed URL without exercising postponed-id resolution.
+    async def keep_url(url, **_kwargs):
+        return url
+
+    monkeypatch.setattr(main, "_resolve_existing_vk_post_url", keep_url)
+    monkeypatch.setattr(main, "vk_api", fake_vk_api)
+    monkeypatch.setattr(main, "upload_vk_photo", fake_upload)
+    monkeypatch.setattr(main, "edit_vk_post", fake_edit)
+
+    with pytest.raises(RuntimeError, match="vk_sync_missing_media_for_existing_post"):
         await main.sync_vk_source_post(event, "Text", None, None)
 
 
