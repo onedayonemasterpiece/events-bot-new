@@ -18,6 +18,7 @@ from audio_transcription.contracts import JobState
 from audio_transcription.job_store import JobOwnershipError
 from private_events_mcp.auth_store import OAuthStateStore, OAuthStoreError
 from private_events_mcp.crypto import AccessIdentity, pkce_s256
+from private_events_mcp.media_contract import VerifiedAsset
 from private_events_mcp.protocol import MCPProtocol
 from private_events_mcp.repository import InvalidArgumentsError
 from private_events_mcp.social_workspace import (
@@ -281,6 +282,48 @@ class FakeDocumentAdapter(FakeAdapter):
     async def stage_asset(self, asset, *, role):
         assert role is MediaRole.DOCUMENT
         return "provider-document-binding"
+
+
+class FakeAlbumIngestor:
+    def __init__(self) -> None:
+        self.assets: list[VerifiedAsset] = []
+
+    async def ingest(
+        self, file, *, owner_binding, max_bytes, expires_at, role="story_media"
+    ) -> VerifiedAsset:
+        index = len(self.assets) + 1
+        asset = VerifiedAsset(
+            storage_ref="ing_" + f"{index:024d}",
+            owner_binding=owner_binding,
+            content_digest="sha256:" + f"{index:064x}",
+            mime_type="image/png",
+            byte_length=128 + index,
+            expires_at=expires_at,
+            width=32,
+            height=32,
+            role="image",
+        )
+        self.assets.append(asset)
+        return asset
+
+
+class FakeAlbumAdapter(FakeAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.staged_provider_refs: list[str] = []
+        self.executed_media_refs: list[str] = []
+
+    async def stage_asset(self, asset, *, role):
+        assert role is MediaRole.IMAGE
+        provider_ref = f"provider-asset-{len(self.staged_provider_refs) + 1}"
+        self.staged_provider_refs.append(provider_ref)
+        return provider_ref
+
+    async def execute(self, intent, *, operation_ref):
+        self.executed_media_refs = [
+            attachment.asset_ref for attachment in intent.content.media
+        ]
+        return await super().execute(intent, operation_ref=operation_ref)
 
 
 class FakeReadMediaAdapter(FakeAdapter):
@@ -1547,7 +1590,27 @@ async def test_exact_user_dm_prepare_is_directly_approved_commit_and_replay(runt
     assert replay["preparation_ref"] == prepared["preparation_ref"]
     assert prepared["status"] == "approved"
     assert replay["status"] == "approved"
+    assert prepared["commit_required"] is True
+    assert prepared["next_action"] == "social_action_commit"
+    assert prepared["operation_state"] == "not_started"
+    assert prepared["provider_attempted"] is False
+    assert prepared["reserved_operation_ref"].startswith("op_")
     assert "approval_url" not in prepared
+    before_by_preparation = await service.status(
+        "preparation", prepared["preparation_ref"], context()
+    )
+    before_by_operation = await service.status(
+        "operation", prepared["reserved_operation_ref"], context()
+    )
+    assert before_by_preparation["preparation_status"] == "approved"
+    assert before_by_preparation["operation_status"] == "not_started"
+    assert before_by_operation["status"] == "not_started"
+    assert before_by_operation["provider_attempted"] is False
+    assert before_by_operation["mutation_boundary_reached"] is False
+    with sqlite3.connect(service.store.path) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM social_workspace_operation"
+        ).fetchone()[0] == 0
     result = await service.commit({
         "preparation_ref": prepared["preparation_ref"],
         "action_digest": prepared["action_digest"],
@@ -1555,12 +1618,146 @@ async def test_exact_user_dm_prepare_is_directly_approved_commit_and_replay(runt
     assert result["status"] == "succeeded"
     assert result["target_ref"] == resolved["target_ref"]
     assert result["item_ref"] == result["read_after_write"]["observed_item_ref"]
+    assert result["provider_attempted"] is True
+    assert result["operation_status"] == "succeeded"
     assert "raw_method" not in result and "access_token" not in result
     assert adapter.executions == 1
-    with pytest.raises(SocialWorkspaceRuntimeError):
-        await service.commit({"preparation_ref": prepared["preparation_ref"],
-                              "action_digest": prepared["action_digest"]}, context())
+    repeated = await service.commit(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        context(),
+    )
+    assert repeated == result
     assert adapter.executions == 1
+
+
+@pytest.mark.asyncio
+async def test_four_image_schedule_runs_one_prepare_commit_operation_in_order(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeAlbumAdapter()
+    ingestor = FakeAlbumIngestor()
+    store = OAuthStateStore(str(tmp_path / "album.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="album-e2e-test-key-that-is-long-enough",
+        asset_ingestor=ingestor,
+        budget_dimension_limits={
+            "attempts": {
+                "global": 100,
+                "principal": 100,
+                "target": 10,
+                "action": 10,
+            }
+        },
+    )
+    target = service._mint_ref(
+        "target",
+        "native-album-channel",
+        "telegram",
+        RuntimePrincipal.from_context(context()),
+    )
+    staged_refs: list[str] = []
+    for index in range(4):
+        staged = await service.stage_asset(
+            validate_asset_stage_request(
+                {
+                    "platform": "telegram",
+                    "file": {
+                        "download_url": f"https://files.example.test/{index}.png",
+                        "file_id": f"file-album-{index}",
+                        "mime_type": "image/png",
+                        "file_name": f"{index}.png",
+                    },
+                    "role": "image",
+                }
+            ),
+            context(),
+        )
+        staged_refs.append(staged["asset_ref"])
+
+    prepare_payload = {
+        "platform": "telegram",
+        "action": "schedule",
+        "idempotency_key": "four-image-album-e2e-0001",
+        "target_ref": target,
+        "content": {
+            "text": "Four image canary",
+            "entities": [],
+            "media": [
+                {"asset_ref": asset_ref, "role": "image"}
+                for asset_ref in staged_refs
+            ],
+        },
+        "schedule_at": "2030-08-31T19:15:00Z",
+    }
+    tools = {
+        tool.name: tool for tool in build_social_workspace_tools(service)
+    }
+    prepared = await tools["social_action_prepare"].handler(
+        prepare_payload, context()
+    )
+    assert prepared["status"] == "approved"
+    assert prepared["operation_state"] == "not_started"
+    assert adapter.executions == 0
+    with sqlite3.connect(store.path) as conn:
+        conn.row_factory = sqlite3.Row
+        assert conn.execute(
+            "SELECT COUNT(*) FROM social_workspace_operation"
+        ).fetchone()[0] == 0
+        persisted = service._intent_from_row(
+            conn.execute("SELECT * FROM social_workspace_preparation").fetchone()
+        )
+    assert [item.asset_ref for item in persisted.content.media] == staged_refs
+
+    before = await tools["social_action_status"].handler(
+        {"operation_ref": prepared["reserved_operation_ref"]}, context()
+    )
+    assert before["status"] == "not_started"
+    assert before["provider_attempted"] is False
+    committed = await tools["social_action_commit"].handler(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        context(),
+    )
+    repeated = await tools["social_action_commit"].handler(
+        {
+            "preparation_ref": prepared["preparation_ref"],
+            "action_digest": prepared["action_digest"],
+        },
+        context(),
+    )
+    assert repeated == committed
+    assert adapter.executions == 1
+    assert adapter.executed_media_refs == adapter.staged_provider_refs
+    with sqlite3.connect(store.path) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM social_workspace_operation"
+        ).fetchone()[0] == 1
+        ingress = [
+            row[0]
+            for row in conn.execute(
+                """SELECT reason_code FROM social_workspace_audit
+                   WHERE operation='commit_ingress' ORDER BY id"""
+            )
+        ]
+    assert ingress == [
+        "tool_received",
+        "schema_validated",
+        "preparation_resolved",
+        "preflight_started",
+        "operation_reserved",
+        "provider_attempt_started",
+        "tool_received",
+        "schema_validated",
+        "preparation_resolved",
+        "operation_already_committed",
+    ]
 
 
 @pytest.mark.asyncio
@@ -1736,6 +1933,94 @@ async def test_budgets_and_denials_are_durably_audited(tmp_path: Path) -> None:
     with sqlite3.connect(store.path) as conn:
         rows = conn.execute("SELECT outcome,reason_code FROM social_workspace_audit").fetchall()
     assert ("denied", "cross_target") in rows
+
+
+@pytest.mark.asyncio
+async def test_commit_budget_denial_is_explicit_audited_and_pre_provider(
+    tmp_path: Path,
+) -> None:
+    adapter = FakeAdapter()
+    store = OAuthStateStore(str(tmp_path / "commit-budget.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store,
+        adapters={"telegram": adapter},
+        encryption_key="commit-budget-test-key-that-is-long-enough",
+        budget_dimension_limits={
+            "attempts": {
+                "global": 100,
+                "principal": 1,
+                "target": 100,
+                "action": 100,
+            }
+        },
+    )
+    principal = RuntimePrincipal.from_context(context())
+
+    async def prepare_for(native_target: str, key: str):
+        target = service._mint_ref("target", native_target, "telegram", principal)
+        return await service.prepare(
+            validate_prepare_request(
+                {
+                    "platform": "telegram",
+                    "action": "publish",
+                    "idempotency_key": key,
+                    "target_ref": target,
+                    "content": {"text": key, "entities": [], "media": []},
+                }
+            ),
+            context(),
+        )
+
+    first = await prepare_for("native-budget-target-1", "budget-first-0001")
+    await service.commit(
+        {
+            "preparation_ref": first["preparation_ref"],
+            "action_digest": first["action_digest"],
+        },
+        context(),
+    )
+    second = await prepare_for("native-budget-target-2", "budget-second-0002")
+    protocol = MCPProtocol(
+        build_social_workspace_tools(service),
+        cache_ttl_seconds=60,
+        challenge='Bearer error="invalid_token"',
+        resource=context().resource,
+        allowed_client_ids=frozenset({context().identity.client_id}),
+    )
+    response = await protocol.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 93,
+            "method": "tools/call",
+            "params": {
+                "name": "social_action_commit",
+                "arguments": {
+                    "preparation_ref": second["preparation_ref"],
+                    "action_digest": second["action_digest"],
+                },
+            },
+        },
+        context().identity,
+    )
+    result = response["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"] == {
+        "error_code": "ATTEMPTS_BUDGET_EXCEEDED",
+        "retry_safe": False,
+    }
+    assert "attempts budget" not in json.dumps(result).lower()
+    assert adapter.executions == 1
+    with sqlite3.connect(store.path) as conn:
+        assert conn.execute(
+            "SELECT COUNT(*) FROM social_workspace_operation"
+        ).fetchone()[0] == 1
+        rows = conn.execute(
+            """SELECT operation,outcome,reason_code FROM social_workspace_audit
+               WHERE operation IN ('commit','commit_ingress') ORDER BY id"""
+        ).fetchall()
+    assert ("commit_ingress", "received", "tool_received") in rows
+    assert ("commit_ingress", "validated", "schema_validated") in rows
+    assert ("commit", "denied", "attempts_budget_exceeded") in rows
 
 
 @pytest.mark.asyncio

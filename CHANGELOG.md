@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Fixed: Private `eventsBot` MCP no longer lets unrelated Telegram/VK incident
+  attempts exhaust the caller-wide daily bucket while the intended target and
+  action remain below their configured limit: global/principal abuse ceilings
+  are now ten times the narrow per-target/per-action limit. Prepare explicitly
+  returns `commit_required`, the next action, reserved operation and
+  `operation_state=not_started`; status distinguishes preparation, operation,
+  provider-attempt and mutation-boundary state. Exact two-field commit replay
+  is idempotent and never calls the provider twice, while pre-provider failures
+  expose bounded codes and durable commit-ingress stages instead of the generic
+  `social workspace request rejected`. Added a connector-like four-image
+  stage/prepare/status/commit/order/replay regression. Regression contract:
+  `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
+
 - Fixed: Telegram MCP publication now budgets the provider session from the
   total verified bytes and item count for the complete supported album of up
   to ten attachments instead of applying the 12-second scalar timeout to all

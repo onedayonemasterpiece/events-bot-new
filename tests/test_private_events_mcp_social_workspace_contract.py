@@ -846,9 +846,17 @@ def test_prepare_output_allows_direct_user_authorization_and_stable_digest() -> 
         "summary": "Send a direct reminder to the resolved person",
         "expires_at": "2026-08-08T13:00:00Z",
         "required_scopes": ["telegram:dm:send"],
+        "reserved_operation_ref": OPERATION_REF,
+        "commit_required": True,
+        "next_action": "complete_external_approval",
+        "operation_state": "not_started",
+        "provider_attempted": False,
     }
     validate(prepared, SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA)
-    validate({**prepared, "status": "approved"}, SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA)
+    validate(
+        {**prepared, "status": "approved", "next_action": "social_action_commit"},
+        SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA,
+    )
 
 
 def test_direct_user_authorization_is_outbound_only_not_edit_or_delete() -> None:
@@ -964,6 +972,21 @@ def test_status_contract_models_provider_uncertainty_and_disallows_blind_retry()
     assert validate_action_status_response(unknown) is SocialActionStatus.OUTCOME_UNKNOWN
     with pytest.raises(ValidationError):
         validate({**unknown, "retry_safe": True}, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA)
+    not_started = {
+        "platform": "telegram",
+        "operation_ref": OPERATION_REF,
+        "preparation_ref": PREPARATION_REF,
+        "action": "schedule",
+        "status": "not_started",
+        "preparation_status": "approved",
+        "operation_status": "not_started",
+        "provider_attempted": False,
+        "mutation_boundary_reached": False,
+        "retry_safe": False,
+        "error_code": "operation_not_started",
+    }
+    validate(not_started, SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA)
+    assert validate_action_status_response(not_started) is SocialActionStatus.NOT_STARTED
 
 
 def test_scheduled_items_contract_is_exact_bounded_and_provider_neutral() -> None:

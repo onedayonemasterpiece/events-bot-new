@@ -163,6 +163,7 @@ class AssetLifecycleStatus(_StringEnum):
 
 
 class SocialActionStatus(_StringEnum):
+    NOT_STARTED = "not_started"
     PREPARED = "prepared"
     AWAITING_HUMAN_APPROVAL = "awaiting_human_approval"
     APPROVED = "approved"
@@ -1705,7 +1706,8 @@ def validate_action_status_response(payload: Mapping[str, Any]) -> SocialActionS
             "mutation_boundary_reached", "scheduled_at", "media_count",
             "reconciliation_attempt", "next_poll_after_seconds",
             "reconciliation_deadline", "exact_match_count", "item_refs",
-            "final_readback", "deletion_evidence",
+            "final_readback", "deletion_evidence", "preparation_status",
+            "operation_status", "provider_attempted",
         },
         "status response",
     )
@@ -1749,6 +1751,22 @@ def validate_action_status_response(payload: Mapping[str, Any]) -> SocialActionS
         raise SocialWorkspaceValidationError(
             "mutation_boundary_reached must be boolean"
         )
+    if "provider_attempted" in data and type(data["provider_attempted"]) is not bool:
+        raise SocialWorkspaceValidationError("provider_attempted must be boolean")
+    if "preparation_status" in data:
+        preparation_status = _enum(
+            data["preparation_status"], SocialActionStatus, "preparation_status"
+        )
+        if preparation_status not in {
+            SocialActionStatus.PREPARED,
+            SocialActionStatus.AWAITING_HUMAN_APPROVAL,
+            SocialActionStatus.APPROVED,
+            SocialActionStatus.COMMITTED,
+            SocialActionStatus.EXPIRED,
+        }:
+            raise SocialWorkspaceValidationError("preparation_status is invalid")
+    if "operation_status" in data:
+        _enum(data["operation_status"], SocialActionStatus, "operation_status")
     stage = data.get("stage")
     if stage is not None and (
         not isinstance(stage, str)
@@ -2500,7 +2518,8 @@ SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA: Mapping[str, Any] = {
     "additionalProperties": False,
     "required": [
         "preparation_ref", "action", "status", "action_digest", "summary", "expires_at",
-        "required_scopes",
+        "required_scopes", "commit_required", "next_action", "operation_state",
+        "reserved_operation_ref", "provider_attempted",
     ],
     "properties": {
         "preparation_ref": {
@@ -2509,6 +2528,16 @@ SOCIAL_WORKSPACE_PREPARE_OUTPUT_SCHEMA: Mapping[str, Any] = {
         "logical_action_ref": {
             "type": "string", "pattern": r"^act_[A-Za-z0-9_-]{24,160}$"
         },
+        "reserved_operation_ref": {
+            "type": "string", "pattern": r"^op_[A-Za-z0-9_-]{24,160}$"
+        },
+        "commit_required": {"const": True},
+        "next_action": {
+            "type": "string",
+            "enum": ["social_action_commit", "complete_external_approval"],
+        },
+        "operation_state": {"const": SocialActionStatus.NOT_STARTED.value},
+        "provider_attempted": {"const": False},
         "action": {"type": "string", "enum": _enum_values(SocialAction)},
         "status": {
             "type": "string",
@@ -2648,6 +2677,20 @@ SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA: Mapping[str, Any] = {
         "action": {"type": "string", "enum": _enum_values(SocialAction)},
         "status": {"type": "string", "enum": _enum_values(SocialActionStatus)},
         "retry_safe": {"type": "boolean"},
+        "preparation_status": {
+            "type": "string",
+            "enum": [
+                SocialActionStatus.PREPARED.value,
+                SocialActionStatus.AWAITING_HUMAN_APPROVAL.value,
+                SocialActionStatus.APPROVED.value,
+                SocialActionStatus.COMMITTED.value,
+                SocialActionStatus.EXPIRED.value,
+            ],
+        },
+        "operation_status": {
+            "type": "string", "enum": _enum_values(SocialActionStatus)
+        },
+        "provider_attempted": {"type": "boolean"},
         "preparation_ref": {
             "type": "string",
             "pattern": r"^prep_[A-Za-z0-9_-]{24,160}$",
