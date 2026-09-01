@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Fixed: durable Telegram provider bindings no longer consume a new encrypted
+  SQLite row every time the same target, message, scheduled item or provider
+  media is read. Secret-bound stable refs now upsert the latest detached
+  provider snapshot for the same native identity, while newly staged upload
+  assets remain immutable/random. The high-churn item/asset safety ceiling is
+  raised from 20,000 to 100,000 so the already saturated production item table
+  can recover immediately; 35-day expiry cleanup remains enforced. This fixes
+  false `provider_error` / `outcome_unknown` receipts after Telegram had
+  successfully created a scheduled album and makes non-empty scheduled queue
+  readback available again. Regression contract:
+  `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
+
 - Fixed: systemic post-redeploy recovery for the 2026-09-01 production
   incident. Ambiguous Kaggle resource-acquire timeouts now retry idempotently
   with a stable event UID; accepted terminal provider failures close the exact

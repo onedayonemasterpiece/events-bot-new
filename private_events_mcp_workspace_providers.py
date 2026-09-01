@@ -31,6 +31,7 @@ from private_events_mcp.social_workspace import (
     MediaRole,
     SocialAction,
     SocialActionStatus,
+    SocialItemKind,
     SocialReactionPreset,
     SocialTargetKind,
     compute_action_digest,
@@ -49,10 +50,31 @@ class ProviderBindingError(RuntimeError):
 
 
 _MAX_PROVIDER_BINDING_ENVELOPE_BYTES = 64 * 1024
+_TELEGRAM_HIGH_CHURN_BINDING_MAXIMUM = 100_000
 
 
 def _bounded_ref(prefix: str) -> str:
     return f"{prefix}_{secrets.token_urlsafe(24)}"
+
+
+def _stable_binding_ref(
+    prefix: str,
+    signing_key: str,
+    namespace: str,
+    *coordinates: Any,
+) -> str:
+    """Mint a secret-bound provider ref for one immutable native identity."""
+
+    key = hashlib.sha256(
+        ("private-events-mcp-stable-ref\0" + signing_key).encode("utf-8")
+    ).digest()
+    payload = "\0".join(
+        [namespace, *(str(value) for value in coordinates)]
+    ).encode("utf-8")
+    token = base64.urlsafe_b64encode(
+        hmac.new(key, payload, hashlib.sha256).digest()[:24]
+    ).decode("ascii").rstrip("=")
+    return f"{prefix}_{token}"
 
 
 class _BoundedMap:
@@ -1086,10 +1108,16 @@ class InMemoryTelegramOpaqueRefStore:
             self._state, kind="tg_target", signing_key=config.signing_key
         )
         self._items = _DurableEncryptedMap(
-            self._state, kind="tg_item", signing_key=config.signing_key
+            self._state,
+            kind="tg_item",
+            signing_key=config.signing_key,
+            maximum=_TELEGRAM_HIGH_CHURN_BINDING_MAXIMUM,
         )
         self._assets = _DurableEncryptedMap(
-            self._state, kind="tg_asset", signing_key=config.signing_key
+            self._state,
+            kind="tg_asset",
+            signing_key=config.signing_key,
+            maximum=_TELEGRAM_HIGH_CHURN_BINDING_MAXIMUM,
         )
         self._cursors = _DurableEncryptedMap(
             self._state, kind="tg_cursor", signing_key=config.signing_key
@@ -1146,9 +1174,27 @@ class InMemoryTelegramOpaqueRefStore:
         profile_link: str | None,
         is_self: bool,
     ) -> Any:
-        ref = _bounded_ref("tgt")
         entity_copy = self._copy(entity)
-        native = f"{kind.value}:{getattr(entity_copy, 'id', 'self')}:{canonical_handle or ''}"
+        entity_id = (
+            entity_copy.get("id")
+            if isinstance(entity_copy, Mapping)
+            else getattr(entity_copy, "id", None)
+        )
+        native = ":".join(
+            (
+                kind.value,
+                str(entity_id if entity_id is not None else "self"),
+                canonical_handle or "",
+                str(int(is_self)),
+            )
+        )
+        ref = _stable_binding_ref(
+            "tgt",
+            self._operation_signing_key,
+            "telegram-target-v1",
+            native,
+            ",".join(sorted(action.value for action in self._allowed_actions)),
+        )
         binding = self._Target(
             ref,
             kind,
@@ -1173,14 +1219,27 @@ class InMemoryTelegramOpaqueRefStore:
         scheduled: bool = False,
     ) -> Any:
         self._targets.get(target_ref)
-        ref = _bounded_ref("itm")
+        effective_actions = (
+            (allowed_actions or self._allowed_actions) & self._allowed_actions
+        )
+        effective_kind = kind or SocialItemKind.MESSAGE
+        ref = _stable_binding_ref(
+            "itm",
+            self._operation_signing_key,
+            "telegram-item-v1",
+            target_ref,
+            message_id,
+            getattr(effective_kind, "value", effective_kind),
+            int(scheduled),
+            ",".join(sorted(action.value for action in effective_actions)),
+        )
         binding_type = self._ScheduledItem if scheduled else self._Item
         binding = binding_type(
             ref,
             target_ref,
             message_id,
-            allowed_actions=(allowed_actions or self._allowed_actions) & self._allowed_actions,
-            **({"kind": kind} if kind is not None else {}),
+            allowed_actions=effective_actions,
+            kind=effective_kind,
         )
         self._items.put(ref, binding)
         return copy.deepcopy(binding)
@@ -1224,7 +1283,13 @@ class InMemoryTelegramOpaqueRefStore:
         fingerprint = hmac.new(
             self._media_fingerprint_key, identity, hashlib.sha256
         ).hexdigest()
-        ref = _bounded_ref("ast")
+        ref = _stable_binding_ref(
+            "ast",
+            self._operation_signing_key,
+            "telegram-read-asset-v1",
+            target_ref,
+            fingerprint,
+        )
         self._assets.put(
             ref,
             self._Asset(

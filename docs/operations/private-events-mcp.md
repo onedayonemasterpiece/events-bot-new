@@ -645,6 +645,17 @@ reconciliation. Encrypted target/item/cursor bindings and operation receipts are
 kept in the isolated auth database, so an approval or reconciliation does not
 lose its provider binding on process restart.
 
+Telegram target, item and provider-read media bindings use secret-bound stable
+refs derived from their immutable native coordinates. Re-reading the same
+target/message/media upserts the latest detached provider snapshot instead of
+minting another encrypted row; rotating Telegram `file_reference` bytes are
+therefore refreshed without changing the public media identity. Verified
+ChatGPT upload-stage bindings stay random and immutable so an older staged ref
+cannot silently resolve to different bytes. Item and asset maps retain the
+35-day expiry sweep and a 100,000-row per-kind fail-closed safety ceiling; this
+ceiling is storage protection, not an album-size limit. Telegram publication
+continues to support one to ten attachments in a native album.
+
 The same dedicated role may advertise image/story capability only after its
 live `CanSendStory`-equivalent rights probe and the server media-store injection
 pass. It receives only an already verified server-owned asset handle, never a
