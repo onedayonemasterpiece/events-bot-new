@@ -1,7 +1,7 @@
 # INC-2026-08-31 eventsBot MCP scheduled readback blocked a safe reschedule
 
-Status: mitigated — exact-main Telegram album timeout hotfix deployed; ChatGPT acceptance pending
-Severity: sev2
+Status: active — pre-provider commit-budget and orchestration-contract regression reproduced; fix/acceptance in progress
+Severity: sev1
 Service: private eventsBot MCP / Telegram and VK scheduled publication
 Opened: 2026-08-31
 Closed: —
@@ -29,6 +29,17 @@ therefore fail-closed for Codex publication. Codex did not publish, schedule,
 delete, retry, alter the caption, or regenerate the four images; the explicit
 handoff leaves any later production publication to ChatGPT through eventsBot
 MCP.
+
+The later ChatGPT-owned attempt for 21:15 exposed a separate control-plane
+failure after the Telegram timeout repair. Production received four real
+`social_action_commit` requests, but all four were denied before an operation
+row or provider call because the caller-wide daily attempts bucket was already
+`10/10`. Earlier Telegram/VK incident attempts had consumed that aggregate even
+though the new target/action buckets were below their limits. The public tool
+collapsed the exact local cause into `social workspace request rejected`, while
+the visible ChatGPT tool journal omitted the four commit calls and the assistant
+reported an incorrect count/cause. The real `@lovekenig` album therefore still
+was not scheduled or published.
 
 ## User / Business Impact
 
@@ -70,6 +81,23 @@ MCP.
   governed by `ENABLE_RUNTIME_FILE_LOGGING` / `RUNTIME_LOG_DIR` was enabled,
   present, fresh, and within its 64 MiB budget. This proves the service was
   otherwise healthy; it does not resolve the old Telegram outcome.
+- Exact production release `v2058` / machine version `2058` ran immutable
+  source SHA `30376f702342cd3fe57ee837800a58e01dc0cbec`; the relevant deployed
+  source-file hashes matched both that commit and `origin/main`, whose
+  `7b44306b0b58889506b987627fffb3848aa00ed6` head was documentation-only ahead.
+- Preparations `prep_Llzoc5Wf1Lq28zbp7neiE1MJFy-8wer2` and
+  `prep_76-3iOvPnmfpvf5SjJRCNfJo-1AVsQJw` durably reserved respectively
+  `op_7txWNfvSt0tn_A6Trpo55TlfOfEYeDAN` and
+  `op_DqVVWBsAyP8iifrq4ugROIgdUhX-WL5C`; neither operation had a
+  `social_workspace_operation` row.
+- Audit/access correlation proves commit ingresses at 18:41:01, 18:42:17,
+  18:42:33 and 18:49:24 UTC. Each returned HTTP 200 with a small structured
+  error in 6–8 ms and recorded `commit denied` before provider transport.
+- The exact UTC-day budget row was already global `10` / principal `10` at
+  17:14:15 UTC; production configured the principal ceiling to `10` while the
+  global ceiling was `100`. The later commits therefore failed the principal
+  `attempts budget exceeded` guard. Transaction rollback left both new
+  operation tables and Telegram provider ledgers empty.
 
 The exact audited payload identity was caption SHA-256
 `b2bb4a7413b1cb63b2913a630a5cc6f1bce477fb9258a193fe4f14d7125328cd`
@@ -146,6 +174,15 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   from 16:25:05 UTC, with no four-image album at or after the requested 18:00
   UTC slot. Codex did not call commit, retry, delete or any other
   provider-content mutation.
+- 2026-08-31 18:40:57 UTC — first fresh four-image preparation was stored as
+  approved with reserved `op_7tx...`; commit ingresses at 18:41:01, 18:42:17
+  and 18:42:33 were denied before operation insertion/provider transport.
+- 2026-08-31 18:49:18 UTC — second fresh preparation was stored as approved
+  with reserved `op_Dq...`; the fourth commit ingress at 18:49:24 was denied at
+  the same pre-provider budget guard.
+- 2026-09-01 — forensic readback again found exact scheduled matches `0`; the
+  public channel page still ended at message `12631` from 16:25:05 UTC on
+  August 31. No VK or `@lovekenig` provider mutation was made during diagnosis.
 
 ## Root Cause
 
@@ -199,6 +236,27 @@ plus these ordered 1122×1402 PNG SHA-256 values:
    provider-side retry/rearm method; only VK implemented that half of the
    contract. A future correctly classified Telegram pre-mutation failure would
    therefore still be rejected as `provider retry is unavailable`.
+9. **Proven caller-wide attempt-budget collision:** server wiring assigned the
+   configured daily value `10` to the principal, target and action dimensions.
+   Ten earlier Telegram/VK incident attempts across several targets/actions
+   exhausted only the coarse principal bucket. The new schedule target/action
+   were still below their own bounds, but every commit was transactionally
+   rejected before operation insertion or `adapter.execute`.
+10. **Proven safe-error loss:** the runtime raised the exact local
+    `attempts budget exceeded` cause, then `social_workspace_tools.rejected()`
+    replaced it with generic `social workspace request rejected`. The audit
+    stored only the exception class, so neither ChatGPT nor an operator could
+    distinguish budget, expiry, binding or asset preflight without DB forensics.
+11. **Proven state-contract ambiguity:** prepare reserved an `operation_ref`
+    internally but did not return it or state that commit was still required.
+    Preparation status `approved` could therefore be narrated as an operation
+    result even though no operation row/provider attempt existed. Status by the
+    reserved operation was not a documented `not_started` state.
+12. **Client/reporting observability failure:** the ChatGPT-visible journal
+    omitted four server-proven commit calls, and assistant prose reported the
+    wrong number and server cause. This is distinct from the server budget
+    defect, but the ambiguous/generic server contract made the false report
+    difficult to detect without production ingress evidence.
 
 ## Contributing Factors
 
@@ -214,6 +272,12 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   the fact.
 - Prior successful ordinary or fast scheduled publications did not exercise
   the cancellation window, four-image VK chain, or stale-claim recovery path.
+- The release gate exercised fake-provider success and transport failures but
+  did not run the complete connector-like four-image
+  `stage -> prepare -> pre-commit status -> commit -> readback` journey with a
+  saturated coarse principal bucket.
+- Incident diagnostics and intended product delivery shared one aggregate
+  caller budget without reserving capacity per target/action.
 
 ## Automation Contract
 
@@ -227,6 +291,8 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   retry classification or provider-stage diagnostics;
 - adding or changing a ChatGPT-visible scheduled-list/retry tool, its scopes,
   bounds, redaction or action-definition publication;
+- changing attempt-budget dimensions, prepare/commit/status state semantics,
+  commit idempotence, safe pre-provider errors or ingress audit stages;
 - reconciling or retrying an outcome-unknown scheduled publication.
 
 ### Affected surfaces
@@ -234,6 +300,7 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - `private_events_mcp/social_workspace_runtime.py`
 - `private_events_mcp/social_workspace.py`
 - `private_events_mcp/social_workspace_tools.py`
+- `private_events_mcp/server.py`
 - `private_events_mcp_telegram_adapter.py`
 - `private_events_mcp_vk_adapter.py`
 - `private_events_mcp_vk_transport.py`
@@ -280,6 +347,19 @@ plus these ordered 1122×1402 PNG SHA-256 values:
 - publish/review the changed ChatGPT action definition and verify the new tools
   in a genuinely new chat; OAuth reconnect or direct `tools/list` alone is not
   acceptance.
+- reproduce the production `10/10` principal collision and prove unrelated
+  targets/actions no longer block a below-limit intended action while the
+  narrow per-target/per-action limits remain `10`;
+- prove prepare returns `commit_required`, `next_action`, the reserved
+  operation and `not_started/provider_attempted=false`; status by either ref
+  cannot represent pre-commit state as a provider operation;
+- prove the exact two-field commit creates one operation/provider attempt,
+  replay returns the same durable receipt without another provider call, and a
+  pre-provider budget denial exposes a bounded code plus exact audit stages;
+- after exact-main deploy and action refresh, run one four-fresh-image Saved
+  Messages/test-channel schedule canary through the same MCP, prove one logical
+  album, delete it immediately and prove scheduled/live absence. Never use
+  `@lovekenig` for that canary.
 
 ### Required evidence
 
@@ -351,6 +431,17 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   ChatGPT through eventsBot MCP; Codex must not publish it. If a provider
   mutation smoke is still necessary, use a separate test payload and delete it
   immediately with verified absence.
+- [x] Separate principal/global abuse ceilings from the configured narrow
+  per-target/per-action attempt limit so unrelated incident attempts cannot
+  consume product delivery capacity.
+- [x] Make prepare/status explicitly expose `commit_required`, next action,
+  reserved operation, `not_started`, provider-attempt and mutation-boundary
+  state; make exact commit replay idempotent without a second adapter call.
+- [x] Preserve bounded pre-provider error codes and commit-ingress audit stages
+  instead of collapsing every rejection to a generic invalid argument.
+- [ ] Merge/deploy exact main, refresh the ChatGPT action snapshot, pass the
+  four-image Saved Messages schedule/delete canary and only then return the
+  real publication task to ChatGPT.
 
 ## Follow-up Actions
 

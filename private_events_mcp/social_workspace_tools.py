@@ -315,6 +315,18 @@ def build_social_workspace_tools(
             code = "FILE_FETCH_FAILED"
         return ToolExecutionError(code, "Social asset staging rejected.")
 
+    def commit_rejected(exc: Exception) -> Exception:
+        safe_code = getattr(exc, "error_code", None)
+        if isinstance(safe_code, str) and re.fullmatch(
+            r"[A-Z][A-Z0-9_]{2,63}", safe_code
+        ):
+            return ToolExecutionError(
+                safe_code,
+                "Social action commit rejected before provider attempt.",
+                retry_safe=bool(getattr(exc, "retry_safe", False)),
+            )
+        return rejected(exc)
+
     read_suffixes = ["discover", "read:public", "analytics", "audience"]
     if enabled("private_read"):
         read_suffixes.extend(("read:private", "read:dialogs"))
@@ -435,6 +447,12 @@ def build_social_workspace_tools(
                     f"SELECT platform,action FROM {table} WHERE {column}=?",  # fixed identifiers
                     (runtime._hash(ref),),
                 ).fetchone()
+                if row is None and kind == "operation":
+                    row = conn.execute(
+                        """SELECT platform,action FROM social_workspace_preparation
+                           WHERE operation_ref=?""",
+                        (ref,),
+                    ).fetchone()
             if row is None:
                 raise InvalidArgumentsError("status reference is unknown")
             require_platform(row["platform"])
@@ -454,7 +472,10 @@ def build_social_workspace_tools(
                 (runtime._hash(ref),),
             ).fetchone()
         if row is None:
-            raise InvalidArgumentsError("preparation reference is unknown")
+            raise ToolExecutionError(
+                "PREPARATION_UNKNOWN",
+                "Social action preparation is unknown.",
+            )
         require_platform(row["platform"])
         require_stored_action_feature(row["action"])
         with runtime.store._lock, runtime.store._connect() as conn:
@@ -531,10 +552,16 @@ def build_social_workspace_tools(
 
     async def commit(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
+            runtime.audit_commit_ingress(
+                context, outcome="received", reason="tool_received"
+            )
+            runtime.audit_commit_ingress(
+                context, outcome="validated", reason="schema_validated"
+            )
             commit_scope(arguments)
             return await runtime.commit(arguments, context)
         except Exception as exc:  # noqa: BLE001 - normalize adapter/runtime errors
-            raise rejected(exc) from None
+            raise commit_rejected(exc) from None
 
     async def status(arguments: Mapping[str, Any], context: ToolCallContext) -> dict[str, Any]:
         try:
@@ -814,7 +841,7 @@ def build_social_workspace_tools(
                      SOCIAL_WORKSPACE_STATUS_OUTPUT_SCHEMA,
                  ),
                  handler=commit, scope_selector=commit_scope,
-                 read_only=False, destructive=True, idempotent=False,
+                 read_only=False, destructive=True, idempotent=True,
                  **mutation_common),
         ToolSpec("social_action_status", "Get social action status",
                  "Read or reconcile durable action state; unknown outcomes are never retry-safe.",

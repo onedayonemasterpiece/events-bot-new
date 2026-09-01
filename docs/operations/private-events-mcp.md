@@ -144,9 +144,9 @@ matching its granted scopes and the enabled provider/capability flags:
 | `social_asset_stage` | ingest one ChatGPT `fileParams` image or eligible Telegram document into immutable short-lived server storage |
 | `social_asset_status` | return only verified MIME/size/digest/dimensions or sanitized document name/classification, expiry and lifecycle state for an opaque asset ref |
 | `social_asset_preview` | render one principal-bound story image as a bounded metadata-free MCP JPEG thumbnail |
-| `social_action_prepare` | freeze exact typed action/content/target/media digest; explicitly requested outbound actions return `approved` with no provider call, while edit/delete wait for external approval |
-| `social_action_commit` | atomically consume the exact preparation authorization, then make the sole provider attempt |
-| `social_action_status` | reconcile durable success/failure/outcome-unknown state |
+| `social_action_prepare` | freeze exact typed action/content/target/media digest; return the reserved operation, `commit_required`, explicit next action and `operation_state=not_started` without a provider call |
+| `social_action_commit` | atomically consume the exact preparation authorization, then make the sole provider attempt; replaying the same preparation returns its durable operation and never calls the provider twice |
+| `social_action_status` | distinguish preparation state, operation state, provider-attempt state and mutation-boundary state; reconcile only a durable attempted operation |
 | `social_action_retry` | make one bounded single-flight retry of a terminal operation only when durable evidence says `retry_safe=true` |
 
 The `social_scheduled_items_list` and `social_action_retry` rows are the target
@@ -450,7 +450,10 @@ Every external mutation follows:
 2. it persists only the exact canonical digest and does not call the provider.
    A fresh typed outbound action explicitly requested through the authenticated
    ChatGPT/OpenCode resource is returned as `approved` without an
-   `approval_url`; edit/delete remain `awaiting_human_approval`;
+   `approval_url`; edit/delete remain `awaiting_human_approval`. The response
+   always says `commit_required=true`, names `next_action`, returns the
+   `reserved_operation_ref`, and reports `operation_state=not_started` plus
+   `provider_attempted=false`;
 3. for edit/delete only, the operator opens the returned URL, enters the
    separate approval token, inspects the exact human-readable target, source
    item, action and text, then confirms in the browser. An opaque-only
@@ -458,8 +461,13 @@ Every external mutation follows:
    closed;
 4. `social_action_commit` accepts only the preparation ref and digest. It
    rechecks the current action-class kill switch, then atomically consumes the
-   server-side approval before one provider attempt;
+   server-side approval before one provider attempt. A repeated call for that
+   exact preparation is an idempotent receipt replay and does not consume
+   another attempt budget or call the adapter;
 5. `social_action_status` or read-after-write evidence reconciles the receipt.
+   Before commit, preparation status may be `approved`, but operation status is
+   explicitly `not_started`, `provider_attempted=false`, and
+   `mutation_boundary_reached=false`.
 
 The preparation allocates the real future `operation_ref`; status by either the
 preparation or operation reference therefore converges on the same durable
@@ -767,10 +775,16 @@ opaque refs. Manifests keep verified technical metadata and a keyed owner/file
 binding; ChatGPT download URLs, original names and provider viewer identities
 do not enter logs, receipts or durable social state.
 Publication attempts are charged before transport against durable UTC-day
-global/principal/target/action limits. Forward is charged to its destination;
-item-only actions are charged to the item's bound source target rather than a
-shared provider bucket (the configured per-principal default is
-`PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY=10`).
+global/principal/target/action limits. The configured value
+`PRIVATE_EVENTS_MCP_SOCIAL_PUBLISH_ATTEMPTS_PER_DAY` (default `10`) remains the
+narrow per-target and per-provider-action limit. Global and principal aggregate
+ceilings are ten times that value, so unrelated Telegram/VK diagnostics or
+targets cannot consume the last product-delivery slot for another action while
+every concrete target/action remains bounded. Forward is charged to its
+destination; item-only actions are charged to the item's bound source target
+rather than a shared provider bucket. A pre-provider denial returns a bounded
+code such as `ATTEMPTS_BUDGET_EXCEEDED`, is durably audited, and never creates
+an operation row or calls the adapter.
 
 Social reads also use durable hourly rate, egress and media budgets. A provider
 call that returned successfully remains a provider success even when its safe
@@ -1250,6 +1264,17 @@ Record all of the following without secrets:
     final message/album/story send. A timeout during upload must be terminal
     `provider_mutation_not_started / retry_safe=true`; a timeout after the final
     send remains `outcome_unknown / retry_safe=false` until readback resolves it.
+29. The regression canary for
+    `INC-2026-08-31-mcp-scheduled-readback-reschedule` uses four fresh small
+    images in Telegram Saved Messages (or an owner-approved isolated test
+    channel), never the production target. In a genuinely new ChatGPT chat it
+    performs four `fileParams -> stage` calls, one `schedule prepare(approved)`,
+    the real two-field commit, and provider-backed scheduled readback. Exactly
+    one logical media group with `media_count=4` must exist in the original
+    order; four separate messages are a failure. The exact scheduled canary is
+    then deleted through the typed scheduled namespace and a fresh read proves
+    zero matches before the slot. A real target publication is still a separate
+    owner action and is never inferred from this canary.
 
 Rollback order: first turn
 `PRIVATE_EVENTS_MCP_UNIVERSAL_SOCIAL_FILE_SEND_ENABLED=0` for a document-only

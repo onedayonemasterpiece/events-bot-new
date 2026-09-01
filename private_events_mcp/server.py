@@ -152,7 +152,12 @@ class PrivateEventsMCPServer:
                 budget_dimension_limits={
                     "attempts": {
                         "global": config.social_publish_attempts_per_day * 10,
-                        "principal": config.social_publish_attempts_per_day,
+                        # The principal aggregate is an abuse ceiling, not a
+                        # product-delivery bucket.  Keep the narrow per-target
+                        # and per-action limits at the configured value so
+                        # unrelated Telegram/VK actions cannot consume the
+                        # caller's one remaining intended publication slot.
+                        "principal": config.social_publish_attempts_per_day * 10,
                         "target": config.social_publish_attempts_per_day,
                         "action": config.social_publish_attempts_per_day,
                     }

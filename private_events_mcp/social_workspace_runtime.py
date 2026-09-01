@@ -76,6 +76,21 @@ MAX_TRANSCRIPTION_ATTACHMENTS_PER_READ = 250
 class SocialWorkspaceRuntimeError(SocialWorkspaceValidationError):
     """A fail-closed runtime policy or durable-state check failed."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str | None = None,
+        retry_safe: bool = False,
+        audit_reason_code: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.retry_safe = bool(retry_safe)
+        self.audit_reason_code = audit_reason_code or (
+            error_code.lower() if error_code else type(self).__name__.lower()
+        )
+
 
 class SocialWorkspaceAdapter(Protocol):
     """Stable provider adapter surface; native provider methods stay private."""
@@ -636,10 +651,16 @@ class SocialWorkspaceRuntime:
             ),
         ).fetchone()
         if row is None:
-            raise SocialWorkspaceRuntimeError("asset reference is unknown or not bound")
+            raise SocialWorkspaceRuntimeError(
+                "asset reference is unknown or not bound",
+                error_code="ASSET_UNKNOWN",
+            )
         expired = int(row["expires_at"]) <= self._now()
         if expired and not allow_expired:
-            raise SocialWorkspaceRuntimeError("asset reference is expired or not bound")
+            raise SocialWorkspaceRuntimeError(
+                "asset reference is expired or not bound",
+                error_code="ASSET_EXPIRED",
+            )
         try:
             metadata = json.loads(self._decrypt(str(row["preview_json"])))
         except Exception:  # noqa: BLE001 - encrypted local state is untrusted
@@ -824,14 +845,15 @@ class SocialWorkspaceRuntime:
         platform = platform if platform in {"telegram", "vk"} else None
         allowed_operations = {
             *(item.value for item in SocialReadOperation),
-            "capabilities", "prepare", "commit", "reconcile",
+            "capabilities", "prepare", "commit", "commit_ingress", "reconcile",
             "scheduled_items_list", "retry",
             "asset_stage", "asset_status", "asset_preview", "social_tool", "invalid",
         }
         operation = operation if operation in allowed_operations else "invalid"
         outcome = outcome if outcome in {
             "succeeded", "succeeded_response_withheld", "outcome_unknown",
-            "failed", "denied",
+            "failed", "denied", "received", "validated", "resolved",
+            "started", "reserved", "replayed",
         } else "failed"
         reason = re.sub(r"[^a-z0-9_]", "_", str(reason).lower())[:64] or "unknown"
         if target_ref is not None and not _REF_RE.fullmatch(target_ref):
@@ -865,6 +887,23 @@ class SocialWorkspaceRuntime:
             outcome="denied",
             reason=reason,
             target_ref=target_ref if isinstance(target_ref, str) and _REF_RE.fullmatch(target_ref) else None,
+        )
+
+    def audit_commit_ingress(
+        self,
+        context: ToolCallContext,
+        *,
+        outcome: str,
+        reason: str,
+    ) -> None:
+        """Persist a safe MCP commit boundary before state-dependent scope checks."""
+
+        self._audit(
+            RuntimePrincipal.from_context(context),
+            platform=None,
+            operation="commit_ingress",
+            outcome=outcome,
+            reason=reason,
         )
 
     def _stable_target_budget_key(
@@ -971,7 +1010,10 @@ class SocialWorkspaceRuntime:
                     ).fetchone()
                     used = int(row["amount"]) if row else 0
                     if used + amount > limit:
-                        raise SocialWorkspaceRuntimeError(f"{metric} budget exceeded")
+                        raise SocialWorkspaceRuntimeError(
+                            f"{metric} budget exceeded",
+                            error_code=f"{metric.upper()}_BUDGET_EXCEEDED",
+                        )
                     conn.execute(
                         """INSERT INTO social_workspace_budget(period,dimension,bucket_hash,metric,amount,updated_at)
                            VALUES(?,?,?,?,?,?) ON CONFLICT(period,dimension,bucket_hash,metric)
@@ -2327,9 +2369,11 @@ class SocialWorkspaceRuntime:
                             (logical_action, existing["preparation_hash"]),
                         )
                     conn.execute("COMMIT")
+                    reserved_operation = str(existing["operation_ref"] or operation)
                     return self._preparation_result(existing["preparation_ref"], intent,
                         digest, int(existing["expires_at"]), str(existing["status"]),
-                        logical_action_ref=str(logical_action))
+                        logical_action_ref=str(logical_action),
+                        reserved_operation_ref=reserved_operation)
                 prep = "prep_" + secrets.token_urlsafe(24)
                 operation = "op_" + secrets.token_urlsafe(24)
                 logical_action = "act_" + secrets.token_urlsafe(24)
@@ -2391,15 +2435,26 @@ class SocialWorkspaceRuntime:
             expires,
             status,
             logical_action_ref=logical_action,
+            reserved_operation_ref=operation,
         )
 
     def _preparation_result(
         self, prep: str, intent: SocialActionIntent, digest: str, expires: int,
         status: str, *, logical_action_ref: str | None = None,
+        reserved_operation_ref: str,
     ) -> dict[str, Any]:
         result = {"preparation_ref": prep, "action": intent.action.value,
                   "status": status,
                   "action_digest": digest,
+                  "reserved_operation_ref": reserved_operation_ref,
+                  "commit_required": True,
+                  "next_action": (
+                      "social_action_commit"
+                      if status == SocialActionStatus.APPROVED.value
+                      else "complete_external_approval"
+                  ),
+                  "operation_state": SocialActionStatus.NOT_STARTED.value,
+                  "provider_attempted": False,
                   "summary": f"{intent.action.value} on approved opaque reference",
                   "expires_at": _now_rfc3339(expires),
                   "required_scopes": sorted(intent.required_scopes)}
@@ -2629,7 +2684,10 @@ class SocialWorkspaceRuntime:
         }
         if not browser_approved and not credential_approved:
             self._audit(principal, platform=None, operation="commit", outcome="denied", reason="invalid_commit_shape")
-            raise SocialWorkspaceRuntimeError("commit requires exact browser-approved fields")
+            raise SocialWorkspaceRuntimeError(
+                "commit requires exact browser-approved fields",
+                error_code="INVALID_COMMIT_SHAPE",
+            )
         prep_ref = str(payload["preparation_ref"])
         digest = str(payload["action_digest"])
         now = self._now()
@@ -2642,16 +2700,63 @@ class SocialWorkspaceRuntime:
                 (self._hash(prep_ref),),
             ).fetchone()
         if preflight is None:
-            raise SocialWorkspaceRuntimeError("approval or preparation is invalid")
+            raise SocialWorkspaceRuntimeError(
+                "approval or preparation is invalid",
+                error_code="PREPARATION_UNKNOWN",
+            )
+        self._audit(
+            principal,
+            platform=str(preflight["platform"]),
+            operation="commit_ingress",
+            outcome="resolved",
+            reason="preparation_resolved",
+            action_digest=digest,
+        )
         if (
             preflight["client_hash"],
             preflight["subject_hash"],
             preflight["resource_hash"],
-            preflight["action_digest"],
-        ) != (client, subject, resource, digest):
-            raise SocialWorkspaceRuntimeError("preparation binding mismatch")
+        ) != (client, subject, resource):
+            raise SocialWorkspaceRuntimeError(
+                "preparation binding mismatch",
+                error_code="PREPARATION_BINDING_MISMATCH",
+            )
+        if preflight["action_digest"] != digest:
+            raise SocialWorkspaceRuntimeError(
+                "preparation action digest mismatch",
+                error_code="ACTION_DIGEST_MISMATCH",
+            )
+        with self.store._lock, self.store._connect() as conn:
+            existing = conn.execute(
+                """SELECT operation_ref FROM social_workspace_operation
+                   WHERE preparation_hash=? AND client_hash=? AND subject_hash=?
+                     AND resource_hash=?""",
+                (self._hash(prep_ref), client, subject, resource),
+            ).fetchone()
+        if existing is not None:
+            operation = str(existing["operation_ref"])
+            self._audit(
+                principal,
+                platform=str(preflight["platform"]),
+                operation="commit_ingress",
+                outcome="replayed",
+                reason="operation_already_committed",
+                action_digest=digest,
+            )
+            return await self.status("operation", operation, context)
         if int(preflight["expires_at"]) <= now:
-            raise SocialWorkspaceRuntimeError("approval or preparation expired")
+            raise SocialWorkspaceRuntimeError(
+                "approval or preparation expired",
+                error_code="PREPARATION_EXPIRED",
+            )
+        self._audit(
+            principal,
+            platform=str(preflight["platform"]),
+            operation="commit_ingress",
+            outcome="started",
+            reason="preflight_started",
+            action_digest=digest,
+        )
         preflight_intent = self._intent_from_row(preflight)
         self._enforce_document_runtime_policy(preflight_intent)
         if not social_scopes_authorized(
@@ -2665,6 +2770,7 @@ class SocialWorkspaceRuntime:
         await self._reverify_document_assets(
             preflight_intent, principal, preflight_assets
         )
+        replay_existing = False
         with self.store._lock, self.store._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
@@ -2716,42 +2822,50 @@ class SocialWorkspaceRuntime:
                     raise SocialWorkspaceRuntimeError("approval or preparation expired")
                 intent = self._intent_from_row(prep)
                 self._enforce_document_runtime_policy(intent)
-                direct_user_authorized = (
-                    browser_approved
-                    and prep["status"] == SocialActionStatus.APPROVED.value
-                    and intent.action in DIRECT_USER_AUTHORIZED_ACTIONS
-                )
-                if not direct_user_authorized:
-                    if approval is None:
-                        raise SocialWorkspaceRuntimeError(
-                            "approval or preparation is invalid"
-                        )
-                    expected_binding = (
-                        client,
-                        subject,
-                        resource,
-                        digest,
-                        self._hash(prep_ref),
-                        prep["target_ref_hash"],
+                existing_operation = conn.execute(
+                    """SELECT * FROM social_workspace_operation
+                       WHERE preparation_hash=? AND client_hash=? AND subject_hash=?
+                         AND resource_hash=?""",
+                    (self._hash(prep_ref), client, subject, resource),
+                ).fetchone()
+                direct_user_authorized = False
+                if existing_operation is None:
+                    direct_user_authorized = (
+                        browser_approved
+                        and prep["status"] == SocialActionStatus.APPROVED.value
+                        and intent.action in DIRECT_USER_AUTHORIZED_ACTIONS
                     )
-                    actual_binding = (
-                        approval["client_hash"],
-                        approval["subject_hash"],
-                        approval["resource_hash"],
-                        approval["action_digest"],
-                        approval["preparation_hash"],
-                        approval["target_ref_hash"],
-                    )
-                    if expected_binding != actual_binding:
-                        raise SocialWorkspaceRuntimeError("approval binding mismatch")
-                    if int(approval["expires_at"]) <= now:
-                        raise SocialWorkspaceRuntimeError(
-                            "approval or preparation expired"
+                    if not direct_user_authorized:
+                        if approval is None:
+                            raise SocialWorkspaceRuntimeError(
+                                "approval or preparation is invalid"
+                            )
+                        expected_binding = (
+                            client,
+                            subject,
+                            resource,
+                            digest,
+                            self._hash(prep_ref),
+                            prep["target_ref_hash"],
                         )
-                    if approval["consumed_at"] is not None:
-                        raise SocialWorkspaceRuntimeError(
-                            "approval receipt was already consumed"
+                        actual_binding = (
+                            approval["client_hash"],
+                            approval["subject_hash"],
+                            approval["resource_hash"],
+                            approval["action_digest"],
+                            approval["preparation_hash"],
+                            approval["target_ref_hash"],
                         )
+                        if expected_binding != actual_binding:
+                            raise SocialWorkspaceRuntimeError("approval binding mismatch")
+                        if int(approval["expires_at"]) <= now:
+                            raise SocialWorkspaceRuntimeError(
+                                "approval or preparation expired"
+                            )
+                        if approval["consumed_at"] is not None:
+                            raise SocialWorkspaceRuntimeError(
+                                "approval receipt was already consumed"
+                            )
                 verified_assets = self._asset_metadata_for_intent(
                     intent, principal, conn=conn
                 )
@@ -2766,41 +2880,51 @@ class SocialWorkspaceRuntime:
                 ):
                     raise SocialWorkspaceRuntimeError("required social action scope is missing")
                 target_ref = self._action_budget_target_ref(intent, conn)
-                self._consume_budget_on_conn(conn, principal, intent.platform.value,
-                                             target_ref, intent.action.value, "attempts", 1, now)
-                self._consume_budget_on_conn(
-                    conn, principal, intent.platform.value, target_ref,
-                    intent.action.value, "media",
-                    len(intent.content.media) if intent.content else 0, now,
-                )
-                if not direct_user_authorized:
-                    changed = conn.execute(
-                        """UPDATE social_workspace_approval SET consumed_at=?
-                           WHERE approval_hash=? AND consumed_at IS NULL""",
-                        (now, approval["approval_hash"]),
-                    ).rowcount
-                    if changed != 1:
-                        raise SocialWorkspaceRuntimeError(
-                            "approval receipt was already consumed"
-                        )
-                operation = str(prep["operation_ref"] or ("op_" + secrets.token_urlsafe(24)))
-                if not prep["operation_ref"]:
-                    conn.execute(
-                        "UPDATE social_workspace_preparation SET operation_ref=? WHERE preparation_hash=?",
-                        (operation, self._hash(prep_ref)),
+                if existing_operation is not None:
+                    operation = str(existing_operation["operation_ref"])
+                    replay_existing = True
+                else:
+                    self._consume_budget_on_conn(
+                        conn, principal, intent.platform.value, target_ref,
+                        intent.action.value, "attempts", 1, now,
                     )
-                conn.execute(
-                    """INSERT INTO social_workspace_operation(operation_hash,operation_ref,
-                       preparation_hash,client_hash,subject_hash,resource_hash,platform,action,
-                       target_ref_hash,status,retry_safe,provider_attempted_at,created_at,updated_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (self._hash(operation), operation, self._hash(prep_ref), client, subject,
-                     resource, intent.platform.value, intent.action.value,
-                     self._hash(target_ref) if target_ref else None,
-                     SocialActionStatus.PROVIDER_ATTEMPTED.value, 0, now, now, now),
-                )
-                conn.execute("UPDATE social_workspace_preparation SET status=? WHERE preparation_hash=?",
-                             (SocialActionStatus.COMMITTED.value, self._hash(prep_ref)))
+                    self._consume_budget_on_conn(
+                        conn, principal, intent.platform.value, target_ref,
+                        intent.action.value, "media",
+                        len(intent.content.media) if intent.content else 0, now,
+                    )
+                    if not direct_user_authorized:
+                        changed = conn.execute(
+                            """UPDATE social_workspace_approval SET consumed_at=?
+                               WHERE approval_hash=? AND consumed_at IS NULL""",
+                            (now, approval["approval_hash"]),
+                        ).rowcount
+                        if changed != 1:
+                            raise SocialWorkspaceRuntimeError(
+                                "approval receipt was already consumed"
+                            )
+                    operation = str(
+                        prep["operation_ref"] or ("op_" + secrets.token_urlsafe(24))
+                    )
+                    if not prep["operation_ref"]:
+                        conn.execute(
+                            "UPDATE social_workspace_preparation SET operation_ref=? WHERE preparation_hash=?",
+                            (operation, self._hash(prep_ref)),
+                        )
+                    conn.execute(
+                        """INSERT INTO social_workspace_operation(operation_hash,operation_ref,
+                           preparation_hash,client_hash,subject_hash,resource_hash,platform,action,
+                           target_ref_hash,status,retry_safe,provider_attempted_at,created_at,updated_at)
+                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (self._hash(operation), operation, self._hash(prep_ref), client, subject,
+                         resource, intent.platform.value, intent.action.value,
+                         self._hash(target_ref) if target_ref else None,
+                         SocialActionStatus.PROVIDER_ATTEMPTED.value, 0, now, now, now),
+                    )
+                    conn.execute(
+                        "UPDATE social_workspace_preparation SET status=? WHERE preparation_hash=?",
+                        (SocialActionStatus.COMMITTED.value, self._hash(prep_ref)),
+                    )
                 conn.execute("COMMIT")
             except Exception as exc:
                 conn.execute("ROLLBACK")
@@ -2808,12 +2932,43 @@ class SocialWorkspaceRuntime:
                     """INSERT INTO social_workspace_audit(principal_hash,platform,operation,
                        target_ref_hash,action_digest,outcome,reason_code,response_bytes,
                        media_items,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                    (self._principal_hash(principal), None, "commit", None,
-                     None, "denied", type(exc).__name__.lower()[:64], 0, 0, self._now()),
+                    (self._principal_hash(principal), str(preflight["platform"]),
+                     "commit", preflight["target_ref_hash"], digest, "denied",
+                     str(getattr(exc, "audit_reason_code", type(exc).__name__)).lower()[:64],
+                     0, 0, self._now()),
                 )
                 raise
         platform = intent.platform.value
         media_count = len(intent.content.media) if intent.content else 0
+        if replay_existing:
+            self._audit(
+                principal,
+                platform=platform,
+                operation="commit_ingress",
+                outcome="replayed",
+                reason="operation_already_committed",
+                target_ref=target_ref,
+                action_digest=digest,
+            )
+            return await self.status("operation", operation, context)
+        self._audit(
+            principal,
+            platform=platform,
+            operation="commit_ingress",
+            outcome="reserved",
+            reason="operation_reserved",
+            target_ref=target_ref,
+            action_digest=digest,
+        )
+        self._audit(
+            principal,
+            platform=platform,
+            operation="commit_ingress",
+            outcome="started",
+            reason="provider_attempt_started",
+            target_ref=target_ref,
+            action_digest=digest,
+        )
         provider_returned = False
         try:
             native = self._native_intent(intent, principal)
@@ -2836,8 +2991,11 @@ class SocialWorkspaceRuntime:
                          "action": intent.action.value,
                          "preparation_ref": prep_ref,
                          "logical_action_ref": str(logical_action),
+                         "preparation_status": SocialActionStatus.COMMITTED.value,
+                         "provider_attempted": True,
                          "attempt_number": 1})
             safe.setdefault("status", SocialActionStatus.SUCCEEDED.value)
+            safe["operation_status"] = safe["status"]
             safe.setdefault("retry_safe", False)
             validate_action_status_response(safe)
             size = len(_json(safe).encode())
@@ -2870,6 +3028,9 @@ class SocialWorkspaceRuntime:
                 "logical_action_ref": str(logical_action),
                 "action": intent.action.value,
                 "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                "preparation_status": SocialActionStatus.COMMITTED.value,
+                "operation_status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                "provider_attempted": True,
                 "retry_safe": False,
                 "attempt_number": 1,
                 "mutation_boundary_reached": True,
@@ -2891,6 +3052,9 @@ class SocialWorkspaceRuntime:
                        "preparation_ref": prep_ref,
                        "logical_action_ref": str(logical_action),
                        "action": intent.action.value, "status": "outcome_unknown",
+                       "preparation_status": SocialActionStatus.COMMITTED.value,
+                       "operation_status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                       "provider_attempted": True,
                        "retry_safe": False, "attempt_number": 1,
                        "mutation_boundary_reached": True,
                        "error_code": "provider_timeout"}
@@ -2906,6 +3070,9 @@ class SocialWorkspaceRuntime:
                     "operation_ref": operation,
                     "action": intent.action.value,
                     "status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                    "preparation_status": SocialActionStatus.COMMITTED.value,
+                    "operation_status": SocialActionStatus.OUTCOME_UNKNOWN.value,
+                    "provider_attempted": True,
                     "retry_safe": False,
                     "error_code": "response_withheld",
                 }
@@ -2924,6 +3091,9 @@ class SocialWorkspaceRuntime:
                       "preparation_ref": prep_ref,
                       "logical_action_ref": str(logical_action),
                       "action": intent.action.value, "status": "failed",
+                      "preparation_status": SocialActionStatus.COMMITTED.value,
+                      "operation_status": SocialActionStatus.FAILED.value,
+                      "provider_attempted": True,
                       "retry_safe": False, "attempt_number": 1,
                       "error_code": "provider_failure"}
             self._finish_operation(operation, failed, "provider_failure")
@@ -2944,7 +3114,10 @@ class SocialWorkspaceRuntime:
             key = self._hash(raw_key)
             row = conn.execute("SELECT amount FROM social_workspace_budget WHERE period=? AND dimension=? AND bucket_hash=? AND metric=?", (period, dimension, key, metric)).fetchone()
             if (int(row["amount"]) if row else 0) + amount > limit:
-                raise SocialWorkspaceRuntimeError(f"{metric} budget exceeded")
+                raise SocialWorkspaceRuntimeError(
+                    f"{metric} budget exceeded",
+                    error_code=f"{metric.upper()}_BUDGET_EXCEEDED",
+                )
             conn.execute("""INSERT INTO social_workspace_budget(period,dimension,bucket_hash,metric,amount,updated_at)
                 VALUES(?,?,?,?,?,?) ON CONFLICT(period,dimension,bucket_hash,metric)
                 DO UPDATE SET amount=amount+excluded.amount,updated_at=excluded.updated_at""",
@@ -2965,11 +3138,37 @@ class SocialWorkspaceRuntime:
             if reference_kind == "operation":
                 row = conn.execute("SELECT * FROM social_workspace_operation WHERE operation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?", (self._hash(reference), client, subject, resource)).fetchone()
                 if row is None:
-                    raise SocialWorkspaceRuntimeError("operation is unknown or not bound")
+                    reserved = conn.execute(
+                        """SELECT * FROM social_workspace_preparation
+                           WHERE operation_ref=? AND client_hash=? AND subject_hash=?
+                             AND resource_hash=?""",
+                        (reference, client, subject, resource),
+                    ).fetchone()
+                    if reserved is None:
+                        raise SocialWorkspaceRuntimeError(
+                            "operation is unknown or not bound",
+                            error_code="OPERATION_UNKNOWN",
+                        )
+                    return {
+                        "platform": reserved["platform"],
+                        "operation_ref": reference,
+                        "preparation_ref": str(reserved["preparation_ref"]),
+                        "logical_action_ref": str(reserved["logical_action_ref"]),
+                        "action": reserved["action"],
+                        "status": SocialActionStatus.NOT_STARTED.value,
+                        "preparation_status": reserved["status"],
+                        "operation_status": SocialActionStatus.NOT_STARTED.value,
+                        "provider_attempted": False,
+                        "mutation_boundary_reached": False,
+                        "retry_safe": False,
+                        "error_code": "operation_not_started",
+                    }
                 if row["result_json"]:
                     return json.loads(row["result_json"])
                 return {"platform": row["platform"], "operation_ref": reference,
                         "action": row["action"], "status": row["status"],
+                        "operation_status": row["status"],
+                        "provider_attempted": row["provider_attempted_at"] is not None,
                         "retry_safe": bool(row["retry_safe"]),
                         "attempt_number": int(row["attempt_number"] or 1)}
             prep = conn.execute("SELECT * FROM social_workspace_preparation WHERE preparation_hash=? AND client_hash=? AND subject_hash=? AND resource_hash=?", (self._hash(reference), client, subject, resource)).fetchone()
@@ -2999,6 +3198,9 @@ class SocialWorkspaceRuntime:
                     return json.loads(linked["result_json"])
                 return {"platform": linked["platform"], "operation_ref": linked["operation_ref"],
                         "action": linked["action"], "status": linked["status"],
+                        "preparation_status": prep["status"],
+                        "operation_status": linked["status"],
+                        "provider_attempted": linked["provider_attempted_at"] is not None,
                         "retry_safe": bool(linked["retry_safe"]),
                         "preparation_ref": str(prep["preparation_ref"]),
                         "logical_action_ref": str(prep["logical_action_ref"]),
@@ -3012,7 +3214,14 @@ class SocialWorkspaceRuntime:
                     (operation_ref, self._hash(reference)),
                 )
             return {"platform": prep["platform"], "operation_ref": operation_ref,
-                    "action": prep["action"], "status": prep["status"], "retry_safe": False}
+                    "preparation_ref": str(prep["preparation_ref"]),
+                    "logical_action_ref": str(prep["logical_action_ref"]),
+                    "action": prep["action"], "status": prep["status"],
+                    "preparation_status": prep["status"],
+                    "operation_status": SocialActionStatus.NOT_STARTED.value,
+                    "provider_attempted": False,
+                    "mutation_boundary_reached": False,
+                    "retry_safe": False}
 
     async def retry(
         self, operation_ref: str, context: ToolCallContext

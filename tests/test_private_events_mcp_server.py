@@ -124,6 +124,14 @@ def test_full_social_catalog_merge_preserves_every_existing_descriptor_and_size(
         asset_ingestor=object(),
     )
     assert server is not None
+    assert server.social_workspace is not None
+    attempts = server.social_workspace._budget_dimension_limits["attempts"]
+    assert attempts == {
+        "global": universal.social_publish_attempts_per_day * 10,
+        "principal": universal.social_publish_attempts_per_day * 10,
+        "target": universal.social_publish_attempts_per_day,
+        "action": universal.social_publish_attempts_per_day,
+    }
     existing = server.protocol.tools
     before = [tool.descriptor() for tool in existing]
     audio = build_audio_transcription_tools(object(), signing_key="s" * 32)
