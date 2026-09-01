@@ -137,6 +137,26 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   configuration. It requires the `*.oaiusercontent.com` family for ChatGPT and
   Codex features, establishing the narrow configuration correction; no generic
   URL downloader or non-OpenAI wildcard is introduced.
+- 2026-09-01 07:52–08:03 UTC — exact `origin/main`
+  `5602eaa7a36e8535935ee6fb7954a5e93c4b9caa` reached Fly release `v2060`
+  with the corrected upload-host family. Four deterministic 96×96 PNG canaries
+  crossed the real ChatGPT connector file materialization and server staging;
+  every staged byte count, MIME, dimension and SHA-256 matched.
+- 2026-09-01 07:54 UTC — a Saved Messages preparation reserved
+  `op_vwK3UF6Y__P1L5Z-VL7-ooz4dEfc-2sK`; its single commit crossed the final
+  Telegram mutation boundary. The adapter returned
+  `outcome_unknown / provider_error`, and its immediate raw scheduled read also
+  failed. An independent user-authorized Telegram provider read found exactly
+  one logical album at `2026-09-01T08:20:00Z`, physical IDs `1–4`, caption
+  SHA-256 `3c3db21049a16cdae3c52b017bd0acde797567dadf0a646a80fdcf2cc3db3397`
+  and `media_count=4`. Thus the schedule mutation had succeeded and the public
+  result was a false unknown caused by scheduled readback.
+- 2026-09-01 07:59 UTC — the authorized canary album was deleted as one exact
+  scheduled group; Telegram provider readback proved all IDs `1–4` absent and
+  the Saved Messages queue contained zero physical/logical scheduled items.
+  A second exact Telethon sequence reproduced the four-upload, album-send,
+  raw-history and group-delete operations with IDs `5–8`; it also finished at
+  zero queue items. No `@lovekenig` or VK mutation was made.
 
 - 2026-08-31, before 10:30 Europe/Kaliningrad — the four-image Telegram and VK
   schedules were prepared for the original slot.
@@ -281,6 +301,14 @@ plus these ordered 1122×1402 PNG SHA-256 values:
     wrong number and server cause. This is distinct from the server budget
     defect, but the ambiguous/generic server contract made the false report
     difficult to detect without production ingress evidence.
+13. **Proven Saved Messages raw-peer mismatch:** the successful MCP mutation
+    and independent provider read proved the album existed, while the adapter's
+    immediate `messages.getScheduledHistory` and every later MCP scheduled read
+    failed. The encrypted target binding replayed a detached Telethon `User`
+    object into raw scheduled methods; the controlled sequence using Telegram's
+    canonical `InputPeerSelf` completed schedule, read and delete. Raw Saved
+    Messages scheduled-history/delete now construct `InputPeerSelf` explicitly;
+    ordinary send/capability behavior is unchanged.
 
 ## Contributing Factors
 
@@ -302,6 +330,9 @@ plus these ordered 1122×1402 PNG SHA-256 values:
   saturated coarse principal bucket.
 - Incident diagnostics and intended product delivery shared one aggregate
   caller budget without reserving capacity per target/action.
+- Fake-provider tests represented Saved Messages with the same generic entity
+  shape as normal peers, so they did not enforce the provider's canonical
+  `InputPeerSelf` constructor for raw scheduled-history/delete methods.
 
 ## Automation Contract
 

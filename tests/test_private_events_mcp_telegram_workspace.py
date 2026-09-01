@@ -155,6 +155,9 @@ class FakeTypes:
     def document_filename(self, file_name):
         return SimpleNamespace(file_name=file_name)
 
+    def self_peer(self):
+        return SimpleNamespace(id=1, workspace_self_peer=True)
+
 
 class FakeAssetReader:
     def __init__(self) -> None:
@@ -2131,7 +2134,9 @@ async def test_no_rights_broadcast_advertises_and_executes_no_mutations(harness)
 
 
 @pytest.mark.asyncio
-async def test_provider_errors_and_outputs_never_leak_native_ids_or_secrets(harness):
+async def test_provider_errors_and_outputs_never_leak_native_ids_or_secrets(
+    harness, caplog
+):
     adapter, client, _, _ = harness
     output = await adapter.read(
         read_request(SocialReadOperation.LIST_ITEMS, target_ref=CHANNEL_REF, limit=1)
@@ -2145,6 +2150,9 @@ async def test_provider_errors_and_outputs_never_leak_native_ids_or_secrets(harn
         await adapter.read(read_request(SocialReadOperation.SEARCH_ITEMS, query="secret"))
     assert str(raised.value) == "Telegram workspace operation failed"
     assert "access_hash" not in repr(raised.value)
+    assert "error_type=RuntimeError" in caplog.text
+    assert "access_hash" not in caplog.text
+    assert "998877" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -2420,6 +2428,29 @@ async def test_scheduled_items_returns_one_logical_four_image_album(harness):
 
 
 @pytest.mark.asyncio
+async def test_saved_messages_scheduled_read_uses_canonical_input_peer_self(harness):
+    adapter, client, _, _ = harness
+    message = Message(1250, "Saved exact")
+    message.date = datetime(2026, 8, 31, 12, 0, tzinfo=timezone.utc)
+    client.scheduled_messages[SELF_REF] = [message]
+
+    result = await adapter.scheduled_items(
+        target_ref=SELF_REF,
+        scheduled_from="2026-08-31T11:59:00Z",
+        scheduled_to="2026-08-31T12:01:00Z",
+        text_sha256=hashlib.sha256(b"Saved exact").hexdigest(),
+        media_count=0,
+        limit=10,
+    )
+
+    assert result["exact_match_count"] == 1
+    scheduled_call = next(
+        values for name, values in client.calls if name == "scheduled_history"
+    )
+    assert scheduled_call["peer"].workspace_self_peer is True
+
+
+@pytest.mark.asyncio
 async def test_schedule_reconciliation_converges_from_unknown_to_exact_raw_match(harness):
     adapter, client, refs, _ = harness
     operation_ref = "op_restartreconcile000000000001"
@@ -2526,6 +2557,33 @@ async def test_scheduled_delete_uses_raw_namespace_and_verifies_album_absence(ha
     assert [name for name, _ in client.calls].count("delete_scheduled") == 1
     assert [name for name, _ in client.calls].count("delete_messages") == 0
     assert client.scheduled_messages[CHANNEL_REF] == []
+
+
+@pytest.mark.asyncio
+async def test_saved_messages_scheduled_delete_uses_input_peer_self(harness):
+    adapter, client, refs, _ = harness
+    scheduled_ref = "itm_savedscheduledalbum0001"
+    refs.items[scheduled_ref] = TelegramScheduledItemBinding(
+        scheduled_ref,
+        SELF_REF,
+        1550,
+        frozenset({SocialAction.DELETE}),
+        SocialItemKind.MESSAGE,
+    )
+    message = Message(1550, "Delete saved exact")
+    client.scheduled_messages[SELF_REF] = [message]
+
+    result = await adapter.execute(
+        intent(SocialAction.DELETE, item_ref=scheduled_ref),
+        operation_ref="op_deletesavedscheduled00000001",
+    )
+
+    assert result["status"] == "succeeded"
+    delete_call = next(
+        values for name, values in client.calls if name == "delete_scheduled"
+    )
+    assert delete_call["peer"].workspace_self_peer is True
+    assert client.scheduled_messages[SELF_REF] == []
 
 
 @pytest.mark.asyncio
