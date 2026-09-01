@@ -17,6 +17,7 @@ import copy
 import hashlib
 import inspect
 import io
+import logging
 import re
 import secrets
 import unicodedata
@@ -48,6 +49,7 @@ from private_events_mcp.social_workspace import (
 )
 
 _TRUST = "untrusted_external_data"
+_LOGGER = logging.getLogger(__name__)
 _MAX_PAGE = 25
 _MAX_SAMPLE = 100
 _MAX_GLOBAL_SCAN = 100
@@ -492,6 +494,7 @@ class _DefaultTelethonTypes:
                 (types, "ReactionCustomEmoji"),
                 (types, "InputMessagesFilterEmpty"),
                 (types, "InputPeerEmpty"),
+                (types, "InputPeerSelf"),
                 (types, "ChatBannedRights"),
             )
             if any(not hasattr(owner, name) for owner, name in required):
@@ -658,6 +661,12 @@ class _DefaultTelethonTypes:
                 period=values.get("period"),
             )
         raise TelegramWorkspaceError("unsupported_provider_feature")
+
+    def self_peer(self) -> Any:
+        """Return Telegram's canonical raw-API peer for Saved Messages."""
+
+        _, types = self._load()
+        return types.InputPeerSelf()
 
     def upload_media(
         self,
@@ -928,6 +937,18 @@ class TelegramWorkspaceAdapter:
                     retry_safe=not attempt.provider_mutation_attempted,
                     retry_after_seconds=wait,
                 ) from None
+            # Persist only a bounded provider class/code fingerprint. Never log
+            # the exception message: Telegram RPC text may contain native ids or
+            # other provider material that must not cross this boundary.
+            provider_code = getattr(exc, "code", None)
+            _LOGGER.warning(
+                "telegram_workspace_provider_error operation=%s error_type=%s "
+                "provider_code=%s mutation_started=%s",
+                operation[:64],
+                type(exc).__name__[:96],
+                provider_code if type(provider_code) is int else "none",
+                attempt.provider_mutation_attempted,
+            )
             raise TelegramWorkspaceError(
                 "provider_error", retry_safe=not attempt.provider_mutation_attempted
             ) from None
@@ -2217,9 +2238,8 @@ class TelegramWorkspaceAdapter:
     ) -> list[Any]:
         """Return Telegram's complete scheduled queue for one exact peer."""
 
-        request = self._types.request(
-            "scheduled_history", peer=target.entity
-        )
+        peer = self._scheduled_peer(target)
+        request = self._types.request("scheduled_history", peer=peer)
         response = await _await(client(request))
         values = getattr(response, "messages", None)
         if not isinstance(values, Sequence) or isinstance(
@@ -2235,6 +2255,14 @@ class TelegramWorkspaceAdapter:
             if candidate is not None
             and self._message_matches_target(candidate, target)
         ]
+
+    def _scheduled_peer(self, target: TelegramTargetBinding) -> Any:
+        if not target.is_self:
+            return target.entity
+        self_peer = getattr(self._types, "self_peer", None)
+        if not callable(self_peer):
+            raise TelegramWorkspaceError("provider_dependency_unavailable")
+        return self_peer()
 
     async def _scheduled_message_by_id(
         self,
@@ -3833,13 +3861,14 @@ class TelegramWorkspaceAdapter:
                         raise TelegramWorkspaceError("item_not_found")
                     album = self._ordered_album_members(observed, scheduled_messages)
                     message_ids = [_provider_message_id(member) for member in album]
+                    peer = self._scheduled_peer(source)
                     await attempt.mark_mutation()
                     await self._call(
                         client,
                         lease,
                         self._types.request(
                             "delete_scheduled",
-                            peer=source.entity,
+                            peer=peer,
                             message_ids=message_ids,
                         ),
                     )

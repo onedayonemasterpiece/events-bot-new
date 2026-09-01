@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fixed: Telegram Saved Messages scheduled-history and scheduled-delete calls
+  now use the canonical MTProto `InputPeerSelf` instead of replaying a detached
+  stored `User` entity into raw scheduled-message methods. Provider-boundary
+  diagnostics retain only operation, exception class, integer RPC code and the
+  mutation-boundary boolean; native exception text remains redacted. This
+  prevents a successfully created multi-image Saved Messages canary from being
+  misreported as `outcome_unknown` when its immediate scheduled readback fails.
+  Regression contract:
+  `INC-2026-08-31-mcp-scheduled-readback-reschedule`.
+
 - Fixed: Private `eventsBot` MCP media ingress now follows OpenAI's documented
   ChatGPT/Codex upload-domain family (`*.oaiusercontent.com`) instead of the
   obsolete single-host assumption `files.oaiusercontent.com`. The existing
