@@ -446,8 +446,13 @@ class SocialWorkspaceRuntime:
                 "target_ref",
                 "kind",
                 "published_at",
+                "scheduled_at",
+                "queue",
                 "text",
                 "caption",
+                "text_sha256",
+                "media_count",
+                "media_roles",
             )
             if key in value
         }
@@ -457,6 +462,37 @@ class SocialWorkspaceRuntime:
                    VALUES(?,?,?) ON CONFLICT(ref_hash) DO UPDATE SET
                    preview_json=excluded.preview_json,created_at=excluded.created_at""",
                 (self._hash(public_ref), self._encrypt(_json(allowed)), self._now()),
+            )
+
+    def _store_scheduled_item_previews(
+        self,
+        value: Mapping[str, Any],
+        *,
+        platform: str,
+        target_ref: str,
+    ) -> None:
+        """Keep enough closed scheduled identity for exact delete approval."""
+
+        items = value.get("items")
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if not isinstance(item, Mapping):
+                continue
+            item_ref = item.get("item_ref")
+            if not isinstance(item_ref, str) or _REF_RE.fullmatch(item_ref) is None:
+                continue
+            self._store_item_preview(
+                item_ref,
+                {
+                    **item,
+                    "target_ref": target_ref,
+                    "kind": (
+                        "scheduled_message"
+                        if platform == "telegram"
+                        else "scheduled_post"
+                    ),
+                },
             )
 
     @staticmethod
@@ -2136,6 +2172,11 @@ class SocialWorkspaceRuntime:
                 raise SocialWorkspaceRuntimeError(
                     "scheduled queue response must be an object"
                 )
+            self._store_scheduled_item_previews(
+                projected,
+                platform=platform,
+                target_ref=request.target_ref,
+            )
             size = len(_json(projected).encode("utf-8"))
             self._consume_budget(
                 principal,
