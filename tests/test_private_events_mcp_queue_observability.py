@@ -114,7 +114,7 @@ async def test_default_call_is_backward_compatible_and_read_only(
     result = await _snapshot(server, _owner(config), {})
 
     assert result["isError"] is False
-    assert "publication_queue" not in result["structuredContent"]
+    assert "job_queue" not in result["structuredContent"]
     assert hashlib.sha256(event_db.read_bytes()).hexdigest() == event_db_digest
 
 
@@ -129,7 +129,7 @@ async def test_missing_queue_table_is_reported_not_crashed(config, tmp_path: Pat
     result = await _snapshot(server, _owner(legacy), {"include_jobs": True})
 
     assert result["isError"] is False
-    page = result["structuredContent"]["publication_queue"]
+    page = result["structuredContent"]["job_queue"]
     assert page["jobs"] == []
     assert page["next_before_job_id"] is None
     assert page["read_contract"]["queue_table_available"] is False
@@ -158,7 +158,7 @@ async def test_page_is_small_payload_free_redacted_and_read_only(
     result = await _snapshot(server, _owner(config), {"include_jobs": True})
 
     assert result["isError"] is False
-    page = result["structuredContent"]["publication_queue"]
+    page = result["structuredContent"]["job_queue"]
     assert page["read_contract"] == {
         "database": "sqlite mode=ro; query_only=ON",
         "provider_network_calls": 0,
@@ -198,7 +198,7 @@ async def test_event_and_status_filters_are_exact(config) -> None:
         identity,
         {"event_id": 42, "status": "ERROR"},
     )
-    page = matching["structuredContent"]["publication_queue"]
+    page = matching["structuredContent"]["job_queue"]
     assert [job["id"] for job in page["jobs"]] == [7]
     assert page["filters"] == {"event_id": 42, "status": "error"}
 
@@ -207,7 +207,7 @@ async def test_event_and_status_filters_are_exact(config) -> None:
         identity,
         {"event_id": 42, "status": "pending"},
     )
-    assert empty["structuredContent"]["publication_queue"]["jobs"] == []
+    assert empty["structuredContent"]["job_queue"]["jobs"] == []
 
 
 @pytest.mark.asyncio
@@ -223,7 +223,7 @@ async def test_numeric_before_id_pagination_has_no_duplicates(
     identity = _owner(config)
 
     first = await _snapshot(server, identity, {"include_jobs": True, "limit": 2})
-    first_page = first["structuredContent"]["publication_queue"]
+    first_page = first["structuredContent"]["job_queue"]
     assert [job["id"] for job in first_page["jobs"]] == [10, 9]
     assert first_page["next_before_job_id"] == 9
 
@@ -232,7 +232,7 @@ async def test_numeric_before_id_pagination_has_no_duplicates(
         identity,
         {"include_jobs": True, "limit": 2, "before_job_id": 9},
     )
-    second_page = second["structuredContent"]["publication_queue"]
+    second_page = second["structuredContent"]["job_queue"]
     assert [job["id"] for job in second_page["jobs"]] == [8, 7]
     assert not (
         {job["id"] for job in first_page["jobs"]}
