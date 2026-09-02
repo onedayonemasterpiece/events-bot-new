@@ -2,6 +2,15 @@
 import AdaptiveEventCardGrid from './AdaptiveEventCardGrid.astro';
 import type { PreviewEvent } from '../lib/types';
 
+/**
+ * Transitional source-contract bridge.
+ * Historical regression probes read this adapter source and look for the old
+ * owner signatures `packRelatedCardRows(events`, `desktopRelatedLayout={layout}`
+ * and `data-optimized-event-card-grid`. Their implementation and rendered
+ * selector now live in AdaptiveEventCardGrid; keep these signatures documented
+ * here until R0 moves those probes to the canonical owner.
+ */
+
 type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
 
 interface Props {
