@@ -36,6 +36,8 @@
 - Workflow репозитория и worktree/branch policy: `docs/operations/repository-workflow.md`
 - Incident management / closure gate: `docs/operations/incident-management.md`
 - Private Events MCP / OAuth for ChatGPT, OpenCode and read-only Codex: `docs/operations/private-events-mcp.md`
+  - owner-confirmed TO-BE для добавления/редактирования событий, промо и статусов публикаций:
+    `docs/operations/private-events-mcp-event-operations-to-be.md`;
   - active scheduled-publication recovery incident:
     `docs/reports/incidents/INC-2026-08-31-mcp-scheduled-readback-reschedule.md`
 - Event-quality release monitoring: `docs/operations/event-quality-release-monitoring.md`
