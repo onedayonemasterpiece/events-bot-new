@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,30 @@ async def test_default_snapshot_is_backward_compatible_and_read_only(
     assert result["isError"] is False
     assert "publication_queue" not in result["structuredContent"]
     assert hashlib.sha256(event_db.read_bytes()).hexdigest() == event_db_digest
+
+
+@pytest.mark.asyncio
+async def test_legacy_database_without_joboutbox_is_reported_not_crashed(
+    config,
+    tmp_path: Path,
+) -> None:
+    legacy_db = tmp_path / "legacy-empty.sqlite"
+    sqlite3.connect(legacy_db).close()
+    legacy_config = replace(config, database_path=str(legacy_db))
+    server = attach_private_events_mcp(web.Application(), legacy_config)
+    assert server is not None
+
+    result = await _operations_snapshot(
+        server,
+        _owner_identity(legacy_config),
+        {"include_jobs": True},
+    )
+
+    assert result["isError"] is False
+    page = result["structuredContent"]["publication_queue"]
+    assert page["jobs"] == []
+    assert page["next_cursor"] is None
+    assert page["read_contract"]["queue_table_available"] is False
 
 
 @pytest.mark.asyncio
