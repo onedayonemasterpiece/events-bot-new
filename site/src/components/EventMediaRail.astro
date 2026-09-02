@@ -24,7 +24,7 @@ const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
   .map((item) => `${item.src} ${item.width}w`)
   .join(', ');
 const mediaFrameKind = (asset: EventImageAsset) => {
-  if (['error', 'stale', 'pending'].includes(asset.media_semantic_status || '')) return 'unknown';
+  if (['error', 'stale'].includes(asset.media_semantic_status || '')) return 'unknown';
   if (asset.image_text_mode === 'visual_only') return 'visual';
   if (asset.image_text_mode === 'ocr_text') return 'document';
   return 'unknown';
