@@ -78,6 +78,13 @@ const hasSideRail = visibleIdentityCount > 0 || hasRailProof;
 const splitIdentityProofRail = hasRailProof && visibleIdentityCount === 3 && density !== 'regular';
 const tailWidth = splitIdentityProofRail ? 96 : hasSideRail ? (visibleIdentityCount === 0 ? 40 : 64) : 0;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
+const cardState = [
+  priority && 'priority',
+  supplemental && 'supplemental',
+  temporalLabel && 'temporal-label',
+  hasSocialProof && 'social-proof',
+  mediaFrameKind === 'fallback' && 'media-fallback',
+].filter(Boolean).join(' ') || undefined;
 const style = [
   `--ke-listing-image-ratio:${image.ratio.toFixed(5)}`,
   `--ke-listing-object-position:${image.objectPosition}`,
@@ -102,9 +109,10 @@ const socialProofLabel = [
   class="ke-listing-card"
   style={style}
   data-ds-component="ListingEventCard"
+  data-ds-family="ListingEventCard"
   data-ds-version="9"
-  data-card-root="ListingEventCard"
-  data-card-variant={density}
+  data-ds-variant={density}
+  data-ds-state={cardState}
   data-feedback-scope
   data-listing-item
   data-listing-supplemental={supplemental ? 'true' : undefined}
@@ -151,6 +159,7 @@ const socialProofLabel = [
     data-media-frame-source-width={image.asset?.width}
     data-media-frame-source-height={image.asset?.height}
     data-media-frame-loading={priority ? 'eager' : 'lazy'}
+    data-media-frame-priority={priority ? 'true' : undefined}
   >
     {imageUrl ? (
       <img
