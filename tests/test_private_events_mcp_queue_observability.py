@@ -274,6 +274,10 @@ async def test_queue_redacts_bearer_and_assignment_credentials(
             {"include_jobs": False, "status": "pending"},
             "include_jobs=false cannot be combined with queue filters",
         ),
+        (
+            {"include_jobs": True, "task": "telegraph_build"},
+            "task requires event_id in R0",
+        ),
         ({"include_jobs": True, "cursor": "not-a-valid-cursor"}, "cursor is invalid"),
         (
             {"include_jobs": True, "due_after": "2026-08-01T00:00:00Z"},
