@@ -232,17 +232,15 @@ def attach_owner_queue_observability(server: Any) -> None:
             raise RuntimeError("operations_snapshot returned a non-object result")
         return {
             **baseline,
-            "publication_queue": await publication_queue_page(
-                server.repository, arguments
-            ),
+            "job_queue": await publication_queue_page(server.repository, arguments),
         }
 
     enhanced = replace(
         original,
         description=(
             original.description
-            + " Owner ChatGPT/OpenCode may request one small payload-free job page; "
-            "fetch job:<id> for existing detail evidence."
+            + " Owner ChatGPT/OpenCode may request one small payload-free JobOutbox "
+            "page; fetch job:<id> for existing detail evidence."
         ),
         input_schema=input_schema,
         handler=operations_snapshot_with_queue,
@@ -254,7 +252,7 @@ def attach_owner_queue_observability(server: Any) -> None:
     server.protocol.by_name = {tool.name: tool for tool in server.protocol.tools}
     server.protocol.policy_fingerprint += "+queue-observability-r0"
     server.protocol.instructions += (
-        " For owner queue inspection, call operations_snapshot with "
+        " For owner JobOutbox inspection, call operations_snapshot with "
         "include_jobs=true or a bounded event/status filter, then fetch job:<id> "
         "for detail."
     )
