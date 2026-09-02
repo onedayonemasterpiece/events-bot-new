@@ -24,10 +24,17 @@ const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
   .map((item) => `${item.src} ${item.width}w`)
   .join(', ');
 const mediaFrameKind = (asset: EventImageAsset) => {
-  if (asset.media_semantic_status === 'error') return 'unknown';
+  if (['error', 'stale', 'pending'].includes(asset.media_semantic_status || '')) return 'unknown';
   if (asset.image_text_mode === 'visual_only') return 'visual';
   if (asset.image_text_mode === 'ocr_text') return 'document';
   return 'unknown';
+};
+const mediaFrameFit = (asset: EventImageAsset) => mediaFrameKind(asset) === 'visual' ? 'cover' : 'contain';
+const mediaFrameCropReason = (asset: EventImageAsset) => {
+  if (mediaFrameKind(asset) === 'visual') return 'gallery_visual_only_cover';
+  if (asset.media_semantic_status && asset.media_semantic_status !== 'classified') return 'semantic_status_fail_closed';
+  if (asset.image_text_mode === 'ocr_text') return 'gallery_document_contain';
+  return 'gallery_unknown_contain';
 };
 const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.height > 0
   ? asset.width / asset.height
@@ -44,8 +51,8 @@ const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.hei
         data-media-frame-contract="v1"
         data-media-frame-surface="media-rail"
         data-media-frame-kind={mediaFrameKind(asset)}
-        data-media-frame-fit="cover"
-        data-media-frame-crop-reason="gallery_thumbnail_navigation"
+        data-media-frame-fit={mediaFrameFit(asset)}
+        data-media-frame-crop-reason={mediaFrameCropReason(asset)}
         data-media-frame-source-width={asset.width || undefined}
         data-media-frame-source-height={asset.height || undefined}
         data-media-frame-loading="eager"
@@ -63,6 +70,7 @@ const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.hei
           alt=""
           loading="eager"
           decoding="async"
+          style={`object-fit:${mediaFrameFit(asset)}`}
           data-media-frame-image
         />
       </button>
