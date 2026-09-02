@@ -205,6 +205,9 @@ async def test_exact_input_packet_returns_noop_before_llm_or_writes(
     db = Database(str(tmp_path / "noop.sqlite"))
     await db.init()
     try:
+        # This fixed-date identity replay must not turn into a wall-clock
+        # past-event policy test after the fixture date passes.
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         monkeypatch.setattr(su, "SMART_UPDATE_LLM_DISABLED", True)
         monkeypatch.setattr(su, "SMART_UPDATE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
         monkeypatch.setattr(su, "SMART_UPDATE_MERGE_IDENTITY_GATE_MODE", IdentityGateMode.OFF)
@@ -720,6 +723,9 @@ async def test_distinct_create_enqueues_festival_only_after_identity_acceptance(
     db = Database(str(tmp_path / "festival-gate.sqlite"))
     await db.init()
     try:
+        # This fixed-date festival identity test isolates merge/fan-out ordering;
+        # wall-clock past-event policy is covered separately.
+        monkeypatch.setenv("SMART_UPDATE_SKIP_PAST_EVENTS", "0")
         async with db.get_session() as session:
             event = Event(
                 title="Лекция",
