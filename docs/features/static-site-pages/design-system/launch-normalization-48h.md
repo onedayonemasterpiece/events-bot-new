@@ -17,111 +17,92 @@ paths:
   contracts/launch-normalized-ui.v1.yaml
 ```
 
-## Launch authority
+## Current implementation facts
 
-This repository owns the executable normalized UI:
+This repository already contains the executable UI, semantic foundations,
+shared components, actual route compositions, preview hub and release tooling.
+The launch work normalizes historical drift; it does not create a new design
+system from scratch.
 
-- `site/src/styles/design-system.css` — foundations and semantic tokens;
-- `site/src/components/design-system/` — shared primitives;
-- `site/src/components/` — product component families;
-- `site/src/layouts/` and `site/src/pages/` — actual route compositions;
-- existing local, preview, production, secret-candidate and Kaggle build paths.
-
-`lovekgd-design-system` stores only stable IDs, variant/state decisions, Golden
-Corpus and route bindings, Penpot placement and visual status. It does not hold
-a second independently edited Astro implementation during this launch.
-
-## Owner review is route review
-
-Do not create `/lab/launch/*` pages. Do not require the owner to review shared
-components on separate laboratory pages.
-
-Golden fixtures are injected into the actual route templates:
+Actual date/weekend semantics:
 
 ```text
-/date-{FRIDAY}/
-/date-{SATURDAY}/
-/date-{SUNDAY}/
-/vyhodnye/{SATURDAY}/
-/podborki/besplatnye-sobytiya/
+/segodnya/                  current build date
+/zavtra/                    next date
+/date-YYYY-MM-DD/           arbitrary date
+/vyhodnye/                  active/nearest weekend
+/vyhodnye/YYYY-MM-DD/       selected available weekend range
 ```
 
-The exact URLs may be served from an immutable preview host or build prefix, but
-the rendered layouts and components must be the production route
-implementations. Issue #621 publishes all clickable links.
+The first three use the shared `DateListingSurface`; weekend routes use the
+distinct `WeekendListingSurface`. Intentional page composition differences are
+preserved while shared foundations, cards, media, controls and icons are
+normalized.
 
-The existing `/lab/design-system/` remains an optional internal regression
-harness only. It is not an owner checkpoint, is not expanded in this programme
-and cannot prove that actual routes reuse one component family.
+## Owner review uses fresh real data
 
-## Component identity and reuse
+Do not create `/lab/launch/*` routes and do not require the owner to review
+components in isolation.
 
-For each normalized family:
-
-1. one central Astro implementation owns the visible component;
-2. all launch routes use that implementation, not page-local copies;
-3. debug/browser evidence exposes `family_id`, version/state and fixture without
-   changing layout;
-4. source checks reject forbidden local overrides and deprecated consumers;
-5. thin S binds the family to exact source paths and actual route consumers;
-6. Penpot route boards use linked instances of one native master/variant family;
-7. V0 verifies the actual route DOM/bounds against the matching Penpot board.
-
-This is how a medallion, card or control is proved to be the same component on
-multiple pages. Visual similarity alone is insufficient.
-
-## Normalization, not copying current drift
-
-Current Astro is `A0`: useful and substantially implemented, but historically
-fragmented.
+The existing preview build exposes one owner entry point:
 
 ```text
-bounded family/consumer census
-→ component / variant / state / composition decision
-→ normalize central foundations and family implementation
-→ migrate actual route consumers
-→ review actual Golden routes
-→ update thin S
-→ create native Penpot master and linked route instances
-→ V0 verdict
+/<buildId>/__preview/
 ```
 
-Reuse the current runtime code and checks plus PR #37/#42/#43/#52 and healthy
-old-Penpot assets/anatomy. Do not reconstruct from scratch.
+The release/data lane must:
 
-## Golden review before real-data review
+1. export a fresh bounded production-event snapshot through the existing
+   exporter;
+2. build the existing preview profile on the normalization integration branch;
+3. publish the exact clickable `/<buildId>/__preview/` URL to issue #621;
+4. rebuild the same preview after each meaningful normalization wave.
 
-Use a fixed `Europe/Kaliningrad` clock and three consecutive dates:
+The owner opens actual product routes from that hub and checks visual sanity.
+The existing `/lab/design-system/` remains unchanged as an internal automated
+regression harness only; it is not an owner checkpoint.
 
-- Friday single-date page: target 5 events, minimum 4;
-- Saturday single-date page: target 6, minimum 5;
-- Sunday single-date page: target 5, minimum 4;
-- weekend page reusing exactly the Saturday/Sunday occurrences;
-- free collection derived from the same corpus.
+## Internal Golden A=S=P
 
-The corpus covers materially different media, title/address length, time,
-admission, calendar and cancellation/reschedule cases. After owner acceptance,
-the same route implementations are built from current production events.
-
-## Work ownership
-
-- `N0`: documentation, Golden Corpus, integration and release;
-- `F0`: foundations, primitives, icons and brand;
-- `M0`: MediaFrame and component/card families;
-- `A0`: shell, listings and route archetypes;
-- `V0`: actual-route browser/Penpot visual review;
-- `K0`: detailed consultant and prompt author;
-- `R0`: Codex implementation worktrees and sole Penpot writer.
-
-The owner is not the message bus. Meaningful results, review links and real
-blockers are posted to issue #621.
-
-## Existing build routes
-
-Reuse the existing build/release system:
+Golden fixtures exist only to make Astro↔Penpot comparisons deterministic.
+With a frozen Friday clock, use the actual route implementations:
 
 ```text
-npm run build
+/segodnya/                            Friday
+/zavtra/                              Saturday
+/date-YYYY-MM-DD/                     Sunday
+/vyhodnye/                            Saturday + Sunday
+/podborki/besplatnye-sobytiya/        free subset
+```
+
+Target event density is `5 / 6 / 5`, minimum `4 / 5 / 4`. Golden selection is
+not an owner-review prerequisite. It supplies identical text, images, states and
+dates to Astro and Penpot after a family is normalized.
+
+## Normalization proof
+
+Each family must have:
+
+- one central Astro implementation;
+- explicit component/variant/state/composition decision;
+- all launch route consumers migrated;
+- no page-local visual copy or forbidden internal override;
+- central foundation, SVG, icon-size and MediaFrame roles;
+- real-data preview rebuilt without visible regression;
+- thin S binding to exact sources and consumers;
+- native Penpot master/variants and linked route instances;
+- internal Golden V0 verdict.
+
+Exactly four semantic icon size roles are required. Concrete dimensions live in
+central tokens/utilities; components choose a role and do not hard-code local
+icon width/height.
+
+## Existing build and release routes
+
+Reuse, do not replace:
+
+```text
+site/scripts/export-production-preview-data.py
 npm run build:preview
 npm run build:production
 npm run build:secret-candidate
@@ -130,19 +111,35 @@ npm run check:preview
 npm run check:production
 npm run check:browser-release
 npm run check:secret-candidate
+scripts/run_static_site_builder_kaggle.py
 ```
 
-The release lane reproduces a current real-data build early, repairs the first
-actual blocker at its component owner and then runs the existing Kaggle
-secret-candidate path on the integrated normalized SHA.
+The current checked-in production catalogue is historical; the programme starts
+by producing a fresh snapshot and current preview. Known browser/media failures,
+including image containment, are repaired at the shared MediaFrame/component
+owner rather than by weakening release checks.
+
+## Work ownership
+
+- `N0`: documentation, fresh real-data export/build, internal Golden corpus,
+  integration and release;
+- `F0`: foundations, primitives, exactly four icon-size roles, SVG and brand;
+- `M0`: MediaFrame and component/card families;
+- `A0`: shell, listings and actual route archetypes;
+- `V0`: real-data visual sanity and internal Golden Astro/Penpot review;
+- `K0`: detailed consultant and prompt author;
+- `R0`: Codex implementation worktrees and sole Penpot writer.
+
+The owner is not the message bus. Meaningful results, review links and real
+blockers are posted to issue #621.
 
 ## Explicit exclusions
 
-Do not add:
+Do not introduce:
 
-- owner-facing lab pages;
+- owner-facing lab pages or owner Golden-corpus review;
 - a new component package/repository;
-- another decoder or global audit;
+- another decoder/global audit;
 - a new orchestration generation;
 - per-candidate provider/lease cryptography;
 - mandatory MAT→QA→INTEGRATE→PUBLISH chains;
@@ -151,6 +148,6 @@ Do not add:
 - full old-Penpot reconstruction;
 - owner-operated result forwarding.
 
-A meaningful checkpoint is an owner-visible actual route, linked Penpot route
-board or real-data candidate—not a commit, isolated lab specimen or empty
-canvas.
+A meaningful checkpoint is a fresh real-data preview, a compact normalization
+report, a native Penpot master with linked route instances or a release
+candidate—not a commit, isolated specimen or empty canvas.
