@@ -62,7 +62,7 @@ const resolved = mode === 'packed'
 <div
   class:list={[
     'cards-grid',
-    'cards-grid--immersive',
+    mode === 'packed' && 'cards-grid--immersive',
     'adaptive-event-card-grid',
     `adaptive-event-card-grid--${mode}`,
     responsiveMobile && 'adaptive-event-card-grid--responsive',
@@ -106,7 +106,7 @@ const resolved = mode === 'packed'
 </div>
 
 <style>
-  .adaptive-event-card-grid {
+  .cards-grid.adaptive-event-card-grid {
     --adaptive-event-card-gap: clamp(.85rem, 1.6vw, 1.25rem);
     min-width: 0;
     display: flex;
