@@ -1,0 +1,507 @@
+schema_version: 2
+contract_id: private-events-mcp-event-operations-v2
+status: to_be_release_blocking
+canonical_doc: docs/operations/private-events-mcp-event-operations-to-be.md
+audit_doc: docs/reports/private-events-mcp-event-operations-to-be-audit-20260902.md
+owner: events-bot-new
+
+release_policy:
+  ci_required: true
+  every_scenario_id_must_map_to_automated_test: true
+  missing_mapping_blocks_merge: true
+  isolated_live_acceptance_required: true
+  production_provider_targets_forbidden: true
+  provider_calls_forbidden_in_unit_and_integration: true
+  outcome_unknown_may_not_be_retried_blindly: true
+  docs_runtime_tools_list_and_tests_must_match: true
+
+layers:
+  unit: pure schemas, normalization, fact comparison and policy
+  integration: temp SQLite with real application services and Smart Update facade
+  protocol: MCP tools, OAuth resources, scopes, idempotency and tenant policy
+  worker: JobOutbox claim, supersession, reconciliation and fake providers
+  render: deterministic lifecycle-notice asset generation
+  site: static projection and public event UI
+  isolated_live: real MCP/auth/queue/worker path on private test destinations
+
+invariants:
+  - Every canonical create passes full Smart Update.
+  - Every reschedule, postpone and cancellation targets an explicit event_id.
+  - Exact or generated public text conflicting with accepted facts is never committable.
+  - Organizer rationale is durable and private unless a separate public_notice is supplied.
+  - Event changes have append-only before and after structured evidence.
+  - Publication age and applied revision come from authoritative publication receipts.
+  - Old jobs cannot publish a stale event revision.
+  - Partner rows are tenant-filtered before serialization.
+  - Lifecycle notices and badges use the existing JobOutbox and Event Media boundaries.
+
+scenarios:
+  - id: CRT-001
+    layer: integration
+    title: Prepare parses raw text but mutates no canonical table
+    expect: [event_delta_0, source_delta_0, job_delta_0, promo_delta_0]
+  - id: CRT-002
+    layer: integration
+    title: Create commit always invokes full Smart Update
+    expect: [smart_update_invoked, no_direct_event_insert]
+  - id: CRT-003
+    layer: integration
+    title: Accepted CREATED returns event ID and standard fan-out
+    expect: [accepted_event_id, standard_joboutbox_tasks]
+  - id: CRT-004
+    layer: integration
+    title: Accepted MERGED returns canonical existing event ID
+    expect: [canonical_event_id, no_duplicate_event]
+  - id: CRT-005
+    layer: integration
+    title: Retry or rejection creates no downstream publication or promo work
+    expect: [job_delta_0, promo_delta_0]
+  - id: CRT-006
+    layer: protocol
+    title: Multi-event source requires frozen candidate selection when ambiguous
+    expect: [commit_blocked_until_selection, digest_covers_selection]
+
+  - id: TXT-001
+    layer: integration
+    title: Exact text consistent with explicit facts is accepted
+    expect: [committable, facts_preserved, unrelated_fields_unchanged]
+  - id: TXT-002
+    layer: integration
+    title: Exact text with another date is blocked
+    expect: [PUBLIC_TEXT_FACT_CONFLICT, event_delta_0, job_delta_0]
+  - id: TXT-003
+    layer: integration
+    title: Exact text with another start time is blocked
+    expect: [PUBLIC_TEXT_FACT_CONFLICT, not_committable]
+  - id: TXT-004
+    layer: integration
+    title: Exact text with another venue address or city is blocked
+    expect: [PUBLIC_TEXT_FACT_CONFLICT, not_committable]
+  - id: TXT-005
+    layer: unit
+    title: Omitted date time or venue does not clear canonical facts
+    expect: [omission_allowed, facts_not_cleared]
+  - id: TXT-006
+    layer: integration
+    title: Supported new fact is merged before exact text validation
+    expect: [source_evidence_required, smart_update_invoked, second_validation]
+  - id: TXT-007
+    layer: unit
+    title: Unresolved explicit logistics claim fails closed
+    expect: [PUBLIC_TEXT_FACT_UNRESOLVED, not_committable]
+  - id: TXT-008
+    layer: unit
+    title: Doors gathering and opening time do not overwrite start time
+    expect: [temporal_roles_distinct, no_false_conflict]
+  - id: TXT-009
+    layer: integration
+    title: Generated text conflicting with facts is rejected
+    expect: [GENERATED_TEXT_FACT_CONFLICT, public_text_not_written]
+  - id: TXT-010
+    layer: protocol
+    title: Commit rechecks current event revision
+    expect: [STALE_EVENT_REVISION, mutation_delta_0]
+  - id: TXT-011
+    layer: protocol
+    title: Owner cannot pass force to bypass a conflict
+    expect: [unknown_argument_rejected, typed_change_required]
+  - id: TXT-012
+    layer: integration
+    title: Exact text bundled with reschedule is checked against proposed snapshot
+    expect: [consistent_text_atomic, conflicting_text_blocks_whole_change]
+
+  - id: EDT-001
+    layer: integration
+    title: Text-only edit leaves media and promo untouched
+    expect: [media_unchanged, campaigns_unchanged]
+  - id: EDT-002
+    layer: integration
+    title: Media add replace remove and reorder use Event Media gate
+    expect: [no_direct_photo_urls_write, approved_projection_only]
+  - id: EDT-003
+    layer: protocol
+    title: Generic edit cannot mutate date time location or lifecycle
+    expect: [typed_operation_required, mutation_delta_0]
+  - id: EDT-004
+    layer: integration
+    title: Edit records actor source before after and revision hashes
+    expect: [event_change_log_row_1, append_only]
+
+  - id: RSC-001
+    layer: integration
+    title: Date-only reschedule preserves event identity
+    expect: [same_event_id, date_changed, organizer_comment_saved]
+  - id: RSC-002
+    layer: integration
+    title: Time-only reschedule preserves event identity
+    expect: [same_event_id, time_changed]
+  - id: RSC-003
+    layer: integration
+    title: Location-only change normalizes venue address and city
+    expect: [same_event_id, location_reference_validation]
+  - id: RSC-004
+    layer: integration
+    title: Date time and location change atomically
+    expect: [no_partial_state, one_change_log_row, one_reconciliation_fanout]
+  - id: RSC-005
+    layer: protocol
+    title: Reschedule requires organizer comment and source provenance
+    expect: [ORGANIZER_COMMENT_REQUIRED, SOURCE_PROVENANCE_REQUIRED]
+  - id: RSC-006
+    layer: protocol
+    title: Mutation requires explicit visible event ID
+    expect: [title_only_rejected, foreign_event_rejected]
+  - id: RSC-007
+    layer: integration
+    title: Collision with another occurrence blocks silent merge
+    expect: [EVENT_IDENTITY_CONFLICT, both_events_unchanged]
+  - id: RSC-008
+    layer: integration
+    title: Same-venue unrelated event is never selected
+    regression_refs:
+      - INC-2026-05-07-vk-time-reschedule-wrong-match
+      - INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost
+    expect: [explicit_target_only, unrelated_event_unchanged]
+  - id: RSC-009
+    layer: integration
+    title: Replay of applied reschedule is idempotent
+    expect: [same_result, duplicate_change_rows_0, duplicate_jobs_0]
+  - id: RSC-010
+    layer: worker
+    title: Old pending job cannot publish stale facts
+    expect: [old_job_superseded, current_revision_job_claimed]
+  - id: RSC-011
+    layer: worker
+    title: Managed original surfaces reconcile to new revision
+    expect: [telegraph_current, vk_current, telegram_current, calendar_current, static_current]
+  - id: RSC-012
+    layer: integration
+    title: Calendar identity stays stable
+    expect: [event_id_stable, calendar_uid_stable, payload_revision_changed]
+  - id: RSC-013
+    layer: integration
+    title: Promo period and budget are not silently extended
+    expect: [campaign_end_not_extended, exposure_goal_not_increased, warning_visible]
+  - id: RSC-014
+    layer: protocol
+    title: Partner reschedule defaults to owner review
+    expect: [review_required, no_direct_public_mutation]
+  - id: RSC-015
+    layer: integration
+    title: Range reschedule requires explicit end date or preserve duration policy
+    expect: [silent_range_shift_forbidden, preview_has_result_range]
+  - id: RSC-016
+    layer: integration
+    title: Preserve-duration range calculation handles month and year boundaries
+    expect: [duration_preserved, valid_end_date]
+  - id: RSC-017
+    layer: unit
+    title: Date and time use Europe Kaliningrad and audit stores offset
+    expect: [timezone_explicit, offset_timestamp_saved]
+  - id: RSC-018
+    layer: integration
+    title: Reschedule from postponed activates same event
+    expect: [same_event_id, lifecycle_active, new_schedule_applied]
+  - id: RSC-019
+    layer: protocol
+    title: Reschedule cannot reactivate cancelled event
+    expect: [CANCELLED_EVENT_RESTORE_REQUIRED, mutation_delta_0]
+
+  - id: PST-001
+    layer: protocol
+    title: Postpone requires event ID rationale and provenance
+    expect: [required_fields_enforced]
+  - id: PST-002
+    layer: integration
+    title: Postpone records unknown future schedule without inventing date
+    expect: [lifecycle_postponed, no_invented_date, old_schedule_in_ledger]
+  - id: PST-003
+    layer: integration
+    title: Postponed event leaves active discovery and promo eligibility
+    expect: [active_discovery_false, future_promo_false]
+  - id: PST-004
+    layer: worker
+    title: Existing managed projections show new date is unknown
+    expect: [originals_reconciled, no_fake_schedule]
+  - id: PST-005
+    layer: integration
+    title: Repeated postpone is idempotent
+    expect: [duplicate_change_rows_0, duplicate_jobs_0]
+  - id: PST-006
+    layer: protocol
+    title: Partner postpone defaults to owner review
+    expect: [review_required]
+  - id: PST-007
+    layer: site
+    title: Postponed detail page stays available and hides old schedule as current
+    expect: [stable_url, postponed_banner, old_schedule_not_current]
+
+  - id: CAN-001
+    layer: protocol
+    title: Cancellation requires rationale and provenance
+    expect: [ORGANIZER_COMMENT_REQUIRED, SOURCE_PROVENANCE_REQUIRED]
+  - id: CAN-002
+    layer: integration
+    title: Cancellation changes lifecycle without deleting event
+    expect: [lifecycle_cancelled, event_row_preserved, change_log_saved]
+  - id: CAN-003
+    layer: worker
+    title: Cancellation stops pending ordinary and promo work
+    expect: [old_jobs_cancelled_or_superseded, new_promo_exposure_0]
+  - id: CAN-004
+    layer: worker
+    title: Managed originals receive cancellation state
+    expect: [stable_urls, current_revision_applied]
+  - id: CAN-005
+    layer: integration
+    title: Historical promo exposures remain
+    expect: [historical_exposures_preserved, future_eligibility_false]
+  - id: CAN-006
+    layer: integration
+    title: Repeated cancellation is idempotent
+    expect: [duplicate_change_rows_0, duplicate_jobs_0, duplicate_notice_0]
+  - id: CAN-007
+    layer: integration
+    title: Internal organizer comment is not public by default
+    expect: [internal_comment_saved, public_projection_excludes_comment]
+  - id: CAN-008
+    layer: integration
+    title: Public cancellation notice is fact checked
+    expect: [conflicting_notice_blocked]
+  - id: CAN-009
+    layer: protocol
+    title: Partner cancellation defaults to owner review
+    expect: [review_required]
+  - id: CAN-010
+    layer: protocol
+    title: Generic edit cannot restore cancelled event
+    expect: [restore_required, mutation_delta_0]
+
+  - id: NTF-001
+    layer: integration
+    title: Published more than 24 hours ago creates separate notice
+    expect: [original_reconciliation_planned, lifecycle_notice_planned]
+  - id: NTF-002
+    layer: integration
+    title: Published exactly 24 hours ago does not create separate notice
+    expect: [original_reconciliation_planned, lifecycle_notice_not_planned]
+  - id: NTF-003
+    layer: integration
+    title: Published less than 24 hours ago only edits original
+    expect: [lifecycle_notice_not_planned]
+  - id: NTF-004
+    layer: integration
+    title: Unknown publication age requires review and no automatic notice
+    expect: [notice_review_required, provider_mutation_0]
+  - id: NTF-005
+    layer: integration
+    title: Surface never published is not planned
+    expect: [surface_state_not_planned]
+  - id: NTF-006
+    layer: integration
+    title: Age uses authoritative first publication receipt not Event added time
+    expect: [first_published_at_used, event_added_at_ignored]
+  - id: NTF-007
+    layer: worker
+    title: One notice per change surface and target
+    expect: [unique_notice_job, duplicate_provider_mutation_0]
+  - id: NTF-008
+    layer: worker
+    title: Rapid newer change supersedes pending older notice
+    expect: [older_notice_superseded, latest_revision_published]
+  - id: NTF-009
+    layer: worker
+    title: Published older notice remains historical after later change
+    expect: [old_publication_preserved, new_change_can_notify]
+  - id: NTF-010
+    layer: protocol
+    title: Owner suppress requires reason and is audited
+    expect: [suppress_reason_required, decision_saved]
+  - id: NTF-011
+    layer: protocol
+    title: Partner cannot force or suppress lifecycle notice
+    expect: [policy_override_denied]
+  - id: NTF-012
+    layer: worker
+    title: Outcome unknown notice is not retried automatically
+    expect: [automatic_retry_0, readback_required]
+  - id: NTF-013
+    layer: integration
+    title: Public notice contains changed fields only and stable link
+    expect: [old_new_diff_correct, internal_comment_absent, stable_link_present]
+
+  - id: IMG-001
+    layer: render
+    title: Cancellation asset contains visible OТМЕНЕНО label
+    expect: [derived_asset_created, label_visible]
+  - id: IMG-002
+    layer: render
+    title: Reschedule asset contains visible ПЕРЕНОС label
+    expect: [derived_asset_created, label_visible]
+  - id: IMG-003
+    layer: render
+    title: Original poster bytes and Event photo URLs remain unchanged
+    expect: [source_sha_unchanged, photo_urls_unchanged]
+  - id: IMG-004
+    layer: render
+    title: Renderer uses geometry and does not cover faces or valuable region
+    expect: [safe_region_respected]
+  - id: IMG-005
+    layer: render
+    title: Unsafe overlay falls back to side band or canvas extension
+    expect: [important_content_not_obscured]
+  - id: IMG-006
+    layer: render
+    title: Asset identity binds change revision source SHA and template version
+    expect: [content_addressed, replay_same_asset]
+  - id: IMG-007
+    layer: worker
+    title: Missing safe image follows provider policy truthfully
+    expect: [no_fake_success, text_only_only_if_allowed]
+  - id: IMG-008
+    layer: integration
+    title: Lifecycle badge works without promo or Afisha Engagement activity
+    expect: [promo_dependency_false]
+
+  - id: SITE-001
+    layer: site
+    title: Cancelled event detail URL stays available with banner
+    expect: [http_success, cancelled_banner]
+  - id: SITE-002
+    layer: site
+    title: Rescheduled page shows only actual old to new fields
+    expect: [diff_exact, unchanged_fields_omitted]
+  - id: SITE-003
+    layer: site
+    title: Internal organizer comment and private provenance never export
+    expect: [private_data_absent]
+  - id: SITE-004
+    layer: site
+    title: Cancelled and postponed events leave active discovery
+    expect: [active_lists_exclude, direct_detail_available]
+  - id: SITE-005
+    layer: site
+    title: SEO status matches lifecycle
+    expect: [EventCancelled_or_EventPostponed]
+  - id: SITE-006
+    layer: site
+    title: Mobile and desktop banner are accessible
+    expect: [visible_status, accessible_name, keyboard_safe]
+  - id: SITE-007
+    layer: integration
+    title: Static projection exports allowlisted public change fields only
+    expect: [public_change_fields_present, operational_fields_absent]
+
+  - id: PRM-001
+    layer: integration
+    title: Promo create requires accepted existing event ID
+    expect: [missing_or_unaccepted_event_rejected]
+  - id: PRM-002
+    layer: integration
+    title: MCP uses existing promo campaign services
+    expect: [no_parallel_promo_model]
+  - id: PRM-003
+    layer: integration
+    title: Reschedule never silently extends campaign period budget or goal
+    expect: [no_auto_extension]
+  - id: PRM-004
+    layer: integration
+    title: Postpone and cancel stop future promo eligibility but keep history
+    expect: [future_false, exposure_history_preserved]
+  - id: PRM-005
+    layer: protocol
+    title: Partner entitlement returns explicit policy verdict
+    expect: [allowed_or_autoapproved_or_review_or_denied]
+
+  - id: SEC-001
+    layer: protocol
+    title: Partner cannot read or mutate another tenant event
+    expect: [read_denied, prepare_denied, commit_denied]
+  - id: SEC-002
+    layer: protocol
+    title: Partner catalogue excludes internal operations incidents and social workspace
+    expect: [tools_hidden]
+  - id: SEC-003
+    layer: protocol
+    title: Owner token is rejected by partner resource and vice versa
+    expect: [audience_binding_enforced]
+  - id: SEC-004
+    layer: protocol
+    title: Tenant filtering occurs before serialization
+    expect: [foreign_rows_not_loaded]
+  - id: SEC-005
+    layer: protocol
+    title: Codex projection remains read only
+    expect: [write_tools_hidden]
+
+  - id: IDEM-001
+    layer: integration
+    title: Same key and digest return same durable result
+    expect: [duplicate_changes_0, duplicate_jobs_0]
+  - id: IDEM-002
+    layer: integration
+    title: Same key with different digest fails closed
+    expect: [IDEMPOTENCY_CONFLICT, mutation_delta_0]
+  - id: IDEM-003
+    layer: integration
+    title: Concurrent commits use optimistic event revision
+    expect: [one_commit_applied, one_stale_rejected, no_mixed_state]
+  - id: IDEM-004
+    layer: protocol
+    title: Approval decision is idempotent and cannot alter frozen payload
+    expect: [same_review_result, payload_digest_unchanged]
+
+  - id: OUT-001
+    layer: integration
+    title: Canonical commit followed by scheduling failure is recoverable
+    expect: [change_not_rolled_back, reconciliation_pending, recovery_rearms_jobs]
+  - id: OUT-002
+    layer: worker
+    title: Worker checks target revision before provider mutation
+    expect: [stale_claim_rejected]
+  - id: OUT-003
+    layer: integration
+    title: Prepare and commit call no social provider directly
+    expect: [direct_provider_calls_0]
+  - id: OUT-004
+    layer: worker
+    title: Superseded and cancelled are directly queryable terminal states
+    expect: [not_masked_as_done]
+
+  - id: QRY-001
+    layer: protocol
+    title: Publication status distinguishes planning transport and revision
+    expect: [not_planned_vs_failed, scheduled_vs_published, stale_vs_current]
+  - id: QRY-002
+    layer: protocol
+    title: Queue list filters event change campaign task status revision and due range
+    expect: [bounded_correct_results, deterministic_cursor]
+  - id: QRY-003
+    layer: protocol
+    title: Job detail exposes sanitized attempts result and provider receipt
+    expect: [secrets_absent]
+  - id: QRY-004
+    layer: protocol
+    title: Partner queue query returns own tenant rows only
+    expect: [foreign_rows_0]
+
+  - id: LIVE-001
+    layer: isolated_live
+    title: Owner creates event through Smart Update and reads standard fan-out
+    expect: [mcp_auth_used, accepted_event_id, queue_readback_complete]
+  - id: LIVE-002
+    layer: isolated_live
+    title: Owner reschedules an old published test event and receives edit plus separate notice
+    expect: [original_updated, notice_published_private, badge_present, status_current]
+  - id: LIVE-003
+    layer: isolated_live
+    title: Owner postpones then reschedules same test event
+    expect: [same_event_id, postponed_then_active, no_duplicate_notice]
+  - id: LIVE-004
+    layer: isolated_live
+    title: Owner cancels test event and all private projections reconcile
+    expect: [cancelled_state, future_jobs_stopped, history_preserved]
+  - id: LIVE-005
+    layer: isolated_live
+    title: Production destination identifiers are rejected in test mode
+    expect: [PRODUCTION_TARGET_FORBIDDEN, provider_mutation_0]
