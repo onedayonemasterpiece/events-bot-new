@@ -145,6 +145,7 @@ def _queue_input_properties(
             "minLength": 1,
             "maxLength": 120,
             "pattern": _FILTER_TOKEN_RE.pattern,
+            "description": "Exact task value; R0 requires event_id with this filter.",
         },
         "status": {
             "type": "string",
@@ -177,6 +178,8 @@ async def publication_queue_page(
     event_id = _positive_int(arguments.get("event_id"), name="event_id")
     task = _filter_token(arguments.get("task"), name="task")
     status = _filter_token(arguments.get("status"), name="status")
+    if task is not None and event_id is None:
+        raise InvalidArgumentsError("task requires event_id in R0")
     cursor_id = _decode_cursor(arguments.get("cursor"))
     limit = _limit(arguments.get("limit"), maximum=_page_limit(repository))
 
