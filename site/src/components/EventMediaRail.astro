@@ -23,6 +23,15 @@ const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
   .sort((left, right) => left.width - right.width)
   .map((item) => `${item.src} ${item.width}w`)
   .join(', ');
+const mediaFrameKind = (asset: EventImageAsset) => {
+  if (asset.media_semantic_status === 'error') return 'unknown';
+  if (asset.image_text_mode === 'visual_only') return 'visual';
+  if (asset.image_text_mode === 'ocr_text') return 'document';
+  return 'unknown';
+};
+const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.height > 0
+  ? asset.width / asset.height
+  : undefined;
 ---
 
 {assets.length > 1 && (
@@ -31,8 +40,18 @@ const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
       <button
         type="button"
         class="event-media-rail__item"
+        data-media-frame
+        data-media-frame-contract="v1"
+        data-media-frame-surface="media-rail"
+        data-media-frame-kind={mediaFrameKind(asset)}
+        data-media-frame-fit="cover"
+        data-media-frame-crop-reason="gallery_thumbnail_navigation"
+        data-media-frame-source-width={asset.width || undefined}
+        data-media-frame-source-height={asset.height || undefined}
+        data-media-frame-loading="eager"
         data-hero-gallery-open={galleryId}
         data-hero-gallery-index={index}
+        style={mediaFrameRatio(asset) ? `--media-frame-source-ratio:${mediaFrameRatio(asset)}` : undefined}
         aria-label={`Открыть изображение ${index + 1} события «${eventTitle}»`}
       >
         <img
@@ -44,6 +63,7 @@ const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
           alt=""
           loading="eager"
           decoding="async"
+          data-media-frame-image
         />
       </button>
     ))}
