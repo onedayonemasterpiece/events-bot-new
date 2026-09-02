@@ -47,6 +47,7 @@ const rowSize = Math.max(1, Math.min(6, Math.floor(Number.isFinite(numericRowSiz
 const defaultLimit = mode === 'packed' ? 10 : events.length;
 const numericLimit = Number(requestedLimit ?? defaultLimit);
 const limit = Math.max(0, Math.floor(Number.isFinite(numericLimit) ? numericLimit : defaultLimit));
+const gridVariant = `${mode}-${rowSize}-column`;
 const gridState = [
   responsiveMobile && 'responsive',
   legacyOptimizedContract && 'legacy-adapter',
@@ -69,10 +70,10 @@ const resolved = mode === 'packed'
     legacyOptimizedContract && responsiveMobile && 'optimized-event-card-grid--responsive',
     className,
   ]}
-  style={`--adaptive-event-card-columns:${rowSize};`}
+  data-ds-component="AdaptiveEventCardGrid"
   data-ds-family="AdaptiveEventCardGrid"
   data-ds-version="1"
-  data-ds-variant={mode}
+  data-ds-variant={gridVariant}
   data-ds-state={gridState}
   data-adaptive-event-card-grid
   data-adaptive-grid-mode={mode}
@@ -80,6 +81,8 @@ const resolved = mode === 'packed'
   data-adaptive-grid-limit={limit}
   data-adaptive-grid-media-treatment={mode === 'packed' ? mediaTreatment : undefined}
   data-adaptive-grid-card-root="EventCard"
+  data-adaptive-grid-layout-engine="flex-lines"
+  data-adaptive-grid-remainder-policy="stretch"
   data-row-normalize={mode === 'packed' ? '' : undefined}
   data-optimized-event-card-grid={legacyOptimizedContract ? '' : undefined}
   data-lab-row-normalize={mode === 'packed' ? '' : undefined}
@@ -104,17 +107,29 @@ const resolved = mode === 'packed'
 
 <style>
   .adaptive-event-card-grid {
+    --adaptive-event-card-gap: clamp(.85rem, 1.6vw, 1.25rem);
     min-width: 0;
-    display: grid;
-    grid-template-columns: repeat(var(--adaptive-event-card-columns, 3), minmax(0, 1fr));
-    gap: clamp(.85rem, 1.6vw, 1.25rem);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--adaptive-event-card-gap);
     align-items: stretch;
   }
 
-  .adaptive-event-card-grid :global(.event-card) { height: 100%; }
+  .adaptive-event-card-grid > :global(.event-card) {
+    min-width: 0;
+    height: auto;
+    flex-grow: 1;
+    flex-shrink: 1;
+  }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="1"] > :global(.event-card) { flex-basis: 100%; }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="2"] > :global(.event-card) { flex-basis: calc(50% - var(--adaptive-event-card-gap)); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="3"] > :global(.event-card) { flex-basis: calc(33.333333% - var(--adaptive-event-card-gap)); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="4"] > :global(.event-card) { flex-basis: calc(25% - var(--adaptive-event-card-gap)); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="5"] > :global(.event-card) { flex-basis: calc(20% - var(--adaptive-event-card-gap)); }
+  .adaptive-event-card-grid[data-adaptive-grid-row-size="6"] > :global(.event-card) { flex-basis: calc(16.666667% - var(--adaptive-event-card-gap)); }
 
   .adaptive-event-card-grid--packed :global([data-lab-related-card]) {
-    height: 100%;
+    height: auto;
     grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
   }
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-link) { display: block; }
@@ -144,12 +159,8 @@ const resolved = mode === 'packed'
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px; }
 
   @media (max-width: 1023px) {
-    .adaptive-event-card-grid--responsive {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .adaptive-event-card-grid--responsive :global([data-lab-related-card]) {
-      grid-row: auto !important;
-      grid-column: auto !important;
+    .adaptive-event-card-grid--responsive > :global(.event-card) {
+      flex-basis: 100%;
     }
   }
 </style>
