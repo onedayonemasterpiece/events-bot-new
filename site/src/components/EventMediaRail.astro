@@ -42,7 +42,17 @@ const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.hei
 ---
 
 {assets.length > 1 && (
-  <nav class="event-media-rail" data-event-media-rail aria-label={`Фотографии события «${eventTitle}»`} style={`--rail-count:${visibleAssets.length + (hiddenCount > 0 ? 1 : 0)}`}>
+  <nav
+    class="event-media-rail"
+    data-event-media-rail
+    data-ds-component="EventMediaRail"
+    data-ds-family="EventMediaRail"
+    data-ds-version="1"
+    data-ds-variant="gallery-thumbnails"
+    data-ds-state={hiddenCount > 0 ? 'overflow' : 'complete'}
+    aria-label={`Фотографии события «${eventTitle}»`}
+    style={`--rail-count:${visibleAssets.length + (hiddenCount > 0 ? 1 : 0)}`}
+  >
     {visibleAssets.map((asset, index) => (
       <button
         type="button"
@@ -56,6 +66,7 @@ const mediaFrameRatio = (asset: EventImageAsset) => asset.width > 0 && asset.hei
         data-media-frame-source-width={asset.width || undefined}
         data-media-frame-source-height={asset.height || undefined}
         data-media-frame-loading="eager"
+        data-media-frame-priority="true"
         data-hero-gallery-open={galleryId}
         data-hero-gallery-index={index}
         style={mediaFrameRatio(asset) ? `--media-frame-source-ratio:${mediaFrameRatio(asset)}` : undefined}
