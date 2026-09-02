@@ -92,6 +92,7 @@ def test_descriptor_changes_owner_only(config) -> None:
         "before_job_id",
         "limit",
     }
+    assert owner_tool.input_schema["properties"]["event_id"]["minimum"] == 0
     assert owner_tool.input_schema["properties"]["limit"]["maximum"] == 10
     assert codex_tool.input_schema["properties"] == {}
     assert len(server.protocol.tools) == len(server.codex_protocol.tools) == 7
@@ -188,7 +189,11 @@ async def test_page_is_small_payload_free_redacted_and_read_only(
 
 
 @pytest.mark.asyncio
-async def test_event_and_status_filters_are_exact(config) -> None:
+async def test_event_and_status_filters_include_global_jobs(
+    config,
+    event_db: Path,
+) -> None:
+    _insert_job(event_db, job_id=8, event_id=0, status="pending")
     server = attach_private_events_mcp(web.Application(), config)
     assert server is not None
     identity = _owner(config)
@@ -202,16 +207,14 @@ async def test_event_and_status_filters_are_exact(config) -> None:
     assert [job["id"] for job in page["jobs"]] == [7]
     assert page["filters"] == {"event_id": 42, "status": "error"}
 
-    empty = await _snapshot(
-        server,
-        identity,
-        {"event_id": 42, "status": "pending"},
-    )
-    assert empty["structuredContent"]["job_queue"]["jobs"] == []
+    global_jobs = await _snapshot(server, identity, {"event_id": 0})
+    global_page = global_jobs["structuredContent"]["job_queue"]
+    assert [job["id"] for job in global_page["jobs"]] == [8]
+    assert global_page["filters"] == {"event_id": 0}
 
 
 @pytest.mark.asyncio
-async def test_numeric_before_id_pagination_has_no_duplicates(
+async def test_numeric_before_id_pagination_has_exact_end_and_no_duplicates(
     config,
     event_db: Path,
 ) -> None:
@@ -234,6 +237,7 @@ async def test_numeric_before_id_pagination_has_no_duplicates(
     )
     second_page = second["structuredContent"]["job_queue"]
     assert [job["id"] for job in second_page["jobs"]] == [8, 7]
+    assert second_page["next_before_job_id"] is None
     assert not (
         {job["id"] for job in first_page["jobs"]}
         & {job["id"] for job in second_page["jobs"]}
@@ -249,6 +253,7 @@ async def test_numeric_before_id_pagination_has_no_duplicates(
             {"include_jobs": False, "status": "pending"},
             "include_jobs=false cannot be combined with queue filters",
         ),
+        ({"include_jobs": True, "event_id": -1}, "event_id must be non-negative"),
         ({"include_jobs": True, "before_job_id": 0}, "before_job_id must be positive"),
         (
             {"include_jobs": True, "task": "telegraph_build"},
