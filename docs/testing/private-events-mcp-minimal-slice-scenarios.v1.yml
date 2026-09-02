@@ -1,0 +1,82 @@
+schema_version: 1
+contract_id: private-events-mcp-minimal-slice-v1
+status: preimplementation_release_blocking
+canonical_audit: docs/reports/private-events-mcp-occam-preimplementation-audit-20260902.md
+
+release_policy:
+  schema_changes_allowed: false
+  worker_behavior_changes_allowed: false
+  provider_network_calls_allowed: false
+  feature_flags_default_off: true
+  owner_only: true
+
+scenarios:
+  - id: MIN-Q-001
+    slice: queue_read
+    title: Queue list is read-only and deterministic
+    expect: [database_delta_0, deterministic_order, bounded_pagination]
+  - id: MIN-Q-002
+    slice: queue_read
+    title: Queue filters use existing JobOutbox fields
+    expect: [event_filter, task_filter, status_filter, due_range_filter]
+  - id: MIN-Q-003
+    slice: queue_read
+    title: Queue output redacts payload and error secrets
+    expect: [no_raw_payload, sanitized_error, sanitized_result]
+  - id: MIN-Q-004
+    slice: queue_read
+    title: Unsupported evidence is returned as unknown
+    expect: [no_guessed_status, no_guessed_timestamp]
+  - id: MIN-Q-005
+    slice: queue_read
+    title: Read tools remain absent from forbidden projections
+    expect: [codex_policy_preserved, partner_policy_preserved]
+
+  - id: MIN-C-001
+    slice: owner_create
+    title: Feature flag off preserves the existing tool catalogue
+    expect: [tools_list_unchanged, runtime_behavior_unchanged]
+  - id: MIN-C-002
+    slice: owner_create
+    title: Prepare changes no canonical data
+    expect: [event_delta_0, event_source_delta_0, job_delta_0, promo_delta_0]
+  - id: MIN-C-003
+    slice: owner_create
+    title: Commit invokes the existing full Smart Update path
+    expect: [smart_update_invoked, no_direct_event_insert, existing_mapping_reused]
+  - id: MIN-C-004
+    slice: owner_create
+    title: CREATED returns canonical event and standard jobs
+    expect: [one_event, accepted_event_id, standard_schedule_event_update_tasks]
+  - id: MIN-C-005
+    slice: owner_create
+    title: MERGED returns the existing canonical event
+    expect: [event_delta_0, canonical_existing_event_id]
+  - id: MIN-C-006
+    slice: owner_create
+    title: Retry or rejection creates no downstream jobs
+    expect: [job_delta_0, promo_delta_0]
+  - id: MIN-C-007
+    slice: owner_create
+    title: Stable source and idempotency replay create no duplicates
+    expect: [duplicate_event_0, duplicate_job_0, same_operation_result]
+  - id: MIN-C-008
+    slice: owner_create
+    title: MCP and manual intake build equivalent Smart Update candidates
+    expect: [candidate_parity, no_second_parser]
+  - id: MIN-C-009
+    slice: owner_create
+    title: Only smart rewrite is available in the first release
+    expect: [exact_text_policy_unavailable, force_unavailable]
+  - id: MIN-C-010
+    slice: owner_create
+    title: No provider adapter is called from prepare or commit
+    expect: [telegram_calls_0, vk_calls_0, telegraph_calls_0]
+  - id: MIN-C-011
+    slice: owner_create
+    title: Internal source locator is stable and not a fake public URL
+    expect: [typed_internal_locator, replay_stable, public_url_fabrication_0]
+  - id: MIN-C-012
+    slice: owner_create
+    title: Existing manual VK and Telegram regression suites stay green
+    expect: [legacy_behavior_preserved]
