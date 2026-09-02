@@ -42,9 +42,17 @@ const {
   legacyOptimizedContract = false,
 } = Astro.props;
 
-const rowSize = Math.max(1, Math.min(6, Math.floor(Number(requestedRowSize) || 3)));
+const numericRowSize = Number(requestedRowSize);
+const rowSize = Math.max(1, Math.min(6, Math.floor(Number.isFinite(numericRowSize) ? numericRowSize : 3)));
 const defaultLimit = mode === 'packed' ? 10 : events.length;
-const limit = Math.max(0, Math.floor(Number(requestedLimit ?? defaultLimit)));
+const numericLimit = Number(requestedLimit ?? defaultLimit);
+const limit = Math.max(0, Math.floor(Number.isFinite(numericLimit) ? numericLimit : defaultLimit));
+const gridState = [
+  responsiveMobile && 'responsive',
+  legacyOptimizedContract && 'legacy-adapter',
+  personalFeed && 'personal-feed',
+  discoveryFeed && 'discovery-feed',
+].filter(Boolean).join(' ') || undefined;
 const resolved = mode === 'packed'
   ? packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
   : events.slice(0, limit).map((item) => ({ item, layout: undefined }));
@@ -62,6 +70,10 @@ const resolved = mode === 'packed'
     className,
   ]}
   style={`--adaptive-event-card-columns:${rowSize};`}
+  data-ds-family="AdaptiveEventCardGrid"
+  data-ds-version="1"
+  data-ds-variant={mode}
+  data-ds-state={gridState}
   data-adaptive-event-card-grid
   data-adaptive-grid-mode={mode}
   data-adaptive-grid-row-size={rowSize}
