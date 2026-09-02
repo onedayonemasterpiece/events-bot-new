@@ -26,7 +26,7 @@ _QUEUE_ARGUMENTS = ("event_id", "status", "before_job_id", "limit")
 _MAX_PAGE_ROWS = 10
 
 
-def _positive_int(value: Any, *, name: str) -> int | None:
+def _integer(value: Any, *, name: str, minimum: int) -> int | None:
     if value is None or value == "":
         return None
     if isinstance(value, bool):
@@ -35,8 +35,9 @@ def _positive_int(value: Any, *, name: str) -> int | None:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
         raise InvalidArgumentsError(f"{name} must be an integer") from exc
-    if parsed <= 0:
-        raise InvalidArgumentsError(f"{name} must be positive")
+    if parsed < minimum:
+        qualifier = "non-negative" if minimum == 0 else "positive"
+        raise InvalidArgumentsError(f"{name} must be {qualifier}")
     return parsed
 
 
@@ -55,7 +56,7 @@ def _page_limit(repository: EventsEvidenceRepository, value: Any) -> int:
     maximum = max(1, min(_MAX_PAGE_ROWS, repository.config.max_rows))
     if value is None:
         return maximum
-    parsed = _positive_int(value, name="limit")
+    parsed = _integer(value, name="limit", minimum=1)
     assert parsed is not None
     return min(parsed, maximum)
 
@@ -82,7 +83,11 @@ def _input_properties(repository: EventsEvidenceRepository) -> dict[str, Any]:
             "default": False,
             "description": "Include one bounded, payload-free JobOutbox page.",
         },
-        "event_id": {"type": "integer", "minimum": 1},
+        "event_id": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Use 0 for global jobs not bound to one event.",
+        },
         "status": {
             "type": "string",
             "minLength": 1,
@@ -121,10 +126,10 @@ async def publication_queue_page(
 ) -> dict[str, Any]:
     """Read a small, deterministic JobOutbox page without exposing payloads."""
 
-    event_id = _positive_int(arguments.get("event_id"), name="event_id")
+    event_id = _integer(arguments.get("event_id"), name="event_id", minimum=0)
     status = _status(arguments.get("status"))
-    before_job_id = _positive_int(
-        arguments.get("before_job_id"), name="before_job_id"
+    before_job_id = _integer(
+        arguments.get("before_job_id"), name="before_job_id", minimum=1
     )
     limit = _page_limit(repository, arguments.get("limit"))
 
@@ -164,18 +169,27 @@ async def publication_queue_page(
     selected = ", ".join(
         repository.db.quote_identifier(column) for column in _CORE_COLUMNS
     )
-    sql = f"SELECT {selected} FROM {repository.db.quote_identifier('joboutbox')}"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += f" ORDER BY {repository.db.quote_identifier('id')} DESC LIMIT ?"
-
-    rows = await repository.db.query(
-        sql,
-        (*params, limit),
-        max_rows=limit,
+    table = repository.db.quote_identifier("joboutbox")
+    where_sql = " WHERE " + " AND ".join(where) if where else ""
+    sql = (
+        f"SELECT {selected} FROM {table}{where_sql} "
+        f"ORDER BY {repository.db.quote_identifier('id')} DESC LIMIT ?"
     )
+    rows = await repository.db.query(sql, (*params, limit), max_rows=limit)
     jobs = [_safe_job(row) for row in rows]
-    next_before_job_id = int(jobs[-1]["id"]) if len(jobs) == limit else None
+
+    next_before_job_id = None
+    if len(jobs) == limit and jobs:
+        last_id = int(jobs[-1]["id"])
+        probe_where = [*where, f"{repository.db.quote_identifier('id')}<?"]
+        probe = await repository.db.query(
+            f"SELECT {repository.db.quote_identifier('id')} FROM {table} "
+            f"WHERE {' AND '.join(probe_where)} LIMIT 1",
+            (*params, last_id),
+            max_rows=1,
+        )
+        if probe:
+            next_before_job_id = last_id
 
     filters = {
         key: value
