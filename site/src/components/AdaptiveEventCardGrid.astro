@@ -1,0 +1,143 @@
+---
+import EventCard from './EventCard.astro';
+import type { PreviewEvent } from '../lib/types';
+import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
+
+type GridMode = 'flow' | 'packed';
+type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
+
+interface Props {
+  events: PreviewEvent[];
+  mode?: GridMode;
+  limit?: number;
+  rowSize?: number;
+  mediaTreatment?: MediaTreatment;
+  className?: string;
+  responsiveMobile?: boolean;
+  surface?: string;
+  algorithmId?: string;
+  currentEventId?: number;
+  discoverySrc?: string;
+  personalFeed?: boolean;
+  discoveryFeed?: boolean;
+  mobileFlowMedia?: boolean;
+  legacyOptimizedContract?: boolean;
+}
+
+const {
+  events,
+  mode = 'packed',
+  limit: requestedLimit,
+  rowSize: requestedRowSize = 3,
+  mediaTreatment = 'hybrid',
+  className,
+  responsiveMobile = false,
+  surface,
+  algorithmId,
+  currentEventId,
+  discoverySrc,
+  personalFeed = false,
+  discoveryFeed = false,
+  mobileFlowMedia = mode === 'flow',
+  legacyOptimizedContract = false,
+} = Astro.props;
+
+const rowSize = Math.max(1, Math.min(6, Math.floor(Number(requestedRowSize) || 3)));
+const defaultLimit = mode === 'packed' ? 10 : events.length;
+const limit = Math.max(0, Math.floor(Number(requestedLimit ?? defaultLimit)));
+const resolved = mode === 'packed'
+  ? packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
+  : events.slice(0, limit).map((item) => ({ item, layout: undefined }));
+---
+
+<div
+  class:list={[
+    'cards-grid',
+    'cards-grid--immersive',
+    'adaptive-event-card-grid',
+    `adaptive-event-card-grid--${mode}`,
+    responsiveMobile && 'adaptive-event-card-grid--responsive',
+    legacyOptimizedContract && 'optimized-event-card-grid',
+    legacyOptimizedContract && responsiveMobile && 'optimized-event-card-grid--responsive',
+    className,
+  ]}
+  style={`--adaptive-event-card-columns:${rowSize};`}
+  data-adaptive-event-card-grid
+  data-adaptive-grid-mode={mode}
+  data-adaptive-grid-row-size={rowSize}
+  data-adaptive-grid-limit={limit}
+  data-adaptive-grid-media-treatment={mode === 'packed' ? mediaTreatment : undefined}
+  data-adaptive-grid-card-root="EventCard"
+  data-row-normalize={mode === 'packed' ? '' : undefined}
+  data-optimized-event-card-grid={legacyOptimizedContract ? '' : undefined}
+  data-lab-row-normalize={mode === 'packed' ? '' : undefined}
+  data-discovery-feed={discoveryFeed ? '' : undefined}
+  data-personal-feed-results={personalFeed ? '' : undefined}
+  data-surface={surface}
+  data-algorithm-id={algorithmId}
+  data-current-event-id={currentEventId}
+  data-discovery-src={discoverySrc}
+  data-feed-card-variant="split-actions"
+>
+  {resolved.map(({ item, layout }) => (
+    <EventCard
+      event={item}
+      variant="split-actions"
+      desktopRelatedCrop={mode === 'packed'}
+      desktopRelatedLayout={mode === 'packed' ? layout : undefined}
+      mobileFlowMedia={mode === 'flow' && mobileFlowMedia}
+    />
+  ))}
+</div>
+
+<style>
+  .adaptive-event-card-grid {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--adaptive-event-card-columns, 3), minmax(0, 1fr));
+    gap: clamp(.85rem, 1.6vw, 1.25rem);
+    align-items: stretch;
+  }
+
+  .adaptive-event-card-grid :global(.event-card) { height: 100%; }
+
+  .adaptive-event-card-grid--packed :global([data-lab-related-card]) {
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-link) { display: block; }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-shell) {
+    position: relative;
+    isolation: isolate;
+    width: 100%;
+    height: auto !important;
+    aspect-ratio: var(--lab-row-media-ratio) !important;
+    overflow: hidden;
+    background: #d2c5b7;
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media) {
+    position: absolute !important;
+    z-index: 2;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-media-kind="visual"] .event-card__media-shell) {
+    background: linear-gradient(135deg, #e4ddd2, #d4c7b9);
+  }
+  .adaptive-event-card-grid--packed :global([data-lab-media-kind="visual"] .event-card__media) { background: transparent !important; }
+  .adaptive-event-card-grid--packed :global([data-card-authoritative-fit="contain"]) { background: #15110f; }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__body) { min-height: 0; align-content: start; }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__utility-row) { min-height: 58px; }
+  .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px; }
+
+  @media (max-width: 1023px) {
+    .adaptive-event-card-grid--responsive {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .adaptive-event-card-grid--responsive :global([data-lab-related-card]) {
+      grid-row: auto !important;
+      grid-column: auto !important;
+    }
+  }
+</style>
