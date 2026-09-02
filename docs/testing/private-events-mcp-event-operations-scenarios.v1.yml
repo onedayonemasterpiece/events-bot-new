@@ -1,0 +1,392 @@
+schema_version: 1
+contract_id: private-events-mcp-event-operations-v1
+status: to_be_release_blocking
+canonical_doc: docs/operations/private-events-mcp-event-operations-to-be.md
+owner: events-bot-new
+
+release_policy:
+  ci_required: true
+  isolated_live_acceptance_required: true
+  production_provider_targets_forbidden: true
+  no_scenario_may_be_waived_by_retrying_the_same_unknown_mutation: true
+  implementation_must_map_every_scenario_id_to_an_automated_test: true
+
+layers:
+  unit:
+    purpose: pure schemas, fact consistency, policy and revision guards
+  integration:
+    purpose: temporary SQLite with real application services, Smart Update facade and JobOutbox
+  protocol:
+    purpose: MCP tools, OAuth resources, scopes, tenant filtering and idempotency
+  worker:
+    purpose: job supersession, claim safety and publication reconciliation with fake providers
+  isolated_live:
+    purpose: real MCP/auth/queue/worker path against test bot and private test destinations
+
+invariants:
+  - Every canonical create, reschedule, location change and cancellation passes the shared Smart Update/event-change boundary.
+  - Exact public text that conflicts with accepted structured facts is never committable.
+  - An event change always targets an explicit event_id; fuzzy matching cannot choose the mutation target.
+  - Organizer rationale and provenance are durable and separate from optional public wording.
+  - A change never publishes a stale event revision and never duplicates a provider mutation after outcome_unknown.
+  - Partner access is filtered by server-side tenant and object policy, not by client-side redaction.
+
+scenarios:
+  - id: TXT-001
+    layer: integration
+    title: Exact text consistent with all explicit facts is accepted
+    expect:
+      - prepare_result: committable
+      - facts_preserved: true
+      - unrelated_fields_unchanged: true
+
+  - id: TXT-002
+    layer: integration
+    title: Exact text with a different date is blocked
+    expect:
+      - error_code: PUBLIC_TEXT_FACT_CONFLICT
+      - preparation_committable: false
+      - event_rows_changed: 0
+      - job_rows_changed: 0
+
+  - id: TXT-003
+    layer: integration
+    title: Exact text with a different start time is blocked
+    expect:
+      - error_code: PUBLIC_TEXT_FACT_CONFLICT
+      - preparation_committable: false
+
+  - id: TXT-004
+    layer: integration
+    title: Exact text with a different venue or city is blocked
+    expect:
+      - error_code: PUBLIC_TEXT_FACT_CONFLICT
+      - preparation_committable: false
+
+  - id: TXT-005
+    layer: unit
+    title: Omission of date, time or venue is not a contradiction
+    expect:
+      - verdict: consistent_or_omitted
+      - existing_facts_cleared: false
+
+  - id: TXT-006
+    layer: integration
+    title: A new supported fact is extracted before exact text commit
+    expect:
+      - smart_update_invoked: true
+      - source_evidence_required: true
+      - exact_text_rewritten: false
+
+  - id: TXT-007
+    layer: unit
+    title: Unresolved explicit logistics claim fails closed
+    expect:
+      - error_code: PUBLIC_TEXT_FACT_UNRESOLVED
+      - preparation_committable: false
+
+  - id: TXT-008
+    layer: integration
+    title: Door opening and event start are compared as different temporal roles
+    expect:
+      - false_time_conflict: false
+      - canonical_start_unchanged: true
+
+  - id: TXT-009
+    layer: integration
+    title: Smart-generated text contradicting accepted facts is a technical failure
+    expect:
+      - public_text_written: false
+      - operation_state: failed
+      - error_code: GENERATED_TEXT_FACT_CONFLICT
+
+  - id: TXT-010
+    layer: protocol
+    title: Commit revalidates exact text against the current event revision
+    expect:
+      - stale_preparation_rejected: true
+      - error_code: STALE_EVENT_REVISION
+
+  - id: TXT-011
+    layer: protocol
+    title: Owner cannot bypass a fact conflict with a force flag
+    expect:
+      - unsupported_force_argument_rejected: true
+      - typed_fact_change_required: true
+
+  - id: RSC-001
+    layer: integration
+    title: Date-only reschedule preserves the event identity
+    expect:
+      - same_event_id: true
+      - new_date_applied: true
+      - organizer_comment_saved: true
+      - smart_update_invoked: true
+
+  - id: RSC-002
+    layer: integration
+    title: Time-only reschedule preserves the event identity
+    expect:
+      - same_event_id: true
+      - new_time_applied: true
+      - smart_update_invoked: true
+
+  - id: RSC-003
+    layer: integration
+    title: Location-only change normalizes venue, address and city
+    expect:
+      - same_event_id: true
+      - location_reference_validation_used: true
+      - organizer_comment_saved: true
+
+  - id: RSC-004
+    layer: integration
+    title: Date, time and location may change atomically
+    expect:
+      - partial_event_state_observable: false
+      - one_event_revision_created: true
+      - one_reconciliation_fanout_created: true
+
+  - id: RSC-005
+    layer: protocol
+    title: Reschedule requires non-empty organizer rationale and provenance
+    expect:
+      - missing_comment_error: ORGANIZER_COMMENT_REQUIRED
+      - missing_source_error: SOURCE_PROVENANCE_REQUIRED
+
+  - id: RSC-006
+    layer: protocol
+    title: Mutation target must be an explicit visible event_id
+    expect:
+      - title_only_mutation_rejected: true
+      - foreign_or_missing_event_rejected: true
+
+  - id: RSC-007
+    layer: integration
+    title: Collision with another canonical occurrence never silently merges
+    expect:
+      - error_code: EVENT_IDENTITY_CONFLICT
+      - both_events_unchanged: true
+      - review_required: true
+
+  - id: RSC-008
+    layer: integration
+    title: Unrelated event at the same venue is never changed
+    regression_refs:
+      - INC-2026-05-07-vk-time-reschedule-wrong-match
+      - INC-2026-08-24-vk-lifecycle-replay-stale-tg-repost
+    expect:
+      - mutation_target_count: 1
+      - unrelated_event_unchanged: true
+
+  - id: RSC-009
+    layer: integration
+    title: Replay of an already-applied reschedule is idempotent
+    expect:
+      - same_operation_result: true
+      - duplicate_change_records: 0
+      - duplicate_jobs: 0
+
+  - id: RSC-010
+    layer: worker
+    title: Old pending publication jobs cannot publish stale facts
+    expect:
+      - stale_jobs_claimed: 0
+      - stale_jobs_terminal_state: superseded
+      - current_revision_job_exists: true
+
+  - id: RSC-011
+    layer: worker
+    title: Published managed surfaces reconcile to the new event revision
+    expect:
+      - telegraph_updated: true
+      - static_projection_updated: true
+      - calendar_projection_updated: true
+      - managed_social_projection_updated_or_truthfully_unsupported: true
+
+  - id: RSC-012
+    layer: integration
+    title: Calendar identity remains stable across a reschedule
+    expect:
+      - event_id_stable: true
+      - calendar_uid_stable: true
+      - calendar_payload_revision_changed: true
+
+  - id: RSC-013
+    layer: integration
+    title: Promo campaign is never silently extended after a later reschedule
+    expect:
+      - exposure_budget_increased: false
+      - campaign_end_extended: false
+      - eligibility_warning_visible: true
+
+  - id: RSC-014
+    layer: integration
+    title: Exact replacement description may be committed with a reschedule only if it matches proposed facts
+    expect:
+      - validation_snapshot: proposed_event_revision
+      - conflicting_text_blocked: true
+      - consistent_text_committed_atomically: true
+
+  - id: RSC-015
+    layer: protocol
+    title: Partner reschedule defaults to owner review
+    expect:
+      - partner_direct_public_mutation: false
+      - operation_state: review_required
+
+  - id: CAN-001
+    layer: protocol
+    title: Cancellation requires organizer rationale and provenance
+    expect:
+      - missing_comment_error: ORGANIZER_COMMENT_REQUIRED
+      - missing_source_error: SOURCE_PROVENANCE_REQUIRED
+
+  - id: CAN-002
+    layer: integration
+    title: Cancellation changes lifecycle without deleting the event
+    expect:
+      - lifecycle_status: cancelled
+      - event_row_preserved: true
+      - source_and_comment_saved: true
+      - smart_update_or_shared_lifecycle_boundary_invoked: true
+
+  - id: CAN-003
+    layer: worker
+    title: Cancellation prevents future ordinary and promo publication
+    expect:
+      - pending_event_jobs_claimed: 0
+      - pending_promo_jobs_claimed: 0
+      - stale_jobs_terminal_state: cancelled_or_superseded
+      - new_promo_exposure_created: false
+
+  - id: CAN-004
+    layer: worker
+    title: Existing public projections receive a cancellation state
+    expect:
+      - stable_event_url_preserved: true
+      - static_event_status: cancelled
+      - calendar_event_status: cancelled
+      - managed_publication_reconciled_or_truthfully_unsupported: true
+
+  - id: CAN-005
+    layer: integration
+    title: Existing promo exposure history is retained after cancellation
+    expect:
+      - historical_exposures_deleted: false
+      - future_eligibility: false
+      - campaign_budget_increased: false
+
+  - id: CAN-006
+    layer: integration
+    title: Repeated cancellation is idempotent
+    expect:
+      - duplicate_public_cancellation_actions: 0
+      - duplicate_jobs: 0
+      - same_terminal_event_state: true
+
+  - id: CAN-007
+    layer: integration
+    title: Internal organizer comment is not published by default
+    expect:
+      - comment_visibility: internal
+      - public_reason_present: false
+
+  - id: CAN-008
+    layer: integration
+    title: Exact public cancellation reason is fact-checked
+    expect:
+      - conflicting_public_reason_blocked: true
+      - internal_cancellation_may_still_be_prepared_separately: true
+
+  - id: CAN-009
+    layer: protocol
+    title: Partner cancellation defaults to owner review
+    expect:
+      - partner_direct_public_mutation: false
+      - operation_state: review_required
+
+  - id: SEC-001
+    layer: protocol
+    title: Partner cannot read or mutate another tenant event
+    expect:
+      - read_denied: true
+      - prepare_denied: true
+      - commit_denied: true
+
+  - id: SEC-002
+    layer: protocol
+    title: Partner catalogue excludes owner incidents and operations
+    expect:
+      - operations_snapshot_visible: false
+      - internal_incident_tools_visible: false
+
+  - id: IDEM-001
+    layer: integration
+    title: Same idempotency key and digest return the same result
+    expect:
+      - duplicate_event_changes: 0
+      - duplicate_jobs: 0
+
+  - id: IDEM-002
+    layer: integration
+    title: Same idempotency key with another digest fails closed
+    expect:
+      - error_code: IDEMPOTENCY_CONFLICT
+      - mutation_count: 0
+
+  - id: CONC-001
+    layer: integration
+    title: Concurrent changes use optimistic event revision control
+    expect:
+      - first_commit_applied: true
+      - second_stale_commit_rejected: true
+      - mixed_partial_state: false
+
+  - id: OUT-001
+    layer: integration
+    title: Event commit followed by scheduling failure remains recoverable
+    expect:
+      - accepted_event_change_not_reported_as_rolled_back: true
+      - operation_state: reconciliation_pending
+      - recovery_rearms_current_revision_jobs: true
+
+  - id: OUT-002
+    layer: worker
+    title: outcome_unknown provider mutation is never automatically repeated
+    expect:
+      - automatic_retry_count: 0
+      - explicit_readback_required: true
+
+  - id: QRY-001
+    layer: protocol
+    title: Publication status distinguishes planning, transport and revision state
+    expect:
+      - distinguish_not_planned_from_failed: true
+      - distinguish_scheduled_from_published: true
+      - expose_stale_or_superseded_revision: true
+      - expose_outcome_unknown: true
+
+  - id: NET-001
+    layer: integration
+    title: Prepare and commit never call Telegram, VK or Telegraph providers directly
+    expect:
+      - direct_provider_calls: 0
+      - external_effects_only_via_workers: true
+
+  - id: LIVE-001
+    layer: isolated_live
+    title: Full owner reschedule and cancellation acceptance against private test destinations
+    expect:
+      - mcp_auth_path_used: true
+      - smart_update_path_used: true
+      - joboutbox_worker_path_used: true
+      - production_destination_resolved: false
+      - status_readback_complete: true
+
+  - id: LIVE-002
+    layer: isolated_live
+    title: Production destination identifiers are rejected in test execution mode
+    expect:
+      - error_code: PRODUCTION_TARGET_FORBIDDEN
+      - provider_mutation_count: 0
