@@ -117,9 +117,11 @@ const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.r
 const fixedLayoutMetric = (value: number | null | undefined, digits: number) => Number.isFinite(value) ? Number(value).toFixed(digits) : undefined;
 const mediaFrameKind = !imageUrl
   ? 'fallback'
-  : documentMedia
-    ? imageTextMode === 'ocr_text' ? 'document' : 'unknown'
-    : 'visual';
+  : cardCrop.mediaTreatment === 'visual-cover'
+    ? 'visual'
+    : imageTextMode === 'ocr_text' && primaryImageAsset?.media_semantic_status !== 'error'
+      ? 'document'
+      : 'unknown';
 const mediaFrameFit = imageUrl ? cardCrop.fit : 'contain';
 const mediaFrameRatio = desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio;
 const mediaFrameStyle = [
