@@ -13,8 +13,8 @@ import MobileListingRailSurface from './MobileListingRailSurface.astro';
 
 interface WeekendLink { href?: string | null; label: string; }
 interface WeekendRangeLink { href: string; label: string; selected?: boolean; actualCurrent?: boolean; }
-interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; currentDate?: string; previous?: WeekendLink | null; next?: WeekendLink | null; ranges?: WeekendRangeLink[]; amberArtifactTailEventId?: number | null; }
-const { events: rawEvents, start, end, dateLabel, currentDate = '', previous = null, next = null, ranges = [], amberArtifactTailEventId = null } = Astro.props;
+interface Props { events: PreviewEvent[]; start: string; end: string; dateLabel: string; routeVariant?: 'current' | 'dated'; currentDate?: string; previous?: WeekendLink | null; next?: WeekendLink | null; ranges?: WeekendRangeLink[]; amberArtifactTailEventId?: number | null; }
+const { events: rawEvents, start, end, dateLabel, routeVariant = 'dated', currentDate = '', previous = null, next = null, ranges = [], amberArtifactTailEventId = null } = Astro.props;
 const events = deduplicateListingEvents(rawEvents);
 const days = [
   { key: 'sat', title: 'Суббота', date: start, events: events.filter((event) => event.start_date === start) },
@@ -27,7 +27,21 @@ function dayDateLabel(date: string): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Kaliningrad' }).format(new Date(`${date}T12:00:00+02:00`));
 }
 ---
-<div class="ke-listing-shell" data-date-listing="weekend" data-listing-variant="DATE-LISTING-V19" data-listing-has-time-nav="true" data-weekend-start={start} data-weekend-end={end} data-current-date={currentDate} data-amber-artifact-research={amberArtifactTailEventId ? 'tail' : 'off'} data-amber-artifact-event-id={amberArtifactTailEventId || undefined}>
+<div
+  class="ke-listing-shell"
+  data-ds-family="WeekendListingSurface"
+  data-ds-version="1"
+  data-ds-variant={routeVariant}
+  data-ds-state={events.length ? 'populated' : 'empty'}
+  data-date-listing="weekend"
+  data-listing-variant="DATE-LISTING-V19"
+  data-listing-has-time-nav="true"
+  data-weekend-start={start}
+  data-weekend-end={end}
+  data-current-date={currentDate}
+  data-amber-artifact-research={amberArtifactTailEventId ? 'tail' : 'off'}
+  data-amber-artifact-event-id={amberArtifactTailEventId || undefined}
+>
   <ListingPageHeader title="Выходные" dateLabel={dateLabel} count={events.length} current="weekend" />
   {ranges.length ? <WeekendRangeNav ranges={ranges} placement="top" /> : null}
   <ListingDiscoveryRail cities={cities} total={events.length} label="на выходных">
