@@ -13,7 +13,7 @@ from private_events_mcp.crypto import AccessIdentity
 from private_events_mcp.integration import attach_private_events_mcp
 
 
-def _owner_identity(config, *, full_read: bool = False) -> AccessIdentity:
+def _owner(config, *, full_read: bool = False) -> AccessIdentity:
     scopes = (
         frozenset({"events:read", "incidents:read", "operations:read"})
         if full_read
@@ -29,16 +29,13 @@ def _owner_identity(config, *, full_read: bool = False) -> AccessIdentity:
     )
 
 
-async def _operations_snapshot(server, identity, arguments):
+async def _snapshot(server, identity, arguments):
     response = await server.protocol.dispatch(
         {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "tools/call",
-            "params": {
-                "name": "operations_snapshot",
-                "arguments": arguments,
-            },
+            "params": {"name": "operations_snapshot", "arguments": arguments},
         },
         identity,
     )
@@ -51,10 +48,8 @@ def _insert_job(
     *,
     job_id: int,
     event_id: int = 42,
-    task: str = "telegraph_build",
     status: str = "pending",
     last_error: str | None = None,
-    next_run_at: str = "2026-08-01T10:05:00Z",
 ) -> None:
     with sqlite3.connect(database) as conn:
         conn.execute(
@@ -67,23 +62,22 @@ def _insert_job(
             (
                 job_id,
                 event_id,
-                task,
+                "telegraph_build",
                 status,
                 0,
                 last_error,
-                None,
+                "must-not-be-listed",
                 "2026-08-01T10:04:00Z",
-                next_run_at,
-                json.dumps({"event_id": event_id, "secret": "must-not-be-listed"}),
+                "2026-08-01T10:05:00Z",
+                json.dumps({"secret": "must-not-be-listed"}),
             ),
         )
         conn.commit()
 
 
-def test_queue_observability_changes_only_owner_descriptor(config) -> None:
+def test_descriptor_changes_owner_only(config) -> None:
     server = attach_private_events_mcp(web.Application(), config)
     assert server is not None
-
     owner_tool = next(
         tool for tool in server.protocol.tools if tool.name == "operations_snapshot"
     )
@@ -94,9 +88,8 @@ def test_queue_observability_changes_only_owner_descriptor(config) -> None:
     assert set(owner_tool.input_schema["properties"]) == {
         "include_jobs",
         "event_id",
-        "task",
         "status",
-        "cursor",
+        "before_job_id",
         "limit",
     }
     assert owner_tool.input_schema["properties"]["limit"]["maximum"] == 10
@@ -110,7 +103,7 @@ def test_queue_observability_changes_only_owner_descriptor(config) -> None:
 
 
 @pytest.mark.asyncio
-async def test_default_snapshot_is_backward_compatible_and_read_only(
+async def test_default_call_is_backward_compatible_and_read_only(
     config,
     event_db: Path,
     event_db_digest: str,
@@ -118,7 +111,7 @@ async def test_default_snapshot_is_backward_compatible_and_read_only(
     server = attach_private_events_mcp(web.Application(), config)
     assert server is not None
 
-    result = await _operations_snapshot(server, _owner_identity(config), {})
+    result = await _snapshot(server, _owner(config), {})
 
     assert result["isError"] is False
     assert "publication_queue" not in result["structuredContent"]
@@ -126,143 +119,28 @@ async def test_default_snapshot_is_backward_compatible_and_read_only(
 
 
 @pytest.mark.asyncio
-async def test_legacy_database_without_joboutbox_is_reported_not_crashed(
-    config,
-    tmp_path: Path,
-) -> None:
+async def test_missing_queue_table_is_reported_not_crashed(config, tmp_path: Path) -> None:
     legacy_db = tmp_path / "legacy-empty.sqlite"
     sqlite3.connect(legacy_db).close()
-    legacy_config = replace(config, database_path=str(legacy_db))
-    server = attach_private_events_mcp(web.Application(), legacy_config)
+    legacy = replace(config, database_path=str(legacy_db))
+    server = attach_private_events_mcp(web.Application(), legacy)
     assert server is not None
 
-    result = await _operations_snapshot(
-        server,
-        _owner_identity(legacy_config),
-        {"include_jobs": True},
-    )
+    result = await _snapshot(server, _owner(legacy), {"include_jobs": True})
 
     assert result["isError"] is False
     page = result["structuredContent"]["publication_queue"]
     assert page["jobs"] == []
-    assert page["next_cursor"] is None
+    assert page["next_before_job_id"] is None
     assert page["read_contract"]["queue_table_available"] is False
+    assert page["read_contract"]["queue_schema_supported"] is False
 
 
 @pytest.mark.asyncio
-async def test_owner_snapshot_lists_payload_free_redacted_jobs(
+async def test_page_is_small_payload_free_redacted_and_read_only(
     config,
     event_db: Path,
     event_db_digest: str,
-) -> None:
-    server = attach_private_events_mcp(web.Application(), config)
-    assert server is not None
-
-    result = await _operations_snapshot(
-        server,
-        _owner_identity(config),
-        {"include_jobs": True},
-    )
-
-    assert result["isError"] is False
-    page = result["structuredContent"]["publication_queue"]
-    assert page["read_contract"] == {
-        "database": "sqlite mode=ro; query_only=ON",
-        "provider_network_calls": 0,
-        "payload_included": False,
-        "ordering": "job_id_desc",
-        "queue_table_available": True,
-        "max_page_rows": 10,
-    }
-    assert page["page_status_counts"] == {"error": 1}
-    assert len(page["jobs"]) == 1
-    job = page["jobs"][0]
-    assert job["id"] == 7
-    assert job["fetch_id"] == "job:7"
-    assert job["event_id"] == 42
-    assert job["task"] == "telegraph_build"
-    assert job["next_run_at"] == "2026-08-01T10:05:00Z"
-    assert "payload" not in job
-    assert "last_result" not in job
-    assert hashlib.sha256(event_db.read_bytes()).hexdigest() == event_db_digest
-
-
-@pytest.mark.asyncio
-async def test_queue_filters_are_parameterized_and_exact(config) -> None:
-    server = attach_private_events_mcp(web.Application(), config)
-    assert server is not None
-    identity = _owner_identity(config)
-
-    matching = await _operations_snapshot(
-        server,
-        identity,
-        {
-            "event_id": 42,
-            "task": "TELEGRAPH_BUILD",
-            "status": "ERROR",
-        },
-    )
-    assert matching["isError"] is False
-    page = matching["structuredContent"]["publication_queue"]
-    assert [job["id"] for job in page["jobs"]] == [7]
-    assert page["filters"] == {
-        "event_id": 42,
-        "task": "telegraph_build",
-        "status": "error",
-    }
-
-    empty = await _operations_snapshot(
-        server,
-        identity,
-        {"event_id": 42, "status": "pending"},
-    )
-    assert empty["isError"] is False
-    assert empty["structuredContent"]["publication_queue"]["jobs"] == []
-
-
-@pytest.mark.asyncio
-async def test_queue_cursor_is_stable_and_does_not_duplicate_rows(
-    config,
-    event_db: Path,
-) -> None:
-    for job_id in (8, 9, 10):
-        _insert_job(event_db, job_id=job_id)
-
-    server = attach_private_events_mcp(web.Application(), config)
-    assert server is not None
-    identity = _owner_identity(config)
-
-    first = await _operations_snapshot(
-        server,
-        identity,
-        {"include_jobs": True, "limit": 2},
-    )
-    first_page = first["structuredContent"]["publication_queue"]
-    assert [job["id"] for job in first_page["jobs"]] == [10, 9]
-    assert first_page["next_cursor"]
-
-    second = await _operations_snapshot(
-        server,
-        identity,
-        {
-            "include_jobs": True,
-            "limit": 2,
-            "cursor": first_page["next_cursor"],
-        },
-    )
-    second_page = second["structuredContent"]["publication_queue"]
-    assert [job["id"] for job in second_page["jobs"]] == [8, 7]
-    assert second_page["next_cursor"] is None
-    assert not (
-        {job["id"] for job in first_page["jobs"]}
-        & {job["id"] for job in second_page["jobs"]}
-    )
-
-
-@pytest.mark.asyncio
-async def test_queue_redacts_bearer_and_assignment_credentials(
-    config,
-    event_db: Path,
 ) -> None:
     with sqlite3.connect(event_db) as conn:
         conn.execute(
@@ -273,21 +151,93 @@ async def test_queue_redacts_bearer_and_assignment_credentials(
             ),
         )
         conn.commit()
+    digest_before_call = hashlib.sha256(event_db.read_bytes()).hexdigest()
 
     server = attach_private_events_mcp(web.Application(), config)
     assert server is not None
-    result = await _operations_snapshot(
-        server,
-        _owner_identity(config),
-        {"include_jobs": True},
-    )
-    job = result["structuredContent"]["publication_queue"]["jobs"][0]
-    serialized = json.dumps(job, ensure_ascii=False)
+    result = await _snapshot(server, _owner(config), {"include_jobs": True})
 
+    assert result["isError"] is False
+    page = result["structuredContent"]["publication_queue"]
+    assert page["read_contract"] == {
+        "database": "sqlite mode=ro; query_only=ON",
+        "provider_network_calls": 0,
+        "payload_included": False,
+        "ordering": "job_id_desc",
+        "queue_table_available": True,
+        "queue_schema_supported": True,
+        "missing_columns": [],
+        "max_page_rows": 10,
+    }
+    assert len(page["jobs"]) == 1
+    job = page["jobs"][0]
+    assert job["id"] == 7
+    assert job["fetch_id"] == "job:7"
+    assert job["event_id"] == 42
+    assert job["task"] == "telegraph_build"
+    assert job["next_run_at"] == "2026-08-01T10:05:00Z"
+    assert "payload" not in job
+    assert "last_result" not in job
+    serialized = json.dumps(job, ensure_ascii=False)
     assert "visible-key-must-not-survive" not in serialized
     assert "abcdefghijklmnopqrstuvwxyz" not in serialized
     assert "<redacted>" in serialized
     assert "ordinary diagnostic" in serialized
+    assert digest_before_call != event_db_digest
+    assert hashlib.sha256(event_db.read_bytes()).hexdigest() == digest_before_call
+
+
+@pytest.mark.asyncio
+async def test_event_and_status_filters_are_exact(config) -> None:
+    server = attach_private_events_mcp(web.Application(), config)
+    assert server is not None
+    identity = _owner(config)
+
+    matching = await _snapshot(
+        server,
+        identity,
+        {"event_id": 42, "status": "ERROR"},
+    )
+    page = matching["structuredContent"]["publication_queue"]
+    assert [job["id"] for job in page["jobs"]] == [7]
+    assert page["filters"] == {"event_id": 42, "status": "error"}
+
+    empty = await _snapshot(
+        server,
+        identity,
+        {"event_id": 42, "status": "pending"},
+    )
+    assert empty["structuredContent"]["publication_queue"]["jobs"] == []
+
+
+@pytest.mark.asyncio
+async def test_numeric_before_id_pagination_has_no_duplicates(
+    config,
+    event_db: Path,
+) -> None:
+    for job_id in (8, 9, 10):
+        _insert_job(event_db, job_id=job_id)
+
+    server = attach_private_events_mcp(web.Application(), config)
+    assert server is not None
+    identity = _owner(config)
+
+    first = await _snapshot(server, identity, {"include_jobs": True, "limit": 2})
+    first_page = first["structuredContent"]["publication_queue"]
+    assert [job["id"] for job in first_page["jobs"]] == [10, 9]
+    assert first_page["next_before_job_id"] == 9
+
+    second = await _snapshot(
+        server,
+        identity,
+        {"include_jobs": True, "limit": 2, "before_job_id": 9},
+    )
+    second_page = second["structuredContent"]["publication_queue"]
+    assert [job["id"] for job in second_page["jobs"]] == [8, 7]
+    assert not (
+        {job["id"] for job in first_page["jobs"]}
+        & {job["id"] for job in second_page["jobs"]}
+    )
 
 
 @pytest.mark.asyncio
@@ -299,14 +249,10 @@ async def test_queue_redacts_bearer_and_assignment_credentials(
             {"include_jobs": False, "status": "pending"},
             "include_jobs=false cannot be combined with queue filters",
         ),
+        ({"include_jobs": True, "before_job_id": 0}, "before_job_id must be positive"),
         (
             {"include_jobs": True, "task": "telegraph_build"},
-            "task requires event_id in R0",
-        ),
-        ({"include_jobs": True, "cursor": "not-a-valid-cursor"}, "cursor is invalid"),
-        (
-            {"include_jobs": True, "due_after": "2026-08-01T00:00:00Z"},
-            "Unsupported argument field(s): due_after",
+            "Unsupported argument field(s): task",
         ),
         (
             {"include_jobs": True, "status": "error' OR 1=1--"},
@@ -314,22 +260,20 @@ async def test_queue_redacts_bearer_and_assignment_credentials(
         ),
     ],
 )
-async def test_queue_arguments_fail_closed(config, arguments, message) -> None:
+async def test_arguments_fail_closed(config, arguments, message) -> None:
     server = attach_private_events_mcp(web.Application(), config)
     assert server is not None
 
-    result = await _operations_snapshot(server, _owner_identity(config), arguments)
+    result = await _snapshot(server, _owner(config), arguments)
 
     assert result["isError"] is True
     assert message in result["content"][0]["text"]
 
 
 @pytest.mark.asyncio
-async def test_existing_fetch_job_detail_path_remains_unchanged(config) -> None:
+async def test_existing_fetch_job_detail_path_is_unchanged(config) -> None:
     server = attach_private_events_mcp(web.Application(), config)
     assert server is not None
-    identity = _owner_identity(config, full_read=True)
-
     response = await server.protocol.dispatch(
         {
             "jsonrpc": "2.0",
@@ -337,7 +281,7 @@ async def test_existing_fetch_job_detail_path_remains_unchanged(config) -> None:
             "method": "tools/call",
             "params": {"name": "fetch", "arguments": {"id": "job:7"}},
         },
-        identity,
+        _owner(config, full_read=True),
     )
 
     assert response is not None
