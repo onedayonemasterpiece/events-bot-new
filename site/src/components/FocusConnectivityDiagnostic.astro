@@ -380,7 +380,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     min-height: 100dvh;
     display: grid;
     place-items: start center;
-    padding: max(.7rem, env(safe-area-inset-top)) .75rem max(.8rem, env(safe-area-inset-bottom));
+    padding: var(--ke-connectivity-page-padding-top) var(--ke-connectivity-page-padding-inline) var(--ke-connectivity-page-padding-bottom);
     color: var(--ke-color-connectivity-text);
     font-family: var(--ke-font-family-sans);
   }
@@ -389,8 +389,8 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     max-width: var(--ke-connectivity-card-max);
     min-width: 0;
     display: grid;
-    gap: .7rem;
-    padding: clamp(1rem, 4vw, 1.5rem);
+    gap: var(--ke-connectivity-card-gap);
+    padding: var(--ke-connectivity-card-padding);
     border: var(--ke-shape-border-hairline) solid var(--ke-color-connectivity-card-border);
     border-radius: var(--ke-connectivity-card-radius);
     background: var(--ke-color-connectivity-card-surface);
@@ -399,88 +399,110 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   .connectivity__eyebrow {
     margin: 0;
     color: var(--ke-color-connectivity-eyebrow);
-    font-size: .78rem;
-    font-weight: 900;
-    letter-spacing: .12em;
+    font-size: var(--ke-connectivity-eyebrow-size);
+    font-weight: var(--ke-connectivity-eyebrow-weight);
+    letter-spacing: var(--ke-connectivity-eyebrow-letter);
     text-transform: uppercase;
   }
-  h1 { margin: 0; font-size: clamp(2rem, 8vw, 3rem); line-height: .98; letter-spacing: -.045em; }
-  .connectivity__lead, .connectivity__status, .connectivity__privacy { margin: 0; line-height: 1.5; }
+  h1 {
+    margin: 0;
+    font-size: var(--ke-connectivity-heading-size);
+    line-height: var(--ke-connectivity-heading-line);
+    letter-spacing: var(--ke-connectivity-heading-letter);
+  }
+  .connectivity__lead, .connectivity__status, .connectivity__privacy {
+    margin: 0;
+    line-height: var(--ke-connectivity-copy-line);
+  }
   .connectivity__run {
     width: 100%;
     min-width: 0;
     min-height: var(--ke-connectivity-action-min-height);
     border: 0;
     border-radius: var(--ke-shape-radius-pill);
-    padding: .8rem 1.25rem;
+    padding: var(--ke-connectivity-action-padding-block) var(--ke-connectivity-action-padding-inline);
     color: var(--ke-color-connectivity-action-text);
     background: var(--ke-color-connectivity-action);
     box-shadow: var(--ke-elevation-connectivity-action);
     font: inherit;
-    font-weight: 850;
+    font-weight: var(--ke-connectivity-action-weight);
     white-space: normal;
     cursor: pointer;
   }
-  .connectivity__run:disabled { cursor: wait; opacity: .72; }
-  .connectivity__status { min-height: 1.4em; color: var(--ke-color-connectivity-muted); font-size: .9rem; }
-  .connectivity__results { display: grid; gap: .45rem; }
+  .connectivity__run:disabled { cursor: wait; opacity: var(--ke-connectivity-disabled-opacity); }
+  .connectivity__status {
+    min-height: var(--ke-connectivity-status-min-height);
+    color: var(--ke-color-connectivity-muted);
+    font-size: var(--ke-connectivity-status-size);
+  }
+  .connectivity__results { display: grid; gap: var(--ke-connectivity-results-gap); }
   .connectivity__result {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: .1rem .8rem;
+    gap: var(--ke-connectivity-result-row-gap) var(--ke-connectivity-result-column-gap);
     align-items: center;
-    padding: .68rem .8rem;
-    border-radius: .85rem;
+    padding: var(--ke-connectivity-result-padding-block) var(--ke-connectivity-result-padding-inline);
+    border-radius: var(--ke-connectivity-result-radius);
     background: var(--ke-color-connectivity-result-surface);
   }
-  .connectivity__result h2 { margin: 0; font-size: .95rem; }
+  .connectivity__result h2 { margin: 0; font-size: var(--ke-connectivity-result-heading-size); }
   .connectivity__result strong { color: var(--ke-color-connectivity-result-text); }
-  .connectivity__result span { grid-column: 2; color: var(--ke-color-connectivity-muted); font-size: .75rem; text-align: right; }
+  .connectivity__result span {
+    grid-column: 2;
+    color: var(--ke-color-connectivity-muted);
+    font-size: var(--ke-connectivity-result-meta-size);
+    text-align: right;
+  }
   .connectivity__result[data-state="ok"] strong { color: var(--ke-color-connectivity-success); }
   .connectivity__result:is([data-state="network_error"], [data-state="timeout"], [data-state="http_error"]) strong { color: var(--ke-color-connectivity-error); }
   .connectivity__receipt {
     display: grid;
-    gap: .55rem;
-    padding-top: .15rem;
+    gap: var(--ke-connectivity-receipt-gap);
+    padding-top: var(--ke-connectivity-receipt-padding-top);
   }
-  .connectivity__receipt > p { margin: 0; line-height: 1.35; }
-  .connectivity__receipt > p:first-child { font-weight: 850; }
-  .connectivity__receipt dl { display: grid; gap: .25rem; margin: 0; }
-  .connectivity__receipt dl div { display: flex; justify-content: space-between; gap: 1rem; }
-  .connectivity__receipt dt { color: var(--ke-color-connectivity-label); font-size: .78rem; }
-  .connectivity__receipt dd { margin: 0; font-size: .82rem; font-weight: 800; text-align: right; }
+  .connectivity__receipt > p { margin: 0; line-height: var(--ke-connectivity-receipt-line); }
+  .connectivity__receipt > p:first-child { font-weight: var(--ke-connectivity-receipt-weight); }
+  .connectivity__receipt dl { display: grid; gap: var(--ke-connectivity-definition-gap); margin: 0; }
+  .connectivity__receipt dl div { display: flex; justify-content: space-between; gap: var(--ke-connectivity-definition-row-gap); }
+  .connectivity__receipt dt { color: var(--ke-color-connectivity-label); font-size: var(--ke-connectivity-definition-label-size); }
+  .connectivity__receipt dd {
+    margin: 0;
+    font-size: var(--ke-connectivity-definition-value-size);
+    font-weight: var(--ke-connectivity-definition-value-weight);
+    text-align: right;
+  }
   .connectivity__send {
-    padding: .7rem .8rem;
-    border-radius: .8rem;
+    padding: var(--ke-connectivity-send-padding-block) var(--ke-connectivity-send-padding-inline);
+    border-radius: var(--ke-connectivity-send-radius);
     color: var(--ke-color-connectivity-send-text);
     background: var(--ke-color-connectivity-send-surface);
-    font-size: .86rem;
-    font-weight: 750;
+    font-size: var(--ke-connectivity-send-size);
+    font-weight: var(--ke-connectivity-send-weight);
   }
   .connectivity__copy {
     display: grid;
-    gap: .25rem;
+    gap: var(--ke-connectivity-copy-gap);
     color: var(--ke-color-connectivity-label);
-    font-size: .75rem;
+    font-size: var(--ke-connectivity-copy-label-size);
   }
   .connectivity__copy input {
     width: 100%;
     min-width: 0;
     border: var(--ke-shape-border-hairline) solid var(--ke-color-connectivity-input-border);
-    border-radius: .7rem;
-    padding: .62rem .7rem;
+    border-radius: var(--ke-connectivity-input-radius);
+    padding: var(--ke-connectivity-input-padding-block) var(--ke-connectivity-input-padding-inline);
     color: var(--ke-color-connectivity-input-text);
     background: var(--ke-color-connectivity-input-surface);
-    font: 700 .72rem/1.2 ui-monospace, monospace;
+    font: var(--ke-connectivity-input-weight) var(--ke-connectivity-input-size) / var(--ke-connectivity-input-line) ui-monospace, monospace;
   }
   .connectivity__copy-button {
-    min-height: var(--ke-size-touch-target);
+    min-height: var(--ke-connectivity-copy-action-min-height);
     border: var(--ke-shape-border-hairline) solid var(--ke-color-connectivity-copy-border);
     border-radius: var(--ke-shape-radius-pill);
-    padding: .65rem 1rem;
+    padding: var(--ke-connectivity-copy-action-padding-block) var(--ke-connectivity-copy-action-padding-inline);
     color: var(--ke-color-connectivity-copy-text);
     background: var(--ke-color-connectivity-copy-surface);
-    font: 800 .9rem/1 var(--ke-font-family-sans);
+    font: var(--ke-connectivity-copy-action-weight) var(--ke-connectivity-copy-action-size) / 1 var(--ke-font-family-sans);
     cursor: pointer;
   }
   [hidden] { display: none !important; }
