@@ -1,4 +1,5 @@
 ---
+import './design-system/product-contour-foundations.css';
 import type { FocusEggId, FocusEggState } from '../lib/focus-easter-eggs';
 
 interface Props {
@@ -19,6 +20,11 @@ const labels: Record<FocusEggState, string> = {
 
 <article
   class:list={['focus-egg-artifact', compact && 'focus-egg-artifact--compact']}
+  data-ds-family="FocusEggArtifact"
+  data-ds-version="1"
+  data-ds-variant={compact ? 'compact' : 'default'}
+  data-ds-state={state}
+  data-ke-foundation-consumer="focus-egg-artifact"
   data-focus-egg-artifact
   data-egg-id={eggId}
   data-egg-state={state}
@@ -55,8 +61,8 @@ const labels: Record<FocusEggState, string> = {
     grid-template-columns: 2.8rem minmax(0, 1fr) auto;
     gap: .7rem;
     align-items: center;
-    border: 1px solid #d4b66a;
-    border-radius: 1rem;
+    border: var(--ke-shape-border-hairline) solid #d4b66a;
+    border-radius: var(--ke-space-lg);
     padding: .75rem;
     background: linear-gradient(135deg, #fffdf5, #fff1c7);
     color: #2f2417;
@@ -64,10 +70,10 @@ const labels: Record<FocusEggState, string> = {
   }
   .focus-egg-artifact[data-egg-state='locked'],
   .focus-egg-artifact[data-egg-state='unavailable'] {
-    border-color: var(--ke-color-line);
-    background: var(--ke-color-canvas);
+    border-color: var(--ke-color-border-default);
+    background: var(--ke-color-background-page);
     box-shadow: none;
-    color: var(--ke-color-muted);
+    color: var(--ke-color-text-muted);
   }
   .focus-egg-artifact[data-egg-state='found'] {
     border-color: #6ea977;
@@ -78,8 +84,8 @@ const labels: Record<FocusEggState, string> = {
     height: 2.8rem;
     display: grid;
     place-items: center;
-    border-radius: 50%;
-    background: rgb(255 255 255 / 78%);
+    border-radius: var(--ke-shape-radius-pill);
+    background: color-mix(in srgb, var(--ke-color-background-surface-strong) 78%, transparent);
     color: #9c6410;
     font-size: 1.45rem;
     font-weight: 900;
@@ -95,20 +101,20 @@ const labels: Record<FocusEggState, string> = {
   .focus-egg-artifact__copy strong { font-size: .94rem; line-height: 1.2; }
   .focus-egg-artifact__action {
     min-width: 76px;
-    min-height: 44px;
+    min-height: var(--ke-size-touch-target);
     border: 0;
-    border-radius: .75rem;
+    border-radius: var(--ke-shape-radius-control);
     padding: .55rem .7rem;
     background: #6f4510;
-    color: #fff;
-    font: 850 .78rem/1 var(--ke-font-sans);
+    color: var(--ke-color-text-inverse);
+    font: 850 .78rem/1 var(--ke-font-family-sans);
     cursor: pointer;
   }
   .focus-egg-artifact__done { color: #396840; font-size: .72rem; font-weight: 900; }
   .focus-egg-artifact__action[hidden],
   .focus-egg-artifact__done[hidden] { display: none; }
   .focus-egg-artifact__action:focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 65%, transparent);
+    outline: var(--ke-shape-border-ring) solid var(--ke-color-focus-ring-accent);
     outline-offset: 3px;
   }
   .focus-egg-artifact--compact { padding: .6rem; }
