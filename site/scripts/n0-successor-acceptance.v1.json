@@ -3,8 +3,8 @@
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_version": "1.9.0",
   "evidence_cutoff": {
-    "issue_comment": 5527249164,
-    "timestamp": "2026-09-03T14:25:37Z"
+    "issue_comment": 5527356024,
+    "timestamp": "2026-09-03T14:34:56Z"
   },
   "owner": "N0",
   "authority": {
@@ -27,7 +27,28 @@
       "branch": "agent/static-site-single-kaggle-contract",
       "observed_head": "0d92654b9637e31753fed5bd4bf6a4a66763c079",
       "runtime_acceptance_rule": "ONLY_EXACT_BUILT_SHA_INHERITS_A_KAGGLE_RESULT",
-      "observed_head_runtime_status": "UNBUILT_POST_ACCEPTED_TRANSACTION"
+      "observed_head_runtime_status": "UNPUBLISHED_EXACT_SHA_KAGGLE_RETRY_PASS",
+      "programme_checkpoint_ancestor": {
+        "head": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
+        "merge_commit": "5346c4ff1eee59d3df7361bb19a06d357275833c"
+      },
+      "unpublished_exact_sha_kaggle_retry": {
+        "issue_comment": 5527345279,
+        "build_id": "preview-golden-0d92654b-20270604-clock-v1",
+        "dataset": "zigomaro/static-site-builder-input-20260903142938-99a218",
+        "kernel": "zigomaro/kenigevents-static-site-builder",
+        "status": "COMPLETE",
+        "result_sha256": "9c84a0e8c6d54f6b7ec50c3e15ab76734fd8ad4baf3c90dd47e6cf864eab624e",
+        "artifact_sha256": "8a91c00c078da45dce90df15205748dc8d5e09bf2c113badc0217a417a0edcae",
+        "service_share": {
+          "status": "skipped",
+          "reason": "golden_preview_frozen_clock"
+        },
+        "events": 288,
+        "page_classes": ["all"],
+        "publication": "INTENTIONALLY_NOT_PUBLISHED",
+        "accepted_as": "PIPELINE_SOURCE_AND_FROZEN_CLOCK_DIAGNOSTIC_ONLY"
+      }
     },
     "n0_branch": {
       "branch": "work/ui-normalization-n0-checklist-20260903",
@@ -160,7 +181,7 @@
       "84504f30eebc334deba46e94365601c3d572c5c0": "ACCEPT build-prefixed asset origin"
     },
     "post_transaction_head": "0d92654b9637e31753fed5bd4bf6a4a66763c079",
-    "post_transaction_decision": "SOURCE_REVIEW_PENDING_NO_RUNTIME_INHERITANCE"
+    "post_transaction_decision": "ACCEPT_SOURCE_AND_UNPUBLISHED_EXACT_SHA_KAGGLE_DIAGNOSTIC_NO_PUBLIC_RUNTIME_INHERITANCE"
   },
   "next_real_gate": {
     "status": "OPEN",
@@ -179,9 +200,13 @@
   },
   "v0_triggers": {
     "golden": {
-      "status": "READY",
+      "status": "READY_PLATFORM_BLOCKED",
       "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
-      "scope": "Golden route/media/grid/state audit; no fresh-real voice-review credit"
+      "scope": "Golden route/media/grid/state audit; no fresh-real voice-review credit",
+      "platform_boundary": "Existing V0 execution surface has no callable my-browser-bridge namespace.",
+      "latest_v0_comment": 5527356024,
+      "v0_observations": 0,
+      "v0_pass": false
     },
     "fresh_real": {
       "status": "PENDING",
