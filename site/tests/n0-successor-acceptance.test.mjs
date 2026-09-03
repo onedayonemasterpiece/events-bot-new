@@ -15,6 +15,7 @@ const goldenContract = readFileSync(
 
 const BASE = '0d73428dfafff2fd5450b74fd68e7bb40e92d2c5';
 const GOLDEN_SHA = '84504f30eebc334deba46e94365601c3d572c5c0';
+const PIPELINE_HEAD = '0d92654b9637e31753fed5bd4bf6a4a66763c079';
 const M0_VALID = 'e620e063472a20f5e703bfb7845cb9ad5e302cfe';
 const M0_INVALID = 'e620e69fd8fb4641415320beaa3ea9c1003beee8';
 const A0_REJECTED_REMOVAL = '5e466d65bc2b71a814c26c063f90aa07709de08f';
@@ -75,12 +76,33 @@ test('N0 rejects invalid refs and keeps current M0/A0 source boundaries explicit
   assert.ok(a0.open_drift.some((item) => item.includes('hidden donor layouts')));
 });
 
-test('only the exact built SHA has runtime acceptance; newer pipeline heads stay unbuilt checkpoints', () => {
+test('published Golden and later unpublished exact-SHA retry keep separate evidence classes', () => {
+  const pipeline = manifest.authority.kaggle_pipeline_source;
+  const retry = pipeline.unpublished_exact_sha_kaggle_retry;
   const decisions = manifest.pipeline_source_decisions;
+
+  assert.equal(pipeline.observed_head, PIPELINE_HEAD);
+  assert.equal(pipeline.observed_head_runtime_status, 'UNPUBLISHED_EXACT_SHA_KAGGLE_RETRY_PASS');
+  assert.equal(retry.issue_comment, 5527345279);
+  assert.equal(retry.status, 'COMPLETE');
+  assert.equal(retry.build_id, 'preview-golden-0d92654b-20270604-clock-v1');
+  assert.equal(retry.publication, 'INTENTIONALLY_NOT_PUBLISHED');
+  assert.equal(retry.service_share.status, 'skipped');
+  assert.equal(retry.service_share.reason, 'golden_preview_frozen_clock');
+  assert.equal(retry.accepted_as, 'PIPELINE_SOURCE_AND_FROZEN_CLOCK_DIAGNOSTIC_ONLY');
+
   assert.equal(decisions.built_transaction_commits[GOLDEN_SHA], 'ACCEPT build-prefixed asset origin');
+  assert.equal(decisions.post_transaction_head, PIPELINE_HEAD);
+  assert.equal(
+    decisions.post_transaction_decision,
+    'ACCEPT_SOURCE_AND_UNPUBLISHED_EXACT_SHA_KAGGLE_DIAGNOSTIC_NO_PUBLIC_RUNTIME_INHERITANCE',
+  );
   assert.notEqual(decisions.post_transaction_head, GOLDEN_SHA);
-  assert.equal(decisions.post_transaction_decision, 'SOURCE_REVIEW_PENDING_NO_RUNTIME_INHERITANCE');
-  assert.equal(manifest.v0_triggers.golden.status, 'READY');
+
+  assert.equal(manifest.v0_triggers.golden.status, 'READY_PLATFORM_BLOCKED');
+  assert.equal(manifest.v0_triggers.golden.latest_v0_comment, 5527356024);
+  assert.equal(manifest.v0_triggers.golden.v0_observations, 0);
+  assert.equal(manifest.v0_triggers.golden.v0_pass, false);
   assert.equal(manifest.v0_triggers.fresh_real.status, 'PENDING');
 });
 
