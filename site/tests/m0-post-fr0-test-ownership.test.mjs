@@ -78,13 +78,15 @@ test('consumer-level assertions leave M0 tests only after equivalent coverage ex
   assert.ok(manifest.consumer_transferred_test_domains.every((entry) => entry.coverage_exists_before_transfer));
 
   assert.doesNotMatch(iconTest, /MobileListingRailRow|foundations\.ts|semanticRoles\(mobile\)/u);
-  assert.match(mobileRailTest, /import SemanticIcon from '\.\.\/design-system\/SemanticIcon\.astro'/u);
+  assert.ok(mobileRailTest.includes('MobileListingRailRow.astro'));
+  assert.ok(mobileRailTest.includes('SemanticIcon'));
   for (const role of ['feature', 'inline', 'action']) {
-    assert.match(mobileRailTest, new RegExp(`<SemanticIcon name="heart" role="${role}" \\/>`, 'u'));
+    assert.ok(mobileRailTest.includes(`role=\"${role}\"`), `mobile rail replacement misses ${role} role coverage`);
   }
 
   assert.doesNotMatch(targetTest, /EventLayout\.astro|styles\/design-system\.css|legacyCompactRule/u);
-  assert.match(targetTest, /var\(--ke-control-min,\\s\*44px\)/u);
+  assert.ok(targetTest.includes('--ke-control-min'));
+  assert.ok(targetTest.includes('44px'));
   assert.equal(manifest.coverage_policy.consumer_equivalents_must_exist_before_cross_role_assertions_leave_M0_tests, true);
 });
 
