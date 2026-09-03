@@ -51,7 +51,7 @@ test('personal feed keeps listing hydration hidden and exposes a bounded canonic
   assert.match(source, /ariaLive="polite"/u);
   assert.match(source, /ariaAtomic=\{false\}/u);
   assert.match(source, /ariaLabelledby=\{headingId\}/u);
-  assert.match(source, /'data-personal-feed-runtime-host':'adaptive-v1'/u);
+  assert.match(source, /'data-personal-feed-runtime-host'\s*:\s*'adaptive-v1'/u);
   assert.doesNotMatch(source, /personal-feed-section__live-region/u, 'canonical adaptive root owns the live region without an intermediary wrapper');
   assert.doesNotMatch(source, /repeat\(3, minmax\(0, 1fr\)\)|repeat\(2, minmax\(0, 1fr\)\)|grid-template-columns: minmax\(0, 1fr\)/u,
     'PersonalFeedSlot must not own a second card-grid layout');
@@ -75,8 +75,8 @@ test('personal feed uses canonical adaptive packing while runtime keeps contiguo
   assert.doesNotMatch(layout, /chunk\.map\(\(item\) => \(\{ item, layout: null \}\)\)/u, 'mobile never falls back to unresolved desktop-template media');
 
   assert.match(slot, /<AdaptiveEventCardGrid[\s\S]*mode="packed"[\s\S]*rowSize=\{3\}[\s\S]*responsive="progressive"/u);
-  assert.match(slot, /'data-personal-feed-slot':''/u);
-  assert.match(slot, /'data-personal-feed-runtime-host':'adaptive-v1'/u);
+  assert.match(slot, /'data-personal-feed-slot'\s*:\s*''/u);
+  assert.match(slot, /'data-personal-feed-runtime-host'\s*:\s*'adaptive-v1'/u);
   assert.doesNotMatch(slot, /\.personal-feed-section(?:--event-detail)? :global\(\[data-lab-related-card/u,
     'consumer no longer owns packed-card geometry');
   assert.doesNotMatch(slot, /event-card__media-shell|event-card__body|event-card__utility-row|event-card__feedback--under/u,
@@ -235,7 +235,7 @@ test('broad continuation uses the canonical card variant and discovery controlle
     read('src/layouts/EventLayout.astro'),
   ]);
 
-  assert.match(slot, /data-personal-feed-slot[\s\S]*data-feed-card-variant="split-actions"/u);
+  assert.match(slot, /'data-personal-feed-slot'\s*:\s*''[\s\S]*'data-feed-card-variant'\s*:\s*'split-actions'/u);
   assert.match(layout, /appendEventCard\(slot, item, slot\.dataset\.feedCardVariant \|\| 'split-actions', layout\)/u);
   assert.match(layout, /personalFeedStores\.set\(section, \{ items: ranked, ranked, rendered: 0, profile, manifest \}\)/u);
   assert.match(layout, /const ranked = toArray\(store\?\.ranked \|\| store\?\.items\)/u, 'candidate and rank lookup share the controller store contract');
