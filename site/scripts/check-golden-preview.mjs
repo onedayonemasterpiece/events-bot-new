@@ -122,14 +122,16 @@ const combinedDateHtml = `${todayHtml}\n${tomorrowHtml}\n${sundayHtml}\n${weeken
 for (const value of ['data-media-frame-fit="cover"', 'data-media-frame-fit="contain"', 'data-media-frame-kind="fallback"']) {
   if (!combinedDateHtml.includes(value)) throw new Error(`Golden date surfaces miss MediaFrame stress evidence ${value}`);
 }
-for (const value of ['Перенесено', 'Отменено']) {
-  if (!combinedDateHtml.includes(value)) throw new Error(`Golden date surfaces miss lifecycle label ${value}`);
-}
-if (!todayHtml.includes(corpus.events.find((event) => event.stress_tags.includes('long-copy')).title)) {
-  throw new Error('Today route misses the long-copy specimen');
-}
+const longCopy = corpus.events.find((event) => event.stress_tags.includes('long-copy'));
+const rescheduled = corpus.events.find((event) => event.stress_tags.includes('lifecycle-rescheduled'));
+const cancelled = corpus.events.find((event) => event.stress_tags.includes('lifecycle-cancelled'));
+if (!longCopy || !todayHtml.includes(longCopy.title)) throw new Error('Today route misses the long-copy specimen');
+if (!rescheduled || !tomorrowHtml.includes(rescheduled.title)) throw new Error('Tomorrow route misses the rescheduled specimen');
+if (!cancelled || !sundayHtml.includes(cancelled.title)) throw new Error('Sunday route misses the cancelled specimen');
 
+const detailHtmlById = new Map();
 for (const event of corpus.events) {
+  const detailPath = join(root, `sobytiya/${event.slug}/index.html`);
   for (const relative of [
     `sobytiya/${event.slug}/index.html`,
     `sobytiya/${event.slug}/event.ics`,
@@ -138,6 +140,10 @@ for (const event of corpus.events) {
     const path = join(root, relative);
     if (!existsSync(path) || !statSync(path).isFile()) throw new Error(`Golden event ${event.id} misses ${relative}`);
   }
+  detailHtmlById.set(event.id, readFileSync(detailPath, 'utf8'));
+}
+if (!detailHtmlById.get(cancelled.id)?.includes('https://schema.org/EventCancelled')) {
+  throw new Error('Cancelled Golden event does not reach the event-detail structured state');
 }
 
 function sameMembers(left, right) {
@@ -165,5 +171,6 @@ console.log(JSON.stringify({
   weekend_occurrence_reuse:true,
   pinned_assets_verified:corpus.pinned_assets.length,
   ordinary_routes_only:true,
+  lifecycle_stress_materialized:true,
   real_preview_data_restored:true,
 }, null, 2));
