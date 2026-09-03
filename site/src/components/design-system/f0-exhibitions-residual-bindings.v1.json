@@ -1,0 +1,452 @@
+{
+  "schema": "kenigevents.f0-exhibitions-residual-bindings.v1",
+  "version": "1.0.0",
+  "status": "FOUNDATIONS_READY_CONSUMER_AND_FRAME_BINDING_PENDING",
+  "role": "F0",
+  "contract_version": "1.10.0",
+  "consumer": "site/src/components/ExhibitionsPersonalSurface.astro",
+  "route": "/vystavki/",
+  "source_owner": {
+    "palette_and_elevation": "site/src/components/design-system/product-theme-foundations.css",
+    "route_geometry": "site/src/components/design-system/route-theme-foundations.css",
+    "registry_import": "site/src/components/design-system/product-contour-foundations.css"
+  },
+  "ownership_boundary": {
+    "F0": [
+      "semantic colors",
+      "elevation values",
+      "typography and spacing aliases",
+      "exactly four icon-size roles",
+      "canonical SVG identities"
+    ],
+    "A0": [
+      "actual consumer selector migration",
+      "route family diagnostics",
+      "preservation of keyboard, filter, gallery, like, reject and undo behavior",
+      "removal of obsolete private theme aliases"
+    ],
+    "FR0": [
+      "deck frame anatomy",
+      "frame dimensions and stacking",
+      "object-fit and object-position",
+      "crop, fallback, loading and media interaction diagnostics"
+    ]
+  },
+  "private_alias_classification": {
+    "remove_as_theme_or_motion_owner": [
+      "--ex-bg",
+      "--ex-surface",
+      "--ex-raised",
+      "--ex-border",
+      "--ex-text",
+      "--ex-muted",
+      "--ex-blue",
+      "--ex-orange",
+      "--ex-red",
+      "--ex-gray",
+      "--ex-yellow",
+      "--ex-purple",
+      "--ex-green",
+      "--ex-ease-cinematic",
+      "--ex-ease-emphasis",
+      "--ex-motion-fast",
+      "--ex-motion-base"
+    ],
+    "retain_as_local_runtime_layout_state": [
+      {
+        "name": "--ex-media-column",
+        "reason": "responsive row measurement input, not a theme token"
+      },
+      {
+        "name": "--ex-row-gap",
+        "reason": "local responsive grid calculation input"
+      },
+      {
+        "name": "--ex-surface-start",
+        "reason": "derived local row-paint offset"
+      },
+      {
+        "name": "--ex-rail-color",
+        "reason": "per-row lifecycle category state selected from F0 semantic colors"
+      }
+    ],
+    "blanket_no_ex_prefix_assertion_allowed": false
+  },
+  "bindings": [
+    {
+      "id": "EX-BODY-BACKGROUND",
+      "selector": ".ex-page",
+      "kind": "color",
+      "current": "radial rgba(84,172,247,.14), radial rgba(241,130,36,.07), var(--ex-bg)",
+      "replacement": "radial var(--ke-color-exhibitions-blue-glow), radial var(--ke-color-exhibitions-orange-glow), var(--ke-color-exhibitions-background)",
+      "consumer_owner": "A0",
+      "browser_expectation": "dark exhibition canvas and both ambient glows are pixel-equivalent"
+    },
+    {
+      "id": "EX-FOCUS",
+      "selector": "body:has(.ex-page) a:focus-visible, body:has(.ex-page) button:focus-visible",
+      "kind": "color",
+      "current": "outline 3px solid var(--ex-blue)",
+      "replacement": "outline var(--ke-exhibitions-focus-width) solid var(--ke-color-exhibitions-blue); offset var(--ke-exhibitions-focus-offset)",
+      "consumer_owner": "A0",
+      "browser_expectation": "keyboard focus contrast and geometry remain unchanged"
+    },
+    {
+      "id": "EX-KBD",
+      "selector": ".ex-page kbd",
+      "kind": "color",
+      "current": "#50555a/#777d82/#202326/#e9ecee/#050607",
+      "replacement": "--ke-color-exhibitions-kbd-line/line-strong/surface/text/shadow",
+      "consumer_owner": "A0",
+      "browser_expectation": "key caps retain current dark raised hierarchy"
+    },
+    {
+      "id": "EX-MODE",
+      "selector": ".ex-mode, .ex-mode button[aria-checked=true]",
+      "kind": "color",
+      "current": "#08090a and inset #3a3f43",
+      "replacement": "--ke-color-exhibitions-mode-surface and --ke-color-exhibitions-mode-selected-line",
+      "consumer_owner": "A0",
+      "browser_expectation": "selected collection mode remains visibly distinct"
+    },
+    {
+      "id": "EX-STICKY-CONTROLS",
+      "selector": ".ex-controls",
+      "kind": "color",
+      "current": "rgba(13,15,16,.96)",
+      "replacement": "var(--ke-color-exhibitions-sticky-surface)",
+      "consumer_owner": "A0",
+      "browser_expectation": "sticky controls retain opaque dark backdrop"
+    },
+    {
+      "id": "EX-TIMELINE",
+      "selector": ".ex-list::before",
+      "kind": "color_elevation",
+      "current": "brand faint -> #626a70 -> #4d555b -> brand faint; white and blue glow",
+      "replacement": "--ke-color-exhibitions-timeline-brand-faint/mid/end plus --ke-elevation-exhibitions-timeline",
+      "consumer_owner": "A0",
+      "browser_expectation": "vertical chronology rail retains current contrast and glow"
+    },
+    {
+      "id": "EX-TIMELINE-MOBILE",
+      "selector": "@media(max-width:820px) .ex-list::before",
+      "kind": "color_elevation",
+      "current": "brand .16 -> #6d767d -> #555e64 -> brand .16; white .08 and brand .1 glow",
+      "replacement": "--ke-color-exhibitions-timeline-mobile-mid/end plus --ke-elevation-exhibitions-timeline-mobile",
+      "consumer_owner": "A0",
+      "browser_expectation": "mobile chronology rail remains stronger than desktop"
+    },
+    {
+      "id": "EX-ROW-SURFACE",
+      "selector": ".ex-row::after",
+      "kind": "color_elevation",
+      "current": "row start/end/highlight/brand gradient and composite shadow",
+      "replacement": "--ke-color-exhibitions-row-start/end/highlight/highlight-soft/highlight-brand and --ke-elevation-exhibitions-row",
+      "consumer_owner": "A0",
+      "browser_expectation": "row glass-depth treatment remains unchanged"
+    },
+    {
+      "id": "EX-ROW-HOVER",
+      "selector": ".ex-row:hover::after, .ex-row:focus-within::after",
+      "kind": "elevation",
+      "current": "inset white .12, black .38 and blue .10/.18 composite",
+      "replacement": "var(--ke-elevation-exhibitions-row-hover)",
+      "consumer_owner": "A0",
+      "browser_expectation": "hover/focus row depth remains unchanged"
+    },
+    {
+      "id": "EX-ROW-KEYBOARD",
+      "selector": ".ex-row.is-keyboard-active::after",
+      "kind": "elevation",
+      "current": "inset white .16, black .4 and blue .16/.72 composite",
+      "replacement": "var(--ke-elevation-exhibitions-row-keyboard)",
+      "consumer_owner": "A0",
+      "browser_expectation": "keyboard-active row remains stronger than pointer hover"
+    },
+    {
+      "id": "EX-ROW-HALO",
+      "selector": ".ex-row__halo",
+      "kind": "color",
+      "current": "rgba(84,172,247,.18) to rgba(84,172,247,.05) to transparent",
+      "replacement": "--ke-color-exhibitions-row-halo-strong and --ke-color-exhibitions-row-halo-soft",
+      "consumer_owner": "A0",
+      "browser_expectation": "row ambient halo remains unchanged"
+    },
+    {
+      "id": "EX-ROW-EDGE",
+      "selector": ".ex-row__edge-light",
+      "kind": "color_elevation",
+      "current": "white .46 and blue .58 edge gradient; blue .28/.34 drop shadows",
+      "replacement": "--ke-color-exhibitions-row-edge-line/brand and --ke-elevation-exhibitions-row-edge-hover/keyboard",
+      "consumer_owner": "A0",
+      "browser_expectation": "edge highlight remains state-sensitive"
+    },
+    {
+      "id": "EX-RAIL-DOT",
+      "selector": ".ex-row__dot",
+      "kind": "color_elevation",
+      "current": "#0d0f10 border and lifecycle-color mixed rings",
+      "replacement": "--ke-color-exhibitions-rail-dot-border plus --ke-elevation-exhibitions-rail-dot/mobile",
+      "consumer_owner": "A0",
+      "browser_expectation": "lifecycle dot keeps current category color and halo",
+      "negative_control": "--ex-rail-color remains local runtime state and does not become a fifth palette root"
+    },
+    {
+      "id": "EX-DECK-FRAME",
+      "selector": ".ex-deck__frame",
+      "kind": "color_elevation",
+      "current": "rgba(220,229,236,.62), #0b0d0e and composite inset/lateral shadow",
+      "replacement": "--ke-color-exhibitions-deck-frame-line/surface and --ke-elevation-exhibitions-deck-frame",
+      "consumer_owner": "FR0",
+      "browser_expectation": "frame line and depth remain unchanged while FR0 owns anatomy",
+      "negative_control": "F0 does not own inline-size, block-size, object-fit or object-position"
+    },
+    {
+      "id": "EX-DECK-OVERLAY",
+      "selector": ".ex-deck__frame::after",
+      "kind": "elevation",
+      "current": "inset white .22/.08",
+      "replacement": "var(--ke-elevation-exhibitions-deck-overlay)",
+      "consumer_owner": "FR0",
+      "browser_expectation": "frame bevel remains unchanged"
+    },
+    {
+      "id": "EX-DECK-STACK",
+      "selector": ".ex-deck__frame[data-deck-state=stack]",
+      "kind": "color_elevation",
+      "current": "rgba(230,238,244,.8) depth-dependent line and depth-dependent shadow",
+      "replacement": "--ke-color-exhibitions-deck-stack-line and --ke-elevation-exhibitions-deck-stack",
+      "consumer_owner": "FR0",
+      "browser_expectation": "stack depth remains computed from --deck-depth"
+    },
+    {
+      "id": "EX-DECK-SKELETON",
+      "selector": ".ex-deck__skeleton, .ex-gallery__skeleton",
+      "kind": "color",
+      "current": "#171a1d -> #252a2e -> #171a1d",
+      "replacement": "--ke-color-exhibitions-skeleton-start/mid",
+      "consumer_owner": "FR0",
+      "browser_expectation": "loading shimmer retains current luminance"
+    },
+    {
+      "id": "EX-DECK-DEPTH",
+      "selector": ".ex-deck__depth-plane, [data-deck-visual=depth-tail]",
+      "kind": "color_elevation",
+      "current": "#343a3f/#202428/#15181a, rgba(202,211,218,.36), #23272b and inset white .13/.05",
+      "replacement": "--ke-color-exhibitions-depth-* and --ke-elevation-exhibitions-depth-overlay",
+      "consumer_owner": "FR0",
+      "browser_expectation": "non-image depth-tail specimens remain visually distinct from loading/error"
+    },
+    {
+      "id": "EX-DECK-HOVER",
+      "selector": ".ex-row:hover .ex-deck, .ex-row:hover .ex-deck__frame, stack hover variants",
+      "kind": "color_elevation",
+      "current": "blue .12 filter, rgba(235,244,250,.84) line and hover composites",
+      "replacement": "--ke-elevation-exhibitions-deck-filter-hover, --ke-color-exhibitions-deck-frame-line-hover, --ke-elevation-exhibitions-deck-frame-hover/stack-hover",
+      "consumer_owner": "FR0",
+      "browser_expectation": "deck focus/hover depth remains unchanged"
+    },
+    {
+      "id": "EX-MEDALLION",
+      "selector": ".ex-deck__medallion",
+      "kind": "color_elevation",
+      "current": "manifest ring/background fallback and black composite shadow",
+      "replacement": "--ke-color-exhibitions-medallion-fallback-ring/surface and --ke-elevation-exhibitions-medallion",
+      "consumer_owner": "FR0",
+      "browser_expectation": "manifest identity colors still override only the bounded fallback"
+    },
+    {
+      "id": "EX-DECK-COUNT",
+      "selector": ".ex-deck__count",
+      "kind": "color_elevation",
+      "current": "white .42 line, rgba(7,9,10,.9), #f4f7f8 and composite depth",
+      "replacement": "--ke-color-exhibitions-deck-count-* and --ke-elevation-exhibitions-deck-count",
+      "consumer_owner": "A0",
+      "browser_expectation": "photo-count badge remains readable over all media"
+    },
+    {
+      "id": "EX-TAGS",
+      "selector": ".ex-reason, .ex-reason--new, .ex-row__tags span",
+      "kind": "color",
+      "current": "#20262c; #3c1d20/#ff8e98; #211c2b/#c2a6fa",
+      "replacement": "--ke-color-exhibitions-reason-surface/reason-new-* and --ke-color-exhibitions-tag-*",
+      "consumer_owner": "A0",
+      "browser_expectation": "reason, new and taxonomy tags remain semantically distinct"
+    },
+    {
+      "id": "EX-ACTION-DEFAULT",
+      "selector": ".ex-action, .ex-action:hover, .ex-action:focus-visible",
+      "kind": "color_elevation",
+      "current": "#121416; rgba(187,222,249,.72); blue .13 glow",
+      "replacement": "--ke-color-exhibitions-action-surface/action-hover-line and --ke-elevation-exhibitions-action-hover",
+      "consumer_owner": "A0",
+      "browser_expectation": "like/reject controls retain current default and hover contrast"
+    },
+    {
+      "id": "EX-ACTION-STATES",
+      "selector": ".ex-action--like[aria-pressed=true], .ex-action--reject[aria-pressed=true]",
+      "kind": "color",
+      "current": "#d86273/#32171d/#ff788c and #72777b/#2b2e30/#e0e2e4",
+      "replacement": "--ke-color-exhibitions-like-selected-* and --ke-color-exhibitions-reject-selected-*",
+      "consumer_owner": "A0",
+      "browser_expectation": "like and reject remain visually and semantically distinct"
+    },
+    {
+      "id": "EX-ICON-SIGNALS",
+      "selector": ".ex-discussed svg, .ex-signal svg",
+      "kind": "icon",
+      "current": "14px local width/height",
+      "replacement": "var(--ke-exhibitions-signal-icon-size) -> inline=16px",
+      "consumer_owner": "A0",
+      "browser_expectation": "small metadata signals use the central inline role",
+      "negative_control": "no local .ke-icon-role width/height override"
+    },
+    {
+      "id": "EX-ICON-ACTIONS",
+      "selector": ".ex-action svg, .ex-action--like svg, .ex-action--reject svg",
+      "kind": "icon",
+      "current": "21px, 19px and 18px local width/height",
+      "replacement": "var(--ke-exhibitions-action-icon-size) -> control=20px",
+      "consumer_owner": "A0",
+      "browser_expectation": "all action glyphs converge to 20px inside unchanged 46px controls",
+      "negative_control": "do not introduce 18, 19 or 21px central roles"
+    },
+    {
+      "id": "EX-REJECTED-HIDDEN",
+      "selector": ".ex-row.is-rejected::after, .ex-row__hidden button",
+      "kind": "color",
+      "current": "#17191a; #565b5f/#232629",
+      "replacement": "--ke-color-exhibitions-rejected-row-surface and --ke-color-exhibitions-hidden-control-*",
+      "consumer_owner": "A0",
+      "browser_expectation": "dismissed row receipt and undo action remain readable"
+    },
+    {
+      "id": "EX-TAIL-EMPTY",
+      "selector": ".ex-tail-callout, .ex-empty",
+      "kind": "color",
+      "current": "#292d30/#101214 and #4c5257 dashed line",
+      "replacement": "--ke-color-exhibitions-tail-line, existing surface, and --ke-color-exhibitions-empty-line",
+      "consumer_owner": "A0",
+      "browser_expectation": "long-tail and empty-state boundaries remain unchanged"
+    },
+    {
+      "id": "EX-GALLERY-SHELL",
+      "selector": ".ex-gallery, .ex-gallery::backdrop",
+      "kind": "color_elevation",
+      "current": "#4b5156/#0c0e0f/black .72 and backdrop black .84",
+      "replacement": "--ke-color-exhibitions-gallery-line/surface/backdrop and --ke-elevation-exhibitions-gallery",
+      "consumer_owner": "A0",
+      "browser_expectation": "modal shell and backdrop retain current depth"
+    },
+    {
+      "id": "EX-GALLERY-MEDIA",
+      "selector": ".ex-gallery__stage, .ex-gallery__media, .ex-gallery__stage img",
+      "kind": "color",
+      "current": "#070809 stage surface",
+      "replacement": "var(--ke-color-exhibitions-gallery-stage-surface)",
+      "consumer_owner": "FR0",
+      "browser_expectation": "contain-mode gallery background remains unchanged",
+      "negative_control": "FR0 continues to own object-fit:contain and frame dimensions"
+    },
+    {
+      "id": "EX-GALLERY-NAVIGATION",
+      "selector": "[data-gallery-prev], [data-gallery-next]",
+      "kind": "icon_color",
+      "current": "text arrows ←/→ on #111416",
+      "replacement": "SemanticIcon arrow-left/arrow-right role=control; --ke-color-exhibitions-gallery-navigation-surface; --ke-exhibitions-gallery-arrow-icon-size",
+      "consumer_owner": "A0",
+      "browser_expectation": "navigation meaning, labels and targets remain unchanged",
+      "negative_control": "text arrow glyph duplicates are absent"
+    },
+    {
+      "id": "EX-LIVE-RECEIPT",
+      "selector": ".ex-live, .ex-live [data-live-undo]",
+      "kind": "color_elevation",
+      "current": "#4d5358/#191c1e/black .45 and #656c72/#272b2e",
+      "replacement": "--ke-color-exhibitions-live-* and --ke-elevation-exhibitions-live",
+      "consumer_owner": "A0",
+      "browser_expectation": "transient receipt and undo control retain current contrast"
+    }
+  ],
+  "technical_exceptions": [
+    {
+      "value": "#000",
+      "location": "CSS mask composition in .ex-row__edge-light",
+      "reason": "mask alpha channel, not a visible UI color",
+      "consumer_owner": "A0"
+    },
+    {
+      "values": ["--media-position", "--media-ratio", "--deck-depth", "--deck-saturation", "--deck-brightness", "--deck-contrast", "--deck-blur"],
+      "reason": "runtime media/deck measurement state",
+      "consumer_owner": "FR0"
+    },
+    {
+      "values": ["--medallion-ring", "--medallion-bg"],
+      "reason": "bounded organizer identity media inputs with F0 fallback tokens",
+      "consumer_owner": "FR0"
+    }
+  ],
+  "strict_acceptance": {
+    "command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "required": [
+      "all visible private theme aliases removed",
+      "four local runtime layout variables retained and classified",
+      "all bindings marked consumer_owner=A0 use a central F0 token or canonical SemanticIcon",
+      "FR0-bound palette/elevation values are available without moving frame anatomy to F0",
+      "no 14/18/19/21px local UI icon dimensions",
+      "gallery arrows use canonical SemanticIcon identities",
+      "no fifth icon role",
+      "no unsupported raw visible color remains outside documented technical/media exceptions"
+    ]
+  },
+  "browser_matrix": {
+    "owner": "V0",
+    "route": "/vystavki/",
+    "viewports": [375, 620, 1024, 1440],
+    "states": [
+      "personal and all modes",
+      "category filter selected",
+      "keyboard-active row",
+      "deck loading/loaded/error/depth-tail",
+      "liked and rejected rows",
+      "gallery open/closing",
+      "live undo receipt",
+      "reduced motion"
+    ],
+    "negative_probes": [
+      "visible raw-color matched rule outside F0 token registry",
+      "consumer-local UI icon square outside 16/20/24/32",
+      "text-arrow duplicate for gallery navigation",
+      "F0 selector owning frame fit/crop/dimensions",
+      "missing family/version/variant/state/foundation-consumer diagnostics"
+    ]
+  },
+  "thin_s": {
+    "collection": "F0 / Exhibitions product theme",
+    "source": "product-theme-foundations.css and route-theme-foundations.css",
+    "binding_mode": "semantic variables only",
+    "runtime_layout_variables_exported": false,
+    "framing_variables_delegated_to": "FR0"
+  },
+  "penpot": {
+    "variable_set": "F0-EXHIBITIONS-THEME-V1",
+    "linked_instance": "ExhibitionsPersonalSurface@1/ranked-personal-catalog",
+    "state_variants": ["personal", "all", "liked", "rejected", "gallery-open", "empty"],
+    "frame_master_owner": "FR0",
+    "materialization_status": "SPEC_ONLY_NOT_MATERIALIZED"
+  },
+  "rollback": {
+    "unit": "F0-RB-EXHIBITIONS-RESIDUAL-THEME",
+    "trigger": "undefined token, strict source failure, semantic state collapse, FR0 ownership regression or V0 computed-style drift",
+    "action": "revert only the exhibitions residual token and consumer substitutions; preserve route data/behavior, unrelated F0 clusters, current successor and immutable previews"
+  },
+  "claims_not_made": [
+    "A0 has consumed this map",
+    "FR0 has consumed frame-state variables",
+    "strict command passed",
+    "the route is source-converged",
+    "a post-consumption preview exists",
+    "V0 accepted the route",
+    "Penpot variables are materialized"
+  ]
+}
