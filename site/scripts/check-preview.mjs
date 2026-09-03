@@ -192,9 +192,11 @@ if (existsSync(pianissimoRoutePath)) {
     'data-mobile-rail-gallery-count="2"',
     'data-mobile-rail-media-reason="safe_visual_landscape_5x4"',
     '--media-width:140px',
-    '--rail-media-fit:cover',
+    'data-media-frame-fit="cover"',
+    'data-media-frame-crop-permission="reviewed"',
     'data-image-text-mode="visual_only"',
-    '--focus-x:65%',
+    'data-media-frame-focal-position="65% 35%"',
+    'data-media-frame-style-owner="media-frame.css"',
   ]) {
     if (!pianissimoRail.includes(marker)) throw new Error(`Pianissimo ${pianissimoEventId} rail crop regression: missing ${marker}`);
   }
@@ -227,7 +229,9 @@ if (existsSync(pianissimoRoutePath)) {
       .find((row) => (
         /data-mobile-rail-media-reason="(?:single_)?safe_visual_landscape_5x4"/u.test(row)
         && row.includes('--media-width:140px')
-        && row.includes('--rail-media-fit:cover')
+        && row.includes('data-media-frame-fit="cover"')
+        && row.includes('data-media-frame-crop-permission="reviewed"')
+        && row.includes('data-media-frame-style-owner="media-frame.css"')
         && row.includes('data-image-text-mode="visual_only"')
       ));
     if (!currentVisualRail) {
@@ -293,7 +297,12 @@ if (
 let moreRail = '';
 if (moreRoutePath && existsSync(moreRoutePath)) {
   moreRail = mobileRailRow(moreRoute, moreEventId);
-  if (!moreRail.includes('data-image-text-mode="ocr_text"') || !moreRail.includes('--rail-media-fit:contain')) {
+  if (
+    !moreRail.includes('data-image-text-mode="ocr_text"')
+    || !moreRail.includes('data-media-frame-fit="contain"')
+    || !moreRail.includes('data-media-frame-crop-permission="forbidden"')
+    || !moreRail.includes('data-media-frame-style-owner="media-frame.css"')
+  ) {
     throw new Error('More vnutri 4211 OCR media must remain fail-closed');
   }
   if (!moreRail.includes(moreManifest.avatarUrl)) {

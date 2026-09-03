@@ -326,6 +326,12 @@ fallback/loading
 responsive resource selection
 ```
 
+Canonical style owner публикуется как `media-frame.css`; caller сохраняет
+interaction ownership и внешнюю геометрию surface, но не переопределяет
+`object-fit`, focal position, clip или radius semantics. EventCard,
+ListingEventCard, EventMediaRail и MobileListingRailRow обязаны использовать
+этот один protocol и публиковать его диагностические поля для browser audit.
+
 Изображение не может визуально выходить за frame. Page-local grid/card CSS не
 может менять framing policy. Existing optimizer/contract расширяется; второй
 параллельный algorithm запрещён без доказанной невозможности reuse.
@@ -346,6 +352,17 @@ Contract:
 - framing остаётся у MediaFrame;
 - no compact/mobile overflow;
 - source/focus order сохраняется.
+
+Диагностика разделяет три популяции и не смешивает их cardinality:
+
+- `input-*` — полный вход до `limit`;
+- `source-*` — admitted input после `limit`;
+- `rendered-*` — фактически созданные direct EventCard roots.
+
+Каждая пара `*-count` / `*-order` описывает одну и ту же популяцию. Единственный
+writer этих полей объявляется через
+`data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"`; page/consumer
+не должен устанавливать второй observer для тех же полей.
 
 Responsive override обязан иметь specificity не ниже базового selector с
 `data-adaptive-grid-row-size`; иначе Astro-scoped CSS оставляет две колонки на

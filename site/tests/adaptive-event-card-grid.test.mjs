@@ -48,6 +48,7 @@ test('AdaptiveEventCardGrid clamps inputs and exposes the exact diagnostics cont
     'data-adaptive-grid-layout-engine="flex-lines"',
     'data-adaptive-grid-remainder-policy="stretch"',
   ]) assert.ok(adaptive.includes(marker), `missing ${marker}`);
+  assert.match(adaptive, /data-adaptive-grid-remainder-variant=\{initialRemainderVariant\}/u);
   assert.match(adaptive, /data-optimized-event-card-grid=\{legacyOptimizedContract \? '' : undefined\}/u);
 });
 
@@ -61,6 +62,7 @@ test('Wave 2 keeps consumer metadata data-only and canonical diagnostics reserve
   assert.match(adaptive, /itemRoots\?: Record<string, AdaptiveEventCardItemRoot>/u);
   assert.match(adaptive, /\^data-\[a-z0-9_\.:-\]\+\$/u);
   assert.match(adaptive, /!ADAPTIVE_ROOT_RESERVED_ATTRIBUTES\.has\(name\)/u);
+  assert.match(adaptive, /'data-adaptive-grid-remainder-variant'/u);
   assert.match(adaptive, /return itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\] \|\| itemRoots\[String\(item\.id\)\]/u);
   assert.match(adaptive, /rootClassName=\{itemRootFor\(item\)\?\.className\}/u);
   assert.match(adaptive, /rootAttributes=\{itemRootFor\(item\)\?\.attributes\}/u);
@@ -82,7 +84,7 @@ test('Wave 2 responsive strategies and legacy adapter mapping remain explicit', 
   assert.match(adaptive, /requestedResponsive === 'progressive' \|\| requestedResponsive === 'stack' \|\| requestedResponsive === 'fixed'/u);
   assert.match(adaptive, /: responsiveMobile \? 'stack' : 'fixed'/u);
   assert.match(adaptive, /data-adaptive-grid-responsive=\{responsive\}/u);
-  for (const diagnostic of ['source-count', 'rendered-count', 'remainder-count', 'source-order', 'rendered-order', 'item-root-contract']) {
+  for (const diagnostic of ['source-count', 'rendered-count', 'remainder-count', 'remainder-variant', 'source-order', 'rendered-order', 'item-root-contract']) {
     assert.ok(adaptive.includes(`data-adaptive-grid-${diagnostic}`), `missing ${diagnostic} diagnostic`);
   }
   assert.match(adaptive, /@media \(max-width: 1023px\)[\s\S]*adaptive-event-card-grid--responsive-stack/u);
@@ -94,7 +96,7 @@ test('Wave 2 responsive strategies and legacy adapter mapping remain explicit', 
   assert.doesNotMatch(legacy, /<style>|packRelatedCardRows|<EventCard\b/u);
 });
 
-test('AdaptiveEventCardGrid flex lines fill complete and final rows without phantom tracks', async () => {
+test('AdaptiveEventCardGrid flex lines fill complete and named final rows without phantom tracks', async () => {
   const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
 
   assert.match(adaptive, /\.cards-grid\.adaptive-event-card-grid \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;[\s\S]*gap: var\(--adaptive-event-card-gap\);/u);
@@ -104,15 +106,35 @@ test('AdaptiveEventCardGrid flex lines fill complete and final rows without phan
   }
   assert.match(adaptive, /data-adaptive-grid-row-size="1"[^\n]*flex-basis: 100%/u);
   assert.match(adaptive, /data-adaptive-grid-row-size="2"[^\n]*flex-basis: calc\(50% - var\(--adaptive-event-card-gap\)\)/u);
+  assert.ok(adaptive.includes("type AdaptiveGridRemainderVariant = 'complete' | `stretch-${number}-of-${number}`;"));
+  assert.match(adaptive, /return remainder === 0 \? 'complete' : `stretch-\$\{remainder\}-of-\$\{size\}`/u);
+  assert.match(adaptive, /grid\.dataset\.adaptiveGridRemainderVariant = runtimeRemainderVariant/u);
+  assert.match(adaptive, /`remainder-\$\{runtimeRemainderVariant\}`/u);
   assert.doesNotMatch(adaptive, /grid-template-columns:\s*repeat/u);
 });
 
-test('normalized component families and MediaFrame diagnostics retain their exact versions and fits', async () => {
-  const [adaptive, card, listing, rail] = await Promise.all([
+test('packed grid keeps row geometry and layering but delegates MediaFrame anatomy', async () => {
+  const adaptive = await read('src/components/AdaptiveEventCardGrid.astro');
+  const shell = /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media-shell\) \{([\s\S]*?)\n  \}/u.exec(adaptive)?.[1] || '';
+  const image = /\.adaptive-event-card-grid--packed :global\(\[data-lab-related-card\] \.event-card__media\) \{([\s\S]*?)\n  \}/u.exec(adaptive)?.[1] || '';
+
+  assert.match(shell, /height: auto !important/u);
+  assert.match(shell, /aspect-ratio: var\(--lab-row-media-ratio\) !important/u);
+  assert.match(shell, /background: #d2c5b7/u);
+  assert.doesNotMatch(shell, /\b(?:position|isolation|width|overflow)\s*:/u);
+  assert.match(image, /position: absolute !important/u);
+  assert.match(image, /z-index: 2/u);
+  assert.match(image, /inset: 0/u);
+  assert.doesNotMatch(image, /\b(?:width|height)\s*:/u);
+});
+
+test('normalized component families and MediaFrame diagnostics retain exact versions, roles and fits', async () => {
+  const [adaptive, card, listing, rail, mediaFrame] = await Promise.all([
     read('src/components/AdaptiveEventCardGrid.astro'),
     read('src/components/EventCard.astro'),
     read('src/components/listings/ListingEventCard.astro'),
     read('src/components/EventMediaRail.astro'),
+    read('src/components/media-frame.css'),
   ]);
 
   for (const [source, family, version] of [
@@ -132,10 +154,21 @@ test('normalized component families and MediaFrame diagnostics retain their exac
   assert.match(listing, /class="ke-listing-card__media ke-skeleton"[\s\S]*data-media-frame/u);
   assert.match(rail, /if \(asset\.media_semantic_status === 'error'\) return 'unknown'/u);
   assert.match(rail, /mediaFrameKind\(asset\) === 'visual' \? 'cover' : 'contain'/u);
-  assert.match(rail, /style=\{`object-fit:\$\{mediaFrameFit\(asset\)\};object-position:50% 50%`\}/u);
+  assert.doesNotMatch(rail, /style=\{`object-fit:/u);
+  assert.doesNotMatch(rail, /\.event-media-rail__frame\s*\{/u);
   for (const source of [card, listing, rail]) {
     assert.doesNotMatch(source, /<(?:a|button)\b[^>]*data-media-frame/u);
+    assert.match(source, /data-media-frame-style-owner="media-frame\.css"/u);
+    assert.match(source, /data-media-frame-role=/u);
+    assert.match(source, /data-media-frame-crop-permission=/u);
+    assert.match(source, /data-media-frame-focal-position=/u);
+    assert.match(source, /data-media-frame-clip="frame"/u);
+    assert.match(source, /data-media-frame-radius="surface"/u);
     assert.match(source, /data-media-frame-interaction-owner="caller"/u);
     assert.match(source, /data-media-frame-(?:image|fallback)/u);
   }
+  assert.match(mediaFrame, /Canonical MediaFrame v1 structural and fit owner/u);
+  assert.match(mediaFrame, /\[data-media-frame-fit="cover"\][\s\S]*object-fit: cover/u);
+  assert.match(mediaFrame, /\[data-media-frame-fit="contain"\][\s\S]*object-fit: contain/u);
+  assert.match(mediaFrame, /object-position: var\(--media-frame-object-position, 50% 50%\)/u);
 });

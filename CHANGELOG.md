@@ -26,6 +26,11 @@
   template, keeping preview media inside its exact immutable publication prefix.
   Frozen Golden previews also skip the unrelated daily service-share render, so
   an explicit future Golden clock cannot fail against today's real event set.
+  The accepted M0 successor is integrated on the same branch: EventCard,
+  ListingEventCard, EventMediaRail and MobileListingRailRow now share the
+  canonical `media-frame.css` protocol, while AdaptiveEventCardGrid publishes
+  separate input/admitted-source/rendered diagnostic populations with coherent
+  count/order cardinality and one explicit diagnostics owner.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK

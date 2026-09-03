@@ -6,6 +6,7 @@ import { eventImageUrl } from '../../lib/assets';
 import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
+import '../media-frame.css';
 
 export type ListingEventCardRootAttributeValue = string | number | boolean | null | undefined;
 export type ListingEventCardRootAttributes = Record<string, ListingEventCardRootAttributeValue>;
@@ -163,6 +164,12 @@ const cardState = [
 ].filter(Boolean).join(' ') || undefined;
 const mediaFrameRatio = image.ratio.toFixed(5);
 const mediaFrameObjectPosition = image.objectPosition;
+const mediaFrameRole = mediaFrameKind === 'fallback'
+  ? 'fallback'
+  : image.asset?.media_role || event.image_media_role || 'unknown_document';
+const mediaFrameCropPermission = mediaFrameFit === 'cover'
+  ? image.adaptiveCrop ? 'reviewed' : 'allowed'
+  : 'forbidden';
 const style = [
   `--ke-listing-image-ratio:${mediaFrameRatio}`,
   `--ke-listing-object-position:${mediaFrameObjectPosition}`,
@@ -236,18 +243,24 @@ const socialProofLabel = [
       class="ke-listing-card__media-frame"
       data-media-frame
       data-media-frame-contract="v1"
+      data-media-frame-style-owner="media-frame.css"
       data-media-frame-surface="listing-card"
+      data-media-frame-role={mediaFrameRole}
       data-media-frame-kind={mediaFrameKind}
       data-media-frame-fit={mediaFrameFit}
+      data-media-frame-crop-permission={mediaFrameCropPermission}
       data-media-frame-ratio={mediaFrameRatio}
       data-media-frame-object-position={mediaFrameObjectPosition}
+      data-media-frame-focal-position={mediaFrameObjectPosition}
       data-media-frame-crop-reason={mediaFrameCropReason}
+      data-media-frame-clip="frame"
+      data-media-frame-radius="surface"
+      data-media-frame-fill="true"
       data-media-frame-source-width={image.asset?.width}
       data-media-frame-source-height={image.asset?.height}
       data-media-frame-loading={priority ? 'eager' : 'lazy'}
       data-media-frame-priority={priority ? 'true' : undefined}
       data-media-frame-interaction-owner="caller"
-      style="display:block;width:100%;height:100%;overflow:hidden"
     >
       {imageUrl ? (
         <img

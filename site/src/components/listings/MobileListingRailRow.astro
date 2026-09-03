@@ -7,6 +7,7 @@ import { selectListingImage } from '../../lib/listingPresentation';
 import { resolveMobileListingRailMediaItems } from '../../lib/mobileListingRailMedia.mjs';
 import { getListingIdentityMedallions } from '../../lib/listingVenueMedallions';
 import './mobile-listing-foundation-bindings.css';
+import '../media-frame.css';
 import Icon from '../Icon.astro';
 import AmberRailArtifact from './AmberRailArtifact.astro';
 
@@ -52,17 +53,27 @@ const mediaFrameKind = (railMedia: (typeof railMediaItems)[number]) => railMedia
   : railMedia.imageTextMode === 'ocr_text'
     ? 'document'
     : 'unknown';
+const mediaFrameRole = (railMedia: (typeof railMediaItems)[number]) => (
+  railMedia.asset?.media_role || event.image_media_role || 'unknown_document'
+);
+const mediaFrameCropPermission = (railMedia: (typeof railMediaItems)[number]) => railMedia.fit === 'contain'
+  ? 'forbidden'
+  : railMedia.reason.includes('safe_visual')
+    ? 'reviewed'
+    : 'allowed';
 const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medallion.avatarUrl.endsWith('.webp')
   ? (medallion.fallbackPngUrl || medallion.avatarUrl)
   : medallion.avatarUrl;
 ---
 <article
   class="event-row"
+  data-ds-component="MobileListingRailRow"
   data-ds-family="MobileListingRailRow"
   data-ds-version="1"
   data-ds-variant={occurrenceMode}
   data-ds-state={rowState}
   data-mobile-listing-row
+  data-mobile-listing-row-base-state={rowState}
   data-feedback-scope
   data-event={event.id}
   data-event-id={event.id}
@@ -106,20 +117,26 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         </span>
         {railMediaItems.map((railMedia, mediaIndex) => {
           const imageUrl = railMedia.src.startsWith('/') ? withBase(railMedia.src) : eventImageUrl(railMedia.src);
-          const [focusX = '50%', focusY = '50%'] = railMedia.objectPosition.split(/\s+/u);
           const loading = priority && mediaIndex === 0 ? 'eager' : 'lazy';
-          const style = `--media-width:${railMedia.width}px;--focus-x:${focusX};--focus-y:${focusY};--rail-media-fit:${railMedia.fit};--media-frame-ratio:${railMedia.ratio};--media-frame-object-position:${railMedia.objectPosition}`;
+          const style = `--media-width:${railMedia.width}px;--media-frame-ratio:${railMedia.ratio};--media-frame-object-position:${railMedia.objectPosition}`;
           return imageUrl ? (
             <span
               class:list={['event-media', 'is-loading', railMedia.fit === 'contain' && 'event-media--natural', railMedia.imageTextMode === 'ocr_text' && 'event-media--ocr']}
               data-media-frame
               data-media-frame-contract="v1"
+              data-media-frame-style-owner="media-frame.css"
               data-media-frame-surface="mobile-listing-rail"
+              data-media-frame-role={mediaFrameRole(railMedia)}
               data-media-frame-kind={mediaFrameKind(railMedia)}
               data-media-frame-fit={railMedia.fit}
+              data-media-frame-crop-permission={mediaFrameCropPermission(railMedia)}
               data-media-frame-ratio={railMedia.ratio}
               data-media-frame-object-position={railMedia.objectPosition}
+              data-media-frame-focal-position={railMedia.objectPosition}
               data-media-frame-crop-reason={railMedia.reason}
+              data-media-frame-clip="frame"
+              data-media-frame-radius="surface"
+              data-media-frame-fill="true"
               data-media-frame-source-width={railMedia.asset?.width || undefined}
               data-media-frame-source-height={railMedia.asset?.height || undefined}
               data-media-frame-loading={loading}
@@ -195,3 +212,59 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
     </span>
   </div>
 </article>
+
+<script>
+  function bindMobileListingRailRowDiagnostics(root = document) {
+    root.querySelectorAll('[data-mobile-listing-row]').forEach((row) => {
+      if (!(row instanceof HTMLElement) || row.dataset.mobileListingRowDiagnosticsBound === 'true') return;
+      row.dataset.mobileListingRowDiagnosticsBound = 'true';
+      const rail = row.querySelector('.rail-window');
+      const sync = () => {
+        const temporalState = row.dataset.mobileRailTemporalState;
+        const media = Array.from(row.querySelectorAll('[data-media-frame][data-media-state]'))
+          .filter((item) => item instanceof HTMLElement);
+        const mediaState = media.some((item) => item.dataset.mediaState === 'error')
+          ? 'media-error'
+          : media.some((item) => item.dataset.mediaState === 'loading')
+            ? 'media-loading'
+            : media.length && media.every((item) => item.dataset.mediaState === 'loaded')
+              ? 'media-loaded'
+              : null;
+        const interactionState = rail instanceof HTMLElement
+          ? [
+              rail.classList.contains('is-dragging') && 'dragging',
+              rail.classList.contains('is-settling') && 'settling',
+              rail.classList.contains('is-dislike-active') && 'dislike-active',
+              rail.classList.contains('is-armed') && 'dislike-armed',
+              rail.classList.contains('is-like-pulling') && 'like-pulling',
+              rail.classList.contains('is-like-armed') && 'like-armed',
+            ]
+          : [];
+        const tokens = [
+          ...(row.dataset.mobileListingRowBaseState || '').split(/\s+/u),
+          row.hidden ? 'hidden' : 'visible',
+          temporalState ? `temporal-${temporalState}` : null,
+          row.dataset.notInterested === 'true' ? 'not-interested' : null,
+          row.classList.contains('is-liked') ? 'liked' : null,
+          ...interactionState,
+          mediaState,
+        ].filter(Boolean);
+        row.dataset.dsState = [...new Set(tokens)].join(' ');
+      };
+      new MutationObserver(sync).observe(row, {
+        subtree:true,
+        attributes:true,
+        attributeFilter:[
+          'hidden',
+          'class',
+          'aria-pressed',
+          'data-not-interested',
+          'data-mobile-rail-temporal-state',
+          'data-media-state',
+        ],
+      });
+      sync();
+    });
+  }
+  bindMobileListingRailRowDiagnostics();
+</script>
