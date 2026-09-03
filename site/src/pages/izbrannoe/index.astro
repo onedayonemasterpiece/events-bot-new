@@ -27,17 +27,17 @@ const description = 'Личная noindex-страница будущих соб
   </main>
   <script>
     const page = document.querySelector('[data-favorites-page]');
-    if (page instanceof HTMLElement) {
+    const surface = page?.querySelector('[data-favorites-surface]');
+    if (page instanceof HTMLElement && surface instanceof HTMLElement) {
       const sync = () => {
-        const signedInNode = page.querySelector('[data-static-auth-signed-in]');
-        const signedIn = signedInNode instanceof HTMLElement && !signedInNode.hidden;
-        const populated = Boolean(page.querySelector('[data-event-card], [data-listing-item], [data-favorite-event]'));
-        const loading = Boolean(page.querySelector('[aria-busy="true"], [data-loading]:not([hidden])'));
-        page.dataset.dsState = loading
-          ? 'loading'
-          : `${signedIn ? 'authorized' : 'anonymous'} ${populated ? 'populated' : 'empty'}`;
+        const localState = surface.dataset.favoritesState || 'loading';
+        const cloudState = surface.dataset.favoritesCloudState || 'idle';
+        page.dataset.dsState = `${localState.replaceAll('_', '-')} cloud-${cloudState.replaceAll('_', '-')}`;
       };
-      new MutationObserver(sync).observe(page, { subtree:true, childList:true, attributes:true, attributeFilter:['hidden', 'aria-busy'] });
+      new MutationObserver(sync).observe(surface, {
+        attributes:true,
+        attributeFilter:['data-favorites-state', 'data-favorites-cloud-state'],
+      });
       sync();
     }
   </script>
