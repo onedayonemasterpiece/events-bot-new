@@ -1400,7 +1400,7 @@ def stage_kernel_and_dataset(args: argparse.Namespace, staging: Path, dataset_di
         'focus_date_to': args.focus_date_to or None,
         'limit': args.limit,
         'public_site_origin': args.public_site_origin,
-        'asset_base_url': args.asset_base_url or None,
+        'asset_base_url': resolve_build_template(args.asset_base_url, build_id),
         'astro_asset_base_url': resolve_build_template(args.astro_asset_base_url, build_id),
         'ics_base_url': args.ics_base_url or None,
         'public_personalization_supabase_url': args.public_personalization_supabase_url or None,

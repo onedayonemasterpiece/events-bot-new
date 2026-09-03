@@ -642,8 +642,8 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
         focus_date_to="",
         limit=50,
         public_site_origin="https://kenigevents.ru",
-        asset_base_url="",
-        astro_asset_base_url="",
+        asset_base_url="https://static.kenigevents.ru/{buildId}",
+        astro_asset_base_url="https://static.kenigevents.ru/{buildId}",
         ics_base_url="",
         public_personalization_supabase_url="",
         public_personalization_supabase_publishable_key="",
@@ -690,6 +690,8 @@ def test_kaggle_runner_and_builder_forward_related_corpus_revision(
     )["catalog_revision"] == "a" * 64
     assert config["sync_pgvector_vectors"] is False
     assert config["public_personalization_supabase_relay_url"] == "https://relay.example.test"
+    assert config["asset_base_url"] == "https://static.kenigevents.ru/preview-revision"
+    assert config["astro_asset_base_url"] == "https://static.kenigevents.ru/preview-revision"
 
     builder_path = (
         Path(__file__).resolve().parents[1]
@@ -1315,7 +1317,7 @@ def test_static_site_kernel_retains_loaded_media_and_keyboard_browser_evidence()
     assert "{'production_root', 'secret_candidate', 'browser_evidence'}" in runner_source
 
 
-def test_add_build_11_astro_asset_template_resolves_to_exact_build() -> None:
+def test_add_build_11_static_asset_template_resolves_to_exact_build() -> None:
     from scripts.run_static_site_builder_kaggle import resolve_build_template
 
     assert resolve_build_template(

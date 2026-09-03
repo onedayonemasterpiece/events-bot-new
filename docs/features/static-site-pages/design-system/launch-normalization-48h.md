@@ -142,6 +142,9 @@ Publisher загружает и затем независимо перечиты
 root/stable-ICS isolation и retry-safe adoption существующих byte-identical
 objects сохраняются. Ограниченная конкурентность устраняет последовательные
 round trips полного preview, не меняя generation/publication semantics.
+Asset и Astro-asset origins принимают тот же `{buildId}` template: immutable
+preview поэтому ссылается на ассеты собственного опубликованного prefix, тогда
+как production без template сохраняет stable origin.
 
 ## 5. Owner review
 
