@@ -129,7 +129,7 @@
 .ke-button--compact { padding-inline: 0.82rem; }
 .ke-button--icon { width: var(--ke-control-min); padding: 0; }
 .ke-button--large.ke-button--icon { width: 52px; }
-.ke-button .icon { width: 1.18rem; height: 1.18rem; flex: 0 0 auto; fill: currentColor; }
+.ke-button .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); flex: 0 0 auto; fill: currentColor; }
 .ke-button--primary { background: var(--ke-color-brand-600); color: var(--ke-color-surface-strong); }
 .ke-button--secondary { border-color: var(--ke-color-line); background: var(--ke-color-surface-strong); color: var(--ke-color-brand-700); }
 .ke-button--quiet { background: transparent; color: var(--ke-color-brand-700); }
@@ -165,7 +165,7 @@
 }
 
 .ke-copy-action { position: relative; flex: 0 0 auto; overflow: visible; }
-.ke-copy-action__icon { width: 1.18rem; height: 1.18rem; display: grid; place-items: center; }
+.ke-copy-action__icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); display: grid; place-items: center; }
 .ke-copy-action__icon .icon { grid-area: 1 / 1; }
 .ke-copy-action__check-icon { display: none; }
 .ke-copy-action[data-copy-state="success"] { border-color: var(--ke-color-success-700); background: var(--ke-color-success-700); color: var(--ke-color-surface-strong); }
@@ -198,70 +198,9 @@
   border: 0 !important;
 }
 
-.ke-badge {
-  min-height: 28px;
-  width: fit-content;
-  max-width: 100%;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ke-space-1);
-  border: 1px solid var(--ke-color-line);
-  border-radius: var(--ke-radius-pill);
-  padding: 0.28rem 0.62rem;
-  background: var(--ke-color-surface-strong);
-  color: var(--ke-color-copy);
-  font: 800 var(--ke-font-size-100) / 1.15 var(--ke-font-sans);
-  overflow-wrap: anywhere;
-}
-.ke-badge--brand { border-color: #e2bda9; background: #f8e5d8; color: var(--ke-color-brand-900); }
-.ke-badge--accent { border-color: #b7ded9; background: #e8f3f1; color: var(--ke-color-accent-700); }
-.ke-badge--success { border-color: #b7dec2; background: var(--ke-color-success-50); color: var(--ke-color-success-700); }
-.ke-badge--warning { border-color: #ead28a; background: var(--ke-color-warning-50); color: var(--ke-color-warning-800); }
-.ke-badge--danger { border-color: #efc1c1; background: var(--ke-color-danger-50); color: var(--ke-color-danger-700); }
 
-.ke-field { display: grid; gap: var(--ke-space-2); color: var(--ke-color-copy); font-family: var(--ke-font-sans); }
-.ke-field__label { font-size: var(--ke-font-size-200); font-weight: 850; }
-.ke-field__control {
-  width: 100%;
-  min-height: 48px;
-  border: 1px solid #cdbfad;
-  border-radius: var(--ke-radius-md);
-  padding: 0.72rem 0.85rem;
-  background: var(--ke-color-surface-strong);
-  color: var(--ke-color-ink);
-  font: 500 var(--ke-font-size-300) / 1.35 var(--ke-font-sans);
-  transition: border-color var(--ke-duration-fast), box-shadow var(--ke-duration-fast), background-color var(--ke-duration-fast);
-}
-.ke-field__control::placeholder { color: #7a6f67; opacity: 1; }
-.ke-field__control:hover,
-.ke-field[data-preview-state="hover"] .ke-field__control { border-color: #a99683; }
-.ke-field__control:focus-visible,
-.ke-field[data-preview-state="focus"] .ke-field__control { outline: 0; border-color: var(--ke-color-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ke-color-focus) 24%, transparent); }
-.ke-field--error .ke-field__control { border-color: var(--ke-color-danger-700); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ke-color-danger-700) 16%, transparent); }
-.ke-field__hint { margin: 0; color: var(--ke-color-muted); font-size: var(--ke-font-size-100); line-height: 1.4; }
-.ke-field--error .ke-field__hint { color: var(--ke-color-danger-700); font-weight: 700; }
-.ke-field__control:disabled { background: #eee7de; color: #746a62; cursor: not-allowed; }
-
-.ke-state-panel {
-  display: grid;
-  gap: var(--ke-space-3);
-  align-content: start;
-  min-height: 172px;
-  border: 1px solid var(--ke-color-line);
-  border-radius: var(--ke-radius-lg);
-  padding: var(--ke-space-5);
-  background: var(--ke-color-surface);
-  box-shadow: var(--ke-shadow-1);
-}
-.ke-state-panel__mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #f8e5d8; color: var(--ke-color-brand-700); font-weight: 950; }
-.ke-state-panel h3 { margin: 0; font-size: var(--ke-font-size-400); line-height: 1.2; }
-.ke-state-panel p { margin: 0; color: var(--ke-color-muted); line-height: 1.5; }
-.ke-state-panel--info .ke-state-panel__mark { background: var(--ke-color-info-50); color: var(--ke-color-info-700); }
-.ke-state-panel--success .ke-state-panel__mark { background: var(--ke-color-success-50); color: var(--ke-color-success-700); }
-.ke-state-panel--warning .ke-state-panel__mark { background: var(--ke-color-warning-50); color: var(--ke-color-warning-800); }
-.ke-state-panel--danger .ke-state-panel__mark { background: var(--ke-color-danger-50); color: var(--ke-color-danger-700); }
-.ke-state-panel--loading .ke-state-panel__mark { position: relative; overflow: hidden; color: transparent; }
-.ke-state-panel--loading .ke-state-panel__mark::after { content: ""; width: 18px; height: 18px; border: 3px solid var(--ke-color-brand-600); border-right-color: transparent; border-radius: 50%; animation: ke-spin 700ms linear infinite; }
+/* Badge, Field and StatePanel visual ownership moved to
+   site/src/components/design-system/component-foundations.css. */
 
 /* Shared date-listing system: Today, Tomorrow and Weekend use this exact
    geometry instead of page-local listing CSS. */
@@ -308,7 +247,7 @@
 .ke-city-filter legend { width: 100%; margin: 0 0 var(--ke-space-1); padding: 0; color: var(--ke-color-ink); font-size: var(--ke-font-size-200); font-weight: 900; line-height: 1.2; }
 .ke-filter-chip { position: relative; min-height: var(--ke-control-min); display: inline-flex; align-items: center; gap: var(--ke-space-2); border: 1px solid var(--ke-color-line); border-radius: var(--ke-radius-pill); padding: var(--ke-space-2) var(--ke-space-3); background: var(--ke-color-surface-strong); color: var(--ke-color-copy); font-size: var(--ke-font-size-200); font-weight: 750; cursor: pointer; }
 .ke-filter-chip input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
-.ke-filter-chip__check { width: 1.15rem; height: 1.15rem; display: grid; place-items: center; border: 1px solid color-mix(in srgb, currentColor 28%, transparent); border-radius: 50%; color: transparent; font-size: 0.72rem; line-height: 1; }
+.ke-filter-chip__check { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); display: grid; place-items: center; border: 1px solid color-mix(in srgb, currentColor 28%, transparent); border-radius: 50%; color: transparent; font-size: 0.72rem; line-height: 1; }
 .ke-filter-chip:has(input:checked) { border-color: var(--ke-color-brand-600); background: #f8e5d8; color: var(--ke-color-brand-900); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ke-color-brand-600) 14%, transparent); }
 .ke-filter-chip:has(input:checked) .ke-filter-chip__check { border-color: var(--ke-color-brand-600); background: var(--ke-color-brand-600); color: #fff; }
 .ke-filter-chip:has(input:focus-visible) { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 68%, transparent); outline-offset: 3px; }
@@ -520,7 +459,7 @@
 .ke-city-filter--direct { flex: 1 1 auto; flex-wrap: nowrap; overflow-x: auto; padding-inline: 2px 10px; scroll-padding-inline: 2px 10px; scrollbar-width: thin; }
 .ke-city-filter legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ke-filter-chip { flex: 0 0 auto; min-height: 40px; padding: 5px 10px; font-size: .875rem; white-space: nowrap; }
-.ke-filter-chip__check { width: 1rem; height: 1rem; }
+.ke-filter-chip__check { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline); }
 .ke-filter-chip strong { min-width: 1.5rem; min-height: 1.5rem; }
 .ke-listing-controls > .listing-filter { flex: 0 0 auto; }
 .ke-time-nav { top: calc(var(--ke-site-header-bar-height) + var(--ke-listing-city-rail-height)); }
@@ -563,14 +502,14 @@
 .ke-listing-card__identity-medallion img { width: 100%; height: 100%; }
 .ke-listing-card__identity-medallion img { object-fit: cover; }
 .ke-listing-card__free-medallion { align-content: center; gap: 1px; border-color: #e8f4dd; background: #2f7d32; color: #fff; font-size: .8rem; line-height: 1; text-align: center; }
-.ke-listing-card__free-medallion .icon { width: 24px; height: 24px; fill: currentColor; }
+.ke-listing-card__free-medallion .icon { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action); fill: currentColor; }
 .ke-listing-card__free-medallion b { font-size: .9rem; }
 .ke-listing-card__utility { flex: 0 0 44px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ke-listing-card__utility--inside { position: absolute; z-index: 3; top: 8px; right: 8px; flex-basis: auto; }
-.ke-listing-card__utility button { width: 44px; min-width: 44px; height: 44px; display: grid; grid-template-columns: 20px auto; place-content: center; align-items: center; gap: 2px; border: 1px solid color-mix(in srgb, var(--ke-color-ink) 14%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--ke-color-surface-strong) 92%, transparent); color: var(--ke-color-ink); cursor: pointer; }
+.ke-listing-card__utility button { width: 44px; min-width: 44px; height: 44px; display: grid; grid-template-columns: var(--ke-icon-size-control) auto; place-content: center; align-items: center; gap: 2px; border: 1px solid color-mix(in srgb, var(--ke-color-ink) 14%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--ke-color-surface-strong) 92%, transparent); color: var(--ke-color-ink); cursor: pointer; }
 .ke-listing-card__utility button:hover { border-color: var(--ke-color-brand-600); color: var(--ke-color-brand-700); }
 .ke-listing-card__utility button[aria-pressed="true"] { background: var(--ke-color-brand-700); color: #fff; }
-.ke-listing-card__utility .icon { width: 20px; height: 20px; fill: currentColor; }
+.ke-listing-card__utility .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control); fill: currentColor; }
 .ke-listing-card__utility button span:empty { display: none; }
 .ke-listing-card__utility button span:not(:empty) { font-size: .68rem; font-weight: 850; }
 .ke-listing-card__medallion { width: 72px; height: 72px; border-width: 4px; }
@@ -959,12 +898,12 @@
 .ke-listing-card__social-proof > span {
   min-height: 24px;
   display: grid;
-  grid-template-columns: 17px minmax(0, 1fr);
+  grid-template-columns: var(--ke-icon-size-inline) minmax(0, 1fr);
   align-items: center;
   gap: 2px;
   font-variant-numeric: tabular-nums;
 }
-.ke-listing-card__social-proof .icon { width: 17px; height: 17px; fill: currentColor; }
+.ke-listing-card__social-proof .icon { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline); fill: currentColor; }
 .ke-listing-card__social-proof b { min-width: 0; font-size: .66rem; font-weight: 760; line-height: 1; }
 .ke-listing-card__social-proof [data-listing-like-proof][data-liked="true"] { color: var(--ke-color-brand-700); }
 .ke-listing-card__social-proof--inside {
@@ -1508,13 +1447,13 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) > span {
     min-height: 25px;
     grid-template-columns: 1fr;
-    grid-template-rows: 14px auto;
+    grid-template-rows: var(--ke-icon-size-inline) auto;
     justify-items: center;
     gap: 0;
   }
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) .icon {
-    width: 14px;
-    height: 14px;
+    width: var(--ke-icon-size-inline);
+    height: var(--ke-icon-size-inline);
   }
   .ke-popular-listing [data-popular-representation="mobile-adaptive"] .ke-listing-card__social-proof:not(.ke-listing-card__social-proof--inside) b {
     font-size: .6rem;
@@ -1575,8 +1514,8 @@ body.is-footer-visible .listing-filter--floating { opacity: 0; pointer-events: n
     outline-offset: 2px;
   }
   .ke-listing-mobile-density-switch__icon {
-    width: 16px;
-    height: 16px;
+    width: var(--ke-icon-size-inline);
+    height: var(--ke-icon-size-inline);
     display: grid;
     border: 1.5px solid currentColor;
     border-radius: 3px;

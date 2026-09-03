@@ -42,6 +42,7 @@ export const LOCAL_SEMANTIC_ICON_NAMES = [
   'arrow-right',
   'chevron-down',
   'link',
+  'catalog-grid',
 ] as const;
 export type LocalSemanticIconName = (typeof LOCAL_SEMANTIC_ICON_NAMES)[number];
 
@@ -50,6 +51,39 @@ export type SemanticIconName = (typeof SEMANTIC_ICON_NAMES)[number];
 
 export const SOCIAL_ICON_NAMES = ['telegram', 'vk', 'max'] as const;
 export type SocialIconName = (typeof SOCIAL_ICON_NAMES)[number];
+
+/**
+ * Exact F0 role decisions for the A0 consumers found by the current V0 source
+ * census. `legacyAlias` is transitional only: A0 removes its local width/height
+ * selector and keeps the SemanticIcon `role` value shown here. None of these
+ * aliases creates a fifth size role.
+ */
+export const ICON_ROLE_BINDINGS_BY_CONSUMER = {
+  'InterestProfile.consent-lock': {
+    role: 'action',
+    legacyAlias: '--ke-personalization-consent-icon-size',
+    removalOwner: 'A0',
+  },
+  'InterestClubCard.route-link': {
+    role: 'inline',
+    legacyAlias: '--ke-club-card-arrow-icon-size',
+    removalOwner: 'A0',
+  },
+  'ArtifactCollection.dialog-close': {
+    role: 'control',
+    legacyAlias: '--ke-artifact-dialog-close-icon-size',
+    removalOwner: 'A0',
+  },
+  'InterestClubsIndexRouteComposition.catalog-count': {
+    role: 'inline',
+    legacyAlias: '--ke-clubs-catalog-icon-size',
+    removalOwner: 'A0',
+  },
+} as const satisfies Record<string, {
+  role: IconSizeRole;
+  legacyAlias: string;
+  removalOwner: 'A0';
+}>;
 
 /**
  * One canonical visible SVG identity per semantic action.
@@ -81,6 +115,7 @@ export const CANONICAL_SVG_BY_ACTION = {
   'transport.car': { component: '../Icon.astro', name: 'car' },
   'transport.walk': { component: '../Icon.astro', name: 'walk' },
   'listing.trend': { component: './SemanticIcon.astro', name: 'trend-up' },
+  'collection.catalog': { component: './SemanticIcon.astro', name: 'catalog-grid' },
 } as const satisfies Record<string, { component: string; name: SemanticIconName }>;
 
 export const CANONICAL_SOCIAL_SVG_BY_SERVICE = {
