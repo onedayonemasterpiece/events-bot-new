@@ -1,0 +1,115 @@
+{
+  "schema": "kenigevents.n0-integrated-successor-acceptance.v1",
+  "version": "1.0.0",
+  "role": "N0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "contract_version": "1.10.0",
+  "base": {
+    "sha": "cebeafeee08251a327145ee973ee035cced65204",
+    "classification": "N0_ACCEPTED_IMMUTABLE_PUBLICATION_SOURCE"
+  },
+  "successor": {
+    "branch": "agent/static-site-single-kaggle-contract",
+    "sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "classification": "N0_ACCEPTED_INTEGRATED_SOURCE_RUNTIME_PENDING",
+    "forward_only_from_base": true,
+    "ahead_by": 25,
+    "behind_by": 0,
+    "merge_base": "cebeafeee08251a327145ee973ee035cced65204",
+    "source_acceptance": true,
+    "executable_acceptance": false,
+    "kaggle_publication_acceptance": false,
+    "v0_acceptance": false
+  },
+  "integrated_batches": [
+    {
+      "role": "F0",
+      "requested_sha": "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
+      "integration_commit": "b90704190314427c81d2d04cc7c51123d53fb68a",
+      "integration_form": "PATCH_EQUIVALENT_SINGLE_BATCH",
+      "role_acceptance_comment": 5532106688,
+      "exact_blobs": {
+        "site/src/components/design-system/check-f0-route-theme-bindings.mjs": "ecd6730f595542f2bae1a3be38f2718f0e9490f9",
+        "site/src/components/design-system/f0-route-theme-bindings.v1.json": "90abc8034f0254e67fe1f257d5072f1153018e5e",
+        "site/src/components/design-system/f0-current-successor-final-source-review.v1.json": "12ac3c3de67ca69ab6128ab86fa6f12b559743ea"
+      },
+      "decision": "ACCEPTED_EXACT_SOURCE"
+    },
+    {
+      "role": "M0",
+      "requested_sha": "105bac16be6c73916a25f3e78b02116869ed5e1e",
+      "integration_commit": "a06cd102e27af313ce1446fe84777fd6d5cc449d",
+      "integration_form": "EXACT_MERGE_PARENT",
+      "role_acceptance_comments": [5531788718, 5532070111],
+      "exact_blobs": {
+        "site/src/components/EventCard.astro": "7bc689ac9b6f823955828706ea4f5ecb23acb58a",
+        "site/src/components/listings/ListingEventCard.astro": "b8a218b9a0accb9f64b51be332a4e797b4aac2b7",
+        "site/src/lib/relatedCardLayout.mjs": "1088e47f5e82062b4f7140b60ead6eb1b5ee898f"
+      },
+      "decision": "ACCEPTED_EXACT_SOURCE"
+    },
+    {
+      "role": "A0",
+      "requested_sha": "3ef253980bdfe0731158f5b8b4b47965fa153ce9",
+      "integration_commit": "8e9975b69c6e353944a79586f5dba82faaa887c0",
+      "integration_form": "PATCH_EQUIVALENT_SINGLE_FILE",
+      "role_result_comment": 5531482466,
+      "exact_blobs": {
+        "site/tests/a0-current-successor-fr0-consumer-boundary.test.mjs": "b8041bd0b80719bd55008923c9d273105462da59"
+      },
+      "decision": "ACCEPTED_EXACT_SOURCE"
+    }
+  ],
+  "integration_reconciliation": {
+    "commit": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "subject": "test(ui): reconcile post-cutover integration gates",
+    "allowed_scope": [
+      "CHANGELOG.md",
+      "docs/features/static-site-pages/design-system/launch-normalization-48h.md",
+      "site/tests/event-card-flex-placement.test.mjs",
+      "site/tests/m0-post-fr0-test-ownership.test.mjs"
+    ],
+    "new_FR0_source": false,
+    "overwrites_accepted_FR0_owners": false
+  },
+  "role_queue_invariant": {
+    "maximum_merge_ready_batches_outside_successor_per_role": 1,
+    "F0_outside_successor": 0,
+    "M0_outside_successor": 0,
+    "A0_outside_successor": 0,
+    "M0_branch_noop_after_requested_sha": {
+      "sha": "ef9a514f78eccbd373d7d66c8f103378484cea6d",
+      "subject": "noop",
+      "product_source_changes": 0,
+      "classification": "NOT_A_SECOND_BATCH"
+    },
+    "FR0_source_batch": null,
+    "FR0_admission_rule": "ONLY_AFTER_FACTUAL_FR0_DRIFT"
+  },
+  "preserved_frozen_blobs": {
+    "site/src/components/ExhibitionsPersonalSurface.astro": "61d065efbc9b05254601ae807b7fcffec701bd04",
+    "site/src/components/ExhibitionPrototypeRow.astro": "ff94b32a288b079f27ca9e8c33d6975f52012478",
+    "site/src/components/exhibitionsMediaFrameBridge.mjs": "1898f0ce973676241d54530d51c17b577e7c6509",
+    "site/src/components/media-frame.css": "1231b0665054da3cd9bf936585a7d2e02838b82a",
+    "site/tests/fr0-exhibitions-media-frame-contract.test.mjs": "ff26615718b83134db9bb65e1a10831818381743"
+  },
+  "remaining_exact_gate": {
+    "owner": "R0",
+    "required": [
+      "executable source/regression exits for exact SHA 3ca6a143e4286c165282c2d8ceef1759a41185b7 or an explicitly reviewed mechanical-only descendant",
+      "one canonical full-real Kaggle StaticSiteBuilder run",
+      "HTTP-200 immutable owner URL",
+      "matching preview-build.json with exact delivery SHA",
+      "fresh snapshot and Kaggle operation/artifact identity",
+      "no root or stable-ICS mutation"
+    ],
+    "then": "N0_RUNTIME_ACCEPTANCE_AND_EXACT_V0_TRIGGER"
+  },
+  "non_claims": [
+    "tests executed",
+    "runtime accepted",
+    "successor Kaggle preview published",
+    "successor V0 verdict issued",
+    "vertical slice browser accepted"
+  ]
+}
