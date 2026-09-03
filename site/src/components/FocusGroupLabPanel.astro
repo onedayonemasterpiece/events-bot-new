@@ -17,6 +17,10 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
 
 <section
   class="focus-lab-panel"
+  data-ds-family="FocusGroupLabPanel"
+  data-ds-version="1"
+  data-ds-variant="authenticated-research-panel"
+  data-ds-state="inactive"
   data-focus-lab-panel
   data-page-family={pageFamily}
   data-page-path={pagePath}
@@ -41,10 +45,10 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
   <div class="focus-lab-panel__ends" aria-hidden="true"><span>Не помогла</span><span>Очень помогла</span></div>
 
   <div class="focus-lab-panel__actions">
-    <button class="ke-button ke-button--secondary" type="button" data-focus-issue-open>
+    <button class="ke-button ke-button--secondary" type="button" data-ke-button-compat="runtime-hook" data-focus-issue-open>
       Сообщить о проблеме
     </button>
-    <button class="ke-button ke-button--secondary" type="button" data-focus-invite-open>
+    <button class="ke-button ke-button--secondary" type="button" data-ke-button-compat="runtime-hook" data-focus-invite-open>
       Пригласить человека
     </button>
   </div>
@@ -72,7 +76,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
         <input type="file" name="screenshot" accept="image/png,image/jpeg,image/webp" />
         <small>PNG, JPG или WebP до 5 МБ.</small>
       </label>
-      <button class="ke-button ke-button--primary" type="submit" data-focus-issue-submit>
+      <button class="ke-button ke-button--primary" type="submit" data-ke-button-compat="runtime-hook" data-focus-issue-submit>
         Отправить
       </button>
       <p data-focus-issue-status role="status" aria-live="polite"></p>
@@ -91,8 +95,8 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
       <div class="focus-lab-panel__qr" data-focus-invite-qr aria-label="QR-код приглашения"></div>
       <p>Покажите QR-код или отправьте ссылку.</p>
       <div class="focus-lab-panel__actions">
-        <button class="ke-button ke-button--primary" type="button" data-focus-invite-share>Поделиться</button>
-        <button class="ke-button ke-button--secondary" type="button" data-focus-invite-copy>Скопировать ссылку</button>
+        <button class="ke-button ke-button--primary" type="button" data-ke-button-compat="runtime-hook" data-focus-invite-share>Поделиться</button>
+        <button class="ke-button ke-button--secondary" type="button" data-ke-button-compat="runtime-hook" data-focus-invite-copy>Скопировать ссылку</button>
       </div>
       <p data-focus-invite-status role="status" aria-live="polite"></p>
     </div>
@@ -114,6 +118,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     try { participation = readFocusParticipationMarker(window.localStorage); } catch { participation = null; }
     if (participation?.status !== 'active') return;
     root.hidden = false;
+    root.dataset.dsState = 'ready';
 
     const feedbackStatus = root.querySelector<HTMLElement>('[data-focus-feedback-status]');
     const confirmLink = root.querySelector<HTMLAnchorElement>('[data-focus-confirm]');
@@ -177,10 +182,12 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
         item.dataset.selected = selected ? 'true' : 'false';
         item.setAttribute('aria-pressed', selected ? 'true' : 'false');
       });
+      root.dataset.dsState = 'score-recorded';
       if (feedbackStatus) feedbackStatus.textContent = 'Ваша оценка сохранена. Её можно изменить.';
     }
 
     const needsConfirmation = () => {
+      root.dataset.dsState = 'identity-required';
       if (feedbackStatus) feedbackStatus.textContent = 'Чтобы отправить ответ, подтвердите участие.';
       if (confirmLink) confirmLink.hidden = false;
     };
@@ -208,6 +215,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
           item.setAttribute('aria-pressed', selected ? 'true' : 'false');
         });
         scoreInFlight = true;
+        root.dataset.dsState = 'submitting-score';
         if (feedbackStatus) feedbackStatus.textContent = 'Отправляем оценку…';
         const payload = {
           p_client_request_id: clientRequestId,
@@ -226,6 +234,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
         if (!queued) {
           scoreInFlight = false;
           scoreButtons.forEach((item) => { item.disabled = false; });
+          root.dataset.dsState = 'score-local-only';
           if (feedbackStatus) feedbackStatus.textContent = 'Оценка сохранена на этой странице, но сейчас не отправилась. Попробуйте ещё раз позже.';
           return;
         }
@@ -234,11 +243,13 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
         scoreInFlight = false;
         scoreButtons.forEach((item) => { item.disabled = false; });
         if (pending) {
+          root.dataset.dsState = 'score-queued';
           if (feedbackStatus) {
             feedbackStatus.textContent = 'Оценка сохранена на этом устройстве. Отправим её, когда связь восстановится.';
           }
           return;
         }
+        root.dataset.dsState = 'score-sent';
         if (feedbackStatus) feedbackStatus.textContent = 'Спасибо, оценка отправлена.';
       });
     });
@@ -246,7 +257,10 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     const issueDialog = root.querySelector<HTMLDialogElement>('[data-focus-issue-dialog]');
     const issueForm = root.querySelector<HTMLFormElement>('[data-focus-issue-form]');
     const issueStatus = root.querySelector<HTMLElement>('[data-focus-issue-status]');
-    root.querySelector<HTMLButtonElement>('[data-focus-issue-open]')?.addEventListener('click', () => issueDialog?.showModal());
+    root.querySelector<HTMLButtonElement>('[data-focus-issue-open]')?.addEventListener('click', () => {
+      root.dataset.dsState = 'issue-dialog';
+      issueDialog?.showModal();
+    });
 
     issueForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -266,6 +280,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
         return;
       }
       if (submit) submit.disabled = true;
+      root.dataset.dsState = 'submitting-issue';
       if (issueStatus) issueStatus.textContent = 'Отправляем…';
       let attachmentPath: string | null = null;
       if (file) {
@@ -276,6 +291,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
           .upload(attachmentPath, file, { contentType: file.type, upsert: false });
         if (uploadError) {
           if (submit) submit.disabled = false;
+          root.dataset.dsState = 'issue-upload-error';
           if (issueStatus) issueStatus.textContent = 'Скриншот не загрузился. Попробуйте ещё раз.';
           return;
         }
@@ -297,6 +313,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
       });
       if (!queued) {
         if (submit) submit.disabled = false;
+        root.dataset.dsState = 'issue-local-error';
         if (issueStatus) issueStatus.textContent = 'Сообщение сейчас не сохранилось. Скопируйте текст и попробуйте ещё раз позже.';
         return;
       }
@@ -304,10 +321,12 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
       const pending = (await feedbackOutbox.inspect()).some((record) => record.id === clientRequestId);
       if (pending) {
         if (submit) submit.disabled = false;
+        root.dataset.dsState = 'issue-queued';
         if (issueStatus) issueStatus.textContent = 'Сообщение сохранено. Отправим его, когда связь восстановится.';
         return;
       }
       issueForm.reset();
+      root.dataset.dsState = 'issue-sent';
       if (issueStatus) issueStatus.textContent = 'Спасибо, сообщение отправлено.';
       window.setTimeout(() => issueDialog?.close(), 900);
       if (submit) submit.disabled = false;
@@ -320,11 +339,15 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     inviteUrl.hash = `invite=${root.dataset.inviteToken || ''}`;
     const exactInviteUrl = inviteUrl.toString();
     try { if (qr) qr.innerHTML = createFocusInviteQrSvg(exactInviteUrl); } catch { if (qr) qr.textContent = 'QR-код не загрузился.'; }
-    root.querySelector<HTMLButtonElement>('[data-focus-invite-open]')?.addEventListener('click', () => inviteDialog?.showModal());
+    root.querySelector<HTMLButtonElement>('[data-focus-invite-open]')?.addEventListener('click', () => {
+      root.dataset.dsState = 'invite-dialog';
+      inviteDialog?.showModal();
+    });
     root.querySelector<HTMLButtonElement>('[data-focus-invite-share]')?.addEventListener('click', async () => {
       if (typeof navigator.share === 'function') {
         try {
           await navigator.share({ title: 'Приглашение в фокус-группу', url: exactInviteUrl });
+          root.dataset.dsState = 'invite-shared';
           if (inviteStatus) inviteStatus.textContent = 'Готово.';
           return;
         } catch (error) {
@@ -333,18 +356,29 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
       }
       try {
         await navigator.clipboard.writeText(exactInviteUrl);
+        root.dataset.dsState = 'invite-copied';
         if (inviteStatus) inviteStatus.textContent = 'Ссылка скопирована.';
-      } catch { if (inviteStatus) inviteStatus.textContent = 'Не получилось скопировать ссылку.'; }
+      } catch {
+        root.dataset.dsState = 'invite-copy-error';
+        if (inviteStatus) inviteStatus.textContent = 'Не получилось скопировать ссылку.';
+      }
     });
     root.querySelector<HTMLButtonElement>('[data-focus-invite-copy]')?.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(exactInviteUrl);
+        root.dataset.dsState = 'invite-copied';
         if (inviteStatus) inviteStatus.textContent = 'Ссылка скопирована.';
-      } catch { if (inviteStatus) inviteStatus.textContent = 'Не получилось скопировать ссылку.'; }
+      } catch {
+        root.dataset.dsState = 'invite-copy-error';
+        if (inviteStatus) inviteStatus.textContent = 'Не получилось скопировать ссылку.';
+      }
     });
 
     root.querySelectorAll<HTMLButtonElement>('[data-focus-dialog-close]').forEach((button) => {
-      button.addEventListener('click', () => button.closest('dialog')?.close());
+      button.addEventListener('click', () => {
+        root.dataset.dsState = 'ready';
+        button.closest('dialog')?.close();
+      });
     });
 
     window.addEventListener('online', () => { void flushFeedbackOutbox(); }, { passive: true });
@@ -360,37 +394,37 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     border: 1px solid #dbc9b5;
     border-radius: 1.35rem;
     padding: clamp(1rem, 3vw, 1.5rem);
-    background: #fffdf8;
-    color: #44362d;
-    box-shadow: 0 14px 38px rgb(72 45 25 / 10%);
+    background: var(--ke-color-surface, #fffdf8);
+    color: var(--ke-color-copy, #44362d);
+    box-shadow: var(--ke-shadow-2, 0 14px 38px rgb(72 45 25 / 10%));
     font-family: var(--ke-font-sans, system-ui, sans-serif);
   }
   .focus-lab-panel[hidden] { display: none; }
   .focus-lab-panel__head { display: flex; align-items: center; gap: 1rem; }
-  .focus-lab-panel__head h2 { margin: 0 0 .25rem; color: #221a14; font-size: clamp(1.2rem, 3vw, 1.65rem); line-height: 1.1; }
-  .focus-lab-panel__head p, .focus-lab-panel__sheet p { margin: 0; color: #6d6259; line-height: 1.45; }
+  .focus-lab-panel__head h2 { margin: 0 0 .25rem; color: var(--ke-color-ink, #221a14); font-size: clamp(1.2rem, 3vw, 1.65rem); line-height: 1.1; }
+  .focus-lab-panel__head p, .focus-lab-panel__sheet p { margin: 0; color: var(--ke-color-muted, #6d6259); line-height: 1.45; }
   .focus-lab-panel__scale { display: grid; grid-template-columns: repeat(11, minmax(40px, 1fr)); gap: .35rem; margin-top: 1rem; }
-  .focus-lab-panel__scale button { min-width: 0; min-height: 44px; border: 1px solid #d8c8b5; border-radius: .7rem; background: #fff; color: #44362d; font: 850 .9rem/1 var(--ke-font-sans); cursor: pointer; }
-  .focus-lab-panel__scale button:hover, .focus-lab-panel__scale button[data-selected="true"] { border-color: #0f766e; background: #d7f0ec; color: #0f5d57; }
+  .focus-lab-panel__scale button { min-width: 0; min-height: 44px; border: 1px solid #d8c8b5; border-radius: .7rem; background: #fff; color: var(--ke-color-copy, #44362d); font: 850 .9rem/1 var(--ke-font-sans); cursor: pointer; }
+  .focus-lab-panel__scale button:hover, .focus-lab-panel__scale button[data-selected="true"] { border-color: var(--ke-color-accent-600, #0f766e); background: #d7f0ec; color: var(--ke-color-accent-700, #0f5d57); }
   .focus-lab-panel__scale button:focus-visible, .focus-lab-panel__sheet button:focus-visible, .focus-lab-panel__sheet textarea:focus-visible, .focus-lab-panel__sheet input:focus-visible { outline: 3px solid rgb(15 118 110 / 35%); outline-offset: 2px; }
-  .focus-lab-panel__ends { display: flex; justify-content: space-between; margin-top: .35rem; color: #6d6259; font-size: .7rem; }
+  .focus-lab-panel__ends { display: flex; justify-content: space-between; margin-top: .35rem; color: var(--ke-color-muted, #6d6259); font-size: .7rem; }
   .focus-lab-panel__actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
-  .focus-lab-panel__status { min-height: 1.4em; margin: .7rem 0 0; color: #0f6c3d; font-size: .82rem; font-weight: 750; }
-  .focus-lab-panel__confirm { display: inline-block; min-height: 44px; color: #98401f; font-weight: 850; line-height: 44px; }
+  .focus-lab-panel__status { min-height: 1.4em; margin: .7rem 0 0; color: var(--ke-color-success-700, #0f6c3d); font-size: .82rem; font-weight: 750; }
+  .focus-lab-panel__confirm { display: inline-block; min-height: 44px; color: var(--ke-color-brand-700, #98401f); font-weight: 850; line-height: 44px; }
   .focus-lab-panel__confirm[hidden] { display: none; }
-  .focus-lab-panel__dialog { width: min(620px, calc(100% - 1rem)); max-height: 90dvh; border: 0; border-radius: 1.35rem; padding: 0; background: transparent; color: #44362d; box-shadow: 0 24px 64px rgb(34 26 20 / 22%); }
+  .focus-lab-panel__dialog { width: min(620px, calc(100% - 1rem)); max-height: 90dvh; border: 0; border-radius: 1.35rem; padding: 0; background: transparent; color: var(--ke-color-copy, #44362d); box-shadow: 0 24px 64px rgb(34 26 20 / 22%); }
   .focus-lab-panel__dialog::backdrop { background: rgb(34 26 20 / 58%); backdrop-filter: blur(3px); }
-  .focus-lab-panel__sheet { display: grid; gap: 1rem; overflow: auto; max-height: 90dvh; padding: clamp(1rem, 4vw, 1.5rem); background: #fffdf8; }
+  .focus-lab-panel__sheet { display: grid; gap: 1rem; overflow: auto; max-height: 90dvh; padding: clamp(1rem, 4vw, 1.5rem); background: var(--ke-color-surface, #fffdf8); }
   .focus-lab-panel__sheet header { display: flex; justify-content: space-between; gap: 1rem; }
   .focus-lab-panel__sheet header > div { display: grid; gap: .8rem; }
-  .focus-lab-panel__sheet h2 { margin: 0; color: #221a14; font-size: clamp(1.5rem, 5vw, 2rem); line-height: 1.08; }
-  .focus-lab-panel__sheet header > button { width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid #dbc9b5; border-radius: 50%; background: #fff; color: #221a14; font-size: 1.8rem; cursor: pointer; }
+  .focus-lab-panel__sheet h2 { margin: 0; color: var(--ke-color-ink, #221a14); font-size: clamp(1.5rem, 5vw, 2rem); line-height: 1.08; }
+  .focus-lab-panel__sheet header > button { width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid #dbc9b5; border-radius: 50%; background: #fff; color: var(--ke-color-ink, #221a14); font-size: 1.8rem; cursor: pointer; }
   .focus-lab-panel__sheet label { display: grid; gap: .45rem; font-weight: 800; }
-  .focus-lab-panel__sheet textarea { box-sizing: border-box; width: 100%; min-height: 150px; resize: vertical; border: 1px solid #cdbfad; border-radius: .9rem; padding: .8rem; background: #fff; color: #221a14; font: 1rem/1.45 var(--ke-font-sans); }
+  .focus-lab-panel__sheet textarea { box-sizing: border-box; width: 100%; min-height: 150px; resize: vertical; border: 1px solid #cdbfad; border-radius: .9rem; padding: .8rem; background: #fff; color: var(--ke-color-ink, #221a14); font: 1rem/1.45 var(--ke-font-sans); }
   .focus-lab-panel__file { border: 1px dashed #cdbfad; border-radius: .9rem; padding: .8rem; }
-  .focus-lab-panel__file small { color: #6d6259; font-weight: 600; }
+  .focus-lab-panel__file small { color: var(--ke-color-muted, #6d6259); font-weight: 600; }
   .focus-lab-panel__sheet > .ke-button { width: 100%; }
-  .focus-lab-panel__sheet > p[role="status"] { min-height: 1.4em; color: #0f6c3d; font-weight: 750; }
+  .focus-lab-panel__sheet > p[role="status"] { min-height: 1.4em; color: var(--ke-color-success-700, #0f6c3d); font-weight: 750; }
   .focus-lab-panel__sheet--invite { justify-items: center; text-align: center; }
   .focus-lab-panel__qr { width: min(280px, 90%); aspect-ratio: 1; padding: .5rem; border-radius: 1rem; background: #fff; }
   .focus-lab-panel__qr :global(svg) { display: block; width: 100%; height: 100%; }
