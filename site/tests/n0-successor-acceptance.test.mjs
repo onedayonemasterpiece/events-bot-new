@@ -21,7 +21,8 @@ const SOURCE_SUCCESSOR = '2e8f4dd2393ce0c5100f8b610aae3f01380aad8c';
 const F0_INTEGRATED = 'de92dabd4551e117ca1af1be7915ff223321cc32';
 const F0_CURRENT = 'f2b9927e25ac0566d35577f69c574cedadab27d7';
 const M0_INTEGRATED = 'c808c75dd975a9851e148ccf993c32787d2b6886';
-const M0_CURRENT = 'c71351decdcee02941acb26c5e2fbaf88faf0378';
+const M0_SOURCE = 'c71351decdcee02941acb26c5e2fbaf88faf0378';
+const M0_CURRENT = 'a6cb9d454cdac3c4165c3715f1e747ef6a59fe3c';
 const A0_CURRENT = '61d340a3ca291f074289d2292b33f56b2bad8a22';
 const SOT_CURRENT = '77f72cf71ee52c10598c2129dae1d961507825a4';
 const GOLDEN_SHA = '84504f30eebc334deba46e94365601c3d572c5c0';
@@ -125,17 +126,42 @@ test('current F0 route-theme batch is required with exact consumer and strict bo
 
 test('current M0 delta is accepted through EventHero MediaFrame without claiming execution', () => {
   assert.equal(manifest.current_refs.M0.integrated_head, M0_INTEGRATED);
+  assert.equal(manifest.current_refs.M0.current_source_head, M0_SOURCE);
   assert.equal(manifest.current_refs.M0.current_head, M0_CURRENT);
-  assert.equal(manifest.current_refs.M0.current_delta_commits.length, 5);
-  assert.equal(manifest.current_refs.M0.current_delta_commits.at(-1), M0_CURRENT);
+  assert.equal(manifest.current_refs.M0.source_delta_commits.length, 5);
+  assert.equal(manifest.current_refs.M0.source_delta_commits.at(-1), M0_SOURCE);
+  assert.equal(manifest.current_refs.M0.downstream_contract_commit, M0_CURRENT);
 
   const m0 = delta('M0-CURRENT-FAMILY-DELTA');
+  assert.equal(m0.source_head, M0_SOURCE);
   assert.equal(m0.head, M0_CURRENT);
-  assert.equal(m0.decision, 'ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD');
+  assert.equal(m0.commits.length, 6);
+  assert.equal(m0.decision, 'SOURCE_AND_DOWNSTREAM_CONTRACTS_ACCEPTED_REQUIRED_BEFORE_NEXT_FULL_BUILD');
   assert.ok(m0.accepted_scope.includes('resolved rail media contradictions fail closed'));
   assert.ok(m0.accepted_scope.includes('responsive stack/progressive seam remains source-addressable'));
   assert.ok(m0.accepted_scope.some((item) => item.includes('non-interactive MediaFrame')));
-  assert.equal(manifest.role_acceptance.M0.runtime_status, 'NOT_RUN_ON_CURRENT_HEAD');
+  assert.equal(manifest.role_acceptance.M0.source_head, M0_SOURCE);
+  assert.equal(manifest.role_acceptance.M0.current_head, M0_CURRENT);
+  assert.equal(manifest.role_acceptance.M0.runtime_status, 'NOT_RUN_ON_CURRENT_SOURCE_HEAD');
+  assert.ok(manifest.role_acceptance.M0.accepted.some((item) => item.includes('machine-readable family')));
+});
+
+test('fresh-real V0 blocker is accepted as a tool boundary, not a browser verdict', () => {
+  const blocker = manifest.v0_platform_blocker;
+  assert.equal(blocker.issue_comment, 5529063082);
+  assert.equal(blocker.classification, 'ACTUAL_TOOL_SURFACE_BOUNDARY');
+  assert.equal(blocker.target_repo_sha, PUBLISHED_REAL);
+  assert.equal(blocker.verdict, 'NOT_EXECUTED');
+  assert.equal(blocker.browser_pass_claimed, false);
+  assert.equal(blocker.browser_drift_claimed, false);
+  assert.equal(blocker.n0_decision, 'ACCEPTED_PLATFORM_BLOCKER_BASELINE_REMAINS_UNAUDITED');
+  assert.match(blocker.remaining_trigger, /callable my-browser-bridge/u);
+
+  const trigger = manifest.v0_triggers.published_fresh_real_baseline;
+  assert.equal(trigger.status, 'READY_BUT_V0_BLOCKED_BY_TOOL_SURFACE');
+  assert.equal(trigger.blocker_comment, 5529063082);
+  assert.equal(trigger.browser_verdict, 'NOT_EXECUTED');
+  assert.ok(manifest.prohibitions.includes('V0 platform blocker represented as browser PASS or DRIFT'));
 });
 
 test('A0 completion remains held at 17/19 until route themes and MECH-06 are materialized', () => {
