@@ -1,0 +1,109 @@
+{
+  "schema": "kenigevents.n0-integrated-successor-publication.v1",
+  "version": "1.0.0",
+  "role": "N0",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "contract_version": "1.10.0",
+  "acceptance_comment": 5532465693,
+  "r0_result_comment": 5532453272,
+  "transaction": {
+    "source_branch": "agent/static-site-single-kaggle-contract",
+    "source_sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "base_sha": "cebeafeee08251a327145ee973ee035cced65204",
+    "build_id": "preview-real-3ca6a143e-normalized-20260903-v1",
+    "public_url": "https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/__preview/",
+    "manifest_url": "https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/preview-build.json",
+    "data_mode": "real",
+    "page_classes": ["all"],
+    "current_remote_head_at_acceptance": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "no_late_batch_after_freeze": true
+  },
+  "manifest_identity": {
+    "owner_http": 200,
+    "manifest_http": 200,
+    "repo_sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "build_id": "preview-real-3ca6a143e-normalized-20260903-v1",
+    "base_path": "/preview-real-3ca6a143e-normalized-20260903-v1",
+    "data_mode": "real",
+    "page_classes": ["all"],
+    "authorized_search_configured": true
+  },
+  "snapshot": {
+    "id": "issue621-real-3ca6a143e-20260903T211550Z",
+    "sha256": "ba25e9e0faabf9de8656921e4597ef30928d90edf47af0c9757a9852dfb83eb4",
+    "size_bytes": 80838656,
+    "event_rows": 8312,
+    "max_event_id": 8723
+  },
+  "kaggle": {
+    "dataset": "zigomaro/static-site-builder-input-20260903211913-70b493",
+    "kernel": "zigomaro/kenigevents-static-site-builder",
+    "status": "COMPLETE",
+    "artifact_archive_sha256": "2f97ae1c05190bb8e8ceff67a066fc27e419c882e243fb6319f770e7d43f4e8c",
+    "artifact_archive_size": 53446257,
+    "result_sha256": "54a2f0717fd14bc2079bdcd564b08a776d1fe5c5d69ef8935ef0dd9792f58983",
+    "kernel_log_sha256": "181750e0f0f5108a03f414900e1d14a0f600f7281d632f25ee13aac902838e64"
+  },
+  "publication": {
+    "object_count": 1423,
+    "total_bytes": 282255137,
+    "semantics": "create-only immutable prefix",
+    "root_mutation": false,
+    "stable_ics_mutation": false
+  },
+  "integrated_intake": {
+    "F0": {
+      "role_sha": "ea4eda91d03bd15bb99e26f4990fe9818e3d4d8b",
+      "integration_commit": "b90704190314427c81d2d04cc7c51123d53fb68a"
+    },
+    "M0": {
+      "role_sha": "105bac16be6c73916a25f3e78b02116869ed5e1e",
+      "integration_commit": "a06cd102e27af313ce1446fe84777fd6d5cc449d"
+    },
+    "A0": {
+      "role_sha": "3ef253980bdfe0731158f5b8b4b47965fa153ce9",
+      "integration_commit": "8e9975b69c6e353944a79586f5dba82faaa887c0"
+    },
+    "FR0_source_batch": null,
+    "R0_reconciliation": "3ca6a143e4286c165282c2d8ceef1759a41185b7"
+  },
+  "acceptance": {
+    "source": "ACCEPTED",
+    "executable": "ACCEPTED",
+    "full_real_kaggle_publication": "ACCEPTED",
+    "public_identity": "ACCEPTED",
+    "independent_V0": "PENDING",
+    "exhibitions_vertical_slice": "SOURCE_ACCEPTED_BROWSER_PENDING",
+    "runtime_EventCard_MediaFrame": "KNOWN_A0_DRIFT_NOT_PASS"
+  },
+  "R0_smoke_boundary": {
+    "classification": "SUPPORTING_TECHNICAL_EVIDENCE_NOT_V0",
+    "route_contract_matrix": "10/10 PASS",
+    "focused_contract_matrix": "77/77 PASS",
+    "isolated_browser_matrix": "176/176 PASS",
+    "independent_browser_verdict": false
+  },
+  "exact_V0_trigger": {
+    "comment": 5532465693,
+    "target_source_sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "known_runtime_drift_comments": [5532284724, 5532335696],
+    "FR0_requirement_comments": [5531944339, 5531980502],
+    "required_exhibitions_slice": true,
+    "result": "PENDING"
+  },
+  "next_gate": {
+    "owner": "V0_THEN_N0",
+    "required": [
+      "personal my-browser-bridge verdict bound to this exact immutable transaction",
+      "source-bound classification of the runtime EventCard MediaFrame drift",
+      "complete exhibitions route, row, frame, resource-state, clipping, interaction and accessibility sections",
+      "N0 accepts or rejects the exhibitions vertical slice independently"
+    ]
+  },
+  "non_claims": [
+    "independent V0 verdict received",
+    "exhibitions vertical slice browser accepted",
+    "runtime EventCard MediaFrame delivery passed",
+    "ASTRO_NORMALIZATION_PASS issued"
+  ]
+}
