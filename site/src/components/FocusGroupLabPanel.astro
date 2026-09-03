@@ -1,5 +1,7 @@
 ---
 import FocusLabBadge from './FocusLabBadge.astro';
+import SemanticIcon from './design-system/SemanticIcon.astro';
+import './design-system/product-contour-foundations.css';
 import { withBase } from '../lib/events';
 import { FOCUS_GROUP_MASS_INVITE_TOKEN } from '../lib/focus-group-prototype';
 import type { FocusGroupPageFamily } from '../lib/focus-group-surface';
@@ -65,7 +67,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
           <FocusLabBadge label="Lab" detail="Фокус-группа" />
           <h2 id="focus-issue-title">Что пошло не так?</h2>
         </div>
-        <button type="button" data-focus-dialog-close aria-label="Закрыть">×</button>
+        <button type="button" data-focus-dialog-close aria-label="Закрыть"><SemanticIcon name="close" role="control" /></button>
       </header>
       <label>
         <span>Что произошло? Что вы хотели сделать? Что не получилось?</span>
@@ -90,7 +92,7 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
           <FocusLabBadge label="Lab" detail="Фокус-группа" />
           <h2 id="focus-invite-title">Пригласить в фокус-группу</h2>
         </div>
-        <button type="button" data-focus-dialog-close aria-label="Закрыть">×</button>
+        <button type="button" data-focus-dialog-close aria-label="Закрыть"><SemanticIcon name="close" role="control" /></button>
       </header>
       <div class="focus-lab-panel__qr" data-focus-invite-qr aria-label="QR-код приглашения"></div>
       <p>Покажите QR-код или отправьте ссылку.</p>
@@ -391,50 +393,50 @@ const confirmHref = withBase('/fokus-gruppa/priglashenie/?confirm=1');
     box-sizing: border-box;
     width: min(1120px, calc(100% - 1rem));
     margin: clamp(2rem, 5vw, 4rem) auto 1rem;
-    border: 1px solid #dbc9b5;
-    border-radius: 1.35rem;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-panel-warm);
+    border-radius: var(--ke-shape-radius-focus-lab);
     padding: clamp(1rem, 3vw, 1.5rem);
-    background: var(--ke-color-surface, #fffdf8);
-    color: var(--ke-color-copy, #44362d);
-    box-shadow: var(--ke-shadow-2, 0 14px 38px rgb(72 45 25 / 10%));
-    font-family: var(--ke-font-sans, system-ui, sans-serif);
+    background: var(--ke-color-focus-sheet-surface);
+    color: var(--ke-color-text-secondary);
+    box-shadow: var(--ke-elevation-focus-lab);
+    font-family: var(--ke-font-family-sans);
   }
   .focus-lab-panel[hidden] { display: none; }
   .focus-lab-panel__head { display: flex; align-items: center; gap: 1rem; }
-  .focus-lab-panel__head h2 { margin: 0 0 .25rem; color: var(--ke-color-ink, #221a14); font-size: clamp(1.2rem, 3vw, 1.65rem); line-height: 1.1; }
-  .focus-lab-panel__head p, .focus-lab-panel__sheet p { margin: 0; color: var(--ke-color-muted, #6d6259); line-height: 1.45; }
+  .focus-lab-panel__head h2 { margin: 0 0 .25rem; color: var(--ke-color-text-primary); font-size: clamp(1.2rem, 3vw, 1.65rem); line-height: 1.1; }
+  .focus-lab-panel__head p, .focus-lab-panel__sheet p { margin: 0; color: var(--ke-color-text-muted); line-height: 1.45; }
   .focus-lab-panel__scale { display: grid; grid-template-columns: repeat(11, minmax(40px, 1fr)); gap: .35rem; margin-top: 1rem; }
-  .focus-lab-panel__scale button { min-width: 0; min-height: 44px; border: 1px solid #d8c8b5; border-radius: .7rem; background: #fff; color: var(--ke-color-copy, #44362d); font: 850 .9rem/1 var(--ke-font-sans); cursor: pointer; }
-  .focus-lab-panel__scale button:hover, .focus-lab-panel__scale button[data-selected="true"] { border-color: var(--ke-color-accent-600, #0f766e); background: #d7f0ec; color: var(--ke-color-accent-700, #0f5d57); }
-  .focus-lab-panel__scale button:focus-visible, .focus-lab-panel__sheet button:focus-visible, .focus-lab-panel__sheet textarea:focus-visible, .focus-lab-panel__sheet input:focus-visible { outline: 3px solid rgb(15 118 110 / 35%); outline-offset: 2px; }
-  .focus-lab-panel__ends { display: flex; justify-content: space-between; margin-top: .35rem; color: var(--ke-color-muted, #6d6259); font-size: .7rem; }
-  .focus-lab-panel__actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
-  .focus-lab-panel__status { min-height: 1.4em; margin: .7rem 0 0; color: var(--ke-color-success-700, #0f6c3d); font-size: .82rem; font-weight: 750; }
-  .focus-lab-panel__confirm { display: inline-block; min-height: 44px; color: var(--ke-color-brand-700, #98401f); font-weight: 850; line-height: 44px; }
+  .focus-lab-panel__scale button { min-width: 0; min-height: var(--ke-focus-control-min); border: var(--ke-shape-border-hairline) solid var(--ke-color-border-score); border-radius: var(--ke-focus-control-radius); background: var(--ke-color-focus-control-surface); color: var(--ke-color-text-secondary); font: 850 .9rem/1 var(--ke-font-family-sans); cursor: pointer; }
+  .focus-lab-panel__scale button:hover, .focus-lab-panel__scale button[data-selected="true"] { border-color: var(--ke-color-action-accent); background: var(--ke-color-focus-control-selected-accent); color: var(--ke-color-action-accent-strong); }
+  .focus-lab-panel__scale button:focus-visible, .focus-lab-panel__sheet button:focus-visible, .focus-lab-panel__sheet textarea:focus-visible, .focus-lab-panel__sheet input:focus-visible { outline: 3px solid var(--ke-color-focus-ring-accent-subtle); outline-offset: 2px; }
+  .focus-lab-panel__ends { display: flex; justify-content: space-between; margin-top: .35rem; color: var(--ke-color-text-muted); font-size: .7rem; }
+  .focus-lab-panel__actions { display: flex; flex-wrap: wrap; gap: var(--ke-space-focus-control-gap); margin-top: 1rem; }
+  .focus-lab-panel__status { min-height: 1.4em; margin: .7rem 0 0; color: var(--ke-color-status-success-foreground); font-size: .82rem; font-weight: 750; }
+  .focus-lab-panel__confirm { display: inline-block; min-height: var(--ke-focus-control-min); color: var(--ke-color-action-primary-hover); font-weight: 850; line-height: var(--ke-focus-control-min); }
   .focus-lab-panel__confirm[hidden] { display: none; }
-  .focus-lab-panel__dialog { width: min(620px, calc(100% - 1rem)); max-height: 90dvh; border: 0; border-radius: 1.35rem; padding: 0; background: transparent; color: var(--ke-color-copy, #44362d); box-shadow: 0 24px 64px rgb(34 26 20 / 22%); }
-  .focus-lab-panel__dialog::backdrop { background: rgb(34 26 20 / 58%); backdrop-filter: blur(3px); }
-  .focus-lab-panel__sheet { display: grid; gap: 1rem; overflow: auto; max-height: 90dvh; padding: clamp(1rem, 4vw, 1.5rem); background: var(--ke-color-surface, #fffdf8); }
+  .focus-lab-panel__dialog { width: min(var(--ke-focus-dialog-lab-max), calc(100% - 1rem)); max-height: var(--ke-focus-dialog-lab-max-height); border: 0; border-radius: var(--ke-shape-radius-focus-lab); padding: 0; background: transparent; color: var(--ke-color-text-secondary); box-shadow: var(--ke-elevation-focus-dialog); }
+  .focus-lab-panel__dialog::backdrop { background: var(--ke-color-focus-dialog-backdrop); backdrop-filter: blur(var(--ke-focus-dialog-backdrop-blur)); }
+  .focus-lab-panel__sheet { display: grid; gap: 1rem; overflow: auto; max-height: var(--ke-focus-dialog-lab-max-height); padding: clamp(1rem, 4vw, 1.5rem); background: var(--ke-color-focus-sheet-surface); }
   .focus-lab-panel__sheet header { display: flex; justify-content: space-between; gap: 1rem; }
   .focus-lab-panel__sheet header > div { display: grid; gap: .8rem; }
-  .focus-lab-panel__sheet h2 { margin: 0; color: var(--ke-color-ink, #221a14); font-size: clamp(1.5rem, 5vw, 2rem); line-height: 1.08; }
-  .focus-lab-panel__sheet header > button { width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid #dbc9b5; border-radius: 50%; background: #fff; color: var(--ke-color-ink, #221a14); font-size: 1.8rem; cursor: pointer; }
+  .focus-lab-panel__sheet h2 { margin: 0; color: var(--ke-color-text-primary); font: var(--ke-type-focus-dialog-heading); }
+  .focus-lab-panel__sheet header > button { width: var(--ke-focus-control-min); height: var(--ke-focus-control-min); flex: 0 0 auto; display: grid; place-items: center; border: var(--ke-shape-border-hairline) solid var(--ke-color-border-panel-warm); border-radius: 50%; background: var(--ke-color-focus-control-surface); color: var(--ke-color-text-primary); cursor: pointer; }
   .focus-lab-panel__sheet label { display: grid; gap: .45rem; font-weight: 800; }
-  .focus-lab-panel__sheet textarea { box-sizing: border-box; width: 100%; min-height: 150px; resize: vertical; border: 1px solid #cdbfad; border-radius: .9rem; padding: .8rem; background: #fff; color: var(--ke-color-ink, #221a14); font: 1rem/1.45 var(--ke-font-sans); }
-  .focus-lab-panel__file { border: 1px dashed #cdbfad; border-radius: .9rem; padding: .8rem; }
-  .focus-lab-panel__file small { color: var(--ke-color-muted, #6d6259); font-weight: 600; }
+  .focus-lab-panel__sheet textarea { box-sizing: border-box; width: 100%; min-height: 150px; resize: vertical; border: var(--ke-shape-border-hairline) solid var(--ke-color-border-input); border-radius: var(--ke-focus-input-radius); padding: .8rem; background: var(--ke-color-focus-control-surface); color: var(--ke-color-text-primary); font: 1rem/1.45 var(--ke-font-family-sans); }
+  .focus-lab-panel__file { border: var(--ke-shape-border-hairline) dashed var(--ke-color-border-input); border-radius: var(--ke-focus-input-radius); padding: .8rem; }
+  .focus-lab-panel__file small { color: var(--ke-color-text-muted); font-weight: 600; }
   .focus-lab-panel__sheet > .ke-button { width: 100%; }
-  .focus-lab-panel__sheet > p[role="status"] { min-height: 1.4em; color: var(--ke-color-success-700, #0f6c3d); font-weight: 750; }
+  .focus-lab-panel__sheet > p[role="status"] { min-height: 1.4em; color: var(--ke-color-status-success-foreground); font-weight: 750; }
   .focus-lab-panel__sheet--invite { justify-items: center; text-align: center; }
-  .focus-lab-panel__qr { width: min(280px, 90%); aspect-ratio: 1; padding: .5rem; border-radius: 1rem; background: #fff; }
+  .focus-lab-panel__qr { width: min(280px, 90%); aspect-ratio: 1; padding: .5rem; border-radius: var(--ke-focus-input-radius); background: var(--ke-color-focus-control-surface); }
   .focus-lab-panel__qr :global(svg) { display: block; width: 100%; height: 100%; }
   .focus-lab-panel__sheet--invite .focus-lab-panel__actions { width: 100%; }
   .focus-lab-panel__sheet--invite .focus-lab-panel__actions .ke-button { flex: 1 1 180px; }
   @media (max-width: 620px) {
-    .focus-lab-panel { width: min(100% - .75rem, 1120px); margin-bottom: 5rem; border-radius: 1.15rem; }
+    .focus-lab-panel { width: min(100% - .75rem, 1120px); margin-bottom: 5rem; border-radius: var(--ke-focus-panel-radius-compact); }
     .focus-lab-panel__head { align-items: flex-start; flex-direction: column; }
     .focus-lab-panel__scale { grid-template-columns: repeat(6, minmax(40px, 1fr)); }
     .focus-lab-panel__actions .ke-button { flex: 1 1 150px; }
-    .focus-lab-panel__dialog { width: 100%; margin: auto 0 0; border-radius: 1.25rem 1.25rem 0 0; }
+    .focus-lab-panel__dialog { width: 100%; margin: auto 0 0; border-radius: var(--ke-focus-panel-radius-compact) var(--ke-focus-panel-radius-compact) 0 0; }
   }
 </style>
