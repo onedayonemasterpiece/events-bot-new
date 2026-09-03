@@ -24,6 +24,7 @@ test('A0 closure targets only actual consumers and no F0, FR0 or M0 canonical ro
     'site/src/components/design-system/',
     'site/src/components/media-frame.css',
     'site/src/components/EventMediaRail.astro',
+    'site/src/components/EventHero.astro',
     'site/src/components/EventCard.astro',
     'site/src/components/listings/ListingEventCard.astro',
     'site/src/components/AdaptiveEventCardGrid.astro',
@@ -49,7 +50,7 @@ for (const path of expectedPaths) {
   });
 }
 
-test('festival transform preserves category assets while centralizing action icons and targets', async () => {
+test('festival transform preserves taxonomy identity and separates equal-color semantic owners', async () => {
   const source = transformA0Consumer(
     'site/src/pages/festivali/index.astro',
     await read('site/src/pages/festivali/index.astro'),
@@ -62,6 +63,30 @@ test('festival transform preserves category assets while centralizing action ico
   assert.equal((source.match(/<SemanticIcon name="heart" role="control" \/>/gu) || []).length, 2);
   assert.doesNotMatch(source, /<Icon name="heart" \/>/u);
   assert.doesNotMatch(source, /width:\s*1\.8rem;\s*height:\s*1\.8rem/u);
+  assert.match(
+    source,
+    /\.festival-guide__icon--heart \{[\s\S]*?background: var\(--ke-color-festival-guide-like-surface\);[\s\S]*?\n  \}/u,
+  );
+  assert.match(
+    source,
+    /\.festival-month__categories li \{[\s\S]*?background: var\(--ke-color-festival-category-surface\);[\s\S]*?\n  \}/u,
+  );
+  assert.doesNotMatch(
+    source,
+    /\.festival-month__categories li \{[\s\S]*?background: var\(--ke-color-festival-guide-like-surface\);[\s\S]*?\n  \}/u,
+  );
+});
+
+test('executable script uses selector-scoped festival substitutions, not unsafe global aliasing', async () => {
+  const script = await read('site/scripts/apply-a0-current-successor-consumer-closure.mjs');
+  assert.match(script, /replaceInsideRule\(source, '\.festival-guide__icon--heart'/u);
+  assert.match(script, /replaceInsideRule\(source, '\.festival-month__categories li'/u);
+  assert.match(script, /--ke-color-festival-guide-like-surface/u);
+  assert.match(script, /--ke-color-festival-category-surface/u);
+  assert.doesNotMatch(
+    script,
+    /const replacements = \[[\s\S]*?\['background: rgba\(165, 72, 33, 0\.1\);', 'background: var\(--ke-color-festival-guide-like-surface\);'\][\s\S]*?\];/u,
+  );
 });
 
 test('exhibitions transform changes only ownership labels and leaves behavior hooks intact', async () => {
