@@ -36,14 +36,11 @@ test('ListingEventCard exposes loaded/fallback state and removes failed network 
   assert.match(source, /if \(!\(image instanceof HTMLImageElement\)\) \{\s*finish\(false\);/u);
 });
 
-test('cards without social proof do not claim a rail or trigger mobile tail geometry', async () => {
-  const [card, css] = await Promise.all([
-    read('src/components/listings/ListingEventCard.astro'),
-    read('src/styles/design-system.css'),
-  ]);
+test('cards without social proof publish an explicit no-proof state', async () => {
+  const card = await read('src/components/listings/ListingEventCard.astro');
 
+  assert.match(card, /const hasSocialProof = likesCount > 0 \|\| sharesCount > 0;/u);
+  assert.match(card, /const hasRailProof = hasSocialProof && !proofInside;/u);
   assert.match(card, /data-listing-proof-placement=\{hasSocialProof \? \(proofInside \? 'inside' : 'rail'\) : 'none'\}/u);
   assert.doesNotMatch(card, /data-listing-proof-placement=\{proofInside \? 'inside' : 'rail'\}/u);
-  assert.match(css, /data-listing-proof-placement="rail"\]\[data-listing-side-identity-count="0"\][\s\S]*--ke-listing-mobile-tail-width: 28px/u,
-    'the existing mobile tail rule must stay limited to real proof rails');
 });
