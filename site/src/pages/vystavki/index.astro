@@ -26,5 +26,12 @@ const headerBadge = projection.newItems.length
   headerBadge={headerBadge}
   heroChrome="immersive"
 >
-  <ExhibitionsPersonalSurface projection={projection} />
+  <div
+    data-ds-family="ExhibitionsRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="personal-immersive"
+    data-ds-state={projection.items.length ? 'populated' : 'empty'}
+  >
+    <ExhibitionsPersonalSurface projection={projection} />
+  </div>
 </EventLayout>

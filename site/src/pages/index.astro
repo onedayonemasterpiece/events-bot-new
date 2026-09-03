@@ -52,7 +52,16 @@ const description = 'Афиша Калининграда без шума: пол
     structuredData={[]}
     mobileSection="afisha"
   >
-    <main id="main" class="home-page" data-home-page data-home-static-fallback-count={feed.length}>
+    <main
+      id="main"
+      class="home-page"
+      data-ds-family="HomePage"
+      data-ds-version="1"
+      data-ds-variant="cold-start"
+      data-ds-state={feed.length ? 'populated' : 'empty'}
+      data-home-page
+      data-home-static-fallback-count={feed.length}
+    >
       <div class="page-shell home-page__shell">
         <HomeHeroTalk event={heroEvent} />
         <HomeQuickNav />
