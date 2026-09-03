@@ -1,7 +1,6 @@
 ---
-import EventCard from './EventCard.astro';
+import AdaptiveEventCardGrid from './AdaptiveEventCardGrid.astro';
 import type { PreviewEvent } from '../lib/types';
-import { packRelatedCardRows } from '../lib/relatedCardLayout.mjs';
 
 type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
 
@@ -32,83 +31,22 @@ const {
   discoverySrc,
   personalFeed = false,
 } = Astro.props;
-
-const packed = packRelatedCardRows(events, {
-  limit,
-  rowSize,
-  mediaTreatment,
-});
 ---
 
-<div
-  class:list={[
-    'cards-grid',
-    'cards-grid--immersive',
-    'optimized-event-card-grid',
-    responsiveMobile && 'optimized-event-card-grid--responsive',
-    className,
-  ]}
-  data-optimized-event-card-grid
-  data-lab-row-normalize
-  data-discovery-feed={!responsiveMobile ? '' : undefined}
-  data-personal-feed-results={personalFeed ? '' : undefined}
-  data-surface={surface}
-  data-algorithm-id={algorithmId}
-  data-current-event-id={currentEventId}
-  data-discovery-src={discoverySrc}
-  data-feed-card-variant="split-actions"
->
-  {packed.map(({ item, layout }) => (
-    <EventCard event={item} variant="split-actions" desktopRelatedCrop desktopRelatedLayout={layout} />
-  ))}
-</div>
-
-<style>
-  .optimized-event-card-grid {
-    min-width: 0;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: clamp(.85rem, 1.6vw, 1.25rem);
-    align-items: stretch;
-  }
-
-  .optimized-event-card-grid :global([data-lab-related-card]) {
-    height: 100%;
-    grid-template-rows: auto minmax(0, 1fr) minmax(58px, auto) minmax(56px, auto);
-  }
-  .optimized-event-card-grid :global([data-lab-related-card] .event-card__media-link) { display: block; }
-  .optimized-event-card-grid :global([data-lab-related-card] .event-card__media-shell) {
-    position: relative;
-    isolation: isolate;
-    width: 100%;
-    height: auto !important;
-    aspect-ratio: var(--lab-row-media-ratio) !important;
-    overflow: hidden;
-    background: #d2c5b7;
-  }
-  .optimized-event-card-grid :global([data-lab-related-card] .event-card__media) {
-    position: absolute !important;
-    z-index: 2;
-    inset: 0;
-    width: 100% !important;
-    height: 100% !important;
-  }
-  .optimized-event-card-grid :global([data-lab-media-kind="visual"] .event-card__media-shell) {
-    background: linear-gradient(135deg, #e4ddd2, #d4c7b9);
-  }
-  .optimized-event-card-grid :global([data-lab-media-kind="visual"] .event-card__media) { background: transparent !important; }
-  .optimized-event-card-grid :global([data-card-authoritative-fit="contain"]) { background: #15110f; }
-  .optimized-event-card-grid :global([data-lab-related-card] .event-card__body) { min-height: 0; align-content: start; }
-  .optimized-event-card-grid :global([data-lab-related-card] .event-card__utility-row) { min-height: 58px; }
-  .optimized-event-card-grid :global([data-lab-related-card] .event-card__feedback--under) { min-height: 56px; }
-
-  @media (max-width: 1023px) {
-    .optimized-event-card-grid--responsive {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .optimized-event-card-grid--responsive :global([data-lab-related-card]) {
-      grid-row: auto !important;
-      grid-column: auto !important;
-    }
-  }
-</style>
+<AdaptiveEventCardGrid
+  events={events}
+  mode="packed"
+  limit={limit}
+  rowSize={rowSize}
+  mediaTreatment={mediaTreatment}
+  className={className}
+  responsive={responsiveMobile ? 'stack' : 'fixed'}
+  responsiveMobile={responsiveMobile}
+  surface={surface}
+  algorithmId={algorithmId}
+  currentEventId={currentEventId}
+  discoverySrc={discoverySrc}
+  personalFeed={personalFeed}
+  discoveryFeed={!responsiveMobile}
+  legacyOptimizedContract
+/>

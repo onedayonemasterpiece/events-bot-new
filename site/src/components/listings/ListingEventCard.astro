@@ -7,11 +7,52 @@ import { cityKey, selectListingImage } from '../../lib/listingPresentation';
 import { getListingIdentityMedallions, getListingVenueMedallion } from '../../lib/listingVenueMedallions';
 import { withBase } from '../../lib/events';
 
-interface Props { event: PreviewEvent; density?: 'regular' | 'weekend' | 'popular'; priority?: boolean; temporalLabel?: string; familyKey?: string; supplemental?: boolean }
-const { event, density = 'regular', priority = false, temporalLabel, familyKey, supplemental = false } = Astro.props;
+export type ListingEventCardRootAttributeValue = string | number | boolean | null | undefined;
+export type ListingEventCardRootAttributes = Record<string, ListingEventCardRootAttributeValue>;
+
+interface Props {
+  event: PreviewEvent;
+  density?: 'regular' | 'weekend' | 'popular';
+  priority?: boolean;
+  temporalLabel?: string;
+  familyKey?: string;
+  supplemental?: boolean;
+  rootClassName?: string;
+  rootAttributes?: ListingEventCardRootAttributes;
+  hidden?: boolean;
+}
+
+const {
+  event,
+  density = 'regular',
+  priority = false,
+  temporalLabel,
+  familyKey,
+  supplemental = false,
+  rootClassName = '',
+  rootAttributes = {},
+  hidden = false,
+} = Astro.props;
 const href = eventHref(event);
 const targetRatio = density === 'weekend' ? 1.2 : density === 'popular' ? 1.25 : 1.35;
 const image = selectListingImage(event, targetRatio);
+const mediaFrameKind = !image.asset
+  ? 'fallback'
+  : image.asset.media_semantic_status === 'error'
+    ? 'unknown'
+    : image.mode.startsWith('visual-')
+      ? 'visual'
+      : image.asset.image_text_mode === 'ocr_text'
+        ? 'document'
+        : 'unknown';
+const mediaFrameFit = image.mode.endsWith('-crop') ? 'cover' : 'contain';
+const mediaFrameCropReason = !image.asset
+  ? 'listing_fallback'
+  : image.asset.media_semantic_status === 'error'
+    ? 'semantic_error_fail_closed'
+    : image.adaptiveCrop
+      ? `listing_reviewed_crop:${image.asset.listing_crop_evidence || 'classified_safe_crop'}`
+      : `listing_natural:${image.mode}`;
 const derivatives = [...(image.asset?.thumbnail_sources || [])]
   .filter((item) => item.src && item.width > 0 && item.height > 0)
   .sort((left, right) => left.width - right.width);
@@ -65,13 +106,73 @@ const hasSideRail = visibleIdentityCount > 0 || hasRailProof;
 const splitIdentityProofRail = hasRailProof && visibleIdentityCount === 3 && density !== 'regular';
 const tailWidth = splitIdentityProofRail ? 96 : hasSideRail ? (visibleIdentityCount === 0 ? 40 : 64) : 0;
 const place = [event.venue_name, event.city].filter(Boolean).join(' · ');
+const LISTING_EVENT_CARD_RESERVED_ROOT_ATTRIBUTES = new Set([
+  'data-ds-component',
+  'data-ds-family',
+  'data-ds-version',
+  'data-ds-variant',
+  'data-ds-state',
+  'data-feedback-scope',
+  'data-listing-item',
+  'data-listing-supplemental',
+  'data-event-id',
+  'data-listing-family-key',
+  'data-event-title',
+  'data-linked-event-ids',
+  'data-listing-city',
+  'data-listing-event-type',
+  'data-listing-image-mode',
+  'data-listing-crop-adaptive',
+  'data-listing-crop-evidence',
+  'data-listing-source-width',
+  'data-listing-source-height',
+  'data-listing-media-role',
+  'data-listing-vertical-retention',
+  'data-listing-low-resolution',
+  'data-listing-density',
+  'data-image-text-mode',
+  'data-venue-medallion',
+  'data-listing-has-social-proof',
+  'data-listing-proof-placement',
+  'data-listing-proof-rows',
+  'data-listing-identity-count',
+  'data-listing-side-identity-count',
+  'data-listing-tail-layout',
+  'data-listing-overlay-kind',
+  'data-event-end-at',
+  'data-event-start-at',
+]);
+const safeRootAttributes = Object.fromEntries(
+  Object.entries(rootAttributes).filter(([name, value]) => (
+    value !== undefined
+    && value !== null
+    && /^data-[a-z0-9_.:-]+$/u.test(name)
+    && !LISTING_EVENT_CARD_RESERVED_ROOT_ATTRIBUTES.has(name)
+  )),
+);
+const cardState = [
+  priority && 'priority',
+  supplemental && 'supplemental',
+  temporalLabel && 'temporal-label',
+  hasSocialProof && 'social-proof',
+  totalIdentityCount > 0 && 'identity',
+  showFree && 'free-admission',
+  image.adaptiveCrop && 'adaptive-crop',
+  `media-${mediaFrameKind}`,
+  Object.keys(safeRootAttributes).length > 0 && 'consumer-metadata',
+].filter(Boolean).join(' ') || undefined;
+const mediaFrameRatio = image.ratio.toFixed(5);
+const mediaFrameObjectPosition = image.objectPosition;
 const style = [
-  `--ke-listing-image-ratio:${image.ratio.toFixed(5)}`,
-  `--ke-listing-object-position:${image.objectPosition}`,
+  `--ke-listing-image-ratio:${mediaFrameRatio}`,
+  `--ke-listing-object-position:${mediaFrameObjectPosition}`,
   `--ke-listing-tail-width:${tailWidth}px`,
+  `--media-frame-ratio:${mediaFrameRatio}`,
+  `--media-frame-object-position:${mediaFrameObjectPosition}`,
   image.asset ? `--ke-listing-source-width:${image.asset.width}px` : '',
   image.asset ? `--ke-listing-source-height:${image.asset.height}px` : '',
 ].filter(Boolean).join(';');
+const cardClass = ['ke-listing-card', rootClassName].filter(Boolean).join(' ');
 const medallionStyle = (medallion: typeof overlayMedallion) => medallion
   ? [medallion.background ? `--venue-medallion-bg:${medallion.background}` : '', medallion.ring ? `--venue-medallion-ring:${medallion.ring}` : ''].filter(Boolean).join(';')
   : undefined;
@@ -84,10 +185,15 @@ const socialProofLabel = [
 ].filter(Boolean).join(', ');
 ---
 <article
-  class="ke-listing-card"
+  {...safeRootAttributes}
+  class={cardClass}
   style={style}
+  hidden={hidden}
   data-ds-component="ListingEventCard"
+  data-ds-family="ListingEventCard"
   data-ds-version="9"
+  data-ds-variant={density}
+  data-ds-state={cardState}
   data-feedback-scope
   data-listing-item
   data-listing-supplemental={supplemental ? 'true' : undefined}
@@ -119,23 +225,48 @@ const socialProofLabel = [
   data-event-start-at={event.starts_at || undefined}
 >
   <div class="ke-listing-card__visual">
-  <a class="ke-listing-card__media ke-skeleton" href={href} data-prefetch aria-label={`Открыть событие: ${event.title}`} data-listing-media-loading>
-    {imageUrl ? (
-      <img
-        src={imageUrl}
-        srcset={responsiveSrcset}
-        sizes={responsiveSizes}
-        width={image.asset?.width || undefined}
-        height={image.asset?.height || undefined}
-        alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`}
-        loading={priority ? 'eager' : 'lazy'}
-        fetchpriority={priority ? 'high' : 'auto'}
-        decoding="async"
-        data-listing-native-loading={priority ? 'eager' : 'lazy'}
-      />
-    ) : (
-      <span class="ke-listing-card__fallback" aria-hidden="true">{event.event_type || 'событие'}</span>
-    )}
+  <a
+    class="ke-listing-card__media ke-skeleton"
+    href={href}
+    data-prefetch
+    aria-label={`Открыть событие: ${event.title}`}
+    data-listing-media-loading
+  >
+    <span
+      class="ke-listing-card__media-frame"
+      data-media-frame
+      data-media-frame-contract="v1"
+      data-media-frame-surface="listing-card"
+      data-media-frame-kind={mediaFrameKind}
+      data-media-frame-fit={mediaFrameFit}
+      data-media-frame-ratio={mediaFrameRatio}
+      data-media-frame-object-position={mediaFrameObjectPosition}
+      data-media-frame-crop-reason={mediaFrameCropReason}
+      data-media-frame-source-width={image.asset?.width}
+      data-media-frame-source-height={image.asset?.height}
+      data-media-frame-loading={priority ? 'eager' : 'lazy'}
+      data-media-frame-priority={priority ? 'true' : undefined}
+      data-media-frame-interaction-owner="caller"
+      style="display:block;width:100%;height:100%;overflow:hidden"
+    >
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          srcset={responsiveSrcset}
+          sizes={responsiveSizes}
+          width={image.asset?.width || undefined}
+          height={image.asset?.height || undefined}
+          alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`}
+          loading={priority ? 'eager' : 'lazy'}
+          fetchpriority={priority ? 'high' : 'auto'}
+          decoding="async"
+          data-listing-native-loading={priority ? 'eager' : 'lazy'}
+          data-media-frame-image
+        />
+      ) : (
+        <span class="ke-listing-card__fallback" data-media-frame-fallback aria-hidden="true">{event.event_type || 'событие'}</span>
+      )}
+    </span>
     {overlayMedallion ? (
       <span class="ke-listing-card__medallion" data-listing-medallion-slug={overlayMedallion.slug} style={medallionStyle(overlayMedallion)} title={overlayMedallion.name} aria-label={overlayMedallion.ariaLabel}>
         <picture>
@@ -190,7 +321,7 @@ const socialProofLabel = [
   function initListingMediaSkeletons(root = document) {
     root.querySelectorAll('[data-listing-media-loading]').forEach((frame) => {
       if (frame.dataset.listingMediaReady === 'true') return;
-      const image = frame.querySelector(':scope > img');
+      const image = frame.querySelector('[data-media-frame-image]');
       if (!image) {
         frame.classList.remove('ke-skeleton');
         frame.dataset.listingMediaReady = 'true';
