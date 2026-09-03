@@ -1,0 +1,133 @@
+name: StaticSiteBuilder one-shot recovery rearm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/static-site-rearm-one-shot.yml
+
+permissions:
+  contents: write
+
+env:
+  FLY_API_TOKEN: ${{ secrets.UNUSUAL_EVENTS_FLY_SSH_TOKEN }}
+  FLY_APP_NAME: ${{ vars.UNUSUAL_EVENTS_FLY_APP_NAME }}
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: { name: unusual-events-monitor }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { fetch-depth: 0 }
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+      - name: Assertion-guarded rearm of exact active owner
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/recover.py" <<'PY'
+          import json, os, sqlite3, tempfile
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          DB='/data/db.sqlite'
+          JOB_ID=66921
+          RUN_ID='static-site:production-secret-20260824T064339-21af62d3:25e062c62ab0'
+          now=datetime.now(timezone.utc).isoformat()
+          conn=sqlite3.connect(DB, timeout=30)
+          conn.row_factory=sqlite3.Row
+          conn.execute('PRAGMA busy_timeout=30000')
+          conn.execute('BEGIN IMMEDIATE')
+          try:
+              state=conn.execute("SELECT * FROM static_site_build_state WHERE release_channel='secret_preview'").fetchone()
+              if state is None or state['active_job_id'] != JOB_ID or state['active_run_id'] != RUN_ID:
+                  raise SystemExit('active owner identity changed; no mutation')
+              job=conn.execute('SELECT * FROM joboutbox WHERE id=?',(JOB_ID,)).fetchone()
+              if job is None or job['status'] != 'error' or job['coalesce_key'] != 'static_site_build:prod':
+                  raise SystemExit('active owner job no longer matches recovery preconditions')
+              if 'BucketMaxSizeExceeded' not in str(job['last_error'] or ''):
+                  raise SystemExit('active owner error changed; no mutation')
+              payload=json.loads(job['payload'] or '{}')
+              handoff=payload.get('remote_handoff')
+              if not isinstance(handoff, dict) or str(handoff.get('run_id') or '') != RUN_ID:
+                  raise SystemExit('exact remote handoff is absent or mismatched')
+              ledger=conn.execute('SELECT * FROM kaggle_run_ledger WHERE run_id=?',(RUN_ID,)).fetchone()
+              if ledger is None or str(ledger['status']) not in {'done','failed'} or not ledger['terminal_at']:
+                  raise SystemExit('remote ledger is not terminal; replacement remains forbidden')
+              followup=conn.execute("SELECT id,status,next_run_at FROM joboutbox WHERE id=66980").fetchone()
+              backup_dir=Path('/data/incident_backups')
+              backup_dir.mkdir(parents=True, exist_ok=True)
+              backup={
+                  'schema_version':1,
+                  'incident':'INC-2026-09-03-static-site-stale-active-owner',
+                  'recorded_at':now,
+                  'state':dict(state),
+                  'job':dict(job),
+                  'ledger':dict(ledger),
+                  'followup':dict(followup) if followup else None,
+              }
+              fd,tmp=tempfile.mkstemp(prefix='.static-site-rearm-',suffix='.json',dir=backup_dir)
+              try:
+                  with os.fdopen(fd,'w',encoding='utf-8') as fh:
+                      json.dump(backup,fh,ensure_ascii=False,indent=2,default=str)
+                      fh.write('\n')
+                      fh.flush(); os.fsync(fh.fileno())
+                  final=backup_dir / ('INC-2026-09-03-static-site-stale-active-owner-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '.json')
+                  os.chmod(tmp,0o600); os.replace(tmp,final)
+              finally:
+                  if os.path.exists(tmp): os.unlink(tmp)
+              cur=conn.execute("UPDATE joboutbox SET status='pending', attempts=0, last_error=NULL, updated_at=?, next_run_at=? WHERE id=? AND status='error'",(now,now,JOB_ID))
+              if cur.rowcount != 1:
+                  raise SystemExit('exact owner CAS failed; no commit')
+              conn.commit()
+              print(json.dumps({
+                  'status':'REARMED',
+                  'job_id':JOB_ID,
+                  'run_id':RUN_ID,
+                  'ledger_status':ledger['status'],
+                  'ledger_terminal_at':ledger['terminal_at'],
+                  'followup_id':followup['id'] if followup else None,
+                  'backup_file':final.name,
+                  'rearmed_at':now,
+              },indent=2))
+          except BaseException:
+              conn.rollback(); raise
+          finally:
+              conn.close()
+          PY
+          encoded="$(base64 -w0 "$RUNNER_TEMP/recover.py")"
+          NO_COLOR=1 flyctl ssh console --app "$FLY_APP_NAME" --pty=false \
+            --command "python3 -c \"import base64;exec(base64.b64decode('$encoded'))\"" \
+            | tee recovery.json
+      - name: Observe exact owner after rearm
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            out="$(NO_COLOR=1 flyctl ssh console --app "$FLY_APP_NAME" --pty=false --command "python3 -c \"import sqlite3,json; c=sqlite3.connect('file:/data/db.sqlite?mode=ro',uri=True); c.row_factory=sqlite3.Row; j=c.execute('SELECT id,status,attempts,last_error,updated_at,next_run_at FROM joboutbox WHERE id=66921').fetchone(); s=c.execute(\\\"SELECT active_job_id,active_run_id,last_success_run_id,last_success_at,updated_at FROM static_site_build_state WHERE release_channel='secret_preview'\\\").fetchone(); print(json.dumps({'job':dict(j) if j else None,'state':dict(s) if s else None},default=str))\"")"
+            echo "$out" > recovery-observation.json
+            status="$(python -c 'import json; print(json.load(open("recovery-observation.json"))["job"]["status"])')"
+            if [[ "$status" != pending && "$status" != running ]]; then break; fi
+            sleep 10
+          done
+          cat recovery-observation.json
+      - name: Upload redacted recovery receipt
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: static-site-rearm-receipt
+          path: |
+            recovery.json
+            recovery-observation.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove one-shot workflow
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          git rebase origin/main
+          git rm .github/workflows/static-site-rearm-one-shot.yml
+          git commit -m 'ops: remove StaticSiteBuilder recovery rearm'
+          git push origin HEAD:main
