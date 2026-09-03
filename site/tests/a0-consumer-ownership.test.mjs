@@ -4,14 +4,15 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('Popular preserves the accepted density choice alongside the canonical rail', async () => {
-  const [surface, density] = await Promise.all([
+test('Popular binds the accepted density choice to exactly two visible canonical representations', async () => {
+  const [surface, density, large, adaptive] = await Promise.all([
     read('src/components/listings/PopularListingSurface.astro'),
     read('src/components/listings/ListingMobileDensitySwitch.astro'),
+    read('src/components/listings/PopularMobileBehaviorRows.astro'),
+    read('src/components/listings/PopularMobileAdaptiveRows.astro'),
   ]);
 
-  assert.match(surface, /import MobileListingRailSurface from/u);
-  assert.equal((surface.match(/<MobileListingRailSurface\b/gu) || []).length, 1);
+  assert.doesNotMatch(surface, /MobileListingRailSurface/u);
   assert.match(surface, /<PopularBehaviorRows[\s\S]*<PopularPersonalizedRow/u);
   assert.match(surface, /import PopularMobileBehaviorRows from/u);
   assert.match(surface, /import PopularMobileAdaptiveRows from/u);
@@ -21,6 +22,21 @@ test('Popular preserves the accepted density choice alongside the canonical rail
   assert.match(surface, /<PopularMobileBehaviorRows groups=\{groups\} \/>/u);
   assert.match(surface, /<PopularMobileAdaptiveRows groups=\{groups\} \/>/u);
   assert.match(surface, /<ListingMobileDensitySwitch \/>/u);
+
+  const representationRoot = surface.match(/<div class="ke-popular-mobile-existing"[^>]*>/u)?.[0] || '';
+  assert.match(representationRoot, /data-popular-density-representations/u);
+  assert.doesNotMatch(representationRoot, /aria-hidden|\binert\b/u);
+
+  assert.match(large, /data-popular-representation="mobile-large"/u);
+  assert.match(large, /data-popular-mobile-layout="large"/u);
+  assert.doesNotMatch(large, /\bhidden\b|\binert\b/u);
+  assert.match(large, /<AdaptiveEventCardGrid/u);
+
+  assert.match(adaptive, /data-popular-representation="mobile-adaptive"/u);
+  assert.match(adaptive, /data-popular-mobile-layout="adaptive"/u);
+  assert.match(adaptive, /\bhidden\b/u);
+  assert.match(adaptive, /\binert\b/u);
+  assert.match(adaptive, /<ListingEventCard/u);
 
   assert.match(density, /role="radiogroup" aria-label="Размер карточек"/u);
   assert.match(density, />\s*Крупно\s*<\/button>/u);
