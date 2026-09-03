@@ -6,7 +6,10 @@ interface Props {
   label?: string;
 }
 const { tone = 'neutral', label } = Astro.props;
-const className = ['ke-badge', tone !== 'neutral' ? `ke-badge--${tone}` : ''].filter(Boolean).join(' ');
+const className = [
+  'ke-foundation-badge',
+  tone !== 'neutral' ? `ke-foundation-badge--${tone}` : '',
+].filter(Boolean).join(' ');
 ---
 <span
   class={className}
@@ -17,4 +20,5 @@ const className = ['ke-badge', tone !== 'neutral' ? `ke-badge--${tone}` : ''].fi
   data-ds-variant={tone}
   data-ds-state="default"
   data-ke-foundation-consumer="badge"
+  data-ke-style-owner="component-foundations"
 ><slot /></span>

@@ -13,7 +13,7 @@ interface Props {
 const { title, message, tone = 'neutral', mark = '•', actionLabel, actionHref } = Astro.props;
 ---
 <section
-  class={`ke-state-panel ke-state-panel--${tone}`}
+  class={`ke-foundation-state-panel ke-foundation-state-panel--${tone}`}
   aria-live={tone === 'danger' ? 'assertive' : tone === 'loading' ? 'polite' : undefined}
   aria-busy={tone === 'loading' ? 'true' : undefined}
   data-ds-component="StatePanel"
@@ -22,9 +22,10 @@ const { title, message, tone = 'neutral', mark = '•', actionLabel, actionHref 
   data-ds-variant={tone}
   data-ds-state={tone === 'loading' ? 'loading' : 'default'}
   data-ke-foundation-consumer="state-panel"
+  data-ke-style-owner="component-foundations"
 >
   <span
-    class="ke-state-panel__mark"
+    class="ke-foundation-state-panel__mark"
     data-ke-icon-role={tone === 'loading' ? 'control' : undefined}
     aria-hidden="true"
   >{mark}</span>
