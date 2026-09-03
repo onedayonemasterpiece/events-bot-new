@@ -254,11 +254,11 @@ test('semantic errors and unknown modes contain while classified visual-only con
 });
 
 test('hero and desktop gallery share the semantic-error contain contract', async () => {
-  const [hero, desktop, personal, optimizedGrid] = await Promise.all([
+  const [hero, desktop, optimizedGrid, adaptiveGrid] = await Promise.all([
     read('src/components/EventHero.astro'),
     read('src/components/DesktopEventPage.astro'),
-    read('src/pages/dlya-menya/index.astro'),
     read('src/components/OptimizedEventCardGrid.astro'),
+    read('src/components/AdaptiveEventCardGrid.astro'),
   ]);
 
   assert.match(hero, /if \(semanticStatus === 'error'\) return 'unknown'/u);
@@ -268,14 +268,18 @@ test('hero and desktop gallery share the semantic-error contain contract', async
   assert.match(desktop, /failClosedImageTextMode\(asset\?\.image_text_mode \|\| fallbackMode, asset\?\.media_semantic_status\)/u);
   assert.match(desktop, /semanticStatus === 'classified' && classifiedRole/u);
   assert.doesNotMatch(desktop, /fallbackMediaRole[\s\S]{0,320}mode === 'visual_only' \? 'event_photo'/u);
-  assert.match(personal, /<OptimizedEventCardGrid/u);
-  assert.match(personal, /className="personal-page__feed-list"/u);
   assert.match(desktop, /<OptimizedEventCardGrid/u);
-  assert.match(optimizedGrid, /packRelatedCardRows\(events/u);
   assert.match(optimizedGrid, /responsiveMobile/u);
-  assert.match(optimizedGrid, /data-optimized-event-card-grid/u);
-  assert.doesNotMatch(personal, /repeat\(3,\s*minmax\(0,\s*1fr\)\)/u);
-  assert.doesNotMatch(personal, /repeat\(2,\s*minmax\(0,\s*1fr\)\)/u);
+  assert.match(optimizedGrid, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro'/u);
+  assert.match(optimizedGrid, /<AdaptiveEventCardGrid/u);
+  assert.doesNotMatch(optimizedGrid, /import EventCard/u);
+  assert.doesNotMatch(optimizedGrid, /packRelatedCardRows/u);
+  assert.doesNotMatch(optimizedGrid, /<style>/u);
+  assert.match(adaptiveGrid, /import \{ packRelatedCardRows \} from '\.\.\/lib\/relatedCardLayout\.mjs'/u);
+  assert.match(adaptiveGrid, /packRelatedCardRows\(events/u);
+  assert.match(adaptiveGrid, /<EventCard/u);
+  assert.match(adaptiveGrid, /data-optimized-event-card-grid=\{legacyOptimizedContract/u);
+  assert.match(adaptiveGrid, /<style>/u);
 });
 
 test('desktop and mobile photo-only rows share the canonical compact 5:4 frame', () => {

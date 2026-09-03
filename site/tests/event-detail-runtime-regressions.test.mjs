@@ -122,11 +122,17 @@ test('desktop static continuation emits stable initial skeleton geometry', async
   const card = await read('src/components/EventCard.astro');
   const desktop = await read('src/components/DesktopEventPage.astro');
   const optimizedGrid = await read('src/components/OptimizedEventCardGrid.astro');
+  const adaptiveGrid = await read('src/components/AdaptiveEventCardGrid.astro');
   const built = await readBuilt('sobytiya/spektakl-garazh-kaliningrad-5658/index.html');
 
   assert.match(desktop, /<OptimizedEventCardGrid/u);
-  assert.match(optimizedGrid, /packRelatedCardRows/u);
-  assert.match(optimizedGrid, /desktopRelatedLayout=\{layout\}/u);
+  assert.match(optimizedGrid, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro'/u);
+  assert.match(optimizedGrid, /<AdaptiveEventCardGrid/u);
+  assert.doesNotMatch(optimizedGrid, /packRelatedCardRows/u);
+  assert.doesNotMatch(optimizedGrid, /desktopRelatedLayout=\{layout\}/u);
+  assert.doesNotMatch(optimizedGrid, /<style>/u);
+  assert.match(adaptiveGrid, /packRelatedCardRows\(events/u);
+  assert.match(adaptiveGrid, /desktopRelatedLayout=\{mode === 'packed' \? layout : undefined\}/u);
   assert.match(card, /--lab-row-media-ratio:/u);
   assert.match(card, /\(desktopRelatedCrop \|\| mobileFlowMedia\) && 'event-card__media-shell--dynamic'/u);
   assert.match(card, /'is-image-loading'/u);
@@ -134,6 +140,8 @@ test('desktop static continuation emits stable initial skeleton geometry', async
   assert.match(card, /onload=\{imageLoadHandler\}/u);
   assert.match(card, /onerror=\{imageErrorHandler\}/u);
   assert.match(built, /data-lab-related-card="true"/u);
+  assert.match(built, /data-optimized-event-card-grid/u);
+  assert.match(built, /data-adaptive-event-card-grid/u);
   assert.match(built, /event-card__media-shell--dynamic is-image-loading/u);
   assert.match(built, /aria-busy="true"/u);
   assert.match(built, /--lab-row-media-ratio:/u);
@@ -204,14 +212,21 @@ test('desktop and mobile transport consume one persisted Smart Update duration f
   }
 });
 
-test('July 26 listing renders event 7018 with its exact curated Ruin Keepers medallion', async () => {
-  const built = await readBuilt('date-2026-07-26/index.html');
-  const row = built.match(/<article class="event-row"[^>]*data-event="7018"[\s\S]*?<\/article>/u)?.[0];
-  assert.ok(row, 'event 7018 must remain in the generated July 26 mobile listing');
-  assert.match(row, /data-event-title="Воскресник в Озёрске"/u);
-  assert.match(row, /Озёрск · центр «Крупорушка»/u);
-  assert.match(row, /aria-label="Организатор: Хранители руин"/u);
-  assert.match(row, /\/assets\/organizers\/ruin-keepers\.webp/u);
+test('event 7018 retains its exact curated Ruin Keepers listing contract after its dated route ages out', async () => {
+  const preview = JSON.parse(await read('src/data/preview-events.json'));
+  const catalog = JSON.parse(await read('src/data/organizerMedallions.json'));
+  const listingCard = await read('src/components/listings/ListingEventCard.astro');
+  const event = preview.events.find((item) => item.id === 7018);
+  const medallion = catalog.items.find((item) => item.slug === 'ruin-keepers');
+
+  assert.ok(event, 'event 7018 must remain in the preview source projection');
+  assert.equal(event.title, 'Воскресник в Озёрске');
+  assert.equal(event.city, 'Озёрск');
+  assert.equal(event.venue_name, 'центр «Крупорушка»');
+  assert.ok(medallion, 'Ruin Keepers must remain in the accepted medallion catalog');
+  assert.equal(medallion.ariaLabel, 'Организатор: Хранители руин');
+  assert.equal(medallion.avatarUrl, '/assets/organizers/ruin-keepers.webp');
+  assert.match(listingCard, /getListingIdentityMedallions\(event\)/u);
 });
 
 test('desktop telephone remains a branded reveal-and-copy CTA', async () => {
