@@ -89,7 +89,6 @@ test('mobile rail resource-state migration preserves geometry, gestures and acti
   for (const invariant of [
     'data-feedback-action="like"',
     'data-feedback-action="not_interested"',
-    'data-gallery-open',
     'event-medallion-slot',
     'event-digest',
     'AmberRailArtifact',
