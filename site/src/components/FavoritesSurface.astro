@@ -1,4 +1,5 @@
 ---
+import AdaptiveEventCardGrid from './AdaptiveEventCardGrid.astro';
 import { withBase } from '../lib/events';
 
 const catalogSrc = withBase('/data/personal-feed.json');
@@ -6,6 +7,10 @@ const catalogSrc = withBase('/data/personal-feed.json');
 
 <section
   class="favorites-surface"
+  data-ds-family="FavoritesSurface"
+  data-ds-version="1"
+  data-ds-variant="future-saved-events"
+  data-ds-state="loading"
   data-favorites-surface
   data-catalog-src={catalogSrc}
   data-favorites-state="loading"
@@ -40,13 +45,20 @@ const catalogSrc = withBase('/data/personal-feed.json');
     <a class="secondary-button" href={withBase('/segodnya/')}>Посмотреть события сегодня</a>
   </section>
 
-  <div
-    class="favorites-surface__grid"
-    data-favorites-grid
-    data-feed-card-variant="split-actions"
-    aria-live="polite"
-    hidden
-  ></div>
+  <AdaptiveEventCardGrid
+    events={[]}
+    mode="flow"
+    rowSize={3}
+    responsive="progressive"
+    ariaLive="polite"
+    ariaAtomic={false}
+    ariaLabelledby="favorites-title"
+    className="favorites-surface__grid"
+    rootAttributes={{
+      'data-favorites-grid':'',
+      'data-favorites-runtime-host':'adaptive-v1',
+    }}
+  />
 </section>
 
 <script>
@@ -124,10 +136,25 @@ const catalogSrc = withBase('/data/personal-feed.json');
 
     const setHydrationState = (state) => {
       root.dataset.favoritesState = state;
+      root.dataset.dsState = state;
       if (skeleton instanceof HTMLElement) {
         skeleton.hidden = state !== 'loading';
         skeleton.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
       }
+    };
+
+    const syncAdaptiveDiagnostics = () => {
+      if (!(grid instanceof HTMLElement)) return 0;
+      const cards = Array.from(grid.querySelectorAll(':scope > [data-event-card]'))
+        .filter((card) => card instanceof HTMLElement);
+      const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
+      const count = cards.length;
+      grid.dataset.adaptiveGridSourceCount = String(count);
+      grid.dataset.adaptiveGridRenderedCount = String(count);
+      grid.dataset.adaptiveGridSourceOrder = order;
+      grid.dataset.adaptiveGridRenderedOrder = order;
+      grid.dataset.adaptiveGridRemainderCount = String(count % 3);
+      return count;
     };
 
     const renderJoined = async ({ catalog, local, remoteRows = [], snapshot, remoteFailed = false, cloudSettled = false }) => {
@@ -146,7 +173,7 @@ const catalogSrc = withBase('/data/personal-feed.json');
         card.dataset.savedRank = String(index);
         grid.appendChild(card);
       }
-      const rendered = grid.querySelectorAll(':scope > [data-event-card]').length;
+      const rendered = syncAdaptiveDiagnostics();
       grid.hidden = rendered === 0;
       if (empty instanceof HTMLElement) empty.hidden = rendered !== 0;
       if (authRequired instanceof HTMLElement) {
@@ -278,8 +305,7 @@ const catalogSrc = withBase('/data/personal-feed.json');
     color: var(--muted);
     font-size: clamp(1rem, 1.8vw, 1.2rem);
   }
-  .favorites-surface__skeleton,
-  .favorites-surface__grid {
+  .favorites-surface__skeleton {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: clamp(.85rem, 1.6vw, 1.25rem);
@@ -321,13 +347,11 @@ const catalogSrc = withBase('/data/personal-feed.json');
   .favorites-surface__empty p { color: var(--muted); }
   .favorites-surface__status { min-height: 1.5rem; color: var(--muted); font-weight: 730; }
   @media (max-width: 960px) {
-    .favorites-surface__skeleton,
-    .favorites-surface__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .favorites-surface__skeleton { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 620px) {
     .favorites-surface { width: min(100% - 1.4rem, 40rem); padding-top: .75rem; }
-    .favorites-surface__skeleton,
-    .favorites-surface__grid { grid-template-columns: minmax(0, 1fr); }
+    .favorites-surface__skeleton { grid-template-columns: minmax(0, 1fr); }
     .favorites-skeleton-card { min-height: 28rem; }
   }
   @media (prefers-reduced-motion: reduce) {
