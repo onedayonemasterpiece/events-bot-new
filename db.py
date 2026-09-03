@@ -671,6 +671,47 @@ class Database:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS ix_event_date_inferred ON event(date_is_inferred, date)"
             )
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS event_change_log(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_ref TEXT NOT NULL UNIQUE,
+                    operation_kind TEXT NOT NULL,
+                    actor_subject TEXT NOT NULL,
+                    actor_client_id TEXT NOT NULL,
+                    actor_audience TEXT NOT NULL,
+                    idempotency_hash TEXT NOT NULL,
+                    action_digest TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_url TEXT NOT NULL,
+                    request_json JSON NOT NULL,
+                    status TEXT NOT NULL,
+                    event_id INTEGER,
+                    before_json JSON,
+                    after_json JSON,
+                    changed_fields_json JSON,
+                    organizer_comment TEXT,
+                    base_event_revision TEXT,
+                    result_event_revision TEXT,
+                    result_json JSON,
+                    error_code TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    started_at TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    UNIQUE(actor_subject, actor_client_id, actor_audience, operation_kind, idempotency_hash),
+                    FOREIGN KEY(event_id) REFERENCES event(id) ON DELETE SET NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_change_log_status_updated "
+                "ON event_change_log(status,updated_at)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS ix_event_change_log_event "
+                "ON event_change_log(event_id,created_at)"
+            )
             dbg("eventposter")
 
             eventposter_columns_before = await (

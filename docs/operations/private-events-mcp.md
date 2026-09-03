@@ -108,9 +108,16 @@ Codex exposes exactly these seven tools; ChatGPT and OpenCode retain them unchan
 | `incident_get` | incident + operations | report/run/job evidence document |
 | `operations_snapshot` | `operations:read` | bounded state, failures and SQLite health |
 
-These tools are read-only, non-destructive and idempotent. The event SQLite file
-is opened with URI `mode=ro`, `PRAGMA query_only=ON`, bounded rows and a VM/time
-deadline. There is no raw SQL, shell, arbitrary outbound HTTP or write tool.
+These seven base tools are read-only, non-destructive and idempotent. The event
+SQLite evidence projection is opened with URI `mode=ro`, `PRAGMA query_only=ON`,
+bounded rows and a VM/time deadline. There is no raw SQL, shell or arbitrary
+outbound HTTP tool.
+
+For the owner ChatGPT/OpenCode projection only, R0 may extend
+`operations_snapshot` with an explicitly requested, at-most-ten-row `job_queue`
+page from the existing `JobOutbox`. It returns no job payload or last-result
+body, and `fetch(id="job:<id>")` remains the detailed evidence path. Codex keeps
+the exact seven descriptors without these extra input fields.
 
 The ordinary structured-result response cap remains
 `PRIVATE_EVENTS_MCP_MAX_RESPONSE_BYTES`. Authenticated `tools/list` metadata is
@@ -118,6 +125,53 @@ separately bounded at 512 KiB (and is still charged to the shared hourly egress
 budget), because the full stable-scope ChatGPT/OpenCode catalog can exceed the
 ordinary 128 KiB data-result default. This does not raise provider-content,
 incident or evidence response limits.
+
+## Owner event creation (R1, source default-off)
+
+The same EventsBot MCP process can expose three owner-only tools when
+`PRIVATE_EVENTS_MCP_EVENT_CREATE_ENABLED=1` and the OAuth grant includes
+`events:write`:
+
+| Tool | Scope | R1 contract |
+|---|---|---|
+| `event_create_prepare` | `events:write` | validate and freeze one exact source request; no canonical DB mutation |
+| `event_create_commit` | `events:write` | reserve one idempotent canonical operation and start the existing parser + full Smart Update path |
+| `event_operation_get` | `operations:read` | poll durable accepted/rejected/failed/outcome-unknown state and event/job refs |
+
+R1 is deliberately narrow:
+
+- exactly one parsed event per committed request; multi-event packets are
+  rejected before Event/EventSource/JobOutbox mutation;
+- only `text_policy=smart_rewrite`; exact/original text, generic edits and
+  lifecycle changes remain unavailable;
+- festival-level programme sources are rejected into a dedicated reviewed
+  intake instead of silently entering the legacy festival queue;
+- no media upload, promo campaign or partner write projection;
+- Smart Update remains the only Event writer and its existing
+  `schedule_event_update_tasks()` remains the only ordinary fan-out owner;
+- the MCP handler never invokes Telegram, VK or Telegraph directly. Immediate
+  legacy page rebuild switches are ignored only for this queue-owned request,
+  so the canonical event commit is followed by ordinary `JobOutbox` work;
+- operation state is stored in the canonical event DB `event_change_log`, not
+  in the separate OAuth/social-workspace SQLite file;
+- the feature flag is strict and default-off. Disabled tools are absent from
+  `tools/list`; existing OAuth grants do not receive `events:write`
+  automatically.
+
+Call sequence:
+
+```text
+event_create_prepare(raw_text, source_url|source_external_id, idempotency_key)
+→ event_create_commit(same fields, preparation_ref, action_digest)
+→ event_operation_get(operation_ref) until terminal
+→ event_get(event_id) and operations_snapshot(include_jobs=true,event_id=...)
+```
+
+A timeout or stale in-progress operation becomes `outcome_unknown`. The caller
+must not create a new idempotency key blindly; first inspect canonical event and
+source evidence. Until exact-main deploy, OAuth scope refresh and authenticated
+readback pass, this section describes staged runtime code rather than a live
+production capability.
 
 ## ChatGPT social workspace
 

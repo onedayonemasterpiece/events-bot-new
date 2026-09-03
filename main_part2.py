@@ -22620,6 +22620,7 @@ def create_app() -> web.Application:
         social_adapters=private_mcp_social_adapters,
         social_workspace_adapters=private_mcp_workspace_adapters,
         asset_ingestor=private_mcp_asset_store,
+        event_database=db,
     )
     SimpleRequestHandler(dp, bot).register(app, path="/webhook")
     setup_application(app, dp, bot=bot)
