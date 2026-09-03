@@ -66,10 +66,38 @@ test('priority and fallback are explicit named variants rather than fake univers
     assert.ok(source.includes('data-media-frame-fallback'), `${file} misses fallback anatomy`);
   }
 
-  const mobileRow = await read('src/components/listings/MobileListingRailRow.astro');
+  const [mobileRow, mobileSurface] = await Promise.all([
+    read('src/components/listings/MobileListingRailRow.astro'),
+    read('src/components/listings/MobileListingRailSurface.astro'),
+  ]);
   assert.match(mobileRow, /return imageUrl \? \([\s\S]*?\) : null;/u,
-    'mobile rail intentionally omits an unavailable media segment instead of painting a second fallback card');
-  assert.doesNotMatch(mobileRow, /data-media-frame-fallback/u);
+    'mobile rail intentionally omits an unavailable media segment instead of painting a fallback-only card');
+
+  const openingFrame = /return imageUrl \? \(\s*(<span[\s\S]*?>)/u.exec(mobileRow)?.[1] || '';
+  assert.ok(openingFrame, 'URL-backed mobile media frame opening tag must be present');
+  assert.match(openingFrame, /data-media-frame-resource-state="pending"/u);
+  assert.doesNotMatch(openingFrame, /\bdata-media-frame-fallback\b/u,
+    'a pending URL-backed frame must not publish the root fallback marker');
+
+  const directHiddenFallback = '<span class="media-frame__fallback" data-media-frame-fallback aria-hidden="true" hidden></span>';
+  assert.equal(occurrences(mobileRow, directHiddenFallback), 1,
+    'the URL-backed frame source must contain exactly one direct hidden fallback child');
+  assert.match(
+    mobileRow,
+    /<img[\s\S]*?data-media-frame-image[\s\S]*?\/>\s*<span class="media-frame__fallback" data-media-frame-fallback aria-hidden="true" hidden><\/span>\s*<\/span>\s*\) : null;/u,
+    'the fallback must be a direct sibling of the image inside the rendered URL-backed frame',
+  );
+
+  assert.match(mobileSurface, /shell\.setAttribute\('data-media-frame-fallback', ''\)/u,
+    'broken runtime state must add the root fallback marker');
+  assert.match(mobileSurface, /if \(fallback\) fallback\.hidden = false/u,
+    'broken runtime state must reveal the existing direct fallback child');
+  assert.match(mobileSurface, /shell\.removeAttribute\('data-media-frame-fallback'\)/u,
+    'loaded runtime state must remove the root fallback marker');
+  assert.match(mobileSurface, /if \(fallback\) fallback\.hidden = true/u,
+    'loaded runtime state must hide the same direct fallback child');
+  assert.doesNotMatch(mobileRow, /return\s+!imageUrl\s*\?/u,
+    'absence of imageUrl must not create a fallback-only media segment');
 });
 
 test('EventMediaRail exposes all three variants and both input contracts', async () => {
