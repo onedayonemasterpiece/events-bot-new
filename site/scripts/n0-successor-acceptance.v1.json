@@ -2,58 +2,55 @@
   "schema_version": "kenigevents.n0-successor-acceptance.v1",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_version": "1.9.0",
+  "pm0_version": "2.2.0",
   "evidence_cutoff": {
     "issue_comment": 5527356024,
-    "timestamp": "2026-09-03T14:34:56Z"
+    "timestamp": "2026-09-03T14:44:36Z"
   },
   "owner": "N0",
   "authority": {
-    "integration": {
+    "programme": {
       "branch": "integration/ui-normalization-launch-20260902",
       "head": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
-      "classification": "CURRENT_PROGRAMME_DOC_CHECKPOINT_NOT_CANDIDATE_ANCESTOR"
+      "classification": "CURRENT_PROGRAMME_CHECKPOINT"
     },
-    "combined_candidate": {
+    "legacy_combined_candidate": {
       "branch": "r0/ui-normalization-current-candidate-20260903",
       "head": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
-      "decision": "ACCEPTED_PRECURSOR"
+      "decision": "ACCEPTED_PRECURSOR_NOT_CURRENT_SUCCESSOR"
+    },
+    "current_integrated_successor_base": {
+      "branch": "agent/static-site-single-kaggle-contract",
+      "head": "9152994b026b34d60d21d68bfa2a4d7d8dc20f3e",
+      "parents": [
+        "0d92654b9637e31753fed5bd4bf6a4a66763c079",
+        "1d145d5efd2a332eff29e69b6afcf43414769906"
+      ],
+      "decision": "SOURCE_ACCEPTED_UNBUILT_SUCCESSOR_BASE",
+      "runtime_acceptance": false,
+      "public_url": null,
+      "included_scope": [
+        "one canonical real/golden Kaggle pipeline",
+        "programme checkpoint ancestry",
+        "build-prefixed immutable asset origin",
+        "Golden frozen-clock service-share skip",
+        "canonical MediaFrame protocol",
+        "coherent AdaptiveEventCardGrid input/source/rendered diagnostics",
+        "named remainder variants",
+        "EventCard, ListingEventCard, EventMediaRail and MobileListingRailRow MediaFrame bindings"
+      ]
+    },
+    "n0_branch": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "minimum_reviewed_commit": "41c9e1200f10e25c3631b71ff84c7546c24e140b",
+      "resolve_remote_head_at_merge": true,
+      "decision": "SOURCE_ACCEPTED_PENDING_R0_INTEGRATION_AND_EXECUTABLE_TESTS"
     },
     "thin_sot": {
       "repository": "onedayonemasterpiece/lovekgd-design-system",
       "branch": "integration/launch-normalized-sot-penpot-20260902",
-      "head": "f3da3c2e8e395ee578a008b208470a3eb64740f8"
-    },
-    "kaggle_pipeline_source": {
-      "branch": "agent/static-site-single-kaggle-contract",
-      "observed_head": "0d92654b9637e31753fed5bd4bf6a4a66763c079",
-      "runtime_acceptance_rule": "ONLY_EXACT_BUILT_SHA_INHERITS_A_KAGGLE_RESULT",
-      "observed_head_runtime_status": "UNPUBLISHED_EXACT_SHA_KAGGLE_RETRY_PASS",
-      "programme_checkpoint_ancestor": {
-        "head": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
-        "merge_commit": "5346c4ff1eee59d3df7361bb19a06d357275833c"
-      },
-      "unpublished_exact_sha_kaggle_retry": {
-        "issue_comment": 5527345279,
-        "build_id": "preview-golden-0d92654b-20270604-clock-v1",
-        "dataset": "zigomaro/static-site-builder-input-20260903142938-99a218",
-        "kernel": "zigomaro/kenigevents-static-site-builder",
-        "status": "COMPLETE",
-        "result_sha256": "9c84a0e8c6d54f6b7ec50c3e15ab76734fd8ad4baf3c90dd47e6cf864eab624e",
-        "artifact_sha256": "8a91c00c078da45dce90df15205748dc8d5e09bf2c113badc0217a417a0edcae",
-        "service_share": {
-          "status": "skipped",
-          "reason": "golden_preview_frozen_clock"
-        },
-        "events": 288,
-        "page_classes": ["all"],
-        "publication": "INTENTIONALLY_NOT_PUBLISHED",
-        "accepted_as": "PIPELINE_SOURCE_AND_FROZEN_CLOCK_DIAGNOSTIC_ONLY"
-      }
-    },
-    "n0_branch": {
-      "branch": "work/ui-normalization-n0-checklist-20260903",
-      "base": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
-      "head_resolution": "Resolve the exact remote tip after this manifest and its tests are committed."
+      "head": "c23ea41b06fb6a629aeb56105dab4afe889da876",
+      "status_doc_updated": true
     }
   },
   "accepted_golden_transaction": {
@@ -97,12 +94,12 @@
       "v0_independent_verdict": "PENDING"
     },
     "checklist_evidence": {
-      "4": "FULL_GOLDEN_KAGGLE_REVIEW_PREVIEW_ACCEPTED",
-      "6": "FROZEN_KALININGRAD_CLOCK_PUBLISHED",
-      "7": "EXACT_5_6_5_DENSITY_PUBLISHED",
-      "8": "EXACT_WEEKEND_OCCURRENCE_REUSE_PUBLISHED",
-      "9": "STRESS_MATRIX_PUBLISHED_V0_VISUAL_VERDICT_PENDING",
-      "10": "PINNED_CORPUS_AND_ASSET_IDENTITY_PUBLISHED_APPEND_ONLY_WINDOW_ACTIVE"
+      "4": "DONE_FULL_GOLDEN_KAGGLE_REVIEW_PREVIEW",
+      "6": "DONE_FROZEN_KALININGRAD_CLOCK",
+      "7": "DONE_EXACT_5_6_5_DENSITY",
+      "8": "DONE_EXACT_WEEKEND_OCCURRENCE_REUSE",
+      "9": "PARTIAL_PUBLISHED_STRESS_MATRIX_V0_VISUAL_VERDICT_PENDING",
+      "10": "DONE_PINNED_CORPUS_AND_ASSETS_APPEND_ONLY_WINDOW_ACTIVE"
     },
     "does_not_close": [
       "PM0 item 3 fresh-real full Kaggle Review Preview",
@@ -113,54 +110,109 @@
       "thin S or Penpot equality"
     ]
   },
+  "pipeline_diagnostics": {
+    "exact_sha": "0d92654b9637e31753fed5bd4bf6a4a66763c079",
+    "issue_comment": 5527345279,
+    "build_id": "preview-golden-0d92654b-20270604-clock-v1",
+    "dataset": "zigomaro/static-site-builder-input-20260903142938-99a218",
+    "kernel": "zigomaro/kenigevents-static-site-builder",
+    "status": "COMPLETE",
+    "result_sha256": "9c84a0e8c6d54f6b7ec50c3e15ab76734fd8ad4baf3c90dd47e6cf864eab624e",
+    "artifact_sha256": "8a91c00c078da45dce90df15205748dc8d5e09bf2c113badc0217a417a0edcae",
+    "service_share": {
+      "status": "skipped",
+      "reason": "golden_preview_frozen_clock"
+    },
+    "events": 288,
+    "page_classes": ["all"],
+    "publication": "INTENTIONALLY_NOT_PUBLISHED",
+    "accepted_as": "PIPELINE_SOURCE_AND_FROZEN_CLOCK_DIAGNOSTIC_ONLY"
+  },
   "role_outputs": {
     "F0": {
       "branch": "work/ui-normalization-f0-wave-3-20260903",
-      "head": "63230e4f0552125494d784c4493390e0a1da2d6c",
-      "merge_base": "bbbc9b09720298f43653c36bd5343385cae63102",
+      "head": "77c0833a7f5d2542bcfb8313a3353f42b75233dd",
+      "merge_base_already_in_precursor": "bbbc9b09720298f43653c36bd5343385cae63102",
+      "post_base_commit_count": 12,
       "candidate_relation": "DIVERGED_POST_CONTAINED_BASE",
-      "decision": "SELECTIVE_POST_BASE_REVIEW_REQUIRED",
-      "runtime_status": "NOT_RUN"
+      "decision": "SELECTIVE_SOURCE_ACCEPTED_NOT_END_TO_END_COMPLETE",
+      "accepted_functional_commits": [
+        "fd47202484da3abb2eff0fac70c6123a0cebba4b",
+        "11de3f042de2bd9205e7a594f78813566d5be5d6",
+        "2e95a34abd39317766abfe19dae8c6b9d4676da2",
+        "77c0833a7f5d2542bcfb8313a3353f42b75233dd"
+      ],
+      "accepted_scope": [
+        "remove duplicate Badge/Field/StatePanel visual ownership from legacy design-system.css",
+        "bind remaining central legacy icon geometry to exactly four icon roles",
+        "add token-only interest-club route foundation",
+        "add canonical catalog-grid semantic icon",
+        "expose delegated and local semantic-icon role diagnostics"
+      ],
+      "remaining_source_evidence": {
+        "consumer_files_with_raw_lengths": 84,
+        "direct_font_family_consumers": [
+          "site/src/components/listings/MobileListingRailSurface.astro",
+          "site/src/layouts/EventLayout.astro",
+          "site/src/layouts/PrelaunchLayout.astro"
+        ],
+        "transitional_local_icon_alias_consumers": [
+          "site/src/components/InterestProfile.astro",
+          "site/src/components/InterestClubCard.astro",
+          "site/src/components/artifacts/ArtifactCollection.astro"
+        ],
+        "interest_club_catalog_icon_state": "A0_REPLACEMENT_PENDING_OR_CANONICAL_SVG_BOUND_AT_RUNTIME_CHECK"
+      },
+      "runtime_status": "NOT_RUN_ON_CURRENT_SUCCESSOR",
+      "browser_status": "V0_OWNED_NOT_CLAIMED"
     },
     "M0": {
       "branch": "work/ui-normalization-m0-continuity-20260903",
-      "valid_head": "e620e063472a20f5e703bfb7845cb9ad5e302cfe",
+      "head": "0bf25ff6c17e1b649b1a64919502103ba60b0d43",
       "invalid_result_sha_rejected": "e620e69fd8fb4641415320beaa3ea9c1003beee8",
-      "lineage": {
-        "merge_base": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
-        "ahead_by": 23,
-        "behind_by": 0
-      },
-      "decision": "SOURCE_SUBSTANTIVE_NOT_CANDIDATE_READY",
-      "accepted_scope": [
-        "canonical MediaFrame owner and protocol",
-        "EventCard and ListingEventCard MediaFrame bindings",
-        "EventMediaRail variants and transport diagnostics",
-        "MobileListingRailRow MediaFrame and runtime-state diagnostics",
-        "AdaptiveEventCardGrid named remainder variants",
-        "M0 regression contracts"
-      ],
-      "blocking_drift": {
+      "integrated_parent": "1d145d5efd2a332eff29e69b6afcf43414769906",
+      "integrated_by": "9152994b026b34d60d21d68bfa2a4d7d8dc20f3e",
+      "decision": "SOURCE_ACCEPTED_TIP_PARTIALLY_INTEGRATED",
+      "resolved_drift": {
         "code": "ADAPTIVE_SOURCE_COUNT_ORDER_CARDINALITY",
-        "fact": "source-count publishes events.length while source-order publishes events.slice(0, limit)",
-        "required_resolution": "Every published count/order pair must describe the same population and have equal cardinality."
+        "resolution": "input/source/rendered populations now expose separate coherent count/order pairs",
+        "diagnostics_owner": "AdaptiveEventCardGrid",
+        "diagnostics_contract": "input-source-rendered-v1"
       },
-      "runtime_status": "NOT_RUN",
+      "accepted_pending_integration_commits": [
+        "da089b95817ed3a3a6c0c5b37adfd16a686235fb",
+        "07bc9c21fc67e24bd26a9268c0df6e459aff004e",
+        "1401b21d9ec68fe38f879de86028f468b515a8d0",
+        "0bf25ff6c17e1b649b1a64919502103ba60b0d43"
+      ],
+      "pending_scope": [
+        "diagnostics ownership negative regression",
+        "desktop rail migration/removal boundary",
+        "fail-closed ListingEventCard broken-media fallback state",
+        "ListingEventCard fallback regression"
+      ],
+      "runtime_status": "NOT_RUN_ON_FULL_M0_TIP",
       "browser_status": "V0_OWNED_NOT_CLAIMED"
     },
     "A0": {
       "branch": "work/ui-normalization-a0-wave-3-20260903",
       "head": "8f96c659cd710091fba61eb65cb4846cccdd2c38",
       "merge_base": "25adccae5975c447f9ee734b110adfb2f8a9d6ae",
-      "decision": "SELECTIVE_PATCH_ONLY_NOT_WHOLESALE",
+      "decision": "HOLD_WHOLESALE_TIP_FOR_A0_COMPLETION_OR_SELECTIVE_PATCH",
       "standalone_build_target": false,
-      "standalone_failure": "Later sources import F0 roots absent from the A0 branch tree.",
+      "route_family_fraction": "5/9",
       "product_removal_rejected_commit": "5e466d65bc2b71a814c26c063f90aa07709de08f",
       "product_behavior_restore_commit": "84399b51b77701be714fdc84429318a9a28f93fd",
       "restore_decision": "ACCEPTED_CORRECTION",
+      "writer_blocked_paths": [
+        "site/src/pages/festivali/index.astro",
+        "site/src/components/ExhibitionsPersonalSurface.astro",
+        "site/src/components/DesktopEventPage.astro",
+        "site/src/layouts/EventLayout.astro",
+        "site/src/components/listings/MobileListingRailSurface.astro"
+      ],
       "open_drift": [
         "Popular density control changes hidden donor layouts rather than the visible canonical rail",
-        "later consumers locally override canonical icon-role dimensions",
         "actual route and layout owners remain partial",
         "A0 branch touches the M0-owned OptimizedEventCardGrid and must be split at integration"
       ],
@@ -170,40 +222,152 @@
         "keyboard radio behavior",
         "pinch behavior",
         "visible-event anchor preservation"
+      ],
+      "fresh_real_minimum_candidate_policy": "DO_NOT_DELAY_FIRST_REAL_PREVIEW_FOR_NON_VERTICAL_SLICE_A0_COMPLETION",
+      "post_real_successor_policy": "INTEGRATE_COMPLETED_A0_ROUTE_FAMILIES_AND_V0_DRIFT_FIXES_SELECTIVELY"
+    }
+  },
+  "candidate_plan": {
+    "nearest_full_real_candidate": {
+      "base": "9152994b026b34d60d21d68bfa2a4d7d8dc20f3e",
+      "status": "PARTIAL_INTEGRATION_REQUIRED",
+      "include": [
+        {
+          "source": "work/ui-normalization-n0-checklist-20260903",
+          "selection": "CURRENT_REMOTE_HEAD",
+          "reason": "contract-1.9 acceptance, one-pipeline policy and transition regression"
+        },
+        {
+          "source": "work/ui-normalization-f0-wave-3-20260903",
+          "selection": "POST_bbbc9b_SOURCE_PATHS_THROUGH_77c0833",
+          "reason": "central owner closure and exactly-four icon-role diagnostics"
+        },
+        {
+          "source": "work/ui-normalization-m0-continuity-20260903",
+          "selection": "FOUR_COMMITS_AFTER_1d145d5_THROUGH_0bf25ff",
+          "reason": "fail-closed broken-media state and exact negative/removal contracts"
+        }
+      ],
+      "hold_for_next_successor": [
+        {
+          "source": "work/ui-normalization-a0-wave-3-20260903",
+          "reason": "5/9 route families, five ready owned paths and unresolved visible Popular density binding"
+        }
+      ],
+      "preserve": [
+        "c124ca2a810f100122230b7f51ec1221f7e74be4 responsive specificity correction",
+        "one Kaggle builder and one Object Storage publisher",
+        "DateListingSurface and WeekendListingSurface as distinct compositions",
+        "Popular Large/Compact user-facing behavior",
+        "production root and stable ICS keys"
+      ],
+      "reject": [
+        "e620e69fd8fb4641415320beaa3ea9c1003beee8 invalid M0 SHA",
+        "5e466d65bc2b71a814c26c063f90aa07709de08f semantic removal as final state",
+        "local full-preview publication commands",
+        "whole-current-A0-tip merge",
+        "runtime inheritance from an earlier build"
+      ]
+    },
+    "post_real_successor": {
+      "status": "WAITING_FOR_A0_COMPLETION_AND_V0_DRIFT",
+      "inputs": [
+        "completed A0 nine-family source matrix or exact selective patches",
+        "fresh-real V0 DRIFT findings",
+        "any later accepted F0/M0 tips"
       ]
     }
   },
-  "pipeline_source_decisions": {
-    "built_transaction_commits": {
-      "e7e8802675103a04c207564f8dccd88a8c0c65de": "ACCEPT one real/golden data-mode Kaggle rail",
-      "e3f6f9dcd5f0103145389556f3e8fbc9b1e59b7b": "ACCEPT bounded create-only publication concurrency",
-      "c124ca2a810f100122230b7f51ec1221f7e74be4": "ACCEPT built responsive-selector correction; M0 successor must retain equivalent behavior",
-      "84504f30eebc334deba46e94365601c3d572c5c0": "ACCEPT build-prefixed asset origin"
+  "gate_graph": [
+    {
+      "id": "CURRENT_SOURCE_CANDIDATE",
+      "owner": "R0",
+      "status": "PARTIAL",
+      "requires": [
+        "integrate candidate_plan.nearest_full_real_candidate.include onto its exact base",
+        "preserve candidate_plan.nearest_full_real_candidate.preserve",
+        "exclude candidate_plan.nearest_full_real_candidate.reject",
+        "run required_source_commands_after_integration"
+      ],
+      "output": "one exact tested successor SHA"
     },
-    "post_transaction_head": "0d92654b9637e31753fed5bd4bf6a4a66763c079",
-    "post_transaction_decision": "ACCEPT_SOURCE_AND_UNPUBLISHED_EXACT_SHA_KAGGLE_DIAGNOSTIC_NO_PUBLIC_RUNTIME_INHERITANCE"
-  },
-  "next_real_gate": {
-    "status": "OPEN",
-    "required": [
-      "one current integrated successor SHA with accepted source deltas only",
-      "fresh immutable production snapshot with source time/count/hash identity",
-      "the canonical events-bot-new Kaggle StaticSiteBuilder",
-      "--preview-data-mode real",
-      "--page-class all",
-      "checked artifact and create-only immutable-prefix publication",
-      "HTTP-200 exact /<buildId>/__preview/",
-      "matching preview-build.json and Kaggle operation/artifact identity",
-      "independent V0 DOM/computed-style verdict"
-    ],
-    "golden_build_is_not_a_substitute": true
-  },
+    {
+      "id": "FULL_REAL_KAGGLE_REVIEW_PREVIEW",
+      "owner": "R0",
+      "status": "BLOCKED_BY_CURRENT_SOURCE_CANDIDATE",
+      "requires": [
+        "fresh immutable production snapshot with source time/count/hash identity",
+        "canonical events-bot-new Kaggle StaticSiteBuilder",
+        "--preview-data-mode real",
+        "--page-class all",
+        "checked artifact",
+        "create-only immutable-prefix publication",
+        "HTTP-200 exact owner URL",
+        "matching preview-build.json and Kaggle operation/artifact identity"
+      ],
+      "output": "N0-reviewable exact fresh-real URL"
+    },
+    {
+      "id": "V0_REAL_DOM_COMPUTED_STYLE_AUDIT",
+      "owner": "V0",
+      "status": "BLOCKED_BY_FULL_REAL_KAGGLE_REVIEW_PREVIEW",
+      "requires": [
+        "proper @GitHub @my-browser-bridge activation",
+        "exact accepted fresh-real URL",
+        "actual DOM and computed-style route/viewport matrix"
+      ],
+      "output": "independent PASS or factual DRIFT"
+    },
+    {
+      "id": "ASTRO_NORMALIZATION_PASS",
+      "owner": "N0",
+      "status": "BLOCKED_BY_V0_AND_REMAINING_ROUTE_SOURCE",
+      "requires": [
+        "no critical V0 DRIFT",
+        "accepted foundation/icon/component/media/grid/shell actual-consumer lineage",
+        "completed launch-scope route normalization"
+      ],
+      "output": "accepted executable Astro normalization"
+    },
+    {
+      "id": "THIN_S_BINDING_READY",
+      "owner": "N0",
+      "status": "BLOCKED_BY_ASTRO_NORMALIZATION_PASS",
+      "requires": [
+        "machine-readable accepted family/root/variant/state/consumer/asset bindings",
+        "exact V0 acceptance cases",
+        "rollback and removal boundaries"
+      ],
+      "output": "thin-S records bound to accepted Astro source"
+    },
+    {
+      "id": "PENPOT_NATIVE_MATERIALIZATION_READY",
+      "owner": "R0.PENPOT",
+      "status": "BLOCKED_BY_THIN_S_BINDING_READY",
+      "requires": [
+        "readable native masters and variants",
+        "linked actual-route instances",
+        "no detached lookalike substitution"
+      ],
+      "output": "current Penpot candidate for V0 Golden equality"
+    },
+    {
+      "id": "RELEASE_CANDIDATE_READY",
+      "owner": "N0",
+      "status": "BLOCKED_BY_GOLDEN_A_S_P_PASS",
+      "requires": [
+        "Golden A=S=P V0 PASS",
+        "production-form Kaggle build on exact accepted SHA",
+        "release/publication/rollback verification"
+      ],
+      "output": "owner-reviewable release candidate"
+    }
+  ],
   "v0_triggers": {
     "golden": {
-      "status": "READY_PLATFORM_BLOCKED",
+      "status": "READY_REQUIRES_PROPER_BROWSER_ACTIVATION",
       "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
       "scope": "Golden route/media/grid/state audit; no fresh-real voice-review credit",
-      "platform_boundary": "Existing V0 execution surface has no callable my-browser-bridge namespace.",
       "latest_v0_comment": 5527356024,
       "v0_observations": 0,
       "v0_pass": false
@@ -216,18 +380,20 @@
   "required_source_commands_after_integration": [
     "cd site && npm run test:n0-successor-acceptance",
     "cd site && npm run test:golden-preview-contract",
+    "cd site && npm run check:preview",
     "cd site && npm run check:design-system-production-surfaces",
-    "cd site && npm run check:design-system-iconography"
+    "cd site && npm run check:design-system-iconography",
+    "cd site && node --test tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/listing-event-card-media-fallback.test.mjs"
   ],
   "prohibitions": [
     "do not publish a full or focused owner preview outside the canonical Kaggle pipeline",
     "do not use deploy:preview or deploy:golden-preview as a launch path",
-    "do not infer runtime acceptance from a newer unbuilt branch head",
+    "do not infer runtime acceptance from an earlier exact-SHA build",
     "do not integrate the invalid M0 result SHA",
-    "do not integrate the M0 head until the source-count/source-order population contract is coherent",
     "do not merge the current A0 branch wholesale",
     "do not delete or silently retire the Popular density choice without an owner product decision",
     "do not treat R0 browser smoke as a V0 verdict",
-    "do not treat Golden as fresh-real preview evidence"
+    "do not treat Golden as fresh-real preview evidence",
+    "do not open thin-S or Penpot materialization before accepted executable Astro and required V0 evidence"
   ]
 }
