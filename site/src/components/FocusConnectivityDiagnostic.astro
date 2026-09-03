@@ -1,4 +1,6 @@
 ---
+import './design-system/product-contour-foundations.css';
+
 interface Props {
   supabaseUrl: string;
   relayUrl?: string;
@@ -15,6 +17,11 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
 
 <main
   class="connectivity"
+  data-ds-family="FocusConnectivityDiagnostic"
+  data-ds-version="1"
+  data-ds-variant="resilient-route-probe"
+  data-ds-state="idle"
+  data-ke-foundation-consumer="focus-connectivity"
   data-focus-connectivity
   data-supabase-url={supabaseUrl}
   data-supabase-relay-url={relayUrl}
@@ -27,7 +34,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     <p class="connectivity__lead">
       Нажмите одну кнопку. Проверка ничего не меняет и не отправляет писем.
     </p>
-    <button class="connectivity__run" type="button" data-connectivity-run>Начать проверку</button>
+    <button class="connectivity__run" type="button" data-ke-button-compat="runtime-hook" data-connectivity-run>Начать проверку</button>
     <p class="connectivity__status" data-connectivity-status role="status">
       Обычно проверка занимает 1–3 секунды.
     </p>
@@ -64,7 +71,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
         <span>Строка результата</span>
         <input type="text" readonly data-connectivity-copy value="" />
       </label>
-      <button class="connectivity__copy-button" type="button" data-connectivity-copy-button>
+      <button class="connectivity__copy-button" type="button" data-ke-button-compat="runtime-hook" data-connectivity-copy-button>
         Скопировать результат
       </button>
     </div>
@@ -172,6 +179,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
 
   runButton?.addEventListener('click', async () => {
     if (!root || !runButton || coolingDown) return;
+    root.dataset.dsState = 'checking';
     const authRuntime = document.querySelector<HTMLElement>('[data-static-site-auth-runtime]');
     const supabaseUrl = String(root.dataset.supabaseUrl || authRuntime?.dataset.supabaseUrl || '').replace(/\/+$/u, '');
     const relayUrl = String(root.dataset.supabaseRelayUrl || authRuntime?.dataset.supabaseRelayUrl || '').replace(/\/+$/u, '');
@@ -296,6 +304,7 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
       .filter((result) => result.id === 'framework-auth' || result.id === 'framework-data')
       .every((result) => result.state === 'ok');
     const controlOk = measured.find((result) => result.id === 'ydb-control')?.state === 'ok';
+    root.dataset.dsState = failed === 0 ? 'complete' : 'degraded';
     if (status) {
       status.textContent = failed === 0
         ? 'Проверка завершена.'
@@ -372,24 +381,24 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     display: grid;
     place-items: start center;
     padding: max(.7rem, env(safe-area-inset-top)) .75rem max(.8rem, env(safe-area-inset-bottom));
-    color: #33261e;
-    font-family: var(--ke-font-sans, system-ui, sans-serif);
+    color: var(--ke-color-connectivity-text);
+    font-family: var(--ke-font-family-sans);
   }
   .connectivity__card {
     width: 100%;
-    max-width: 520px;
+    max-width: var(--ke-connectivity-card-max);
     min-width: 0;
     display: grid;
     gap: .7rem;
     padding: clamp(1rem, 4vw, 1.5rem);
-    border: 1px solid #e3d2bd;
-    border-radius: 1.35rem;
-    background: #fffdf8;
-    box-shadow: 0 16px 40px rgb(69 42 25 / 12%);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-connectivity-card-border);
+    border-radius: var(--ke-connectivity-card-radius);
+    background: var(--ke-color-connectivity-card-surface);
+    box-shadow: var(--ke-elevation-connectivity-card);
   }
   .connectivity__eyebrow {
     margin: 0;
-    color: #9e3f20;
+    color: var(--ke-color-connectivity-eyebrow);
     font-size: .78rem;
     font-weight: 900;
     letter-spacing: .12em;
@@ -400,18 +409,20 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   .connectivity__run {
     width: 100%;
     min-width: 0;
-    min-height: 3.15rem;
+    min-height: var(--ke-connectivity-action-min-height);
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--ke-shape-radius-pill);
     padding: .8rem 1.25rem;
+    color: var(--ke-color-connectivity-action-text);
+    background: var(--ke-color-connectivity-action);
+    box-shadow: var(--ke-elevation-connectivity-action);
     font: inherit;
     font-weight: 850;
     white-space: normal;
     cursor: pointer;
   }
-  .connectivity__run { color: #fff; background: #a74523; box-shadow: 0 10px 26px rgb(167 69 35 / 24%); }
   .connectivity__run:disabled { cursor: wait; opacity: .72; }
-  .connectivity__status { min-height: 1.4em; color: #75675d; font-size: .9rem; }
+  .connectivity__status { min-height: 1.4em; color: var(--ke-color-connectivity-muted); font-size: .9rem; }
   .connectivity__results { display: grid; gap: .45rem; }
   .connectivity__result {
     display: grid;
@@ -420,13 +431,13 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
     align-items: center;
     padding: .68rem .8rem;
     border-radius: .85rem;
-    background: #f5eee5;
+    background: var(--ke-color-connectivity-result-surface);
   }
   .connectivity__result h2 { margin: 0; font-size: .95rem; }
-  .connectivity__result strong { color: #66564b; }
-  .connectivity__result span { grid-column: 2; color: #75675d; font-size: .75rem; text-align: right; }
-  .connectivity__result[data-state="ok"] strong { color: #1f744e; }
-  .connectivity__result:is([data-state="network_error"], [data-state="timeout"], [data-state="http_error"]) strong { color: #b02c2c; }
+  .connectivity__result strong { color: var(--ke-color-connectivity-result-text); }
+  .connectivity__result span { grid-column: 2; color: var(--ke-color-connectivity-muted); font-size: .75rem; text-align: right; }
+  .connectivity__result[data-state="ok"] strong { color: var(--ke-color-connectivity-success); }
+  .connectivity__result:is([data-state="network_error"], [data-state="timeout"], [data-state="http_error"]) strong { color: var(--ke-color-connectivity-error); }
   .connectivity__receipt {
     display: grid;
     gap: .55rem;
@@ -436,44 +447,44 @@ const ydbControlUrl = 'https://d5da9drpe2ndhlf7c1d5.nkhmighe.apigw.yandexcloud.n
   .connectivity__receipt > p:first-child { font-weight: 850; }
   .connectivity__receipt dl { display: grid; gap: .25rem; margin: 0; }
   .connectivity__receipt dl div { display: flex; justify-content: space-between; gap: 1rem; }
-  .connectivity__receipt dt { color: #7a6a5e; font-size: .78rem; }
+  .connectivity__receipt dt { color: var(--ke-color-connectivity-label); font-size: .78rem; }
   .connectivity__receipt dd { margin: 0; font-size: .82rem; font-weight: 800; text-align: right; }
   .connectivity__send {
     padding: .7rem .8rem;
     border-radius: .8rem;
-    color: #743017;
-    background: #fbe4d6;
+    color: var(--ke-color-connectivity-send-text);
+    background: var(--ke-color-connectivity-send-surface);
     font-size: .86rem;
     font-weight: 750;
   }
   .connectivity__copy {
     display: grid;
     gap: .25rem;
-    color: #7a6a5e;
+    color: var(--ke-color-connectivity-label);
     font-size: .75rem;
   }
   .connectivity__copy input {
     width: 100%;
     min-width: 0;
-    border: 1px solid #d9c5b4;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-connectivity-input-border);
     border-radius: .7rem;
     padding: .62rem .7rem;
-    color: #493329;
-    background: #fff;
+    color: var(--ke-color-connectivity-input-text);
+    background: var(--ke-color-connectivity-input-surface);
     font: 700 .72rem/1.2 ui-monospace, monospace;
   }
   .connectivity__copy-button {
-    min-height: 2.75rem;
-    border: 1px solid #a74523;
-    border-radius: 999px;
+    min-height: var(--ke-size-touch-target);
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-connectivity-copy-border);
+    border-radius: var(--ke-shape-radius-pill);
     padding: .65rem 1rem;
-    color: #8d371b;
-    background: #fff9f3;
-    font: 800 .9rem/1 system-ui, sans-serif;
+    color: var(--ke-color-connectivity-copy-text);
+    background: var(--ke-color-connectivity-copy-surface);
+    font: 800 .9rem/1 var(--ke-font-family-sans);
     cursor: pointer;
   }
   [hidden] { display: none !important; }
   @media (max-width: 460px) {
-    .connectivity__card { border-radius: 1.1rem; }
+    .connectivity__card { border-radius: var(--ke-connectivity-card-radius-mobile); }
   }
 </style>
