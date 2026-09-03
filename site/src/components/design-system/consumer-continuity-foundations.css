@@ -1,0 +1,59 @@
+/*
+ * F0 continuity roles exposed by the latest A0 actual-consumer migrations.
+ *
+ * Token-only registry. A0 keeps ownership of consumer selectors and decides
+ * when to replace the listed literals; these values preserve current pixels.
+ */
+:root {
+  /* HomeHeroTalk residual type, spacing, shape and media geometry. */
+  --ke-home-hero-lead-size: clamp(1rem, 1.8vw, 1.22rem);
+  --ke-home-hero-lead-line: 1.48;
+  --ke-home-hero-actions-gap: 0.65rem;
+  --ke-home-hero-actions-margin-top: 1.2rem;
+  --ke-home-feature-radius: var(--ke-shape-radius-editorial-panel);
+  --ke-home-feature-media-min-height: 20rem;
+  --ke-home-feature-media-min-height-compact: 18rem;
+  --ke-home-feature-copy-gap: 0.24rem;
+  --ke-home-feature-copy-padding: 1rem 1.1rem 1.15rem;
+  --ke-home-feature-title-size: clamp(1.25rem, 2.2vw, 1.8rem);
+  --ke-home-feature-title-line: 1.05;
+  --ke-home-feature-meta-size: 0.9rem;
+
+  /* HomeQuickNav six/three/two-column family. */
+  --ke-home-quick-nav-gap: 0.7rem;
+  --ke-home-quick-nav-gap-compact: 0.55rem;
+  --ke-home-quick-nav-item-gap: 0.15rem;
+  --ke-home-quick-nav-item-padding-block: 0.85rem;
+  --ke-home-quick-nav-item-padding-inline: 0.9rem;
+  --ke-home-quick-nav-item-padding-compact: 0.72rem;
+  --ke-home-quick-nav-item-radius: var(--ke-shape-radius-focus-panel-compact);
+  --ke-home-quick-nav-motion: var(--ke-duration-fast) ease;
+  --ke-home-quick-nav-hover-offset: -2px;
+  --ke-home-quick-nav-focus-offset: 2px;
+  --ke-home-quick-nav-title-size: 1.02rem;
+  --ke-home-quick-nav-title-line: 1.08;
+  --ke-home-quick-nav-meta-size: var(--ke-type-metadata-size);
+  --ke-home-quick-nav-meta-weight: 680;
+  --ke-home-quick-nav-meta-line: 1.2;
+
+  /* HomeColdStartFeed residual copy rhythm. */
+  --ke-home-feed-margin-top: var(--ke-space-lg);
+  --ke-home-feed-head-gap: var(--ke-space-lg);
+  --ke-home-feed-head-margin-bottom: 1.1rem;
+  --ke-home-feed-heading-margin: 0.1rem 0 0;
+  --ke-home-feed-status-max-width: 32rem;
+  --ke-home-feed-status-size: 0.92rem;
+  --ke-home-feed-status-weight: 720;
+  --ke-home-feed-padding-compact: 0.7rem;
+  --ke-home-feed-head-padding-compact: 0.35rem;
+
+  /* PersonalFeedSlot residual section and action rhythm. */
+  --ke-personal-feed-copy-max-width: 46rem;
+  --ke-personal-feed-copy-margin: 0.45rem 0 1rem;
+  --ke-personal-feed-status-margin-top: -0.35rem;
+  --ke-personal-feed-action-margin-top: var(--ke-space-lg);
+  --ke-personal-feed-action-inline-gap: var(--ke-space-sm);
+  --ke-personal-feed-mobile-margin-top: var(--ke-space-lg);
+  --ke-personal-feed-mobile-padding: 1.15rem 1rem 1.35rem;
+  --ke-personal-feed-mobile-action-margin-top: 0.85rem;
+}
