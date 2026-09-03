@@ -1,0 +1,318 @@
+{
+  "schema": "kenigevents.f0-route-theme-bindings.v1",
+  "version": "1.0.0",
+  "status": "F0_READY_A0_CONSUMPTION_PENDING",
+  "role": "F0",
+  "contract_version": "1.9.0",
+  "observed_successor": {
+    "branch": "agent/static-site-single-kaggle-contract",
+    "sha": "d0ad17088e13d5dab3d992326f393e2616246c5d",
+    "includes_f0_ancestor": "de92dabd4551e117ca1af1be7915ff223321cc32"
+  },
+  "runtime_evidence": {
+    "fresh_real_preview": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+    "fresh_real_source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+    "golden_preview": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+    "golden_v0_comment": 5527892153,
+    "n0_classification_comment": 5528519655,
+    "boundary": "source bindings do not inherit browser acceptance from either immutable preview"
+  },
+  "ownership": {
+    "F0": [
+      "semantic token names and exact current values",
+      "four icon-role classification",
+      "canonical SVG identity binding",
+      "strict source regression and rollback boundaries"
+    ],
+    "A0": [
+      "replace consumer-local aliases and raw declarations",
+      "remove consumer-local SVG and target-size overrides",
+      "preserve route composition and behavior"
+    ],
+    "R0": [
+      "apply accepted cross-branch mechanics",
+      "run strict executable checks",
+      "publish only through the canonical Kaggle pipeline"
+    ],
+    "V0": [
+      "independent DOM and computed-box/style verdict on the exact successor preview"
+    ]
+  },
+  "clusters": [
+    {
+      "id": "F0-ROUTE-EXHIBITIONS",
+      "consumer": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "route": "/vystavki/",
+      "family": "ExhibitionsPersonalSurface@1/ranked-personal-catalog",
+      "state": "CENTRAL_TOKENS_READY_CONSUMER_LOCAL_OWNER_PRESENT",
+      "private_aliases": {
+        "--ex-bg": "--ke-color-exhibitions-background",
+        "--ex-surface": "--ke-color-exhibitions-surface",
+        "--ex-raised": "--ke-color-exhibitions-raised",
+        "--ex-border": "--ke-color-exhibitions-border",
+        "--ex-text": "--ke-color-exhibitions-text",
+        "--ex-muted": "--ke-color-exhibitions-muted",
+        "--ex-blue": "--ke-color-exhibitions-blue",
+        "--ex-orange": "--ke-color-exhibitions-orange",
+        "--ex-red": "--ke-color-exhibitions-red",
+        "--ex-gray": "--ke-color-exhibitions-gray",
+        "--ex-yellow": "--ke-color-exhibitions-yellow",
+        "--ex-purple": "--ke-color-exhibitions-purple",
+        "--ex-green": "--ke-color-exhibitions-green",
+        "--ex-ease-cinematic": "--ke-exhibitions-ease-cinematic",
+        "--ex-ease-emphasis": "--ke-exhibitions-ease-emphasis",
+        "--ex-motion-fast": "--ke-exhibitions-motion-fast",
+        "--ex-motion-base": "--ke-exhibitions-motion-base"
+      },
+      "required_tokens": [
+        "--ke-color-exhibitions-background",
+        "--ke-color-exhibitions-surface",
+        "--ke-color-exhibitions-raised",
+        "--ke-color-exhibitions-border",
+        "--ke-color-exhibitions-text",
+        "--ke-color-exhibitions-muted",
+        "--ke-color-exhibitions-blue",
+        "--ke-color-exhibitions-orange",
+        "--ke-color-exhibitions-red",
+        "--ke-color-exhibitions-gray",
+        "--ke-color-exhibitions-yellow",
+        "--ke-color-exhibitions-purple",
+        "--ke-color-exhibitions-green",
+        "--ke-exhibitions-ease-cinematic",
+        "--ke-exhibitions-ease-emphasis",
+        "--ke-exhibitions-motion-fast",
+        "--ke-exhibitions-motion-base",
+        "--ke-exhibitions-page-font-size",
+        "--ke-exhibitions-page-line",
+        "--ke-exhibitions-shell-max",
+        "--ke-exhibitions-shell-gutter",
+        "--ke-exhibitions-controls-min-height",
+        "--ke-exhibitions-row-min-height",
+        "--ke-color-exhibitions-category-selected-border",
+        "--ke-color-exhibitions-category-selected-surface",
+        "--ke-color-exhibitions-keyboard-help-border",
+        "--ke-color-exhibitions-keyboard-help-start",
+        "--ke-color-exhibitions-keyboard-help-end",
+        "--ke-color-exhibitions-action-border",
+        "--ke-color-exhibitions-action-hover-surface",
+        "--ke-color-exhibitions-action-underline",
+        "--ke-color-exhibitions-timeline-mid",
+        "--ke-color-exhibitions-timeline-end",
+        "--ke-elevation-exhibitions-row",
+        "--ke-elevation-exhibitions-row-hover",
+        "--ke-elevation-exhibitions-row-keyboard",
+        "--ke-exhibitions-gallery-arrow-icon-size",
+        "--ke-exhibitions-action-icon-size",
+        "--ke-exhibitions-signal-icon-size"
+      ],
+      "source_signatures_current": [
+        "--ex-bg:#0d0f10",
+        "--ex-motion-base:420ms",
+        "background:rgba(13,15,16,.96)",
+        "border-color:#697078",
+        "background:#24272a"
+      ],
+      "required_substrings_after_migration": [
+        "var(--ke-color-exhibitions-background)",
+        "var(--ke-color-exhibitions-text)",
+        "var(--ke-exhibitions-motion-base)",
+        "var(--ke-exhibitions-shell-max)"
+      ],
+      "forbidden_substrings_after_migration": [
+        "--ex-bg:",
+        "--ex-surface:",
+        "--ex-motion-base:",
+        "var(--ex-bg)",
+        "var(--ex-surface)",
+        "var(--ex-motion-base)"
+      ],
+      "removal_boundary": "delete the private :root --ex-* declaration block and replace its uses only after route-theme-foundations.css is imported through product-contour-foundations.css; preserve the dark exhibitions language and all keyboard/personalization behavior",
+      "rollback_unit": "F0-RB-EXHIBITIONS-THEME",
+      "browser_expectations": [
+        "dark canvas, sticky controls, status rails and keyboard help retain current computed colors and geometry",
+        "no warm generic control palette replaces the exhibitions product language",
+        "no consumer-local icon square overrides the four central roles"
+      ]
+    },
+    {
+      "id": "F0-ROUTE-FESTIVALS",
+      "consumer": "site/src/pages/festivali/index.astro",
+      "route": "/festivali/",
+      "family": "FestivalsTimelineRouteComposition@1/annual-timeline",
+      "state": "CENTRAL_TOKENS_READY_RAW_ROUTE_THEME_AND_ICON_OVERRIDES_PRESENT",
+      "required_tokens": [
+        "--ke-festival-page-max",
+        "--ke-festival-page-gutter",
+        "--ke-festival-hero-columns",
+        "--ke-festival-hero-gap",
+        "--ke-festival-hero-padding",
+        "--ke-festival-hero-radius",
+        "--ke-color-festival-hero-border",
+        "--ke-color-festival-hero-glow",
+        "--ke-color-festival-hero-surface-start",
+        "--ke-color-festival-hero-surface-end",
+        "--ke-elevation-festival-hero",
+        "--ke-festival-heading-size",
+        "--ke-festival-heading-weight",
+        "--ke-festival-heading-line",
+        "--ke-festival-heading-letter",
+        "--ke-color-festival-hairline",
+        "--ke-color-festival-surface-translucent",
+        "--ke-festival-guide-radius",
+        "--ke-festival-guide-icon-container-size",
+        "--ke-festival-guide-icon-size",
+        "--ke-color-festival-guide-icon-surface",
+        "--ke-color-festival-guide-icon",
+        "--ke-festival-month-rail-width",
+        "--ke-festival-category-container-size",
+        "--ke-festival-category-asset-size",
+        "--ke-festival-row-gap",
+        "--ke-color-festival-card-border",
+        "--ke-color-festival-card-surface",
+        "--ke-elevation-festival-card",
+        "--ke-festival-card-radius",
+        "--ke-festival-like-target-min",
+        "--ke-festival-like-icon-size",
+        "--ke-color-festival-like-line",
+        "--ke-color-festival-like-surface",
+        "--ke-color-festival-status-confirmed-surface",
+        "--ke-color-festival-status-confirmed-text",
+        "--ke-color-festival-status-pending-surface",
+        "--ke-color-festival-status-pending-text",
+        "--ke-color-festival-card-caption",
+        "--ke-color-festival-card-theme-surface",
+        "--ke-color-festival-card-theme-text",
+        "--ke-festival-motion-fast"
+      ],
+      "source_signatures_current": [
+        "data-ds-family=\"FestivalsTimelineRouteComposition\"",
+        "<SemanticIcon name=\"link\" role=\"control\" />",
+        ".festival-guide__icon :global(svg) { width: 0.95rem; height: 0.95rem;",
+        "width: clamp(2rem, 2.35vw, 2.2rem);",
+        "background: #31261f;"
+      ],
+      "required_substrings_after_migration": [
+        "var(--ke-festival-page-max)",
+        "var(--ke-festival-hero-radius)",
+        "var(--ke-festival-guide-icon-size)",
+        "var(--ke-festival-like-target-min)",
+        "<SemanticIcon name=\"heart\" role=\"control\" />"
+      ],
+      "forbidden_substrings_after_migration": [
+        ".festival-guide__icon :global(svg) { width: 0.95rem; height: 0.95rem;",
+        "width: clamp(2rem, 2.35vw, 2.2rem);",
+        "height: clamp(2rem, 2.35vw, 2.2rem);",
+        "<Icon name=\"heart\" />"
+      ],
+      "semantic_icon_bindings": [
+        {
+          "action": "festival.guide.link",
+          "component": "SemanticIcon",
+          "name": "link",
+          "role": "control"
+        },
+        {
+          "action": "festival.guide.calendar",
+          "component": "SemanticIcon",
+          "name": "calendar",
+          "role": "control"
+        },
+        {
+          "action": "festival.favorite",
+          "component": "SemanticIcon",
+          "name": "heart",
+          "role": "control"
+        }
+      ],
+      "identity_asset_exception": "festival category mask files are editorial taxonomy assets; tokenize their containers and asset bounds but do not count them as a fifth UI icon role",
+      "source_drift": [
+        "the route currently overrides control-role SemanticIcon SVGs to 0.95rem instead of 20px",
+        "the interactive festival favorite target is currently clamp(2rem,2.35vw,2.2rem), below the 44px launch minimum"
+      ],
+      "removal_boundary": "replace raw route-theme values and the local SVG/target dimensions after this F0 file is integrated; preserve timeline packing, category assets, object-position data, likes storage and all route copy",
+      "rollback_unit": "F0-RB-FESTIVALS-THEME-AND-CONTROLS",
+      "browser_expectations": [
+        "guide glyphs compute to the 20px control role inside unchanged 1.9rem decorative containers",
+        "favorite buttons compute to at least 44 by 44px while retaining the same position and state",
+        "warm hero, timeline, cards, status pills and overlays retain current computed appearance"
+      ]
+    },
+    {
+      "id": "F0-ROUTE-CLUB-DETAIL",
+      "consumer": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "route": "/kluby-po-interesam/<slug>/",
+      "family": "InterestClubDetailRouteComposition@1/verified-club",
+      "state": "CENTRAL_TOKENS_READY_RAW_ROUTE_THEME_AND_TEXT_GLYPH_PRESENT",
+      "required_tokens": [
+        "--ke-club-detail-gap",
+        "--ke-club-detail-hero-heading-max",
+        "--ke-club-detail-hero-heading-size",
+        "--ke-club-detail-hero-heading-line",
+        "--ke-color-club-detail-hero-start",
+        "--ke-color-club-detail-hero-end",
+        "--ke-club-detail-facts-columns",
+        "--ke-club-detail-facts-gap",
+        "--ke-club-detail-fact-padding",
+        "--ke-club-detail-fact-radius",
+        "--ke-color-club-detail-fact-border",
+        "--ke-color-club-detail-fact-surface",
+        "--ke-club-detail-term-size",
+        "--ke-club-detail-value-weight",
+        "--ke-club-detail-meeting-gap",
+        "--ke-club-detail-meeting-columns",
+        "--ke-club-detail-meeting-column-gap",
+        "--ke-color-club-detail-meeting-border",
+        "--ke-club-detail-action-min",
+        "--ke-club-detail-back-icon-size",
+        "--ke-color-club-detail-empty-surface",
+        "--ke-club-detail-note-border",
+        "--ke-club-detail-note-radius",
+        "--ke-color-club-detail-note-border",
+        "--ke-color-club-detail-note-surface"
+      ],
+      "source_signatures_current": [
+        "data-ds-family=\"InterestClubDetailRouteComposition\"",
+        "background:linear-gradient(135deg, #fffdf8, rgba(215,240,236,.7))",
+        "background:rgba(215,240,236,.58)",
+        "<span aria-hidden=\"true\">←</span>"
+      ],
+      "required_substrings_after_migration": [
+        "var(--ke-color-club-detail-hero-start)",
+        "var(--ke-color-club-detail-note-surface)",
+        "var(--ke-club-detail-action-min)",
+        "<SemanticIcon name=\"arrow-left\" role=\"inline\" />"
+      ],
+      "forbidden_substrings_after_migration": [
+        "background:linear-gradient(135deg, #fffdf8, rgba(215,240,236,.7))",
+        "background:rgba(215,240,236,.58)",
+        "<span aria-hidden=\"true\">←</span>"
+      ],
+      "semantic_icon_bindings": [
+        {
+          "action": "interest-club.detail.back",
+          "component": "SemanticIcon",
+          "name": "arrow-left",
+          "role": "inline"
+        }
+      ],
+      "removal_boundary": "replace only route-local visual values and the text arrow; preserve verified-club data, future/history state, breadcrumbs, meeting links and empty-state semantics",
+      "rollback_unit": "F0-RB-CLUB-DETAIL-THEME",
+      "browser_expectations": [
+        "mint hero/fact/note surfaces retain current contrast and geometry",
+        "the back action retains its 44px target and uses the canonical inline arrow SVG",
+        "mobile facts and meeting rows retain their one-column breakpoint behavior"
+      ]
+    }
+  ],
+  "strict_gate": {
+    "command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "opens_when": "the accepted A0 consumer changes are present on one integrated successor",
+    "must_pass_before": "a successor is credited with PM0 13, 15, 16, 18 or 19 closure for these routes"
+  },
+  "downstream": {
+    "thin_s_binding_id": "F0-ROUTE-THEME-V1",
+    "penpot_variable_set_id": "F0-ROUTE-THEME-V1",
+    "materialization_status": "SPECIFICATION_REQUIRED_AFTER_SOURCE_INTEGRATION_AND_V0",
+    "production_mutation": "FORBIDDEN"
+  }
+}
