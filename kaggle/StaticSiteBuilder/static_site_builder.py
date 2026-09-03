@@ -992,6 +992,22 @@ def render_daily_service_share(config: dict, build_clock: dict) -> dict:
     }
 
 
+def materialize_service_share(
+    config: dict,
+    build_clock: dict,
+    *,
+    preview_data_mode: str,
+) -> dict:
+    """Keep a frozen Golden preview independent of today's real event set."""
+
+    if preview_data_mode == "golden":
+        return {
+            "status": "skipped",
+            "reason": "golden_preview_frozen_clock",
+        }
+    return render_daily_service_share(config, build_clock)
+
+
 def ensure_node22(env: dict[str, str]) -> dict[str, str]:
     current = subprocess.run(['node', '--version'], cwd=str(WORKING), env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     version = (current.stdout or '').strip()
@@ -1176,7 +1192,11 @@ def main() -> int:
         export_preview_data_if_configured(config)
         related_retrieval = read_related_retrieval_receipt()
         collection_semantic = read_collection_semantic_receipt(config)
-        service_share_result = render_daily_service_share(config, build_clock)
+        service_share_result = materialize_service_share(
+            config,
+            build_clock,
+            preview_data_mode=preview_data_mode,
+        )
         semantic_result_path = SITE_DIR / 'src' / 'data' / 'static-semantic-build-result.json'
         if (
             config.get('collection_semantic_compute')

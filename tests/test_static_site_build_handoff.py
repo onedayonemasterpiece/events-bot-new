@@ -1296,6 +1296,47 @@ def test_static_site_kernel_installs_chromium_with_linux_dependencies() -> None:
     )
 
 
+def test_static_site_golden_preview_skips_real_daily_service_share(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib.util
+
+    kernel_path = (
+        Path(__file__).resolve().parents[1]
+        / "kaggle"
+        / "StaticSiteBuilder"
+        / "static_site_builder.py"
+    )
+    spec = importlib.util.spec_from_file_location("static_site_builder_golden_share_test", kernel_path)
+    assert spec and spec.loader
+    kernel = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kernel)
+    calls: list[tuple[dict, dict]] = []
+    monkeypatch.setattr(
+        kernel,
+        "render_daily_service_share",
+        lambda config, clock: calls.append((config, clock)) or {"status": "ready"},
+    )
+
+    skipped = kernel.materialize_service_share(
+        {"profile": "preview"},
+        {"effective_date": "2027-06-04"},
+        preview_data_mode="golden",
+    )
+    assert skipped == {
+        "status": "skipped",
+        "reason": "golden_preview_frozen_clock",
+    }
+    assert calls == []
+
+    assert kernel.materialize_service_share(
+        {"profile": "preview"},
+        {"effective_date": "2026-09-03"},
+        preview_data_mode="real",
+    ) == {"status": "ready"}
+    assert len(calls) == 1
+
+
 def test_static_site_kernel_retains_loaded_media_and_keyboard_browser_evidence() -> None:
     kernel_path = (
         Path(__file__).resolve().parents[1]

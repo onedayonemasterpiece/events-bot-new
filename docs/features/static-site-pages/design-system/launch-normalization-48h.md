@@ -232,6 +232,9 @@ round trips полного preview, не меняя generation/publication seman
 Asset и Astro-asset origins принимают тот же `{buildId}` template: immutable
 preview поэтому ссылается на ассеты собственного опубликованного prefix, тогда
 как production без template сохраняет stable origin.
+Golden build не рендерит независимую daily service-share карточку из реального
+сегодняшнего каталога: её отсутствие не должно ломать frozen future corpus.
+Real preview и production-form build сохраняют обычный service-share этап.
 
 ## 5. Owner review
 

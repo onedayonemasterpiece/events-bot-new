@@ -24,6 +24,8 @@
   per-object SHA-256/MIME checks and retry-safe immutable-prefix adoption.
   Both public asset and Astro-asset origins now resolve the same `{buildId}`
   template, keeping preview media inside its exact immutable publication prefix.
+  Frozen Golden previews also skip the unrelated daily service-share render, so
+  an explicit future Golden clock cannot fail against today's real event set.
 
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK
