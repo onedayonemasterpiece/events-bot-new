@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import io
 import sys
 import json
 import importlib.util
@@ -922,10 +924,27 @@ def test_runner_adopts_exact_complete_output_without_push(tmp_path: Path) -> Non
             return {"status": "COMPLETE"}
         def download_kernel_output(self, _kernel, *, path, force=True):
             output = Path(path)
+            archive = output / "preview-adopt.tar.gz"
+            with tarfile.open(archive, "w:gz") as bundle:
+                payload = b"checked preview"
+                info = tarfile.TarInfo(name="preview-adopt/__preview/index.html")
+                info.size = len(payload)
+                bundle.addfile(info, io.BytesIO(payload))
             (output / "static_site_build_result.json").write_text(
-                json.dumps({"ok": True, "build_id": "preview-adopt"}), encoding="utf-8"
+                json.dumps({
+                    "ok": True,
+                    "profile": "preview",
+                    "build_id": "preview-adopt",
+                    "page_classes": ["all"],
+                    "artifacts": [{
+                        "kind": "preview",
+                        "filename": archive.name,
+                        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                        "size": archive.stat().st_size,
+                    }],
+                }), encoding="utf-8"
             )
-            return ["static_site_build_result.json"]
+            return ["static_site_build_result.json", archive.name]
 
     args = SimpleNamespace(
         expected_dataset_ref="owner/exact-input",

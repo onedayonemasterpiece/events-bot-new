@@ -31,6 +31,7 @@ from static_site_release import (
     make_request_payload,
     merge_request_payload,
     publish_secret_candidate_archive,
+    publish_preview_archive,
     prune_secret_candidate_objects,
     prune_immutable_snapshots,
     prune_static_site_outputs,
@@ -1285,6 +1286,74 @@ def test_add_build_10_secret_candidate_publish_is_create_only_and_root_isolated(
     assert adopted.object_count == receipt.object_count
     assert adopted.manifest_sha256 == receipt.manifest_sha256
     assert adopted.token_sha256 == receipt.token_sha256
+    assert adopted.public_url == receipt.public_url
+
+
+def test_kaggle_preview_publish_is_create_only_and_build_prefix_isolated(tmp_path) -> None:
+    build_id = "preview-page-class-test"
+    preview = tmp_path / "preview" / build_id
+    (preview / "__preview").mkdir(parents=True)
+    index = b'<!doctype html><meta name="robots" content="noindex,nofollow">'
+    (preview / "__preview" / "index.html").write_bytes(index)
+    (preview / "preview-build.json").write_text(
+        json.dumps(
+            {
+                "buildId": build_id,
+                "repo_sha": "a" * 40,
+                "basePath": f"/{build_id}",
+                "pageClasses": ["date"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    archive = tmp_path / f"{build_id}.tar.gz"
+    with tarfile.open(archive, "w:gz") as bundle:
+        bundle.add(preview, arcname=build_id)
+    artifact_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+    result = {
+        "profile": "preview",
+        "build_id": build_id,
+        "page_classes": ["date"],
+        "artifacts": [
+            {
+                "kind": "preview",
+                "filename": archive.name,
+                "sha256": artifact_sha,
+                "size": archive.stat().st_size,
+            }
+        ],
+    }
+    client = _MemoryS3()
+    receipt = publish_preview_archive(
+        archive,
+        build_result=result,
+        extraction_root=tmp_path / "extract",
+        bucket="bucket",
+        endpoint="https://storage.invalid",
+        region="ru-central1",
+        access_key_id="test",
+        secret_access_key="test",
+        s3_client=client,
+        public_probe=lambda url: url.endswith(f"/{build_id}/__preview/"),
+    )
+    assert receipt.page_classes == ("date",)
+    assert receipt.root_mutation is False and receipt.stable_ics_mutation is False
+    assert receipt.object_count == 2
+    assert all(key.startswith(f"{build_id}/") for _bucket, key in client.objects)
+
+    adopted = publish_preview_archive(
+        archive,
+        build_result=result,
+        extraction_root=tmp_path / "extract-retry",
+        bucket="bucket",
+        endpoint="https://storage.invalid",
+        region="ru-central1",
+        access_key_id="test",
+        secret_access_key="test",
+        s3_client=client,
+        public_probe=lambda url: url.endswith(f"/{build_id}/__preview/"),
+    )
+    assert adopted.artifact_sha256 == receipt.artifact_sha256
     assert adopted.public_url == receipt.public_url
 
 

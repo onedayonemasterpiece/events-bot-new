@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import calendar
 import json
+import mimetypes
 import os
 import re
 import shutil
@@ -43,6 +44,9 @@ SECRET_CANDIDATE_MANIFEST_SCHEMA = "static_secret_candidate_manifest_v1"
 SECRET_CANDIDATE_TOKEN_RE = r"[A-Za-z0-9_-]{43}"
 STATIC_SITE_IMAGE_SOURCE_MANIFEST_SCHEMA = "static_site_image_source_manifest_v1"
 STATIC_SITE_SOURCE_IDENTITY_SCHEMA = "static_site_source_identity_v1"
+STATIC_SITE_PREVIEW_PAGE_CLASSES = frozenset({
+    "all", "event", "date", "weekend", "collection", "personal", "focus", "partner", "lab",
+})
 STATIC_SITE_TIME_ZONE_NAME = "Europe/Kaliningrad"
 STATIC_SITE_TIME_ZONE = ZoneInfo(STATIC_SITE_TIME_ZONE_NAME)
 STATIC_SITE_FINGERPRINT_SCHEMA = "static_site_input_fingerprint_v1"
@@ -423,6 +427,21 @@ class SecretCandidateReceipt:
     token_sha256: str
     manifest_sha256: str
     object_count: int
+    public_url: str
+    verified_at: str
+    root_mutation: bool = False
+    stable_ics_mutation: bool = False
+
+
+@dataclass(frozen=True)
+class PreviewPublicationReceipt:
+    schema_version: str
+    build_id: str
+    repo_sha: str
+    artifact_sha256: str
+    page_classes: tuple[str, ...]
+    object_count: int
+    total_bytes: int
     public_url: str
     verified_at: str
     root_mutation: bool = False
@@ -2611,7 +2630,7 @@ def resolve_checked_static_site_artifact(
     caller cannot substitute a file between result validation and publication.
     """
 
-    if kind not in {"production_root", "secret_candidate", "browser_evidence"}:
+    if kind not in {"preview", "production_root", "secret_candidate", "browser_evidence"}:
         raise StaticSitePermanentError("static_site_artifact_kind_invalid")
     artifacts = build_result.get("artifacts")
     if not isinstance(artifacts, list):
@@ -2636,6 +2655,229 @@ def resolve_checked_static_site_artifact(
     ):
         raise StaticSitePermanentError(f"static_site_result_artifact_hash_mismatch:{kind}")
     return artifact
+
+
+def _safe_extract_preview_archive(
+    archive: Path, destination: Path, build_id: str
+) -> Path:
+    prefix = f"{build_id}/"
+    if not re.fullmatch(r"preview-[A-Za-z0-9][A-Za-z0-9._-]{0,191}", build_id):
+        raise StaticSitePermanentError("preview_publish_build_id_invalid")
+    if destination.exists():
+        raise StaticSitePermanentError("preview_publish_extract_destination_exists")
+    destination.mkdir(parents=True)
+    with tarfile.open(archive, "r:gz") as bundle:
+        members = bundle.getmembers()
+        if not members or len(members) > 100_000:
+            raise StaticSitePermanentError("preview_publish_archive_member_count_invalid")
+        for member in members:
+            name = member.name
+            while name.startswith("./"):
+                name = name[2:]
+            if name.startswith(("/", "../")):
+                raise StaticSitePermanentError(
+                    f"preview_publish_archive_path_invalid:{name[:160]}"
+                )
+            if name.rstrip("/") == build_id and member.isdir():
+                continue
+            if (
+                not name.startswith(prefix)
+                or member.issym()
+                or member.islnk()
+                or not (member.isdir() or member.isfile())
+            ):
+                raise StaticSitePermanentError(
+                    f"preview_publish_archive_path_invalid:{name[:160]}"
+                )
+            relative = name[len(prefix) :]
+            parts = Path(relative).parts
+            if not relative or any(part in {"", ".", ".."} for part in parts):
+                raise StaticSitePermanentError("preview_publish_archive_relative_path_invalid")
+            target = destination.joinpath(*parts)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = bundle.extractfile(member)
+            if source is None:
+                raise StaticSitePermanentError("preview_publish_archive_member_unreadable")
+            with source, target.open("xb") as handle:
+                while chunk := source.read(1024 * 1024):
+                    handle.write(chunk)
+    return destination
+
+
+def _preview_content_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    exact = {
+        ".html": "text/html; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".xml": "application/xml; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
+        ".ics": "text/calendar; charset=utf-8",
+        ".webmanifest": "application/manifest+json; charset=utf-8",
+        ".svg": "image/svg+xml",
+    }
+    return exact.get(suffix) or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+
+
+def publish_preview_archive(
+    archive_path: str | os.PathLike[str],
+    *,
+    build_result: Mapping[str, Any],
+    extraction_root: str | os.PathLike[str],
+    bucket: str,
+    endpoint: str,
+    region: str,
+    access_key_id: str,
+    secret_access_key: str,
+    public_base_url: str = "https://kenigevents.ru",
+    s3_client: Any | None = None,
+    public_probe: Any | None = None,
+) -> PreviewPublicationReceipt:
+    """Publish one checked Kaggle preview below its immutable build-id prefix."""
+
+    if build_result.get("profile") != "preview":
+        raise StaticSitePermanentError("preview_publish_profile_invalid")
+    build_id = str(build_result.get("build_id") or "")
+    page_classes = tuple(str(item) for item in (build_result.get("page_classes") or ()))
+    if (
+        not page_classes
+        or len(set(page_classes)) != len(page_classes)
+        or any(item not in STATIC_SITE_PREVIEW_PAGE_CLASSES for item in page_classes)
+        or ("all" in page_classes and page_classes != ("all",))
+    ):
+        raise StaticSitePermanentError("preview_publish_page_classes_missing")
+    artifacts = build_result.get("artifacts")
+    matches = [
+        item
+        for item in artifacts or ()
+        if isinstance(item, Mapping) and item.get("kind") == "preview"
+    ]
+    if len(matches) != 1:
+        raise StaticSitePermanentError("preview_publish_artifact_missing")
+    artifact = matches[0]
+    archive = Path(archive_path)
+    if (
+        artifact.get("filename") != f"{build_id}.tar.gz"
+        or archive.name != artifact.get("filename")
+        or not archive.is_file()
+        or archive.stat().st_size != int(artifact.get("size") or -1)
+        or _sha256_file(archive) != artifact.get("sha256")
+    ):
+        raise StaticSitePermanentError("preview_publish_artifact_hash_mismatch")
+    root = _safe_extract_preview_archive(
+        archive, Path(extraction_root) / f"preview-{build_id}", build_id
+    )
+    try:
+        manifest = json.loads((root / "preview-build.json").read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise StaticSitePermanentError(f"preview_publish_manifest_invalid:{exc}") from exc
+    repo_sha = str(manifest.get("repo_sha") or "")
+    if (
+        manifest.get("buildId") != build_id
+        or manifest.get("basePath") != f"/{build_id}"
+        or tuple(manifest.get("pageClasses") or ()) != page_classes
+        or not re.fullmatch(r"[0-9a-f]{40}", repo_sha)
+        or not (root / "__preview" / "index.html").is_file()
+    ):
+        raise StaticSitePermanentError("preview_publish_manifest_identity_mismatch")
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    if not files or len(files) > 100_000:
+        raise StaticSitePermanentError("preview_publish_file_count_invalid")
+    if s3_client is None:
+        import boto3
+
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            region_name=region,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+        )
+
+    def is_create_conflict(exc: BaseException) -> bool:
+        response = getattr(exc, "response", None)
+        error = response.get("Error") if isinstance(response, Mapping) else None
+        code = str(error.get("Code") or "") if isinstance(error, Mapping) else ""
+        status = (
+            (response.get("ResponseMetadata") or {}).get("HTTPStatusCode")
+            if isinstance(response, Mapping)
+            else None
+        )
+        return code in {"PreconditionFailed", "ConditionalRequestConflict", "412", "409"} or status in {409, 412}
+
+    objects: list[dict[str, Any]] = []
+    for path in files:
+        relative = path.relative_to(root).as_posix()
+        digest = _sha256_file(path)
+        content_type = _preview_content_type(path)
+        cache_control = (
+            "public, max-age=31536000, immutable"
+            if relative.startswith(("_astro/", "assets/", "service-share/versions/"))
+            else "public, max-age=300"
+        )
+        item = {
+            "key": f"{build_id}/{relative}",
+            "path": path,
+            "sha256": digest,
+            "size": path.stat().st_size,
+            "content_type": content_type,
+            "cache_control": cache_control,
+        }
+        try:
+            with path.open("rb") as handle:
+                s3_client.put_object(
+                    Bucket=bucket,
+                    Key=item["key"],
+                    Body=handle,
+                    IfNoneMatch="*",
+                    ContentType=content_type,
+                    CacheControl=cache_control,
+                    Metadata={"sha256": digest},
+                )
+        except Exception as exc:
+            if not is_create_conflict(exc):
+                raise
+        objects.append(item)
+    for item in objects:
+        response = s3_client.get_object(Bucket=bucket, Key=item["key"])
+        body = response["Body"].read()
+        if len(body) != item["size"] or hashlib.sha256(body).hexdigest() != item["sha256"]:
+            raise StaticSiteRetryableError(
+                f"preview_publish_uploaded_hash_mismatch:{item['key']}"
+            )
+        if str(response.get("ContentType") or "") != item["content_type"]:
+            raise StaticSiteRetryableError(
+                f"preview_publish_uploaded_mime_mismatch:{item['key']}"
+            )
+    public_url = f"{public_base_url.rstrip('/')}/{build_id}/__preview/"
+    if public_probe is not None:
+        public_probe(public_url)
+    else:
+        try:
+            with urlopen(Request(public_url, headers={"Cache-Control": "no-cache"}), timeout=30) as response:
+                if response.status != 200 or not response.read(16):
+                    raise StaticSiteRetryableError(
+                        f"preview_publish_public_http:{response.status}"
+                    )
+        except HTTPError as exc:
+            raise StaticSiteRetryableError(
+                f"preview_publish_public_http:{exc.code}"
+            ) from exc
+    return PreviewPublicationReceipt(
+        schema_version="static_site_preview_publication_v1",
+        build_id=build_id,
+        repo_sha=repo_sha,
+        artifact_sha256=str(artifact.get("sha256") or ""),
+        page_classes=page_classes,
+        object_count=len(objects),
+        total_bytes=sum(int(item["size"]) for item in objects),
+        public_url=public_url,
+        verified_at=iso_utc(),
+    )
 
 
 def _safe_extract_candidate_archive(archive: Path, destination: Path, token: str) -> Path:

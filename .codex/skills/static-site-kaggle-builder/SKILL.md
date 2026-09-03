@@ -26,6 +26,10 @@ Reuse the existing events-bot Kaggle infrastructure:
 3. If running from Fly/production DB, create a status dataset with `create_kaggle_run_config(...)` and `create_kaggle_status_dataset(...)` and include it in `dataset_sources`.
 4. Let `kaggle_status_client` emit internal progress from the kernel; do not accept opaque `ERROR`/`FAILED` without logs/status evidence.
 5. Use the resource lease key `static_site:builder` for production status-aware runs.
+6. Publish previews only from the checked downloaded Kaggle artifact with
+   `--publish-preview`; never upload a locally generated `site/dist` tree.
+7. Use repeatable preview-only `--page-class` values for focused runs. A
+   production candidate must remain `all`/full-catalog.
 
 ## Known Kaggle pitfalls already solved
 
@@ -97,7 +101,25 @@ Evidence:
 - related-chain cache: `event_vector_related_chain_v2`, `local_tfidf_sparse_v1`, Gemma 4 26B partial audit `45` provider calls via Supabase limiter, cache rerun `provider_calls=0`;
 - public Playwright regression: `artifacts/codex/static-site-builder/playwright-v46d-public-check.cjs`.
 
-## Production handoff
+## Preview and production handoff
+
+Both profiles use one rail: immutable data + exact SHA → Kaggle build/check →
+downloaded hash-bound artifact → trusted host-side Object Storage publisher.
+They target the same `kenigevents.ru` bucket. Preview publishes create-only to
+`/<buildId>/` and verifies `/<buildId>/__preview/`; production candidates use
+the protected `/_review/<token>/` candidate prefix and optional atomic root
+promotion. Bucket credentials stay on the host, not in Kaggle.
+
+For a focused preview add, for example:
+
+```bash
+--profile preview --catalog-mode slice --page-class date \
+--download-output --publish-preview
+```
+
+Available page classes are `event`, `date`, `weekend`, `collection`,
+`personal`, `focus`, `partner`, and `lab`. Direct `npm run deploy:preview` is
+retired.
 
 Enable with `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`. Smart Update enqueues one coalesced outbox task:
 
@@ -106,9 +128,11 @@ Enable with `ENABLE_STATIC_SITE_KAGGLE_BUILDER=1`. Smart Update enqueues one coa
 - delay: 15 minutes after the latest event update
 - handler: `job_static_site_build_kaggle`
 
-The handler calls the runner with `/data/db.sqlite`, `--status-db /data/db.sqlite`, the Fly callback `/internal/kaggle/run-event`, and `--download-output`.
-
-Do not claim production static-page publishing is complete until the CDN/Object Storage handoff is enabled and verified. The current Kaggle job produces the checked artifact; bucket/CDN upload is a separate gate.
+The handler calls the runner with the immutable production projection,
+`--status-db /data/db.sqlite`, the Fly callback
+`/internal/kaggle/run-event`, and `--download-output`. Secret-candidate upload
+is controlled separately by `ENABLE_STATIC_SITE_SECRET_PUBLISH`; root
+activation remains a distinct atomic promotion gate.
 
 ## Verification checklist
 

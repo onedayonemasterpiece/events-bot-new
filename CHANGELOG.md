@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Changed: static-site previews and production candidates now share one
+  Kaggle-to-checked-artifact-to-host-publisher rail targeting the same
+  `kenigevents.ru` bucket; direct local-dist preview publication is retired.
+  Preview runs can select stable route families with repeatable
+  `--page-class`, publish create-only below `/<buildId>/`, and verify the exact
+  `/<buildId>/__preview/` URL. Production candidates remain full-catalog and
+  reject page-class slicing.
+
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK
   posts fail closed when an accepted/pending poster exists but storage failed

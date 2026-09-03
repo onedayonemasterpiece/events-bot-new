@@ -331,7 +331,8 @@ features:
       - site/src/data/preview-related.json
       - site/scripts/build-preview.mjs
       - site/scripts/check-preview.mjs
-      - site/scripts/deploy-preview-yc.mjs
+      - site/scripts/page-class-build-filter.mjs
+      - site/scripts/check-page-class-preview.mjs
   event_comment_feedback:
     status: design
     docs: docs/features/event-comment-feedback/README.md

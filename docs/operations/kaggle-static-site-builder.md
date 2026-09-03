@@ -13,6 +13,82 @@ already-existing production env flags.
 
 ## Position
 
+### Single build-and-publish rail (decision 2026-09-03)
+
+There is one supported materialization sequence for both product previews and
+production candidates:
+
+```text
+immutable production projection + exact Git SHA
+  -> unique private Kaggle input dataset
+  -> Kaggle CPU export + Astro build + profile checks
+  -> checked, hash-bound Kaggle artifact
+  -> trusted host-side Object Storage publisher
+  -> public HTTP verification + receipt
+```
+
+Both modes use `scripts/run_static_site_builder_kaggle.py`,
+`kaggle/StaticSiteBuilder/static_site_builder.py`, the same Astro source and the
+same `kenigevents.ru` Object Storage bucket. Bucket credentials remain on the
+trusted host; “Kaggle build with bucket publication” does **not** mean copying
+Object Storage credentials into the notebook. A local Astro build is only a
+diagnostic/test gate and is never a publishable production or preview source.
+The former `npm run deploy:preview` local-dist publisher is retired.
+
+Only the final route prefix and allowed completeness differ:
+
+| Profile | Generation | Object prefix / public URL | Rule |
+|---|---|---|---|
+| `preview` | full slice or named page classes | `/<buildId>/`; entry `/<buildId>/__preview/` | immutable `preview-*` build id; may be partial; always `noindex` |
+| `production-candidate` | complete catalog only | `/_review/<token>/` for private review, plus checked root-form artifact | slicing is forbidden |
+| activated production | already checked complete root artifact | `/` (`/segodnya/`, `/sobytiya/...`) | only atomic root promotion; never a preview upload |
+
+The preview prefix is not a second deployment architecture. It is the same
+Kaggle-to-artifact-to-host-publisher transaction with a different final slug.
+Neither profile may overwrite stable `/ics/`, a root control key or another
+build prefix.
+
+#### Preview page-class slicing
+
+`preview` accepts repeatable `--page-class` (or
+`STATIC_SITE_PAGE_CLASSES=event,date`). `all` is the default and cannot be
+combined with named classes. The stable classes are:
+
+| Class | Route family |
+|---|---|
+| `event` | `/sobytiya/**` and `/data/discovery/**` |
+| `date` | `/`, `/segodnya/`, `/zavtra/`, `/date-*`, event-date data |
+| `weekend` | `/vyhodnye/**` |
+| `collection` | exhibitions, popular, unusual, festivals, selections and interest clubs |
+| `personal` | search, favourites, personal feed, closed listings and shared PWA runtime |
+| `focus` | `/fokus-gruppa/**` |
+| `partner` | `/partnerstvo/` and `/partners/` |
+| `lab` | internal `/lab/**` regression surfaces |
+
+Every sliced preview also contains the `__preview/` entry and prefix-local
+`robots.txt`. Unselected route families are not prerendered. Production
+candidates reject any selection other than `all` before the Kaggle push.
+
+Canonical on-demand example:
+
+```bash
+set -a; source .env; set +a
+python scripts/run_static_site_builder_kaggle.py \
+  --db <immutable-production-projection.sqlite> \
+  --repo-sha <exact-40-character-SHA> \
+  --profile preview --catalog-mode slice \
+  --page-class date --limit 200 \
+  --build-id preview-YYYYMMDD-normalized-date-pages-v1 \
+  --asset-base-url https://static.kenigevents.ru \
+  --astro-asset-base-url 'https://static.kenigevents.ru/{buildId}' \
+  --download-output --publish-preview
+```
+
+`--publish-preview` is valid only together with a waited, downloaded `preview`
+run. The host revalidates the artifact hash, safe archive containment,
+`preview-build.json` identity and every uploaded object before probing the
+exact HTTPS entry URL.
+
 Kaggle is an accepted **batch executor** in this project because the repo already uses Kaggle for monitored parser/video/social jobs. For static pages it may build Astro HTML, related/discovery manifests, golden-facet manifests, share-card artifacts and offline evaluation reports.
 
 R15 unusual events reuse this executor, lease and immutable input dataset. The
@@ -55,7 +131,7 @@ landmark may be intentionally hidden until their browser capability is known.
 No-JavaScript content gates therefore inspect the product page's own landmark,
 not unrelated focus-group/PWA controls contributed by the shared layout.
 
-It is acceptable for the Kaggle API actor to be a dedicated personal Kaggle user/account, but only as an execution/publisher identity inside this protocol: least-privileged credentials, immutable snapshot input, status ledger, staging-prefix upload, checked manifest, promotion gate and rollback. The personal account must not become the only place where production release state is known.
+It is acceptable for the Kaggle API actor to be a dedicated personal Kaggle user/account, but only as an execution identity inside this protocol: immutable snapshot input, status ledger and checked output. Object Storage publication uses the separate trusted host identity. The personal account must not become the only place where production release state is known.
 
 ## Production protocol
 
