@@ -37,22 +37,23 @@ const headingId = `personal-feed-${context}-title`;
     <h2 id={headingId} data-personal-feed-title>{heading}</h2>
     <p class="muted-note personal-feed-section__explanation" data-personal-feed-explanation>{explanation}</p>
     <p class="muted-note personal-feed-section__status" data-personal-feed-status role="status" aria-live="polite">Подбираем события…</p>
-    <div class="personal-feed-section__live-region" aria-live="polite">
-      <AdaptiveEventCardGrid
-        events={[]}
-        mode="packed"
-        rowSize={3}
-        responsive="progressive"
-        personalFeed
-        className="cards-grid--personal-feed personal-feed-section__feed"
-        rootAttributes={{
-          'data-personal-feed-slot':'',
-          'data-feed-card-variant':'split-actions',
-          'data-listing-context':context,
-          'data-personal-feed-runtime-host':'adaptive-v1',
-        }}
-      />
-    </div>
+    <AdaptiveEventCardGrid
+      events={[]}
+      mode="packed"
+      rowSize={3}
+      responsive="progressive"
+      personalFeed
+      ariaLive="polite"
+      ariaAtomic={false}
+      ariaLabelledby={headingId}
+      className="cards-grid--personal-feed personal-feed-section__feed"
+      rootAttributes={{
+        'data-personal-feed-slot':'',
+        'data-feed-card-variant':'split-actions',
+        'data-listing-context':context,
+        'data-personal-feed-runtime-host':'adaptive-v1',
+      }}
+    />
     {!isEventDetail && <button type="button" class="secondary-button personal-feed-section__load-more" data-personal-feed-load-more hidden>Показать ещё</button>}
     <button type="button" class="secondary-button personal-feed-section__refresh" data-personal-feed-refresh hidden>Обновить ленту</button>
     {isEventDetail && <a class="secondary-button personal-feed-section__all-events" data-personal-feed-all-events href={siteHomeHref()}>Все анонсы</a>}
@@ -97,21 +98,21 @@ const headingId = `personal-feed-${context}-title`;
     width: 100%;
     max-width: none;
     margin: 0;
-    padding: clamp(2rem, 4vw, 4.5rem) max(16px, calc((100vw - min(1180px, calc(100vw - 32px))) / 2));
+    padding: var(--ke-personal-feed-section-padding) max(var(--ke-personal-feed-section-padding-inline-min), calc((100vw - min(var(--ke-personal-feed-container), calc(100vw - 32px))) / 2));
     border: 0;
     border-radius: 0;
-    background: #f5ede2;
+    background: var(--ke-color-personal-feed-surface);
     box-shadow: none;
   }
 
   .personal-feed-section--event-detail > .section-card__inner {
-    width: min(1180px, 100%);
+    width: min(var(--ke-personal-feed-container), 100%);
     margin: 0 auto;
     padding: 0;
   }
 
   .personal-feed-section--event-detail h2 {
-    font-size: clamp(2rem, 4vw, 4rem);
+    font-size: var(--ke-personal-feed-heading-size);
   }
 
   .personal-feed-section__explanation,
@@ -122,10 +123,6 @@ const headingId = `personal-feed-${context}-title`;
 
   .personal-feed-section__status {
     margin-top: -0.35rem;
-  }
-
-  .personal-feed-section__live-region {
-    min-width: 0;
   }
 
   .personal-feed-section__load-more,
@@ -160,7 +157,7 @@ const headingId = `personal-feed-${context}-title`;
     .personal-feed-section--event-detail {
       margin-top: 1rem;
       padding: 1.15rem 1rem 1.35rem;
-      border-radius: 24px;
+      border-radius: var(--ke-personal-feed-radius-compact);
     }
 
     .personal-feed-section__load-more,
