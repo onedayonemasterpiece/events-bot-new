@@ -1,0 +1,50 @@
+name: Vector owner status
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/vector-status-one-shot.yml]
+permissions: { contents: write }
+env:
+  FLY_API_TOKEN: ${{ secrets.UNUSUAL_EVENTS_FLY_SSH_TOKEN }}
+  FLY_APP_NAME: ${{ vars.UNUSUAL_EVENTS_FLY_APP_NAME }}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: { name: unusual-events-monitor }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { fetch-depth: 0 }
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+      - name: Read status
+        run: |
+          cat > "$RUNNER_TEMP/p.py" <<'PY'
+          import json,sqlite3
+          from pathlib import Path
+          c=sqlite3.connect('file:/data/db.sqlite?mode=ro',uri=True); c.row_factory=sqlite3.Row
+          op=dict(c.execute("SELECT id,status,started_at,finished_at,metrics_json,details_json FROM ops_run WHERE id=8124").fetchone())
+          job=dict(c.execute("SELECT id,status,attempts,last_error,last_result,updated_at,next_run_at FROM joboutbox WHERE id=66114").fetchone())
+          static=dict(c.execute("SELECT id,status,attempts,last_error,updated_at,next_run_at FROM joboutbox WHERE id=66980").fetchone())
+          state=dict(c.execute("SELECT active_job_id,active_run_id,last_success_run_id,last_success_at,updated_at FROM static_site_build_state WHERE release_channel='secret_preview'").fetchone())
+          c.close()
+          for key in ('metrics_json','details_json'):
+              raw=op.get(key)
+              if raw:
+                  try: op[key]=json.loads(raw)
+                  except Exception: op[key]='unparseable'
+          r=Path('/data/event_vector_sync_receipt.json'); receipt={}
+          if r.is_file():
+              v=json.load(open(r,encoding='utf-8')); receipt={k:v.get(k) for k in ('schema_version','status','complete','run_id','projected_at','events','coverage')}; receipt['mtime']=r.stat().st_mtime
+          print(json.dumps({'op':op,'job':job,'static_job':static,'static_state':state,'receipt':receipt},ensure_ascii=False,indent=2,default=str))
+          PY
+          e="$(base64 -w0 "$RUNNER_TEMP/p.py")"
+          NO_COLOR=1 flyctl ssh console --app "$FLY_APP_NAME" --pty=false --command "python3 -c \"import base64;exec(base64.b64decode('$e'))\"" | tee status.json
+          NO_COLOR=1 flyctl ssh console --app "$FLY_APP_NAME" --pty=false --command "sh -lc \"grep 'event_vector_sync run_id=8124' /data/runtime_logs/events-bot.log 2>/dev/null | tail -n 12\"" | tee status.log || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: { name: vector-owner-status, path: "status.json\nstatus.log", retention-days: 7 }
+      - name: Remove probe
+        if: ${{ always() }}
+        run: |
+          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main; git rebase origin/main; git rm .github/workflows/vector-status-one-shot.yml
+          git commit -m 'ops: remove vector owner status probe'; git push origin HEAD:main
