@@ -81,6 +81,20 @@ const normalizedMediaUrl = (value: string | null | undefined) => {
   if (/^(?:data|blob):/iu.test(raw)) return raw;
   return eventImageUrl(raw) || raw;
 };
+const normalizedSrcset = (value: string | null | undefined) => {
+  const raw = String(value || '').trim();
+  if (!raw) return undefined;
+  // A data URL contains its own comma and is already self-contained. Ordinary
+  // rail derivatives are width/DPR candidates and are normalized one by one.
+  if (/^(?:data|blob):/iu.test(raw)) return raw;
+  const candidates = raw.split(',').map((candidate) => {
+    const match = /^(\S+)(?:\s+(\d+(?:\.\d+)?[wx]))?$/iu.exec(candidate.trim());
+    if (!match) return '';
+    const src = normalizedMediaUrl(match[1]);
+    return src ? [src, match[2]].filter(Boolean).join(' ') : '';
+  }).filter(Boolean);
+  return candidates.length ? candidates.join(', ') : undefined;
+};
 const normalizedThumbnailSources = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
   .map((item) => ({
     src: normalizedMediaUrl(item.src),
@@ -135,7 +149,7 @@ const normalizedResolvedItem = (item: EventMediaRailItem, index: number): Normal
     ...item,
     src,
     thumbnailSrc,
-    thumbnailSrcset: String(item.thumbnailSrcset || '').trim() || undefined,
+    thumbnailSrcset: normalizedSrcset(item.thumbnailSrcset),
     kind,
     fit,
     width,
