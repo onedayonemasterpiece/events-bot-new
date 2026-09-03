@@ -1,6 +1,6 @@
 {
   "schema": "kenigevents.v0-browser-audit-matrix.v1",
-  "version": 2,
+  "version": 3,
   "contract_version": "1.10.0",
   "authored_against_source": "1bc6d9cb4c122046f4782532381de953727c1da6",
   "checkpoint_semantics": "NON_GATING",
@@ -10,7 +10,7 @@
     "relationship": "EXECUTABLE_OVERLAY_NOT_REPLACEMENT",
     "canonical_a0_v0_matrix": {
       "repository": "onedayonemasterpiece/lovekgd-design-system",
-      "ref": "d14ac7c932ba0b554b229e5dcab0504c10ca2328",
+      "ref": "b3395b944f8255defed20c69338d775a94b3ad02",
       "path": "catalog/normalization/evidence/a0-v0-acceptance-matrix.v1.json",
       "blob_sha": "e81a75a77a62c2f2efc2b9f0c72625f56c1fc38b",
       "schema": "kenigevents.a0-v0-acceptance-matrix.v1"
@@ -26,9 +26,12 @@
   },
   "published_targets": {
     "real": {
-      "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
-      "source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
-      "verdict": "NOT_EXECUTED"
+      "url": "https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/",
+      "source_sha": "1bc6d9cb4c122046f4782532381de953727c1da6",
+      "verdict": "NOT_EXECUTED",
+      "classification": "CURRENT_PUBLIC_PRE_F0_BASELINE",
+      "r0_result_comment": 5529740140,
+      "supersedes": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/"
     },
     "golden": {
       "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
@@ -40,15 +43,16 @@
   "ref_snapshot": {
     "semantics": "TRANSACTION_EVIDENCE_NOT_HARD_GATES",
     "integration": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
-    "successor": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "successor": "7f4d04b7de7003eb44980e4215871381686cb9b3",
     "N0": "fac1a2434ee550b37c9630c3502130574be53ecc",
     "F0_source": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
-    "F0_report": "0246d5bc1cd606bf5e71d4d3419892d63c54216e",
+    "F0_report": "1c4de6afdb0ab14e2d828946f9b34ce69ae3565e",
     "FR0": "NOT_MATERIALIZED_CUTOVER_BASE_REQUIRED",
     "M0_source": "c71351decdcee02941acb26c5e2fbaf88faf0378",
     "M0_report": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
-    "A0": "61d340a3ca291f074289d2292b33f56b2bad8a22",
-    "thin_sot": "d14ac7c932ba0b554b229e5dcab0504c10ca2328"
+    "A0": "6357b6d31f145e8b16f8a40f172970d73cf79051",
+    "thin_sot": "b3395b944f8255defed20c69338d775a94b3ad02",
+    "published_real_source": "1bc6d9cb4c122046f4782532381de953727c1da6"
   },
   "viewports": [
     { "id": "mobile-360x812", "width": 360, "height": 812, "class": "mobile" },
@@ -131,13 +135,7 @@
       { "id": "PM0-37-19", "route": "/zakrytaya-afisha/", "family": "ClosedFocusHubRouteComposition", "viewport_ids": ["mobile-390x844", "desktop-canonical-1280x800"] }
     ]
   },
-  "focused_case_ids": [
-    "V0-A0-HOME",
-    "V0-A0-PERSONAL-FEED",
-    "V0-A0-FAVORITES",
-    "V0-A0-SEARCH",
-    "V0-A0-EVENT-DETAIL"
-  ],
+  "focused_case_ids": ["V0-A0-HOME", "V0-A0-PERSONAL-FEED", "V0-A0-FAVORITES", "V0-A0-SEARCH", "V0-A0-EVENT-DETAIL"],
   "observation_contract": {
     "required": ["target.previewUrl", "target.sourceSha", "target.dataMode", "documents[]"],
     "groups": ["shell", "auxiliaryTargets", "identityExpectations", "externalTargets", "popularRows", "mediaFrames", "adaptiveGrids", "keyboard"],
@@ -172,5 +170,5 @@
     "product_behavior_effect": "none",
     "published_preview_effect": "none"
   },
-  "next_gate": "N0-accepted tested successor -> immutable full real/all Kaggle HTTP-200 preview -> independent V0 classification; FR0 is included only after exact cutover and must not delay an already-ready successor"
+  "next_gate": "independent V0 audit of current HTTP-200 1bc6d9cb preview when my-browser-bridge is callable; any newer N0-accepted immutable full real/all Kaggle successor, including the post-F0 transaction, supersedes it as the next audit target"
 }
