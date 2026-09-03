@@ -396,9 +396,14 @@ must have a structural data-driven fallback with the same multi-image and
 recommendation-journey contract; expiry of one historical event is not a build
 failure.
 
-An empty listing is accepted only through an explicit canonical empty state:
-the mobile rail root must exist and publish `data-ds-state="empty"`. Absence of
-rows alone never converts a missing rail into a passing empty fixture.
+An empty Date/Weekend listing is accepted only through an explicit canonical
+empty state: its mobile rail root must exist and publish
+`data-ds-state="empty"`. Absence of rows alone never converts a missing rail
+into a passing empty fixture. Popular is intentionally different: it owns the
+accepted Large/Compact representations and must not recreate a disconnected
+third `MobileListingRailSurface` merely to satisfy a generic preview check.
+Real data may omit any evidence shelf that has fewer than three honest
+candidates; the remaining shelves preserve canonical order and 3–5 cards.
 
 V0 — read-only ChatGPT window с `my-browser-bridge` и GitHub.
 

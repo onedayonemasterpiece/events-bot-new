@@ -13,6 +13,9 @@
   instead of widening the whole document. Cards, media ratios and shelf
   composition are unchanged; the browser gate covers the 980px breakpoint
   seams, the 1366px presentation contour and short real-data listing pages.
+  The generated-preview gate now validates Popular's accepted Large/Compact
+  roots without requiring a disconnected third mobile rail and permits
+  truthfully omitted evidence shelves while preserving survivor order.
 
 - Changed: static-site previews and production candidates now share one
   Kaggle-to-checked-artifact-to-host-publisher rail targeting the same
