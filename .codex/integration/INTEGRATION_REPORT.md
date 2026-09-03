@@ -240,3 +240,12 @@ research lanes changed no files.
 - `Codex_only_implementation_and_why_it_was_not_economical_for_a_role_window`: none; integration/runtime/evidence only.
 - `blind_wait_seconds: 0`
 - `duplicated_specialist_work: 0`
+
+### Successor role checkpoint (2026-09-03T11:51Z)
+
+- F0 convergence/docs tip `bbbc9b09720298f43653c36bd5343385cae63102` and A0 artifact-route test tip `25adccae5975c447f9ee734b110adfb2f8a9d6ae` merged without conflict; A0 targeted suite PASS.
+- `local_runtime_work_completed`: after two capacity failures, official Astro `outDir` contract was checked and the exact frozen build transaction was moved to a disk-backed isolated worktree with 6+ GiB available; active PID+log-tail generation restarted with identical SHA/data/reference time/build ID.
+- `role_outputs_integrated_or_verified`: yes, latest fetched F0/M0/A0 tips.
+- `Codex_only_implementation_and_why_it_was_not_economical_for_a_role_window`: none; R0 only changed execution placement from bounded tmpfs to sufficient disk and integrated role commits.
+- `blind_wait_seconds: 0`
+- `duplicated_specialist_work: 0`
