@@ -31,14 +31,14 @@ test('A0 may retain or remove the bounded runtime placement bridge without losin
   const columnSetter = /card\.style\.setProperty\('grid-column', String\(Number\(relatedLayout\.rowColumn\) \+ 1\)\)/u;
   const rowRemoval = /card\.style\.removeProperty\('grid-row'\)/u;
   const columnRemoval = /card\.style\.removeProperty\('grid-column'\)/u;
-  const bridgePresent = rowSetter.test(layout) || columnSetter.test(layout) || rowRemoval.test(layout) || columnRemoval.test(layout);
+  const bridgePresent = rowSetter.test(layout) || columnSetter.test(layout);
 
   assert.match(layout, /setRuntimeCardDataset\(card, 'labRowIndex'/u);
   assert.match(layout, /setRuntimeCardDataset\(card, 'labRowColumn'/u);
   if (bridgePresent) {
     assert.match(layout, rowSetter);
     assert.match(layout, columnSetter);
-    assert.match(layout, rowRemoval);
-    assert.match(layout, columnRemoval);
   }
+  assert.match(layout, rowRemoval);
+  assert.match(layout, columnRemoval);
 });

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Changed: integrated the post-FR0 M0 card/grid batch on the current normalized
+  successor. `EventCard` and `ListingEventCard` now publish the canonical
+  `pending | loaded | fallback | broken` media resource lifecycle, fail broken
+  resources closed to the existing fallback, and the public related-card
+  resolver enforces the documented 20% document/OCR crop budget. Integration
+  regressions now recognize the accepted flex-line cleanup path and loop-based
+  mobile icon-role coverage without changing product layout or interactions.
+
 - Fixed: the browser release gate now waits for the repeated footer poster-copy
   transaction itself to become idle before sending the text-copy shortcut,
   instead of accepting an identical stale toast from the first transaction.

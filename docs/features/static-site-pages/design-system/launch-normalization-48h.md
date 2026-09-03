@@ -332,6 +332,21 @@ interaction ownership и внешнюю геометрию surface, но не п
 ListingEventCard, EventMediaRail и MobileListingRailRow обязаны использовать
 этот один protocol и публиковать его диагностические поля для browser audit.
 
+После FR0 cutover карточки используют один resource-state vocabulary:
+`EventCard` и `ListingEventCard` с URL начинают в `pending`, успешная загрузка
+переходит в `loaded`, отсутствие URL — в `fallback`, а network/decode failure —
+в `broken` с прямым fallback, `contain`, запрещённым crop и
+`resource_load_error`. Failed `src/srcset` удаляются, поэтому broken resource
+не может вернуть `cover`. Это не переносит framing paint в карточку:
+`media-frame.css` остаётся единственным fit/focal/clip owner. Mobile listing
+rail пока остаётся отдельным consumer-binding backlog и не считается закрытым
+этим card batch.
+
+Публичный `relatedCardLayout` resolver самостоятельно применяет тот же
+максимальный 20% crop budget к OCR/document media: точная граница допустима,
+запрос выше неё обязан fail-close в `contain`, даже если resolver вызван вне
+row packer.
+
 Изображение не может визуально выходить за frame. Page-local grid/card CSS не
 может менять framing policy. Existing optimizer/contract расширяется; второй
 параллельный algorithm запрещён без доказанной невозможности reuse.

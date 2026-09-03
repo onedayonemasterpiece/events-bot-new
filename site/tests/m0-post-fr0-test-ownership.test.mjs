@@ -80,9 +80,8 @@ test('consumer-level assertions leave M0 tests only after equivalent coverage ex
   assert.doesNotMatch(iconTest, /MobileListingRailRow|foundations\.ts|semanticRoles\(mobile\)/u);
   assert.ok(mobileRailTest.includes('MobileListingRailRow.astro'));
   assert.ok(mobileRailTest.includes('SemanticIcon'));
-  for (const role of ['feature', 'inline', 'action']) {
-    assert.ok(mobileRailTest.includes(`role=\"${role}\"`), `mobile rail replacement misses ${role} role coverage`);
-  }
+  assert.match(mobileRailTest, /for \(const role of \['feature', 'inline', 'action'\]\)/u);
+  assert.ok(mobileRailTest.includes('new RegExp(`<SemanticIcon name="heart" role="${role}"'));
 
   assert.doesNotMatch(targetTest, /EventLayout\.astro|styles\/design-system\.css|legacyCompactRule/u);
   assert.ok(targetTest.includes('--ke-control-min'));
