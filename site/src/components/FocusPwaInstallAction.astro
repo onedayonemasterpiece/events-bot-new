@@ -7,6 +7,10 @@ const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
 
 <section
   class="focus-pwa"
+  data-ds-family="FocusPwaInstallAction"
+  data-ds-version="1"
+  data-ds-variant="browser-install"
+  data-ds-state="checking"
   data-focus-pwa-install
   data-pwa-install-root
   data-pwa-install-id={pwaInstallId}
@@ -26,6 +30,7 @@ const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
   <button
     type="button"
     class="ke-button ke-button--primary ke-button--large focus-pwa__button"
+    data-ke-button-compat="runtime-hook-hidden"
     data-pwa-install-button
     hidden
   >
@@ -125,4 +130,19 @@ const pwaOpenHref = withBase('/fokus-gruppa/priglashenie/?launch=pwa');
 <script>
   import { hydrateFocusPwaInstallActions } from '../lib/focus-pwa-install-controller';
   hydrateFocusPwaInstallActions();
+  document.querySelectorAll('[data-focus-pwa-install]').forEach((root) => {
+    if (!(root instanceof HTMLElement)) return;
+    const button = root.querySelector('[data-pwa-install-button]');
+    const sync = () => {
+      root.dataset.dsState = button instanceof HTMLElement && !button.hidden
+        ? 'install-ready'
+        : root.dataset.pwaInstallReady === 'true' ? 'resolved' : 'checking';
+    };
+    new MutationObserver(sync).observe(root, {
+      subtree:true,
+      attributes:true,
+      attributeFilter:['hidden', 'data-pwa-install-ready'],
+    });
+    sync();
+  });
 </script>

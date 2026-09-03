@@ -4,7 +4,17 @@ import { withBase } from '../lib/events';
 const invitePath = withBase('/fokus-gruppa/priglashenie/');
 ---
 
-<section id="focus-invite-share" class="focus-share" data-focus-share data-invite-path={invitePath} aria-labelledby="focus-share-title">
+<section
+  id="focus-invite-share"
+  class="focus-share"
+  data-ds-family="FocusGroupInviteShare"
+  data-ds-version="1"
+  data-ds-variant="browser-local-link-and-qr"
+  data-ds-state="idle"
+  data-focus-share
+  data-invite-path={invitePath}
+  aria-labelledby="focus-share-title"
+>
   <div>
     <p class="focus-share__eyebrow">Пригласить в фокус-группу</p>
     <h2 id="focus-share-title">Одна ссылка — тот же адрес в QR</h2>
@@ -16,7 +26,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
   </div>
 
   <div class="focus-share__actions">
-    <button class="ke-button ke-button--secondary" type="button" data-focus-share-create>
+    <button class="ke-button ke-button--secondary" type="button" data-ke-button-compat="runtime-hook" data-focus-share-create>
       Создать новую ссылку и QR
     </button>
     <div class="focus-share__result" data-focus-share-result hidden>
@@ -32,6 +42,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
           <span>Код строится прямо в браузере и не отправляется во внешний сервис.</span>
           <a
             class="ke-button ke-button--secondary"
+            data-ke-button-compat="runtime-hook-download"
             data-focus-share-qr-download
             download="priglashenie-fokus-gruppa.svg"
           >
@@ -40,10 +51,10 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
         </div>
       </div>
       <div class="focus-share__buttons">
-        <button class="ke-button ke-button--primary" type="button" data-focus-share-native>
+        <button class="ke-button ke-button--primary" type="button" data-ke-button-compat="runtime-hook" data-focus-share-native>
           Поделиться
         </button>
-        <button class="ke-button ke-button--secondary" type="button" data-focus-share-copy>
+        <button class="ke-button ke-button--secondary" type="button" data-ke-button-compat="runtime-hook" data-focus-share-copy>
           Копировать
         </button>
       </div>
@@ -99,14 +110,15 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
 
     let qrObjectUrl: string | null = null;
 
-    const setStatus = (message: string) => {
+    const setStatus = (message: string, state?: string) => {
       status.textContent = message;
+      if (state) root.dataset.dsState = state;
     };
 
     const selectFallback = () => {
       input.focus();
       input.select();
-      setStatus('Автокопирование недоступно. Ссылка выделена — скопируйте её вручную.');
+      setStatus('Автокопирование недоступно. Ссылка выделена — скопируйте её вручную.', 'manual-copy');
     };
 
     createButton.addEventListener('click', () => {
@@ -126,9 +138,9 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
         result.hidden = false;
         createButton.textContent = 'Создать другую ссылку и QR';
         nativeButton.hidden = typeof navigator.share !== 'function';
-        setStatus('Ссылка и QR готовы. Код нигде не отправлялся и не сохранялся сайтом.');
+        setStatus('Ссылка и QR готовы. Код нигде не отправлялся и не сохранялся сайтом.', 'ready');
       } catch {
-        setStatus('Браузер не смог создать ссылку и QR. Ничего не было сохранено.');
+        setStatus('Браузер не смог создать ссылку и QR. Ничего не было сохранено.', 'error');
       }
     });
 
@@ -140,12 +152,12 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
           text: 'Приглашение проверить продуктовый прототип.',
           url: input.value,
         });
-        setStatus('Системное меню «Поделиться» закрыто. Ссылка не хранится сайтом.');
+        setStatus('Системное меню «Поделиться» закрыто. Ссылка не хранится сайтом.', 'shared');
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
-          setStatus('Отправка отменена.');
+          setStatus('Отправка отменена.', 'ready');
         } else {
-          setStatus('Не удалось открыть системное меню. Можно скопировать ссылку.');
+          setStatus('Не удалось открыть системное меню. Можно скопировать ссылку.', 'share-unavailable');
         }
       }
     });
@@ -154,7 +166,7 @@ const invitePath = withBase('/fokus-gruppa/priglashenie/');
       if (!input.value) return;
       try {
         await navigator.clipboard.writeText(input.value);
-        setStatus('Ссылка скопирована. Она открывает вступление, но не заменяет подтверждение аккаунта.');
+        setStatus('Ссылка скопирована. Она открывает вступление, но не заменяет подтверждение аккаунта.', 'copied');
       } catch {
         selectFallback();
       }
