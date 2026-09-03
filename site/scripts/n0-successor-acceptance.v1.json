@@ -1,171 +1,208 @@
 {
   "schema_version": "kenigevents.n0-successor-acceptance.v1",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
-  "contract_version": "1.8.0",
-  "generated_at": "2026-09-03T12:50:00.000Z",
-  "owner": "N0",
-  "base_candidate": {
-    "branch": "r0/ui-normalization-current-candidate-20260903",
-    "sha": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
-    "decision": "ACCEPTED_PRECURSOR",
-    "runtime_status": "R0_FULL_GATE_PENDING"
+  "contract_version": "1.9.0",
+  "evidence_cutoff": {
+    "issue_comment": 5527249164,
+    "timestamp": "2026-09-03T14:25:37Z"
   },
-  "frozen_first_real_preview": {
-    "decision": "KEEP_FROZEN_DO_NOT_MUTATE",
-    "repo_sha": "d5ff87bcb7a2b2051ad956ef9e7e2733a1ae62c3",
-    "build_id": "preview-ui-normalized-d5ff87bc-fresh-20260903-v1",
-    "source_snapshot": "snapshot-n0-critical-contour-20260903T084238Z",
-    "snapshot_sha256": "f1f52748529ae2f750974f5a7f11b8745a3d035978d3bb1dbc7e95b5d5feb6a5",
-    "event_rows": 8296,
-    "eligible_events": 555,
-    "next_gate": "native R0 exact build/check/deploy/public-verification result"
+  "owner": "N0",
+  "authority": {
+    "integration": {
+      "branch": "integration/ui-normalization-launch-20260902",
+      "head": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8",
+      "classification": "CURRENT_PROGRAMME_DOC_CHECKPOINT_NOT_CANDIDATE_ANCESTOR"
+    },
+    "combined_candidate": {
+      "branch": "r0/ui-normalization-current-candidate-20260903",
+      "head": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+      "decision": "ACCEPTED_PRECURSOR"
+    },
+    "thin_sot": {
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "branch": "integration/launch-normalized-sot-penpot-20260902",
+      "head": "f3da3c2e8e395ee578a008b208470a3eb64740f8"
+    },
+    "kaggle_pipeline_source": {
+      "branch": "agent/static-site-single-kaggle-contract",
+      "observed_head": "0d92654b9637e31753fed5bd4bf6a4a66763c079",
+      "runtime_acceptance_rule": "ONLY_EXACT_BUILT_SHA_INHERITS_A_KAGGLE_RESULT",
+      "observed_head_runtime_status": "UNBUILT_POST_ACCEPTED_TRANSACTION"
+    },
+    "n0_branch": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "base": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+      "head_resolution": "Resolve the exact remote tip after this manifest and its tests are committed."
+    }
+  },
+  "accepted_golden_transaction": {
+    "decision": "ACCEPTED_AS_GOLDEN_KAGGLE_PIPELINE_AND_CORPUS_EVIDENCE_ONLY",
+    "issue_comment": 5527249164,
+    "build_id": "preview-golden-84504f30-20270604-v1",
+    "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+    "repo_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+    "explicit_ancestry": [
+      "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+      "e7e8802675103a04c207564f8dccd88a8c0c65de",
+      "e3f6f9dcd5f0103145389556f3e8fbc9b1e59b7b",
+      "c124ca2a810f100122230b7f51ec1221f7e74be4",
+      "84504f30eebc334deba46e94365601c3d572c5c0"
+    ],
+    "data_mode": "golden",
+    "page_classes": ["all"],
+    "golden_corpus_id": "golden-review-20260903-v1",
+    "golden_corpus_sha256": "f90561691baa6744804b6cba36b0a8580eac8e9607dcdb97483511ad32e7ce00",
+    "kaggle": {
+      "dataset": "zigomaro/static-site-builder-input-20260903141925-94f0f2",
+      "kernel": "zigomaro/kenigevents-static-site-builder",
+      "status": "COMPLETE"
+    },
+    "artifact": {
+      "result_sha256": "fdb44cea1bbc196633494b5f7be5070b5aaa46030f8ac375c7166158ae302618",
+      "archive_sha256": "9bba6912202806e3faf9b48e0e911908018f08c2fc40e79713b9f344e7cb6265",
+      "published_objects": 1450,
+      "published_bytes": 178470938,
+      "root_mutation": false,
+      "stable_ics_mutation": false
+    },
+    "verification": {
+      "owner_url_http": 200,
+      "manifest_http": 200,
+      "document_cases": 36,
+      "document_http_200": 36,
+      "document_horizontal_overflow_cases": 0,
+      "unexpected_http_failures": 0,
+      "expected_missing_media_404": 26,
+      "v0_independent_verdict": "PENDING"
+    },
+    "checklist_evidence": {
+      "4": "FULL_GOLDEN_KAGGLE_REVIEW_PREVIEW_ACCEPTED",
+      "6": "FROZEN_KALININGRAD_CLOCK_PUBLISHED",
+      "7": "EXACT_5_6_5_DENSITY_PUBLISHED",
+      "8": "EXACT_WEEKEND_OCCURRENCE_REUSE_PUBLISHED",
+      "9": "STRESS_MATRIX_PUBLISHED_V0_VISUAL_VERDICT_PENDING",
+      "10": "PINNED_CORPUS_AND_ASSET_IDENTITY_PUBLISHED_APPEND_ONLY_WINDOW_ACTIVE"
+    },
+    "does_not_close": [
+      "PM0 item 3 fresh-real full Kaggle Review Preview",
+      "PM0 item 5 production-form or Release Candidate",
+      "voice-review readiness gate",
+      "V0 visual PASS",
+      "ASTRO_NORMALIZATION_PASS",
+      "thin S or Penpot equality"
+    ]
   },
   "role_outputs": {
     "F0": {
-      "head": "bbbc9b09720298f43653c36bd5343385cae63102",
-      "decision": "ALREADY_CONTAINED_IN_BASE_CANDIDATE",
-      "notes": "Central foundation registry, bindings and convergence census remain accepted."
+      "branch": "work/ui-normalization-f0-wave-3-20260903",
+      "head": "63230e4f0552125494d784c4493390e0a1da2d6c",
+      "merge_base": "bbbc9b09720298f43653c36bd5343385cae63102",
+      "candidate_relation": "DIVERGED_POST_CONTAINED_BASE",
+      "decision": "SELECTIVE_POST_BASE_REVIEW_REQUIRED",
+      "runtime_status": "NOT_RUN"
     },
     "M0": {
       "branch": "work/ui-normalization-m0-continuity-20260903",
-      "head": "e5c07e9f00b34f4143d8539c79b6b0f9f4de32a8",
-      "decision": "ACCEPT_SOURCE_FOR_SUCCESSOR",
+      "valid_head": "e620e063472a20f5e703bfb7845cb9ad5e302cfe",
+      "invalid_result_sha_rejected": "e620e69fd8fb4641415320beaa3ea9c1003beee8",
       "lineage": {
         "merge_base": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
-        "ahead_by": 13,
+        "ahead_by": 23,
         "behind_by": 0
       },
+      "decision": "SOURCE_SUBSTANTIVE_NOT_CANDIDATE_READY",
       "accepted_scope": [
-        "one MediaFrame v1 structural/fit CSS owner",
-        "EventCard MediaFrame protocol",
-        "ListingEventCard MediaFrame protocol",
-        "EventMediaRail MediaFrame protocol",
-        "MobileListingRailRow MediaFrame protocol and runtime state diagnostics",
-        "AdaptiveEventCardGrid explicit complete/stretch remainder state",
-        "source regression contracts for roots, framing, discovery adapter and row states"
+        "canonical MediaFrame owner and protocol",
+        "EventCard and ListingEventCard MediaFrame bindings",
+        "EventMediaRail variants and transport diagnostics",
+        "MobileListingRailRow MediaFrame and runtime-state diagnostics",
+        "AdaptiveEventCardGrid named remainder variants",
+        "M0 regression contracts"
       ],
-      "changed_paths": [
-        "site/src/components/AdaptiveEventCardGrid.astro",
-        "site/src/components/EventCard.astro",
-        "site/src/components/EventMediaRail.astro",
-        "site/src/components/listings/ListingEventCard.astro",
-        "site/src/components/listings/MobileListingRailRow.astro",
-        "site/src/components/media-frame.css",
-        "site/tests/adaptive-event-card-grid.test.mjs",
-        "site/tests/keyboard-event-navigation-production.test.mjs",
-        "site/tests/mobile-listing-rail-row-state.test.mjs",
-        "site/tests/mobile-listing-rails.test.mjs",
-        "site/tests/ui-normalization-m0-contract.test.mjs"
-      ],
+      "blocking_drift": {
+        "code": "ADAPTIVE_SOURCE_COUNT_ORDER_CARDINALITY",
+        "fact": "source-count publishes events.length while source-order publishes events.slice(0, limit)",
+        "required_resolution": "Every published count/order pair must describe the same population and have equal cardinality."
+      },
+      "runtime_status": "NOT_RUN",
       "browser_status": "V0_OWNED_NOT_CLAIMED"
     },
     "A0": {
       "branch": "work/ui-normalization-a0-wave-3-20260903",
-      "accepted_head": "82691aa174b788687fb8e2f0f94809ef64a36e51",
-      "accepted_commits_after_base_a0": [
-        "f0ae566203ff71cb6cee9e3569d3c2bef1cdbdde",
-        "82691aa174b788687fb8e2f0f94809ef64a36e51"
+      "head": "8f96c659cd710091fba61eb65cb4846cccdd2c38",
+      "merge_base": "25adccae5975c447f9ee734b110adfb2f8a9d6ae",
+      "decision": "SELECTIVE_PATCH_ONLY_NOT_WHOLESALE",
+      "standalone_build_target": false,
+      "standalone_failure": "Later sources import F0 roots absent from the A0 branch tree.",
+      "product_removal_rejected_commit": "5e466d65bc2b71a814c26c063f90aa07709de08f",
+      "product_behavior_restore_commit": "84399b51b77701be714fdc84429318a9a28f93fd",
+      "restore_decision": "ACCEPTED_CORRECTION",
+      "open_drift": [
+        "Popular density control changes hidden donor layouts rather than the visible canonical rail",
+        "later consumers locally override canonical icon-role dimensions",
+        "actual route and layout owners remain partial",
+        "A0 branch touches the M0-owned OptimizedEventCardGrid and must be split at integration"
       ],
-      "decision": "ACCEPT_BOUNDED_PREFIX_ONLY",
-      "accepted_scope": [
-        "FocusGroupInviteIntake canonical foundations and identity",
-        "canonical check icon",
-        "explicit runtime-hook compatibility markers",
-        "focused negative/source regression contract"
-      ],
-      "rejected_tip": "5e466d65bc2b71a814c26c063f90aa07709de08f",
-      "rejected_commit": "5e466d65bc2b71a814c26c063f90aa07709de08f",
-      "rejection_code": "PRODUCT_BEHAVIOR_REMOVAL_NOT_AUTHORIZED",
-      "rejection_reason": "The rejected commit removes the visible Large/Compact radiogroup, persisted ke_listing_density_v2 choice, keyboard selection, pinch gesture and both mobile density target representations. That is a user-facing product change, not mechanical duplicate-root closure.",
-      "required_correction": "Revert only 5e466d65 while retaining the accepted prefix, or obtain an explicit owner product decision with replacement interaction and regression/browser contract."
-    },
-    "N0": {
-      "branch": "work/ui-normalization-n0-checklist-20260903",
-      "base_sha": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
-      "head_resolution": "Use the exact branch tip published by N0 after final fresh-read; it must contain this manifest and remain a descendant of base_sha.",
-      "decision": "ACCEPT_SOURCE_FOR_SUCCESSOR_AFTER_EXACT_HEAD_FREEZE",
-      "scope": [
-        "Golden review corpus v1",
-        "corpus validator and PreviewEvent materializer",
-        "deterministic admission action fixtures",
-        "isolated byte-restoring Golden preview builder",
-        "real/golden preview metadata identity",
-        "Golden route/asset/action checker",
-        "fail-closed Golden immutable-prefix deployment wrapper",
-        "source and deploy regression contracts",
-        "N0 Golden acceptance/transition runbook"
-      ],
-      "runtime_status": "NOT_RUN_GITHUB_ONLY_ROLE"
+      "must_preserve_without_owner_decision": [
+        "visible Large/Compact choice",
+        "localStorage restoration",
+        "keyboard radio behavior",
+        "pinch behavior",
+        "visible-event anchor preservation"
+      ]
     }
   },
-  "successor_merge_order": [
-    {
-      "order": 1,
-      "role": "M0",
-      "ref": "e5c07e9f00b34f4143d8539c79b6b0f9f4de32a8",
-      "operation": "fast-forward or ordinary merge from the accepted base candidate"
+  "pipeline_source_decisions": {
+    "built_transaction_commits": {
+      "e7e8802675103a04c207564f8dccd88a8c0c65de": "ACCEPT one real/golden data-mode Kaggle rail",
+      "e3f6f9dcd5f0103145389556f3e8fbc9b1e59b7b": "ACCEPT bounded create-only publication concurrency",
+      "c124ca2a810f100122230b7f51ec1221f7e74be4": "ACCEPT built responsive-selector correction; M0 successor must retain equivalent behavior",
+      "84504f30eebc334deba46e94365601c3d572c5c0": "ACCEPT build-prefixed asset origin"
     },
-    {
-      "order": 2,
-      "role": "A0",
-      "ref": "82691aa174b788687fb8e2f0f94809ef64a36e51",
-      "operation": "merge the exact accepted commit, never the current rejected branch tip"
-    },
-    {
-      "order": 3,
-      "role": "N0",
-      "ref": "work/ui-normalization-n0-checklist-20260903@<exact-final-tip-from-N0-result>",
-      "operation": "merge exact final N0 tip after verifying it descends from 0d73428d and contains this manifest"
-    }
-  ],
-  "path_overlap_review": {
-    "M0_A0": "NONE in accepted deltas",
-    "M0_N0": "NONE; M0 owns component roots/tests, N0 owns Golden build/check/package/runbook",
-    "A0_N0": "NONE; accepted A0 owns FocusGroupInviteIntake and focus source test",
-    "expected_conflict_policy": "No semantic conflict resolution is authorized. Any unexpected overlap stops only that merge and is returned to N0/owning role."
+    "post_transaction_head": "0d92654b9637e31753fed5bd4bf6a4a66763c079",
+    "post_transaction_decision": "SOURCE_REVIEW_PENDING_NO_RUNTIME_INHERITANCE"
   },
-  "required_source_commands": [
-    "cd site && node --test tests/ui-normalization-m0-contract.test.mjs tests/adaptive-event-card-grid.test.mjs tests/mobile-listing-rails.test.mjs tests/mobile-listing-rail-row-state.test.mjs tests/keyboard-event-navigation-production.test.mjs tests/event-detail-runtime-regressions.test.mjs tests/visual-keyboard-regressions.test.mjs",
-    "cd site && node --test tests/focus-normalization-source.test.mjs tests/focus-group-product-surface.test.mjs tests/focus-pwa-membership.test.mjs tests/static-site-auth.test.mjs",
+  "next_real_gate": {
+    "status": "OPEN",
+    "required": [
+      "one current integrated successor SHA with accepted source deltas only",
+      "fresh immutable production snapshot with source time/count/hash identity",
+      "the canonical events-bot-new Kaggle StaticSiteBuilder",
+      "--preview-data-mode real",
+      "--page-class all",
+      "checked artifact and create-only immutable-prefix publication",
+      "HTTP-200 exact /<buildId>/__preview/",
+      "matching preview-build.json and Kaggle operation/artifact identity",
+      "independent V0 DOM/computed-style verdict"
+    ],
+    "golden_build_is_not_a_substitute": true
+  },
+  "v0_triggers": {
+    "golden": {
+      "status": "READY",
+      "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+      "scope": "Golden route/media/grid/state audit; no fresh-real voice-review credit"
+    },
+    "fresh_real": {
+      "status": "PENDING",
+      "required_result": "exact HTTP-200 current full real Kaggle Review Preview with matching manifest/snapshot/artifact identity"
+    }
+  },
+  "required_source_commands_after_integration": [
+    "cd site && npm run test:n0-successor-acceptance",
     "cd site && npm run test:golden-preview-contract",
-    "cd site && npm run test:golden-deploy-contract",
     "cd site && npm run check:design-system-production-surfaces",
     "cd site && npm run check:design-system-iconography"
   ],
-  "required_successor_real_gate": [
-    "npm run build:preview",
-    "npm run check:preview",
-    "npm run check:unified-prototype",
-    "immutable-prefix deploy with KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY=1",
-    "public 2xx owner URL and matching preview-build.json"
-  ],
-  "required_golden_gate_after_successor_real": [
-    "npm run build:golden-preview",
-    "npm run check:golden-preview",
-    "npm run check:preview",
-    "npm run check:unified-prototype",
-    "npm run deploy:golden-preview dry run",
-    "npm run deploy:golden-preview",
-    "public 2xx owner URL, preview-build.json, corpus and machine evidence"
-  ],
-  "checklist_effect": {
-    "3": "Frozen first real preview remains R0 runtime/publication pending.",
-    "4": "Golden source/build/check/deploy contract is implemented; runtime/public 2xx remains pending.",
-    "6": "Frozen Kaliningrad Friday/Saturday/Sunday source contract implemented; built output pending.",
-    "7": "Exact 5/6/5 source density implemented; built output pending.",
-    "8": "Exact current/dated Weekend occurrence reuse implemented; built output pending.",
-    "9": "Media/copy/admission/calendar/lifecycle stress source cells implemented; V0 verdict pending.",
-    "10": "Pinned event/image/SVG and two-week append-only source lock implemented; runtime/public identity readback pending.",
-    "26": "M0 source now publishes one shared MediaFrame owner; runtime/V0 pending.",
-    "30": "M0 source has explicit complete/stretch remainder states; runtime/V0 pending.",
-    "voice_review_gate": "NOT_READY until current-sha fresh-real public 2xx plus V0 no-critical-drift verdict."
-  },
   "prohibitions": [
-    "do not mutate or rebuild the frozen first real-preview transaction from successor refs",
-    "do not merge A0 commit 5e466d65 or a descendant containing it without the required product decision/correction",
-    "do not treat source tests as runtime PASS",
-    "do not treat R0 local smoke as V0 verdict",
-    "do not publish Golden data to the stable site root",
-    "do not create a second Astro or owner-facing Golden lab"
+    "do not publish a full or focused owner preview outside the canonical Kaggle pipeline",
+    "do not use deploy:preview or deploy:golden-preview as a launch path",
+    "do not infer runtime acceptance from a newer unbuilt branch head",
+    "do not integrate the invalid M0 result SHA",
+    "do not integrate the M0 head until the source-count/source-order population contract is coherent",
+    "do not merge the current A0 branch wholesale",
+    "do not delete or silently retire the Popular density choice without an owner product decision",
+    "do not treat R0 browser smoke as a V0 verdict",
+    "do not treat Golden as fresh-real preview evidence"
   ]
 }
