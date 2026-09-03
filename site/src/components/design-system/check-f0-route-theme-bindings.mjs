@@ -14,9 +14,9 @@ const productContour = readRepo('site/src/components/design-system/product-conto
 const strict = process.env.F0_REQUIRE_ROUTE_THEME_CONSUMED === '1';
 
 assert.equal(registry.schema, 'kenigevents.f0-route-theme-bindings.v1');
-assert.equal(registry.version, '1.0.0');
+assert.equal(registry.version, '1.1.0');
 assert.equal(registry.role, 'F0');
-assert.ok(['1.9.0', '1.10.0'].includes(registry.contract_version), 'unsupported route-theme registry contract');
+assert.equal(registry.contract_version, '1.10.0', 'route-theme registry must match active contract 1.10.0');
 assert.equal(registry.clusters.length, 3);
 assert.equal(semanticSeparation.schema, 'kenigevents.f0-festival-semantic-separation.v1');
 assert.equal(semanticSeparation.contract_version, '1.10.0');
@@ -104,7 +104,7 @@ for (const cluster of registry.clusters) {
   const migratedHits = cluster.required_substrings_after_migration.filter((signature) => source.includes(signature));
   assert.ok(
     currentHits.length >= Math.min(2, cluster.source_signatures_current.length) || migratedHits.length === cluster.required_substrings_after_migration.length,
-    `${cluster.id} matches neither its current source precondition nor its migrated contract`,
+    `${cluster.id} matches neither its current source signatures nor its migrated contract`,
   );
 
   if (strict) {
@@ -279,6 +279,10 @@ if (strict) {
   assert.equal(festivalSemanticState, 'SEMANTICALLY_SEPARATED');
   assert.equal(guideUsesCategoryRole, false, 'guide-like cue is bound to the category role');
   assert.equal(categoryUsesGuideRole, false, 'category container is bound to the guide-like role');
+  assert.ok(festival.includes('<SemanticIcon name="heart" role="control" />'), 'festival heart must use the canonical control icon');
+  assert.ok(festival.includes('<SemanticIcon name="link" role="control" />'), 'festival link must use the canonical control icon');
+  assert.ok(festival.includes('<SemanticIcon name="calendar" role="control" />'), 'festival calendar must use the canonical control icon');
+  assert.ok(festival.includes("rel={item.isExternal ? 'noopener noreferrer' : undefined}"), 'festival external links must retain noopener+noreferrer');
   assert.deepEqual(exhibitionsPrivateThemeHits, [], 'exhibitions retains private theme/motion aliases');
   assert.deepEqual(
     exhibitionsRuntimeVariablesPresent.sort(),
@@ -339,7 +343,8 @@ if (strict) assert.equal(festivalTargetState, 'CENTRAL_44PX_MIN_BOUND');
 
 console.log(JSON.stringify({
   contract: registry.schema,
-  contract_compatibility: [registry.contract_version, semanticSeparation.contract_version],
+  contract_version: registry.contract_version,
+  semantic_separation_contract_version: semanticSeparation.contract_version,
   observed_successor: registry.observed_successor,
   strict_mode: strict,
   route_foundation: 'TOKEN_ONLY_PASS',

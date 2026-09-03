@@ -1,21 +1,21 @@
 {
   "schema": "kenigevents.f0-route-theme-bindings.v1",
-  "version": "1.0.0",
-  "status": "F0_READY_A0_CONSUMPTION_PENDING",
+  "version": "1.1.0",
+  "status": "F0_CURRENT_SUCCESSOR_SOURCE_CONSUMED_VOCABULARY_1_10",
   "role": "F0",
-  "contract_version": "1.9.0",
+  "contract_version": "1.10.0",
   "observed_successor": {
     "branch": "agent/static-site-single-kaggle-contract",
-    "sha": "d0ad17088e13d5dab3d992326f393e2616246c5d",
-    "includes_f0_ancestor": "de92dabd4551e117ca1af1be7915ff223321cc32"
+    "sha": "cebeafeee08251a327145ee973ee035cced65204",
+    "includes_f0_ancestor": "a4db631dbb3b01e1f71c42e0e3b87d077a538d19"
   },
   "runtime_evidence": {
-    "fresh_real_preview": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
-    "fresh_real_source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
-    "golden_preview": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+    "source_review_only": true,
+    "next_full_kaggle_preview_pending": true,
     "golden_v0_comment": 5527892153,
-    "n0_classification_comment": 5528519655,
-    "boundary": "source bindings do not inherit browser acceptance from either immutable preview"
+    "source_review_start_comment": 5530418021,
+    "fr0_result_comments": [5530845070, 5530977687],
+    "boundary": "source acceptance does not claim executable PASS, full Kaggle Preview, browser observation or V0 PASS"
   },
   "ownership": {
     "F0": [
@@ -28,6 +28,10 @@
       "replace consumer-local aliases and raw declarations",
       "remove consumer-local SVG and target-size overrides",
       "preserve route composition and behavior"
+    ],
+    "FR0": [
+      "MediaFrame framing for exhibitions deck, gallery and medallion",
+      "fail-closed media semantics and resource-state publication"
     ],
     "R0": [
       "apply accepted cross-branch mechanics",
@@ -44,7 +48,7 @@
       "consumer": "site/src/components/ExhibitionsPersonalSurface.astro",
       "route": "/vystavki/",
       "family": "ExhibitionsPersonalSurface@1/ranked-personal-catalog",
-      "state": "CENTRAL_TOKENS_READY_CONSUMER_LOCAL_OWNER_PRESENT",
+      "state": "SOURCE_CONSUMED_PRIVATE_THEME_REMOVED_RUNTIME_VARIABLES_PRESERVED",
       "private_aliases": {
         "--ex-bg": "--ke-color-exhibitions-background",
         "--ex-surface": "--ke-color-exhibitions-surface",
@@ -64,6 +68,12 @@
         "--ex-motion-fast": "--ke-exhibitions-motion-fast",
         "--ex-motion-base": "--ke-exhibitions-motion-base"
       },
+      "retained_runtime_variables": [
+        "--ex-media-column",
+        "--ex-row-gap",
+        "--ex-surface-start",
+        "--ex-rail-color"
+      ],
       "required_tokens": [
         "--ke-color-exhibitions-background",
         "--ke-color-exhibitions-surface",
@@ -106,11 +116,11 @@
         "--ke-exhibitions-signal-icon-size"
       ],
       "source_signatures_current": [
-        "--ex-bg:#0d0f10",
-        "--ex-motion-base:420ms",
-        "background:rgba(13,15,16,.96)",
-        "border-color:#697078",
-        "background:#24272a"
+        "data-ke-foundation-consumer=\"exhibitions-personal-surface\"",
+        "var(--ke-color-exhibitions-background)",
+        "--ex-media-column:",
+        "<SemanticIcon name=\"arrow-left\" role=\"control\" />",
+        "<SemanticIcon name=\"arrow-right\" role=\"control\" />"
       ],
       "required_substrings_after_migration": [
         "var(--ke-color-exhibitions-background)",
@@ -126,12 +136,13 @@
         "var(--ex-surface)",
         "var(--ex-motion-base)"
       ],
-      "removal_boundary": "delete the private :root --ex-* declaration block and replace its uses only after route-theme-foundations.css is imported through product-contour-foundations.css; preserve the dark exhibitions language and all keyboard/personalization behavior",
+      "removal_boundary": "remove only the 17 private exhibitions theme and motion aliases; retain exactly the four runtime --ex-* layout variables and all interaction behavior",
       "rollback_unit": "F0-RB-EXHIBITIONS-THEME",
       "browser_expectations": [
         "dark canvas, sticky controls, status rails and keyboard help retain current computed colors and geometry",
         "no warm generic control palette replaces the exhibitions product language",
-        "no consumer-local icon square overrides the four central roles"
+        "no consumer-local numeric UI icon square overrides the four central roles",
+        "gallery arrows use canonical SemanticIcon control roles"
       ]
     },
     {
@@ -139,7 +150,7 @@
       "consumer": "site/src/pages/festivali/index.astro",
       "route": "/festivali/",
       "family": "FestivalsTimelineRouteComposition@1/annual-timeline",
-      "state": "CENTRAL_TOKENS_READY_RAW_ROUTE_THEME_AND_ICON_OVERRIDES_PRESENT",
+      "state": "SOURCE_CONSUMED_SEMANTIC_ROLES_SEPARATED_CANONICAL_CONTROLS",
       "required_tokens": [
         "--ke-festival-page-max",
         "--ke-festival-page-gutter",
@@ -163,6 +174,8 @@
         "--ke-festival-guide-icon-size",
         "--ke-color-festival-guide-icon-surface",
         "--ke-color-festival-guide-icon",
+        "--ke-color-festival-guide-like-surface",
+        "--ke-color-festival-category-surface",
         "--ke-festival-month-rail-width",
         "--ke-festival-category-container-size",
         "--ke-festival-category-asset-size",
@@ -185,11 +198,11 @@
         "--ke-festival-motion-fast"
       ],
       "source_signatures_current": [
-        "data-ds-family=\"FestivalsTimelineRouteComposition\"",
-        "<SemanticIcon name=\"link\" role=\"control\" />",
-        ".festival-guide__icon :global(svg) { width: 0.95rem; height: 0.95rem;",
-        "width: clamp(2rem, 2.35vw, 2.2rem);",
-        "background: #31261f;"
+        "data-ke-foundation-consumer=\"festival-route\"",
+        "background: var(--ke-color-festival-guide-like-surface)",
+        "background: var(--ke-color-festival-category-surface)",
+        "width: var(--ke-festival-like-target-min)",
+        "rel={item.isExternal ? 'noopener noreferrer' : undefined}"
       ],
       "required_substrings_after_migration": [
         "var(--ke-festival-page-max)",
@@ -205,6 +218,12 @@
         "<Icon name=\"heart\" />"
       ],
       "semantic_icon_bindings": [
+        {
+          "action": "festival.guide.like",
+          "component": "SemanticIcon",
+          "name": "heart",
+          "role": "control"
+        },
         {
           "action": "festival.guide.link",
           "component": "SemanticIcon",
@@ -225,15 +244,19 @@
         }
       ],
       "identity_asset_exception": "festival category mask files are editorial taxonomy assets; tokenize their containers and asset bounds but do not count them as a fifth UI icon role",
-      "source_drift": [
-        "the route currently overrides control-role SemanticIcon SVGs to 0.95rem instead of 20px",
-        "the interactive festival favorite target is currently clamp(2rem,2.35vw,2.2rem), below the 44px launch minimum"
+      "source_drift": [],
+      "closed_source_drift": [
+        "guide-like action cue and taxonomy container now use distinct semantic roles while preserving equal current values",
+        "guide and favorite glyphs now use the 20px control role",
+        "favorite targets now use the 44px minimum",
+        "safe external links retain both noopener and noreferrer"
       ],
-      "removal_boundary": "replace raw route-theme values and the local SVG/target dimensions after this F0 file is integrated; preserve timeline packing, category assets, object-position data, likes storage and all route copy",
+      "removal_boundary": "retain the current selector-scoped semantic separation and central controls; preserve timeline packing, taxonomy assets, object-position data, likes storage and all route copy",
       "rollback_unit": "F0-RB-FESTIVALS-THEME-AND-CONTROLS",
       "browser_expectations": [
-        "guide glyphs compute to the 20px control role inside unchanged 1.9rem decorative containers",
+        "guide glyphs compute to the 20px control role inside unchanged decorative containers",
         "favorite buttons compute to at least 44 by 44px while retaining the same position and state",
+        "guide-like and taxonomy containers resolve through distinct semantic variables",
         "warm hero, timeline, cards, status pills and overlays retain current computed appearance"
       ]
     },
@@ -242,7 +265,7 @@
       "consumer": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
       "route": "/kluby-po-interesam/<slug>/",
       "family": "InterestClubDetailRouteComposition@1/verified-club",
-      "state": "CENTRAL_TOKENS_READY_RAW_ROUTE_THEME_AND_TEXT_GLYPH_PRESENT",
+      "state": "SOURCE_CONSUMED_CANONICAL_ROUTE_THEME_AND_SVG",
       "required_tokens": [
         "--ke-club-detail-gap",
         "--ke-club-detail-hero-heading-max",
@@ -272,9 +295,10 @@
       ],
       "source_signatures_current": [
         "data-ds-family=\"InterestClubDetailRouteComposition\"",
-        "background:linear-gradient(135deg, #fffdf8, rgba(215,240,236,.7))",
-        "background:rgba(215,240,236,.58)",
-        "<span aria-hidden=\"true\">←</span>"
+        "data-ke-foundation-consumer=\"club-detail\"",
+        "var(--ke-color-club-detail-hero-start)",
+        "var(--ke-color-club-detail-note-surface)",
+        "<SemanticIcon name=\"arrow-left\" role=\"inline\" />"
       ],
       "required_substrings_after_migration": [
         "var(--ke-color-club-detail-hero-start)",
@@ -295,7 +319,7 @@
           "role": "inline"
         }
       ],
-      "removal_boundary": "replace only route-local visual values and the text arrow; preserve verified-club data, future/history state, breadcrumbs, meeting links and empty-state semantics",
+      "removal_boundary": "retain the canonical route-theme bindings and inline arrow identity; preserve verified-club data, future/history state, breadcrumbs, meeting links and empty-state semantics",
       "rollback_unit": "F0-RB-CLUB-DETAIL-THEME",
       "browser_expectations": [
         "mint hero/fact/note surfaces retain current contrast and geometry",
@@ -306,13 +330,13 @@
   ],
   "strict_gate": {
     "command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
-    "opens_when": "the accepted A0 consumer changes are present on one integrated successor",
-    "must_pass_before": "a successor is credited with PM0 13, 15, 16, 18 or 19 closure for these routes"
+    "opens_when": "the exact F0 1.10 vocabulary correction is integrated into a current successor containing the reviewed A0 and FR0 source",
+    "must_pass_before": "R0 invokes the next full Kaggle Preview"
   },
   "downstream": {
     "thin_s_binding_id": "F0-ROUTE-THEME-V1",
     "penpot_variable_set_id": "F0-ROUTE-THEME-V1",
-    "materialization_status": "SPECIFICATION_REQUIRED_AFTER_SOURCE_INTEGRATION_AND_V0",
+    "materialization_status": "SOURCE_ACCEPTED_AWAITING_EXECUTABLE_PREVIEW_V0_AND_N0_PROMOTION",
     "production_mutation": "FORBIDDEN"
   }
 }
