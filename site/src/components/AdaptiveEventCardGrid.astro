@@ -125,6 +125,8 @@ const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
   'data-adaptive-grid-remainder-policy',
   'data-adaptive-grid-remainder-variant',
   'data-adaptive-grid-responsive',
+  'data-adaptive-grid-diagnostics-owner',
+  'data-adaptive-grid-diagnostics-contract',
   'data-adaptive-grid-input-count',
   'data-adaptive-grid-input-order',
   'data-adaptive-grid-source-count',
@@ -205,6 +207,8 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-adaptive-grid-remainder-policy="stretch"
   data-adaptive-grid-remainder-variant={initialRemainderVariant}
   data-adaptive-grid-responsive={responsive}
+  data-adaptive-grid-diagnostics-owner="AdaptiveEventCardGrid"
+  data-adaptive-grid-diagnostics-contract="input-source-rendered-v1"
   data-adaptive-grid-input-count={events.length}
   data-adaptive-grid-input-order={inputOrder}
   data-adaptive-grid-source-count={admittedSource.length}
