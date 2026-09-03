@@ -1,0 +1,171 @@
+{
+  "schema_version": "kenigevents.n0-successor-acceptance.v1",
+  "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
+  "contract_version": "1.8.0",
+  "generated_at": "2026-09-03T12:50:00.000Z",
+  "owner": "N0",
+  "base_candidate": {
+    "branch": "r0/ui-normalization-current-candidate-20260903",
+    "sha": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+    "decision": "ACCEPTED_PRECURSOR",
+    "runtime_status": "R0_FULL_GATE_PENDING"
+  },
+  "frozen_first_real_preview": {
+    "decision": "KEEP_FROZEN_DO_NOT_MUTATE",
+    "repo_sha": "d5ff87bcb7a2b2051ad956ef9e7e2733a1ae62c3",
+    "build_id": "preview-ui-normalized-d5ff87bc-fresh-20260903-v1",
+    "source_snapshot": "snapshot-n0-critical-contour-20260903T084238Z",
+    "snapshot_sha256": "f1f52748529ae2f750974f5a7f11b8745a3d035978d3bb1dbc7e95b5d5feb6a5",
+    "event_rows": 8296,
+    "eligible_events": 555,
+    "next_gate": "native R0 exact build/check/deploy/public-verification result"
+  },
+  "role_outputs": {
+    "F0": {
+      "head": "bbbc9b09720298f43653c36bd5343385cae63102",
+      "decision": "ALREADY_CONTAINED_IN_BASE_CANDIDATE",
+      "notes": "Central foundation registry, bindings and convergence census remain accepted."
+    },
+    "M0": {
+      "branch": "work/ui-normalization-m0-continuity-20260903",
+      "head": "e5c07e9f00b34f4143d8539c79b6b0f9f4de32a8",
+      "decision": "ACCEPT_SOURCE_FOR_SUCCESSOR",
+      "lineage": {
+        "merge_base": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+        "ahead_by": 13,
+        "behind_by": 0
+      },
+      "accepted_scope": [
+        "one MediaFrame v1 structural/fit CSS owner",
+        "EventCard MediaFrame protocol",
+        "ListingEventCard MediaFrame protocol",
+        "EventMediaRail MediaFrame protocol",
+        "MobileListingRailRow MediaFrame protocol and runtime state diagnostics",
+        "AdaptiveEventCardGrid explicit complete/stretch remainder state",
+        "source regression contracts for roots, framing, discovery adapter and row states"
+      ],
+      "changed_paths": [
+        "site/src/components/AdaptiveEventCardGrid.astro",
+        "site/src/components/EventCard.astro",
+        "site/src/components/EventMediaRail.astro",
+        "site/src/components/listings/ListingEventCard.astro",
+        "site/src/components/listings/MobileListingRailRow.astro",
+        "site/src/components/media-frame.css",
+        "site/tests/adaptive-event-card-grid.test.mjs",
+        "site/tests/keyboard-event-navigation-production.test.mjs",
+        "site/tests/mobile-listing-rail-row-state.test.mjs",
+        "site/tests/mobile-listing-rails.test.mjs",
+        "site/tests/ui-normalization-m0-contract.test.mjs"
+      ],
+      "browser_status": "V0_OWNED_NOT_CLAIMED"
+    },
+    "A0": {
+      "branch": "work/ui-normalization-a0-wave-3-20260903",
+      "accepted_head": "82691aa174b788687fb8e2f0f94809ef64a36e51",
+      "accepted_commits_after_base_a0": [
+        "f0ae566203ff71cb6cee9e3569d3c2bef1cdbdde",
+        "82691aa174b788687fb8e2f0f94809ef64a36e51"
+      ],
+      "decision": "ACCEPT_BOUNDED_PREFIX_ONLY",
+      "accepted_scope": [
+        "FocusGroupInviteIntake canonical foundations and identity",
+        "canonical check icon",
+        "explicit runtime-hook compatibility markers",
+        "focused negative/source regression contract"
+      ],
+      "rejected_tip": "5e466d65bc2b71a814c26c063f90aa07709de08f",
+      "rejected_commit": "5e466d65bc2b71a814c26c063f90aa07709de08f",
+      "rejection_code": "PRODUCT_BEHAVIOR_REMOVAL_NOT_AUTHORIZED",
+      "rejection_reason": "The rejected commit removes the visible Large/Compact radiogroup, persisted ke_listing_density_v2 choice, keyboard selection, pinch gesture and both mobile density target representations. That is a user-facing product change, not mechanical duplicate-root closure.",
+      "required_correction": "Revert only 5e466d65 while retaining the accepted prefix, or obtain an explicit owner product decision with replacement interaction and regression/browser contract."
+    },
+    "N0": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "base_sha": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+      "head_resolution": "Use the exact branch tip published by N0 after final fresh-read; it must contain this manifest and remain a descendant of base_sha.",
+      "decision": "ACCEPT_SOURCE_FOR_SUCCESSOR_AFTER_EXACT_HEAD_FREEZE",
+      "scope": [
+        "Golden review corpus v1",
+        "corpus validator and PreviewEvent materializer",
+        "deterministic admission action fixtures",
+        "isolated byte-restoring Golden preview builder",
+        "real/golden preview metadata identity",
+        "Golden route/asset/action checker",
+        "fail-closed Golden immutable-prefix deployment wrapper",
+        "source and deploy regression contracts",
+        "N0 Golden acceptance/transition runbook"
+      ],
+      "runtime_status": "NOT_RUN_GITHUB_ONLY_ROLE"
+    }
+  },
+  "successor_merge_order": [
+    {
+      "order": 1,
+      "role": "M0",
+      "ref": "e5c07e9f00b34f4143d8539c79b6b0f9f4de32a8",
+      "operation": "fast-forward or ordinary merge from the accepted base candidate"
+    },
+    {
+      "order": 2,
+      "role": "A0",
+      "ref": "82691aa174b788687fb8e2f0f94809ef64a36e51",
+      "operation": "merge the exact accepted commit, never the current rejected branch tip"
+    },
+    {
+      "order": 3,
+      "role": "N0",
+      "ref": "work/ui-normalization-n0-checklist-20260903@<exact-final-tip-from-N0-result>",
+      "operation": "merge exact final N0 tip after verifying it descends from 0d73428d and contains this manifest"
+    }
+  ],
+  "path_overlap_review": {
+    "M0_A0": "NONE in accepted deltas",
+    "M0_N0": "NONE; M0 owns component roots/tests, N0 owns Golden build/check/package/runbook",
+    "A0_N0": "NONE; accepted A0 owns FocusGroupInviteIntake and focus source test",
+    "expected_conflict_policy": "No semantic conflict resolution is authorized. Any unexpected overlap stops only that merge and is returned to N0/owning role."
+  },
+  "required_source_commands": [
+    "cd site && node --test tests/ui-normalization-m0-contract.test.mjs tests/adaptive-event-card-grid.test.mjs tests/mobile-listing-rails.test.mjs tests/mobile-listing-rail-row-state.test.mjs tests/keyboard-event-navigation-production.test.mjs tests/event-detail-runtime-regressions.test.mjs tests/visual-keyboard-regressions.test.mjs",
+    "cd site && node --test tests/focus-normalization-source.test.mjs tests/focus-group-product-surface.test.mjs tests/focus-pwa-membership.test.mjs tests/static-site-auth.test.mjs",
+    "cd site && npm run test:golden-preview-contract",
+    "cd site && npm run test:golden-deploy-contract",
+    "cd site && npm run check:design-system-production-surfaces",
+    "cd site && npm run check:design-system-iconography"
+  ],
+  "required_successor_real_gate": [
+    "npm run build:preview",
+    "npm run check:preview",
+    "npm run check:unified-prototype",
+    "immutable-prefix deploy with KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY=1",
+    "public 2xx owner URL and matching preview-build.json"
+  ],
+  "required_golden_gate_after_successor_real": [
+    "npm run build:golden-preview",
+    "npm run check:golden-preview",
+    "npm run check:preview",
+    "npm run check:unified-prototype",
+    "npm run deploy:golden-preview dry run",
+    "npm run deploy:golden-preview",
+    "public 2xx owner URL, preview-build.json, corpus and machine evidence"
+  ],
+  "checklist_effect": {
+    "3": "Frozen first real preview remains R0 runtime/publication pending.",
+    "4": "Golden source/build/check/deploy contract is implemented; runtime/public 2xx remains pending.",
+    "6": "Frozen Kaliningrad Friday/Saturday/Sunday source contract implemented; built output pending.",
+    "7": "Exact 5/6/5 source density implemented; built output pending.",
+    "8": "Exact current/dated Weekend occurrence reuse implemented; built output pending.",
+    "9": "Media/copy/admission/calendar/lifecycle stress source cells implemented; V0 verdict pending.",
+    "10": "Pinned event/image/SVG and two-week append-only source lock implemented; runtime/public identity readback pending.",
+    "26": "M0 source now publishes one shared MediaFrame owner; runtime/V0 pending.",
+    "30": "M0 source has explicit complete/stretch remainder states; runtime/V0 pending.",
+    "voice_review_gate": "NOT_READY until current-sha fresh-real public 2xx plus V0 no-critical-drift verdict."
+  },
+  "prohibitions": [
+    "do not mutate or rebuild the frozen first real-preview transaction from successor refs",
+    "do not merge A0 commit 5e466d65 or a descendant containing it without the required product decision/correction",
+    "do not treat source tests as runtime PASS",
+    "do not treat R0 local smoke as V0 verdict",
+    "do not publish Golden data to the stable site root",
+    "do not create a second Astro or owner-facing Golden lab"
+  ]
+}
