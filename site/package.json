@@ -18,7 +18,6 @@
     "check:bus-directory": "node scripts/check-bus-transport-directory.mjs",
     "check:rail-directory": "node scripts/check-rail-transport-directory.mjs",
     "check:preview": "node scripts/check-preview.mjs",
-    "check:preview-slice": "node scripts/check-page-class-preview.mjs",
     "check:golden-preview": "node scripts/check-golden-preview.mjs && node scripts/check-golden-actions.mjs",
     "check:unified-prototype": "node scripts/check-unified-prototype.mjs",
     "check:production": "node scripts/check-production.mjs",
@@ -36,8 +35,8 @@
     "plan:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs plan",
     "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
     "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
-    "test:page-class-preview": "node --test scripts/page-class-build-filter.behavior.test.mjs",
     "test:n0-successor-acceptance": "node --test tests/n0-successor-acceptance.test.mjs",
+    "test:n0-v0-golden-drift": "node --test tests/n0-v0-golden-drift-acceptance.test.mjs",
     "test:golden-preview-contract": "node --test tests/golden-review-preview-contract.test.mjs tests/golden-review-actions.test.mjs",
     "test:content-media": "node --experimental-strip-types --test scripts/content-media.behavior.test.mjs",
     "test:festival-timeline-layout": "node --experimental-strip-types --test scripts/festival-timeline-layout.behavior.test.mjs",
@@ -56,7 +55,9 @@
     "test:resilient-client": "node --experimental-strip-types --test src/lib/resilientSupabaseTransport.test.ts tests/resilient-data-storage.test.mjs tests/supabase-runtime-gate.test.mjs && node --experimental-strip-types --test tests/search-recovery.test.mjs tests/static-site-auth.test.mjs tests/pwa-install.test.mjs",
     "test:transport-faults": "node --experimental-strip-types --test src/lib/transportFaultInjector.test.ts && node --test scripts/transport-fault-build-contract.test.mjs",
     "test:prelaunch-form": "node --experimental-strip-types --test src/lib/prelaunchEmail.test.ts tests/prelaunch-form-contract.test.mjs",
-    "check:prelaunch-form": "node scripts/check-prelaunch-form-security.mjs"
+    "check:prelaunch-form": "node scripts/check-prelaunch-form-security.mjs",
+    "check:preview-slice": "node scripts/check-page-class-preview.mjs",
+    "test:page-class-preview": "node --test scripts/page-class-build-filter.behavior.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.108.2",

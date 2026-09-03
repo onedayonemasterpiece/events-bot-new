@@ -170,22 +170,29 @@ test('network gate fails closed on unreachable HTML, MIME drift or public identi
   );
 });
 
-test('existing build and canonical Kaggle publication paths retain full-SHA metadata and immutable-prefix publication', async () => {
-  const [buildSource, runnerSource, publisherSource, packageSource] = await Promise.all([
+test('build identity remains full-SHA and N0 publication policy is Kaggle-only', async () => {
+  const [buildSource, packageSource, acceptanceSource] = await Promise.all([
     readFile(new URL('../scripts/build-preview.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../../scripts/run_static_site_builder_kaggle.py', import.meta.url), 'utf8'),
-    readFile(new URL('../../static_site_release.py', import.meta.url), 'utf8'),
     readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    readFile(new URL('../scripts/n0-successor-acceptance.v1.json', import.meta.url), 'utf8'),
   ]);
   assert.match(buildSource, /STATIC_SITE_REPO_SHA/u);
   assert.match(buildSource, /repo_sha:\s*gitFullSha\(\)/u);
   assert.match(buildSource, /preview-build\.json/u);
   assert.match(buildSource, /SITE_BASE_PATH:\s*`\/\$\{buildId\}`/u);
-  assert.match(runnerSource, /publish_preview_archive/u);
-  assert.match(runnerSource, /--preview-data-mode/u);
-  assert.ok(publisherSource.includes('f"{build_id}/{relative}"'));
-  assert.match(publisherSource, /IfNoneMatch="\*"/u);
+
   const packageJson = JSON.parse(packageSource);
   assert.equal(packageJson.scripts['deploy:preview'], undefined);
   assert.equal(packageJson.scripts['deploy:golden-preview'], undefined);
+
+  const acceptance = JSON.parse(acceptanceSource);
+  const realGate = acceptance.gate_graph.find((item) => item.id === 'FULL_REAL_KAGGLE_REVIEW_PREVIEW');
+  assert.ok(realGate, 'full-real Kaggle gate is missing');
+  assert.equal(realGate.owner, 'R0');
+  assert.equal(realGate.status, 'BLOCKED_BY_CURRENT_SOURCE_CANDIDATE');
+  assert.ok(realGate.requires.includes('canonical events-bot-new Kaggle StaticSiteBuilder'));
+  assert.ok(realGate.requires.includes('--preview-data-mode real'));
+  assert.ok(realGate.requires.includes('--page-class all'));
+  assert.ok(realGate.requires.includes('matching preview-build.json and Kaggle operation/artifact identity'));
+  assert.ok(acceptance.prohibitions.includes('do not use deploy:preview or deploy:golden-preview as a launch path'));
 });
