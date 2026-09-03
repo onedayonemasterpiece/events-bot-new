@@ -41,3 +41,30 @@ test('collection route delegates item markup and styles to one canonical catalog
   assert.match(catalog, /--ke-color-collection-link-text/u);
   assert.doesNotMatch(catalog, /var\(--color-border,\s*#ddd\)|var\(--color-surface,\s*#fff\)/u);
 });
+
+test('partners route consumes the complete partnership registry instead of owning responsive literals', async () => {
+  const source = await read('src/pages/partners/index.astro');
+
+  assert.match(source, /data-ds-family="PartnersRouteComposition"/u);
+  assert.match(source, /data-ke-foundation-consumer="partners-route"/u);
+  for (const token of [
+    '--ke-partners-page-padding-bottom',
+    '--ke-partners-container',
+    '--ke-partners-heading-size',
+    '--ke-partners-grid-columns-mobile',
+    '--ke-partners-grid-row-height-wide',
+    '--ke-partner-focus-alpha',
+    '--ke-partner-motion',
+    '--ke-partner-logo-height-tall-desktop',
+    '--ke-partner-meta-size',
+    '--ke-partners-mobile-column-gap',
+    '--ke-partner-mobile-logo-height-tall',
+    '--ke-partners-narrow-row-height',
+  ]) assert.match(source, new RegExp(token, 'u'));
+
+  assert.doesNotMatch(
+    source,
+    /padding-bottom:\s*clamp\(2\.25rem|max-width:\s*1100px|--cell-h:\s*76px|column-gap:\s*0\.62rem|row-gap:\s*0\.78rem|max-height:\s*112px|max-height:\s*104px|font-size:\s*0\.58rem/u,
+    'partners route no longer owns the partnership geometry cluster',
+  );
+});
