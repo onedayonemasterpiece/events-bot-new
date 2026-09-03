@@ -1,21 +1,25 @@
 {
   "schema": "kenigevents.n0-v0-verdict-admission.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "role": "N0",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_version": "1.10.0",
+  "FR0_requirement_comments": [5531944339, 5531980502, 5532544488],
   "candidate_targets": [
     {
       "source_sha": "cebeafeee08251a327145ee973ee035cced65204",
       "build_id": "preview-real-cebeafeee-normalized-20260903-v1",
       "public_url": "https://kenigevents.ru/preview-real-cebeafeee-normalized-20260903-v1/__preview/",
-      "purpose": "current accepted publication and exhibitions vertical-slice audit"
+      "purpose": "accepted precursor publication and historical exhibitions vertical-slice transaction"
     },
     {
       "source_sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
-      "build_id": null,
-      "public_url": null,
-      "purpose": "next exact integrated successor after its canonical publication"
+      "build_id": "preview-real-3ca6a143e-normalized-20260903-v1",
+      "public_url": "https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/__preview/",
+      "manifest_url": "https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/preview-build.json",
+      "snapshot_id": "issue621-real-3ca6a143e-20260903T211550Z",
+      "snapshot_sha256": "ba25e9e0faabf9de8656921e4597ef30928d90edf47af0c9757a9852dfb83eb4",
+      "purpose": "current exact integrated successor, runtime-drift specimen and exhibitions vertical-slice audit"
     }
   ],
   "current_V0_harness": {
@@ -50,19 +54,38 @@
         "evidence": "media-frame classifier has no required observation/completeness gate for pending|loaded|fallback|broken, direct fallback visibility, image resource presence, source ratio and legacy-state absence",
         "effect": "cannot close the accepted FR0 resource-state contract or the exhibitions vertical slice",
         "required_resolution": "record and completeness-check all required resource-state fields"
+      },
+      {
+        "code": "V0_HARNESS_UNSCOPED_BARE_MEDIA_FRAME_MARKERS",
+        "evidence": "a bare DesktopEventPage data-media-frame marker represents legacy resource identity primary_media_frame and lacks contract=v1/style-owner/protocol fields",
+        "effect": "an unscoped census can falsely count it as malformed canonical v1 or award normalization credit",
+        "required_resolution": "enumerate canonical roots only with [data-media-frame][data-media-frame-contract=\"v1\"] and report bare markers separately"
       }
     ],
     "does_not_block_personal_browser_observation": true,
     "does_not_block_R0_kaggle_publication": true,
     "does_not_create_FR0_source_batch": true
   },
+  "media_frame_root_scope": {
+    "canonical_selector": "[data-media-frame][data-media-frame-contract=\"v1\"]",
+    "legacy_selector": "[data-media-frame]:not([data-media-frame-contract])",
+    "legacy_classification": "LEGACY_RESOURCE_MARKER_OUTSIDE_CURRENT_V1_DELIVERY",
+    "legacy_resource_identity": "event-format.media.primary-large-frame / primary_media_frame",
+    "rules": [
+      "legacy markers are not malformed MediaFrame v1 roots",
+      "legacy markers receive no current v1 normalization credit",
+      "legacy markers remain visible in the later normalization census",
+      "this classification authorizes no product-source change or FR0 batch"
+    ]
+  },
   "admission_paths": {
     "automated_classifier": {
       "admissible_when": [
         "the runtime identifier defect is closed",
-        "FR0 clipping semantics match comments 5531980502",
+        "FR0 clipping semantics match comment 5531980502",
         "interaction-owner=none exception matches comment 5531944339",
         "resource-state evidence is mandatory and completeness-checked",
+        "canonical v1 and bare legacy roots are enumerated separately per comment 5532544488",
         "the observation target identity exactly matches the public manifest"
       ]
     },
@@ -73,6 +96,7 @@
         "the issue result names the exact public URL, source SHA, build ID and snapshot",
         "each finding cites route, viewport, selector and observed browser evidence",
         "the result applies accepted clipping and interaction-owner semantics rather than the stale classifier rules",
+        "canonical MediaFrame roots use the exact v1 selector and bare legacy markers are reported separately",
         "the result separately reports exhibitions route, row, MediaFrame, resource-state, interaction and accessibility sections",
         "omitted required sections are INCOMPLETE rather than PASS",
         "R0 smoke, source assertions and inferred CSS are not substituted for browser evidence"
@@ -100,13 +124,21 @@
       "exhibitions-medallion": "none only when frame and descendants are noninteractive"
     },
     "clipping_rule": "raw image-box extension is not drift by itself; visible paint/hit-test escape or absent/noncanonical clip is drift",
+    "canonical_root_selector": "[data-media-frame][data-media-frame-contract=\"v1\"]",
     "acceptance_is_independent_of_unrelated_route_drift": true
+  },
+  "known_source_bound_drift": {
+    "comment": 5532284724,
+    "N0_acceptance_comment": 5532335696,
+    "domain": "client-created EventCard runtime MediaFrame rebinding",
+    "expected_on_3ca6": "DRIFT_OR_INCOMPLETE_NOT_PASS",
+    "does_not_reject_exhibitions_slice": true
   },
   "decision": {
     "current_automated_harness": "REJECTED_UNCHANGED",
-    "personal_V0_browser_verdict": "READY_FOR_ADMISSION_WHEN_PUBLISHED",
+    "personal_V0_browser_verdict": "READY_FOR_ADMISSION",
     "cebeafee_publication": "UNAFFECTED",
-    "three_batch_successor": "UNAFFECTED",
-    "next_action_owner": "V0"
+    "three_batch_successor": "PUBLICATION_ACCEPTED_V0_PENDING",
+    "next_action_owner": "V0_THEN_N0"
   }
 }
