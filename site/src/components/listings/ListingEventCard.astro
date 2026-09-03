@@ -1,6 +1,6 @@
 ---
 import type { PreviewEvent } from '../../lib/types';
-import Icon from '../Icon.astro';
+import SemanticIcon from '../design-system/SemanticIcon.astro';
 import { eventHref } from '../../lib/events';
 import { eventImageUrl } from '../../lib/assets';
 import { cityKey, selectListingImage } from '../../lib/listingPresentation';
@@ -299,8 +299,8 @@ const socialProofLabel = [
   </a>
   {proofInside ? (
     <a class="ke-listing-card__social-proof ke-listing-card__social-proof--inside" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
-      {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
-      {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
+      {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><SemanticIcon name="share" role="inline" /><b data-listing-share-count>{sharesCount}</b></span> : null}
+      {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><SemanticIcon name="heart" role="inline" /><b data-listing-like-count>{likesCount}</b></span> : null}
     </a>
   ) : null}
   {hasSideRail ? (
@@ -320,8 +320,8 @@ const socialProofLabel = [
       ) : null}
       {hasSocialProof && !proofInside ? (
         <a class="ke-listing-card__social-proof" href={href} data-prefetch data-nosnippet aria-label={`${socialProofLabel}. Открыть событие: ${event.title}`}>
-          {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><Icon name="share" /><b data-listing-share-count>{sharesCount}</b></span> : null}
-          {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><Icon name="heart" /><b data-listing-like-count>{likesCount}</b></span> : null}
+          {sharesCount > 0 ? <span data-listing-share-proof data-base-count={sharesCount}><SemanticIcon name="share" role="inline" /><b data-listing-share-count>{sharesCount}</b></span> : null}
+          {likesCount > 0 ? <span data-listing-like-proof data-base-count={likesCount}><SemanticIcon name="heart" role="inline" /><b data-listing-like-count>{likesCount}</b></span> : null}
         </a>
       ) : null}
     </div>
