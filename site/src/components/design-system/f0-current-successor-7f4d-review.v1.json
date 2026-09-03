@@ -1,0 +1,184 @@
+{
+  "schema": "kenigevents.f0-current-successor-7f4d-review.v1",
+  "version": "1.0.0",
+  "status": "ACCEPT_SUCCESSOR_BASE_AND_CLUB_CLUSTERS_REJECT_F0_ROUTE_THEME_COMPLETION",
+  "role": "F0",
+  "contract_version": "1.10.0",
+  "successor": {
+    "branch": "agent/static-site-single-kaggle-contract",
+    "sha": "7f4d04b7de7003eb44980e4215871381686cb9b3",
+    "parent": "333e37fd158fd6cad93f4dd53f4f65fa7757570c",
+    "public_preview": null,
+    "runtime_acceptance": false
+  },
+  "current_f0": {
+    "source_boundary": "a4db631dbb3b01e1f71c42e0e3b87d077a538d19",
+    "merge_base_with_successor": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+    "source_commits_missing_from_successor": 12,
+    "whole_f0_branch_merge_allowed": false
+  },
+  "accepted_successor_properties": [
+    "current canonical successor ancestry after the public 1bc6d9cb baseline",
+    "one F0 product-contour registry import graph",
+    "InterestClubCard consumes all four accepted residual alpha tokens",
+    "interest-club detail consumes the declared F0 route roles and canonical arrow-left inline icon",
+    "festival external blank targets preserve noopener noreferrer",
+    "festival guide/favorite actions use canonical SemanticIcon identities",
+    "festival favorite targets bind to the central 44px minimum role",
+    "exhibitions private theme/motion aliases are removed",
+    "exhibitions retains the four classified runtime layout/state variables"
+  ],
+  "cluster_decisions": [
+    {
+      "id": "F0-CLUB-CARD",
+      "consumer": "site/src/components/InterestClubCard.astro",
+      "decision": "SOURCE_ACCEPT",
+      "evidence": [
+        "all four semantic residual tokens are consumed",
+        "canonical InterestClubCard anatomy and arrow-right inline identity remain",
+        "no route/card palette collapse is introduced"
+      ],
+      "remaining": "integrated executable strict gate and V0 only"
+    },
+    {
+      "id": "F0-CLUB-DETAIL",
+      "consumer": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "decision": "SOURCE_ACCEPT",
+      "evidence": [
+        "product-contour registry imported",
+        "hero/facts/meetings/empty/note/action roles consumed",
+        "SemanticIcon arrow-left/inline replaces the text arrow",
+        "verified-club semantics, external link policy and mobile composition preserved"
+      ],
+      "remaining": "integrated executable strict gate and V0 only"
+    },
+    {
+      "id": "F0-FESTIVALS",
+      "consumer": "site/src/pages/festivali/index.astro",
+      "decision": "PARTIAL_SOURCE_DRIFT",
+      "accepted": [
+        "route family diagnostics",
+        "canonical guide/favorite SemanticIcons",
+        "44px favorite targets",
+        "safe external rel tokens"
+      ],
+      "missing": [
+        "current F0 festival category-surface semantic role",
+        "context-scoped distinction between guide-like cue and taxonomy container",
+        "complete route-theme token consumption",
+        "current strict route-theme checker and semantic-separation record"
+      ],
+      "source_facts": [
+        ".festival-guide__icon--heart still owns raw rgba(165,72,33,.1)",
+        ".festival-month__categories li still owns the same raw value rather than its independent taxonomy role",
+        "hero/navigation/guide/timeline/card/status/gallery-visible values remain broadly raw"
+      ],
+      "required_input": [
+        "F0 source through a4db631dbb3b01e1f71c42e0e3b87d077a538d19",
+        "accepted A0 festival source 230e574745bc99cc187e6f892927fa92474ddd07",
+        "accepted A0 festival regression ffee86fb6ce466b1cb303c7b3daea67f84127b67"
+      ]
+    },
+    {
+      "id": "F0-EXHIBITIONS",
+      "consumer": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "decision": "PARTIAL_SOURCE_DRIFT",
+      "accepted": [
+        "private --ex-* palette and motion declaration block removed",
+        "exact runtime variables --ex-media-column, --ex-row-gap, --ex-surface-start and --ex-rail-color retained",
+        "base route diagnostics and a subset of central colors/geometry consumed"
+      ],
+      "missing": [
+        "complete A0 residual state/elevation token consumption",
+        "complete FR0 frame/depth/skeleton/medallion token consumption",
+        "inline/control role replacement for numeric local SVG dimensions",
+        "canonical SemanticIcon arrow-left/right gallery navigation",
+        "removal of raw visible dark/state/gallery/live/depth values",
+        "current F0 residual inventory and strict checker"
+      ],
+      "source_facts": [
+        "gallery navigation still renders text arrows",
+        "signal/action icon selectors still own numeric dimensions including 18px and 21px",
+        "row/deck/gallery/live/raw dark-state values remain consumer-owned"
+      ],
+      "required_input": [
+        "F0 source through a4db631dbb3b01e1f71c42e0e3b87d077a538d19",
+        "a corrected A0 exhibitions closure satisfying the current residual checker",
+        "FR0 exhibitions frame-state consumption for tokens assigned to FR0"
+      ]
+    }
+  ],
+  "missing_current_f0_files": [
+    "site/src/components/design-system/f0-festival-semantic-separation.v1.json",
+    "site/src/components/design-system/f0-exhibitions-residual-bindings.v1.json",
+    "site/src/components/design-system/f0-exhibitions-token-inventory.v1.json",
+    "site/src/components/design-system/check-f0-exhibitions-residual-contract.mjs"
+  ],
+  "checker_decision": {
+    "successor_checker_contract": "1.9.0",
+    "current_f0_contract": "1.10.0",
+    "successor_checker_is_sufficient_for_current_acceptance": false,
+    "reason": "the successor checker predates festival semantic separation, exhibitions runtime-variable classification, complete token inventory, icon/SVG gates and A0/FR0 ownership split"
+  },
+  "required_commands_after_integration": [
+    "node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "node site/src/components/design-system/check-f0-exhibitions-residual-contract.mjs",
+    "F0_REQUIRE_EXHIBITIONS_RESIDUAL_CONSUMED=1 node site/src/components/design-system/check-f0-exhibitions-residual-contract.mjs",
+    "node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+    "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs"
+  ],
+  "candidate_recipe": {
+    "base": "7f4d04b7de7003eb44980e4215871381686cb9b3 or current descendant",
+    "include": [
+      "current F0-owned files through a4db631dbb3b01e1f71c42e0e3b87d077a538d19",
+      "accepted corrected festival A0 source/test deltas",
+      "corrected complete exhibitions A0 packet when F0-accepted",
+      "FR0 exhibitions frame-state packet when available and accepted",
+      "current accepted M0/FR0/N0 descendants"
+    ],
+    "do_not_reapply": [
+      "club-card four-token consumer patch already present",
+      "club-detail consumer patch already present"
+    ],
+    "preserve": [
+      "festival noopener noreferrer regression",
+      "four exhibitions runtime variables",
+      "interest-club behavior and route semantics",
+      "one canonical Kaggle pipeline",
+      "production root and stable ICS identities"
+    ]
+  },
+  "preview_boundary": {
+    "latest_public": "https://kenigevents.ru/preview-real-1bc6d9cb-normalized-20260903-v1/__preview/",
+    "latest_public_source": "1bc6d9cb4c122046f4782532381de953727c1da6",
+    "successor_7f4_public_preview_exists": false,
+    "independent_v0_on_7f4": false,
+    "classification": "SOURCE_REVIEW_ONLY_NO_RUNTIME_OR_BROWSER_COMPLETION_CREDIT"
+  },
+  "f0_verdict": {
+    "accept_as_current_successor_base": true,
+    "accept_club_clusters_as_source_converged": true,
+    "accept_festival_as_source_converged": false,
+    "accept_exhibitions_as_source_converged": false,
+    "accept_current_f0_strict_gate_pass": false,
+    "new_f0_token_or_product_decision_required": false,
+    "remaining_f0_source_authoring_required": false
+  },
+  "rollback": {
+    "unit": "F0-RB-SUCCESSOR-7F4D-ROUTE-THEME-INCLUSION",
+    "boundary": "retain successor and accepted club clusters; integrate/revert festival and exhibitions subunits independently; never roll back the whole successor or immutable public baseline for one route-theme failure"
+  },
+  "claims_not_made": [
+    "current F0 source is integrated into 7f4d04b7",
+    "corrected exhibitions A0 packet exists",
+    "FR0 exhibitions frame packet exists",
+    "current F0 strict commands passed",
+    "7f4d04b7 has a public preview",
+    "V0 accepted 7f4d04b7"
+  ],
+  "exit_effect": {
+    "ready_owned_items": 0,
+    "remaining_external_trigger": "A0 corrected complete exhibitions closure and FR0 exhibitions frame-state consumption, followed by F0 review; then R0 materializes current F0 a4db631d and accepted route packets onto 7f4d04b7 or its current descendant, executes all current strict F0 gates and publishes the exact post-F0 full fresh-real URL for independent V0"
+  }
+}
