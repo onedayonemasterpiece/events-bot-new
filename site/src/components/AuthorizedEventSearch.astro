@@ -16,7 +16,7 @@ const searchExecutionModeControl = import.meta.env.PUBLIC_SITE_MODE === 'secret_
 const enabled = Boolean(supabaseUrl && supabaseKey);
 const HeadingTag = headingLevel;
 ---
-<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-search-execution-mode-control={searchExecutionModeControl ? 'true' : 'false'} data-search-state="idle" data-search-terminal="false" data-supabase-url={supabaseUrl || undefined} data-supabase-relay-url={supabaseRelayUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
+<section id="poisk" class:list={["authorized-search", compact && "authorized-search--compact", standalone && "authorized-search--standalone"]} data-ds-family="AuthorizedEventSearch" data-ds-version="1" data-ds-variant="ranked-phase-feed" data-ds-state={enabled ? 'auth-required' : 'recovery'} data-authorized-search data-search-enabled={enabled ? 'true' : 'false'} data-search-transport={searchTransport} data-search-execution-mode-control={searchExecutionModeControl ? 'true' : 'false'} data-search-state="idle" data-search-terminal="false" data-supabase-url={supabaseUrl || undefined} data-supabase-relay-url={supabaseRelayUrl || undefined} data-supabase-key={supabaseKey || undefined} data-yandex-provider={yandexProvider} data-nosnippet>
   <div class="authorized-search__head">
     <div class="authorized-search__copy">
       <p class="eyebrow">Умный поиск</p>
@@ -73,7 +73,7 @@ const HeadingTag = headingLevel;
       <div class="authorized-search__skeleton-media"></div>
     </div>
   </div>
-  <div class="authorized-search__results" data-search-results hidden></div>
+  <div class="authorized-search__results" data-ds-family="SearchResultsComposition" data-ds-version="1" data-ds-variant="ranked-phase-feed" data-ds-state="idle" data-search-results hidden></div>
   <button type="button" class="secondary-button authorized-search__more" data-search-more hidden>Показать ещё</button>
 </section>
 
@@ -157,6 +157,18 @@ const HeadingTag = headingLevel;
       const terminalStates = new Set(['success', 'empty', 'error', 'validation']);
       root.dataset.searchState = state;
       root.dataset.searchTerminal = terminalStates.has(state) ? 'true' : 'false';
+      const settledCards = results?.querySelectorAll('[data-event-card]').length || 0;
+      const acceptedState = ({
+        checking_auth:'auth-required',
+        idle:'idle',
+        loading:'loading',
+        success:settledCards > 0 ? 'populated' : 'empty',
+        empty:'empty',
+        validation:'recovery',
+        error:'error',
+      })[state] || 'idle';
+      root.dataset.dsState = acceptedState;
+      if (results) results.dataset.dsState = acceptedState;
     }
 
     function displayUserName(user) {

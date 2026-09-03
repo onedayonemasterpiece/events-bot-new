@@ -110,8 +110,9 @@ test('R01-R07 keep the cross-surface product contracts in canonical implementati
   assert.match(home, /HomeHeroTalk/u);
   assert.match(home, /HomeQuickNav/u);
   assert.match(home, /HomeColdStartFeed/u);
-  assert.match(homeFeed, /data-home-feed-limit="30"/u);
-  assert.match(homeFeed, /events\.slice\(0,\s*30\)/u);
+  assert.match(homeFeed, /'data-home-feed-limit':'30'/u);
+  assert.match(homeFeed, /events\.slice\(0, 30\)/u);
+  assert.match(homeFeed, /<AdaptiveEventCardGrid[\s\S]*?limit=\{30\}/u);
   assert.doesNotMatch(homeFeed, /\bfetch\s*\(|gemini|embedding/iu);
 });
 

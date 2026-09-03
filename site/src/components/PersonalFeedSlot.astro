@@ -44,6 +44,8 @@ const headingId = `personal-feed-${context}-title`;
       rowSize={3}
       responsive="progressive"
       personalFeed
+      runtimeManaged
+      runtimeSourcePolicy="mirror-rendered"
       ariaLive="polite"
       ariaAtomic={false}
       ariaLabelledby={headingId}
@@ -62,31 +64,25 @@ const headingId = `personal-feed-${context}-title`;
 </section>
 
 <script>
-  const PERSONAL_FEED_ROW_SIZE = 3;
   document.querySelectorAll('[data-personal-feed-section]').forEach((section) => {
     if (!(section instanceof HTMLElement) || section.dataset.personalFeedDiagnosticsBound === 'true') return;
     const slot = section.querySelector('[data-personal-feed-slot][data-adaptive-event-card-grid]');
     if (!(slot instanceof HTMLElement)) return;
     section.dataset.personalFeedDiagnosticsBound = 'true';
-    const syncDiagnostics = () => {
-      const cards = Array.from(slot.querySelectorAll(':scope > [data-event-card]'))
-        .filter((card) => card instanceof HTMLElement);
-      const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
-      const count = cards.length;
-      slot.dataset.adaptiveGridSourceCount = String(count);
-      slot.dataset.adaptiveGridRenderedCount = String(count);
-      slot.dataset.adaptiveGridSourceOrder = order;
-      slot.dataset.adaptiveGridRenderedOrder = order;
-      slot.dataset.adaptiveGridRemainderCount = String(count % PERSONAL_FEED_ROW_SIZE);
+    const syncSectionState = () => {
+      const count = Number.parseInt(slot.dataset.adaptiveGridRenderedCount || '0', 10);
       const mode = section.dataset.personalFeedMode || (section.hidden ? 'dormant' : 'pending');
-      section.dataset.dsState = `${mode.replaceAll('_', '-')} ${count ? 'populated' : 'empty'}`;
+      section.dataset.dsState = `${mode.replaceAll('_', '-')} ${count > 0 ? 'populated' : 'empty'}`;
     };
-    new MutationObserver(syncDiagnostics).observe(slot, { childList:true });
-    new MutationObserver(syncDiagnostics).observe(section, {
+    new MutationObserver(syncSectionState).observe(slot, {
+      attributes:true,
+      attributeFilter:['data-adaptive-grid-rendered-count', 'data-adaptive-grid-runtime-state'],
+    });
+    new MutationObserver(syncSectionState).observe(section, {
       attributes:true,
       attributeFilter:['hidden', 'data-personal-feed-mode'],
     });
-    syncDiagnostics();
+    syncSectionState();
   });
 </script>
 

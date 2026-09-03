@@ -125,9 +125,12 @@ test('broad continuation escapes a same-type bubble while remaining finite and d
   assert.ok(new Set(selected.map(({ candidate }) => candidate.category)).size >= 4, 'the continuation deliberately broadens across event types');
 });
 
-test('runtime continuation uses compact row-local intrinsic chrome', async () => {
+test('runtime continuation delegates compact row geometry to the canonical adaptive grid', async () => {
   const source = await readFile(path.join(siteRoot, 'src/components/PersonalFeedSlot.astro'), 'utf8');
-  assert.match(source, /grid-template-rows:\s*auto minmax\(0, 1fr\) minmax\(58px, auto\) minmax\(56px, auto\)/u);
+  assert.match(source, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro'/u);
+  assert.match(source, /<AdaptiveEventCardGrid[\s\S]*?mode="packed"[\s\S]*?rowSize=\{3\}[\s\S]*?responsive="progressive"/u);
+  assert.match(source, /'data-feed-card-variant':'split-actions'/u);
+  assert.doesNotMatch(source, /grid-template-rows:/u);
   assert.doesNotMatch(source, /\[data-lab-related-card\] \.event-card__body[\s\S]*?height:\s*184px/u);
   assert.doesNotMatch(source, /\[data-lab-related-card\] \.event-card__utility-row[\s\S]*?max-height:\s*58px/u);
   assert.doesNotMatch(source, /\[data-lab-related-card\] \.event-card__feedback--under[\s\S]*?max-height:\s*56px/u);

@@ -1,0 +1,98 @@
+---
+import './design-system/product-contour-foundations.css';
+import type { CollectionRegistryEntry, CollectionRegistryStatus } from '../lib/staticCollections';
+import { withBase } from '../lib/events';
+
+interface Props {
+  entries: CollectionRegistryEntry[];
+}
+
+const { entries } = Astro.props;
+const statusLabel: Record<CollectionRegistryStatus, string> = {
+  public: 'Готово',
+  repair: 'Обновляется',
+  blocked: 'Недоступно',
+  deferred: 'Скоро',
+};
+---
+
+<nav
+  class="collection-catalog"
+  data-ds-family="CollectionCatalog"
+  data-ds-version="1"
+  data-ds-variant="publication-status-grid"
+  data-ds-state={entries.some((entry) => Boolean(entry.path)) ? 'available' : 'empty'}
+  data-ke-foundation-consumer="collection-catalog"
+  data-static-collection-nav
+  aria-label="Подборки событий"
+>
+  {entries.map((entry) => (
+    entry.path ? (
+      <a
+        class="collection-catalog__item"
+        href={withBase(entry.path)}
+        data-ds-family="CollectionCatalogItem"
+        data-ds-version="1"
+        data-ds-variant="link"
+        data-ds-state={entry.status}
+        data-collection-key={entry.key}
+        data-collection-status={entry.status}
+      >
+        <span class="collection-catalog__status">{statusLabel[entry.status]}</span>
+        <strong>{entry.title}</strong>
+        <span>{entry.description}</span>
+      </a>
+    ) : (
+      <article
+        class="collection-catalog__item collection-catalog__item--disabled"
+        data-ds-family="CollectionCatalogItem"
+        data-ds-version="1"
+        data-ds-variant="disabled"
+        data-ds-state={entry.status}
+        data-collection-key={entry.key}
+        data-collection-status={entry.status}
+      >
+        <span class="collection-catalog__status">{statusLabel[entry.status]}</span>
+        <strong>{entry.title}</strong>
+        <span>{entry.description}</span>
+      </article>
+    )
+  ))}
+</nav>
+
+<style>
+  .collection-catalog {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: 0.8rem;
+  }
+
+  .collection-catalog__item {
+    display: grid;
+    gap: var(--ke-space-sm);
+    padding: 1.1rem;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-collection-link-border);
+    border-radius: var(--ke-collection-state-radius);
+    color: inherit;
+    text-decoration: none;
+    background: var(--ke-color-collection-link-surface);
+  }
+
+  a.collection-catalog__item:hover {
+    transform: translateY(-1px);
+    background: var(--ke-color-collection-link-hover-surface);
+  }
+
+  .collection-catalog__status {
+    width: max-content;
+    color: var(--ke-color-collection-link-text);
+    font-size: var(--ke-type-metadata-size);
+    font-weight: var(--ke-type-metadata-weight);
+    letter-spacing: var(--ke-type-metadata-letter);
+    text-transform: uppercase;
+  }
+
+  .collection-catalog__item--disabled {
+    opacity: 0.72;
+  }
+</style>

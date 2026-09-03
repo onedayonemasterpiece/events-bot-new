@@ -126,7 +126,8 @@ test('favorites and home source contracts use canonical adaptive/card runtimes a
   assert.match(surface, /<AdaptiveEventCardGrid[\s\S]*mode="flow"[\s\S]*rowSize=\{3\}[\s\S]*responsive="progressive"/u);
   assert.match(surface, /'data-favorites-grid'\s*:\s*''/u);
   assert.match(surface, /'data-favorites-runtime-host'\s*:\s*'adaptive-v1'/u);
-  assert.match(surface, /syncAdaptiveDiagnostics/u);
+  assert.doesNotMatch(surface, /syncAdaptiveDiagnostics/u,
+    'AdaptiveEventCardGrid is the only diagnostics writer for Favorites');
   assert.match(surface, /KenigEventsCreateEventCard/u);
   assert.match(surface, /joinFutureSavedEvents/u);
   assert.doesNotMatch(surface, /\.favorites-surface__grid\s*\{[\s\S]*grid-template-columns/u,

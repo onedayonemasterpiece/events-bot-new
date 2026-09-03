@@ -1,12 +1,13 @@
 ---
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import CollectionCatalog from '../../components/CollectionCatalog.astro';
 import EventLayout from '../../layouts/EventLayout.astro';
-import { absoluteUrl, getEvents, siteHomeHref, SITE_NAME, withBase } from '../../lib/events';
+import { absoluteUrl, getEvents, siteHomeHref, SITE_NAME } from '../../lib/events';
 import { getCollectionCatalogEntries, resolveGastronomyCollection } from '../../lib/staticCollections';
+import '../../components/design-system/product-contour-foundations.css';
 
 const title = `Подборки событий | ${SITE_NAME}`;
 const description = 'Тематические подборки событий Калининграда и области с проверенным статусом публикации.';
-const statusLabel = { public:'Готово', repair:'Обновляется', deferred:'Скоро' } as const;
 const collectionCatalogEntries = getCollectionCatalogEntries(resolveGastronomyCollection(getEvents()).lifecycle);
 const availableCount = collectionCatalogEntries.filter((entry) => Boolean(entry.path)).length;
 ---
@@ -26,46 +27,14 @@ const availableCount = collectionCatalogEntries.filter((entry) => Boolean(entry.
         <h1>Подборки событий</h1>
         <p class="lead">В каталоге видны только опубликованные, восстанавливаемые или запланированные подборки. Заблокированные проверки сюда не попадают.</p>
       </div></section>
-      <nav class="collection-grid" data-static-collection-nav aria-label="Подборки событий">
-        {collectionCatalogEntries.map((entry) => (
-          entry.path ? (
-            <a
-              class="collection-card"
-              href={withBase(entry.path)}
-              data-ds-family="CollectionCatalogItem"
-              data-ds-version="1"
-              data-ds-variant="link"
-              data-ds-state={entry.status}
-              data-collection-key={entry.key}
-              data-collection-status={entry.status}
-            >
-              <span class="collection-card__status">{statusLabel[entry.status as keyof typeof statusLabel]}</span>
-              <strong>{entry.title}</strong><span>{entry.description}</span>
-            </a>
-          ) : (
-            <article
-              class="collection-card collection-card--disabled"
-              data-ds-family="CollectionCatalogItem"
-              data-ds-version="1"
-              data-ds-variant="disabled"
-              data-ds-state={entry.status}
-              data-collection-key={entry.key}
-              data-collection-status={entry.status}
-            >
-              <span class="collection-card__status">{statusLabel[entry.status as keyof typeof statusLabel]}</span>
-              <strong>{entry.title}</strong><span>{entry.description}</span>
-            </article>
-          )
-        ))}
-      </nav>
+      <CollectionCatalog entries={collectionCatalogEntries} />
     </div>
   </main>
 </EventLayout>
+
 <style>
-  .page-shell--collection-catalog { display:grid; gap:1rem; }
-  .collection-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr)); gap:.8rem; }
-  .collection-card { display:grid; gap:.5rem; padding:1.1rem; border:1px solid var(--color-border, #ddd); border-radius:1rem; color:inherit; text-decoration:none; background:var(--color-surface, #fff); }
-  a.collection-card:hover { transform:translateY(-1px); }
-  .collection-card__status { width:max-content; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; opacity:.7; }
-  .collection-card--disabled { opacity:.72; }
+  .page-shell--collection-catalog {
+    display: grid;
+    gap: var(--ke-space-lg);
+  }
 </style>

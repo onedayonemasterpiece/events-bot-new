@@ -14,7 +14,15 @@ const endingSoonLabel = endingSoonCount === 1 ? 'скоро закроется' 
 const newLabel = newItems.length === 1 ? 'новая' : 'новых';
 ---
 
-<main id="main" class="ex-page" data-exhibitions-prototype>
+<main
+  id="main"
+  class="ex-page"
+  data-ds-family="ExhibitionsPersonalSurface"
+  data-ds-version="1"
+  data-ds-variant="ranked-personal-catalog"
+  data-ds-state={newItems.length + priorityItems.length + tailItems.length > 0 ? 'personal all-topics populated' : 'personal all-topics empty'}
+  data-exhibitions-prototype
+>
     <a class="ex-skip" href="#exhibition-results">К списку выставок</a>
 
     <div class="ex-shell" id="top">
@@ -1262,6 +1270,7 @@ const newLabel = newItems.length === 1 ? 'новая' : 'новых';
       syncTailWindow();
       if (visibleCount instanceof HTMLElement) visibleCount.textContent = String(count);
       if (empty instanceof HTMLElement) empty.hidden = count > 0;
+      root.dataset.dsState = `${mode} ${category === 'Все темы' ? 'all-topics' : 'filtered'} ${count > 0 ? 'populated' : 'empty'}`;
       if (personalNote instanceof HTMLElement) {
         const likeCount = currentLikes().length;
         personalNote.innerHTML = hasProfile()

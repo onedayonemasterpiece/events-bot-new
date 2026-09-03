@@ -1,11 +1,13 @@
 ---
 import PersonalizationRuntime from '../../components/personalization/PersonalizationRuntime.astro';
 import Button from '../../components/design-system/Button.astro';
+import SemanticIcon from '../../components/design-system/SemanticIcon.astro';
 import FocusLabBadge from '../../components/FocusLabBadge.astro';
 import FocusGroupThankYou from '../../components/FocusGroupThankYou.astro';
 import FocusGroupInviteShare from '../../components/FocusGroupInviteShare.astro';
 import { absoluteUrl, IS_SECRET_CANDIDATE, withBase } from '../../lib/events';
 import '../../styles/design-system.css';
+import '../../components/design-system/product-contour-foundations.css';
 
 const robots = IS_SECRET_CANDIDATE
   ? 'noindex,nofollow,noarchive,nosnippet'
@@ -36,9 +38,10 @@ const robots = IS_SECRET_CANDIDATE
       data-ds-version="1"
       data-ds-variant="research-programme"
       data-ds-state="available"
+      data-ke-foundation-consumer="focus-programme-route"
     >
       <nav class="focus-programme__nav" aria-label="Навигация фокус-группы">
-        <a href={withBase('/')} class="focus-programme__back">← Стартовый экран</a>
+        <a href={withBase('/')} class="focus-programme__back"><SemanticIcon name="arrow-left" role="inline" /> Стартовый экран</a>
         <FocusLabBadge label="Фокус-группа" detail="Программа · прототип" />
       </nav>
 
@@ -106,42 +109,71 @@ const robots = IS_SECRET_CANDIDATE
 
 <style>
   * { box-sizing: border-box; }
-  html { background: var(--ke-color-canvas); color: var(--ke-color-ink); font-family: var(--ke-font-sans); }
-  body { min-width: 320px; min-height: 100dvh; margin: 0; background: radial-gradient(circle at 100% 0, rgb(255 193 13 / 14%), transparent 28rem), var(--ke-color-canvas); }
-  .focus-programme { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; padding: 1rem 0 4rem; }
-  .focus-programme__skip { position: fixed; z-index: 50; top: .5rem; left: .5rem; transform: translateY(-150%); border-radius: .5rem; padding: .7rem 1rem; background: #221a14; color: #fff; font-weight: 800; }
+  html { background: var(--ke-color-background-page); color: var(--ke-color-text-primary); font-family: var(--ke-font-family-sans); }
+  body {
+    min-width: 320px;
+    min-height: 100dvh;
+    margin: 0;
+    background:
+      radial-gradient(circle at 100% 0, color-mix(in srgb, var(--ke-color-focus-brand-marker) 14%, transparent), transparent 28rem),
+      var(--ke-color-background-page);
+  }
+  .focus-programme { width: min(var(--ke-container-wide), calc(100% - 2rem)); margin: 0 auto; padding: 1rem 0 4rem; }
+  .focus-programme__skip {
+    position: fixed;
+    z-index: var(--ke-layer-navigation);
+    top: .5rem;
+    left: .5rem;
+    transform: translateY(-150%);
+    border-radius: var(--ke-shape-radius-compact);
+    padding: .7rem 1rem;
+    background: var(--ke-color-text-primary);
+    color: var(--ke-color-text-inverse);
+    font-weight: 800;
+  }
   .focus-programme__skip:focus { transform: none; }
-  .focus-programme__nav { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .focus-programme__back { min-height: 44px; display: inline-flex; align-items: center; color: var(--ke-color-brand-700); font-size: .86rem; font-weight: 850; text-decoration: none; }
-  .focus-programme__hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: clamp(2rem, 6vw, 5rem); align-items: end; min-height: 580px; border: 1px solid var(--ke-color-line); border-radius: 2rem; padding: clamp(1.4rem, 5vw, 4rem); background: linear-gradient(145deg, #fff, #fff6e5); box-shadow: var(--ke-shadow-2); }
-  .focus-programme__eyebrow { margin: 0 0 .55rem; color: var(--ke-color-brand-700); font-size: .72rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+  .focus-programme__nav { min-height: var(--ke-size-mobile-header); display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .focus-programme__back { min-height: var(--ke-size-touch-target); display: inline-flex; align-items: center; gap: var(--ke-space-xs); color: var(--ke-color-action-primary-hover); font-size: .86rem; font-weight: 850; text-decoration: none; }
+  .focus-programme__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+    gap: clamp(2rem, 6vw, 5rem);
+    align-items: end;
+    min-height: 580px;
+    border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default);
+    border-radius: var(--ke-shape-radius-hero);
+    padding: clamp(1.4rem, 5vw, 4rem);
+    background: linear-gradient(145deg, var(--ke-color-background-surface-strong), color-mix(in srgb, var(--ke-color-focus-brand-marker) 10%, var(--ke-color-background-surface-strong)));
+    box-shadow: var(--ke-elevation-popover);
+  }
+  .focus-programme__eyebrow { margin: 0 0 .55rem; color: var(--ke-color-action-primary-hover); font-size: .72rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
   .focus-programme__hero h1 { max-width: 13ch; margin: 0; font-size: clamp(3rem, 8vw, 7rem); line-height: .88; letter-spacing: -.065em; text-wrap: balance; }
-  .focus-programme__hero > p { margin: 0; color: var(--ke-color-muted); font-size: clamp(1.05rem, 2vw, 1.28rem); line-height: 1.6; }
+  .focus-programme__hero > p { margin: 0; color: var(--ke-color-text-muted); font-size: clamp(1.05rem, 2vw, 1.28rem); line-height: 1.6; }
   .focus-programme__journey,
   .focus-programme__signals,
-  .focus-programme__cta { display: grid; grid-template-columns: minmax(220px, .6fr) minmax(0, 1.4fr); gap: 2rem; margin-top: 1rem; border: 1px solid var(--ke-color-line); border-radius: 1.5rem; padding: clamp(1.2rem, 3vw, 2rem); background: var(--ke-color-surface-strong); }
+  .focus-programme__cta { display: grid; grid-template-columns: minmax(220px, .6fr) minmax(0, 1.4fr); gap: 2rem; margin-top: 1rem; border: var(--ke-shape-border-hairline) solid var(--ke-color-border-default); border-radius: var(--ke-focus-panel-radius); padding: var(--ke-space-focus-panel-padding); background: var(--ke-color-focus-panel-surface); }
   .focus-programme__section-head h2,
   .focus-programme__cta h2 { margin: 0; font-size: clamp(1.6rem, 4vw, 2.7rem); line-height: 1; letter-spacing: -.04em; }
   .focus-programme__journey ol { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
-  .focus-programme__journey li { display: grid; grid-template-columns: 2.6rem 1fr; gap: .7rem; border-radius: 1rem; padding: .85rem; background: var(--ke-color-canvas); }
-  .focus-programme__journey li > span { color: var(--ke-color-brand-600); font-size: .72rem; font-weight: 900; letter-spacing: .08em; }
+  .focus-programme__journey li { display: grid; grid-template-columns: 2.6rem 1fr; gap: .7rem; border-radius: var(--ke-focus-input-radius); padding: .85rem; background: var(--ke-color-background-page); }
+  .focus-programme__journey li > span { color: var(--ke-color-action-primary); font-size: .72rem; font-weight: 900; letter-spacing: .08em; }
   .focus-programme__journey li div { display: grid; gap: .22rem; }
-  .focus-programme__journey li p { margin: 0; color: var(--ke-color-muted); font-size: .82rem; line-height: 1.45; }
+  .focus-programme__journey li p { margin: 0; color: var(--ke-color-text-muted); font-size: .82rem; line-height: 1.45; }
   .focus-programme__signal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
-  .focus-programme__signal-grid article { border-radius: 1rem; padding: 1rem; background: var(--ke-color-canvas); }
-  .focus-programme__signal-grid span { color: var(--ke-color-accent-700); font-size: .7rem; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
+  .focus-programme__signal-grid article { border-radius: var(--ke-focus-input-radius); padding: 1rem; background: var(--ke-color-background-page); }
+  .focus-programme__signal-grid span { color: var(--ke-color-action-accent-strong); font-size: .7rem; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
   .focus-programme__signal-grid h3 { margin: .4rem 0 .35rem; font-size: 1.05rem; }
-  .focus-programme__signal-grid p { margin: 0; color: var(--ke-color-muted); font-size: .82rem; line-height: 1.45; }
+  .focus-programme__signal-grid p { margin: 0; color: var(--ke-color-text-muted); font-size: .82rem; line-height: 1.45; }
   :global(.focus-thanks) { margin-top: 1rem; }
   .focus-programme__cta { align-items: center; }
-  .focus-programme__cta > div > p:last-child { margin: .75rem 0 0; color: var(--ke-color-muted); line-height: 1.5; }
+  .focus-programme__cta > div > p:last-child { margin: .75rem 0 0; color: var(--ke-color-text-muted); line-height: 1.5; }
   .focus-programme__cta-actions { display: grid; justify-items: end; gap: .55rem; }
-  .focus-programme__boundary { display: grid; gap: .3rem; margin-top: 1rem; border-radius: 1rem; padding: 1rem; background: var(--ke-color-info-50); color: var(--ke-color-info-700); line-height: 1.45; }
+  .focus-programme__boundary { display: grid; gap: .3rem; margin-top: 1rem; border-radius: var(--ke-focus-input-radius); padding: 1rem; background: var(--ke-color-status-info-background); color: var(--ke-color-status-info-foreground); line-height: 1.45; }
   .focus-programme__boundary span { font-size: .84rem; }
-  a:focus-visible { outline: 3px solid color-mix(in srgb, var(--ke-color-focus) 60%, transparent); outline-offset: 3px; }
+  a:focus-visible { outline: var(--ke-shape-border-ring) solid var(--ke-color-focus-ring-accent); outline-offset: 3px; }
 
   @media (max-width: 760px) {
-    .focus-programme { width: min(100% - 1rem, 1120px); padding-top: .5rem; }
+    .focus-programme { width: min(100% - 1rem, var(--ke-container-wide)); padding-top: .5rem; }
     .focus-programme__hero { grid-template-columns: 1fr; min-height: calc(100dvh - 5rem); align-content: end; }
     .focus-programme__journey,
     .focus-programme__signals,

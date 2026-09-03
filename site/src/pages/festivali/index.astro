@@ -1,6 +1,7 @@
 ---
 import EventLayout from '../../layouts/EventLayout.astro';
 import Icon from '../../components/Icon.astro';
+import SemanticIcon from '../../components/design-system/SemanticIcon.astro';
 import festivalProjection from '../../data/festival-timeline.json';
 import {
   festivalTimelineMonths,
@@ -213,7 +214,16 @@ const structuredData = [{
   structuredData={structuredData}
   headerCurrent="festivals"
 >
-  <main id="main" class="festival-page" data-festival-timeline data-festival-count={resolvedItems.length}>
+  <main
+    id="main"
+    class="festival-page"
+    data-ds-family="FestivalsTimelineRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="annual-timeline"
+    data-ds-state={resolvedItems.length > 0 ? 'populated' : 'empty'}
+    data-festival-timeline
+    data-festival-count={resolvedItems.length}
+  >
     <section class="festival-hero" aria-labelledby="festival-title">
       <div class="festival-hero__copy">
         <p class="festival-eyebrow">Календарь на 2026 год · июль—декабрь</p>
@@ -242,11 +252,11 @@ const structuredData = [{
         <p><strong>Отметьте интересное</strong><span>Нажмите сердце — фестиваль сохранится в этом браузере.</span></p>
       </div>
       <div class="festival-guide__item">
-        <span class="festival-guide__icon" aria-hidden="true">↗</span>
+        <span class="festival-guide__icon" aria-hidden="true"><SemanticIcon name="link" role="control" /></span>
         <p><strong>Проверьте дату и программу</strong><span>Статус показывает, что подтверждено; карточка откроет источник организатора.</span></p>
       </div>
       <div class="festival-guide__item">
-        <span class="festival-guide__icon" aria-hidden="true">＋</span>
+        <span class="festival-guide__icon" aria-hidden="true"><SemanticIcon name="calendar" role="control" /></span>
         <p><strong>Следите за обновлениями</strong><span>Позже отметка станет основой уведомлений; сейчас это локальная закладка.</span></p>
       </div>
       <span class="festival-guide__live" data-festival-like-live aria-live="polite"></span>

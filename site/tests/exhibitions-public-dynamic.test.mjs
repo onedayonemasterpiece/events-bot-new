@@ -141,7 +141,10 @@ test('public route keeps the donor CSS/interaction contract while replacing fixt
   const scriptBlock = (source) => source.slice(source.indexOf('<script is:inline>'), source.lastIndexOf('</script>') + '</script>'.length);
 
   assert.equal(cssBlock(surfaceSource), cssBlock(donorSource), 'accepted responsive/mobile presentation must stay exact');
-  assert.equal(scriptBlock(surfaceSource), scriptBlock(donorSource), 'accepted keyboard/gallery/personalization behavior must stay exact');
+  const surfaceBehavior = scriptBlock(surfaceSource)
+    .replace(/^\s*root\.dataset\.dsState = `\$\{mode\} \$\{category === 'Все темы' \? 'all-topics' : 'filtered'\} \$\{count > 0 \? 'populated' : 'empty'\}`;\n/mu, '');
+  assert.equal(surfaceBehavior, scriptBlock(donorSource), 'accepted keyboard/gallery/personalization behavior must stay exact apart from normalized diagnostics');
+  assert.match(scriptBlock(surfaceSource), /root\.dataset\.dsState = `\$\{mode\} \$\{category === 'Все темы' \? 'all-topics' : 'filtered'\} \$\{count > 0 \? 'populated' : 'empty'\}`/u);
   assert.match(publicSource, /projectExhibitionsPersonal\(getOngoingExhibitionEvents\(\), currentDate\)/u);
   assert.match(publicSource, /ExhibitionsPersonalSurface/u);
   assert.match(surfaceSource, /ExhibitionPrototypeRow/u);

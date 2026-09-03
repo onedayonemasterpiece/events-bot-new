@@ -10,6 +10,7 @@ import { displayDateTime, eventAbsoluteUrl, eventTicketActionLabel, eventAdmissi
 import { eventImageUrl } from '../lib/assets';
 import { isLowResolutionPortraitEventMedia, selectEventMediaByQuality } from '../lib/eventMediaQuality';
 import { resolveEventFallbackArt } from '../lib/eventFallbackArt';
+import './media-frame.css';
 
 export type HeroMode = 'poster-stage' | 'photo-cover' | 'fallback-art';
 export type HeroComposition = 'poster-billboard' | 'poster-attached-card' | 'photo-cinematic-sheet' | 'photo-parallax-sheet' | 'compact-ticketing';
@@ -203,28 +204,67 @@ const efficientPortraitViewer = galleryPhotoCount >= 5 && portraitPhotoCount >= 
 const galleryHintLabel = galleryPhotoCount > 1 ? `Фото ${galleryPhotoCount}` : 'Открыть фото';
 const calendarPrimary = canAddToCalendar && (!ctaHref || event.ticket.kind === 'free');
 const showTicketCta = Boolean(ctaHref);
+const primaryMediaFrameFit = primaryLowResolutionPortrait ? 'contain' : primaryHeroCrop.fit;
+const primaryMediaFramePosition = heroObjectPosition || primaryHeroCrop.objectPosition || '50% 50%';
+const primaryMediaFrameKind = primaryImageTextMode === 'visual_only'
+  ? 'visual'
+  : primaryImageTextMode === 'ocr_text' ? 'document' : 'unknown';
+const primaryMediaFrameRole = primaryImageAsset?.media_semantic_status === 'classified'
+  ? primaryImageAsset.media_role
+  : 'unknown_document';
+const primaryMediaFrameRatio = primaryImageAsset?.width && primaryImageAsset?.height
+  ? primaryImageAsset.width / primaryImageAsset.height
+  : undefined;
+const primaryMediaFrameStyle = [
+  `--media-frame-object-position:${primaryMediaFramePosition}`,
+  primaryMediaFrameRatio ? `--media-frame-ratio:${primaryMediaFrameRatio}` : '',
+  primaryMediaFrameRatio ? `--media-frame-source-ratio:${primaryMediaFrameRatio}` : '',
+  primaryLowResolutionPortrait && primaryImageAsset?.width ? `--hero-source-width:${primaryImageAsset.width}px` : '',
+  primaryLowResolutionPortrait && primaryImageAsset?.height ? `--hero-source-height:${primaryImageAsset.height}px` : '',
+].filter(Boolean).join(';');
 ---
-<section class={heroClass} data-event-hero data-feedback-scope data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={primaryImageTextMode} data-hero-quality-hidden-count={mediaQualitySelection.hiddenSourceIndexes.length || undefined} data-hero-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined} data-hero-tint={tint} data-presentation-fallback={typedFallbackArt?.kind}>
+<section class={heroClass} data-event-hero data-feedback-scope data-ds-family="EventHero" data-ds-version="1" data-ds-variant={heroComposition} data-ds-state={`${heroMode} ${hasGallery ? 'gallery' : 'fallback'}`} data-event-id={event.id} data-event-title={event.title} data-hero-mode={heroMode} data-hero-composition={heroComposition} data-hero-image-text-mode={primaryImageTextMode} data-hero-quality-hidden-count={mediaQualitySelection.hiddenSourceIndexes.length || undefined} data-hero-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined} data-hero-tint={tint} data-presentation-fallback={typedFallbackArt?.kind}>
   {hasGallery ? (
     <button type="button" class="event-hero__visual" data-hero-gallery-open={heroGalleryId} data-hero-gallery-index="0" aria-label={`Открыть изображение события «${event.title}» на весь экран`}>
       {primaryImageUrl && heroMode !== 'fallback-art' ? (
-        <img
-          class="event-hero__image"
-          src={primaryImageUrl}
-          alt={heroAlt}
-          loading="eager"
-          decoding="async"
-          fetchpriority="high"
-          data-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined}
-          data-protected-crop-fit={primaryHeroCrop.fit}
-          data-protected-crop-reason={primaryHeroCrop.reason}
-          style={[
-            `object-fit:${primaryLowResolutionPortrait ? 'contain' : primaryHeroCrop.fit}`,
-            heroObjectPosition ? `object-position:${heroObjectPosition}` : '',
-            primaryLowResolutionPortrait && primaryImageAsset?.width ? `--hero-source-width:${primaryImageAsset.width}px` : '',
-            primaryLowResolutionPortrait && primaryImageAsset?.height ? `--hero-source-height:${primaryImageAsset.height}px` : '',
-          ].filter(Boolean).join(';') || undefined}
-        />
+        <span
+          class="event-hero__media-frame"
+          data-media-frame
+          data-media-frame-contract="v1"
+          data-media-frame-style-owner="media-frame.css"
+          data-media-frame-surface="event-hero"
+          data-media-frame-role={primaryMediaFrameRole}
+          data-media-frame-kind={primaryMediaFrameKind}
+          data-media-frame-fit={primaryMediaFrameFit}
+          data-media-frame-crop-permission={primaryMediaFrameFit === 'cover' ? 'allowed' : 'forbidden'}
+          data-media-frame-ratio={primaryMediaFrameRatio?.toFixed(5)}
+          data-media-frame-object-position={primaryMediaFramePosition}
+          data-media-frame-focal-position={primaryMediaFramePosition}
+          data-media-frame-crop-reason={primaryLowResolutionPortrait ? 'low_resolution_portrait_contain' : primaryHeroCrop.reason}
+          data-media-frame-clip="frame"
+          data-media-frame-radius="surface"
+          data-media-frame-fill="true"
+          data-media-frame-source-width={primaryImageAsset?.width}
+          data-media-frame-source-height={primaryImageAsset?.height}
+          data-media-frame-source-ratio={primaryMediaFrameRatio?.toFixed(5)}
+          data-media-frame-loading="eager"
+          data-media-frame-priority="true"
+          data-media-frame-interaction-owner="caller"
+          style={primaryMediaFrameStyle || undefined}
+        >
+          <img
+            class="event-hero__image"
+            data-media-frame-image
+            src={primaryImageUrl}
+            alt={heroAlt}
+            loading="eager"
+            decoding="async"
+            fetchpriority="high"
+            data-low-resolution-portrait={primaryLowResolutionPortrait ? 'true' : undefined}
+            data-protected-crop-fit={primaryMediaFrameFit}
+            data-protected-crop-reason={primaryLowResolutionPortrait ? 'low_resolution_portrait_contain' : primaryHeroCrop.reason}
+          />
+        </span>
       ) : (
         <div class="event-hero__fallback" aria-hidden="true">
           <span>{event.event_type || 'событие'}</span>

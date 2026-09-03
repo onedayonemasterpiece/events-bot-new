@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const read = (relativePath) => readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
 
-test('accepted v23 full-viewport 112px rail is tracked on every approved mobile listing surface', async () => {
+test('accepted v23 full-viewport 112px rail remains on its approved date and weekend surfaces', async () => {
   const [surface, row, menu, dates, weekend, popular, accessory] = await Promise.all([
     read('src/components/listings/MobileListingRailSurface.astro'),
     read('src/components/listings/MobileListingRailRow.astro'),
@@ -67,8 +67,11 @@ test('accepted v23 full-viewport 112px rail is tracked on every approved mobile 
   assert.match(dates, /calendarToday=\{getCurrentDate\(\)\}/u);
   assert.match(weekend, /<MobileListingRailSurface[\s\S]*occurrenceMode="per-date"/u);
   assert.match(weekend, /calendarToday=\{currentDate \|\| start\}/u);
-  assert.match(popular, /collapseOccurrenceCards\(group\.events, 'per-family'\)/u);
-  assert.match(popular, /<MobileListingRailSurface[\s\S]*occurrenceMode="per-family"/u);
+  assert.doesNotMatch(popular, /MobileListingRailSurface/u,
+    'Popular owns exactly the accepted Large/Compact representations, not a disconnected third rail');
+  assert.match(popular, /<PopularMobileBehaviorRows groups=\{groups\} \/>/u);
+  assert.match(popular, /<PopularMobileAdaptiveRows groups=\{groups\} \/>/u);
+  assert.match(popular, /<ListingMobileDensitySwitch \/>/u);
   assert.match(accessory, /getStaticEventDateAvailability\(\)/u);
   assert.match(accessory, /class="date-rail"/u);
   assert.match(accessory, /class="date-calendar-trigger"/u);
