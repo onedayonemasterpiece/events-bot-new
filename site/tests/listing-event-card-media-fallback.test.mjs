@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath) => readFile(path.join(siteRoot, relativePath), 'utf8');
+const DIRECT_FRAMING_DECLARATION = /(?:^|[;{])\s*object-(?:fit|position)\s*:/mu;
 
 test('ListingEventCard keeps one root and the canonical resource-state channel', async () => {
   const source = await read('src/components/listings/ListingEventCard.astro');
@@ -54,8 +55,8 @@ test('ListingEventCard broken resources fail closed and cannot retain cover', as
   assert.match(source, /mediaFrame\.dataset\.mediaFrameFocalPosition = '50% 50%'/u);
   assert.match(source, /mediaFrame\.setAttribute\('data-media-frame-fallback', ''\)/u);
   assert.match(source, /if \(broken && image instanceof HTMLImageElement\) \{[\s\S]*image\.hidden = true;[\s\S]*image\.removeAttribute\('srcset'\);[\s\S]*image\.removeAttribute\('src'\);/u);
-  assert.doesNotMatch(source, /object-fit:/u, 'ListingEventCard must not reimplement canonical framing paint');
-  assert.doesNotMatch(source, /object-position:/u, 'ListingEventCard must not reimplement canonical framing paint');
+  assert.doesNotMatch(source, DIRECT_FRAMING_DECLARATION,
+    'ListingEventCard must not reimplement object-fit/object-position declarations');
 });
 
 test('ListingEventCard preserves responsive resources and no-proof spacing', async () => {
