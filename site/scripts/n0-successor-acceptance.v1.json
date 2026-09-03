@@ -2,10 +2,10 @@
   "schema_version": "kenigevents.n0-successor-acceptance.v1",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_version": "1.9.0",
-  "pm0_version": "2.2.0",
+  "pm0_version": "2.3.0",
   "evidence_cutoff": {
     "issue_comment": 5527668536,
-    "timestamp": "2026-09-03T14:58:52Z"
+    "timestamp": "2026-09-03T15:13:00Z"
   },
   "owner": "N0",
   "authority": {
@@ -42,15 +42,16 @@
     },
     "n0_branch": {
       "branch": "work/ui-normalization-n0-checklist-20260903",
-      "minimum_reviewed_commit": "2c8e998ab3f537a6daf6eaeb919f11636e141e97",
+      "minimum_reviewed_commit": "84d222864664d56fb930df631e79ac6710e1879b",
       "resolve_remote_head_at_merge": true,
       "decision": "SOURCE_ACCEPTED_PENDING_R0_INTEGRATION_AND_EXECUTABLE_TESTS"
     },
     "thin_sot": {
       "repository": "onedayonemasterpiece/lovekgd-design-system",
       "branch": "integration/launch-normalized-sot-penpot-20260902",
-      "head": "c23ea41b06fb6a629aeb56105dab4afe889da876",
-      "status_doc_updated": true
+      "minimum_reviewed_head": "44b264813eef4fcf1f7f898ef989ddfeb0672cbf",
+      "resolve_remote_head_at_merge": true,
+      "pm0_version": "2.3.0"
     }
   },
   "accepted_golden_transaction": {
@@ -67,9 +68,7 @@
       "84504f30eebc334deba46e94365601c3d572c5c0"
     ],
     "data_mode": "golden",
-    "page_classes": [
-      "all"
-    ],
+    "page_classes": ["all"],
     "golden_corpus_id": "golden-review-20260903-v1",
     "golden_corpus_sha256": "f90561691baa6744804b6cba36b0a8580eac8e9607dcdb97483511ad32e7ce00",
     "kaggle": {
@@ -126,33 +125,40 @@
       "reason": "golden_preview_frozen_clock"
     },
     "events": 288,
-    "page_classes": [
-      "all"
-    ],
+    "page_classes": ["all"],
     "publication": "INTENTIONALLY_NOT_PUBLISHED",
     "accepted_as": "PIPELINE_SOURCE_AND_FROZEN_CLOCK_DIAGNOSTIC_ONLY"
   },
   "role_outputs": {
     "F0": {
       "branch": "work/ui-normalization-f0-wave-3-20260903",
-      "head": "77c0833a7f5d2542bcfb8313a3353f42b75233dd",
+      "latest_reviewed_head": "de92dabd4551e117ca1af1be7915ff223321cc32",
       "merge_base_already_in_precursor": "bbbc9b09720298f43653c36bd5343385cae63102",
-      "post_base_commit_count": 12,
-      "candidate_relation": "DIVERGED_POST_CONTAINED_BASE",
-      "decision": "SELECTIVE_SOURCE_ACCEPTED_NOT_END_TO_END_COMPLETE",
+      "decision": "SOURCE_ACCEPTED_NOT_END_TO_END_COMPLETE",
       "accepted_functional_commits": [
         "fd47202484da3abb2eff0fac70c6123a0cebba4b",
         "11de3f042de2bd9205e7a594f78813566d5be5d6",
         "2e95a34abd39317766abfe19dae8c6b9d4676da2",
-        "77c0833a7f5d2542bcfb8313a3353f42b75233dd"
+        "77c0833a7f5d2542bcfb8313a3353f42b75233dd",
+        "de92dabd4551e117ca1af1be7915ff223321cc32"
       ],
       "accepted_scope": [
         "remove duplicate Badge/Field/StatePanel visual ownership from legacy design-system.css",
-        "bind remaining central legacy icon geometry to exactly four icon roles",
-        "add token-only interest-club route foundation",
-        "add canonical catalog-grid semantic icon",
-        "expose delegated and local semantic-icon role diagnostics"
+        "bind central legacy icon geometry to exactly four icon roles",
+        "add interest-club route foundation and canonical catalog-grid icon",
+        "expose delegated/local semantic-icon role diagnostics",
+        "formalize current typography authority and exact A0 migration bindings"
       ],
+      "typography_authority": {
+        "registry": "site/src/components/design-system/f0-typography-authority.v1.json",
+        "source_family": "Inter fallback stack",
+        "source_primitive_owner": "site/src/styles/design-system.css --ke-font-sans",
+        "semantic_owner": "site/src/components/design-system/foundations.css --ke-font-family-sans",
+        "owner_approval_claimed": false,
+        "font_binary_authority": false,
+        "font_face_authority": false,
+        "pm0_item_11": "PARTIAL"
+      },
       "remaining_source_evidence": {
         "consumer_files_with_raw_lengths": 84,
         "direct_font_family_consumers": [
@@ -160,26 +166,25 @@
           "site/src/layouts/EventLayout.astro",
           "site/src/layouts/PrelaunchLayout.astro"
         ],
-        "transitional_local_icon_alias_consumers": [
+        "transitional_local_icon_alias_consumers_before_A0_projection": [
           "site/src/components/InterestProfile.astro",
           "site/src/components/InterestClubCard.astro",
           "site/src/components/artifacts/ArtifactCollection.astro"
-        ],
-        "interest_club_catalog_icon_state": "A0_REPLACEMENT_PENDING_OR_CANONICAL_SVG_BOUND_AT_RUNTIME_CHECK"
+        ]
       },
       "runtime_status": "NOT_RUN_ON_CURRENT_SUCCESSOR",
       "browser_status": "V0_OWNED_NOT_CLAIMED"
     },
     "M0": {
       "branch": "work/ui-normalization-m0-continuity-20260903",
-      "head": "c5f208c3bf9dc3177c025b6d354b7e54bcf3b0a1",
+      "latest_reviewed_head": "4c83fc7769b1dec2d92469373e3b15154af437f4",
       "invalid_result_sha_rejected": "e620e69fd8fb4641415320beaa3ea9c1003beee8",
       "integrated_parent": "1d145d5efd2a332eff29e69b6afcf43414769906",
       "integrated_by": "9152994b026b34d60d21d68bfa2a4d7d8dc20f3e",
       "decision": "SOURCE_ACCEPTED_TIP_PARTIALLY_INTEGRATED",
       "resolved_drift": {
         "code": "ADAPTIVE_SOURCE_COUNT_ORDER_CARDINALITY",
-        "resolution": "input/source/rendered populations now expose separate coherent count/order pairs",
+        "resolution": "input/source/rendered populations expose separate coherent count/order pairs",
         "diagnostics_owner": "AdaptiveEventCardGrid",
         "diagnostics_contract": "input-source-rendered-v1"
       },
@@ -193,42 +198,92 @@
         "c63070e8a1c840dc12cc66c4b12762844dcf8191",
         "879a4be610206a5a6791447af8650b1010cbfff2",
         "db21c7195fa1a2fe116f94dcd68445676cc5031d",
-        "c5f208c3bf9dc3177c025b6d354b7e54bcf3b0a1"
+        "c5f208c3bf9dc3177c025b6d354b7e54bcf3b0a1",
+        "e7fc25e71b075449f7f75e33b1348516d268bb29",
+        "e3676b6953ad44de07992e66666c6cdc9c1ca66b",
+        "e780493083fc4ee9dcad5c7aa0df907c7fa90394",
+        "3874c19d5e38a745d952381124f107c357e0c241",
+        "8920fad219d9a9e5e1a983a39891855187e51e05",
+        "18af5ebc42aa755d1829fc4977c3df50ad574a6e",
+        "b1731b7f15a9494e5102e9cee4f58847c8755b4f",
+        "4c83fc7769b1dec2d92469373e3b15154af437f4"
       ],
-      "pending_scope": [
-        "diagnostics ownership negative regression",
-        "desktop rail migration/removal boundary",
-        "fail-closed ListingEventCard broken-media fallback state",
-        "ListingEventCard fallback regression",
-        "empty-card social-proof placement none state",
+      "accepted_scope": [
+        "single MediaFrame anatomy and fit owner",
+        "coherent grid input/source/rendered diagnostics and named remainder variants",
+        "fail-closed ListingEventCard broken-media fallback",
+        "empty social-proof placement none state",
         "flex-only EventCard placement without inert grid row/column",
-        "A0 removal boundary for obsolete runtime placement",
-        "owner-local listing proof regression"
+        "canonical EventCard, ListingEventCard and MobileListingRailRow icon roles",
+        "natural contain-document width owned by MediaFrame"
       ],
       "runtime_status": "NOT_RUN_ON_FULL_M0_TIP",
       "browser_status": "V0_OWNED_NOT_CLAIMED"
     },
     "A0": {
       "branch": "work/ui-normalization-a0-wave-3-20260903",
-      "head": "8f96c659cd710091fba61eb65cb4846cccdd2c38",
+      "latest_reviewed_head": "ec926580fa2cc003318006f4c1d671fc459ea26c",
       "merge_base": "25adccae5975c447f9ee734b110adfb2f8a9d6ae",
-      "decision": "HOLD_WHOLESALE_TIP_FOR_A0_COMPLETION_OR_SELECTIVE_PATCH",
+      "branch_commits_after_merge_base": 45,
+      "decision": "SELECTIVE_PATH_PROJECTION_ACCEPTED_WHOLE_BRANCH_HELD",
       "standalone_build_target": false,
       "route_family_fraction": "5/9",
       "product_removal_rejected_commit": "5e466d65bc2b71a814c26c063f90aa07709de08f",
       "product_behavior_restore_commit": "84399b51b77701be714fdc84429318a9a28f93fd",
-      "restore_decision": "ACCEPTED_CORRECTION",
-      "writer_blocked_paths": [
+      "popular_visible_binding_commit": "3630c3eb92088c5b8de163805bb2c4f564def57c",
+      "popular_density_decision": "RESOLVED_PRESERVED_AND_BOUND_TO_VISIBLE_REPRESENTATIONS",
+      "accepted_latest_projection": {
+        "from_exclusive": "8f96c659cd710091fba61eb65cb4846cccdd2c38",
+        "through_inclusive": "ec926580fa2cc003318006f4c1d671fc459ea26c",
+        "commits": [
+          "3630c3eb92088c5b8de163805bb2c4f564def57c",
+          "142086f1d9ee6c2782bd0181e5ce2569d208f016",
+          "d50ca4b12261883d02904c88c84cb5fc158d4100",
+          "b239870d0c5527146e1c0a38e7f12f31ab6c6425",
+          "7106e558a44e7fac720c078aeeecf7393a7c3b8e",
+          "8cfac46df8be93309efad2f5452cf843250b9b12",
+          "92264f06f79ad1fedb20096dfb4bbecc3a8f6f72",
+          "e28b0b6ba57637fc6caebca743a302444a271b3b",
+          "75465138eae249024eb611e5e4ffd7c9a4988738",
+          "ec926580fa2cc003318006f4c1d671fc459ea26c"
+        ],
+        "source_paths": [
+          "site/src/components/FavoritesSurface.astro",
+          "site/src/components/HomeColdStartFeed.astro",
+          "site/src/components/PersonalFeedSlot.astro",
+          "site/src/components/listings/PopularListingSurface.astro",
+          "site/src/components/InterestClubCard.astro",
+          "site/src/components/artifacts/ArtifactCollection.astro",
+          "site/src/pages/kluby-po-interesam/index.astro"
+        ],
+        "regression_paths": [
+          "site/tests/a0-adaptive-grid-consumer-ownership.test.mjs",
+          "site/tests/a0-consumer-ownership.test.mjs"
+        ],
+        "accepted_effects": [
+          "Popular Large/Compact choice controls exactly two visible representations",
+          "PersonalFeed, Home and Favorites delegate Adaptive diagnostics to the canonical root",
+          "interest-club route consumes the F0 foundation and canonical catalog-grid icon",
+          "InterestClubCard and ArtifactCollection remove local icon dimensions"
+        ]
+      },
+      "excluded_from_nearest_projection": [
+        "site/src/components/OptimizedEventCardGrid.astro",
+        "site/src/components/design-system/a0-media-frame-exceptions.v1.json",
+        "site/tests/event-hero-media-frame-exception.test.mjs"
+      ],
+      "remaining_owned_paths": [
         "site/src/pages/festivali/index.astro",
         "site/src/components/ExhibitionsPersonalSurface.astro",
         "site/src/components/DesktopEventPage.astro",
         "site/src/layouts/EventLayout.astro",
         "site/src/components/listings/MobileListingRailSurface.astro"
       ],
-      "open_drift": [
-        "Popular density control changes hidden donor layouts rather than the visible canonical rail",
-        "actual route and layout owners remain partial",
-        "A0 branch touches the M0-owned OptimizedEventCardGrid and must be split at integration"
+      "remaining": [
+        "four route families remain PARTIAL",
+        "M0-owned OptimizedEventCardGrid may not be imported from the A0 branch",
+        "temporary EventHero exception is not accepted into the first-real candidate",
+        "remaining five consumer/layout paths require later A0 source closure"
       ],
       "must_preserve_without_owner_decision": [
         "visible Large/Compact choice",
@@ -236,9 +291,7 @@
         "keyboard radio behavior",
         "pinch behavior",
         "visible-event anchor preservation"
-      ],
-      "fresh_real_minimum_candidate_policy": "DO_NOT_DELAY_FIRST_REAL_PREVIEW_FOR_NON_VERTICAL_SLICE_A0_COMPLETION",
-      "post_real_successor_policy": "INTEGRATE_COMPLETED_A0_ROUTE_FAMILIES_AND_V0_DRIFT_FIXES_SELECTIVELY"
+      ]
     }
   },
   "candidate_plan": {
@@ -248,25 +301,30 @@
       "include": [
         {
           "source": "work/ui-normalization-n0-checklist-20260903",
-          "selection": "CURRENT_REMOTE_HEAD",
-          "reason": "contract-1.9 acceptance, one-pipeline policy and transition regression"
+          "selection": "CURRENT_REMOTE_HEAD_IF_DESCENDANT_OF_MINIMUM_REVIEWED_COMMIT_AND_NO_NEW_UNREVIEWED_N0_SOURCE",
+          "reason": "contract-1.9 acceptance, one-pipeline policy, public identity and downstream gate regression"
         },
         {
           "source": "work/ui-normalization-f0-wave-3-20260903",
-          "selection": "POST_bbbc9b_SOURCE_PATHS_THROUGH_77c0833",
-          "reason": "central owner closure and exactly-four icon-role diagnostics"
+          "selection": "REVIEWED_SOURCE_PATHS_THROUGH_de92dabd",
+          "reason": "foundation owner closure, exactly-four icon roles and typography authority"
         },
         {
           "source": "work/ui-normalization-m0-continuity-20260903",
-          "selection": "TEN_COMMITS_AFTER_1d145d5_THROUGH_c5f208",
-          "reason": "complete reviewed M0 delta: coherent diagnostics, fail-closed media/proof states and flex-only placement boundaries"
+          "selection": "EIGHTEEN_COMMITS_AFTER_1d145d5_THROUGH_4c83fc77",
+          "reason": "complete reviewed M0 delta through canonical icon roles and natural document sizing"
+        },
+        {
+          "source": "work/ui-normalization-a0-wave-3-20260903",
+          "selection": "ONLY_role_outputs.A0.accepted_latest_projection.source_paths_AND_regression_paths_AT_ec926580",
+          "reason": "remove duplicate grid/icon ownership and preserve visible Popular density behavior"
         }
       ],
       "hold_for_next_successor": [
-        {
-          "source": "work/ui-normalization-a0-wave-3-20260903",
-          "reason": "5/9 route families, five ready owned paths and unresolved visible Popular density binding"
-        }
+        "all A0 paths outside the accepted latest projection",
+        "A0 remaining_owned_paths",
+        "any F0/M0/A0 commit newer than latest_reviewed_head until N0 reviews it",
+        "fresh-real V0 DRIFT fixes"
       ],
       "preserve": [
         "c124ca2a810f100122230b7f51ec1221f7e74be4 responsive specificity correction",
@@ -280,15 +338,17 @@
         "5e466d65bc2b71a814c26c063f90aa07709de08f semantic removal as final state",
         "local full-preview publication commands",
         "whole-current-A0-tip merge",
+        "A0 projection of the M0-owned OptimizedEventCardGrid",
+        "temporary EventHero exception in the first-real candidate",
         "runtime inheritance from an earlier build"
       ]
     },
     "post_real_successor": {
-      "status": "WAITING_FOR_A0_COMPLETION_AND_V0_DRIFT",
+      "status": "WAITING_FOR_A0_REMAINING_PATHS_AND_V0_DRIFT",
       "inputs": [
-        "completed A0 nine-family source matrix or exact selective patches",
+        "completed A0 route-family source matrix or exact later selective projections",
         "fresh-real V0 DRIFT findings",
-        "any later accepted F0/M0 tips"
+        "any later N0-reviewed F0/M0 tips"
       ]
     }
   },
@@ -301,6 +361,7 @@
         "integrate candidate_plan.nearest_full_real_candidate.include onto its exact base",
         "preserve candidate_plan.nearest_full_real_candidate.preserve",
         "exclude candidate_plan.nearest_full_real_candidate.reject",
+        "stop if any role head is newer than its latest reviewed boundary and changes selected paths",
         "run required_source_commands_after_integration"
       ],
       "output": "one exact tested successor SHA"
@@ -380,16 +441,7 @@
   "pm0_delta_reporting": {
     "owner_correction_comment": 5527668536,
     "effective_immediately": true,
-    "fresh_read_heads": [
-      "r0/ui-normalization-current-candidate-20260903",
-      "integration/ui-normalization-launch-20260902",
-      "work/ui-normalization-n0-checklist-20260903",
-      "work/ui-normalization-f0-wave-3-20260903",
-      "work/ui-normalization-m0-continuity-20260903",
-      "work/ui-normalization-a0-wave-3-20260903",
-      "agent/static-site-single-kaggle-contract",
-      "lovekgd-design-system/integration/launch-normalized-sot-penpot-20260902"
-    ],
+    "current_spec_version": "2.3.0",
     "required_output_blocks": [
       "checkbox_transitions",
       "progress_inside_partial",
@@ -421,7 +473,9 @@
     "cd site && npm run check:preview",
     "cd site && npm run check:design-system-production-surfaces",
     "cd site && npm run check:design-system-iconography",
-    "cd site && node --test tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/listing-event-card-media-fallback.test.mjs tests/event-card-flex-placement.test.mjs"
+    "cd site && node --test tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/listing-event-card-media-fallback.test.mjs tests/event-card-flex-placement.test.mjs tests/m0-card-icon-role-contract.test.mjs tests/media-frame-style-owner.test.mjs tests/a0-adaptive-grid-consumer-ownership.test.mjs tests/a0-consumer-ownership.test.mjs",
+    "cd site && node src/components/design-system/check-f0-typography-authority.mjs",
+    "cd site && node src/components/design-system/check-f0-interest-club-and-icon-contract.mjs"
   ],
   "prohibitions": [
     "do not publish a full or focused owner preview outside the canonical Kaggle pipeline",
