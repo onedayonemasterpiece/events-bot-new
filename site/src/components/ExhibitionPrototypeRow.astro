@@ -4,6 +4,7 @@ import organizerMedallions from '../data/organizerMedallions.json';
 import { withBase } from '../lib/events';
 import { resolveEventMedallions, type OrganizerMedallionDefinition } from '../lib/eventMedallions';
 import type { EventImageAsset } from '../lib/types';
+import './media-frame.css';
 
 interface PrototypeSpec {
   id: number;
@@ -123,7 +124,24 @@ if (!media.length && event.image_url) {
     sortPriority: 2,
   });
 }
-const galleryImages = [...media].sort((a, b) => a.sourceIndex - b.sourceIndex).map((asset) => asset.src);
+const galleryManifest = [...media]
+  .sort((a, b) => a.sourceIndex - b.sourceIndex)
+  .map((asset) => ({
+    src: asset.src,
+    srcset: asset.thumbnailSrcset,
+    width: asset.width,
+    height: asset.height,
+    sourceRatio: asset.sourceRatio,
+    presentationRatio: asset.sourceRatio,
+    treatment: 'document-natural',
+    mediaRole: asset.mediaRole,
+    textMode: asset.textMode,
+    safeCrop: false,
+    cropReason: 'gallery_full_asset_contain',
+    cropLoss: 0,
+    objectPosition: '50% 50%',
+  }));
+const galleryImages = galleryManifest.map((asset) => asset.src);
 // Discovery starts with verified, crop-safe event photos; the identity poster
 // remains intact and reachable in the source-order gallery.
 const deckMedia = [...media]
@@ -198,6 +216,7 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     data-gallery-open
     data-gallery-title={event.title}
     data-gallery-images={JSON.stringify(galleryImages)}
+    data-gallery-manifest={JSON.stringify(galleryManifest)}
     data-deck-manifest={JSON.stringify(deckMedia)}
     data-media-total={String(deckMedia.length || 1)}
     data-deck-cursor="0"
@@ -213,10 +232,28 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
           data-deck-slot={String(slotIndex)}
           data-deck-visual="media"
           data-image-state="idle"
+          data-media-frame
+          data-media-frame-contract="v1"
+          data-media-frame-style-owner="media-frame.css"
+          data-media-frame-surface="exhibitions-deck"
+          data-media-frame-role="unknown_document"
+          data-media-frame-kind="unknown"
+          data-media-frame-fit="contain"
+          data-media-frame-crop-permission="forbidden"
+          data-media-frame-object-position="50% 50%"
+          data-media-frame-focal-position="50% 50%"
+          data-media-frame-crop-reason="unbound_deck_slot"
+          data-media-frame-clip="frame"
+          data-media-frame-radius="surface"
+          data-media-frame-fill="true"
+          data-media-frame-loading={rowIndex > 2 ? 'lazy' : 'eager'}
+          data-media-frame-resource-state="idle"
+          data-media-frame-interaction-owner="caller"
           hidden
         >
           <img
             data-deck-image
+            data-media-frame-image
             sizes="(max-width: 740px) 48vw, 190px"
             alt=""
             width="1"
@@ -224,8 +261,8 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
             loading={rowIndex > 2 ? 'lazy' : 'eager'}
             decoding="async"
           />
-          <span class="ex-deck__skeleton" data-image-skeleton aria-hidden="true"></span>
-          <span class="ex-deck__depth-plane" aria-hidden="true"></span>
+          <span class="ex-deck__skeleton" data-image-skeleton data-media-frame-placeholder aria-hidden="true"></span>
+          <span class="ex-deck__depth-plane" data-media-frame-fallback aria-hidden="true"></span>
         </span>
       ))}
     </span>
@@ -235,14 +272,37 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
         data-exhibition-medallion
         data-medallion-slug={listingMedallion.item.slug}
         data-medallion-evidence={listingMedallion.evidence.field}
+        data-media-frame
+        data-media-frame-contract="v1"
+        data-media-frame-style-owner="media-frame.css"
+        data-media-frame-surface="exhibitions-medallion"
+        data-media-frame-role={listingMedallion.item.category || 'organizer'}
+        data-media-frame-kind="visual"
+        data-media-frame-fit="cover"
+        data-media-frame-crop-permission="allowed"
+        data-media-frame-ratio="1.00000"
+        data-media-frame-object-position="50% 50%"
+        data-media-frame-focal-position="50% 50%"
+        data-media-frame-crop-reason="institutional_identity_square"
+        data-media-frame-clip="frame"
+        data-media-frame-radius="surface"
+        data-media-frame-fill="true"
+        data-media-frame-source-width="44"
+        data-media-frame-source-height="44"
+        data-media-frame-source-ratio="1.00000"
+        data-media-frame-loading="lazy"
+        data-media-frame-resource-state="pending"
+        data-media-frame-interaction-owner="none"
         style={`--medallion-bg:${listingMedallion.item.background || '#17191b'};--medallion-ring:${listingMedallion.item.ring || '#697178'}`}
         aria-hidden="true"
       >
+        <span class="ex-deck__medallion-fallback" data-media-frame-fallback aria-hidden="true"></span>
         <picture>
           {listingMedallion.item.avatarUrl.endsWith('.webp') && listingMedallion.item.fallbackPngUrl && (
             <source srcset={withBase(listingMedallion.item.avatarUrl)} type="image/webp" />
           )}
           <img
+            data-media-frame-image
             src={withBase(listingMedallion.item.avatarUrl.endsWith('.webp') ? (listingMedallion.item.fallbackPngUrl || listingMedallion.item.avatarUrl) : listingMedallion.item.avatarUrl)}
             alt=""
             width="44"
@@ -313,3 +373,10 @@ const actionLabel = `${event.title}: ${item.status}. ${item.reasons.join('. ')}`
     <button type="button" data-undo>Отменить</button>
   </div>
 </article>
+
+<script>
+  import { hydrateExhibitionsMediaFrames } from './exhibitionsMediaFrameBridge.mjs';
+
+  hydrateExhibitionsMediaFrames();
+  document.addEventListener('astro:page-load', () => hydrateExhibitionsMediaFrames());
+</script>
