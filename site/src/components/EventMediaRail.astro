@@ -45,6 +45,7 @@ interface Props {
 }
 
 interface NormalizedRailItem extends EventMediaRailItem {
+  asset?: EventImageAsset;
   thumbnailWidth?: number;
   thumbnailHeight?: number;
   width?: number;
@@ -139,6 +140,7 @@ const normalizedGalleryItem = (asset: EventImageAsset, index: number): Normalize
   const width = finitePositive(asset.width);
   const height = finitePositive(asset.height);
   return {
+    asset,
     src: eventImageUrl(asset.src) || asset.src,
     thumbnailSrc: thumbnail(asset),
     thumbnailSrcset: srcset(asset) || undefined,
@@ -223,6 +225,7 @@ const rootStyle = variant === 'gallery-thumbnails'
   >
     {visibleItems.map((item, index) => {
       const sourceRatio = mediaFrameSourceRatio(item.width, item.height);
+      const asset = item.asset;
       const usesPlaceholder = variant !== 'gallery-thumbnails';
       const imageSizes = variant === 'hero-selector'
         ? '(min-width:1024px) 96px, 1px'
@@ -282,22 +285,36 @@ const rootStyle = variant === 'gallery-thumbnails'
             data-media-frame-interaction-owner="caller"
             style={frameStyle}
           >
-            <img
-              src={usesPlaceholder ? transparentRailPixel : item.thumbnailSrc}
-              srcset={usesPlaceholder ? undefined : item.thumbnailSrcset}
-              data-rail-thumbnail={usesPlaceholder ? '' : undefined}
-              data-thumbnail-src={usesPlaceholder ? item.thumbnailSrc : undefined}
-              data-thumbnail-srcset={usesPlaceholder ? item.thumbnailSrcset : undefined}
-              sizes={imageSizes}
-              width={item.thumbnailWidth || item.width}
-              height={item.thumbnailHeight || item.height}
-              alt=""
-              loading={usesPlaceholder ? 'lazy' : 'eager'}
-              decoding="async"
-              fetchpriority={usesPlaceholder ? 'low' : undefined}
-              style={`object-fit:${item.fit};object-position:${item.objectPosition}`}
-              data-media-frame-image
-            />
+            {variant === 'gallery-thumbnails' && asset ? (
+              <img
+                src={item.thumbnailSrc}
+                srcset={item.thumbnailSrcset}
+                sizes={imageSizes}
+                width={item.thumbnailWidth || item.width}
+                height={item.thumbnailHeight || item.height}
+                alt=""
+                loading="eager"
+                decoding="async"
+                style={`object-fit:${mediaFrameFit(asset)};object-position:50% 50%`}
+                data-media-frame-image
+              />
+            ) : (
+              <img
+                src={transparentRailPixel}
+                data-rail-thumbnail
+                data-thumbnail-src={item.thumbnailSrc}
+                data-thumbnail-srcset={item.thumbnailSrcset}
+                sizes={imageSizes}
+                width={item.thumbnailWidth || item.width}
+                height={item.thumbnailHeight || item.height}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                fetchpriority="low"
+                style={`object-fit:${item.fit};object-position:${item.objectPosition}`}
+                data-media-frame-image
+              />
+            )}
           </picture>
           {usesResolvedItems && item.roleLabel && <span class="event-media-rail__role">{item.roleLabel}</span>}
         </button>
