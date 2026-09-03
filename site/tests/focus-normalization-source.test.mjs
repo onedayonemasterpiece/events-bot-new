@@ -10,6 +10,7 @@ const consumers = {
   pwa: 'src/components/FocusPwaInstallAction.astro',
   badge: 'src/components/FocusLabBadge.astro',
   lab: 'src/components/FocusGroupLabPanel.astro',
+  intake: 'src/components/FocusGroupInviteIntake.astro',
 };
 
 test('normalized focus consumers load the one product-contour foundation registry', async () => {
@@ -75,15 +76,55 @@ test('focus PWA and lab badge consume central brand and surface roles', async ()
   assert.match(badge, /data-ds-version="1"/u);
 });
 
+test('focus invite intake consumes the central focus roles and canonical success identity', async () => {
+  const intake = await read(consumers.intake);
+
+  assert.match(intake, /import Button from '\.\/design-system\/Button\.astro'/u);
+  assert.match(intake, /import SemanticIcon from '\.\/design-system\/SemanticIcon\.astro'/u);
+  assert.match(intake, /data-ds-family="FocusGroupInviteIntake"/u);
+  assert.match(intake, /data-ds-version="1"/u);
+  assert.match(intake, /data-ds-variant="pwa-membership"/u);
+  assert.match(intake, /data-ds-state="pending"/u);
+  assert.match(intake, /data-ke-foundation-consumer="focus-invite-intake"/u);
+  assert.match(intake, /root\.dataset\.dsState = stage/u);
+  assert.match(intake, /root\.dataset\.dsState = 'error'/u);
+  assert.match(intake, /<SemanticIcon name="check" role="feature" \/>/u);
+  assert.doesNotMatch(intake, />✓</u);
+  assert.match(intake, /<Button variant="primary" href=\{programmeHref\}>/u);
+  assert.match(intake, /<Button variant="primary" size="large" href=\{homeHref\}>/u);
+
+  for (const token of [
+    '--ke-focus-intake-container',
+    '--ke-focus-brand-image-size',
+    '--ke-elevation-focus-brand',
+    '--ke-color-focus-sheet-surface',
+    '--ke-elevation-focus-card',
+    '--ke-color-border-prize',
+    '--ke-color-focus-consent-surface',
+    '--ke-focus-otp-cell-size',
+    '--ke-focus-intake-check-icon-size',
+    '--ke-focus-intake-spinner-size',
+  ]) assert.match(intake, new RegExp(token, 'u'));
+
+  assert.doesNotMatch(
+    intake,
+    /width:\s*5\.75rem|background:\s*#fffdf8|border:\s*1px solid #ecd29a|background:\s*#fff4d6|background:\s*#f8f2e9|background:\s*#e6f4ef|background:\s*#d7f0ec|border:\s*1px solid #cdbfad/u,
+    'intake no longer owns foundation palette, image size or field geometry',
+  );
+});
+
 test('data-hook and hidden/download controls stay explicit compatibility consumers until Button supports passthrough attributes', async () => {
-  const [feedback, share, pwa, lab] = await Promise.all([
+  const [feedback, share, pwa, lab, intake] = await Promise.all([
     read(consumers.feedback),
     read(consumers.share),
     read(consumers.pwa),
     read(consumers.lab),
+    read(consumers.intake),
   ]);
   assert.match(feedback, /data-ke-button-compat="runtime-hook" data-feedback-open/u);
   assert.match(share, /data-ke-button-compat="runtime-hook-download"[\s\S]*data-focus-share-qr-download/u);
   assert.match(pwa, /data-ke-button-compat="runtime-hook-hidden"[\s\S]*data-pwa-install-button[\s\S]*hidden/u);
   assert.match(lab, /data-ke-button-compat="runtime-hook" data-focus-issue-submit/u);
+  assert.match(intake, /data-ke-button-compat="runtime-hook" data-focus-email-open/u);
+  assert.match(intake, /data-ke-button-compat="runtime-hook" data-focus-account-continue/u);
 });
