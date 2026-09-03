@@ -51,6 +51,34 @@ const iconRoles = Object.fromEntries(
 );
 assert.deepEqual(iconRoles, { inline: 16, control: 20, action: 24, feature: 32 });
 
+for (const binding of [
+  '.ke-button .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control);',
+  '.ke-copy-action__icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control);',
+  '.ke-filter-chip__check { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control);',
+  '.ke-filter-chip__check { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline); }',
+  '.ke-listing-card__free-medallion .icon { width: var(--ke-icon-size-action); height: var(--ke-icon-size-action);',
+  'grid-template-columns: var(--ke-icon-size-control) auto;',
+  '.ke-listing-card__utility .icon { width: var(--ke-icon-size-control); height: var(--ke-icon-size-control);',
+  'grid-template-columns: var(--ke-icon-size-inline) minmax(0, 1fr);',
+  '.ke-listing-card__social-proof .icon { width: var(--ke-icon-size-inline); height: var(--ke-icon-size-inline);',
+  'grid-template-rows: var(--ke-icon-size-inline) auto;',
+  '.ke-listing-mobile-density-switch__icon {\n    width: var(--ke-icon-size-inline);\n    height: var(--ke-icon-size-inline);',
+]) {
+  assert.ok(legacyCss.includes(binding), `physical icon-role binding is missing: ${binding}`);
+}
+assert.doesNotMatch(
+  legacyCss,
+  /\.icon\s*\{[^}]*\b(?:width|height):\s*-?(?:\d*\.)?\d+(?:px|rem|em)\b/gu,
+  'a design-system icon selector still owns a raw glyph dimension',
+);
+for (const obsoleteSlot of [
+  'grid-template-columns: 20px auto;',
+  'grid-template-columns: 17px minmax(0, 1fr);',
+  'grid-template-rows: 14px auto;',
+]) {
+  assert.ok(!legacyCss.includes(obsoleteSlot), `raw icon slot remains: ${obsoleteSlot}`);
+}
+
 const canonicalSvgBlock = foundationsTs.match(/export const CANONICAL_SVG_BY_ACTION = \{([\s\S]*?)\} as const satisfies/u)?.[1] || '';
 for (const action of [
   'feedback.like',
@@ -65,4 +93,4 @@ for (const action of [
   assert.ok(canonicalSvgBlock.includes(`'${action}'`), `canonical SVG registry misses ${action}`);
 }
 
-console.log('F0 normalization negative probes passed: legacy primitive owners removed, compatibility anchors retained, four icon roles and canonical SVG registry intact.');
+console.log('F0 normalization negative probes passed: duplicate primitive owners removed; compatibility anchors retained; physical consumers use exactly four icon roles; canonical SVG registry intact.');
