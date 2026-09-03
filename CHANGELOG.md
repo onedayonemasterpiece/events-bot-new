@@ -49,6 +49,14 @@
   to one card at 620px and below instead of retaining two undersized columns
   whose card content caused horizontal document overflow.
 
+- Fixed: the real Review Preview post-build gate now discovers a deterministic
+  multi-image recommendation journey from the generated active catalog. It
+  still prefers the historical `6408 -> 6407` canary when present, but no
+  longer rejects a fresh production slice merely because those expired events
+  have left it. Listing verification also accepts an explicitly empty canonical
+  mobile rail root, so a legitimate zero-event Weekend does not masquerade as
+  a missing rail implementation.
+
 - Fixed: durable Telegram provider bindings no longer consume a new encrypted
   SQLite row every time the same target, message, scheduled item or provider
   media is read. Secret-bound stable refs now upsert the latest detached

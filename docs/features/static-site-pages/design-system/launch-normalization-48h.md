@@ -390,6 +390,16 @@ A0 владеет shell, listings и routes. Он:
 
 ## 11. Browser/DOM audit
 
+Real Review Preview gates select browser specimens from the generated active
+catalog. Historical event IDs may remain preferred canaries while present, but
+must have a structural data-driven fallback with the same multi-image and
+recommendation-journey contract; expiry of one historical event is not a build
+failure.
+
+An empty listing is accepted only through an explicit canonical empty state:
+the mobile rail root must exist and publish `data-ds-state="empty"`. Absence of
+rows alone never converts a missing rail into a passing empty fixture.
+
 V0 — read-only ChatGPT window с `my-browser-bridge` и GitHub.
 
 Routes:
