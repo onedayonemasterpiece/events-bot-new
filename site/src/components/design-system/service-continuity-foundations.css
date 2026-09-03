@@ -1,0 +1,80 @@
+/*
+ * Service-share and install-action continuity roles.
+ *
+ * Token-only registry. A0 owns component selectors and runtime state; F0 owns
+ * the shared visible roles and canonical SVG identities recorded here.
+ */
+:root {
+  /* ServiceShareAction. */
+  --ke-service-share-row-gap: 0.6rem;
+  --ke-service-share-column-gap: 0.75rem;
+  --ke-service-share-prompt-row-gap: 0.18rem;
+  --ke-service-share-prompt-column-gap: 0.28rem;
+  --ke-service-share-prompt-size: 0.9rem;
+  --ke-service-share-prompt-line: 1.4;
+  --ke-service-share-prompt-strong-weight: 780;
+  --ke-service-share-wordmark-height: 1em;
+  --ke-service-share-controls-basis: 32rem;
+  --ke-service-share-controls-gap: 0.5rem;
+  --ke-service-share-button-gap: 0.45rem;
+  --ke-service-share-button-padding-block: 0.55rem;
+  --ke-service-share-button-padding-inline: 0.8rem;
+  --ke-service-share-button-size: 0.88rem;
+  --ke-service-share-button-weight: 760;
+  --ke-service-share-button-line: 1.2;
+  --ke-service-share-disabled-opacity: 0.56;
+  --ke-service-share-shortcut-min-width: 1.45rem;
+  --ke-service-share-shortcut-min-height: 1.35rem;
+  --ke-service-share-shortcut-padding-block: 0.08rem;
+  --ke-service-share-shortcut-padding-inline: 0.28rem;
+  --ke-service-share-shortcut-radius: 4px;
+  --ke-service-share-shortcut-size: 0.68rem;
+  --ke-service-share-shortcut-weight: 800;
+  --ke-service-share-shortcut-line: 1;
+  --ke-service-share-fallback-size: 0.86rem;
+  --ke-service-share-fallback-weight: 760;
+
+  /* Public PwaInstallAction: footer panel and fixed presentation share one
+     semantic family but intentionally retain different alpha/depth values. */
+  --ke-pwa-install-gap: 0.9rem;
+  --ke-pwa-install-padding: var(--ke-space-lg);
+  --ke-pwa-install-radius: var(--ke-shape-radius-focus-panel-compact);
+  --ke-pwa-install-border: rgba(255, 255, 255, 0.16);
+  --ke-pwa-install-surface: rgba(255, 255, 255, 0.055);
+  --ke-pwa-install-glow: rgba(245, 177, 143, 0.16);
+  --ke-pwa-install-glow-size: 9rem;
+  --ke-pwa-install-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --ke-pwa-install-copy-gap: 0.24rem;
+  --ke-pwa-install-title-size: 1rem;
+  --ke-pwa-install-title-line: 1.2;
+  --ke-color-pwa-install-text: var(--ke-color-footer-text);
+  --ke-color-pwa-install-copy: #cdbfb4;
+  --ke-color-pwa-install-status: #d8c9bd;
+  --ke-pwa-install-copy-size: 0.84rem;
+  --ke-pwa-install-copy-line: 1.45;
+  --ke-pwa-install-status-size: 0.82rem;
+  --ke-pwa-install-status-line: 1.45;
+  --ke-pwa-install-button-min-height: var(--ke-size-control-comfortable);
+  --ke-pwa-install-button-gap: var(--ke-space-focus-control-gap);
+  --ke-pwa-install-button-padding-block: 0.65rem;
+  --ke-pwa-install-button-padding-inline: var(--ke-space-lg);
+  --ke-color-pwa-install-button-border: rgba(255, 244, 232, 0.42);
+  --ke-color-pwa-install-button-surface: var(--ke-color-footer-share-surface);
+  --ke-color-pwa-install-button-text: var(--ke-color-footer-share-heading);
+  --ke-pwa-install-button-weight: 850;
+  --ke-pwa-install-button-icon-size: var(--ke-icon-size-control);
+  --ke-pwa-install-pressed-offset: 1px;
+  --ke-pwa-install-disabled-opacity: 0.72;
+
+  --ke-pwa-install-presentation-layer: 10000;
+  --ke-pwa-install-presentation-inset: max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  --ke-pwa-install-presentation-max: 440px;
+  --ke-pwa-install-presentation-padding: 1.15rem;
+  --ke-pwa-install-presentation-radius: 22px;
+  --ke-pwa-install-presentation-border: rgba(255, 255, 255, 0.18);
+  --ke-pwa-install-presentation-glow: rgba(245, 177, 143, 0.2);
+  --ke-pwa-install-presentation-glow-size: 10rem;
+  --ke-color-pwa-install-presentation-surface: var(--ke-color-footer-surface);
+  --ke-elevation-pwa-install-presentation: 0 24px 64px rgba(0, 0, 0, 0.34);
+  --ke-pwa-install-presentation-title-size: 1.05rem;
+}
