@@ -1,16 +1,20 @@
 {
   "schema": "kenigevents.n0-exhibitions-vertical-slice-acceptance.v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "role": "N0",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_version": "1.10.0",
-  "v0_requirement_comments": [5531944339, 5531980502],
-  "frozen_transaction": {
-    "source_sha": "cebeafeee08251a327145ee973ee035cced65204",
-    "build_id": "preview-real-cebeafeee-normalized-20260903-v1",
-    "publication_state": "IN_PROGRESS",
-    "snapshot_id": "issue621-real-cebeafeee-20260903T201333Z",
-    "snapshot_sha256": "db3e7dc2cc2c5e5ce3609500286c4de903f1b37a07c8ebf99926c2137df7ef20"
+  "v0_requirement_comments": [5531944339, 5531980502, 5532544488, 5532596307],
+  "audit_transaction": {
+    "source_sha": "3ca6a143e4286c165282c2d8ceef1759a41185b7",
+    "source_predecessor": "cebeafeee08251a327145ee973ee035cced65204",
+    "accepted_source_blobs_unchanged_from_predecessor": true,
+    "build_id": "preview-real-3ca6a143e-normalized-20260903-v1",
+    "public_url": "https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/__preview/",
+    "manifest_url": "https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/preview-build.json",
+    "publication_state": "N0_ACCEPTED",
+    "snapshot_id": "issue621-real-3ca6a143e-20260903T211550Z",
+    "snapshot_sha256": "ba25e9e0faabf9de8656921e4597ef30928d90edf47af0c9757a9852dfb83eb4"
   },
   "slice": {
     "id": "EXHIBITIONS_PERSONAL_ROW_FR0_MEDIAFRAME",
@@ -23,7 +27,8 @@
     "source_verdict": "ACCEPTED_SOURCE",
     "browser_verdict": "PENDING_V0",
     "independent_acceptance": true,
-    "unrelated_route_drift_rejects_slice": false
+    "unrelated_route_drift_rejects_slice": false,
+    "known_runtime_EventCard_drift_rejects_slice": false
   },
   "exact_source": [
     {
@@ -99,16 +104,26 @@
     "competing_route_local_attribute_scoped_MediaFrame_owner": "NOT_FOUND_BY_SOURCE_REVIEW",
     "runtime_or_browser_credit": false
   },
+  "root_scope": {
+    "canonical_selector": "[data-media-frame][data-media-frame-contract=\"v1\"]",
+    "legacy_selector": "[data-media-frame]:not([data-media-frame-contract])",
+    "legacy_classification": "LEGACY_RESOURCE_MARKER_OUTSIDE_CURRENT_V1_DELIVERY",
+    "legacy_markers_are_malformed_v1": false,
+    "legacy_markers_receive_v1_credit": false,
+    "legacy_marker_presence_rejects_slice": false
+  },
   "v0_required_sections": {
     "viewports": [375, 620, 1024, 1440],
     "route_and_document": [
-      "HTTP 200 for the exact frozen build route",
+      "HTTP 200 for the exact 3ca6 build route",
       "document horizontal overflow <= 1px",
       "one visible ExhibitionsPersonalSurface root",
       "visible ExhibitionPrototypeRow population is nonzero"
     ],
     "frame_protocol": [
-      "every visible deck/gallery/medallion frame has contract v1 and style-owner media-frame.css",
+      "enumerate canonical frames only through the v1 selector",
+      "report bare legacy frame markers separately without v1 credit",
+      "every visible deck/gallery/medallion v1 frame has style-owner media-frame.css",
       "data-media-frame-fit equals computed object-fit",
       "object position equals the published focal/object-position field",
       "canonical frame overflow clips painted and hit-test output",
@@ -150,17 +165,21 @@
   },
   "acceptance_rule": {
     "N0_accepts_slice_when": [
-      "the exact cebeafee publication identity is accepted",
+      "the exact 3ca6 publication identity is accepted",
       "V0 personally reports all required exhibitions and FR0 MediaFrame sections",
       "no critical structural DRIFT exists in this slice",
-      "no required route/viewport/frame case is omitted"
+      "no required route/viewport/frame/resource/interaction case is omitted"
     ],
     "omitted_required_case": "INCOMPLETE_NOT_PASS",
     "unrelated_route_drift": "DOES_NOT_REJECT_THIS_SLICE",
+    "known_runtime_EventCard_drift": "DOES_NOT_REJECT_THIS_SLICE",
     "N0_may_not_self_issue_browser_verdict": true
   },
   "rollback_boundary": {
-    "preserve_frozen_immutable_prefix": true,
+    "preserve_immutable_prefixes": [
+      "preview-real-cebeafeee-normalized-20260903-v1",
+      "preview-real-3ca6a143e-normalized-20260903-v1"
+    ],
     "smallest_units": [
       "exhibitions consumer materialization",
       "ExhibitionPrototypeRow protocol binding",
