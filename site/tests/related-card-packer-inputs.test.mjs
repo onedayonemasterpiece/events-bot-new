@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { packRelatedCardRows } from '../src/lib/relatedCardLayout.mjs';
+
+const events = Array.from({ length: 7 }, (_, index) => ({
+  id: index + 1,
+  title: `Event ${index + 1}`,
+  image_url: `/event-${index + 1}.jpg`,
+  image_text_mode: 'visual_only',
+  image_assets: [{
+    src: `/event-${index + 1}.jpg`,
+    width: 1250,
+    height: 1000,
+    image_text_mode: 'visual_only',
+    media_semantic_status: 'classified',
+    media_role: 'event_photo',
+    safe_crop: true,
+  }],
+}));
+
+const rowSizes = (packed) => [...new Set(packed.map(({ layout }) => layout.rowIndex))]
+  .map((rowIndex) => packed.filter(({ layout }) => layout.rowIndex === rowIndex).length);
+
+test('public packer floors fractional limit and rowSize values', () => {
+  const packed = packRelatedCardRows(events, { limit: 5.9, rowSize: 2.9 });
+
+  assert.equal(packed.length, 5);
+  assert.deepEqual(rowSizes(packed), [2, 2, 1]);
+  assert.ok(packed.every(({ layout }) => layout.rowColumn === 0 || layout.rowColumn === 1));
+});
+
+test('public packer defaults non-finite values instead of producing NaN layout state', () => {
+  const packed = packRelatedCardRows(events, { limit: Number.NaN, rowSize: Number.NaN });
+
+  assert.equal(packed.length, events.length);
+  assert.deepEqual(rowSizes(packed), [3, 3, 1]);
+  assert.ok(packed.every(({ layout }) => Number.isInteger(layout.rowIndex) && Number.isInteger(layout.rowColumn)));
+});
+
+test('public packer clamps rowSize and rejects negative limits deterministically', () => {
+  const wide = packRelatedCardRows(events, { limit: 7, rowSize: 99 });
+  const empty = packRelatedCardRows(events, { limit: -4, rowSize: 3 });
+
+  assert.deepEqual(rowSizes(wide), [6, 1]);
+  assert.deepEqual(empty, []);
+});
