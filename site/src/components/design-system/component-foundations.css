@@ -1,12 +1,13 @@
-@import "./foundations.css";
+@import "./surface-foundations.css";
 
 /*
- * F0 Wave 3: authoritative semantic styling and legacy-owner closure for
- * primitive Astro controls.
+ * F0 authoritative semantic styling and legacy-owner closure for primitive
+ * Astro controls.
  *
- * `foundations.css` owns cross-product roles. This file owns the exact retained
- * values of Button, Badge, Field and StatePanel. Rules consume tokens only;
- * raw values appear once in the component-token registry below.
+ * `surface-foundations.css` owns cross-product roles and exact actual-surface
+ * aliases. This file owns Button, Badge, Field and StatePanel component tokens
+ * and selectors. Component tokens forward exact duplicates to the surface
+ * registry instead of retaining a second raw-value owner.
  *
  * Ownership boundary:
  * - canonical Button roots keep the public `.ke-button` contract, but these
@@ -14,7 +15,7 @@
  * - unmarked `.ke-button` remains the documented class-only compatibility
  *   boundary in `design-system.css` for standalone and legacy consumers;
  * - Badge, Field and StatePanel have no class-only consumers, so their canonical
- *   roots use owner-private classes and no longer match the historical selectors.
+ *   roots use owner-private classes and do not match historical selectors.
  */
 
 :root {
@@ -26,7 +27,7 @@
   --ke-duration-spinner: 700ms;
 
   --ke-color-control-hover-surface: #fff7ea;
-  --ke-color-control-selected-surface: #f8e5d8;
+  --ke-color-control-selected-surface: var(--ke-color-surface-brand-selected);
   --ke-color-control-disabled-border: #ddd2c6;
   --ke-color-control-disabled-surface: #eee7de;
   --ke-color-control-disabled-foreground: #746a62;
@@ -51,10 +52,10 @@
   --ke-color-badge-warning-border: #ead28a;
   --ke-color-badge-danger-border: #efc1c1;
 
-  --ke-color-field-border: #cdbfad;
-  --ke-color-field-placeholder: #7a6f67;
-  --ke-color-field-hover-border: #a99683;
-  --ke-color-field-focus-ring: color-mix(in srgb, var(--ke-color-focus-ring) 24%, transparent);
+  --ke-color-field-border: var(--ke-color-border-input);
+  --ke-color-field-placeholder: var(--ke-color-text-input-placeholder);
+  --ke-color-field-hover-border: var(--ke-color-border-input-hover);
+  --ke-color-field-focus-ring: var(--ke-color-focus-ring-input);
   --ke-color-field-error-ring: color-mix(in srgb, var(--ke-color-status-danger-foreground) 16%, transparent);
   --ke-field-padding-block: 0.72rem;
   --ke-field-padding-inline: 0.85rem;
