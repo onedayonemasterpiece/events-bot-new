@@ -1,0 +1,249 @@
+{
+  "schema": "kenigevents.f0-end-to-end-result.v1",
+  "version": "1.0.0",
+  "status": "F0_OWNED_BACKLOG_DRAINED_EXTERNAL_INTEGRATION_RUNTIME_AND_BROWSER_GATES_REMAIN",
+  "role": "F0",
+  "contract_version": "1.9.0",
+  "pm0_version": "2.3.0",
+  "instruction_comment": 5526326906,
+  "evidence_cutoff": {
+    "golden_v0_drift_comment": 5527892153,
+    "fresh_real_publication_comment": 5528274698,
+    "n0_successor_result_comment": 5528519655,
+    "fresh_real_v0_platform_blocker_comment": 5529063082
+  },
+  "current_refs_at_exit_recensus": {
+    "programme": {
+      "branch": "integration/ui-normalization-launch-20260902",
+      "head": "ce59cc2fda4e61c8af37f980a5e440c093bd2da8"
+    },
+    "legacy_combined_candidate": {
+      "branch": "r0/ui-normalization-current-candidate-20260903",
+      "head": "0d73428dfafff2fd5450b74fd68e7bb40e92d2c5",
+      "classification": "ACCEPTED_PRECURSOR_NOT_CURRENT_SUCCESSOR"
+    },
+    "source_successor": {
+      "branch": "agent/static-site-single-kaggle-contract",
+      "head": "2e8f4dd2393ce0c5100f8b610aae3f01380aad8c",
+      "classification": "SOURCE_ACCEPTED_INTERMEDIATE_NOT_CURRENT_RUNTIME_ACCEPTED"
+    },
+    "F0": {
+      "branch": "work/ui-normalization-f0-wave-3-20260903",
+      "source_integration_boundary": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "reporting_commit_parent": "0fb2938344cf96b05be0df09dfb9e69525b3717d"
+    },
+    "N0": {
+      "branch": "work/ui-normalization-n0-checklist-20260903",
+      "head": "3f78a27a8dfc701d68a8e1bfcf33b63d7a3eb095",
+      "accepted_f0_boundary": "f2b9927e25ac0566d35577f69c574cedadab27d7",
+      "new_f0_0fb_status": "NOT_YET_REVIEWED_BY_N0"
+    },
+    "M0": {
+      "branch": "work/ui-normalization-m0-continuity-20260903",
+      "head": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133"
+    },
+    "A0": {
+      "branch": "work/ui-normalization-a0-wave-3-20260903",
+      "head": "61d340a3ca291f074289d2292b33f56b2bad8a22"
+    },
+    "thin_sot": {
+      "repository": "onedayonemasterpiece/lovekgd-design-system",
+      "branch": "integration/launch-normalized-sot-penpot-20260902",
+      "head": "70f8f162897168c8f1c2300f9c2b4b9a9a4665ec"
+    }
+  },
+  "source_delivery": {
+    "commits": [
+      {
+        "sha": "f2b9927e25ac0566d35577f69c574cedadab27d7",
+        "message": "feat(ui): bind remaining route theme foundations",
+        "scope": [
+          "token-only exhibitions, festivals and club-detail foundations",
+          "machine-readable actual-consumer bindings",
+          "strict source/negative gate",
+          "rollback and browser boundaries"
+        ]
+      },
+      {
+        "sha": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+        "message": "feat(ui): close interest-club theme decision",
+        "scope": [
+          "club index versus card product classification",
+          "four residual InterestClubCard alpha token owners",
+          "strict club-theme gate",
+          "bounded integration/rollback decision"
+        ]
+      }
+    ],
+    "integration_rule": "integrate F0-owned files and exact A0 substitutions only; do not merge the diverged F0 branch wholesale over later successor consumers",
+    "divergence_at_exit": {
+      "merge_base": "de92dabd4551e117ca1af1be7915ff223321cc32",
+      "f0_ahead_by": 2,
+      "f0_behind_successor_by": 260
+    }
+  },
+  "downstream_delivery": {
+    "repository": "onedayonemasterpiece/lovekgd-design-system",
+    "commits": [
+      {
+        "sha": "a6b8b643317657684679a61bd66876d6c69722f1",
+        "message": "feat(normalization): add F0 thin-S and Penpot bindings"
+      },
+      {
+        "sha": "70f8f162897168c8f1c2300f9c2b4b9a9a4665ec",
+        "message": "feat(normalization): extend F0 club theme bindings"
+      }
+    ],
+    "artifacts": [
+      "catalog/normalization/f0-foundation-thin-s-bindings.v1.json",
+      "catalog/normalization/f0-interest-club-theme-extension.v1.json",
+      "penpot/candidate/f0-foundation-variable-spec.v1.json",
+      "penpot/candidate/f0-interest-club-theme-extension.v1.json",
+      "docs/launch-normalization/f0-foundation-integration-and-rollback.v1.json",
+      "docs/launch-normalization/f0-interest-club-theme-rollback.v1.json"
+    ],
+    "materialization_status": "SPEC_ONLY_NOT_PENPOT_MATERIALIZED"
+  },
+  "tiers": {
+    "A_source_and_actual_consumers": {
+      "checked": true,
+      "f0_owned_source_status": "COMPLETE_FOR_CURRENT_KNOWN_CONTOUR",
+      "closed_items": [
+        "one semantic typography authority and explicit no-font-binary boundary",
+        "exactly four icon roles and canonical SemanticIcon identity registry",
+        "exhibitions route-theme token cluster",
+        "festivals route-theme, guide icon and favorite target bindings",
+        "interest-club detail route-theme and back-icon binding",
+        "interest-club index versus card palette classification",
+        "four residual InterestClubCard decorative alpha token owners"
+      ],
+      "remaining_consumer_work": [
+        {
+          "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+          "owner": "A0_R0_MECHANICAL",
+          "work": "consume F0 exhibition tokens and remove private --ex-* owner"
+        },
+        {
+          "path": "site/src/pages/festivali/index.astro",
+          "owner": "A0_R0_MECHANICAL",
+          "work": "consume F0 route tokens, remove 0.95rem glyph override, bind 44px favorite target and SemanticIcon heart"
+        },
+        {
+          "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+          "owner": "A0_R0_MECHANICAL",
+          "work": "consume club-detail tokens and replace the text back arrow with SemanticIcon arrow-left/inline"
+        },
+        {
+          "path": "site/src/components/InterestClubCard.astro",
+          "owner": "A0_R0_MECHANICAL",
+          "work": "perform four exact decorative-alpha substitutions"
+        },
+        {
+          "paths": [
+            "site/src/layouts/EventLayout.astro",
+            "site/src/layouts/PrelaunchLayout.astro"
+          ],
+          "owner": "A0",
+          "work": "remove direct Inter stack bypasses after importing the canonical F0 registry"
+        },
+        {
+          "path": "site/src/components/listings/MobileListingRailSurface.astro",
+          "owner": "A0",
+          "work": "remove remaining consumer-local paint/media ownership; required semantic F0 tokens already exist"
+        }
+      ],
+      "why_no_f0_item_remains": "Every current consumer gap has an exact central token, role, identity and removal boundary; applying those bindings changes A0-owned selectors/consumers rather than F0 authority."
+    },
+    "B_current_candidate_and_cross_role_bindings": {
+      "checked": true,
+      "candidate_status": "CURRENT_SUCCESSOR_2E8F4DD_DOES_NOT_CONTAIN_F0_0FB2938_OR_LATEST_M0",
+      "n0_current_contract": "N0 3f78a27 accepts F0 f2b9927 and requires its A0 consumption before the next full build; F0 0fb2938 and SoT 70f8f16 require a fresh N0 review",
+      "cross_role_inputs": {
+        "M0": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+        "A0": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+        "N0": "3f78a27a8dfc701d68a8e1bfcf33b63d7a3eb095"
+      },
+      "why_no_f0_item_remains": "Candidate ancestry and inclusion/rejection are N0-owned; cross-branch materialization and conflict repair are R0-owned. F0 supplied bounded commits, path lists, strict commands and a no-wholesale-merge rule."
+    },
+    "C_published_previews_and_v0": {
+      "checked": true,
+      "fresh_real": {
+        "url": "https://kenigevents.ru/preview-real-4536847f-fresh-20260903-v1/__preview/",
+        "source_sha": "4536847f9fbdaa27326ebb3ec9ec1c825736e107",
+        "status": "VALID_PIPELINE_AND_FRESH_DATA_BASELINE_PRECEDES_CURRENT_SUCCESSOR_AND_NEW_F0"
+      },
+      "golden": {
+        "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+        "source_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+        "v0_status": "DRIFT",
+        "accepted_factual_drift": "36.28px auxiliary target, current source closed pending V0",
+        "accepted_owner": "A0",
+        "rejected_v0_demands": [
+          "parallel data-ui identity protocol",
+          "blanket target=_blank prohibition"
+        ]
+      },
+      "latest_v0": {
+        "comment": 5529063082,
+        "fresh_real_browser_verdict": "NOT_EXECUTED",
+        "classification": "ACTUAL_MY_BROWSER_BRIDGE_TOOL_SURFACE_BOUNDARY",
+        "new_factual_f0_drift": false
+      },
+      "why_no_f0_item_remains": "No independent browser observation established a new F0 defect. The exact F0 route/icon/target expectations are already encoded for the first successor preview that contains them."
+    },
+    "D_regression_negative_and_rollback": {
+      "checked": true,
+      "authored_checks": [
+        "site/src/components/design-system/check-f0-typography-authority.mjs",
+        "site/src/components/design-system/check-f0-interest-club-and-icon-contract.mjs",
+        "site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+        "site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+        "site/src/components/design-system/f0-normalization-negative-probes.mjs",
+        "site/src/components/design-system/f0-candidate-consumer-census.mjs"
+      ],
+      "strict_commands": [
+        "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+        "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs"
+      ],
+      "rollback_units": [
+        "F0-RB-CORE-FOUNDATIONS",
+        "F0-RB-TYPOGRAPHY",
+        "F0-RB-ICON-AUTHORITY",
+        "F0-RB-EXHIBITIONS-THEME",
+        "F0-RB-FESTIVALS-THEME-AND-CONTROLS",
+        "F0-RB-CLUB-DETAIL-THEME",
+        "F0-RB-INTEREST-CLUB-INDEX-THEME",
+        "F0-RB-INTEREST-CLUB-CARD-THEME",
+        "F0-RB-DOWNSTREAM-SPEC"
+      ],
+      "execution_status": "NOT_RUN_IN_THIS_GITHUB_ONLY_F0_WINDOW",
+      "why_no_f0_item_remains": "The source contracts and negative controls are authored. Executing Node/Astro checks on the integrated cross-role SHA is an R0 local-runtime responsibility."
+    },
+    "E_thin_s_and_penpot_ready_bindings": {
+      "checked": true,
+      "thin_s_status": "MACHINE_READABLE_SPEC_COMMITTED",
+      "penpot_status": "MACHINE_READABLE_NATIVE_VARIABLE_AND_LINKED_MASTER_SPEC_COMMITTED_NOT_MATERIALIZED",
+      "penpot_file_id": "40e06342-8830-80d6-8008-8fc8a3a4cd4f",
+      "why_no_f0_item_remains": "All current F0 domains have source-bound token groups, family/state bindings, evidence requirements and rollback records. Native Penpot mutation is reserved for R0.PENPOT after N0 and V0 gates."
+    },
+    "F_next_product_gate": {
+      "checked": true,
+      "current_gate": "N0-accepted integrated successor containing F0 0fb2938, latest accepted M0/A0/N0 work and strict source checks; then one canonical fresh-real full Kaggle preview and independent V0 verdict",
+      "gate_after_current": "ASTRO_NORMALIZATION_PASS -> bound thin S -> native Penpot variables/masters/linked routes -> Golden A=S=P V0 PASS -> release candidate",
+      "why_no_f0_item_remains": "Every next step requires candidate acceptance, cross-branch materialization, executable runtime, Kaggle publication, independent browser observation or Penpot writing, none of which is F0-owned."
+    }
+  },
+  "claims_not_made": [
+    "F0 commits are integrated into the current successor",
+    "strict or existing executable checks passed on an integrated SHA",
+    "a new fresh-real or Golden preview was published",
+    "V0 browser PASS or new factual DRIFT exists for current F0 source",
+    "thin S is promoted to CURRENT",
+    "Penpot variables, masters or linked instances were materialized",
+    "ASTRO_NORMALIZATION_PASS or release acceptance was issued"
+  ],
+  "exit": {
+    "ready_owned_items": 0,
+    "remaining_external_trigger": "N0 RESULT accepting F0 source boundary 0fb2938344cf96b05be0df09dfb9e69525b3717d and thin-SoT 70f8f162897168c8f1c2300f9c2b4b9a9a4665ec into the latest successor; then R0 publishes the first exact HTTP-200 fresh-real /<buildId>/__preview/ whose explicit ancestry contains 0fb2938, followed by an independent V0 DOM/computed-style verdict on that exact URL"
+  }
+}
