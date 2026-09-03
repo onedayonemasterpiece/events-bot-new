@@ -14,17 +14,21 @@ const targetRatio = density === 'weekend' ? 1.2 : density === 'popular' ? 1.25 :
 const image = selectListingImage(event, targetRatio);
 const mediaFrameKind = !image.asset
   ? 'fallback'
-  : image.mode.startsWith('visual-')
-    ? 'visual'
-    : image.asset.image_text_mode === 'ocr_text'
-      ? 'document'
-      : 'unknown';
+  : image.asset.media_semantic_status === 'error'
+    ? 'unknown'
+    : image.mode.startsWith('visual-')
+      ? 'visual'
+      : image.asset.image_text_mode === 'ocr_text'
+        ? 'document'
+        : 'unknown';
 const mediaFrameFit = image.mode.endsWith('-crop') ? 'cover' : 'contain';
 const mediaFrameCropReason = !image.asset
   ? 'listing_fallback'
-  : image.adaptiveCrop
-    ? `listing_reviewed_crop:${image.asset.listing_crop_evidence || 'classified_safe_crop'}`
-    : `listing_natural:${image.mode}`;
+  : image.asset.media_semantic_status === 'error'
+    ? 'semantic_error_fail_closed'
+    : image.adaptiveCrop
+      ? `listing_reviewed_crop:${image.asset.listing_crop_evidence || 'classified_safe_crop'}`
+      : `listing_natural:${image.mode}`;
 const derivatives = [...(image.asset?.thumbnail_sources || [])]
   .filter((item) => item.src && item.width > 0 && item.height > 0)
   .sort((left, right) => left.width - right.width);
@@ -83,14 +87,19 @@ const cardState = [
   supplemental && 'supplemental',
   temporalLabel && 'temporal-label',
   hasSocialProof && 'social-proof',
-  mediaFrameKind === 'fallback' && 'media-fallback',
+  totalIdentityCount > 0 && 'identity',
+  showFree && 'free-admission',
+  image.adaptiveCrop && 'adaptive-crop',
+  `media-${mediaFrameKind}`,
 ].filter(Boolean).join(' ') || undefined;
+const mediaFrameRatio = image.ratio.toFixed(5);
+const mediaFrameObjectPosition = image.objectPosition;
 const style = [
-  `--ke-listing-image-ratio:${image.ratio.toFixed(5)}`,
-  `--ke-listing-object-position:${image.objectPosition}`,
+  `--ke-listing-image-ratio:${mediaFrameRatio}`,
+  `--ke-listing-object-position:${mediaFrameObjectPosition}`,
   `--ke-listing-tail-width:${tailWidth}px`,
-  `--media-frame-ratio:${image.ratio.toFixed(5)}`,
-  `--media-frame-object-position:${image.objectPosition}`,
+  `--media-frame-ratio:${mediaFrameRatio}`,
+  `--media-frame-object-position:${mediaFrameObjectPosition}`,
   image.asset ? `--ke-listing-source-width:${image.asset.width}px` : '',
   image.asset ? `--ke-listing-source-height:${image.asset.height}px` : '',
 ].filter(Boolean).join(';');
@@ -150,34 +159,42 @@ const socialProofLabel = [
     data-prefetch
     aria-label={`Открыть событие: ${event.title}`}
     data-listing-media-loading
-    data-media-frame
-    data-media-frame-contract="v1"
-    data-media-frame-surface="listing-card"
-    data-media-frame-kind={mediaFrameKind}
-    data-media-frame-fit={mediaFrameFit}
-    data-media-frame-crop-reason={mediaFrameCropReason}
-    data-media-frame-source-width={image.asset?.width}
-    data-media-frame-source-height={image.asset?.height}
-    data-media-frame-loading={priority ? 'eager' : 'lazy'}
-    data-media-frame-priority={priority ? 'true' : undefined}
   >
-    {imageUrl ? (
-      <img
-        src={imageUrl}
-        srcset={responsiveSrcset}
-        sizes={responsiveSizes}
-        width={image.asset?.width || undefined}
-        height={image.asset?.height || undefined}
-        alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`}
-        loading={priority ? 'eager' : 'lazy'}
-        fetchpriority={priority ? 'high' : 'auto'}
-        decoding="async"
-        data-listing-native-loading={priority ? 'eager' : 'lazy'}
-        data-media-frame-image
-      />
-    ) : (
-      <span class="ke-listing-card__fallback" data-media-frame-fallback aria-hidden="true">{event.event_type || 'событие'}</span>
-    )}
+    <span
+      class="ke-listing-card__media-frame"
+      data-media-frame
+      data-media-frame-contract="v1"
+      data-media-frame-surface="listing-card"
+      data-media-frame-kind={mediaFrameKind}
+      data-media-frame-fit={mediaFrameFit}
+      data-media-frame-ratio={mediaFrameRatio}
+      data-media-frame-object-position={mediaFrameObjectPosition}
+      data-media-frame-crop-reason={mediaFrameCropReason}
+      data-media-frame-source-width={image.asset?.width}
+      data-media-frame-source-height={image.asset?.height}
+      data-media-frame-loading={priority ? 'eager' : 'lazy'}
+      data-media-frame-priority={priority ? 'true' : undefined}
+      data-media-frame-interaction-owner="caller"
+      style="display:block;width:100%;height:100%;overflow:hidden"
+    >
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          srcset={responsiveSrcset}
+          sizes={responsiveSizes}
+          width={image.asset?.width || undefined}
+          height={image.asset?.height || undefined}
+          alt={image.asset?.alt || event.image_alt || `Афиша события «${event.title}»`}
+          loading={priority ? 'eager' : 'lazy'}
+          fetchpriority={priority ? 'high' : 'auto'}
+          decoding="async"
+          data-listing-native-loading={priority ? 'eager' : 'lazy'}
+          data-media-frame-image
+        />
+      ) : (
+        <span class="ke-listing-card__fallback" data-media-frame-fallback aria-hidden="true">{event.event_type || 'событие'}</span>
+      )}
+    </span>
     {overlayMedallion ? (
       <span class="ke-listing-card__medallion" data-listing-medallion-slug={overlayMedallion.slug} style={medallionStyle(overlayMedallion)} title={overlayMedallion.name} aria-label={overlayMedallion.ariaLabel}>
         <picture>
@@ -232,7 +249,7 @@ const socialProofLabel = [
   function initListingMediaSkeletons(root = document) {
     root.querySelectorAll('[data-listing-media-loading]').forEach((frame) => {
       if (frame.dataset.listingMediaReady === 'true') return;
-      const image = frame.querySelector(':scope > img');
+      const image = frame.querySelector('[data-media-frame-image]');
       if (!image) {
         frame.classList.remove('ke-skeleton');
         frame.dataset.listingMediaReady = 'true';
