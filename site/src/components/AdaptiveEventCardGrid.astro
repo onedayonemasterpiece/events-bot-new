@@ -321,20 +321,14 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   }
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-link) { display: block; }
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media-shell) {
-    position: relative;
-    isolation: isolate;
-    width: 100%;
     height: auto !important;
     aspect-ratio: var(--lab-row-media-ratio) !important;
-    overflow: hidden;
     background: #d2c5b7;
   }
   .adaptive-event-card-grid--packed :global([data-lab-related-card] .event-card__media) {
     position: absolute !important;
     z-index: 2;
     inset: 0;
-    width: 100% !important;
-    height: 100% !important;
   }
   .adaptive-event-card-grid--packed :global([data-lab-media-kind="visual"] .event-card__media-shell) {
     background: linear-gradient(135deg, #e4ddd2, #d4c7b9);
