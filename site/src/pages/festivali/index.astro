@@ -335,7 +335,7 @@ const structuredData = [{
                         class="festival-card__link"
                         href={item.href}
                         target={item.isExternal ? '_blank' : undefined}
-                        rel={item.isExternal ? 'noreferrer' : undefined}
+                        rel={item.isExternal ? 'noopener noreferrer' : undefined}
                         aria-label={`${item.title}. ${item.dateLabel}. ${item.place}. ${item.statusLabel}. Источник: ${item.linkLabel}`}
                       >
                         <figure class="festival-card__media">

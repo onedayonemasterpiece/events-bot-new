@@ -578,3 +578,10 @@ M0 расширен от ранее принятого `4c83fc77...` до при
 `c808c75d...`. Несовпавшие тесты N0 приведены к compact manifest schema без
 изменения gate graph; F0 checker отличает contextual `--ke-icon-size` dispatch
 от token authority и проверяет aliases, заканчивающиеся canonical role suffix.
+
+Публичный fresh-real browser census дополнительно применяет уточнённый N0
+контракт для внешних ссылок: `target="_blank"` сам по себе допустим, но каждая
+такая ссылка обязана содержать одновременно `noopener` и `noreferrer`.
+Festival timeline ранее генерировал только `noreferrer`; route-local binding
+исправлен без изменения URL, композиции или поведения карточек. Source-test и
+публичный browser probe проверяют оба токена.

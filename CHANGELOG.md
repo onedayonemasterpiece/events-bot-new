@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: external festival timeline links now carry both `noopener` and
+  `noreferrer`, matching the accepted N0/V0 safe-blank-target contract. This is
+  a route-local safety correction only; festival composition and navigation
+  behavior are unchanged.
+
 - Changed: integrated the accepted F0/M0/A0 UI-normalization checkpoints and
   completed `A0-MECH-01..05`: search lifecycle, event-detail rails and
   MediaFrame ownership, listing-rail framing ownership, route identities,
