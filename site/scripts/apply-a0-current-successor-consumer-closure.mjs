@@ -38,6 +38,18 @@ const ensureFoundationConsumer = (source, stateLine, consumer) => {
   return source.replace(stateLine, `${stateLine}\n    ${marker}`);
 };
 
+const replaceInsideRule = (source, selector, replacements) => {
+  const open = `  ${selector} {`;
+  const start = source.indexOf(open);
+  assert.notEqual(start, -1, `missing CSS rule ${selector}`);
+  const end = source.indexOf('\n  }', start + open.length);
+  assert.notEqual(end, -1, `unterminated CSS rule ${selector}`);
+  const endExclusive = end + '\n  }'.length;
+  let block = source.slice(start, endExclusive);
+  for (const [from, to] of replacements) block = replaceAllIfPresent(block, from, to);
+  return `${source.slice(0, start)}${block}${source.slice(endExclusive)}`;
+};
+
 const transformInterestClubCard = (input) => {
   let source = input;
   const replacements = [
@@ -138,6 +150,27 @@ const transformFestivals = (input) => {
     'festival-route',
   );
 
+  source = replaceInsideRule(source, '.festival-guide__icon--heart', [
+    ['background: rgba(165, 72, 33, 0.1);', 'background: var(--ke-color-festival-guide-like-surface);'],
+  ]);
+  source = replaceInsideRule(source, '.festival-month__categories li', [
+    ['flex: 0 0 28px;', 'flex: 0 0 var(--ke-festival-category-container-size);'],
+    ['width: 28px;', 'width: var(--ke-festival-category-container-size);'],
+    ['height: 28px;', 'height: var(--ke-festival-category-container-size);'],
+    ['background: rgba(165, 72, 33, 0.1);', 'background: var(--ke-color-festival-category-surface);'],
+  ]);
+  source = replaceInsideRule(source, '.festival-month__categories i', [
+    ['width: 21px;', 'width: var(--ke-festival-category-asset-size);'],
+    ['height: 21px;', 'height: var(--ke-festival-category-asset-size);'],
+  ]);
+  source = replaceInsideRule(source, '.festival-card__like', [
+    ['width: clamp(2rem, 2.35vw, 2.2rem);', 'width: var(--ke-festival-like-target-min);'],
+    ['height: clamp(2rem, 2.35vw, 2.2rem);', 'height: var(--ke-festival-like-target-min);'],
+    ['border: 1px solid rgba(255, 255, 255, 0.34);', 'border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-like-line);'],
+    ['background: rgba(18, 14, 12, 0.58);', 'background: var(--ke-color-festival-like-surface);'],
+    ['box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);', 'box-shadow: var(--ke-elevation-festival-like);'],
+  ]);
+
   const replacements = [
     ['width: min(1240px, calc(100% - 2rem));', 'width: min(var(--ke-festival-page-max), calc(100% - 2 * var(--ke-festival-page-gutter)));'],
     ['padding: clamp(0.85rem, 1.7vw, 1.65rem) 0 clamp(5.5rem, 8vw, 7rem);', 'padding: var(--ke-festival-page-padding-start) 0 var(--ke-festival-page-padding-end);'],
@@ -156,13 +189,10 @@ const transformFestivals = (input) => {
     ['grid-template-columns: 1.9rem minmax(0, 1fr);', 'grid-template-columns: var(--ke-festival-guide-icon-container-size) minmax(0, 1fr);'],
     ['width: 1.9rem;\n    height: 1.9rem;', 'width: var(--ke-festival-guide-icon-container-size);\n    height: var(--ke-festival-guide-icon-container-size);'],
     ['background: rgba(15, 118, 110, 0.09);\n    color: #0f766e;\n    font-size: 0.95rem;', 'background: var(--ke-color-festival-guide-icon-surface);\n    color: var(--ke-color-festival-guide-icon);\n    font-size: var(--ke-festival-guide-icon-size);'],
-    ['background: rgba(165, 72, 33, 0.1);', 'background: var(--ke-color-festival-guide-like-surface);'],
     ['z-index: 60;', 'z-index: var(--ke-festival-live-layer);'],
     ['border-radius: 12px;\n    background: rgba(255, 253, 248, 0.97);\n    box-shadow: 0 14px 40px rgba(36, 24, 16, 0.2);', 'border-radius: var(--ke-festival-live-radius);\n    background: var(--ke-color-festival-surface-raised);\n    box-shadow: var(--ke-elevation-festival-live);'],
     ['grid-template-columns: 132px minmax(0, 1fr);', 'grid-template-columns: var(--ke-festival-month-rail-width) minmax(0, 1fr);'],
     ['width: 0.82rem;\n    height: 0.82rem;', 'width: var(--ke-festival-month-marker-size);\n    height: var(--ke-festival-month-marker-size);'],
-    ['flex: 0 0 28px;\n    width: 28px;\n    height: 28px;', 'flex: 0 0 var(--ke-festival-category-container-size);\n    width: var(--ke-festival-category-container-size);\n    height: var(--ke-festival-category-container-size);'],
-    ['width: 21px;\n    height: 21px;', 'width: var(--ke-festival-category-asset-size);\n    height: var(--ke-festival-category-asset-size);'],
     ['gap: clamp(0.62rem, 1vw, 0.88rem);', 'gap: var(--ke-festival-row-gap);'],
     ['margin-top: clamp(0.62rem, 1vw, 0.88rem);', 'margin-top: var(--ke-festival-row-gap);'],
     ['border: 1px solid rgba(57, 39, 27, 0.08);', 'border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-card-border);'],
@@ -170,9 +200,6 @@ const transformFestivals = (input) => {
     ['background: #31261f;\n    box-shadow: 0 5px 16px rgba(52, 32, 18, 0.12);', 'background: var(--ke-color-festival-card-surface);\n    box-shadow: var(--ke-elevation-festival-card);'],
     ['transition: border-color 160ms ease, box-shadow 160ms ease;', 'transition: border-color var(--ke-festival-motion-fast), box-shadow var(--ke-festival-motion-fast);'],
     ['border-color: rgba(57, 39, 27, 0.16);\n    box-shadow: 0 7px 20px rgba(52, 32, 18, 0.16);', 'border-color: var(--ke-color-festival-card-border-hover);\n    box-shadow: var(--ke-elevation-festival-card-hover);'],
-    ['width: clamp(2rem, 2.35vw, 2.2rem);\n    height: clamp(2rem, 2.35vw, 2.2rem);', 'width: var(--ke-festival-like-target-min);\n    height: var(--ke-festival-like-target-min);'],
-    ['border: 1px solid rgba(255, 255, 255, 0.34);', 'border: var(--ke-shape-border-hairline) solid var(--ke-color-festival-like-line);'],
-    ['background: rgba(18, 14, 12, 0.58);\n    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);', 'background: var(--ke-color-festival-like-surface);\n    box-shadow: var(--ke-elevation-festival-like);'],
     ['border-color: rgba(255, 255, 255, 0.72);\n    background: rgba(18, 14, 12, 0.76);', 'border-color: var(--ke-color-festival-like-line-hover);\n    background: var(--ke-color-festival-like-surface-hover);'],
     ['border-color: rgba(255, 255, 255, 0.86);', 'border-color: var(--ke-color-festival-like-line-selected);'],
     ['background: #e8f5e9;\n    color: #24743b;\n    box-shadow: 0 2px 7px rgba(34, 20, 12, 0.12);', 'background: var(--ke-color-festival-status-confirmed-surface);\n    color: var(--ke-color-festival-status-confirmed-text);\n    box-shadow: var(--ke-elevation-festival-status);'],
@@ -345,12 +372,22 @@ export function assertA0ConsumerPostconditions(path, source) {
       assert.match(source, /data-ke-foundation-consumer="festival-route"/u);
       assert.match(source, /product-contour-foundations\.css/u);
       assert.ok(count(source, '<SemanticIcon name="heart" role="control" />') >= 2, `${path} must use semantic heart twice`);
-      for (const token of ['--ke-festival-page-max', '--ke-festival-hero-radius', '--ke-festival-guide-icon-size', '--ke-festival-like-target-min']) {
-        assert.ok(source.includes(`var(${token})`), `${path} misses ${token}`);
-      }
-      for (const forbidden of ['<Icon name="heart" />', '.festival-guide__icon :global(svg) { width: 0.95rem; height: 0.95rem;', 'width: clamp(2rem, 2.35vw, 2.2rem);', 'height: clamp(2rem, 2.35vw, 2.2rem);']) {
-        assert.ok(!source.includes(forbidden), `${path} retains ${forbidden}`);
-      }
+      for (const token of [
+        '--ke-festival-page-max',
+        '--ke-festival-hero-radius',
+        '--ke-festival-guide-icon-size',
+        '--ke-festival-like-target-min',
+        '--ke-color-festival-guide-like-surface',
+        '--ke-color-festival-category-surface',
+      ]) assert.ok(source.includes(`var(${token})`), `${path} misses ${token}`);
+      for (const forbidden of [
+        '<Icon name="heart" />',
+        '.festival-guide__icon :global(svg) { width: 0.95rem; height: 0.95rem;',
+        'width: clamp(2rem, 2.35vw, 2.2rem);',
+        'height: clamp(2rem, 2.35vw, 2.2rem);',
+      ]) assert.ok(!source.includes(forbidden), `${path} retains ${forbidden}`);
+      assert.match(source, /\.festival-guide__icon--heart \{[\s\S]*background: var\(--ke-color-festival-guide-like-surface\);/u);
+      assert.match(source, /\.festival-month__categories li \{[\s\S]*background: var\(--ke-color-festival-category-surface\);/u);
       assert.ok(source.includes("rel={item.isExternal ? 'noopener noreferrer' : undefined}"), `${path} misses safe external rel`);
       break;
     case 'site/src/components/ExhibitionsPersonalSurface.astro':
@@ -387,15 +424,18 @@ const assertIntegratedF0Inputs = () => {
     'site/src/components/design-system/f0-route-theme-bindings.v1.json',
     'site/src/components/design-system/interest-club-card-continuity-foundations.css',
     'site/src/components/design-system/f0-interest-club-theme-decision.v1.json',
+    'site/src/components/design-system/f0-festival-semantic-separation.v1.json',
   ];
   for (const path of required) assert.ok(existsSync(resolve(repoRoot, path)), `missing integrated F0 input ${path}`);
   const productContour = readFileSync(resolve(repoRoot, 'site/src/components/design-system/product-contour-foundations.css'), 'utf8');
   assert.ok(productContour.includes('@import "./route-theme-foundations.css";'), 'product contour misses route theme import');
   assert.ok(productContour.includes('@import "./interest-club-card-continuity-foundations.css";'), 'product contour misses club continuity import');
+  const routeThemes = readFileSync(resolve(repoRoot, 'site/src/components/design-system/route-theme-foundations.css'), 'utf8');
+  assert.ok(routeThemes.includes('--ke-color-festival-guide-like-surface:'), 'missing festival guide action surface');
+  assert.ok(routeThemes.includes('--ke-color-festival-category-surface:'), 'missing festival taxonomy surface');
 };
 
-async function main() {
-  const checkOnly = process.argv.includes('--check');
+export async function runA0ConsumerClosure({ checkOnly = false } = {}) {
   assertIntegratedF0Inputs();
   const results = [];
   for (const path of A0_CONSUMER_CLOSURE_PATHS) {
@@ -407,19 +447,22 @@ async function main() {
     if (!checkOnly && before !== after) writeFileSync(absolute, after);
     results.push({ path, changed: before !== after, mode: checkOnly ? 'check' : 'apply' });
   }
-  console.log(JSON.stringify({
+  const receipt = {
     schema: 'kenigevents.a0-current-successor-consumer-closure.v1',
     contract: 'launch-normalized-ui.v1@1.10.0',
+    festival_semantic_separation: 'guide-like-action != editorial-category-taxonomy',
     check_only: checkOnly,
     targets: results,
-    m0_or_fr0_roots_mutated: false,
-  }, null, 2));
+    m0_fr0_or_f0_roots_mutated: false,
+  };
+  console.log(JSON.stringify(receipt, null, 2));
+  return receipt;
 }
 
 const invokedAsScript = process.argv[1]
   && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
 if (invokedAsScript) {
-  main().catch((error) => {
+  runA0ConsumerClosure({ checkOnly: process.argv.includes('--check') }).catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });
