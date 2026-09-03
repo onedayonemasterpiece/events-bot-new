@@ -2,7 +2,8 @@
 
 Статус: `ACTIVE`  
 Координация: `onedayonemasterpiece/events-bot-new#621`  
-Implementation branch: `integration/ui-normalization-launch-20260902`  
+Sole executable branch: `agent/static-site-single-kaggle-contract`  
+Programme/history anchor: `integration/ui-normalization-launch-20260902`  
 Base at programme design: `61f7a6af5f5e82515dcd42c93dd02748297112bc`
 
 Canonical programme и thin S:
@@ -17,6 +18,41 @@ paths:
   docs/launch-normalization/CONSULTANT-K0.md
   contracts/launch-normalized-ui.v1.yaml
 ```
+
+## 0. Trunk-based delivery authority
+
+Эта коррекция меняет только delivery semantics существующей программы. Она не
+создаёт новую topology, generation, T0, process, contract family, packet schema,
+builder или управляющий контур.
+
+```yaml
+sole_executable_Astro_trunk:
+  repository: onedayonemasterpiece/events-bot-new
+  branch: agent/static-site-single-kaggle-contract
+  current_head: 3ca6a143e4286c165282c2d8ceef1759a41185b7
+programme_history_anchor:
+  branch: integration/ui-normalization-launch-20260902
+  merge_target: false
+  executable_acceptance_target: false
+historical_r0_branches:
+  classification: evidence_only
+  new_product_integration: forbidden
+max_merge_ready_batches_outside_trunk_per_role: 1
+current_full_real_preview: https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/__preview/
+current_manifest: https://kenigevents.ru/preview-real-3ca6a143e-normalized-20260903-v1/preview-build.json
+personal_V0_verdict: PENDING
+active_A0_correction:
+  branch: work/ui-normalization-a0-mobile-listing-rail-resource-state-20260903
+  current_head: 2dac9d16031d4f1505184fc9678f88c855c3988a
+  merge_ready: false
+  required_action: supersede_same_branch_with_test_repairs_and_EventLayout_runtime_MediaFrame_rebinding
+T0: preserved_unchanged_by_this_correction
+```
+
+Все новые принятые Astro product batches попадают только в sole trunk. Role
+branches остаются временными source/test review surfaces. N0/R0 самостоятельно
+fresh-read-ят current refs и втягивают один совместимый current merge-ready
+batch без owner relay; второй ожидающий merge-ready batch той же роли запрещён.
 
 ## 1. Product fact
 
@@ -40,8 +76,8 @@ Actual routes:
 
 ## 2. Continuous execution, не numbered micro-waves
 
-N0/F0/M0/A0 назначаются на полный owned product contour. Wave, branch, commit и
-`[RESULT]` — checkpoints, но не команда завершить turn.
+N0/F0/FR0/M0/A0 назначаются на полный owned product contour. Wave, branch,
+commit и `[RESULT]` — checkpoints, но не команда завершить turn.
 
 ```text
 fresh-read current state
@@ -71,38 +107,55 @@ owned работы.
 ## 3. Порядок выполнения
 
 ```text
-N0: candidate review → same-data baseline → conditional promotion
+N0: current role refs → accept one current merge-ready batch per role
+    → sole executable trunk → exact tested descendant
     → full Kaggle generation → reachable preview → V0 trigger
 +
-F0/M0/A0: saturation всех current owned consumers/invariants
+F0/FR0/M0/A0: saturation всех current owned consumers/invariants
 +
-V0: complete harness → actual browser matrix when URL exists
+V0: personal browser matrix and independent domain verdicts
 +
-R0: integration, local focused diagnostics and invocation/observation of the
-    shared Kaggle build
-→ first owner-facing normalized /<buildId>/__preview/
+R0: compatible integration, local focused diagnostics and
+    invocation/observation of the shared Kaggle build
+```
+
+N0 не ждёт все роли одновременно. Foundations, MediaFrame, EventCard/Grid и
+Shell/Routes принимаются независимо. Один `DRIFT` не аннулирует `PASS`
+совместимого domain или vertical slice.
+
+```yaml
+candidate_max_lag_minutes_when_merge_ready_output_exists: 30
+max_merge_ready_batches_outside_trunk_per_role: 1
+full_preview_after_compatible_batches: 2_to_3
+full_preview_max_active_minutes_since_previous: 60
+every_exact_preview_requires_V0_trigger: true
 ```
 
 Technical baseline нужен для before/after и не обязан быть owner checkpoint.
-Family не завершена без fresh-real-data Kaggle build и V0 browser verdict.
+Family не завершена без fresh-real-data Kaggle build и personal V0 browser
+verdict.
 
 N0 не дробит critical path на обязательные owner wake-ups, если acceptance
-criteria можно определить заранее. Он задаёт R0 conditional end-to-end branch:
+criteria можно определить заранее. После superseding A0 result N0 сам выдаёт
+R0 acceptance; владелец не переносит SHA, не формирует packet и не запускает
+pull вручную.
 
 ```text
-IF exact candidate focused diagnostics/tests/same-data checks PASS
-  THEN promote exact candidate
-  AND invoke the one shared Kaggle pipeline
+IF exact compatible batch focused diagnostics/tests PASS
+  THEN integrate into agent/static-site-single-kaggle-contract
+  AND publish exact tested descendant
+  AND invoke the one shared Kaggle pipeline by cadence
   AND publish reachable preview through its checked artifact
+  AND trigger V0
 ELSE
-  no promotion/deploy
-  continue safe diagnosis
-  publish factual defect
+  reject only that batch
+  continue compatible domains
+  publish exact owned correction
 ```
 
 R0 после каждого result fresh-read-ит #621/current refs и продолжает следующую
-ready safe mechanical task. При ожидаемом N0 trigger R0 использует bounded watch
-60–120 seconds, maximum 30 minutes, а не немедленный exit.
+ready safe mechanical task. Historical `r0/*` branches не являются integration
+targets и не получают новую product integration.
 
 ## 4. Один build/publish contract
 
@@ -125,7 +178,7 @@ production-form build
 - data mode (`real` или `golden`);
 - immutable root `slug/prefix`;
 - optional allowlisted page-class filter для тестового preview;
-- уровнем проверок и правом promotion.
+- уровнями проверок и правом promotion.
 
 Focused preview, который публикуется по секретной ссылке, также проходит через
 тот же Kaggle pipeline. Он не является второй архитектурой и не использует
@@ -293,7 +346,7 @@ site/src/lib/relatedCardLayout.mjs
 site/src/components/OptimizedEventCardGrid.astro
 ```
 
-Shared MediaFrame contract владеет:
+FR0-owned shared MediaFrame contract владеет:
 
 ```text
 media role
@@ -309,6 +362,9 @@ responsive resource selection
 Изображение не может визуально выходить за frame. Page-local grid/card CSS не
 может менять framing policy. Existing optimizer/contract расширяется; второй
 параллельный algorithm запрещён без доказанной невозможности reuse.
+
+M0 consumes MediaFrame API for card/grid families. A0 migrates runtime consumers
+and may not create a route-local framing owner.
 
 ## 9. AdaptiveEventCardGrid
 
@@ -338,13 +394,15 @@ A0 владеет shell, listings и routes. Он:
 - сохраняет различие DateListingSurface/WeekendListingSurface;
 - мигрирует actual pages на canonical roots;
 - применяет F0 tokens/icon roles;
-- применяет explicit M0 grid/media APIs;
+- применяет explicit M0 grid/card и FR0 framing APIs;
 - удаляет local forks и internal overrides;
 - не копирует family markup в pages;
 - не создаёт новый route model.
 
-После каждого consumer checkpoint A0 повторно строит census и продолжает
-следующий eligible consumer без отдельного owner prompt.
+Текущая correction выполняется только на существующей ветке
+`work/ui-normalization-a0-mobile-listing-rail-resource-state-20260903`.
+`2dac9d16031d4f1505184fc9678f88c855c3988a` не merge-ready; следующая допустимая
+A0 поставка — superseding head той же ветки.
 
 ## 11. Browser/DOM audit
 
@@ -372,15 +430,24 @@ V0 проверяет component markers/anatomy, computed typography/spacing/col
 radii/borders/icon sizes, image bounds/object-fit/overflow/clip, adaptive row
 occupancy/equal heights, responsive transitions и horizontal overflow.
 
+Для текущего exact Preview personal V0 публикует независимые verdict sections:
+
+```text
+Foundations
+MediaFrame
+EventCard/Grid
+Shell/Routes
+```
+
 ```text
 PASS
-DRIFT        → F0/M0/A0 immediately
+DRIFT        → F0/FR0/M0/A0 immediately, только owning domain
 PRODUCT_GAP  → backlog after normalization gate
 BLOCKER      → only after all independent work and fallbacks are exhausted
 ```
 
-После complete harness отсутствие preview допускает standby. После exact
-reachable URL один run покрывает весь browser matrix и DRIFT routing.
+Один domain `DRIFT` не отменяет совместимый `PASS` другого domain или vertical
+slice. R0 smoke не является personal V0 verdict.
 
 ## 12. Internal Golden A=S=P
 
@@ -401,16 +468,17 @@ review prerequisite. После завершения family thin S фиксир�
 
 ## 13. Parallel ownership
 
-- `N0`: generation decision, conditional execution authority, integration,
-  status, preview, release;
+- `N0`: sole-trunk acceptance, generation decision, status, preview, release and
+  V0 trigger/review;
 - `F0`: foundations, colors, type, spacing, four icon roles, SVG/brand,
   duplicate style ownership;
-- `M0`: component roots, MediaFrame, EventCard/ListingEventCard,
+- `FR0`: MediaFrame, EventMediaRail and framing semantics/diagnostics;
+- `M0`: component roots, EventCard/ListingEventCard and
   AdaptiveEventCardGrid;
 - `A0`: shell, listings, routes, consumer migration;
-- `V0`: my-browser-bridge audit; later Golden Penpot audit;
+- `V0`: personal my-browser-bridge audit; later Golden Penpot audit;
 - `K0`: consultant/process repair;
-- `R0`: persistent bounded Codex execution, local focused diagnostics,
+- `R0`: compatible integration into the sole trunk, local focused diagnostics,
   invocation/observation of the shared Kaggle pipeline and sole Penpot writer;
 - `my-data-hub`: sole MCP facade for published review-build operations.
 
@@ -450,14 +518,28 @@ Product UI-gap/change work открывается только после:
 После gate можно менять palette и интерфейс. Release затронутой family требует
 обновлённый thin S и Penpot binding.
 
-## 16. Meaningful checkpoints
+## 16. Near-term gate
+
+```text
+personal V0 verdict on exact 3ca6a143 Preview
++
+one superseding A0 correction batch on the existing branch
+→ N0 independently issues R0 acceptance
+→ pull into agent/static-site-single-kaggle-contract
+→ exact tested trunk descendant
+→ next full real Kaggle Preview
+→ V0 recheck
+```
+
+## 17. Meaningful checkpoints
 
 Meaningful checkpoint:
 
+- canonical authority correction with remote read-back;
 - technical fresh-data generation verdict from the shared Kaggle path;
-- normalized source convergence reviewed by role owner;
+- exact tested descendant of the sole trunk;
 - reachable normalized real-data preview;
-- V0 browser PASS/DRIFT;
+- personal V0 browser PASS/DRIFT;
 - native Penpot master + linked route board;
 - checked release candidate.
 
