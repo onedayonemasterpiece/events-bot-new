@@ -67,11 +67,13 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
 ---
 <article
   class="event-row"
+  data-ds-component="MobileListingRailRow"
   data-ds-family="MobileListingRailRow"
   data-ds-version="1"
   data-ds-variant={occurrenceMode}
   data-ds-state={rowState}
   data-mobile-listing-row
+  data-mobile-listing-row-base-state={rowState}
   data-feedback-scope
   data-event={event.id}
   data-event-id={event.id}
@@ -210,3 +212,59 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
     </span>
   </div>
 </article>
+
+<script>
+  function bindMobileListingRailRowDiagnostics(root = document) {
+    root.querySelectorAll('[data-mobile-listing-row]').forEach((row) => {
+      if (!(row instanceof HTMLElement) || row.dataset.mobileListingRowDiagnosticsBound === 'true') return;
+      row.dataset.mobileListingRowDiagnosticsBound = 'true';
+      const rail = row.querySelector('.rail-window');
+      const sync = () => {
+        const temporalState = row.dataset.mobileRailTemporalState;
+        const media = Array.from(row.querySelectorAll('[data-media-frame][data-media-state]'))
+          .filter((item) => item instanceof HTMLElement);
+        const mediaState = media.some((item) => item.dataset.mediaState === 'error')
+          ? 'media-error'
+          : media.some((item) => item.dataset.mediaState === 'loading')
+            ? 'media-loading'
+            : media.length && media.every((item) => item.dataset.mediaState === 'loaded')
+              ? 'media-loaded'
+              : null;
+        const interactionState = rail instanceof HTMLElement
+          ? [
+              rail.classList.contains('is-dragging') && 'dragging',
+              rail.classList.contains('is-settling') && 'settling',
+              rail.classList.contains('is-dislike-active') && 'dislike-active',
+              rail.classList.contains('is-armed') && 'dislike-armed',
+              rail.classList.contains('is-like-pulling') && 'like-pulling',
+              rail.classList.contains('is-like-armed') && 'like-armed',
+            ]
+          : [];
+        const tokens = [
+          ...(row.dataset.mobileListingRowBaseState || '').split(/\s+/u),
+          row.hidden ? 'hidden' : 'visible',
+          temporalState ? `temporal-${temporalState}` : null,
+          row.dataset.notInterested === 'true' ? 'not-interested' : null,
+          row.classList.contains('is-liked') ? 'liked' : null,
+          ...interactionState,
+          mediaState,
+        ].filter(Boolean);
+        row.dataset.dsState = [...new Set(tokens)].join(' ');
+      };
+      new MutationObserver(sync).observe(row, {
+        subtree:true,
+        attributes:true,
+        attributeFilter:[
+          'hidden',
+          'class',
+          'aria-pressed',
+          'data-not-interested',
+          'data-mobile-rail-temporal-state',
+          'data-media-state',
+        ],
+      });
+      sync();
+    });
+  }
+  bindMobileListingRailRowDiagnostics();
+</script>
