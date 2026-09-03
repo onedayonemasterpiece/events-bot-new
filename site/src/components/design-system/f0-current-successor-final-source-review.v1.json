@@ -1,0 +1,123 @@
+{
+  "schema": "kenigevents.f0-current-successor-final-source-review.v1",
+  "version": "1.0.0",
+  "contract_version": "1.10.0",
+  "role": "F0",
+  "status": "CURRENT_SUCCESSOR_REJECTED_F0_VOCABULARY_PATCH_READY",
+  "reviewed_successor": {
+    "branch": "agent/static-site-single-kaggle-contract",
+    "sha": "cebeafeee08251a327145ee973ee035cced65204"
+  },
+  "current_role_heads": {
+    "A0": "dc7b722ecdc268b24c2a2d36911e76d4f2dfd891",
+    "F0_reporting_pre_patch": "32ce83d63c9bf87b2422e0ade10b30f14d3bc3b0",
+    "F0_source_boundary_in_successor": "a4db631dbb3b01e1f71c42e0e3b87d077a538d19",
+    "FR0": "2231e1d668f896d634e5663b59520bc710d5fea6",
+    "M0": "5eeaba09b5ec432a77ff899ce98fb8b9f492c133",
+    "N0": "fac1a2434ee550b37c9630c3502130574be53ecc",
+    "V0_durable_source_harness": "a1555f9e968f4a9c73cff4e041e6bae30fe580c1"
+  },
+  "included_lineage": {
+    "F0": {
+      "source": "a4db631dbb3b01e1f71c42e0e3b87d077a538d19",
+      "integration_merge": "20be17e4",
+      "included": true
+    },
+    "FR0": {
+      "source": "2231e1d668f896d634e5663b59520bc710d5fea6",
+      "integration_merge": "082865adb7ad64d08d96269b7172a7916905e2a0",
+      "included": true
+    },
+    "A0": {
+      "whole_branch_merge_required": false,
+      "festival_materialization_commits": [
+        "0766ba802d4198c7f70e750079b74dae074e6a0e",
+        "14ead7019af40ecb2df6a4f39d6f88e0b6ba98e1"
+      ],
+      "exhibitions_materialization_commits": [
+        "041a391",
+        "3ae487cc48710700b58c94313482e137dcb67c8e"
+      ]
+    }
+  },
+  "source_blobs": {
+    "festival_consumer": "4e7b9a2ef6c4b3a852ca3d46abefbc2e5a982555",
+    "exhibitions_consumer": "61d065efbc9b05254601ae807b7fcffec701bd04",
+    "exhibitions_row": "ff94b32a288b079f27ca9e8c33d6975f52012478",
+    "exhibitions_media_frame_bridge": "1898f0ce973676241d54530d51c17b577e7c6509",
+    "media_frame_css": "1231b0665054da3cd9bf936585a7d2e02838b82a",
+    "fr0_exhibitions_test": "ff26615718b83134db9bb65e1a10831818381743",
+    "stale_route_theme_registry": "42deca6a0658386e9854c2b3461103cd84ad28ad",
+    "stale_route_theme_checker": "fae5ee5f3369981e210716525c56dc776aa9f996"
+  },
+  "verdicts": {
+    "festivals": {
+      "verdict": "ACCEPTED_SOURCE",
+      "facts": [
+        "guide-like and taxonomy roles are separate",
+        "route theme is consumed",
+        "heart, link and calendar use canonical SemanticIcon control roles",
+        "interactive favorite targets bind to the 44px minimum",
+        "external blank targets retain noopener and noreferrer"
+      ]
+    },
+    "exhibitions": {
+      "verdict": "ACCEPTED_SOURCE",
+      "facts": [
+        "only the 17 private theme and motion aliases are removed",
+        "the four runtime --ex-* layout variables are retained",
+        "A0 state/elevation and icon roles are consumed",
+        "numeric local UI SVG dimensions are removed",
+        "gallery arrows use canonical SemanticIcon control roles"
+      ]
+    },
+    "FR0_batch_4": {
+      "verdict": "ACCEPTED_SOURCE",
+      "facts": [
+        "deck, gallery and medallion MediaFrame roots are present",
+        "document, OCR and unknown media fail closed to contain",
+        "responsive gallery manifest preserves dimensions and srcset",
+        "pending, loaded, broken and fallback states are published",
+        "media-frame.css remains the canonical framing owner"
+      ]
+    },
+    "overall": {
+      "verdict": "REJECTED_CURRENT_SHA",
+      "blocking_defect": "the current route-theme registry still declares contract 1.9.0 and its checker accepts 1.9.0 vocabulary"
+    }
+  },
+  "prepared_F0_patch": {
+    "registry_blob": "90abc8034f0254e67fe1f257d5072f1153018e5e",
+    "checker_blob": "ecd6730f595542f2bae1a3be38f2718f0e9490f9",
+    "paths": [
+      "site/src/components/design-system/f0-route-theme-bindings.v1.json",
+      "site/src/components/design-system/check-f0-route-theme-bindings.mjs"
+    ]
+  },
+  "required_R0_commands_after_integration": [
+    "cd site && node src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "cd site && F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "cd site && node src/components/design-system/check-f0-exhibitions-residual-contract.mjs",
+    "cd site && F0_REQUIRE_EXHIBITIONS_RESIDUAL_CONSUMED=1 node src/components/design-system/check-f0-exhibitions-residual-contract.mjs",
+    "cd site && node --test tests/a0-current-successor-consumer-closure.test.mjs tests/fr0-exhibitions-media-frame-contract.test.mjs"
+  ],
+  "rollback": {
+    "unit": "F0-RB-CONTRACT-1_10-ROUTE-THEME-VOCABULARY",
+    "paths": [
+      "site/src/components/design-system/f0-route-theme-bindings.v1.json",
+      "site/src/components/design-system/check-f0-route-theme-bindings.mjs"
+    ],
+    "preserve": [
+      "accepted festival consumer closure",
+      "accepted exhibitions consumer closure",
+      "FR0 Batch 4",
+      "all unrelated successor changes and immutable previews"
+    ]
+  },
+  "claims_not_made": [
+    "executable PASS",
+    "Kaggle Preview PASS",
+    "V0 PASS",
+    "Penpot materialization"
+  ]
+}
