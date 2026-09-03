@@ -1,0 +1,157 @@
+/* Collections, clubs, favorites and gamification foundation roles. */
+:root {
+  /* Compatibility alias: historical consumers referenced brand-50 without a
+     primitive owner. Its actual selected-chip role is the existing warm brand
+     selection surface, not a new palette step. */
+  --ke-color-brand-50: var(--ke-color-surface-brand-selected);
+
+  /* Interest club cards. The dark photographic family is an editorial surface,
+     not an inverse status component. */
+  --ke-color-club-card-surface: #17343a;
+  --ke-color-club-card-text: var(--ke-color-text-inverse);
+  --ke-color-club-card-topic: #e9fffd;
+  --ke-color-club-card-copy: rgba(255, 255, 255, 0.88);
+  --ke-color-club-card-fact-label: rgba(255, 255, 255, 0.68);
+  --ke-color-club-card-border: rgba(255, 255, 255, 0.62);
+  --ke-color-club-card-fact-line: rgba(255, 255, 255, 0.28);
+  --ke-color-club-card-fact-line-compact: rgba(255, 255, 255, 0.2);
+  --ke-color-club-card-fallback-start: #17353d;
+  --ke-color-club-card-fallback-middle: #1b263d;
+  --ke-color-club-card-fallback-end: #311f2d;
+  --ke-color-club-card-fallback-gold-glow: rgba(251, 205, 112, 0.48);
+  --ke-color-club-card-fallback-teal-glow: rgba(117, 211, 204, 0.3);
+  --ke-color-club-card-veil-top: rgba(8, 15, 19, 0.08);
+  --ke-color-club-card-veil-middle: rgba(8, 15, 19, 0.34);
+  --ke-color-club-card-veil-bottom: rgba(8, 13, 17, 0.94);
+  --ke-color-club-card-veil-side: rgba(8, 13, 17, 0.16);
+  --ke-color-club-card-future-surface: rgba(244, 154, 37, 0.92);
+  --ke-color-club-card-future-text: #24170c;
+  --ke-color-club-card-future-line: rgba(255, 255, 255, 0.58);
+  --ke-color-club-card-future-desktop-start: rgba(255, 184, 78, 0.98);
+  --ke-color-club-card-future-desktop-end: rgba(238, 135, 29, 0.96);
+  --ke-color-club-card-future-desktop-line: rgba(255, 244, 218, 0.78);
+  --ke-color-club-card-future-glow-start: rgba(255, 218, 151, 0.9);
+  --ke-color-club-card-future-glow-middle: rgba(255, 169, 54, 0.62);
+  --ke-color-club-card-future-glow-end: rgba(244, 145, 37, 0.22);
+  --ke-color-club-card-link: #a9ddff;
+  --ke-color-club-card-link-hover: #d8efff;
+  --ke-color-club-card-focus: var(--ke-color-keyboard-focus);
+  --ke-elevation-club-card: 0 22px 48px rgba(42, 38, 34, 0.17);
+  --ke-elevation-club-card-hover: 0 28px 56px rgba(42, 38, 34, 0.23);
+  --ke-elevation-club-card-focus: 0 28px 58px rgba(42, 38, 34, 0.26);
+  --ke-elevation-club-card-mobile: 0 18px 38px rgba(42, 38, 34, 0.2);
+  --ke-elevation-club-future: inset 0 1px 0 rgba(255, 255, 255, 0.56), 0 2px 4px rgba(75, 35, 9, 0.22), 0 8px 11px rgba(255, 194, 96, 0.58), 0 18px 28px rgba(244, 145, 37, 0.5);
+  --ke-club-card-radius: var(--ke-shape-radius-editorial-panel);
+  --ke-club-card-radius-mobile: 22px;
+  --ke-club-card-arrow-icon-size: var(--ke-icon-size-inline);
+
+  /* Focus egg state language. Eligible amber and found green are collection
+     progress states, intentionally separate from warning/success badges. */
+  --ke-color-egg-eligible-border: #d4b66a;
+  --ke-color-egg-eligible-surface-start: #fffdf5;
+  --ke-color-egg-eligible-surface-end: #fff1c7;
+  --ke-color-egg-eligible-card-surface-start: var(--ke-color-background-surface-strong);
+  --ke-color-egg-eligible-card-surface-end: #fff5d7;
+  --ke-color-egg-text: #2f2417;
+  --ke-color-egg-glyph: #9c6410;
+  --ke-color-egg-glyph-surface: rgba(255, 255, 255, 0.78);
+  --ke-color-egg-action: #6f4510;
+  --ke-color-egg-action-text: var(--ke-color-text-inverse);
+  --ke-color-egg-found-border-interactive: #6ea977;
+  --ke-color-egg-found-border-card: #7bb083;
+  --ke-color-egg-found-surface-start: #f7fff5;
+  --ke-color-egg-found-surface-end: #e8f8df;
+  --ke-color-egg-found-card-surface-start: var(--ke-color-background-surface-strong);
+  --ke-color-egg-found-card-surface-end: #effbe8;
+  --ke-color-egg-found-text: #396840;
+  --ke-elevation-egg-artifact: 0 0.5rem 1.5rem rgba(75, 47, 5, 0.1);
+  --ke-egg-artifact-radius: var(--ke-space-lg);
+  --ke-egg-artifact-glyph-size: 2.8rem;
+  --ke-egg-artifact-glyph-size-compact: 2.5rem;
+  --ke-egg-card-radius: var(--ke-shape-radius-card);
+  --ke-egg-card-mark-size: 3.25rem;
+
+  /* Artifact collection shell and slots. */
+  --ke-color-artifact-ink: #281d17;
+  --ke-color-artifact-eyebrow: var(--ke-color-brand-tag);
+  --ke-color-artifact-device-surface: #fff6df;
+  --ke-color-artifact-device-border: #d08a31;
+  --ke-color-artifact-slot-surface: var(--ke-color-surface-warm);
+  --ke-color-artifact-slot-border: rgba(74, 48, 35, 0.16);
+  --ke-color-artifact-slot-number: #a68e7e;
+  --ke-color-artifact-slot-mystery: #9c806e;
+  --ke-color-artifact-slot-copy: #76645a;
+  --ke-color-artifact-slot-mystery-line: color-mix(in srgb, var(--ke-color-action-primary-strong) 28%, transparent);
+  --ke-color-artifact-slot-mystery-surface: rgba(255, 255, 255, 0.55);
+  --ke-color-artifact-found-glow: #fff4bd;
+  --ke-color-artifact-found-middle: #fff9e9;
+  --ke-color-artifact-found-end: var(--ke-color-surface-warm);
+  --ke-color-artifact-found-label: #6f6b2e;
+  --ke-color-artifact-dialog-control-surface: #eee2d5;
+  --ke-color-artifact-dialog-control-text: #4a3024;
+  --ke-color-artifact-disabled-surface: #e9e1d8;
+  --ke-color-artifact-disabled-text: #776c65;
+  --ke-color-artifact-disabled-border: rgba(74, 48, 35, 0.15);
+  --ke-elevation-artifact-slot: 0 12px 30px rgba(68, 39, 24, 0.07);
+  --ke-elevation-artifact-dialog: 0 24px 80px rgba(31, 18, 12, 0.28);
+  --ke-artifact-container: 1120px;
+  --ke-artifact-slot-min-height: 244px;
+  --ke-artifact-slot-min-height-mobile: 190px;
+  --ke-artifact-slot-radius: 22px;
+  --ke-artifact-found-radius: 21px;
+  --ke-artifact-dialog-radius: 26px;
+  --ke-artifact-dialog-close-size: var(--ke-size-touch-target);
+  --ke-artifact-dialog-close-icon-size: var(--ke-icon-size-control);
+
+  /* Amber artifact illumination. Illustration dimensions are media geometry;
+     the found receipt check is a canonical inline icon. */
+  --ke-color-amber-artifact-ink: var(--ke-color-text-primary);
+  --ke-color-amber-glow-core: rgba(255, 236, 156, 0.58);
+  --ke-color-amber-glow-middle: rgba(255, 190, 43, 0.42);
+  --ke-color-amber-glow-edge: rgba(255, 157, 12, 0.18);
+  --ke-color-amber-ring-line: rgba(255, 238, 174, 0.94);
+  --ke-color-amber-ring-core: rgba(255, 220, 118, 0.28);
+  --ke-color-amber-ring-edge: rgba(255, 180, 35, 0.08);
+  --ke-color-amber-ray-strong: rgba(255, 205, 92, 0.22);
+  --ke-color-amber-ray-soft: rgba(255, 222, 130, 0.18);
+  --ke-color-amber-shine: rgba(255, 255, 255, 0.82);
+  --ke-color-amber-shine-warm: rgba(255, 226, 142, 0.42);
+  --ke-color-amber-found-surface: color-mix(in srgb, var(--ke-color-background-surface) 94%, transparent);
+  --ke-color-amber-found-line: var(--ke-color-border-brand-emphasis);
+  --ke-color-amber-found-text: var(--ke-color-action-primary-strong);
+  --ke-elevation-amber-ring: 0 0 5px rgba(255, 221, 116, 0.88), 0 0 13px rgba(255, 163, 20, 0.52);
+  --ke-elevation-amber-media: drop-shadow(0 5px 7px rgba(157, 78, 0, 0.26));
+  --ke-elevation-amber-collection-media: drop-shadow(0 6px 8px rgba(157, 78, 0, 0.23));
+  --ke-elevation-amber-dialog-media: drop-shadow(0 10px 12px rgba(157, 78, 0, 0.24));
+  --ke-amber-tail-width: 94px;
+  --ke-amber-tail-height: 112px;
+  --ke-amber-media-width: 74px;
+  --ke-amber-media-height: 96px;
+  --ke-amber-found-check-icon-size: var(--ke-icon-size-inline);
+  --ke-amber-arrival-duration: 420ms;
+  --ke-amber-collect-duration: 430ms;
+  --ke-amber-float-duration: 3000ms;
+  --ke-amber-shine-duration: 5200ms;
+
+  /* Favorites and collection/search links. */
+  --ke-color-favorites-surface: var(--ke-color-background-surface);
+  --ke-color-favorites-empty-surface: var(--ke-color-surface-warm);
+  --ke-color-favorites-border: var(--ke-color-border-default);
+  --ke-color-favorites-action: var(--ke-color-action-primary-hover);
+  --ke-color-favorites-skeleton: #e5dbce;
+  --ke-color-favorites-skeleton-shine: rgba(255, 255, 255, 0.62);
+  --ke-favorites-panel-radius: var(--ke-shape-radius-card);
+  --ke-favorites-action-icon-size: var(--ke-icon-size-inline);
+  --ke-color-collection-link-surface: var(--ke-color-background-surface);
+  --ke-color-collection-link-hover-surface: var(--ke-color-surface-warm);
+  --ke-color-collection-link-border: var(--ke-color-border-default);
+  --ke-color-collection-link-text: var(--ke-color-action-primary-hover);
+  --ke-collection-link-arrow-icon-size: var(--ke-icon-size-inline);
+
+  /* Retained collection close pairs:
+     - eligible amber is discovery readiness, not warning;
+     - interactive and passive found borders retain different strength;
+     - club orange signals scheduled activity and remains separate from amber
+       artifact discovery;
+     - amber illumination alphas are media-lighting layers, not UI states. */
+}
