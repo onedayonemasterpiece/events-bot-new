@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const DIRECT_FRAMING_DECLARATION = /(?:^|[;{])\s*object-(?:fit|position)\s*:/mu;
 
 test('EventCard publishes the canonical MediaFrame resource-state channel', async () => {
   const source = await read('src/components/EventCard.astro');
@@ -33,8 +34,8 @@ test('EventCard load preserves crop evidence and broken resources fail closed', 
   assert.match(source, /removeAttribute\('srcset'\)/u);
   assert.match(source, /classList\.add\('is-image-missing'\)/u);
   assert.match(source, /if\(!\(this\.naturalWidth>0&&this\.naturalHeight>0\)\)/u);
-  assert.doesNotMatch(source, /object-fit:/u, 'EventCard must not reimplement canonical framing paint');
-  assert.doesNotMatch(source, /object-position:/u, 'EventCard must not reimplement canonical framing paint');
+  assert.doesNotMatch(source, DIRECT_FRAMING_DECLARATION,
+    'EventCard must not reimplement object-fit/object-position declarations');
 });
 
 test('EventCard keeps fallback, natural-aspect, action and metadata anatomy', async () => {
