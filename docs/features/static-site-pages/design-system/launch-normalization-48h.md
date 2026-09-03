@@ -681,3 +681,8 @@ non-gating classifier поверх канонического browser release ga
 tip была опечатка в имени `AUTHORED_AGAINST_SOURCE`, из-за которой модуль не
 инициализировался; локальная коррекция покрыта собственным V0 test suite и не
 меняет matrix, owner routing или критерии вердикта.
+
+На disk-constrained worker canonical `check-browser-release-gate.mjs` и его
+browser behavior tests можно запустить с `--executable-path <chromium>` либо
+`PLAYWRIGHT_EXECUTABLE_PATH=<chromium>`: это меняет только способ выбора уже
+установленного браузера, не сам gate и не его browser evidence.

@@ -13,6 +13,11 @@
   its authored-source constant reference so the independent observation
   harness executes instead of failing during module initialization.
 
+- Fixed: the canonical local browser release gate and its behavior tests accept
+  an explicit `--executable-path` / `PLAYWRIGHT_EXECUTABLE_PATH`, allowing a
+  provisioned Playwright Chromium to be reused without downloading a second
+  browser build into a disk-constrained worker.
+
 - Fixed: integrated the FR0 EventMediaRail fallback and clip-ownership batches.
   Broken rail resources now fail closed to the canonical non-interactive
   fallback with `contain` and forbidden crop diagnostics, while the nested
