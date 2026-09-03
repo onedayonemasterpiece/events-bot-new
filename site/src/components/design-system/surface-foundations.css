@@ -1,0 +1,287 @@
+@import "./foundations.css";
+
+/*
+ * Whole-product surface foundations — continuous F0 contour.
+ *
+ * This registry has no component selectors. It names current product values so
+ * A0/M0 consumers can replace local literals without inventing palette, type,
+ * geometry or motion decisions. Raw values are retained only where no earlier
+ * primitive has the same semantic role.
+ */
+:root {
+  /* Shared editorial and interaction surfaces. */
+  --ke-color-surface-warm: var(--ke-color-background-header);
+  --ke-color-surface-warm-translucent: color-mix(in srgb, var(--ke-color-surface-warm) 84%, transparent);
+  --ke-color-surface-brand-selected: #f8e5d8;
+  --ke-color-surface-accent-selected: #d7f0ec;
+  --ke-color-surface-accent-confirmed: #e6f4ef;
+  --ke-color-surface-neutral-subtle: #f4f1ea;
+  --ke-color-surface-neutral-warm: #f6efe6;
+  --ke-color-surface-consent: #f8f2e9;
+  --ke-color-surface-input: var(--ke-color-background-surface-strong);
+  --ke-color-surface-media-placeholder: #d2c5b7;
+  --ke-color-surface-media-contain: #15110f;
+  --ke-color-surface-inverse-feature: #17120f;
+  --ke-color-surface-inverse-ambient: #211712;
+  --ke-color-text-inverse-muted: color-mix(in srgb, var(--ke-color-surface-warm) 74%, transparent);
+  --ke-color-text-inverse-warm: #e5c4ad;
+
+  /* Brand-line roles merge repeated rgba(121 48 20 / n) literals. */
+  --ke-color-border-brand-quiet: color-mix(in srgb, var(--ke-color-action-primary-strong) 11%, transparent);
+  --ke-color-border-brand-soft: color-mix(in srgb, var(--ke-color-action-primary-strong) 13%, transparent);
+  --ke-color-border-brand-interactive: color-mix(in srgb, var(--ke-color-action-primary-strong) 20%, transparent);
+  --ke-color-border-brand-hover: color-mix(in srgb, var(--ke-color-action-primary-strong) 28%, transparent);
+
+  /* Form/control border roles. Close pairs are retained by interaction state. */
+  --ke-color-border-input: #cdbfad;
+  --ke-color-border-input-hover: #a99683;
+  --ke-color-border-score: #d8c8b5;
+  --ke-color-border-panel-warm: #dbc9b5;
+  --ke-color-border-consent: #d9ccbb;
+  --ke-color-border-prize: #ecd29a;
+  --ke-color-border-otp-verifying: #b79878;
+  --ke-color-text-input-placeholder: #7a6f67;
+
+  --ke-color-focus-ring-accent: color-mix(in srgb, var(--ke-color-focus-ring) 60%, transparent);
+  --ke-color-focus-ring-accent-medium: color-mix(in srgb, var(--ke-color-focus-ring) 55%, transparent);
+  --ke-color-focus-ring-accent-subtle: color-mix(in srgb, var(--ke-color-focus-ring) 35%, transparent);
+  --ke-color-focus-ring-input: color-mix(in srgb, var(--ke-color-focus-ring) 24%, transparent);
+  --ke-color-focus-ring-brand-subtle: color-mix(in srgb, var(--ke-color-action-primary) 25%, transparent);
+
+  /* Status/consent surfaces that are not generic status badges. */
+  --ke-color-surface-prize: #fff4d6;
+  --ke-color-text-prize: #5d3c12;
+  --ke-color-status-warning-deep: #7a4b00;
+
+  /* Intentional display and section typography variants. */
+  --ke-type-display-home-size: clamp(3rem, 7.5vw, 7.2rem);
+  --ke-type-display-home-line: 0.86;
+  --ke-type-display-home-letter: -0.075em;
+  --ke-type-display-home: var(--ke-type-h1-weight) var(--ke-type-display-home-size) / var(--ke-type-display-home-line) var(--ke-font-family-sans);
+
+  --ke-type-display-unusual-size: clamp(4rem, 10vw, 8.5rem);
+  --ke-type-display-unusual-line: 0.78;
+  --ke-type-display-unusual-letter: -0.075em;
+  --ke-type-display-unusual: var(--ke-type-h1-weight) var(--ke-type-display-unusual-size) / var(--ke-type-display-unusual-line) var(--ke-font-family-sans);
+
+  --ke-type-display-collection-size: clamp(2.8rem, 6vw, 5.8rem);
+  --ke-type-display-collection-line: 0.9;
+  --ke-type-display-collection-letter: var(--ke-type-h1-letter);
+  --ke-type-display-collection: var(--ke-type-h1-weight) var(--ke-type-display-collection-size) / var(--ke-type-display-collection-line) var(--ke-font-family-sans);
+
+  --ke-type-feature-section-size: clamp(2rem, 4vw, 4.2rem);
+  --ke-type-feature-section-line: var(--ke-type-h1-line);
+  --ke-type-feature-section-letter: var(--ke-type-h1-letter);
+  --ke-type-feature-section: var(--ke-type-h2-weight) var(--ke-type-feature-section-size) / var(--ke-type-feature-section-line) var(--ke-font-family-sans);
+
+  --ke-type-editorial-section-size: clamp(1.6rem, 3.5vw, 2.8rem);
+  --ke-type-editorial-section-line: 1;
+  --ke-type-editorial-section: var(--ke-type-h2-weight) var(--ke-type-editorial-section-size) / var(--ke-type-editorial-section-line) var(--ke-font-family-sans);
+
+  --ke-type-focus-heading-size: clamp(1.35rem, 3vw, 2rem);
+  --ke-type-focus-heading-line: 1.08;
+  --ke-type-focus-heading: var(--ke-type-h3-weight) var(--ke-type-focus-heading-size) / var(--ke-type-focus-heading-line) var(--ke-font-family-sans);
+
+  --ke-type-focus-dialog-heading-size: clamp(1.4rem, 4vw, 2.1rem);
+  --ke-type-focus-dialog-heading-line: 1.08;
+  --ke-type-focus-dialog-heading: var(--ke-type-h3-weight) var(--ke-type-focus-dialog-heading-size) / var(--ke-type-focus-dialog-heading-line) var(--ke-font-family-sans);
+
+  --ke-type-eyebrow-size: 0.72rem;
+  --ke-type-eyebrow-line: 1.2;
+  --ke-type-eyebrow-weight: var(--ke-type-h3-weight);
+  --ke-type-eyebrow-letter: 0.11em;
+  --ke-type-eyebrow: var(--ke-type-eyebrow-weight) var(--ke-type-eyebrow-size) / var(--ke-type-eyebrow-line) var(--ke-font-family-sans);
+
+  /* Cross-surface responsive spacing. */
+  --ke-space-home-hero-padding: clamp(1.1rem, 4vw, 3rem);
+  --ke-space-home-hero-gap: clamp(1rem, 3vw, 2.4rem);
+  --ke-space-home-feed-padding: clamp(1rem, 3vw, 2rem);
+  --ke-space-home-grid-gap: clamp(0.85rem, 1.6vw, 1.25rem);
+  --ke-space-card-grid-gap: clamp(0.75rem, 1.8vw, 1.25rem);
+  --ke-space-editorial-panel-padding: clamp(1.5rem, 4vw, 3rem);
+  --ke-space-focus-panel-padding: clamp(1.15rem, 3vw, 2rem);
+  --ke-space-focus-card-padding: clamp(1.15rem, 5vw, 2rem);
+  --ke-space-focus-dialog-padding: clamp(1rem, 3vw, 1.65rem);
+  --ke-space-focus-control-gap: 0.55rem;
+  --ke-space-focus-boundary-block: 0.75rem;
+  --ke-space-focus-boundary-inline: 0.9rem;
+
+  /* Cross-surface shape roles. */
+  --ke-shape-radius-home-hero: clamp(24px, 4vw, 42px);
+  --ke-shape-radius-home-feed: clamp(24px, 4vw, 38px);
+  --ke-shape-radius-editorial-hero: var(--ke-shape-radius-hero);
+  --ke-shape-radius-editorial-hero-compact: var(--ke-shape-radius-hero-compact);
+  --ke-shape-radius-editorial-panel: 28px;
+  --ke-shape-radius-collection-panel: 26px;
+  --ke-shape-radius-focus-panel: 24px;
+  --ke-shape-radius-focus-panel-compact: 20px;
+  --ke-shape-radius-focus-lab: 1.35rem;
+  --ke-shape-radius-focus-control: 12px;
+  --ke-shape-radius-focus-input: 0.9rem;
+  --ke-shape-radius-focus-boundary: 0.9rem;
+
+  /* Cross-surface elevation roles. */
+  --ke-elevation-home-hero: 0 24px 65px rgba(72, 45, 25, 0.11);
+  --ke-elevation-home-feature: 0 18px 46px rgba(35, 24, 18, 0.2);
+  --ke-elevation-focus-panel: var(--ke-elevation-card);
+  --ke-elevation-focus-pwa: 0 8px 25px rgba(72, 45, 25, 0.08);
+  --ke-elevation-focus-lab: 0 14px 38px rgba(72, 45, 25, 0.1);
+  --ke-elevation-focus-card: 0 18px 52px rgba(72, 45, 25, 0.12);
+  --ke-elevation-focus-selected: 0 4px 14px rgba(72, 45, 25, 0.1);
+  --ke-elevation-focus-dialog: 0 24px 64px rgba(34, 26, 20, 0.22);
+  --ke-elevation-focus-brand: 0 12px 30px rgba(72, 45, 25, 0.14);
+
+  /* Home surfaces. #fffaf3 is merged into the canonical warm surface. */
+  --ke-color-home-hero-start: var(--ke-color-surface-warm);
+  --ke-color-home-hero-end: #f5e4d0;
+  --ke-color-home-ambient-start: #ac6240;
+  --ke-color-home-ambient-end: var(--ke-color-surface-inverse-ambient);
+  --ke-color-home-feed-surface: var(--ke-color-surface-warm-translucent);
+  --ke-color-home-card-surface: var(--ke-color-surface-warm);
+  --ke-color-home-card-hover-surface: var(--ke-color-background-surface-strong);
+  --ke-color-home-feature-surface: var(--ke-color-surface-inverse-feature);
+  --ke-color-home-feature-text: var(--ke-color-surface-warm);
+  --ke-color-home-feature-muted: var(--ke-color-text-inverse-muted);
+  --ke-color-home-feature-eyebrow: var(--ke-color-text-inverse-warm);
+  --ke-size-home-nav-item: 92px;
+  --ke-size-home-nav-item-compact: 82px;
+
+  /* Free collection. Existing Wave-1 identity colours remain canonical. */
+  --ke-color-free-hero-start: var(--ke-color-background-surface);
+  --ke-color-free-hero-end: var(--ke-color-free-hero-surface);
+  --ke-color-free-results-surface: var(--ke-color-background-surface);
+  --ke-color-free-results-border: var(--ke-color-border-brand-quiet);
+  --ke-free-results-radius: var(--ke-shape-radius-collection-panel);
+  --ke-free-results-radius-compact: var(--ke-shape-radius-focus-panel-compact);
+  --ke-free-results-padding: var(--ke-space-editorial-panel-padding);
+  --ke-free-medallion-hero-size: clamp(180px, 23vw, 300px);
+  --ke-free-medallion-hero-size-compact: 96px;
+  --ke-free-medallion-sticky-size: 58px;
+  --ke-free-medallion-sticky-size-compact: 50px;
+  --ke-free-sticky-top: var(--ke-site-header-bar-height);
+  --ke-free-sticky-top-compact: var(--ke-size-mobile-header);
+  --ke-free-sticky-layer: var(--ke-layer-floating);
+  --ke-free-sticky-layer-compact: 35;
+  --ke-free-motion-opacity: 180ms ease;
+  --ke-free-motion-transform: var(--ke-duration-base) ease;
+
+  /* Unusual/editorial collection. */
+  --ke-color-unusual-hero-start: var(--ke-color-surface-warm);
+  --ke-color-unusual-hero-end: #eee1d2;
+  --ke-color-unusual-hero-brand-glow: color-mix(in srgb, var(--ke-color-action-primary) 22%, transparent);
+  --ke-color-unusual-hero-accent-glow: color-mix(in srgb, var(--ke-color-action-accent) 14%, transparent);
+  --ke-color-unusual-panel-surface: var(--ke-color-background-surface);
+  --ke-color-unusual-panel-border: var(--ke-color-border-brand-quiet);
+  --ke-unusual-panel-radius: var(--ke-shape-radius-editorial-panel);
+  --ke-unusual-panel-radius-compact: var(--ke-shape-radius-focus-panel-compact);
+  --ke-unusual-panel-padding: var(--ke-space-editorial-panel-padding);
+
+  /* Gastronomy/neutral collection state. */
+  --ke-color-collection-state-surface: var(--ke-color-surface-neutral-subtle);
+  --ke-collection-state-radius: var(--ke-space-lg);
+  --ke-collection-state-padding-block: 0.85rem;
+  --ke-collection-state-padding-inline: var(--ke-space-lg);
+
+  /* Personal feed host. Grid/media ownership migrates to canonical families. */
+  --ke-color-personal-feed-surface: #f5ede2;
+  --ke-color-personal-feed-media-placeholder: var(--ke-color-surface-media-placeholder);
+  --ke-color-personal-feed-contain-band: var(--ke-color-surface-media-contain);
+  --ke-personal-feed-container: var(--ke-container-content);
+  --ke-personal-feed-grid-gap: var(--ke-space-card-grid-gap);
+  --ke-personal-feed-radius-compact: var(--ke-shape-radius-hero-compact);
+  --ke-personal-feed-section-padding: clamp(2rem, 4vw, 4.5rem);
+  --ke-personal-feed-section-padding-inline-min: var(--ke-space-lg);
+  --ke-personal-feed-heading-size: clamp(2rem, 4vw, 4rem);
+
+  /* Shared focus-group shell/panel/dialog roles. */
+  --ke-color-focus-panel-surface: var(--ke-color-background-surface-strong);
+  --ke-color-focus-sheet-surface: var(--ke-color-background-surface);
+  --ke-color-focus-control-surface: var(--ke-color-background-surface-strong);
+  --ke-color-focus-control-selected-brand: var(--ke-color-surface-brand-selected);
+  --ke-color-focus-control-selected-accent: var(--ke-color-surface-accent-selected);
+  --ke-color-focus-confirmed-surface: var(--ke-color-surface-accent-confirmed);
+  --ke-color-focus-neutral-surface: var(--ke-color-surface-neutral-warm);
+  --ke-color-focus-consent-surface: var(--ke-color-surface-consent);
+  --ke-color-focus-dialog-backdrop: rgba(34, 26, 20, 0.58);
+  --ke-focus-dialog-backdrop-blur: 3px;
+  --ke-focus-panel-radius: var(--ke-shape-radius-focus-panel);
+  --ke-focus-panel-radius-compact: var(--ke-shape-radius-focus-panel-compact);
+  --ke-focus-dialog-radius: var(--ke-shape-radius-focus-panel);
+  --ke-focus-control-radius: var(--ke-shape-radius-focus-control);
+  --ke-focus-input-radius: var(--ke-shape-radius-focus-input);
+  --ke-focus-boundary-radius: var(--ke-shape-radius-focus-boundary);
+  --ke-focus-control-min: var(--ke-size-touch-target);
+  --ke-focus-dialog-max: 720px;
+  --ke-focus-dialog-lab-max: 620px;
+  --ke-focus-dialog-max-height: min(88dvh, 780px);
+  --ke-focus-dialog-lab-max-height: 90dvh;
+  --ke-focus-entry-duration: 180ms;
+  --ke-focus-entry-ease: ease-out;
+  --ke-focus-entry-offset: 12px;
+  --ke-focus-entry-scale: 0.985;
+
+  /* Focus intake and brand marker. Brand media sizes are not icon roles. */
+  --ke-color-focus-brand-marker: #ffc10d;
+  --ke-color-focus-brand-marker-surface: color-mix(in srgb, var(--ke-color-focus-brand-marker) 13%, var(--ke-color-background-surface-strong));
+  --ke-color-focus-brand-marker-border: color-mix(in srgb, var(--ke-color-action-primary) 25%, transparent);
+  --ke-focus-brand-image-size: 5.75rem;
+  --ke-focus-brand-image-radius: 24%;
+  --ke-focus-lab-icon-container-size: 2rem;
+  --ke-focus-lab-icon-container-size-hero: 2.65rem;
+  --ke-focus-lab-icon-size: var(--ke-icon-size-action);
+  --ke-focus-lab-icon-size-hero: var(--ke-icon-size-feature);
+  --ke-focus-intake-container: 560px;
+  --ke-focus-intake-control-large: 50px;
+  --ke-focus-intake-input-height: 54px;
+  --ke-focus-intake-check-container: 3.5rem;
+  --ke-focus-intake-spinner-size: var(--ke-icon-size-feature);
+  --ke-focus-otp-cell-border: 1.5px;
+  --ke-focus-otp-cell-radius: 0.8rem;
+  --ke-focus-otp-cell-size: clamp(2.55rem, 12vw, 3rem);
+  --ke-focus-otp-transition: 150ms ease;
+
+  /* Mobile event review metadata is an intentional dense event-detail variant. */
+  --ke-color-event-meta-panel-text: #46372d;
+  --ke-color-event-meta-panel-text-strong: #34271f;
+  --ke-color-event-meta-date-legacy: #8f3517;
+  --ke-color-event-meta-date: #7e2d12;
+  --ke-color-event-meta-time: #241c17;
+  --ke-color-event-meta-weekday: #b54d22;
+  --ke-color-event-meta-weekday-text: var(--ke-color-surface-warm);
+  --ke-color-event-meta-panel-surface: color-mix(in srgb, var(--ke-color-event-meta-weekday) 7%, transparent);
+  --ke-color-event-meta-border-soft: color-mix(in srgb, var(--ke-color-action-primary-strong) 12%, transparent);
+  --ke-color-event-meta-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 14%, transparent);
+  --ke-color-event-meta-border-strong: color-mix(in srgb, var(--ke-color-action-primary-strong) 22%, transparent);
+  --ke-type-event-meta-weekday-size: 0.74rem;
+  --ke-type-event-meta-date-size: 1.12rem;
+  --ke-type-event-meta-time-size: 1.2rem;
+  --ke-type-event-meta-place-size: 0.92rem;
+  --ke-event-meta-weekday-height: 30px;
+  --ke-event-meta-weekday-radius: 9px;
+
+  /* EventMediaRail and future named hero-selector/poster-strip variants. */
+  --ke-media-rail-thumbnail-size: 92px;
+  --ke-media-rail-more-count-size: var(--ke-type-body-size);
+  --ke-media-rail-more-label-size: 0.66rem;
+  --ke-color-media-rail-more-surface: var(--ke-color-surface-warm);
+  --ke-color-media-rail-more-text: var(--ke-color-event-meta-time);
+
+  /*
+   * Retained close pairs:
+   * - input / score / panel / consent borders differ by interactive affordance,
+   *   not by accidental palette duplication;
+   * - neutral-subtle / neutral-warm / consent surfaces distinguish collection
+   *   status, explanatory guidance and explicit consent;
+   * - home warm gradient, unusual muted gradient and personal-feed canvas are
+   *   separate editorial identities, not status colours;
+   * - event-meta legacy/date/time inks encode hierarchy within dense metadata;
+   * - focus prize yellow remains distinct from warning status and review notice.
+   *
+   * Same-role near-duplicates merged:
+   * - #fffaf3 -> --ke-color-surface-warm (#fffaf2);
+   * - repeated #fff/#ffffff -> --ke-color-background-surface-strong;
+   * - repeated #fffdf8 -> --ke-color-background-surface;
+   * - repeated rgba(121 48 20 / 11|13|20|28%) -> named brand-line roles;
+   * - repeated #d7f0ec / #f8e5d8 / #cdbfad -> one selected/input role each.
+   */
+}

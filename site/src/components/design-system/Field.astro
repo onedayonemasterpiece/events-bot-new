@@ -1,4 +1,6 @@
 ---
+import './component-foundations.css';
+
 interface Props {
   id: string;
   label: string;
@@ -11,12 +13,25 @@ interface Props {
 const { id, label, value, placeholder, hint, state = 'default', type = 'text' } = Astro.props;
 const error = state === 'error';
 const hintId = hint ? `${id}-hint` : undefined;
-const className = ['ke-field', error ? 'ke-field--error' : ''].filter(Boolean).join(' ');
+const className = [
+  'ke-foundation-field',
+  error ? 'ke-foundation-field--error' : '',
+].filter(Boolean).join(' ');
 ---
-<label class={className} data-preview-state={state === 'default' || error || state === 'disabled' ? undefined : state}>
-  <span class="ke-field__label">{label}</span>
+<label
+  class={className}
+  data-preview-state={state === 'default' || error || state === 'disabled' ? undefined : state}
+  data-ds-component="Field"
+  data-ds-family="Field"
+  data-ds-version="2"
+  data-ds-variant={type}
+  data-ds-state={state}
+  data-ke-foundation-consumer="field"
+  data-ke-style-owner="component-foundations"
+>
+  <span class="ke-foundation-field__label">{label}</span>
   <input
-    class="ke-field__control"
+    class="ke-foundation-field__control"
     id={id}
     name={id}
     type={type}
@@ -26,5 +41,5 @@ const className = ['ke-field', error ? 'ke-field--error' : ''].filter(Boolean).j
     aria-invalid={error ? 'true' : undefined}
     aria-describedby={hintId}
   />
-  {hint && <span class="ke-field__hint" id={hintId}>{hint}</span>}
+  {hint && <span class="ke-foundation-field__hint" id={hintId}>{hint}</span>}
 </label>

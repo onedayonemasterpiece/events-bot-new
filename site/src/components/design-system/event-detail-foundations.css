@@ -1,0 +1,192 @@
+/* Event-detail, occurrence, participant, weather and PWA roles. */
+:root {
+  /* Shared event-detail warm/coral interaction language. */
+  --ke-color-event-detail-ink: #241c17;
+  --ke-color-event-detail-ink-strong: #2d211a;
+  --ke-color-event-detail-ink-soft: #352820;
+  --ke-color-event-detail-muted: #75665b;
+  --ke-color-event-detail-muted-cool: #77695f;
+  --ke-color-event-detail-muted-warm: #6f6157;
+  --ke-color-event-detail-link: #8d3417;
+  --ke-color-event-detail-link-hover: #b54d22;
+  --ke-color-event-detail-action: #b54d22;
+  --ke-color-event-detail-action-strong: #bd4e20;
+  --ke-color-event-detail-action-dark: #8c3327;
+  --ke-color-event-detail-surface: var(--ke-color-surface-warm);
+  --ke-color-event-detail-surface-hover: #fff3e8;
+  --ke-color-event-detail-surface-translucent: rgba(255, 250, 242, 0.64);
+  --ke-color-event-detail-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 20%, transparent);
+  --ke-color-event-detail-border-soft: color-mix(in srgb, var(--ke-color-action-primary-strong) 12%, transparent);
+  --ke-color-event-detail-focus: var(--ke-color-event-detail-action-strong);
+  --ke-color-event-detail-keyboard-focus: #f4b942;
+
+  /* Media fallback is a technical contain surface, not a content colour. */
+  --ke-color-event-fallback-surface: #181818;
+  --ke-event-fallback-mobile-min-height: clamp(300px, 92vw, 560px);
+
+  /* Question CTA. VK colours are provider-brand action data. */
+  --ke-color-question-cta-surface: var(--ke-color-event-detail-surface);
+  --ke-color-question-cta-text: var(--ke-color-event-detail-ink);
+  --ke-color-question-cta-muted: var(--ke-color-event-detail-muted-warm);
+  --ke-color-question-cta-border: rgba(98, 72, 55, 0.22);
+  --ke-color-question-cta-icon-surface: #f2dfc6;
+  --ke-color-provider-vk-action: #447bba;
+  --ke-color-provider-vk-action-hover: #356aa8;
+  --ke-elevation-question-cta: 0 14px 34px rgba(35, 25, 18, 0.1);
+  --ke-question-illustration-icon-size: var(--ke-icon-size-feature);
+  --ke-question-provider-icon-size: var(--ke-icon-size-control);
+  --ke-question-control-min: var(--ke-size-control-comfortable);
+  --ke-question-radius-desktop: var(--ke-shape-radius-focus-panel-compact);
+  --ke-question-radius-mobile: 18px;
+
+  /* Participant cards. Avatar dimensions remain media geometry. */
+  --ke-color-participant-text: var(--ke-color-event-detail-ink-strong);
+  --ke-color-participant-muted: var(--ke-color-event-detail-muted-cool);
+  --ke-color-participant-eyebrow: #a64c28;
+  --ke-color-participant-card-border: rgba(116, 82, 61, 0.17);
+  --ke-color-participant-card-surface: rgba(255, 251, 245, 0.76);
+  --ke-color-participant-headliner-border: rgba(181, 77, 34, 0.32);
+  --ke-color-participant-headliner-start: rgba(255, 249, 240, 0.96);
+  --ke-color-participant-headliner-end: rgba(250, 225, 199, 0.72);
+  --ke-color-participant-avatar-surface: #ead7c1;
+  --ke-color-participant-avatar-text: #7b321b;
+  --ke-color-participant-avatar-ring: rgba(112, 73, 50, 0.22);
+  --ke-color-participant-headliner: var(--ke-color-event-detail-action);
+  --ke-color-participant-headliner-text: var(--ke-color-reference4-brand-inverse);
+  --ke-color-participant-credit: #8f5c43;
+  --ke-color-participant-like-border: rgba(143, 75, 48, 0.2);
+  --ke-color-participant-like-border-hover: rgba(181, 77, 34, 0.45);
+  --ke-color-participant-like-surface: rgba(255, 255, 255, 0.72);
+  --ke-color-participant-like-text: #9a4a37;
+  --ke-color-participant-like-selected: var(--ke-color-event-detail-action-strong);
+  --ke-color-participant-like-focus: rgba(181, 77, 34, 0.36);
+  --ke-elevation-participant-card: 0 8px 20px rgba(67, 43, 29, 0.055);
+  --ke-elevation-participant-avatar: 0 7px 14px rgba(79, 48, 29, 0.12);
+  --ke-participant-like-icon-size: var(--ke-icon-size-inline);
+  --ke-participant-avatar-size: 64px;
+  --ke-participant-avatar-size-mobile: 58px;
+  --ke-participant-card-radius: 18px;
+  --ke-participant-card-radius-mobile: 16px;
+
+  /* Occurrence navigation. */
+  --ke-color-occurrence-muted: #7b6b5e;
+  --ke-color-occurrence-summary: var(--ke-color-event-detail-muted);
+  --ke-color-occurrence-link: var(--ke-color-event-detail-link);
+  --ke-color-occurrence-link-hover: var(--ke-color-event-detail-link-hover);
+  --ke-color-occurrence-date: var(--ke-color-event-detail-ink-soft);
+  --ke-color-occurrence-mobile-surface: var(--ke-color-event-detail-surface-translucent);
+  --ke-color-occurrence-chip-surface: var(--ke-color-event-detail-surface);
+  --ke-color-occurrence-chip-hover-surface: var(--ke-color-event-detail-surface-hover);
+  --ke-color-occurrence-chip-current: var(--ke-color-event-detail-action);
+  --ke-color-occurrence-chip-border: rgba(141, 52, 23, 0.28);
+  --ke-elevation-occurrence-current: 0 4px 12px rgba(141, 52, 23, 0.18);
+  --ke-occurrence-chip-radius: var(--ke-shape-radius-pill);
+  --ke-occurrence-mobile-panel-radius: 10px;
+  --ke-occurrence-disclosure-icon-size: var(--ke-icon-size-inline);
+
+  /* Weather context. Cool teal is environmental information, not success. */
+  --ke-color-weather-surface-cool: #dbeaf0;
+  --ke-color-weather-surface: color-mix(in srgb, var(--ke-color-background-page) 88%, var(--ke-color-weather-surface-cool));
+  --ke-color-weather-mobile-surface: rgba(226, 239, 239, 0.58);
+  --ke-color-weather-text: var(--ke-color-text-primary);
+  --ke-color-weather-muted: var(--ke-color-text-muted);
+  --ke-color-weather-accent: #276b73;
+  --ke-color-weather-border: color-mix(in srgb, var(--ke-color-text-primary) 13%, transparent);
+  --ke-weather-location-icon-size: var(--ke-icon-size-action);
+  --ke-weather-inline-icon-size: var(--ke-icon-size-inline);
+  --ke-weather-radius: var(--ke-space-lg);
+  --ke-weather-radius-compact: var(--ke-shape-radius-focus-control);
+  --ke-weather-min-height: 74px;
+  --ke-weather-min-height-compact: 108px;
+  --ke-weather-min-height-mobile: 116px;
+
+  /* Desktop event action panel. */
+  --ke-color-event-action-panel-surface: var(--ke-color-background-inverse-raised);
+  --ke-color-event-action-panel-text: var(--ke-color-surface-warm);
+  --ke-color-event-action-panel-muted: #d7c9bc;
+  --ke-color-event-action-primary: var(--ke-color-event-detail-action);
+  --ke-color-event-action-primary-text: var(--ke-color-text-inverse);
+  --ke-color-event-action-toast-success: #2d6f58;
+  --ke-color-event-action-toast-error: var(--ke-color-event-detail-action-dark);
+  --ke-color-event-action-toast-border: rgba(255, 255, 255, 0.25);
+  --ke-elevation-event-action-primary: 0 12px 24px rgba(124, 49, 20, 0.25);
+  --ke-elevation-event-action-primary-pressed: 0 6px 14px rgba(124, 49, 20, 0.22);
+  --ke-elevation-event-action-toast: 0 8px 18px rgba(20, 52, 41, 0.28);
+  --ke-event-action-primary-icon-size: var(--ke-icon-size-action);
+  --ke-event-action-control-icon-size: var(--ke-icon-size-control);
+  --ke-event-action-primary-min-height: 56px;
+  --ke-event-action-primary-radius: 18px;
+
+  /* PWA install action shares footer inverse semantics but has distinct depth. */
+  --ke-color-pwa-surface: var(--ke-color-footer-surface);
+  --ke-color-pwa-panel-surface: rgba(255, 255, 255, 0.055);
+  --ke-color-pwa-panel-line: rgba(255, 255, 255, 0.16);
+  --ke-color-pwa-panel-line-presentation: rgba(255, 255, 255, 0.18);
+  --ke-color-pwa-panel-inset: rgba(255, 255, 255, 0.08);
+  --ke-color-pwa-text: var(--ke-color-footer-text);
+  --ke-color-pwa-copy: #cdbfb4;
+  --ke-color-pwa-status: #d8c9bd;
+  --ke-color-pwa-glow: rgba(245, 177, 143, 0.16);
+  --ke-color-pwa-glow-presentation: rgba(245, 177, 143, 0.2);
+  --ke-color-pwa-action-surface: var(--ke-color-footer-share-surface);
+  --ke-color-pwa-action-text: var(--ke-color-footer-share-heading);
+  --ke-color-pwa-action-line: rgba(255, 244, 232, 0.42);
+  --ke-elevation-pwa-presentation: 0 24px 64px rgba(0, 0, 0, 0.34);
+  --ke-pwa-icon-size: var(--ke-icon-size-control);
+  --ke-pwa-panel-radius: var(--ke-shape-radius-focus-panel-compact);
+  --ke-pwa-presentation-radius: 22px;
+  --ke-pwa-action-min-height: var(--ke-size-control-comfortable);
+  --ke-layer-pwa-presentation: 10000;
+
+  /* Keyboard-assist layer. Gold is an input-modality focus cue. */
+  --ke-color-keyboard-focus: var(--ke-color-event-detail-keyboard-focus);
+  --ke-color-keyboard-focus-subtle: rgba(244, 185, 66, 0.34);
+  --ke-color-keyboard-panel-surface: #241f1b;
+  --ke-color-keyboard-panel-text: var(--ke-color-surface-warm);
+  --ke-color-keyboard-panel-muted: #cfc2b6;
+  --ke-color-keyboard-panel-card-muted: #bfb1a5;
+  --ke-color-keyboard-panel-accent: #d77a4f;
+  --ke-color-keyboard-kbd-surface: #332c27;
+  --ke-color-keyboard-kbd-shadow: #171310;
+  --ke-color-keyboard-control-surface: var(--ke-color-surface-warm);
+  --ke-color-keyboard-control-hover-surface: #fff4e8;
+  --ke-color-keyboard-control-text: #5f3b29;
+  --ke-color-keyboard-control-border: rgba(92, 63, 45, 0.22);
+  --ke-color-keyboard-action-success: #267848;
+  --ke-color-keyboard-action-danger: #c93434;
+  --ke-elevation-keyboard-card-focus: 0 12px 36px rgba(46, 31, 22, 0.2);
+  --ke-elevation-keyboard-action-success: 0 8px 20px rgba(38, 120, 72, 0.28);
+  --ke-elevation-keyboard-action-danger: 0 8px 20px rgba(201, 52, 52, 0.3);
+  --ke-keyboard-start-min-height: 72px;
+  --ke-keyboard-start-radius: 18px;
+
+  /* Mobile event-detail production chrome. Event-meta roles are in
+     surface-foundations.css and remain the accepted dense hierarchy. */
+  --ke-color-mobile-event-surface: var(--ke-color-background-page);
+  --ke-color-mobile-event-card-surface: var(--ke-color-background-surface);
+  --ke-color-mobile-event-warm-surface: var(--ke-color-surface-warm);
+  --ke-color-mobile-event-action: var(--ke-color-event-detail-action);
+  --ke-color-mobile-event-action-strong: var(--ke-color-event-detail-action-strong);
+  --ke-color-mobile-event-inverse-surface: var(--ke-color-background-inverse-raised);
+  --ke-color-mobile-event-inverse-text: var(--ke-color-surface-warm);
+  --ke-color-mobile-event-border: var(--ke-color-event-meta-border);
+  --ke-color-mobile-event-border-strong: var(--ke-color-event-meta-border-strong);
+  --ke-mobile-event-action-icon-size: var(--ke-icon-size-control);
+  --ke-mobile-event-feature-icon-size: var(--ke-icon-size-action);
+
+  /* Event-token manifest values (organizer background/ring) are media identity
+     data. Generic pill and medallion chrome must use these shared roles. */
+  --ke-color-token-pill-surface: var(--ke-color-background-surface-strong);
+  --ke-color-token-pill-text: var(--ke-color-text-secondary);
+  --ke-color-token-pill-border: var(--ke-color-border-default);
+  --ke-color-token-free-surface: var(--ke-color-free-identity);
+  --ke-color-token-free-text: var(--ke-color-text-inverse);
+  --ke-token-pill-icon-size: var(--ke-icon-size-inline);
+
+  /* Retained event-detail close pairs:
+     - coral link/action/strong shades encode link, CTA and selected state;
+     - weather teal remains informational/environmental, not success;
+     - participant social receipt colours stay separate from generic status;
+     - PWA inverse muted levels preserve hierarchy on the dark footer family;
+     - keyboard gold is an input-modality cue and must not merge with warning. */
+}

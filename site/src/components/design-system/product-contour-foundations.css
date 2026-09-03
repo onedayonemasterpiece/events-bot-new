@@ -1,0 +1,12 @@
+@import "./shell-foundations.css";
+@import "./event-detail-foundations.css";
+@import "./collection-foundations.css";
+@import "./transport-foundations.css";
+@import "./product-theme-foundations.css";
+
+/*
+ * Whole-product F0 registry entry point.
+ *
+ * Family files contain tokens only. They do not own consumer selectors. Actual
+ * consumers import this registry while migrating local literals and geometry.
+ */

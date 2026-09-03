@@ -1,0 +1,115 @@
+/* Personalization, exhibitions and connectivity product-theme foundations. */
+:root {
+  /* Local personalization prototype. Teal is consent/profile interaction, gold
+     is confidence evidence, coral is a signal accent. */
+  --ke-color-personalization-ink: #172b2b;
+  --ke-color-personalization-muted: #536564;
+  --ke-color-personalization-line: rgba(23, 43, 43, 0.16);
+  --ke-color-personalization-paper: var(--ke-color-background-surface);
+  --ke-color-personalization-notice-surface: rgba(255, 253, 248, 0.78);
+  --ke-color-personalization-mint: #d9eee7;
+  --ke-color-personalization-teal: #166a64;
+  --ke-color-personalization-teal-hover: #0f554f;
+  --ke-color-personalization-teal-ink: #0b4d48;
+  --ke-color-personalization-teal-focus: #146e68;
+  --ke-color-personalization-coral: #c95f43;
+  --ke-color-personalization-gold: #e9b94d;
+  --ke-color-personalization-code-surface: #edf3ef;
+  --ke-color-personalization-workspace-start: #fbf3df;
+  --ke-color-personalization-workspace-end: #eff7f3;
+  --ke-color-personalization-legend-surface: #f8fbf9;
+  --ke-color-personalization-map-surface: #f2f7f4;
+  --ke-color-personalization-digest-surface: #fff9eb;
+  --ke-color-personalization-tag-surface: #edf5f1;
+  --ke-color-personalization-tag-text: #245c58;
+  --ke-color-personalization-selected-line: rgba(22, 106, 100, 0.58);
+  --ke-elevation-personalization-panel: 0 20px 64px rgba(27, 49, 47, 0.09);
+  --ke-elevation-personalization-selected: 0 10px 28px rgba(22, 106, 100, 0.08);
+  --ke-personalization-panel-radius: clamp(1.25rem, 3vw, 2rem);
+  --ke-personalization-card-radius: var(--ke-shape-radius-card);
+  --ke-personalization-control-radius: 0.7rem;
+  --ke-personalization-summary-radius: var(--ke-space-lg);
+  --ke-personalization-control-min: var(--ke-size-control-comfortable);
+  --ke-personalization-choice-min: var(--ke-size-touch-target);
+  --ke-personalization-consent-icon-container-size: 3.25rem;
+  --ke-personalization-consent-icon-size: var(--ke-icon-size-action);
+  --ke-personalization-motion: 180ms ease;
+
+  /* Exhibitions prototype intentionally has a self-contained dark product
+     family. It must not be mapped onto warm inverse controls. */
+  --ke-color-exhibitions-background: #0d0f10;
+  --ke-color-exhibitions-surface: #101214;
+  --ke-color-exhibitions-raised: #17191c;
+  --ke-color-exhibitions-border: #2d3134;
+  --ke-color-exhibitions-text: #f4f4f2;
+  --ke-color-exhibitions-muted: #a8adb2;
+  --ke-color-exhibitions-blue: #54acf7;
+  --ke-color-exhibitions-orange: #f18224;
+  --ke-color-exhibitions-red: #ef4b58;
+  --ke-color-exhibitions-gray: #9da2a6;
+  --ke-color-exhibitions-yellow: #efc12b;
+  --ke-color-exhibitions-purple: #a97bf4;
+  --ke-color-exhibitions-green: #92cb70;
+  --ke-color-exhibitions-kbd-line: #50555a;
+  --ke-color-exhibitions-kbd-line-strong: #777d82;
+  --ke-color-exhibitions-kbd-surface: #202326;
+  --ke-color-exhibitions-kbd-text: #e9ecee;
+  --ke-color-exhibitions-kbd-shadow: #050607;
+  --ke-color-exhibitions-mode-surface: #08090a;
+  --ke-color-exhibitions-mode-selected-line: #3a3f43;
+  --ke-color-exhibitions-sticky-surface: rgba(13, 15, 16, 0.96);
+  --ke-color-exhibitions-blue-glow: rgba(84, 172, 247, 0.14);
+  --ke-color-exhibitions-orange-glow: rgba(241, 130, 36, 0.07);
+  --ke-exhibitions-ease-cinematic: cubic-bezier(0.16, 1, 0.3, 1);
+  --ke-exhibitions-ease-emphasis: cubic-bezier(0.22, 1.28, 0.36, 1);
+  --ke-exhibitions-motion-fast: 240ms;
+  --ke-exhibitions-motion-base: 420ms;
+  --ke-exhibitions-container: 1320px;
+  --ke-exhibitions-control-min: var(--ke-size-touch-target);
+  --ke-exhibitions-control-radius: 6px;
+  --ke-exhibitions-mode-radius: 7px;
+  --ke-exhibitions-gallery-arrow-icon-size: var(--ke-icon-size-control);
+  --ke-exhibitions-action-icon-size: var(--ke-icon-size-control);
+  --ke-exhibitions-signal-icon-size: var(--ke-icon-size-inline);
+
+  /* Organizer medallion background/ring values injected from the manifest are
+     identity media data. The fallback values below remain technical defaults. */
+  --ke-color-exhibitions-medallion-fallback-surface: #17191b;
+  --ke-color-exhibitions-medallion-fallback-ring: #697178;
+
+  /* Focus connectivity diagnostic. This warm receipt family is operational UI,
+     not a new brand palette. */
+  --ke-color-connectivity-text: #33261e;
+  --ke-color-connectivity-card-surface: var(--ke-color-background-surface);
+  --ke-color-connectivity-card-border: #e3d2bd;
+  --ke-color-connectivity-eyebrow: #9e3f20;
+  --ke-color-connectivity-action: #a74523;
+  --ke-color-connectivity-action-text: var(--ke-color-text-inverse);
+  --ke-color-connectivity-muted: #75675d;
+  --ke-color-connectivity-result-surface: #f5eee5;
+  --ke-color-connectivity-result-text: #66564b;
+  --ke-color-connectivity-success: #1f744e;
+  --ke-color-connectivity-error: #b02c2c;
+  --ke-color-connectivity-label: #7a6a5e;
+  --ke-color-connectivity-send-surface: #fbe4d6;
+  --ke-color-connectivity-send-text: #743017;
+  --ke-color-connectivity-input-border: #d9c5b4;
+  --ke-color-connectivity-input-text: #493329;
+  --ke-color-connectivity-input-surface: var(--ke-color-background-surface-strong);
+  --ke-color-connectivity-copy-border: var(--ke-color-connectivity-action);
+  --ke-color-connectivity-copy-text: #8d371b;
+  --ke-color-connectivity-copy-surface: #fff9f3;
+  --ke-elevation-connectivity-card: 0 16px 40px rgba(69, 42, 25, 0.12);
+  --ke-elevation-connectivity-action: 0 10px 26px rgba(167, 69, 35, 0.24);
+  --ke-connectivity-card-max: 520px;
+  --ke-connectivity-card-radius: 1.35rem;
+  --ke-connectivity-card-radius-mobile: 1.1rem;
+  --ke-connectivity-action-min-height: 3.15rem;
+
+  /* Retained product-theme close pairs:
+     - personalization teal is consent/profile interaction, not weather/Kaup;
+     - personalization gold is confidence evidence, not warning/keyboard focus;
+     - the exhibitions palette is a complete dark visual language and remains
+       isolated from warm product primitives;
+     - connectivity success/error are probe outcomes, not generic form badges. */
+}

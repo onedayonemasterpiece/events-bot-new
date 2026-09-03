@@ -1,0 +1,291 @@
+@import "../../styles/design-system.css";
+
+/*
+ * KenigEvents foundations contract — F0 Wave 1.
+ *
+ * `site/src/styles/design-system.css` remains the canonical primitive registry.
+ * This file is its one semantic alias layer for Astro consumers. Existing
+ * visual values are preserved; new raw values live here only when they do not
+ * already have a primitive owner.
+ */
+
+:root {
+  /* Typography families and roles. */
+  --ke-font-family-sans: var(--ke-font-sans);
+
+  --ke-type-body-size: var(--ke-font-size-300);
+  --ke-type-body-line: var(--ke-line-body);
+  --ke-type-body-weight: 400;
+  --ke-type-body-strong-weight: 500;
+  --ke-type-body: var(--ke-type-body-weight) var(--ke-type-body-size) / var(--ke-type-body-line) var(--ke-font-family-sans);
+
+  --ke-type-label-size: var(--ke-font-size-200);
+  --ke-type-label-line: 1.2;
+  --ke-type-label-weight: 800;
+  --ke-type-label-strong-weight: 850;
+  --ke-type-label: var(--ke-type-label-weight) var(--ke-type-label-size) / var(--ke-type-label-line) var(--ke-font-family-sans);
+
+  --ke-type-metadata-size: var(--ke-font-size-100);
+  --ke-type-metadata-dense-size: 0.6875rem;
+  --ke-type-metadata-line: 1.25;
+  --ke-type-metadata-weight: 700;
+  --ke-type-metadata-letter: 0.04em;
+  --ke-type-metadata: var(--ke-type-metadata-weight) var(--ke-type-metadata-size) / var(--ke-type-metadata-line) var(--ke-font-family-sans);
+
+  --ke-type-h4-size: var(--ke-font-size-400);
+  --ke-type-h4-line: 1.2;
+  --ke-type-h4-weight: 850;
+  --ke-type-h4-letter: -0.01em;
+  --ke-type-h4: var(--ke-type-h4-weight) var(--ke-type-h4-size) / var(--ke-type-h4-line) var(--ke-font-family-sans);
+
+  --ke-type-h3-size: var(--ke-font-size-500);
+  --ke-type-h3-line: 1.1;
+  --ke-type-h3-weight: 900;
+  --ke-type-h3-letter: -0.025em;
+  --ke-type-h3: var(--ke-type-h3-weight) var(--ke-type-h3-size) / var(--ke-type-h3-line) var(--ke-font-family-sans);
+
+  --ke-type-h2-size: var(--ke-font-size-600);
+  --ke-type-h2-line: 1.05;
+  --ke-type-h2-weight: 900;
+  --ke-type-h2-letter: -0.035em;
+  --ke-type-h2: var(--ke-type-h2-weight) var(--ke-type-h2-size) / var(--ke-type-h2-line) var(--ke-font-family-sans);
+
+  --ke-type-h1-size: var(--ke-font-size-700);
+  --ke-type-h1-line: 0.92;
+  --ke-type-h1-weight: 950;
+  --ke-type-h1-letter: -0.06em;
+  --ke-type-h1: var(--ke-type-h1-weight) var(--ke-type-h1-size) / var(--ke-type-h1-line) var(--ke-font-family-sans);
+
+  /* Intentional compact H1 variant used by dense mobile listing headers. */
+  --ke-type-h1-compact-size: 2.25rem;
+  --ke-type-h1-compact-line: 0.94;
+  --ke-type-h1-compact-weight: 920;
+  --ke-type-h1-compact-letter: -0.055em;
+  --ke-type-h1-compact: var(--ke-type-h1-compact-weight) var(--ke-type-h1-compact-size) / var(--ke-type-h1-compact-line) var(--ke-font-family-sans);
+
+  /* Canonical 4 px spacing scale and semantic aliases. */
+  --ke-space-xs: var(--ke-space-1);
+  --ke-space-sm: var(--ke-space-2);
+  --ke-space-md: var(--ke-space-3);
+  --ke-space-lg: var(--ke-space-4);
+  --ke-space-xl: var(--ke-space-5);
+  --ke-space-2xl: var(--ke-space-6);
+  --ke-space-3xl: var(--ke-space-8);
+  --ke-space-4xl: var(--ke-space-10);
+  --ke-space-5xl: var(--ke-space-12);
+  --ke-space-6xl: var(--ke-space-16);
+
+  --ke-space-icon-inline: var(--ke-space-xs);
+  --ke-space-control-gap: var(--ke-space-sm);
+  --ke-space-content-gap: var(--ke-space-md);
+  --ke-space-component: var(--ke-space-lg);
+  --ke-space-card: var(--ke-space-xl);
+  --ke-space-section-tight: var(--ke-space-2xl);
+  --ke-space-section: var(--ke-space-3xl);
+  --ke-space-section-loose: var(--ke-space-5xl);
+  --ke-space-page: var(--ke-space-6xl);
+
+  /* Sizing, containers and breakpoint contract. */
+  --ke-size-touch-target: var(--ke-control-min);
+  --ke-size-control-comfortable: 48px;
+  --ke-size-control-large: 52px;
+  --ke-size-mobile-header: 64px;
+  --ke-size-mobile-rail-row: 112px;
+
+  --ke-container-content: var(--ke-content-max);
+  --ke-container-wide: var(--ke-content-wide-max);
+  --ke-container-listing: var(--ke-content-listing-max);
+  --ke-container-gutter-mobile: 12px;
+  --ke-container-gutter-compact: 24px;
+  --ke-container-gutter-fluid: clamp(24px, 5vw, 48px);
+
+  /* Informational contract values; CSS media queries use the same literals. */
+  --ke-breakpoint-mobile: 720px;
+  --ke-breakpoint-compact: 980px;
+  --ke-breakpoint-wide: 1760px;
+
+  /* Shape, border, elevation and layer roles. */
+  --ke-shape-radius-compact: var(--ke-radius-sm);
+  --ke-shape-radius-control: var(--ke-radius-md);
+  --ke-shape-radius-card: var(--ke-radius-lg);
+  --ke-shape-radius-panel: var(--ke-radius-xl);
+  --ke-shape-radius-hero: 32px;
+  --ke-shape-radius-hero-compact: 24px;
+  --ke-shape-radius-pill: var(--ke-radius-pill);
+
+  --ke-shape-border-hairline: 1px;
+  --ke-shape-border-strong: 2px;
+  --ke-shape-border-ring: 4px;
+
+  --ke-elevation-card: var(--ke-shadow-1);
+  --ke-elevation-popover: var(--ke-shadow-2);
+  --ke-elevation-overlay: var(--ke-shadow-3);
+  --ke-elevation-mobile-sticky: 0 6px 12px rgba(72, 45, 25, 0.045);
+  --ke-elevation-mobile-card: 0 7px 18px rgba(72, 45, 25, 0.065);
+  --ke-elevation-free-hero: 0 18px 45px rgba(72, 45, 25, 0.08);
+
+  --ke-layer-content: 1;
+  --ke-layer-sticky: 30;
+  --ke-layer-floating: 48;
+  --ke-layer-navigation: 52;
+  --ke-layer-sticky-title: 59;
+  --ke-layer-header: 60;
+  --ke-layer-modal: 80;
+
+  /* General semantic colour aliases. */
+  --ke-color-text-primary: var(--ke-color-ink);
+  --ke-color-text-secondary: var(--ke-color-copy);
+  --ke-color-text-muted: var(--ke-color-muted);
+  --ke-color-text-inverse: var(--ke-color-surface-strong);
+
+  --ke-color-background-page: var(--ke-color-canvas);
+  --ke-color-background-subtle: var(--ke-color-canvas-soft);
+  --ke-color-background-surface: var(--ke-color-surface);
+  --ke-color-background-surface-strong: var(--ke-color-surface-strong);
+  --ke-color-background-inverse: var(--ke-color-surface-inverse);
+  --ke-color-background-inverse-raised: var(--ke-color-surface-inverse-raised);
+  --ke-color-background-header: var(--ke-color-header);
+
+  --ke-color-border-default: var(--ke-color-line);
+  --ke-color-border-brand-hairline: color-mix(in srgb, var(--ke-color-brand-800) 9%, transparent);
+  --ke-color-border-brand-subtle: color-mix(in srgb, var(--ke-color-brand-800) 14%, transparent);
+  --ke-color-border-brand-emphasis: color-mix(in srgb, var(--ke-color-brand-600) 22%, transparent);
+
+  --ke-color-action-primary: var(--ke-color-brand-600);
+  --ke-color-action-primary-hover: var(--ke-color-brand-700);
+  --ke-color-action-primary-strong: var(--ke-color-brand-800);
+  --ke-color-action-primary-ink: var(--ke-color-brand-900);
+  --ke-color-action-accent: var(--ke-color-accent-600);
+  --ke-color-action-accent-strong: var(--ke-color-accent-700);
+  --ke-color-focus-ring: var(--ke-color-focus);
+  --ke-color-focus-ring-warm: #f1ae79;
+
+  --ke-color-status-success-background: var(--ke-color-success-50);
+  --ke-color-status-success-foreground: var(--ke-color-success-700);
+  --ke-color-status-warning-background: var(--ke-color-warning-50);
+  --ke-color-status-warning-foreground: var(--ke-color-warning-800);
+  --ke-color-status-danger-background: var(--ke-color-danger-50);
+  --ke-color-status-danger-foreground: var(--ke-color-danger-700);
+  --ke-color-status-info-background: var(--ke-color-info-50);
+  --ke-color-status-info-foreground: var(--ke-color-info-700);
+
+  --ke-color-inverse-control: var(--ke-color-control-inverse);
+  --ke-color-inverse-control-background: var(--ke-color-control-inverse-bg);
+  --ke-color-inverse-control-border: var(--ke-color-control-inverse-line);
+  --ke-color-inverse-control-hover: var(--ke-color-control-inverse-hover);
+
+  /* Today review-date guard. #5d2c19 is merged into brand-900. */
+  --ke-color-review-notice-background: #fff4df;
+  --ke-color-review-notice-border: var(--ke-color-border-brand-emphasis);
+  --ke-color-review-notice-text: var(--ke-color-action-primary-ink);
+  --ke-review-notice-max-width: var(--ke-container-content);
+  --ke-review-notice-radius: var(--ke-shape-radius-control);
+  --ke-review-notice-margin-top: 18px;
+  --ke-review-notice-padding-block: 14px;
+  --ke-review-notice-padding-inline: 16px;
+  --ke-review-notice-copy-gap: var(--ke-space-xs);
+
+  /* Mobile listing rail. Existing canvas/surface/text/line/brand duplicates merge. */
+  --ke-color-mobile-rail-canvas: var(--ke-color-background-page);
+  --ke-color-mobile-rail-surface: var(--ke-color-background-surface);
+  --ke-color-mobile-rail-text: var(--ke-color-text-primary);
+  --ke-color-mobile-rail-muted: var(--ke-color-text-muted);
+  --ke-color-mobile-rail-line: var(--ke-color-border-default);
+  --ke-color-mobile-rail-primary: var(--ke-color-action-primary);
+  --ke-color-mobile-rail-primary-strong: var(--ke-color-action-primary-strong);
+  --ke-color-mobile-rail-time-surface: #efe3d3;
+  --ke-color-mobile-rail-time-ink: var(--ke-color-action-primary-strong);
+  --ke-color-mobile-rail-cue: #8a7f76;
+  --ke-color-mobile-rail-sticky-background: color-mix(in srgb, var(--ke-color-background-header) 97%, transparent);
+  --ke-color-mobile-rail-group-background: color-mix(in srgb, var(--ke-color-background-page) 98.5%, transparent);
+  --ke-color-mobile-rail-focus: color-mix(in srgb, var(--ke-color-focus-ring) 62%, transparent);
+  --ke-color-gesture-negative: #b12626;
+  --ke-color-gesture-positive: #2f7a56;
+
+  --ke-mobile-rail-page-head-height: 96px;
+  --ke-mobile-rail-feed-head-height: 60px;
+  --ke-mobile-rail-group-head-min-height: 54px;
+  --ke-mobile-rail-card-width: 296px;
+  --ke-mobile-rail-time-width: 96px;
+  --ke-mobile-rail-info-width: 162px;
+  --ke-mobile-rail-section-gap: 10px;
+  --ke-mobile-rail-card-radius: var(--ke-shape-radius-control);
+
+  /* Free collection identity and surfaces. */
+  --ke-color-free-identity: #2f7d32;
+  --ke-color-free-hero-glow: #68a853;
+  --ke-color-free-hero-surface: #f1f6e9;
+  --ke-color-free-border: color-mix(in srgb, var(--ke-color-free-identity) 16%, transparent);
+  --ke-color-free-panel-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 11%, transparent);
+  --ke-color-free-medallion-shadow: rgba(38, 83, 34, 0.18);
+  --ke-color-free-medallion-shadow-strong: rgba(38, 83, 34, 0.22);
+  --ke-free-hero-radius: var(--ke-shape-radius-hero);
+  --ke-free-hero-radius-compact: var(--ke-shape-radius-hero-compact);
+  --ke-free-panel-radius: var(--ke-shape-radius-panel);
+  --ke-free-panel-padding: clamp(1.5rem, 4vw, 3rem);
+  --ke-free-hero-padding: clamp(2rem, 5vw, 5rem);
+  --ke-free-hero-gap: clamp(1.5rem, 4vw, 4rem);
+
+  /* CopyAction semantic colours; raw values are owned once here. */
+  --ke-color-copy-action-border: rgba(55, 38, 27, 0.18);
+  --ke-color-copy-action-foreground: #8e3d1e;
+  --ke-color-copy-action-background: rgba(255, 255, 255, 0.72);
+  --ke-color-copy-action-inverse-border: rgba(255, 255, 255, 0.2);
+  --ke-color-copy-action-inverse-foreground: var(--ke-color-background-header);
+  --ke-color-copy-action-inverse-background: rgba(255, 255, 255, 0.09);
+  --ke-color-copy-action-success-background: #2d6f58;
+  --ke-color-copy-action-success-border: #70bb9d;
+  --ke-color-copy-action-error-border: #f28c76;
+  --ke-color-copy-action-error-ring: rgba(242, 140, 118, 0.2);
+
+  /*
+   * Retained close pairs:
+   * - review notice warm surface vs header warm surface: state recognition.
+   * - rail time surface vs canvas-soft: stronger tile separation at mobile size.
+   * - free hero surface vs success background: collection identity vs status.
+   * - free identity green vs positive-gesture green: editorial category vs feedback.
+   * - rail cue vs muted text: cue must remain lower contrast than readable metadata.
+   */
+
+  /* Exactly four icon-size roles. */
+  --ke-icon-size-inline: 16px;
+  --ke-icon-size-control: 20px;
+  --ke-icon-size-action: 24px;
+  --ke-icon-size-feature: 32px;
+}
+
+/* Optional role utilities for consumers that cannot use component-owned styles. */
+:where(.ke-type-body) { font: var(--ke-type-body); letter-spacing: 0; }
+:where(.ke-type-label) { font: var(--ke-type-label); letter-spacing: 0; }
+:where(.ke-type-metadata) { font: var(--ke-type-metadata); letter-spacing: var(--ke-type-metadata-letter); }
+:where(.ke-type-h4) { font: var(--ke-type-h4); letter-spacing: var(--ke-type-h4-letter); }
+:where(.ke-type-h3) { font: var(--ke-type-h3); letter-spacing: var(--ke-type-h3-letter); }
+:where(.ke-type-h2) { font: var(--ke-type-h2); letter-spacing: var(--ke-type-h2-letter); }
+:where(.ke-type-h1) { font: var(--ke-type-h1); letter-spacing: var(--ke-type-h1-letter); }
+:where(.ke-type-h1-compact) { font: var(--ke-type-h1-compact); letter-spacing: var(--ke-type-h1-compact-letter); }
+
+/*
+ * Central icon sizing utility. !important is intentionally temporary and
+ * bounded: it lets role assignment outrank historical component-local widths
+ * while those owning components migrate away from local dimensions.
+ */
+:where(.ke-icon-role) {
+  --ke-icon-size: var(--ke-icon-size-control);
+  width: var(--ke-icon-size) !important;
+  min-width: var(--ke-icon-size) !important;
+  height: var(--ke-icon-size) !important;
+  min-height: var(--ke-icon-size) !important;
+  flex: 0 0 var(--ke-icon-size) !important;
+  display: inline-block;
+  fill: currentColor;
+  vertical-align: -0.125em;
+}
+
+:where(.ke-icon-role--inline) { --ke-icon-size: var(--ke-icon-size-inline); }
+:where(.ke-icon-role--control) { --ke-icon-size: var(--ke-icon-size-control); }
+:where(.ke-icon-role--action) { --ke-icon-size: var(--ke-icon-size-action); }
+:where(.ke-icon-role--feature) { --ke-icon-size: var(--ke-icon-size-feature); }
+
+:where(img.ke-icon-role, svg.social-icon.ke-icon-role) {
+  object-fit: contain;
+}
