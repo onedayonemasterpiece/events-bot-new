@@ -147,19 +147,18 @@ class PrivateEventsMCPServer:
                 media_story_enabled=config.universal_social_media_story_enabled,
                 file_send_enabled=config.universal_social_file_send_enabled,
                 budget_limits=SocialBudgetLimits(
-                    attempts=config.social_publish_attempts_per_day
+                    attempts=max(1000, config.social_publish_attempts_per_day)
                 ),
                 budget_dimension_limits={
                     "attempts": {
-                        "global": config.social_publish_attempts_per_day * 10,
+                        "global": max(1000, config.social_publish_attempts_per_day) * 10,
                         # The principal aggregate is an abuse ceiling, not a
-                        # product-delivery bucket.  Keep the narrow per-target
-                        # and per-action limits at the configured value so
-                        # unrelated Telegram/VK actions cannot consume the
-                        # caller's one remaining intended publication slot.
-                        "principal": config.social_publish_attempts_per_day * 10,
-                        "target": config.social_publish_attempts_per_day,
-                        "action": config.social_publish_attempts_per_day,
+                        # product-delivery bucket. Keep every provider-attempt
+                        # ceiling at an emergency-only floor so normal owned
+                        # editorial publishing cannot exhaust it.
+                        "principal": max(1000, config.social_publish_attempts_per_day) * 10,
+                        "target": max(1000, config.social_publish_attempts_per_day),
+                        "action": max(1000, config.social_publish_attempts_per_day),
                     }
                 },
             )

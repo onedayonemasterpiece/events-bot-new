@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Private eventsBot MCP owned social schedules no longer hit the former 10-attempt product ceiling: the retained daily attempt guard is emergency-scale, and local pre-provider reference/digest failures remain uncharged. Provider-read, principal-bound image `ast_*` references can now be safely rematerialized through the existing `social_asset_stage` tool for VK or Telegram after byte/digest/MIME/dimension/expiry reverification; raw URLs, paths, native IDs, expired refs, and foreign-principal refs remain rejected.
+
 - Fixed: Yandex Object Storage media failures now log bounded provider HTTP and
   error codes instead of silently collapsing to `None`, and new managed VK
   posts fail closed when an accepted/pending poster exists but storage failed

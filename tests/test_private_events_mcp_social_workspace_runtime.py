@@ -3485,3 +3485,37 @@ def test_refresh_allowed_scope_gate_precedes_revocation(tmp_path) -> None:
         now=1_900_000_002,
     )
     assert grant.scopes == {"offline_access", "telegram:dm:send"}
+
+@pytest.mark.asyncio
+async def test_owned_schedule_pre_provider_commit_failures_do_not_spend_attempt_budget(tmp_path: Path) -> None:
+    adapter = FakeAdapter()
+    store = OAuthStateStore(str(tmp_path / "attempt-accounting.sqlite"))
+    service = SocialWorkspaceRuntime(
+        store=store, adapters={"telegram": adapter},
+        encryption_key="attempt-accounting-key-long-enough",
+        budget_dimension_limits={"attempts": {
+            "global": 1, "principal": 1, "target": 1, "action": 1,
+        }},
+    )
+    principal = RuntimePrincipal.from_context(context())
+    target = service._mint_ref("target", "owned-schedule-target", "telegram", principal)
+    prepared = await service.prepare(validate_prepare_request({
+        "platform": "telegram", "action": "schedule",
+        "idempotency_key": "owned-schedule-budget-0001", "target_ref": target,
+        "schedule_at": "2027-01-15T20:00:00Z",
+        "content": {"text": "scheduled", "entities": [], "media": []},
+    }), context())
+    for _ in range(5):
+        with pytest.raises(SocialWorkspaceRuntimeError):
+            await service.commit({
+                "preparation_ref": prepared["preparation_ref"],
+                "action_digest": "0" * 64,
+            }, context())
+    with sqlite3.connect(store.path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM social_workspace_budget WHERE metric='attempts'").fetchone()[0] == 0
+    result = await service.commit({
+        "preparation_ref": prepared["preparation_ref"],
+        "action_digest": prepared["action_digest"],
+    }, context())
+    assert result["status"] == "succeeded"
+    assert adapter.executions == 1

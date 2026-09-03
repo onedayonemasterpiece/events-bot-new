@@ -2288,67 +2288,45 @@ class SocialWorkspaceRuntime:
             )
 
     async def _reverify_document_assets(
-        self,
-        intent: SocialActionIntent,
-        principal: RuntimePrincipal,
+        self, intent: SocialActionIntent, principal: RuntimePrincipal,
         metadata: list[dict[str, Any]],
     ) -> None:
-        if not self._has_document(intent):
+        if not metadata:
             return
         self._enforce_document_runtime_policy(intent)
-        assert self.asset_ingestor is not None
+        if self.asset_ingestor is None or not callable(getattr(self.asset_ingestor, "reverify", None)):
+            raise SocialWorkspaceRuntimeError("asset reverification is unavailable")
         reverify = self.asset_ingestor.reverify
         owner_binding = self._principal_hash(principal)
-        timeout = max(
-            self.provider_timeout_seconds, self.asset_ingest_timeout_seconds
-        )
+        timeout = max(self.provider_timeout_seconds, self.asset_ingest_timeout_seconds)
         for stored in metadata:
-            if stored["role"] != MediaRole.DOCUMENT.value:
-                continue
+            role = MediaRole(str(stored["role"]))
+            maximum = self.document_max_bytes if role is MediaRole.DOCUMENT else self.asset_max_bytes
             try:
-                refreshed = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        reverify,
-                        stored["storage_ref"],
-                        owner_binding=owner_binding,
-                        max_bytes=self.document_max_bytes,
-                        role=MediaRole.DOCUMENT.value,
-                    ),
-                    timeout=timeout,
-                )
+                refreshed = await asyncio.wait_for(asyncio.to_thread(
+                    reverify, stored["storage_ref"], owner_binding=owner_binding,
+                    max_bytes=maximum, role=role.value), timeout=timeout)
             except asyncio.TimeoutError:
-                raise SocialWorkspaceRuntimeError(
-                    "document asset reverification timed out"
-                ) from None
+                raise SocialWorkspaceRuntimeError("asset reverification timed out") from None
             if inspect.isawaitable(refreshed):
-                raise SocialWorkspaceRuntimeError(
-                    "document asset reverification must be synchronous"
-                )
-            verified = self._validate_verified_asset(
-                refreshed,
-                owner_binding=owner_binding,
-                requested_expires_at=int(stored["expires_at"]),
-                role=MediaRole.DOCUMENT,
-            )
+                raise SocialWorkspaceRuntimeError("asset reverification must be synchronous")
+            verified = self._validate_verified_asset(refreshed, owner_binding=owner_binding,
+                requested_expires_at=int(stored["expires_at"]), role=role)
+            keys = ["storage_ref", "role", "content_digest", "mime_type",
+                    "byte_length", "expires_at", "width", "height"]
+            if role is MediaRole.DOCUMENT:
+                keys.extend(["display_name", "classification"] )
             fresh = {
                 "storage_ref": verified.storage_ref,
-                "role": (
-                    verified.role.value
-                    if isinstance(verified.role, MediaRole)
-                    else verified.role
-                ),
-                "content_digest": verified.content_digest,
-                "mime_type": verified.mime_type,
-                "byte_length": verified.byte_length,
-                "expires_at": verified.expires_at,
-                "display_name": verified.display_name,
-                "classification": verified.classification,
+                "role": verified.role.value if isinstance(verified.role, MediaRole) else verified.role,
+                "content_digest": verified.content_digest, "mime_type": verified.mime_type,
+                "byte_length": verified.byte_length, "expires_at": verified.expires_at,
+                "width": verified.width, "height": verified.height,
+                "display_name": verified.display_name, "classification": verified.classification,
             }
-            expected = {key: stored[key] for key in fresh}
-            if fresh != expected:
-                raise SocialWorkspaceRuntimeError(
-                    "verified document bytes or metadata changed"
-                )
+            if {key: fresh.get(key) for key in keys} != {key: stored.get(key) for key in keys}:
+                raise SocialWorkspaceRuntimeError("verified asset bytes or metadata changed")
+
 
     async def prepare(self, intent: SocialActionIntent, context: ToolCallContext) -> dict[str, Any]:
         principal = RuntimePrincipal.from_context(context)
@@ -2808,9 +2786,17 @@ class SocialWorkspaceRuntime:
         preflight_assets = self._asset_metadata_for_intent(
             preflight_intent, principal
         )
+        if compute_action_digest(
+            preflight_intent,
+            verified_assets=self._digest_assets(preflight_assets) or None,
+        ) != digest:
+            raise SocialWorkspaceRuntimeError("verified asset action digest mismatch")
         await self._reverify_document_assets(
             preflight_intent, principal, preflight_assets
         )
+        # Resolve every opaque reference before reserving an attempt. A local
+        # expired/foreign binding must never consume provider-attempt budget.
+        preflight_native_intent = self._native_intent(preflight_intent, principal)
         replay_existing = False
         with self.store._lock, self.store._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -3012,7 +2998,7 @@ class SocialWorkspaceRuntime:
         )
         provider_returned = False
         try:
-            native = self._native_intent(intent, principal)
+            native = preflight_native_intent
             known: dict[tuple[str, str], str] = {}
             if native.target_ref and intent.target_ref:
                 known[("target", native.target_ref)] = intent.target_ref
@@ -3638,31 +3624,84 @@ class SocialWorkspaceRuntime:
                 else self.asset_max_bytes
             )
             try:
-                ingest_parameters = inspect.signature(
-                    self.asset_ingestor.ingest
-                ).parameters
-                ingest_kwargs: dict[str, Any] = {
-                    "owner_binding": owner_binding,
-                    "max_bytes": byte_limit,
-                    "expires_at": requested_expires_at,
-                }
-                if "role" in ingest_parameters:
-                    ingest_kwargs["role"] = (
-                        request.role.value
-                        if request.role is MediaRole.DOCUMENT
-                        else "story_media"
+                if request.source_asset_ref is not None:
+                    if request.role is not MediaRole.IMAGE:
+                        raise SocialWorkspaceRuntimeError(
+                            "provider-read promotion supports images only"
+                        )
+                    promote = getattr(self.asset_ingestor, "ingest_provider_bytes", None)
+                    if not callable(promote):
+                        raise SocialWorkspaceRuntimeError(
+                            "provider-read asset promotion is unavailable"
+                        )
+                    client, subject, resource = self._binding(principal)
+                    with self.store._lock, self.store._connect() as conn:
+                        source = conn.execute(
+                            """SELECT platform,provider_ref_ciphertext,expires_at
+                               FROM social_workspace_ref WHERE ref_hash=? AND ref_kind='asset'
+                               AND client_hash=? AND subject_hash=? AND resource_hash=?
+                               AND policy_version=? AND expires_at>?""",
+                            (self._hash(request.source_asset_ref), client, subject, resource,
+                             self.policy_version, self._now()),
+                        ).fetchone()
+                    if source is None:
+                        raise SocialWorkspaceRuntimeError(
+                            "source asset is expired or not bound", error_code="ASSET_EXPIRED"
+                        )
+                    source_platform = str(source["platform"] )
+                    source_ref = self._decrypt(str(source["provider_ref_ciphertext"]))
+                    reader = getattr(self._adapter(source_platform), "read_asset", None)
+                    if not callable(reader):
+                        raise SocialWorkspaceRuntimeError(
+                            "provider-read asset materialization is unavailable"
+                        )
+                    materialized = await asyncio.wait_for(
+                        reader(source_ref, owner_binding=owner_binding, max_bytes=byte_limit),
+                        timeout=self.provider_timeout_seconds,
                     )
-                elif request.role is MediaRole.DOCUMENT:
-                    raise SocialWorkspaceRuntimeError(
-                        "document-aware asset ingestor is unavailable"
+                    raw = materialized if type(materialized) is bytes else getattr(materialized, "content", None)
+                    if type(raw) is not bytes or not 1 <= len(raw) <= byte_limit:
+                        raise SocialWorkspaceRuntimeError("provider returned an invalid image asset")
+                    claimed_length = getattr(materialized, "byte_length", None)
+                    claimed_digest = getattr(materialized, "content_digest", None)
+                    claimed_mime = getattr(materialized, "mime_type", None)
+                    measured_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+                    if claimed_length is not None and claimed_length != len(raw):
+                        raise SocialWorkspaceRuntimeError("provider image integrity check failed")
+                    if claimed_digest is not None and (
+                        not isinstance(claimed_digest, str)
+                        or not hmac.compare_digest(claimed_digest, measured_digest)
+                    ):
+                        raise SocialWorkspaceRuntimeError("provider image integrity check failed")
+                    if claimed_mime is not None and (
+                        not isinstance(claimed_mime, str) or not claimed_mime.startswith("image/")
+                    ):
+                        raise SocialWorkspaceRuntimeError("provider image MIME check failed")
+                    requested_expires_at = min(requested_expires_at, int(source["expires_at"]))
+                    ingested = await asyncio.wait_for(
+                        promote(raw, owner_binding=owner_binding, max_bytes=byte_limit,
+                            expires_at=requested_expires_at, content_digest=measured_digest,
+                            mime_type=claimed_mime),
+                        timeout=self.asset_ingest_timeout_seconds,
                     )
-                ingested = await asyncio.wait_for(
-                    self.asset_ingestor.ingest(
-                        request.file,
-                        **ingest_kwargs,
-                    ),
-                    timeout=self.asset_ingest_timeout_seconds,
-                )
+                else:
+                    assert request.file is not None
+                    ingest_parameters = inspect.signature(self.asset_ingestor.ingest).parameters
+                    ingest_kwargs: dict[str, Any] = {
+                        "owner_binding": owner_binding, "max_bytes": byte_limit,
+                        "expires_at": requested_expires_at,
+                    }
+                    if "role" in ingest_parameters:
+                        ingest_kwargs["role"] = (request.role.value
+                            if request.role is MediaRole.DOCUMENT else "story_media")
+                    elif request.role is MediaRole.DOCUMENT:
+                        raise SocialWorkspaceRuntimeError(
+                            "document-aware asset ingestor is unavailable"
+                        )
+                    ingested = await asyncio.wait_for(
+                        self.asset_ingestor.ingest(request.file, **ingest_kwargs),
+                        timeout=self.asset_ingest_timeout_seconds,
+                    )
             except asyncio.TimeoutError:
                 raise SocialWorkspaceRuntimeError("social asset ingestion timed out") from None
             verified = self._validate_verified_asset(
