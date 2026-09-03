@@ -20,8 +20,9 @@ const EXPECTED_BLOBS = Object.freeze({
 
 test('vertical slice is source-accepted on one frozen transaction without browser inflation', () => {
   assert.equal(acceptance.schema, 'kenigevents.n0-exhibitions-vertical-slice-acceptance.v1');
-  assert.equal(acceptance.version, '1.0.0');
+  assert.equal(acceptance.version, '1.1.0');
   assert.equal(acceptance.contract_version, '1.10.0');
+  assert.deepEqual(acceptance.v0_requirement_comments, [5531944339, 5531980502]);
   assert.equal(acceptance.frozen_transaction.source_sha, FROZEN);
   assert.equal(acceptance.frozen_transaction.build_id, 'preview-real-cebeafeee-normalized-20260903-v1');
   assert.equal(acceptance.slice.id, 'EXHIBITIONS_PERSONAL_ROW_FR0_MEDIAFRAME');
@@ -65,12 +66,13 @@ test('source acceptance preserves one framing owner and accepted medallion seman
   assert.equal(source.competing_route_local_attribute_scoped_MediaFrame_owner, 'NOT_FOUND_BY_SOURCE_REVIEW');
 });
 
-test('V0 matrix cannot omit route, resource-state, interaction or accessibility evidence', () => {
+test('V0 matrix cannot omit route, resource-state, clipping, interaction or accessibility evidence', () => {
   const required = acceptance.v0_required_sections;
   assert.deepEqual(required.viewports, [375, 620, 1024, 1440]);
   for (const section of [
     'route_and_document',
     'frame_protocol',
+    'clipping_observation',
     'resource_state_observation',
     'interaction',
     'row_and_accessibility',
@@ -78,6 +80,26 @@ test('V0 matrix cannot omit route, resource-state, interaction or accessibility 
   assert.ok(required.resource_state_observation.includes('resource_state pending|loaded|fallback|broken'));
   assert.ok(required.interaction.includes('medallion is a non-interactive span with interaction-owner=none'));
   assert.ok(required.interaction.includes('missing/unknown interaction owner or MediaFrame-owned activation is DRIFT'));
+  assert.deepEqual(required.clipping_observation, [
+    'image_box_extends_beyond_frame boolean',
+    'computed_frame_overflow_x hidden|clip|visible|other',
+    'computed_frame_overflow_y hidden|clip|visible|other',
+    'paint_or_hit_test_escapes_frame boolean',
+    'clip_owner media-frame.css|other|absent',
+  ]);
+  assert.equal(
+    required.clipping_classification.extended_box_with_canonical_clip_and_no_paint_or_hit_test_escape,
+    'PASS_INTENTIONAL_CROP_OR_PARALLAX',
+  );
+  assert.equal(
+    required.clipping_classification.extended_box_with_visible_or_absent_clip_or_observable_escape,
+    'FR0_DRIFT_MEDIA_FRAME_IMAGE_ESCAPES_FRAME',
+  );
+  assert.equal(
+    required.clipping_classification.contain_media_visible_content_clipped_or_document_area_suppressed,
+    'FR0_DRIFT',
+  );
+  assert.equal(required.clipping_classification.raw_image_box_containment_is_sufficient, false);
   assert.equal(acceptance.acceptance_rule.omitted_required_case, 'INCOMPLETE_NOT_PASS');
   assert.equal(acceptance.acceptance_rule.unrelated_route_drift, 'DOES_NOT_REJECT_THIS_SLICE');
   assert.equal(acceptance.acceptance_rule.N0_may_not_self_issue_browser_verdict, true);
@@ -138,6 +160,7 @@ test('strict integrated-source mode verifies the accepted chain without redefini
 
   for (const marker of [
     '[data-media-frame][data-media-frame-contract="v1"]',
+    'overflow: hidden',
     'object-position: var(--media-frame-object-position, 50% 50%)',
     '[data-media-frame-fit="cover"] > [data-media-frame-image]',
     '[data-media-frame-fit="contain"] > [data-media-frame-image]',
