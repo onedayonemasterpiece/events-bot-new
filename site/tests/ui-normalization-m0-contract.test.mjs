@@ -41,30 +41,47 @@ test('EventMediaRail exposes one canonical three-variant family and preserves ca
   assert.match(source, /attributeFilter:\['data-rail-visible-count', 'data-rail-hidden-count', 'data-rail-complete'\]/u);
 });
 
-test('AdaptiveEventCardGrid owns compatibility, live-region, runtime and consumer metadata contracts', async () => {
+test('AdaptiveEventCardGrid owns compatibility, live-region, filtered runtime and consumer metadata contracts', async () => {
   const source = await read('src/components/AdaptiveEventCardGrid.astro');
   const optimized = await read('src/components/OptimizedEventCardGrid.astro');
 
-  for (const prop of ['runtimeManaged?', 'ariaLive?', 'ariaAtomic?', 'ariaBusy?', 'ariaLabel?', 'ariaLabelledby?']) {
+  for (const prop of [
+    'runtimeManaged?',
+    'runtimeVisibleOnly?',
+    'runtimeSourcePolicy?',
+    'ariaLive?',
+    'ariaAtomic?',
+    'ariaBusy?',
+    'ariaLabel?',
+    'ariaLabelledby?',
+  ]) {
     assert.ok(source.includes(prop), `missing adaptive runtime/live-region API: ${prop}`);
   }
-  assert.match(source, /const runtimeManagedGrid = runtimeManaged \?\? personalFeed;/u);
+  assert.match(source, /type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' \| 'initial';/u);
+  assert.match(source, /const runtimeManagedGrid = runtimeManaged \?\? \(personalFeed \|\| discoveryFeed\);/u);
+  assert.match(source, /requestedRuntimeSourcePolicy === 'initial'/u);
   assert.match(source, /aria-live=\{ariaLive\}/u);
   assert.match(source, /aria-atomic=\{ariaAtomic === undefined \? undefined : String\(ariaAtomic\)\}/u);
   assert.match(source, /aria-busy=\{ariaBusy === undefined \? undefined : String\(ariaBusy\)\}/u);
   assert.match(source, /aria-labelledby=\{ariaLabelledby\}/u);
   assert.match(source, /'data-adaptive-grid-live'/u);
   assert.match(source, /'data-adaptive-grid-runtime-managed'/u);
+  assert.match(source, /'data-adaptive-grid-runtime-visible-only'/u);
+  assert.match(source, /'data-adaptive-grid-runtime-source-policy'/u);
   assert.match(source, /data-adaptive-grid-runtime-managed=\{runtimeManagedGrid \? 'true' : undefined\}/u);
+  assert.match(source, /data-adaptive-grid-runtime-visible-only=\{runtimeManagedGrid && runtimeVisibleOnly \? 'true' : undefined\}/u);
+  assert.match(source, /data-adaptive-grid-runtime-source-policy=\{runtimeManagedGrid \? runtimeSourcePolicy : undefined\}/u);
   assert.match(source, /data-adaptive-grid-item-root-contract=\{hasItemRoots/u);
   assert.match(source, /rootClassName=\{itemRootFor\(item\)\?\.className\}/u);
   assert.match(source, /rootAttributes=\{itemRootFor\(item\)\?\.attributes\}/u);
   assert.match(source, /!ADAPTIVE_ROOT_RESERVED_ATTRIBUTES\.has\(name\)/u);
   assert.match(source, /function bindAdaptiveEventCardGridRuntime\(root = document\)/u);
-  assert.match(source, /querySelectorAll\('\[data-adaptive-event-card-grid\]\[data-adaptive-grid-runtime-managed="true"\]'\)/u);
-  assert.match(source, /new MutationObserver\(sync\)\.observe\(grid, \{ childList:true \}\)/u);
-  assert.match(source, /grid\.dataset\.adaptiveGridRemainderCount = String\(count % runtimeRowSize\)/u);
+  assert.match(source, /const cards = visibleOnly \? directCards\.filter\(\(card\) => !card\.hidden\) : directCards;/u);
+  assert.match(source, /if \(sourcePolicy === 'mirror-rendered'\) \{/u);
+  assert.match(source, /grid\.dataset\.adaptiveGridRenderedCount = String\(count\)/u);
   assert.match(source, /grid\.dataset\.adaptiveGridRenderedOrder = order/u);
+  assert.match(source, /grid\.dataset\.adaptiveGridRemainderCount = String\(count % runtimeRowSize\)/u);
+  assert.match(source, /\{ childList:true, subtree:true, attributes:true, attributeFilter:\['hidden'\] \}/u);
 
   assert.match(optimized, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro';/u);
   assert.match(optimized, /legacyOptimizedContract/u);

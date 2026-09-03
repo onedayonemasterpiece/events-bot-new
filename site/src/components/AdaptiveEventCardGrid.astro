@@ -7,6 +7,7 @@ type GridMode = 'flow' | 'packed';
 type MediaTreatment = 'cover' | 'ambient' | 'hybrid';
 type ResponsiveStrategy = 'fixed' | 'progressive' | 'stack';
 type AdaptiveGridLive = 'off' | 'polite' | 'assertive';
+type AdaptiveGridRuntimeSourcePolicy = 'mirror-rendered' | 'initial';
 
 export interface AdaptiveEventCardItemRoot {
   className?: string;
@@ -34,6 +35,8 @@ interface Props {
   rootAttributes?: EventCardRootAttributes;
   itemRoots?: Record<string, AdaptiveEventCardItemRoot>;
   runtimeManaged?: boolean;
+  runtimeVisibleOnly?: boolean;
+  runtimeSourcePolicy?: AdaptiveGridRuntimeSourcePolicy;
   ariaLive?: AdaptiveGridLive;
   ariaAtomic?: boolean;
   ariaBusy?: boolean;
@@ -61,6 +64,8 @@ const {
   rootAttributes = {},
   itemRoots = {},
   runtimeManaged,
+  runtimeVisibleOnly = false,
+  runtimeSourcePolicy: requestedRuntimeSourcePolicy,
   ariaLive,
   ariaAtomic,
   ariaBusy,
@@ -76,7 +81,10 @@ const limit = Math.max(0, Math.floor(Number.isFinite(numericLimit) ? numericLimi
 const responsive: ResponsiveStrategy = requestedResponsive === 'progressive' || requestedResponsive === 'stack' || requestedResponsive === 'fixed'
   ? requestedResponsive
   : responsiveMobile ? 'stack' : 'fixed';
-const runtimeManagedGrid = runtimeManaged ?? personalFeed;
+const runtimeManagedGrid = runtimeManaged ?? (personalFeed || discoveryFeed);
+const runtimeSourcePolicy: AdaptiveGridRuntimeSourcePolicy = requestedRuntimeSourcePolicy === 'initial'
+  ? 'initial'
+  : 'mirror-rendered';
 const gridVariant = `${mode}-${rowSize}-column`;
 const gridBaseState = [
   responsive !== 'fixed' && `responsive-${responsive}`,
@@ -84,6 +92,7 @@ const gridBaseState = [
   personalFeed && 'personal-feed',
   discoveryFeed && 'discovery-feed',
   runtimeManagedGrid && 'runtime-managed',
+  runtimeManagedGrid && runtimeVisibleOnly && 'runtime-visible-only',
 ].filter(Boolean).join(' ') || undefined;
 const resolved = mode === 'packed'
   ? packRelatedCardRows(events, { limit, rowSize, mediaTreatment })
@@ -117,6 +126,8 @@ const ADAPTIVE_ROOT_RESERVED_ATTRIBUTES = new Set([
   'data-adaptive-grid-runtime-bound',
   'data-adaptive-grid-runtime-state',
   'data-adaptive-grid-base-state',
+  'data-adaptive-grid-runtime-visible-only',
+  'data-adaptive-grid-runtime-source-policy',
   'data-row-normalize',
   'data-optimized-event-card-grid',
   'data-lab-row-normalize',
@@ -184,6 +195,8 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
   data-adaptive-grid-runtime-managed={runtimeManagedGrid ? 'true' : undefined}
   data-adaptive-grid-runtime-state={initialRuntimeState}
   data-adaptive-grid-base-state={gridBaseState}
+  data-adaptive-grid-runtime-visible-only={runtimeManagedGrid && runtimeVisibleOnly ? 'true' : undefined}
+  data-adaptive-grid-runtime-source-policy={runtimeManagedGrid ? runtimeSourcePolicy : undefined}
   data-row-normalize={mode === 'packed' ? '' : undefined}
   data-optimized-event-card-grid={legacyOptimizedContract ? '' : undefined}
   data-lab-row-normalize={mode === 'packed' ? '' : undefined}
@@ -218,17 +231,24 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
     root.querySelectorAll('[data-adaptive-event-card-grid][data-adaptive-grid-runtime-managed="true"]').forEach((grid) => {
       if (!(grid instanceof HTMLElement) || grid.dataset.adaptiveGridRuntimeBound === 'true') return;
       grid.dataset.adaptiveGridRuntimeBound = 'true';
+      const visibleOnly = grid.dataset.adaptiveGridRuntimeVisibleOnly === 'true';
+      const sourcePolicy = grid.dataset.adaptiveGridRuntimeSourcePolicy === 'initial'
+        ? 'initial'
+        : 'mirror-rendered';
       const sync = () => {
-        const cards = Array.from(grid.querySelectorAll(':scope > [data-event-card]'))
+        const directCards = Array.from(grid.querySelectorAll(':scope > [data-event-card]'))
           .filter((card) => card instanceof HTMLElement);
+        const cards = visibleOnly ? directCards.filter((card) => !card.hidden) : directCards;
         const order = cards.map((card) => card.dataset.eventId || '').filter(Boolean).join(',');
         const count = cards.length;
         const parsedRowSize = Number.parseInt(grid.dataset.adaptiveGridRowSize || '1', 10);
         const runtimeRowSize = Number.isFinite(parsedRowSize) && parsedRowSize > 0 ? parsedRowSize : 1;
         const runtimeState = count ? 'populated' : 'empty';
-        grid.dataset.adaptiveGridSourceCount = String(count);
+        if (sourcePolicy === 'mirror-rendered') {
+          grid.dataset.adaptiveGridSourceCount = String(count);
+          grid.dataset.adaptiveGridSourceOrder = order;
+        }
         grid.dataset.adaptiveGridRenderedCount = String(count);
-        grid.dataset.adaptiveGridSourceOrder = order;
         grid.dataset.adaptiveGridRenderedOrder = order;
         grid.dataset.adaptiveGridRemainderCount = String(count % runtimeRowSize);
         grid.dataset.adaptiveGridRuntimeState = runtimeState;
@@ -236,7 +256,10 @@ const hasItemRoots = Object.keys(itemRoots).length > 0;
           .filter(Boolean)
           .join(' ');
       };
-      new MutationObserver(sync).observe(grid, { childList:true });
+      const observerOptions = visibleOnly
+        ? { childList:true, subtree:true, attributes:true, attributeFilter:['hidden'] }
+        : { childList:true };
+      new MutationObserver(sync).observe(grid, observerOptions);
       sync();
     });
   }
