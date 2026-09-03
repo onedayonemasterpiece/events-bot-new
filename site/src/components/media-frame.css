@@ -55,3 +55,24 @@
   width: 100%;
   height: 100%;
 }
+
+/* EventMediaRail activates some thumbnail resources only after responsive
+ * layout. Its placeholder load is not success. A declared fallback or a
+ * broken activated resource must expose real fallback anatomy and must not
+ * leave a stale visual/cover image visible behind diagnostics. */
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"] > [data-media-frame-fallback] {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-kind="fallback"] > [data-media-frame-image],
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-resource-state="broken"] > [data-media-frame-image] {
+  visibility: hidden;
+}
+
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-kind="fallback"] > [data-media-frame-fallback],
+[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="media-rail"][data-media-frame-resource-state="broken"] > [data-media-frame-fallback] {
+  display: block;
+}
