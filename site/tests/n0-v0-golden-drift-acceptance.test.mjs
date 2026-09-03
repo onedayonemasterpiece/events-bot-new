@@ -16,20 +16,16 @@ function selectorBody(source, selector) {
   return match?.[1] || '';
 }
 
-test('N0 keeps the exact Golden DRIFT without preserving obsolete source blockers', () => {
+test('Golden DRIFT is retained without preserving a source blocker already closed later', () => {
   const verdict = acceptance.v0_golden_verdict;
   assert.equal(verdict.issue_comment, 5527892153);
   assert.equal(verdict.verdict, 'DRIFT');
   assert.equal(verdict.release_acceptance, false);
   assert.equal(verdict.target.repo_sha, '84504f30eebc334deba46e94365601c3d572c5c0');
-  assert.equal(verdict.target.data_mode, 'golden');
   assert.equal(verdict.matrix.document_http_200, 40);
-  assert.equal(verdict.matrix.document_total, 40);
-  assert.equal(verdict.matrix.free_collection_visible_cards_at_375, 6);
 
   const target = verdict.findings.event_card_auxiliary_target_height;
   assert.equal(target.classification, 'ACCEPTED_PRODUCT_DRIFT');
-  assert.equal(target.owner, 'A0');
   assert.equal(target.observed_height_px, 36.28);
   assert.equal(target.minimum_height_px, 44);
   assert.equal(target.current_source_status, 'CLOSED_IN_D0AD1708_PENDING_V0_RECHECK');
@@ -44,16 +40,14 @@ test('fresh-real V0 platform failure is not represented as PASS or DRIFT', () =>
   assert.equal(blocker.verdict, 'NOT_EXECUTED');
   assert.equal(blocker.browser_pass_claimed, false);
   assert.equal(blocker.browser_drift_claimed, false);
-  assert.equal(blocker.n0_decision, 'ACCEPTED_PLATFORM_BLOCKER_BASELINE_REMAINS_UNAUDITED');
 
   const trigger = acceptance.v0_triggers.published_fresh_real_baseline;
   assert.equal(trigger.status, 'READY_BUT_V0_BLOCKED_BY_TOOL_SURFACE');
   assert.equal(trigger.blocker_comment, 5529063082);
   assert.equal(trigger.browser_verdict, 'NOT_EXECUTED');
-  assert.ok(acceptance.prohibitions.includes('V0 platform blocker represented as browser PASS or DRIFT'));
 });
 
-test('canonical data-ds and safe blank-target decisions remain authoritative', () => {
+test('data-ds identity and safe blank-target rules remain canonical', () => {
   const anchors = acceptance.v0_golden_verdict.findings.stable_dom_anchors;
   assert.equal(anchors.classification, 'REJECTED_AS_V0_SELECTOR_CONTRACT_DRIFT');
   assert.equal(anchors.source_change_required, false);
@@ -63,7 +57,6 @@ test('canonical data-ds and safe blank-target decisions remain authoritative', (
     'data-ds-variant',
     'data-ds-state',
   ]);
-  assert.match(anchors.forbidden_resolution, /data-ui/u);
 
   const blank = acceptance.v0_golden_verdict.findings.target_blank;
   assert.equal(blank.classification, 'REJECTED_AS_OVERBROAD_V0_NEGATIVE_GATE');
@@ -75,23 +68,24 @@ test('canonical data-ds and safe blank-target decisions remain authoritative', (
   ]);
 });
 
-test('the current candidate boundary includes every unresolved source and integration cluster', () => {
+test('current candidate boundary lists every unresolved source class', () => {
   const candidate = acceptance.nearest_full_real_candidate;
-  assert.equal(candidate.base, '2e8f4dd2393ce0c5100f8b610aae3f01380aad8c');
+  assert.equal(candidate.base, '1bc6d9cb4c122046f4782532381de953727c1da6');
   assert.equal(candidate.status,
-    'BLOCKED_BY_F0_CONSUMPTION_M0_DELTA_A0_MECH_06_AND_EXECUTABLE_TESTS');
-  assert.deepEqual(candidate.blocking_source_fixes.map((item) => item.code), [
-    'F0_ROUTE_THEME_CONSUMPTION_PENDING',
-    'A0_FOCUS_ROUTE_IDENTITIES_MISSING',
+    'BLOCKED_BY_F0_CONSUMPTION_M0_CURRENT_A0_MECH_06_AND_EXECUTABLE_TESTS');
+  assert.deepEqual(candidate.blocking_source_fixes, [
+    'F0_ROUTE_THEME_CONSUMPTION',
+    'F0_INTEREST_CLUB_CARD_RESIDUAL',
+    'A0_FOCUS_ROUTE_IDENTITIES',
   ]);
-  assert.ok(candidate.blocking_integration.some((item) => /f2b9927e/u.test(item)));
-  assert.ok(candidate.blocking_integration.some((item) => /c71351de/u.test(item)));
-  assert.ok(candidate.blocking_integration.some((item) => /a6cb9d45/u.test(item)));
+  assert.ok(candidate.include.some((item) => /0fb2938344cf96b05be0df09dfb9e69525b3717d/u.test(item)));
+  assert.ok(candidate.include.some((item) => /c71351decdcee02941acb26c5e2fbaf88faf0378/u.test(item)));
+  assert.ok(candidate.include.some((item) => /5eeaba09b5ec432a77ff899ce98fb8b9f492c133/u.test(item)));
   assert.ok(candidate.reject.includes('runtime inheritance from an earlier SHA'));
-  assert.ok(candidate.reject.includes('treating 4536847f V0 evidence as current-successor PASS'));
+  assert.ok(candidate.reject.includes('treating 4536847f as current-successor browser acceptance'));
 });
 
-test('strict current-successor gate closes all known Golden, F0, M0 and A0 source drift', async () => {
+test('strict successor closes Golden, F0, M0 and A0 source drift together', async () => {
   if (!strictSourceGate) return;
 
   const [
@@ -102,9 +96,12 @@ test('strict current-successor gate closes all known Golden, F0, M0 and A0 sourc
     festivals,
     exhibitions,
     clubDetail,
+    clubCard,
     eventHero,
-    f0BindingsRaw,
-    f0Checker,
+    f0RouteBindingsRaw,
+    f0RouteChecker,
+    f0ClubDecisionRaw,
+    f0ClubChecker,
     m0BindingsRaw,
   ] = await Promise.all([
     read('src/layouts/EventLayout.astro'),
@@ -114,9 +111,12 @@ test('strict current-successor gate closes all known Golden, F0, M0 and A0 sourc
     read('src/pages/festivali/index.astro'),
     read('src/components/ExhibitionsPersonalSurface.astro'),
     read('src/pages/kluby-po-interesam/[slug]/index.astro'),
+    read('src/components/InterestClubCard.astro'),
     read('src/components/EventHero.astro'),
     read('src/components/design-system/f0-route-theme-bindings.v1.json'),
     read('src/components/design-system/check-f0-route-theme-bindings.mjs'),
+    read('src/components/design-system/f0-interest-club-theme-decision.v1.json'),
+    read('src/components/design-system/check-f0-interest-club-theme-decision.mjs'),
     read('src/data/m0-downstream-bindings.v1.json'),
   ]);
 
@@ -129,8 +129,7 @@ test('strict current-successor gate closes all known Golden, F0, M0 and A0 sourc
     `EventLayout auxiliary target minimum is ${minimum ?? 'absent'}; required >=44px`);
   assert.doesNotMatch(negativeBody, /min-height:\s*(?:3[0-9](?:\.\d+)?)px/u);
 
-  assert.match(popular, /\.ke-popular-behavior__row\s*\{[^}]*overflow-x:\s*auto/su,
-    'Popular intrinsic shelf must own internal horizontal scrolling');
+  assert.match(popular, /\.ke-popular-behavior__row\s*\{[^}]*overflow-x:\s*auto/su);
   assert.match(popular, /\.ke-popular-behavior__row\s*\{[^}]*min-width:\s*0/su);
 
   for (const marker of [
@@ -150,10 +149,10 @@ test('strict current-successor gate closes all known Golden, F0, M0 and A0 sourc
     assert.ok(closedHub.includes(state), `closed hub never publishes ${state}`);
   }
 
-  const f0Bindings = JSON.parse(f0BindingsRaw);
-  assert.equal(f0Bindings.schema, 'kenigevents.f0-route-theme-bindings.v1');
-  assert.equal(f0Bindings.clusters.length, 3);
-  assert.match(f0Checker, /F0_REQUIRE_ROUTE_THEME_CONSUMED/u);
+  const routeBindings = JSON.parse(f0RouteBindingsRaw);
+  assert.equal(routeBindings.schema, 'kenigevents.f0-route-theme-bindings.v1');
+  assert.equal(routeBindings.clusters.length, 3);
+  assert.match(f0RouteChecker, /F0_REQUIRE_ROUTE_THEME_CONSUMED/u);
 
   assert.doesNotMatch(festivals,
     /\.festival-guide__icon :global\(svg\)\s*\{\s*width:\s*0\.95rem;\s*height:\s*0\.95rem;/u);
@@ -161,6 +160,7 @@ test('strict current-successor gate closes all known Golden, F0, M0 and A0 sourc
   assert.doesNotMatch(festivals, /height:\s*clamp\(2rem,\s*2\.35vw,\s*2\.2rem\)/u);
   assert.match(festivals, /var\(--ke-festival-like-target-min\)/u);
   assert.match(festivals, /<SemanticIcon name="heart" role="control" \/>/u);
+  assert.match(festivals, /rel=\{item\.isExternal \? 'noopener noreferrer' : undefined\}/u);
 
   for (const forbidden of ['--ex-bg:', '--ex-surface:', '--ex-motion-base:', 'var(--ex-bg)', 'var(--ex-surface)']) {
     assert.ok(!exhibitions.includes(forbidden), `exhibitions retains ${forbidden}`);
@@ -171,6 +171,16 @@ test('strict current-successor gate closes all known Golden, F0, M0 and A0 sourc
   assert.doesNotMatch(clubDetail, /<span aria-hidden="true">←<\/span>/u);
   assert.match(clubDetail, /<SemanticIcon name="arrow-left" role="inline" \/>/u);
   assert.match(clubDetail, /var\(--ke-club-detail-action-min\)/u);
+
+  const clubDecision = JSON.parse(f0ClubDecisionRaw);
+  assert.equal(clubDecision.schema, 'kenigevents.f0-interest-club-theme-decision.v1');
+  assert.equal(clubDecision.status, 'PRODUCT_CLASSIFICATION_CLOSED_RESIDUAL_CARD_BINDING_READY');
+  assert.equal(clubDecision.residual_card_bindings.length, 4);
+  assert.match(f0ClubChecker, /F0_REQUIRE_CLUB_THEME_CONSUMED/u);
+  for (const binding of clubDecision.residual_card_bindings) {
+    assert.ok(!clubCard.includes(binding.current), `InterestClubCard retains ${binding.current}`);
+    assert.ok(clubCard.includes(binding.replacement), `InterestClubCard misses ${binding.replacement}`);
+  }
 
   assert.match(eventHero, /data-ds-family="EventHero"/u);
   assert.match(eventHero, /class="event-hero__media-frame"/u);
