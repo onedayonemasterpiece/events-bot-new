@@ -38,7 +38,8 @@ test('desktop similar cards use the same discovery controller and broad hydratio
   ]);
   const layout = await read('src/layouts/EventLayout.astro');
   assert.match(desktop, /data-related-start[\s\S]*<OptimizedEventCardGrid/u);
-  assert.match(optimizedGrid, /discoveryFeed=\{!responsiveMobile\}[\s\S]*discoverySrc=\{discoverySrc\}/u);
+  assert.match(optimizedGrid, /discoverySrc=\{discoverySrc\}/u);
+  assert.match(optimizedGrid, /discoveryFeed=\{!responsiveMobile\}/u);
   assert.match(optimizedGrid, /import AdaptiveEventCardGrid from '\.\/AdaptiveEventCardGrid\.astro'/u);
   assert.doesNotMatch(optimizedGrid, /data-discovery-feed=\{!responsiveMobile/u);
   assert.match(layout, /personalFeedHydrationInFlight = new WeakSet\(\)/u);
