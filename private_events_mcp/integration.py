@@ -11,6 +11,8 @@ from aiohttp import web
 from .chatgpt_refresh_policy import install_chatgpt_refresh_policy
 from .config import PrivateEventsMCPConfig
 from .media_contract import AssetIngestor
+from .event_create import EventCreateRuntime
+from .event_create_adapter import MainEventCreateExecutor
 from .queue_read import attach_owner_queue_observability
 from .server import (
     ENDPOINT_FINGERPRINT_APP_KEY,
@@ -89,6 +91,7 @@ def attach_private_events_mcp(
     social_adapters: Mapping[str, SocialAdapter] | None = None,
     social_workspace_adapters: Mapping[str, SocialWorkspaceAdapter] | None = None,
     asset_ingestor: AssetIngestor | None = None,
+    event_database: Any | None = None,
 ) -> PrivateEventsMCPServer | None:
     """Attach the private MCP routes to the existing aiohttp app.
 
@@ -104,11 +107,23 @@ def attach_private_events_mcp(
     if SERVER_APP_KEY in app:
         return app[SERVER_APP_KEY]
     _install_access_log_redaction(resolved)
+    event_create_runtime = None
+    if resolved.event_create_enabled:
+        if event_database is None:
+            raise ValueError(
+                "event create requires the canonical EventsBot Database instance"
+            )
+        event_create_runtime = EventCreateRuntime(
+            config=resolved,
+            database=event_database,
+            executor=MainEventCreateExecutor(event_database),
+        )
     server = PrivateEventsMCPServer(
         resolved,
         social_adapters=social_adapters,
         social_workspace_adapters=social_workspace_adapters,
         asset_ingestor=asset_ingestor,
+        event_create_runtime=event_create_runtime,
     )
     # R0 deliberately extends only the owner ChatGPT/OpenCode descriptor and
     # handler for the existing operations_snapshot tool. The Codex protocol,
@@ -137,6 +152,11 @@ def attach_private_events_mcp(
         if audio_service is not None and server.social_workspace is not None:
             server.social_workspace.enable_audio_transcription(audio_service)
     server.register(app)
+    if event_create_runtime is not None:
+        async def _shutdown_event_create(_app: web.Application) -> None:
+            await event_create_runtime.shutdown()
+
+        app.on_cleanup.append(_shutdown_event_create)
     logger.info(
         "private_events_mcp attached endpoint_fingerprint=%s mode=%s",
         app.get(ENDPOINT_FINGERPRINT_APP_KEY, "unknown"),
