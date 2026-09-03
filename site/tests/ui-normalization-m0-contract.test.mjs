@@ -183,15 +183,17 @@ test('current DesktopEventPage rail consumers are either migrated or fully cover
   }
 });
 
-test('M0 source remains inside contract v1.8.0 assigned card/media roots', async () => {
+test('M0 source and regression surfaces match contract v1.9.0 assignments', async () => {
   const files = [
     'src/lib/relatedCardLayout.mjs',
     'src/components/OptimizedEventCardGrid.astro',
     'src/components/AdaptiveEventCardGrid.astro',
     'src/components/EventCard.astro',
     'src/components/listings/ListingEventCard.astro',
+    'src/components/listings/MobileListingRailRow.astro',
     'src/components/EventMediaRail.astro',
     'src/components/media-frame.css',
+    'scripts/check-preview.mjs',
   ];
   await Promise.all(files.map(read));
 });
