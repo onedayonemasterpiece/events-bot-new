@@ -46,10 +46,37 @@ const pwaServiceWorkerScope = withBase('/');
       }
     </script>
   </head>
-  <body>
+  <body
+    data-ds-family="FocusGroupInviteRouteComposition"
+    data-ds-version="1"
+    data-ds-variant="pwa-membership"
+    data-ds-state="pending"
+  >
     <PersonalizationRuntime />
     <FocusGroupInviteIntake />
     <StaticSiteAuthRuntime />
+    <script>
+      const routeRoot = document.body;
+      const intakeRoot = document.querySelector('[data-focus-intake]');
+      if (intakeRoot instanceof HTMLElement) {
+        const syncRouteState = () => {
+          const error = intakeRoot.querySelector('[data-intake-error]:not([hidden])');
+          const stage = intakeRoot.querySelector('[data-intake-stage]:not([hidden])');
+          const pending = intakeRoot.querySelector('[data-intake-pending]:not([hidden])');
+          routeRoot.dataset.dsState = error
+            ? 'error'
+            : stage instanceof HTMLElement
+              ? String(stage.dataset.intakeStage || 'active')
+              : pending ? 'pending' : 'resolving';
+        };
+        new MutationObserver(syncRouteState).observe(intakeRoot, {
+          subtree:true,
+          attributes:true,
+          attributeFilter:['hidden'],
+        });
+        syncRouteState();
+      }
+    </script>
   </body>
 </html>
 
