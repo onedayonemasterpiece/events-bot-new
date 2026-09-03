@@ -91,6 +91,7 @@ test('strict successor closes Golden, F0, M0 and A0 source drift together', asyn
   const [
     layout,
     popular,
+    popularStyles,
     focusCollection,
     closedHub,
     festivals,
@@ -106,6 +107,7 @@ test('strict successor closes Golden, F0, M0 and A0 source drift together', asyn
   ] = await Promise.all([
     read('src/layouts/EventLayout.astro'),
     read('src/components/listings/PopularListingSurface.astro'),
+    read('src/styles/design-system.css'),
     read('src/pages/fokus-gruppa/kollektsiya/index.astro'),
     read('src/pages/zakrytaya-afisha/index.astro'),
     read('src/pages/festivali/index.astro'),
@@ -129,8 +131,9 @@ test('strict successor closes Golden, F0, M0 and A0 source drift together', asyn
     `EventLayout auxiliary target minimum is ${minimum ?? 'absent'}; required >=44px`);
   assert.doesNotMatch(negativeBody, /min-height:\s*(?:3[0-9](?:\.\d+)?)px/u);
 
-  assert.match(popular, /\.ke-popular-behavior__row\s*\{[^}]*overflow-x:\s*auto/su);
-  assert.match(popular, /\.ke-popular-behavior__row\s*\{[^}]*min-width:\s*0/su);
+  assert.match(popular, /<PopularBehaviorRows groups=\{desktop\.groups\}>/u);
+  assert.match(popularStyles, /\.ke-popular-behavior__row\s*\{[^}]*overflow-x:\s*auto/su);
+  assert.match(popularStyles, /\.ke-popular-behavior__row\s*\{[^}]*min-width:\s*0/su);
 
   for (const marker of [
     'data-ds-family="FocusEggCollectionRouteComposition"',
