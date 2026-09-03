@@ -1,0 +1,107 @@
+{
+  "schema": "kenigevents.f0-festival-semantic-separation.v1",
+  "version": "1.0.0",
+  "contract_version": "1.10.0",
+  "status": "F0_CORRECTION_REQUIRED_BEFORE_A0_CLOSURE_ACCEPTANCE",
+  "role": "F0",
+  "consumer": "site/src/pages/festivali/index.astro",
+  "route": "/festivali/",
+  "a0_closure_packet": {
+    "branch": "work/ui-normalization-a0-wave-3-20260903",
+    "commit": "5e66444b20a0c4b90004a895345a5c8389ec8530",
+    "script": "site/scripts/apply-a0-current-successor-consumer-closure.mjs",
+    "decision": "DRIFT_REQUIRES_CONTEXT_SCOPED_REPLACEMENT",
+    "unsafe_pattern": "replaceAll of background rgba(165,72,33,0.1) with --ke-color-festival-guide-like-surface"
+  },
+  "finding": {
+    "raw_value": "rgba(165, 72, 33, 0.1)",
+    "current_occurrence_roles": [
+      {
+        "selector": ".festival-guide__icon--heart",
+        "semantic_role": "guide-like action cue",
+        "token": "--ke-color-festival-guide-like-surface"
+      },
+      {
+        "selector": ".festival-month__categories li",
+        "semantic_role": "editorial festival taxonomy identity container",
+        "token": "--ke-color-festival-category-surface"
+      }
+    ],
+    "same_current_value": true,
+    "same_semantic_role": false,
+    "merge_allowed": false,
+    "reason": "Exact visual equality does not make an action cue and an editorial taxonomy container the same semantic owner. The retained festival identity-asset exception requires independent variable bindings."
+  },
+  "foundation_authority": {
+    "guide_token_owner": "site/src/components/design-system/route-theme-foundations.css",
+    "category_token_owner": "site/src/components/design-system/route-theme-foundations.css",
+    "guide_token": "--ke-color-festival-guide-like-surface",
+    "category_token": "--ke-color-festival-category-surface",
+    "current_value_equivalence_is_intentional": true,
+    "future_palette_coupling": false
+  },
+  "required_consumer_state": {
+    "guide_selector": ".festival-guide__icon--heart",
+    "guide_declaration": "background: var(--ke-color-festival-guide-like-surface);",
+    "category_selector": ".festival-month__categories li",
+    "category_declaration": "background: var(--ke-color-festival-category-surface);",
+    "forbidden": [
+      ".festival-month__categories li using --ke-color-festival-guide-like-surface",
+      ".festival-guide__icon--heart using --ke-color-festival-category-surface",
+      "a global raw-value replacement that cannot distinguish the two selectors"
+    ]
+  },
+  "a0_correction_boundary": {
+    "owner": "A0",
+    "allowed": [
+      "replace the guide-heart declaration in its exact selector block",
+      "replace the category-container declaration in its exact selector block",
+      "retain both tokens even while their current values are equal",
+      "keep the rest of the executable closure packet unchanged when its postconditions still pass"
+    ],
+    "forbidden": [
+      "global replacement of the shared raw value",
+      "renaming category identity assets into action icons",
+      "merging the two Penpot/thin-S variables",
+      "changing any route copy, timeline packing, category masks or favorite behavior"
+    ]
+  },
+  "strict_gate": {
+    "command": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "checks": [
+      "both semantic tokens have exactly one F0 declaration owner",
+      "both tokens retain equal current computed source values without aliasing one to the other",
+      "the exact consumer selector blocks use their respective tokens",
+      "the executable A0 closure script contains no unsafe global guide-token replacement"
+    ]
+  },
+  "browser_expectations": [
+    "guide-heart and category containers remain pixel-equivalent to the pre-normalization route",
+    "matched style owners resolve to distinct semantic variables",
+    "category mask assets remain editorial identity media and do not create a fifth icon role"
+  ],
+  "thin_s_binding": {
+    "guide": "festival.guide.like.surface",
+    "category": "festival.category.identity.surface",
+    "must_remain_distinct": true
+  },
+  "penpot_binding": {
+    "collection": "F0 / Festivals theme",
+    "guide_variable": "festival.guide.like.surface",
+    "category_variable": "festival.category.identity.surface",
+    "same_current_value_allowed": true,
+    "variable_aliasing_forbidden": true
+  },
+  "rollback": {
+    "unit": "F0-RB-FESTIVAL-SEMANTIC-SEPARATION",
+    "trigger": "strict source failure, selector misbinding, or visual drift",
+    "action": "revert only the two context-scoped consumer substitutions and this addendum/token; preserve all other accepted festival, F0, A0, successor and immutable-preview state"
+  },
+  "claims_not_made": [
+    "A0 closure packet is corrected",
+    "consumer uses the category token",
+    "strict gate passed",
+    "a post-correction preview exists",
+    "V0 accepted the distinction"
+  ]
+}

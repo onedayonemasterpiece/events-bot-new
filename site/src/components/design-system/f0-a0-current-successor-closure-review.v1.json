@@ -1,0 +1,196 @@
+{
+  "schema": "kenigevents.f0-a0-current-successor-closure-review.v1",
+  "version": "1.0.0",
+  "status": "PARTIALLY_ACCEPTED_WITH_TWO_F0_BLOCKING_CORRECTIONS",
+  "role": "F0",
+  "contract_version": "1.10.0",
+  "reviewed_a0": {
+    "branch": "work/ui-normalization-a0-wave-3-20260903",
+    "head": "93acd4b8853d99dbd03b492c63d0cb2282a5fcc9",
+    "script_commit": "5e66444b20a0c4b90004a895345a5c8389ec8530",
+    "test_commit": "93acd4b8853d99dbd03b492c63d0cb2282a5fcc9",
+    "script": "site/scripts/apply-a0-current-successor-consumer-closure.mjs",
+    "test": "site/tests/a0-current-successor-consumer-closure.test.mjs",
+    "execution_claimed": false
+  },
+  "path_decisions": [
+    {
+      "path": "site/src/components/InterestClubCard.astro",
+      "decision": "ACCEPT_BOUNDED_NET_PATCH",
+      "acceptance": "site/src/components/design-system/f0-a0-club-card-consumption-acceptance.v1.json",
+      "required_f0_source": "0fb2938344cf96b05be0df09dfb9e69525b3717d"
+    },
+    {
+      "path": "site/src/pages/kluby-po-interesam/[slug]/index.astro",
+      "decision": "ACCEPT_BOUNDED_NET_PATCH",
+      "acceptance": "site/src/components/design-system/f0-a0-club-detail-consumption-acceptance.v1.json",
+      "required_f0_source": "0fb2938344cf96b05be0df09dfb9e69525b3717d"
+    },
+    {
+      "path": "site/src/pages/festivali/index.astro",
+      "decision": "REJECT_CURRENT_SCRIPT_UNTIL_CONTEXT_SCOPED_SEMANTIC_REPLACEMENT",
+      "blocking_finding": "the script globally maps every rgba(165,72,33,0.1) occurrence to --ke-color-festival-guide-like-surface even though the guide-heart cue and editorial category container are distinct roles",
+      "required_correction": {
+        "guide_selector": ".festival-guide__icon--heart",
+        "guide_token": "--ke-color-festival-guide-like-surface",
+        "category_selector": ".festival-month__categories li",
+        "category_token": "--ke-color-festival-category-surface",
+        "global_raw_value_replacement_forbidden": true
+      },
+      "accepted_subset_after_correction": [
+        "SemanticIcon heart/control for both visible favorite controls",
+        "SemanticIcon link/control and calendar/control in the guide",
+        "removal of local SVG width/height selectors for those UI glyphs",
+        "44px favorite target role",
+        "safe external noopener noreferrer relation",
+        "route family/version/variant/state and foundation-consumer diagnostics"
+      ],
+      "strict_gate": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+      "rollback_unit": "F0-RB-FESTIVAL-SEMANTIC-SEPARATION"
+    },
+    {
+      "path": "site/src/components/ExhibitionsPersonalSurface.astro",
+      "decision": "REJECT_CURRENT_SCRIPT_AS_SELF_CONTRADICTORY_AND_F0_INCOMPLETE",
+      "blocking_findings": [
+        "postcondition assert.ok(!source.includes('--ex-')) rejects intentional runtime layout variables --ex-media-column, --ex-row-gap, --ex-surface-start and --ex-rail-color that the transform preserves",
+        "the transform does not consume already-published kbd, mode, sticky, glow, timeline, row-elevation and medallion fallback F0 tokens",
+        "the transform leaves 14px, 18px, 19px and 21px local SVG dimensions instead of inline/control roles",
+        "the gallery retains text arrow glyph duplicates instead of canonical SemanticIcon arrow-left/right control identities",
+        "removing the private root palette alone does not eliminate the remaining raw visible dark-surface, state, gallery, toast and depth values"
+      ],
+      "required_runtime_variable_classification": {
+        "retain_as_local_layout_state": [
+          "--ex-media-column",
+          "--ex-row-gap",
+          "--ex-surface-start",
+          "--ex-rail-color"
+        ],
+        "remove_as_private_theme_or_motion_owner": [
+          "--ex-bg",
+          "--ex-surface",
+          "--ex-raised",
+          "--ex-border",
+          "--ex-text",
+          "--ex-muted",
+          "--ex-blue",
+          "--ex-orange",
+          "--ex-red",
+          "--ex-gray",
+          "--ex-yellow",
+          "--ex-purple",
+          "--ex-green",
+          "--ex-ease-cinematic",
+          "--ex-ease-emphasis",
+          "--ex-motion-fast",
+          "--ex-motion-base"
+        ]
+      },
+      "required_icon_bindings": [
+        {
+          "consumer": ".ex-discussed svg",
+          "role": "inline",
+          "token": "--ke-exhibitions-signal-icon-size"
+        },
+        {
+          "consumer": ".ex-signal svg",
+          "role": "inline",
+          "token": "--ke-exhibitions-signal-icon-size"
+        },
+        {
+          "consumer": ".ex-action svg",
+          "role": "control",
+          "token": "--ke-exhibitions-action-icon-size"
+        },
+        {
+          "consumer": ".ex-action--like svg",
+          "role": "control",
+          "token": "--ke-exhibitions-action-icon-size"
+        },
+        {
+          "consumer": ".ex-action--reject svg",
+          "role": "control",
+          "token": "--ke-exhibitions-action-icon-size"
+        },
+        {
+          "consumer": "[data-gallery-prev]",
+          "component": "SemanticIcon",
+          "name": "arrow-left",
+          "role": "control"
+        },
+        {
+          "consumer": "[data-gallery-next]",
+          "component": "SemanticIcon",
+          "name": "arrow-right",
+          "role": "control"
+        }
+      ],
+      "already_published_tokens_that_must_be_consumed": [
+        "--ke-color-exhibitions-kbd-line",
+        "--ke-color-exhibitions-kbd-line-strong",
+        "--ke-color-exhibitions-kbd-surface",
+        "--ke-color-exhibitions-kbd-text",
+        "--ke-color-exhibitions-kbd-shadow",
+        "--ke-color-exhibitions-mode-surface",
+        "--ke-color-exhibitions-mode-selected-line",
+        "--ke-color-exhibitions-sticky-surface",
+        "--ke-color-exhibitions-blue-glow",
+        "--ke-color-exhibitions-orange-glow",
+        "--ke-color-exhibitions-timeline-mid",
+        "--ke-color-exhibitions-timeline-end",
+        "--ke-color-exhibitions-row-start",
+        "--ke-color-exhibitions-row-end",
+        "--ke-elevation-exhibitions-row",
+        "--ke-elevation-exhibitions-row-hover",
+        "--ke-elevation-exhibitions-row-keyboard",
+        "--ke-color-exhibitions-medallion-fallback-surface",
+        "--ke-color-exhibitions-medallion-fallback-ring"
+      ],
+      "strict_gate": "F0_REQUIRE_ROUTE_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+      "rollback_unit": "F0-RB-EXHIBITIONS-THEME"
+    },
+    {
+      "path": "site/src/pages/fokus-gruppa/kollektsiya/index.astro",
+      "decision": "OUTSIDE_F0_VISUAL_ACCEPTANCE_EXCEPT_DIAGNOSTIC_IDENTITY",
+      "owner": "A0",
+      "f0_objection": null
+    },
+    {
+      "path": "site/src/pages/zakrytaya-afisha/index.astro",
+      "decision": "OUTSIDE_F0_VISUAL_ACCEPTANCE_EXCEPT_DIAGNOSTIC_IDENTITY",
+      "owner": "A0",
+      "f0_objection": null
+    }
+  ],
+  "executable_regression_contract": {
+    "path": "site/src/components/design-system/check-f0-route-theme-bindings.mjs",
+    "f0_commit": "d3e36f84de0fa58cb72d494d00cea5c67d54bdff",
+    "new_negative_controls": [
+      "reject the unsafe global festival replacement",
+      "reject the blanket exhibitions --ex-* postcondition",
+      "require explicit retention of four runtime layout variables",
+      "require every already-published central exhibitions binding",
+      "reject local raw SVG dimensions",
+      "require canonical gallery navigation SVG identities"
+    ]
+  },
+  "r0_materialization_boundary": {
+    "whole_script_currently_accepted": false,
+    "safe_to_apply_now": [
+      "InterestClubCard bounded net patch",
+      "club-detail bounded net patch"
+    ],
+    "must_not_apply_as_completed_closure": [
+      "current festivals transform",
+      "current exhibitions transform"
+    ],
+    "next_acceptance_requires": "A0 corrects both exact F0 findings, then F0 reviews the new script/head before R0 applies the packet"
+  },
+  "claims_not_made": [
+    "the A0 script or tests were executed",
+    "the current script is safe as a whole",
+    "festivals or exhibitions are source-converged",
+    "strict F0 route-theme gate passes",
+    "a post-consumption preview exists",
+    "V0 accepted these routes"
+  ]
+}

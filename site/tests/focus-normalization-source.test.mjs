@@ -74,6 +74,8 @@ test('focus PWA and lab badge consume central brand and surface roles', async ()
     '--ke-focus-lab-icon-size',
     '--ke-focus-lab-icon-size-hero',
   ]) assert.match(badge, new RegExp(token, 'u'));
+  assert.match(badge, /import '\.\/design-system\/product-contour-foundations\.css';/u);
+  assert.match(badge, /import '\.\/design-system\/component-foundations\.css';/u);
   assert.match(badge, /data-ds-family="FocusLabBadge"/u);
   assert.match(badge, /data-ds-version="1"/u);
 });
@@ -104,9 +106,14 @@ test('focus invite intake consumes the central focus roles and canonical success
     '--ke-color-border-prize',
     '--ke-color-focus-consent-surface',
     '--ke-focus-otp-cell-size',
-    '--ke-focus-intake-check-icon-size',
     '--ke-focus-intake-spinner-size',
   ]) assert.match(intake, new RegExp(token, 'u'));
+
+  assert.doesNotMatch(
+    intake,
+    /--ke-focus-intake-check-icon-size/u,
+    'the feature icon role, not the intake consumer, owns success-icon sizing',
+  );
 
   assert.doesNotMatch(
     intake,

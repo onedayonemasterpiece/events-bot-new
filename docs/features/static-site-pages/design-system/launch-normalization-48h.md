@@ -623,3 +623,40 @@ census — `19/19`. Это только source-level convergence: V0 browser cre
 Penpot materialization не заявляются. Новый exact SHA замораживается только
 после N0 integration и полного test/build checkpoint; затем тот же canonical
 Kaggle runner публикует новый full `real/all` immutable preview.
+
+## 19. Public successor smoke and focus badge registry closure (2026-09-03)
+
+Для source `7f4d04b7...` canonical Kaggle rail опубликовал immutable full
+`real/all` preview
+`/preview-real-7f4d04b7-normalized-20260903-v1/__preview/`. Публичные
+изолированные матрицы прошли `176/176` и `77/77`: HTTP, document overflow,
+console/request failures, MediaFrame fit/escape, nested interactive и targets
+ниже 44px не обнаружены на их 11 route-наборах.
+
+Дополнительный route-identity probe включил standalone focus routes, которых
+не было в этих 11 routes, и воспроизвёл overflow коллекции на 375px. Причина
+не относится к июльской композиции: недавняя нормализация `FocusLabBadge`
+заменила локальные размеры на roles из `surface-foundations.css`, но consumer
+импортировал только `product-contour-foundations.css`. Неразрешённые размеры
+оставляли intrinsic 800px SVG владельцем ширины.
+
+Механическое исправление сохраняет badge anatomy и palette: consumer теперь
+загружает также canonical `component-foundations.css`, который является
+публичным entry point для `surface-foundations.css`. Source regression требует
+оба registry imports; размер success icon в invite intake по-прежнему
+принадлежит canonical `feature` role, а не локальному selector.
+
+После следующего fresh-read интегрирована точная F0 source boundary
+`4709dc231...`, а A0 closure из tip `dc7b722ec...` применён только к шести
+заявленным consumer paths, без merge divergent A0 branch и без записи в
+F0/FR0/M0 roots. Идемпотентный check сообщает `changed:false` для всех шести
+путей. Строгий route-theme gate подтверждает semantic separation festival
+guide/taxonomy, ровно четыре exhibitions runtime variables, 20 обязательных
+central bindings и canonical gallery arrows; club-theme gate также проходит.
+
+FR0 batches through `85d443046...` интегрированы отдельным ancestry merge.
+`EventMediaRail` теперь fail-closed переводит network-broken resource в
+`fallback/contain/crop-forbidden`, а настоящий fallback child принадлежит
+canonical MediaFrame. Clipping изображения и fallback также имеет одного
+владельца — внутренний MediaFrame; внешний rail button сохраняет только
+interaction, sizing и radius, без дублирующего `overflow:hidden`.

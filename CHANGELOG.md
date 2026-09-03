@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+- Fixed: integrated the FR0 EventMediaRail fallback and clip-ownership batches.
+  Broken rail resources now fail closed to the canonical non-interactive
+  fallback with `contain` and forbidden crop diagnostics, while the nested
+  MediaFrame is the sole image/fallback clipping owner; outer controls retain
+  interaction, sizing and radius behavior.
+
+- Changed: materialized the bounded A0 six-consumer closure against the exact
+  accepted F0 route-theme boundary. Festival guide and taxonomy surfaces now
+  have distinct semantic tokens; exhibitions retain only four runtime layout
+  variables while consuming the complete central palette/elevation/icon set
+  and canonical gallery arrows. The transform is idempotent and does not write
+  F0, FR0 or M0 roots.
+
+- Fixed: `FocusLabBadge` now loads the canonical component/surface token
+  registry alongside the product contour. This resolves an undefined-token
+  regression introduced during normalization that let the lab-flask SVG use
+  its 800px intrinsic width on the standalone focus collection route; badge
+  anatomy, palette and the July presentation composition are unchanged.
+
 - Changed: integrated the accepted F0 route-theme and interest-club residual
   foundations plus the current M0 source/downstream ancestry. Exhibitions,
   festivals, interest-club detail and `InterestClubCard` now consume their

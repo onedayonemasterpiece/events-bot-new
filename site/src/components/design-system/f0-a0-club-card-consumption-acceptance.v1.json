@@ -1,0 +1,88 @@
+{
+  "schema": "kenigevents.f0-a0-club-card-consumption-acceptance.v1",
+  "version": "1.0.0",
+  "status": "ACCEPTED_PATCH_REQUIRES_F0_SOURCE_AND_SUCCESSOR_INTEGRATION",
+  "role": "F0",
+  "contract_version": "1.10.0",
+  "a0": {
+    "branch": "work/ui-normalization-a0-wave-3-20260903",
+    "commit": "29538035d94a15adac9fd8ee7463ece87c8d1033",
+    "parent": "61d340a3ca291f074289d2292b33f56b2bad8a22",
+    "message": "refactor(ui): consume club card continuity tokens",
+    "path": "site/src/components/InterestClubCard.astro"
+  },
+  "f0_source": {
+    "required_commit": "0fb2938344cf96b05be0df09dfb9e69525b3717d",
+    "foundation": "site/src/components/design-system/interest-club-card-continuity-foundations.css",
+    "decision": "site/src/components/design-system/f0-interest-club-theme-decision.v1.json",
+    "checker": "site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+    "registry_import": "site/src/components/design-system/product-contour-foundations.css"
+  },
+  "accepted_substitutions": [
+    {
+      "from": "rgba(255,255,255,.035)",
+      "to": "var(--ke-color-club-card-fallback-orbit-ring-inner)"
+    },
+    {
+      "from": "rgba(255,255,255,.025)",
+      "to": "var(--ke-color-club-card-fallback-orbit-ring-outer)"
+    },
+    {
+      "from": "rgba(255,255,255,.3)",
+      "to": "var(--ke-color-club-card-fallback-orbit-line)"
+    },
+    {
+      "from": "rgba(255,255,255,.24)",
+      "to": "var(--ke-color-club-card-fact-divider)"
+    }
+  ],
+  "review": {
+    "all_four_exact_substitutions_present": true,
+    "other_component_lines_changed": false,
+    "family_anatomy_changed": false,
+    "user_facing_behavior_changed": false,
+    "icon_role_changed": false,
+    "route_palette_collapsed_into_card_palette": false,
+    "classification": "SAFE_EXACT_A0_CONSUMPTION_PATCH"
+  },
+  "standalone_boundary": {
+    "a0_branch_contains_required_f0_foundation": false,
+    "a0_branch_contains_required_product_contour_registry": false,
+    "a0_head_is_standalone_build_candidate": false,
+    "whole_a0_branch_merge_allowed": false,
+    "reason": "The A0 branch is divergent patch material. The four var() references require F0 source 0fb2938 on the integration target."
+  },
+  "integration": {
+    "owner": "R0",
+    "base": "agent/static-site-single-kaggle-contract@1bc6d9cb4c122046f4782532381de953727c1da6 or current descendant",
+    "sequence": [
+      "materialize F0-owned source through 0fb2938344cf96b05be0df09dfb9e69525b3717d",
+      "apply the net patch from A0 commit 29538035d94a15adac9fd8ee7463ece87c8d1033",
+      "preserve later successor copies of all unrelated consumers",
+      "run the default and strict club-theme checks",
+      "include the exact tested result in the next canonical full fresh-real Kaggle build"
+    ],
+    "strict_command": "F0_REQUIRE_CLUB_THEME_CONSUMED=1 node site/src/components/design-system/check-f0-interest-club-theme-decision.mjs",
+    "expected_strict_state": "route_state=CENTRALIZED; card_residual_state=CENTRALIZED; icon_role_count=4"
+  },
+  "rollback": {
+    "unit": "F0-RB-INTEREST-CLUB-CARD-THEME",
+    "trigger": "missing token, strict gate failure, computed palette drift or component behavior change",
+    "action": "revert only the four A0 substitutions and/or omit the F0 residual source unit; preserve primary InterestClubCard theme, successor source and immutable previews"
+  },
+  "backlog_effect": {
+    "f0_decision_item_closed": true,
+    "a0_consumer_analysis_item_closed": true,
+    "source_integration_item_owner": "R0",
+    "runtime_test_item_owner": "R0",
+    "browser_item_owner": "V0",
+    "remaining_f0_owned_item": false
+  },
+  "claims_not_made": [
+    "A0 patch is integrated into the source successor",
+    "required F0 tokens resolve on the A0 branch by itself",
+    "strict gate passed",
+    "a fresh-real build contains the patch",
+    "V0 accepted the card palette"
+  ]
+}
