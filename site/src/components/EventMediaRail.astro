@@ -76,17 +76,28 @@ const finitePositive = (value: number | null | undefined) => (
 const finiteIndex = (value: number | null | undefined, fallback: number) => (
   Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.floor(Number(value)) : fallback
 );
+const normalizedMediaUrl = (value: string | null | undefined) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^(?:data|blob):/iu.test(raw)) return raw;
+  return eventImageUrl(raw) || raw;
+};
+const normalizedThumbnailSources = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
+  .map((item) => ({
+    src: normalizedMediaUrl(item.src),
+    width: finitePositive(item.width),
+    height: finitePositive(item.height),
+  }))
+  .filter((item): item is { src: string; width: number; height: number } => Boolean(item.src && item.width && item.height))
+  .sort((left, right) => left.width - right.width);
 const normalizedObjectPosition = (value: string | null | undefined) => {
   const raw = String(value || '').trim();
   return /^[a-z0-9.%\s-]+$/iu.test(raw) ? raw : '50% 50%';
 };
-const thumbnail = (asset: EventImageAsset) => {
-  const derivatives = [...(asset.thumbnail_sources || [])].sort((left, right) => left.width - right.width);
-  return derivatives[0]?.src || eventImageUrl(asset.src) || asset.src;
-};
-const srcset = (asset: EventImageAsset) => (asset.thumbnail_sources || [])
-  .slice()
-  .sort((left, right) => left.width - right.width)
+const thumbnail = (asset: EventImageAsset) => (
+  normalizedThumbnailSources(asset)[0]?.src || normalizedMediaUrl(asset.src)
+);
+const srcset = (asset: EventImageAsset) => normalizedThumbnailSources(asset)
   .map((item) => `${item.src} ${item.width}w`)
   .join(', ');
 const mediaFrameKind = (asset: EventImageAsset): EventMediaRailFrameKind => {
@@ -119,8 +130,13 @@ const normalizedResolvedItem = (item: EventMediaRailItem, index: number): Normal
   const height = finitePositive(item.height);
   const sourceRatio = mediaFrameSourceRatio(width, height);
   const railRatio = finitePositive(item.railRatio) || sourceRatio;
+  const src = normalizedMediaUrl(item.src);
+  const thumbnailSrc = normalizedMediaUrl(item.thumbnailSrc) || src;
   return {
     ...item,
+    src,
+    thumbnailSrc,
+    thumbnailSrcset: String(item.thumbnailSrcset || '').trim() || undefined,
     kind,
     fit,
     width,
@@ -137,12 +153,12 @@ const normalizedResolvedItem = (item: EventMediaRailItem, index: number): Normal
   };
 };
 const normalizedGalleryItem = (asset: EventImageAsset, index: number): NormalizedRailItem => {
-  const derivatives = [...(asset.thumbnail_sources || [])].sort((left, right) => left.width - right.width);
+  const derivatives = normalizedThumbnailSources(asset);
   const width = finitePositive(asset.width);
   const height = finitePositive(asset.height);
   return {
     asset,
-    src: eventImageUrl(asset.src) || asset.src,
+    src: normalizedMediaUrl(asset.src),
     thumbnailSrc: thumbnail(asset),
     thumbnailSrcset: srcset(asset) || undefined,
     thumbnailWidth: finitePositive(derivatives[0]?.width) || width,
@@ -163,9 +179,11 @@ const normalizedGalleryItem = (asset: EventImageAsset, index: number): Normalize
   };
 };
 
-const normalizedItems = variant === 'gallery-thumbnails'
+const normalizedCandidates = variant === 'gallery-thumbnails'
   ? assets.map(normalizedGalleryItem)
   : items.map(normalizedResolvedItem);
+const normalizedItems = normalizedCandidates.filter((item) => Boolean(item.src && item.thumbnailSrc));
+const rejectedCount = normalizedCandidates.length - normalizedItems.length;
 const numericMaxVisible = Number(maxVisible);
 const visibleLimit = Math.max(2, Math.floor(Number.isFinite(numericMaxVisible) ? numericMaxVisible : 6));
 const visibleItems = variant === 'gallery-thumbnails'
@@ -213,7 +231,9 @@ const rootStyle = variant === 'gallery-thumbnails'
     data-ds-version="1"
     data-ds-variant={variant}
     data-ds-state={rootState}
+    data-event-media-rail-input-total={normalizedCandidates.length}
     data-event-media-rail-total={normalizedItems.length}
+    data-event-media-rail-rejected={rejectedCount || undefined}
     data-event-media-rail-visible={usesResolvedItems ? 'pending' : visibleItems.length}
     data-event-media-rail-hidden={usesResolvedItems ? 'pending' : hiddenCount}
     data-event-media-rail-source-owner={usesResolvedItems ? 'caller' : 'EventMediaRail'}
