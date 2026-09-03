@@ -49,8 +49,32 @@ test('MediaFrame owns inner anatomy without overriding surface inline sizing', a
   assert.match(mediaFrame, /\[data-media-frame-fit="cover"\] > \[data-media-frame-image\][\s\S]*object-fit: cover/u);
   assert.match(mediaFrame, /\[data-media-frame-fit="contain"\] > \[data-media-frame-image\][\s\S]*object-fit: contain/u);
 
+  const naturalDocumentSelector = '[data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="event-card"][data-media-frame-fit="contain"]:not([data-media-frame-fill="true"]) > [data-media-frame-image]';
+  const naturalDocumentBlock = blockAfter(mediaFrame, naturalDocumentSelector);
+  assert.match(naturalDocumentBlock, /width: 100%/u);
+  assert.match(naturalDocumentBlock, /height: auto/u);
+  assert.doesNotMatch(
+    mediaFrame,
+    /\[data-media-frame-fit="contain"\] > \[data-media-frame-image\] \{[^}]*width: 100%[^}]*height: auto/usu,
+    'natural-height width fill must remain scoped to non-fill EventCard documents',
+  );
+
   assert.match(mobileSurface, /\.ke-mobile-listing-rails--v23 \.event-media\{[^}]*flex:0 0 var\(--media-width\);width:var\(--media-width\);height:112px/u);
   assert.match(mobileRow, /import '\.\.\/media-frame\.css';/u);
   assert.match(mobileRow, /--media-width:\$\{railMedia\.width\}px/u);
   assert.doesNotMatch(mobileRow, /--rail-media-fit|--focus-x|--focus-y/u);
+});
+
+test('EventLayout may remove duplicate natural document image sizing after MediaFrame integration', async () => {
+  const [mediaFrame, layout] = await Promise.all([
+    read('src/components/media-frame.css'),
+    read('src/layouts/EventLayout.astro'),
+  ]);
+  const legacyNaturalRule = /\.event-card__media-shell--document \.event-card__media\s*\{[^}]*width:\s*100%[^}]*height:\s*auto[^}]*\}/u;
+  const canonicalNaturalRule = /data-media-frame-surface="event-card"\]\[data-media-frame-fit="contain"\]:not\(\[data-media-frame-fill="true"\]\)[\s\S]*width: 100%;[\s\S]*height: auto;/u;
+
+  assert.match(mediaFrame, canonicalNaturalRule);
+  if (legacyNaturalRule.test(layout)) {
+    assert.match(layout, legacyNaturalRule, 'current A0 boundary is this duplicate rule only');
+  }
 });
