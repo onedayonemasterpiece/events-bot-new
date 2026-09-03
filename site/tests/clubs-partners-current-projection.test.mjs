@@ -66,6 +66,22 @@ test('ICAE is the deterministic sixth partner and uses one byte-faithful local o
   assert.equal(createHash('sha256').update(sourceLogo).digest('hex'), expectedSha);
 });
 
+test('partners route keeps its bespoke official-logo board but owns one normalized route composition', async () => {
+  const page = await read('../src/pages/partners/index.astro');
+
+  assert.match(page, /import '\.\.\/\.\.\/components\/design-system\/product-contour-foundations\.css'/u);
+  assert.match(page, /data-ds-family="PartnersRouteComposition"/u);
+  assert.match(page, /data-ds-version="1"/u);
+  assert.match(page, /data-ds-variant="official-logo-board"/u);
+  assert.match(page, /data-ds-state=\{INFO_PARTNERS\.length \? 'populated' : 'empty'\}/u);
+  assert.match(page, /data-partners-route/u);
+  assert.match(page, /INFO_PARTNERS\.map/u);
+  assert.doesNotMatch(page, /AdaptiveEventCardGrid|EventCard/u,
+    'the partner logo board is a distinct composition, not an event-card lookalike');
+  assert.match(page, /--ke-color-text-primary/u);
+  assert.match(page, /--ke-color-text-muted/u);
+});
+
 test('preview hub no longer describes Clubs as empty and advertises the six-logo board', async () => {
   const hub = await read('../src/pages/[preview]/index.astro');
 
