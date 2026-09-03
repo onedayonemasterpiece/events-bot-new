@@ -1,0 +1,137 @@
+/*
+ * Mobile event-review foundation roles from the current accepted-v2..v8
+ * consumer census. Token-only: A0 retains every consumer selector and M0
+ * retains EventHero/EventCard anatomy.
+ */
+:root {
+  /* Shared review shell and accepted metadata treatments. */
+  --ke-mobile-review-shell-padding-bottom: 1.5rem;
+  --ke-mobile-review-medallion-offset: 0.25rem;
+
+  --ke-mobile-review-meta-v2-gap-block: 0.2rem;
+  --ke-mobile-review-meta-v2-gap-inline: 0.45rem;
+  --ke-mobile-review-meta-v2-margin-top: 0.05rem;
+  --ke-mobile-review-meta-v2-padding-block: 0.72rem;
+  --ke-mobile-review-meta-v2-padding-inline: 0.82rem;
+  --ke-mobile-review-meta-v2-radius: 14px;
+  --ke-color-mobile-review-meta-v2-border: var(--ke-color-event-meta-border-soft);
+  --ke-color-mobile-review-meta-v2-surface: var(--ke-color-event-meta-panel-surface);
+  --ke-color-mobile-review-meta-v2-text: var(--ke-color-event-meta-panel-text);
+  --ke-color-mobile-review-meta-v2-date: var(--ke-color-event-meta-date-legacy);
+  --ke-mobile-review-meta-v2-date-size: 1.05rem;
+  --ke-mobile-review-meta-v2-date-weight: 920;
+  --ke-mobile-review-meta-v2-date-line: 1.15;
+  --ke-mobile-review-meta-v2-place-size: var(--ke-type-event-meta-place-size);
+  --ke-mobile-review-meta-v2-place-weight: 780;
+  --ke-mobile-review-meta-v2-place-line: 1.24;
+
+  --ke-mobile-review-meta-dense-gap: 0.58rem;
+  --ke-mobile-review-meta-dense-margin-top: 0.08rem;
+  --ke-mobile-review-meta-dense-padding-top: 0.78rem;
+  --ke-mobile-review-meta-dense-padding-inline: 0.08rem;
+  --ke-mobile-review-meta-dense-padding-bottom: 0.82rem;
+  --ke-color-mobile-review-meta-dense-text: var(--ke-color-event-meta-panel-text-strong);
+  --ke-color-mobile-review-meta-dense-border-top: var(--ke-color-event-meta-border-strong);
+  --ke-color-mobile-review-meta-dense-border-bottom: var(--ke-color-event-meta-border);
+  --ke-mobile-review-meta-when-gap: 0.5rem;
+  --ke-mobile-review-meta-weekday-padding-block: 0.35rem;
+  --ke-mobile-review-meta-weekday-padding-inline: 0.54rem;
+  --ke-mobile-review-meta-place-padding-top: 0.55rem;
+  --ke-mobile-review-meta-place-weight: 820;
+  --ke-mobile-review-meta-place-line: 1.22;
+  --ke-mobile-review-meta-letter: -0.025em;
+
+  /* Poster movement and spacing preserve the accepted review compositions. */
+  --ke-mobile-review-poster-travel: 42px;
+  --ke-mobile-review-medallion-offset-v4: clamp(0.85rem, 3.8vw, 1.05rem);
+  --ke-mobile-review-details-offset-v4: clamp(1.35rem, 5.5vw, 1.65rem);
+  --ke-mobile-review-details-offset-accepted: clamp(1.1rem, 4.6vw, 1.35rem);
+
+  /* Accepted-v5 foreground continuation. */
+  --ke-mobile-review-continuation-overlap: 1.5rem;
+  --ke-mobile-review-continuation-padding-responsive: clamp(0.6rem, 2.8vw, 0.75rem);
+  --ke-mobile-review-continuation-padding-inline: 0.75rem;
+  --ke-color-mobile-review-continuation-v5-start: rgba(240, 225, 207, 0.88);
+  --ke-color-mobile-review-continuation-v5-middle: rgba(250, 240, 226, 0.9);
+  --ke-color-mobile-review-continuation-v5-end: rgba(255, 249, 240, 0.86);
+  --ke-color-mobile-review-continuation-transparent: rgba(248, 240, 229, 0);
+  --ke-mobile-review-continuation-v5-middle-stop: 6rem;
+  --ke-mobile-review-continuation-v5-end-stop: 16rem;
+  --ke-mobile-review-continuation-v5-fade-stop: 32rem;
+
+  /* Accepted-v6..v8 continuation rise. The shared gradient is atmospheric
+     event-page composition, not a reusable status surface. */
+  --ke-mobile-review-continuation-rise: clamp(28rem, 110vw, 32rem);
+  --ke-mobile-review-continuation-tail: 44rem;
+  --ke-mobile-review-continuation-soft-offset: 21rem;
+  --ke-mobile-review-continuation-warm-offset: 12rem;
+  --ke-mobile-review-continuation-light-offset: 16rem;
+  --ke-color-mobile-review-continuation-clear: rgba(242, 231, 215, 0);
+  --ke-color-mobile-review-continuation-soft: rgba(242, 231, 215, 0.22);
+  --ke-color-mobile-review-continuation-warm: rgba(240, 225, 207, 0.7);
+  --ke-color-mobile-review-continuation-light: rgba(250, 240, 226, 0.9);
+  --ke-color-mobile-review-continuation-surface: rgba(255, 249, 240, 0.82);
+
+  /* Open prose/source boundary. */
+  --ke-mobile-review-prose-max: 66ch;
+  --ke-mobile-review-prose-padding-inline: 0.25rem;
+  --ke-mobile-review-prose-padding-top: 1.15rem;
+  --ke-mobile-review-prose-padding-bottom: 0.35rem;
+  --ke-mobile-review-source-margin-top: 0.85rem;
+  --ke-mobile-review-source-radius: var(--ke-space-lg);
+  --ke-color-mobile-review-source-border: var(--ke-color-border-brand-quiet);
+  --ke-color-mobile-review-source-surface: rgba(255, 253, 248, 0.52);
+
+  /* Mobile action dock. */
+  --ke-color-mobile-review-dock-surface: var(--ke-color-background-inverse-raised);
+  --ke-color-mobile-review-dock-text: var(--ke-color-surface-warm);
+  --ke-color-mobile-review-dock-border: rgba(255, 255, 255, 0.08);
+  --ke-color-mobile-review-dock-control-surface: rgba(255, 255, 255, 0.08);
+  --ke-color-mobile-review-dock-control-surface-hover: rgba(255, 255, 255, 0.13);
+  --ke-color-mobile-review-dock-control-border: rgba(255, 255, 255, 0.1);
+  --ke-color-mobile-review-dock-control-border-hover: rgba(255, 255, 255, 0.2);
+  --ke-elevation-mobile-review-dock: 0 14px 28px rgba(41, 37, 33, 0.18);
+  --ke-mobile-review-dock-gap: 0.42rem;
+  --ke-mobile-review-dock-padding: 0.48rem;
+  --ke-mobile-review-dock-radius: 18px;
+  --ke-mobile-review-dock-primary-min-height: var(--ke-size-control-large);
+  --ke-mobile-review-dock-primary-radius: 14px;
+  --ke-mobile-review-dock-secondary-basis: 7.15rem;
+  --ke-mobile-review-dock-secondary-min-height: var(--ke-size-control-comfortable);
+  --ke-mobile-review-dock-secondary-padding-block: 0.55rem;
+  --ke-mobile-review-dock-secondary-padding-inline: 0.48rem;
+  --ke-mobile-review-dock-secondary-radius: 13px;
+  --ke-mobile-review-dock-secondary-size: 0.84rem;
+  --ke-mobile-review-dock-secondary-line: 1.05;
+  --ke-mobile-review-dock-icon-size: var(--ke-icon-size-control);
+  --ke-mobile-review-dock-like-size: var(--ke-size-control-large);
+  --ke-mobile-review-dock-like-padding-inline: 0.42rem;
+
+  /* Accepted v3 emphasis and v4 simplified selected state. */
+  --ke-mobile-review-dock-like-emphasis-size: 56px;
+  --ke-color-mobile-review-like-selected-border: #ffad87;
+  --ke-color-mobile-review-like-selected: var(--ke-color-event-detail-action);
+  --ke-color-mobile-review-like-selected-text: var(--ke-color-text-inverse);
+  --ke-color-mobile-review-like-selected-ring: #ef9b72;
+  --ke-elevation-mobile-review-like-selected: 0 0 0 3px var(--ke-color-mobile-review-dock-surface), 0 0 0 5px var(--ke-color-mobile-review-like-selected-ring), 0 10px 22px rgba(181, 77, 34, 0.38);
+  --ke-mobile-review-like-selected-offset: -1px;
+  --ke-mobile-review-like-selected-icon-scale: 1.12;
+  --ke-mobile-review-like-motion: 180ms ease;
+
+  /* The receipt container is not a fifth icon role. A0 should render the
+     canonical check SVG at inline=16px inside this existing 1.22rem badge. */
+  --ke-mobile-review-check-container-size: 1.22rem;
+  --ke-mobile-review-check-icon-size: var(--ke-icon-size-inline);
+  --ke-mobile-review-check-offset-top: -0.42rem;
+  --ke-mobile-review-check-offset-inline: -0.34rem;
+  --ke-mobile-review-check-font-size-fallback: var(--ke-type-eyebrow-size);
+
+  /* Compact dock geometry. */
+  --ke-mobile-review-dock-compact-control-size: var(--ke-size-control-large);
+  --ke-mobile-review-dock-compact-padding-inline: 0.38rem;
+  --ke-mobile-review-dock-narrow-secondary-basis: 5.9rem;
+  --ke-mobile-review-dock-narrow-secondary-padding-inline: 0.34rem;
+  --ke-mobile-review-dock-narrow-secondary-size: 0.79rem;
+  --ke-mobile-review-dock-v2-control-size: var(--ke-size-control-comfortable);
+  --ke-mobile-review-dock-v2-padding-inline: 0.35rem;
+}

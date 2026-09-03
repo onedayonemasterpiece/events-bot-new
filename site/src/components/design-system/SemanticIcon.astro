@@ -29,7 +29,8 @@ const localSemantic = name === 'trend-up'
   || name === 'close'
   || name === 'arrow-left'
   || name === 'arrow-right'
-  || name === 'chevron-down';
+  || name === 'chevron-down'
+  || name === 'link';
 ---
 {localSemantic ? (
   <svg
@@ -57,6 +58,9 @@ const localSemantic = name === 'trend-up'
     )}
     {name === 'chevron-down' && (
       <path d="m5 9 7 7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    )}
+    {name === 'link' && (
+      <path d="M9.5 14.5l5-5M8.25 15.75l-1.1 1.1a3.25 3.25 0 0 1-4.6-4.6l2.7-2.7a3.25 3.25 0 0 1 4.6 0l.65.65M15.75 8.25l1.1-1.1a3.25 3.25 0 0 1 4.6 4.6l-2.7 2.7a3.25 3.25 0 0 1-4.6 0l-.65-.65" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
     )}
   </svg>
 ) : (

@@ -41,6 +41,7 @@ export const LOCAL_SEMANTIC_ICON_NAMES = [
   'arrow-left',
   'arrow-right',
   'chevron-down',
+  'link',
 ] as const;
 export type LocalSemanticIconName = (typeof LOCAL_SEMANTIC_ICON_NAMES)[number];
 
@@ -61,6 +62,7 @@ export const CANONICAL_SVG_BY_ACTION = {
   'feedback.not-interested': { component: '../Icon.astro', name: 'dislike' },
   'action.calendar': { component: '../Icon.astro', name: 'calendar' },
   'action.share': { component: '../Icon.astro', name: 'share' },
+  'action.link': { component: './SemanticIcon.astro', name: 'link' },
   'action.location': { component: '../Icon.astro', name: 'pin' },
   'action.ticket': { component: '../Icon.astro', name: 'ticket' },
   'action.information': { component: '../Icon.astro', name: 'info' },
