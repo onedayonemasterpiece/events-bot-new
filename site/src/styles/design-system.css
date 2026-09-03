@@ -1058,6 +1058,8 @@
   align-items: flex-start;
   gap: 16px;
   padding-top: 14px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 .ke-popular-behavior__row .ke-listing-card {
   flex: 0 0 calc(var(--ke-listing-media-height) * var(--ke-listing-image-ratio) + var(--ke-listing-tail-width, 0px));

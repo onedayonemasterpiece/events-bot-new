@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Changed: integrated the accepted F0/M0/A0 UI-normalization checkpoints and
+  completed `A0-MECH-01..05`: search lifecycle, event-detail rails and
+  MediaFrame ownership, listing-rail framing ownership, route identities,
+  semantic icons and 44px action targets now converge on their canonical
+  roots. Event-detail advances the source-family census to `6/9`, pending the
+  independent V0 browser verdict.
+
+- Fixed: desktop Popular shelves now own their intrinsic one-row width excess
+  instead of widening the whole document. Cards, media ratios and shelf
+  composition are unchanged; the browser gate covers the 980px breakpoint
+  seams, the 1366px presentation contour and short real-data listing pages.
+
 - Changed: static-site previews and production candidates now share one
   Kaggle-to-checked-artifact-to-host-publisher rail targeting the same
   `kenigevents.ru` bucket; direct local-dist preview publication is retired.

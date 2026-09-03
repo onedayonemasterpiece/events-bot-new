@@ -519,3 +519,41 @@ preview/generation/owner/A=S=P checkpoint.
 Checkpoint publication не завершает роль автоматически. Packet, dispatch,
 worktree, commit без role review, test без output, 404 route и empty Penpot page
 не являются product result.
+
+## 17. Accepted source-integration checkpoint (2026-09-03)
+
+Текущая интеграция строится от точных принятых границ, а не от поздних tip
+роль-веток:
+
+```text
+R0 base: 4536847f9fbdaa27326ebb3ec9ec1c825736e107
+F0:      de92dabd4551e117ca1af1be7915ff223321cc32
+M0:      4c83fc7769b1dec2d92469373e3b15154af437f4
+A0:      net projection through ec926580fa2cc003318006f4c1d671fc459ea26c
+```
+
+После проекции A0 механически завершены принятые `A0-MECH-01..05`:
+
+- InterestProfile больше не владеет размерами semantic icons;
+- AuthorizedEventSearch/SearchResults публикуют один ranked-phase-feed family
+  и точные lifecycle states;
+- MobileListingRailSurface оставляет MediaFrame framing/clip/focal ownership и
+  сохраняет только геометрию/gesture-контракт surface;
+- DesktopEventPage использует `EventMediaRail` для hero и split rails,
+  EventHero публикует MediaFrame diagnostics, а EventLayout больше не является
+  вторым EventCard framing owner;
+- festival/exhibitions routes публикуют route-family identity и используют
+  canonical semantic icons; отрицательная action target в EventLayout поднята
+  с 36px до минимальных 44px.
+
+Event-detail family поэтому имеет статус `source_converged`; grouped source
+fraction — `6/9`. Это не V0 PASS: gallery, dialog, route и viewport поведение
+проверяется на immutable fresh-real-data preview.
+
+Отдельный desktop Popular containment fix не меняет принятую композицию V28.
+Полки остаются однострочными, карточки сохраняют исходные размеры/ratio, а
+избыток ширины принадлежит самой полке через horizontal scroll, не документу.
+Презентационный snapshot 30 июля мог полностью помещаться; свежий сентябрьский
+catalog содержит более широкую комбинацию 16:9 карточек и recognition rails и
+тем самым проявил старую data-dependent щель. Это исправление containment, а
+не восстановление древнего интерфейса и не redesign.

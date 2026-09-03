@@ -89,6 +89,19 @@ Break Summer Fest regression ID `5130`, cold-start absence of the sixth shelf,
 Desktop browser geometry remains checked at 1366×768, 1536×864 (FHD at 125%)
 and 1920×1080.
 
+Every desktop shelf remains `nowrap`, but the shelf itself owns any intrinsic
+width excess with horizontal scrolling at every desktop width. The document
+must not become wider than the viewport. This does not shrink cards, change
+media ratios, wrap the five-card answer, or introduce a second presentation.
+In addition to the established presentation contours, browser acceptance
+checks `961`, `1022`, `1023`, `1024` and `1440` px.
+
+The 30 July presentation snapshot fitting without document overflow is not
+contradictory evidence: the fault was data-dependent. A later real catalogue
+combined enough wide 16:9 cards and recognition rails to exceed the shelf at
+desktop seams. The repair assigns overflow to the existing shelf and preserves
+the accepted V28 composition rather than reviving or redesigning an older UI.
+
 Gemini 3.1 Pro's critical review supplied the global-family, time-boundary,
 mobile-isolation and warm/cold invariants. Two suggestions were intentionally
 rejected: server-side selection cannot read the local-only profile, and false
