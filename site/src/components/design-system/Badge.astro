@@ -1,4 +1,6 @@
 ---
+import './component-foundations.css';
+
 interface Props {
   tone?: 'neutral' | 'brand' | 'accent' | 'success' | 'warning' | 'danger';
   label?: string;
@@ -6,4 +8,13 @@ interface Props {
 const { tone = 'neutral', label } = Astro.props;
 const className = ['ke-badge', tone !== 'neutral' ? `ke-badge--${tone}` : ''].filter(Boolean).join(' ');
 ---
-<span class={className} aria-label={label}><slot /></span>
+<span
+  class={className}
+  aria-label={label}
+  data-ds-component="Badge"
+  data-ds-family="Badge"
+  data-ds-version="2"
+  data-ds-variant={tone}
+  data-ds-state="default"
+  data-ke-foundation-consumer="badge"
+><slot /></span>

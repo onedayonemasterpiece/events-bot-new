@@ -1,4 +1,6 @@
 ---
+import './component-foundations.css';
+
 interface Props {
   id: string;
   label: string;
@@ -13,7 +15,16 @@ const error = state === 'error';
 const hintId = hint ? `${id}-hint` : undefined;
 const className = ['ke-field', error ? 'ke-field--error' : ''].filter(Boolean).join(' ');
 ---
-<label class={className} data-preview-state={state === 'default' || error || state === 'disabled' ? undefined : state}>
+<label
+  class={className}
+  data-preview-state={state === 'default' || error || state === 'disabled' ? undefined : state}
+  data-ds-component="Field"
+  data-ds-family="Field"
+  data-ds-version="2"
+  data-ds-variant={type}
+  data-ds-state={state}
+  data-ke-foundation-consumer="field"
+>
   <span class="ke-field__label">{label}</span>
   <input
     class="ke-field__control"

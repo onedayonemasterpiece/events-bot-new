@@ -1,5 +1,6 @@
 ---
 import Button from './Button.astro';
+import './component-foundations.css';
 
 interface Props {
   title: string;
@@ -11,8 +12,22 @@ interface Props {
 }
 const { title, message, tone = 'neutral', mark = '•', actionLabel, actionHref } = Astro.props;
 ---
-<section class={`ke-state-panel ke-state-panel--${tone}`} aria-live={tone === 'danger' ? 'assertive' : tone === 'loading' ? 'polite' : undefined} aria-busy={tone === 'loading' ? 'true' : undefined}>
-  <span class="ke-state-panel__mark" aria-hidden="true">{mark}</span>
+<section
+  class={`ke-state-panel ke-state-panel--${tone}`}
+  aria-live={tone === 'danger' ? 'assertive' : tone === 'loading' ? 'polite' : undefined}
+  aria-busy={tone === 'loading' ? 'true' : undefined}
+  data-ds-component="StatePanel"
+  data-ds-family="StatePanel"
+  data-ds-version="2"
+  data-ds-variant={tone}
+  data-ds-state={tone === 'loading' ? 'loading' : 'default'}
+  data-ke-foundation-consumer="state-panel"
+>
+  <span
+    class="ke-state-panel__mark"
+    data-ke-icon-role={tone === 'loading' ? 'control' : undefined}
+    aria-hidden="true"
+  >{mark}</span>
   <h3>{title}</h3>
   <p>{message}</p>
   {actionLabel && <div><Button variant="secondary" size="compact" href={actionHref}>{actionLabel}</Button></div>}
