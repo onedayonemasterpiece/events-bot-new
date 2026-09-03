@@ -28,9 +28,22 @@ test('MediaFrame owns inner anatomy without overriding surface inline sizing', a
   assert.match(rootBlock, /display: block/u);
   assert.match(rootBlock, /min-width: 0/u);
   assert.match(rootBlock, /overflow: hidden/u);
-  assert.doesNotMatch(rootBlock, /(?:^|\n)\s*(?:width|max-width|inline-size)\s*:/u,
-    'frame root must not override a rail/card surface width');
+  assert.doesNotMatch(rootBlock, /(?:^|\n)\s*(?:width|max-width|inline-size|height|block-size)\s*:/u,
+    'frame root must not override a rail/card surface box');
 
+  assert.match(
+    mediaFrame,
+    /\[data-media-frame-fill="true"\]:is\([\s\S]*\[data-media-frame-surface="listing-card"\],[\s\S]*\[data-media-frame-surface="media-rail"\][\s\S]*\) \{\s*height: 100%;\s*\}/u,
+  );
+  assert.doesNotMatch(
+    mediaFrame,
+    /\[data-media-frame-fill="true"\]\s*\{\s*height: 100%;/u,
+    'root height must not be applied to EventCard or mobile-listing-rail frames',
+  );
+  assert.doesNotMatch(
+    mediaFrame,
+    /\[data-media-frame-surface="mobile-listing-rail"\][\s\S]{0,120}height: 100%/u,
+  );
   assert.match(mediaFrame, /\[data-media-frame-fill="true"\] > \[data-media-frame-image\][\s\S]*width: 100%;[\s\S]*height: 100%/u);
   assert.match(mediaFrame, /object-position: var\(--media-frame-object-position, 50% 50%\)/u);
   assert.match(mediaFrame, /\[data-media-frame-fit="cover"\] > \[data-media-frame-image\][\s\S]*object-fit: cover/u);
