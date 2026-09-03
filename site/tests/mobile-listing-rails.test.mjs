@@ -40,7 +40,10 @@ test('accepted v23 full-viewport 112px rail remains on its approved date and wee
   assert.match(row, /data-feedback-action="not_interested"/u);
   assert.match(row, /data-feedback-count/u);
   assert.match(row, /data-image-text-mode=\{railMedia\.imageTextMode\}/u);
-  assert.match(row, /data-media-state="loading"/u);
+  assert.match(row, /data-media-frame-resource-state="pending"/u);
+  assert.match(row, /data-media-frame-source-ratio=\{sourceRatio \? sourceRatio\.toFixed\(5\) : undefined\}/u);
+  assert.match(row, /data-media-frame-fallback aria-hidden="true" hidden/u);
+  assert.doesNotMatch(row, /data-media-state=/u);
   assert.match(row, /import '\.\.\/media-frame\.css';/u);
   for (const marker of [
     'data-media-frame-contract="v1"',
@@ -60,6 +63,10 @@ test('accepted v23 full-viewport 112px rail remains on its approved date and wee
   assert.match(surface, /mobile-rail-media-skeleton/u);
   assert.match(surface, /if \(img\.complete\) decodeLoaded\(\)/u);
   assert.match(surface, /img\.addEventListener\('error', \(\) => done\(false\)/u);
+  assert.match(surface, /shell\.dataset\.mediaFrameResourceState = 'loaded'/u);
+  assert.match(surface, /shell\.dataset\.mediaFrameResourceState = 'broken'/u);
+  assert.match(surface, /shell\.dataset\.mediaFrameCropReason = 'resource_load_error'/u);
+  assert.doesNotMatch(surface, /dataset\.mediaState/u);
   assert.doesNotMatch(menu, /\.reference4-menu__brand::before/u);
   assert.match(dates, /<MobileListingRailSurface[\s\S]*occurrenceMode="per-date"/u);
   assert.match(dates, /const mobileChronologicalEvents = events;/u);
