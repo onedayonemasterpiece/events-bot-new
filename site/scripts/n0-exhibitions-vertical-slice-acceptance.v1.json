@@ -1,9 +1,10 @@
 {
   "schema": "kenigevents.n0-exhibitions-vertical-slice-acceptance.v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "role": "N0",
   "coordination_issue": "onedayonemasterpiece/events-bot-new#621",
   "contract_version": "1.10.0",
+  "v0_requirement_comments": [5531944339, 5531980502],
   "frozen_transaction": {
     "source_sha": "cebeafeee08251a327145ee973ee035cced65204",
     "build_id": "preview-real-cebeafeee-normalized-20260903-v1",
@@ -110,10 +111,23 @@
       "every visible deck/gallery/medallion frame has contract v1 and style-owner media-frame.css",
       "data-media-frame-fit equals computed object-fit",
       "object position equals the published focal/object-position field",
-      "frame clips image and fallback without escape",
+      "canonical frame overflow clips painted and hit-test output",
       "document or unknown media never retains cover",
       "broken media becomes fallback contain forbidden resource_load_error"
     ],
+    "clipping_observation": [
+      "image_box_extends_beyond_frame boolean",
+      "computed_frame_overflow_x hidden|clip|visible|other",
+      "computed_frame_overflow_y hidden|clip|visible|other",
+      "paint_or_hit_test_escapes_frame boolean",
+      "clip_owner media-frame.css|other|absent"
+    ],
+    "clipping_classification": {
+      "extended_box_with_canonical_clip_and_no_paint_or_hit_test_escape": "PASS_INTENTIONAL_CROP_OR_PARALLAX",
+      "extended_box_with_visible_or_absent_clip_or_observable_escape": "FR0_DRIFT_MEDIA_FRAME_IMAGE_ESCAPES_FRAME",
+      "contain_media_visible_content_clipped_or_document_area_suppressed": "FR0_DRIFT",
+      "raw_image_box_containment_is_sufficient": false
+    },
     "resource_state_observation": [
       "resource_state pending|loaded|fallback|broken",
       "root fallback marker",
