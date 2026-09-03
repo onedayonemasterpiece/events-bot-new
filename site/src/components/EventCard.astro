@@ -115,10 +115,35 @@ const mediaShellStyle = [
 const imageLoadHandler = `const shell=this.closest('.event-card__media-shell');${mobileFlowMedia && relatedMediaDecision?.useNaturalAspect ? "if(shell&&this.naturalWidth>0&&this.naturalHeight>0){shell.style.setProperty('--dynamic-media-ratio',this.naturalWidth+' / '+this.naturalHeight);shell.dataset.naturalAspectReconciled='true';}" : ''}shell?.classList.remove('is-image-loading');shell?.classList.add('is-image-loaded');shell?.removeAttribute('aria-busy');`;
 const imageErrorHandler = "this.closest('.event-card__media-shell')?.classList.remove('is-image-loading'); this.closest('.event-card__media-shell')?.classList.add('is-image-missing'); this.closest('.event-card__media-shell')?.removeAttribute('aria-busy'); this.hidden = true; this.removeAttribute('src');";
 const fixedLayoutMetric = (value: number | null | undefined, digits: number) => Number.isFinite(value) ? Number(value).toFixed(digits) : undefined;
+const mediaFrameKind = !imageUrl
+  ? 'fallback'
+  : cardCrop.mediaTreatment === 'visual-cover'
+    ? 'visual'
+    : imageTextMode === 'ocr_text' && primaryImageAsset?.media_semantic_status !== 'error'
+      ? 'document'
+      : 'unknown';
+const mediaFrameFit = imageUrl ? cardCrop.fit : 'contain';
+const mediaFrameRatio = desktopRelatedLayout?.rowRatio || relatedMediaDecision?.rowRatio || intrinsicMediaRatio;
+const mediaFrameStyle = [
+  mediaShellStyle,
+  `--media-frame-ratio:${mediaFrameRatio}`,
+  `--media-frame-object-position:${cardObjectPosition || '50% 50%'}`,
+].filter(Boolean).join(';');
+const cardState = [
+  runtimeTemplate && 'runtime-template',
+  desktopRelatedCrop && 'packed-row',
+  mobileFlowMedia && 'mobile-flow',
+  !imageUrl && 'media-fallback',
+].filter(Boolean).join(' ') || undefined;
 ---
 <article
   class={cardClass}
   data-event-card
+  data-ds-component="EventCard"
+  data-ds-family="EventCard"
+  data-ds-version="2"
+  data-ds-variant={variant}
+  data-ds-state={cardState}
   data-feed-card-variant={variant}
   data-calendar-eligible={canAddToCalendar ? "true" : "false"}
   data-event-id={event.id}
@@ -142,8 +167,23 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
 >
   <a class="event-card__media-link" href={href} data-card-media-link data-prefetch aria-label={`Открыть событие: ${event.title}`}>
     {imageUrl ? (
-      <span class={mediaShellClass} data-card-media-shell data-media-role={imageMediaRole} style={mediaShellStyle || undefined} aria-busy="true">
-        <span class="event-card__image-fallback" data-card-image-fallback aria-hidden="true">
+      <span
+        class={mediaShellClass}
+        data-card-media-shell
+        data-media-role={imageMediaRole}
+        data-media-frame
+        data-media-frame-contract="v1"
+        data-media-frame-surface="event-card"
+        data-media-frame-kind={mediaFrameKind}
+        data-media-frame-fit={mediaFrameFit}
+        data-media-frame-crop-reason={cardCrop.cropReason}
+        data-media-frame-source-width={primaryImageAsset?.width}
+        data-media-frame-source-height={primaryImageAsset?.height}
+        data-media-frame-loading="lazy"
+        style={mediaFrameStyle || undefined}
+        aria-busy="true"
+      >
+        <span class="event-card__image-fallback" data-card-image-fallback data-media-frame-fallback aria-hidden="true">
           <span data-card-fallback-date>{dateLabel}</span>
           <strong data-card-fallback-type>{event.event_type || 'событие'}</strong>
           {event.city && <span data-card-fallback-city>{event.city}</span>}
@@ -151,6 +191,7 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
         <img
           class="event-card__media"
           data-card-image
+          data-media-frame-image
           src={imageUrl}
           alt={event.image_alt || `Афиша события «${event.title}»`}
           loading="lazy"
@@ -167,7 +208,20 @@ const fixedLayoutMetric = (value: number | null | undefined, digits: number) => 
         />
       </span>
     ) : (
-      <span class="event-card__media-shell event-card__media-shell--cover event-card__fallback" data-card-media-shell aria-hidden="true">
+      <span
+        class="event-card__media-shell event-card__media-shell--cover event-card__fallback"
+        data-card-media-shell
+        data-media-frame
+        data-media-frame-contract="v1"
+        data-media-frame-surface="event-card"
+        data-media-frame-kind="fallback"
+        data-media-frame-fit="contain"
+        data-media-frame-crop-reason="event_card_fallback"
+        data-media-frame-loading="lazy"
+        data-media-frame-fallback
+        style={`--media-frame-ratio:${mediaFrameRatio};--media-frame-object-position:50% 50%`}
+        aria-hidden="true"
+      >
         <span data-card-fallback-date>{dateLabel}</span>
         <strong data-card-fallback-type>{event.event_type || 'событие'}</strong>
         {event.city && <span data-card-fallback-city>{event.city}</span>}

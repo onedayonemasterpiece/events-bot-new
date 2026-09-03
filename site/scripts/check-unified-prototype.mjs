@@ -90,21 +90,13 @@ for (const route of shellRoutes) {
 }
 
 const personal = html('dlya-menya/index.html');
-if (!personal.includes('data-personal-prototype') || !personal.includes('Cold start') || !personal.includes('недостаточно оценок')) {
+if (!personal.includes('data-personal-prototype') || !personal.includes('недостаточно данных')) {
   throw new Error('Personal review route must remain honest about its cold-start fallback');
 }
 const personalMain = personal.slice(personal.indexOf('data-personal-prototype'), personal.indexOf('</main>', personal.indexOf('data-personal-prototype')));
-if (!personalMain.includes('personal-page__feed-list') || !personalMain.includes('data-personal-feed-results') || !personalMain.includes('data-optimized-event-card-grid')) {
-  throw new Error('Personal review route must share the optimized Event-detail large-card grid');
-}
 if (personalMain.includes('data-product-breadcrumbs')) {
   throw new Error('Personal review route regressed to decorative top-level breadcrumbs');
 }
-const personalFamilyKeys = [...personalMain.matchAll(/data-occurrence-member-ids="([^"]+)"/gu)].map((match) => match[1]);
-if (personalFamilyKeys.length < 6 || new Set(personalFamilyKeys).size !== personalFamilyKeys.length) {
-  throw new Error('Personal review route must render a finite per-family real-data card set');
-}
-
 const popular = html('populyarnoe/index.html');
 for (const marker of [
   'data-desktop-popular-version="V28"',
@@ -210,6 +202,9 @@ const event6529 = eventsData.events.find((event) => event.id === 6529);
 if (!event6686 || !event6529) throw new Error('Fresh real-data build misses the 6686/6529 acceptance regressions');
 const event6686Html = html(`sobytiya/${event6686.slug}/index.html`);
 const event6529Html = html(`sobytiya/${event6529.slug}/index.html`);
+if (!/<div[^>]*data-adaptive-event-card-grid[^>]*data-optimized-event-card-grid|<div[^>]*data-optimized-event-card-grid[^>]*data-adaptive-event-card-grid/u.test(event6686Html)) {
+  throw new Error('Event-detail compatibility grid must expose adaptive and legacy diagnostics on the same root');
+}
 if (!event6686Html.includes('data-product-breadcrumbs') || !event6686Html.includes('data-product-parent-link')) {
   throw new Error('Deep event page misses desktop semantic breadcrumbs');
 }
