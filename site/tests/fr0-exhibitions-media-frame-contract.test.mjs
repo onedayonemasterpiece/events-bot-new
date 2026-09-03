@@ -96,7 +96,9 @@ test('exhibitions deck, gallery and medallion use the canonical MediaFrame proto
   for (const surfaceName of ['exhibitions-deck', 'exhibitions-gallery', 'exhibitions-medallion']) {
     assert.ok(mediaFrame.includes(`data-media-frame-surface="${surfaceName}"`), `canonical CSS must own ${surfaceName}`);
   }
-  assert.match(mediaFrame, /data-media-frame-surface="exhibitions-gallery"\][^}]+display:\s*grid;[^}]+place-items:\s*center;/su);
+  assert.match(mediaFrame, /data-media-frame-surface="exhibitions-deck"\]\s*\{[^}]*position:\s*absolute;/su);
+  assert.match(mediaFrame, /data-media-frame-surface="exhibitions-gallery"\]\s*\{[^}]*position:\s*relative;[^}]*display:\s*grid;[^}]*place-items:\s*center;/su);
+  assert.match(mediaFrame, /data-media-frame-surface="exhibitions-medallion"\]\s*\{[^}]*position:\s*absolute;[^}]*display:\s*grid;[^}]*place-items:\s*center;/su);
   assert.match(mediaFrame, /data-media-frame-resource-state="pending"\][^}]+data-media-frame-placeholder/su);
   assert.match(mediaFrame, /data-media-frame-resource-state="broken"[^}]+data-media-frame-fallback/su);
 

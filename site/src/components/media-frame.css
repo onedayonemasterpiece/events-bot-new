@@ -107,16 +107,21 @@
  * caller. The canonical frame owns effective clipping, fit, focal position and
  * the published loading/fallback state for deck, gallery and medallion media. */
 [data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="exhibitions-deck"] {
+  position: absolute;
   border-radius: var(--media-frame-radius, 4px);
 }
 
 [data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="exhibitions-gallery"] {
+  position: relative;
   display: grid;
   place-items: center;
   border-radius: var(--media-frame-radius, 0);
 }
 
 [data-media-frame][data-media-frame-contract="v1"][data-media-frame-surface="exhibitions-medallion"] {
+  position: absolute;
+  display: grid;
+  place-items: center;
   border-radius: 50%;
 }
 
