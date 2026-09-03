@@ -118,16 +118,33 @@ test('the two-week stability window permits additions but forbids mutation or de
   }
 });
 
-test('Golden generation reuses ordinary routes, restores real data and has an explicit immutable-prefix checker', () => {
+test('Golden local generation is diagnostic-only and full publication is the canonical Kaggle rail', () => {
   const packageJson = JSON.parse(read('package.json'));
   const builder = read('scripts/build-golden-preview.mjs');
   const previewBuilder = read('scripts/build-preview.mjs');
   const checker = read('scripts/check-golden-preview.mjs');
-  const deployer = read('scripts/deploy-preview-yc.mjs');
+  const actionChecker = read('scripts/check-golden-actions.mjs');
+  const acceptance = JSON.parse(read('scripts/n0-successor-acceptance.v1.json'));
+  const goldenDoc = readFileSync(
+    resolve(repositoryRoot, 'docs', 'features', 'static-site-pages', 'design-system', 'golden-review-preview-v1.md'),
+    'utf8',
+  );
 
   assert.equal(packageJson.scripts['build:golden-preview'], 'node scripts/build-golden-preview.mjs');
-  assert.equal(packageJson.scripts['check:golden-preview'], 'node scripts/check-golden-preview.mjs');
-  assert.equal(packageJson.scripts['test:golden-preview-contract'], 'node --test tests/golden-review-preview-contract.test.mjs');
+  assert.equal(
+    packageJson.scripts['check:golden-preview'],
+    'node scripts/check-golden-preview.mjs && node scripts/check-golden-actions.mjs',
+  );
+  assert.equal(
+    packageJson.scripts['test:golden-preview-contract'],
+    'node --test tests/golden-review-preview-contract.test.mjs tests/golden-review-actions.test.mjs',
+  );
+  assert.equal(packageJson.scripts['deploy:preview'], undefined);
+  assert.equal(packageJson.scripts['deploy:golden-preview'], undefined);
+  assert.equal(packageJson.scripts['test:golden-deploy-contract'], undefined);
+  assert.equal(existsSync(join(siteDir, 'scripts', 'deploy-golden-preview.mjs')), false);
+  assert.equal(existsSync(join(siteDir, 'tests', 'golden-review-deploy-contract.test.mjs')), false);
+
   assert.match(builder, /PREVIEW_DATA_MODE:'golden'/u);
   assert.match(builder, /STATIC_SITE_CURRENT_DATE:corpus\.frozen_clock\.current_date/u);
   assert.match(builder, /PUBLIC_SEARCH_COLLECTION_REFERENCE_DATE:corpus\.frozen_clock\.current_date/u);
@@ -139,8 +156,21 @@ test('Golden generation reuses ordinary routes, restores real data and has an ex
   assert.match(checker, /WeekendListingSurface/u);
   assert.match(checker, /FreeCollectionSurface/u);
   assert.match(checker, /ordinary_routes_only:true/u);
-  assert.ok(deployer.includes('const target = `s3://${bucket}/${buildId}/`;'));
-  assert.match(deployer, /KENIGEVENTS_SITE_REQUIRE_PUBLIC_VERIFY/u);
+  assert.match(actionChecker, /goldenActionContract/u);
+  assert.match(actionChecker, /free_and_cancelled_external_actions:false/u);
+
+  const realGate = acceptance.gate_graph.find((item) => item.id === 'FULL_REAL_KAGGLE_REVIEW_PREVIEW');
+  assert.ok(realGate, 'full-real Kaggle gate is missing');
+  assert.ok(realGate.requires.includes('canonical events-bot-new Kaggle StaticSiteBuilder'));
+  assert.ok(realGate.requires.includes('--preview-data-mode real'));
+  assert.ok(realGate.requires.includes('--page-class all'));
+  assert.ok(realGate.requires.includes('create-only immutable-prefix publication'));
+  assert.ok(acceptance.prohibitions.includes('do not publish a full or focused owner preview outside the canonical Kaggle pipeline'));
+
+  assert.match(goldenDoc, /same Kaggle runner/u);
+  assert.match(goldenDoc, /Local diagnostic/u);
+  assert.match(goldenDoc, /one existing `events-bot-new` Kaggle `StaticSiteBuilder`/u);
+  assert.doesNotMatch(goldenDoc, /npm run deploy:golden-preview/u);
   assert.equal(existsSync(join(siteDir, 'src', 'pages', 'golden')), false, 'a second Golden UI route is forbidden');
   assert.equal(existsSync(join(siteDir, 'src', 'pages', 'lab', 'golden')), false, 'an owner-facing Golden lab is forbidden');
   assert.equal(existsSync(GOLDEN_CORPUS_PATH), true);
