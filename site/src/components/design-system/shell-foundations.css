@@ -1,0 +1,141 @@
+/* Whole-product shell, navigation and service-action roles. */
+:root {
+  /* Public footer. */
+  --ke-color-footer-surface: #25211e;
+  --ke-color-footer-text: #fff7ed;
+  --ke-color-footer-copy: #f8ecdd;
+  --ke-color-footer-muted: #bfb1a6;
+  --ke-color-footer-section-label: #b9aaa0;
+  --ke-color-footer-contact: #f5b18f;
+  --ke-color-footer-document-note: #be9b88;
+  --ke-color-footer-social-meta: #9f9188;
+  --ke-color-footer-utility: #c9b8ad;
+  --ke-color-footer-share-surface: #fff8ee;
+  --ke-color-footer-share-surface-hover: #f7eadc;
+  --ke-color-footer-share-heading: #552414;
+  --ke-color-footer-share-text: #251c17;
+  --ke-color-footer-share-brand: #9b3f1d;
+  --ke-color-footer-share-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 25%, transparent);
+  --ke-color-footer-line: rgba(255, 255, 255, 0.11);
+  --ke-color-footer-control-line: rgba(255, 255, 255, 0.13);
+  --ke-color-footer-control-surface: rgba(255, 255, 255, 0.045);
+  --ke-color-footer-control-hover-line: rgba(245, 177, 143, 0.6);
+  --ke-color-footer-control-hover-surface: rgba(255, 255, 255, 0.08);
+  --ke-color-unusual-notification: #f06355;
+  --ke-color-unusual-notification-ring: rgba(240, 99, 85, 0.15);
+  --ke-elevation-footer-share: 0 16px 38px rgba(0, 0, 0, 0.16);
+  --ke-footer-social-icon-size: var(--ke-icon-size-control);
+
+  /* Bottom navigation: 21 px historical glyphs merge into control=20 px. */
+  --ke-color-mobile-nav-surface: var(--ke-color-background-surface);
+  --ke-color-mobile-nav-border: var(--ke-color-border-brand-soft);
+  --ke-color-mobile-nav-inactive: #766b62;
+  --ke-color-mobile-nav-active: var(--ke-color-text-primary);
+  --ke-color-mobile-nav-active-icon-surface: color-mix(in srgb, var(--ke-color-text-primary) 8%, transparent);
+  --ke-elevation-mobile-nav: 0 -9px 24px rgba(72, 45, 25, 0.07);
+  --ke-mobile-nav-icon-size: var(--ke-icon-size-control);
+  --ke-mobile-nav-icon-container-width: 38px;
+  --ke-mobile-nav-icon-container-height: 28px;
+  --ke-mobile-nav-icon-container-radius: 10px;
+
+  /* Toast layer. */
+  --ke-color-toast-surface: var(--ke-color-background-surface);
+  --ke-color-toast-text: var(--ke-color-text-primary);
+  --ke-color-toast-action: var(--ke-color-action-primary-strong);
+  --ke-color-toast-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 18%, transparent);
+  --ke-color-toast-success-border: rgba(38, 120, 72, 0.32);
+  --ke-color-toast-error-border: rgba(164, 59, 47, 0.36);
+  --ke-color-toast-progress: var(--ke-color-action-primary);
+  --ke-elevation-toast: 0 14px 34px rgba(72, 45, 25, 0.18);
+  --ke-toast-radius: var(--ke-shape-radius-control);
+  --ke-toast-control-size: var(--ke-size-touch-target);
+  --ke-toast-close-icon-size: var(--ke-icon-size-control);
+
+  /* Service share action. Inline SVG copies migrate to Icon/SemanticIcon. */
+  --ke-color-service-share-text: var(--ke-color-text-primary);
+  --ke-color-service-share-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 48%, transparent);
+  --ke-color-service-share-hover-border: var(--ke-color-action-primary-hover);
+  --ke-color-service-share-hover-surface: color-mix(in srgb, var(--ke-color-action-primary-strong) 6%, transparent);
+  --ke-color-service-share-success-border: #3f8a5b;
+  --ke-color-service-share-success-surface: rgba(63, 138, 91, 0.09);
+  --ke-color-service-share-success-text: #2f7449;
+  --ke-color-service-share-error-border: #a85645;
+  --ke-color-service-share-error-surface: rgba(168, 86, 69, 0.07);
+  --ke-color-service-share-error-text: #8b4537;
+  --ke-color-service-share-shortcut-border: color-mix(in srgb, var(--ke-color-action-primary-strong) 50%, transparent);
+  --ke-color-service-share-shortcut-border-strong: color-mix(in srgb, var(--ke-color-action-primary-strong) 76%, transparent);
+  --ke-color-service-share-shortcut-surface: color-mix(in srgb, var(--ke-color-action-primary-strong) 6%, transparent);
+  --ke-elevation-service-share-shortcut: 0 1px 0 rgba(0, 0, 0, 0.16);
+  --ke-service-share-icon-size: var(--ke-icon-size-control);
+  --ke-service-share-control-min: var(--ke-size-touch-target);
+  --ke-service-share-motion: var(--ke-duration-fast) ease-out;
+
+  /* Reference4 mobile discovery shell. The stitched WebP and close skin are
+     media assets; values below own their live fallback and glass/chrome. */
+  --ke-reference4-drawer-ease: cubic-bezier(0.22, 0.86, 0.32, 1);
+  --ke-reference4-drawer-duration: 320ms;
+  --ke-reference4-plane-duration: 240ms;
+  --ke-reference4-plane-opacity-duration: 180ms;
+  --ke-reference4-tag-width: 120px;
+  --ke-reference4-tag-height: 84px;
+  --ke-reference4-close-skin-size: 112px;
+  --ke-reference4-brand-width: 150px;
+  --ke-reference4-brand-height: 112px;
+  --ke-reference4-date-row-height: 58px;
+  --ke-reference4-list-height: 416px;
+  --ke-reference4-row-height: 52px;
+  --ke-reference4-utility-account-height: 56px;
+  --ke-reference4-share-height: 50px;
+
+  --ke-color-reference4-ink: #241b16;
+  --ke-color-reference4-ink-raised: #2b211c;
+  --ke-color-reference4-row-ink: #261d18;
+  --ke-color-reference4-control-ink: #2a211c;
+  --ke-color-reference4-brand-fallback: var(--ke-color-brand-tag);
+  --ke-color-reference4-brand-inverse: #fffaf4;
+  --ke-color-reference4-date-ink: #251c17;
+  --ke-color-reference4-current-ink: #8d351c;
+  --ke-color-reference4-row-current-ink: #8f351c;
+  --ke-color-reference4-back-ink: var(--ke-color-action-primary-strong);
+  --ke-color-reference4-account-current-surface: #3b2720;
+  --ke-color-reference4-account-initial: #753a22;
+  --ke-color-reference4-notification: #c72f2f;
+
+  --ke-color-reference4-glass-line: rgba(255, 255, 255, 0.56);
+  --ke-color-reference4-glass-line-soft: rgba(255, 255, 255, 0.48);
+  --ke-color-reference4-glass-surface: rgba(255, 252, 247, 0.48);
+  --ke-color-reference4-glass-surface-soft: rgba(255, 252, 247, 0.32);
+  --ke-color-reference4-utility-surface: rgba(255, 252, 247, 0.18);
+  --ke-color-reference4-share-surface: rgba(255, 252, 247, 0.58);
+  --ke-color-reference4-account-surface: rgba(255, 253, 249, 0.58);
+  --ke-color-reference4-account-row-surface: rgba(48, 31, 23, 0.075);
+  --ke-color-reference4-date-surface: rgba(255, 255, 255, 0.11);
+  --ke-color-reference4-date-current-line: rgba(255, 226, 213, 0.84);
+  --ke-color-reference4-date-current-surface: rgba(255, 218, 203, 0.64);
+  --ke-color-reference4-row-current-surface: rgba(255, 236, 225, 0.42);
+  --ke-color-reference4-divider: rgba(114, 93, 80, 0.18);
+  --ke-color-reference4-fallback-surface: rgba(203, 191, 181, 0.94);
+  --ke-color-reference4-panel-brand-glow: rgba(160, 78, 45, 0.18);
+  --ke-color-reference4-panel-top: rgba(70, 36, 25, 0.15);
+  --ke-color-reference4-panel-middle: rgba(227, 216, 207, 0.14);
+  --ke-color-reference4-panel-bottom: rgba(241, 235, 228, 0.18);
+
+  --ke-elevation-reference4-tag: drop-shadow(0 8px 8px rgba(52, 25, 16, 0.22)) drop-shadow(0 15px 20px rgba(52, 25, 16, 0.14));
+  --ke-elevation-reference4-close: drop-shadow(0 8px 9px rgba(42, 22, 15, 0.24)) drop-shadow(0 18px 28px rgba(42, 22, 15, 0.18));
+  --ke-elevation-reference4-panel: inset 0 1px 0 rgba(255, 255, 255, 0.56), 0 20px 46px rgba(46, 25, 16, 0.24);
+  --ke-elevation-reference4-list: 0 13px 34px rgba(46, 28, 20, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  --ke-elevation-reference4-utility: 0 12px 30px rgba(46, 28, 20, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  --ke-elevation-reference4-account: 0 5px 15px rgba(64, 40, 28, 0.08), inset 0 1px rgba(255, 255, 255, 0.64);
+
+  /* Main row masks are feature=32; account=control; share=action; back=inline. */
+  --ke-reference4-row-icon-size: var(--ke-icon-size-feature);
+  --ke-reference4-account-icon-size: var(--ke-icon-size-control);
+  --ke-reference4-share-icon-size: var(--ke-icon-size-action);
+  --ke-reference4-back-icon-size: var(--ke-icon-size-inline);
+
+  /* Retained shell close pairs:
+     - footer copy/text/contact remain separate contrast levels on inverse;
+     - service-share success/error colours are interactive receipts, not badges;
+     - Reference4 glass layers are retained because their alpha order constructs
+       the accepted stitched-skin depth and cannot collapse to one flat surface. */
+}
