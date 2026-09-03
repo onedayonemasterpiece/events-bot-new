@@ -696,3 +696,8 @@ order, но оставлял row ratio от optimized order. Cold hydration те
 решения перед DOM move; reaction path с зафиксированным viewport-prefix из
 `#780` не изменён. Это механическое восстановление уже заявленного row
 контракта, не редизайн июльской композиции.
+
+Browser release gate перед проверкой `loaded|missing` последовательно пересекает
+каждую карточку recommendations/continuation. Это сохраняет production
+`loading="lazy"`, но исключает ложный timeout второй строки, которая до
+скролла законно находилась вне preload distance Chromium.

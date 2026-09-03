@@ -111,6 +111,7 @@ test('R03 mandatory browser gate has bounded action/navigation waits and no netw
   assert.doesNotMatch(source, /window\.scrollTo\(\{\s*top:\s*document\.documentElement\.scrollHeight/gu);
   assert.match(source, /data-hide-sticky-after/gu);
   assert.match(source, /page\.mouse\.wheel\(0, 320\)/gu);
+  assert.match(source, /cardLocator\.nth\(index\)\.scrollIntoViewIfNeeded\(\)/u);
   assert.match(source, /closeAllConnections/u);
   assert.match(source, /url\.href === expected, \{ timeout: 12_000, waitUntil:'domcontentloaded' \}/u);
   assert.match(source, /let server = null;[\s\S]*let browser = null;/u);

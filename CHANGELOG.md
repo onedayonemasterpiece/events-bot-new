@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fixed: the browser release gate now crosses every lazy recommendation card
+  before waiting for loaded/missing media state, so an off-screen continuation
+  row is tested after Chromium legitimately starts its image requests rather
+  than being misclassified as a timeout.
+
 - Fixed: cold hydration of a packed event-detail discovery grid now reruns the
   canonical row packer before moving ranked DOM nodes and reapplies each
   MediaFrame row decision. Runtime ranking can no longer detach card order

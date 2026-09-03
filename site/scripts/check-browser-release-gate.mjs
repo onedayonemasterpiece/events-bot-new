@@ -328,6 +328,15 @@ async function chooseSpecimen(browser, origin, candidates) {
 }
 
 export async function assertRecommendationGeometry(page, selector, expectedCount = 1) {
+  // Runtime continuation cards inherit the canonical lazy-loading image
+  // contract. Explicitly cross every generated card before waiting for its
+  // media state; otherwise a second row can remain correctly deferred below
+  // Chromium's preload distance and the gate mistakes that for a broken URL.
+  const cardLocator = page.locator(selector);
+  const cardCount = await cardLocator.count();
+  for (let index = 0; index < cardCount; index += 1) {
+    await cardLocator.nth(index).scrollIntoViewIfNeeded();
+  }
   await page.waitForFunction((cardSelector) => Array.from(document.querySelectorAll(cardSelector))
     .filter((card) => !card.hidden)
     .every((card) => {
