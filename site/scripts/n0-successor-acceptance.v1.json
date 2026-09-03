@@ -4,8 +4,8 @@
   "contract_version": "1.9.0",
   "pm0_version": "2.3.0",
   "evidence_cutoff": {
-    "issue_comment": 5527668536,
-    "timestamp": "2026-09-03T15:13:00Z"
+    "issue_comment": 5527907602,
+    "timestamp": "2026-09-03T15:18:09Z"
   },
   "owner": "N0",
   "authority": {
@@ -42,7 +42,7 @@
     },
     "n0_branch": {
       "branch": "work/ui-normalization-n0-checklist-20260903",
-      "minimum_reviewed_commit": "84d222864664d56fb930df631e79ac6710e1879b",
+      "minimum_reviewed_commit": "eae9ed523ebe709e9e2c964053e68d20d6c16c0f",
       "resolve_remote_head_at_merge": true,
       "decision": "SOURCE_ACCEPTED_PENDING_R0_INTEGRATION_AND_EXECUTABLE_TESTS"
     },
@@ -92,14 +92,15 @@
       "document_horizontal_overflow_cases": 0,
       "unexpected_http_failures": 0,
       "expected_missing_media_404": 26,
-      "v0_independent_verdict": "PENDING"
+      "v0_independent_verdict": "DRIFT",
+      "v0_issue_comment": 5527892153
     },
     "checklist_evidence": {
       "4": "DONE_FULL_GOLDEN_KAGGLE_REVIEW_PREVIEW",
       "6": "DONE_FROZEN_KALININGRAD_CLOCK",
       "7": "DONE_EXACT_5_6_5_DENSITY",
       "8": "DONE_EXACT_WEEKEND_OCCURRENCE_REUSE",
-      "9": "PARTIAL_PUBLISHED_STRESS_MATRIX_V0_VISUAL_VERDICT_PENDING",
+      "9": "PARTIAL_PUBLISHED_STRESS_MATRIX_V0_DRIFT",
       "10": "DONE_PINNED_CORPUS_AND_ASSETS_APPEND_ONLY_WINDOW_ACTIVE"
     },
     "does_not_close": [
@@ -128,6 +129,66 @@
     "page_classes": ["all"],
     "publication": "INTENTIONALLY_NOT_PUBLISHED",
     "accepted_as": "PIPELINE_SOURCE_AND_FROZEN_CLOCK_DIAGNOSTIC_ONLY"
+  },
+  "v0_golden_verdict": {
+    "issue_comment": 5527892153,
+    "verdict": "DRIFT",
+    "release_acceptance": false,
+    "target": {
+      "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
+      "repo_sha": "84504f30eebc334deba46e94365601c3d572c5c0",
+      "data_mode": "golden",
+      "contract_version": "1.9.0"
+    },
+    "matrix": {
+      "viewports": [375, 620, 1024, 1440],
+      "routes_per_viewport": 10,
+      "document_http_200": 40,
+      "document_total": 40,
+      "free_collection_visible_cards_at_375": 6,
+      "free_collection_horizontal_overflow_observed": false
+    },
+    "findings": {
+      "event_card_auxiliary_target_height": {
+        "classification": "ACCEPTED_PRODUCT_DRIFT",
+        "owner": "A0",
+        "source_path": "site/src/layouts/EventLayout.astro",
+        "selector": ".event-card--split-actions .event-card__utility-row .feedback-button--negative",
+        "observed_height_px": 36.28,
+        "source_override_px": 36,
+        "minimum_height_px": 44,
+        "required_fix": "remove the specific 36px override or raise it to at least 44px while preserving the existing Not interested behavior",
+        "blocks_first_real_candidate": true
+      },
+      "stable_dom_anchors": {
+        "classification": "REJECTED_AS_V0_SELECTOR_CONTRACT_DRIFT",
+        "source_change_required": false,
+        "canonical_identity": [
+          "data-ds-family",
+          "data-ds-version",
+          "data-ds-variant",
+          "data-ds-state"
+        ],
+        "existing_surface_hooks": [
+          "data-free-collection-surface",
+          "data-adaptive-event-card-grid",
+          "data-event-card"
+        ],
+        "forbidden_resolution": "do not add a parallel data-ui-* identity layer",
+        "required_v0_update": "use the canonical data-ds identity plus existing family-specific hooks"
+      },
+      "target_blank": {
+        "classification": "REJECTED_AS_OVERBROAD_V0_NEGATIVE_GATE",
+        "source_change_required": false,
+        "accepted_behavior": "external social/action links may open a new context when they are isolated by safe rel tokens",
+        "required_rel_tokens": ["noopener", "noreferrer"],
+        "replacement_negative_selectors": [
+          "[target=\"_blank\"]:not([rel~=\"noopener\"])",
+          "[target=\"_blank\"]:not([rel~=\"noreferrer\"])"
+        ],
+        "observed_legitimate_example": "a[aria-label=\"Telegram: Анонсы\"][target=\"_blank\"][rel~=\"noopener\"][rel~=\"noreferrer\"]"
+      }
+    }
   },
   "role_outputs": {
     "F0": {
@@ -166,7 +227,7 @@
           "site/src/layouts/EventLayout.astro",
           "site/src/layouts/PrelaunchLayout.astro"
         ],
-        "transitional_local_icon_alias_consumers_before_A0_projection": [
+        "transitional_local_icon_alias_consumers_before_A0_materialization": [
           "site/src/components/InterestProfile.astro",
           "site/src/components/InterestClubCard.astro",
           "site/src/components/artifacts/ArtifactCollection.astro"
@@ -225,66 +286,55 @@
       "latest_reviewed_head": "ec926580fa2cc003318006f4c1d671fc459ea26c",
       "merge_base": "25adccae5975c447f9ee734b110adfb2f8a9d6ae",
       "branch_commits_after_merge_base": 45,
-      "decision": "SELECTIVE_PATH_PROJECTION_ACCEPTED_WHOLE_BRANCH_HELD",
+      "decision": "NET_CONSUMER_DIFF_AND_MECHANICAL_BATCH_ACCEPTED_WHOLE_BRANCH_MERGE_FORBIDDEN",
       "standalone_build_target": false,
-      "route_family_fraction": "5/9",
+      "route_family_fraction_before_materialization": "5/9",
       "product_removal_rejected_commit": "5e466d65bc2b71a814c26c063f90aa07709de08f",
       "product_behavior_restore_commit": "84399b51b77701be714fdc84429318a9a28f93fd",
       "popular_visible_binding_commit": "3630c3eb92088c5b8de163805bb2c4f564def57c",
       "popular_density_decision": "RESOLVED_PRESERVED_AND_BOUND_TO_VISIBLE_REPRESENTATIONS",
-      "accepted_latest_projection": {
-        "from_exclusive": "8f96c659cd710091fba61eb65cb4846cccdd2c38",
-        "through_inclusive": "ec926580fa2cc003318006f4c1d671fc459ea26c",
-        "commits": [
-          "3630c3eb92088c5b8de163805bb2c4f564def57c",
-          "142086f1d9ee6c2782bd0181e5ce2569d208f016",
-          "d50ca4b12261883d02904c88c84cb5fc158d4100",
-          "b239870d0c5527146e1c0a38e7f12f31ab6c6425",
-          "7106e558a44e7fac720c078aeeecf7393a7c3b8e",
-          "8cfac46df8be93309efad2f5452cf843250b9b12",
-          "92264f06f79ad1fedb20096dfb4bbecc3a8f6f72",
-          "e28b0b6ba57637fc6caebca743a302444a271b3b",
-          "75465138eae249024eb611e5e4ffd7c9a4988738",
-          "ec926580fa2cc003318006f4c1d671fc459ea26c"
+      "materialization_batch": {
+        "issue_comment": 5527907602,
+        "status": "N0_ACCEPTED_WITH_44PX_AMENDMENT",
+        "frozen_dependencies": {
+          "F0": "de92dabd4551e117ca1af1be7915ff223321cc32",
+          "M0": "4c83fc7769b1dec2d92469373e3b15154af437f4",
+          "A0": "ec926580fa2cc003318006f4c1d671fc459ea26c"
+        },
+        "materialization_order": [
+          "integrate F0",
+          "integrate M0",
+          "apply the net A0 consumer diff excluding M0 roots",
+          "apply A0-MECH-01 through A0-MECH-05",
+          "run exact source tests before any full Kaggle build"
         ],
-        "source_paths": [
-          "site/src/components/FavoritesSurface.astro",
-          "site/src/components/HomeColdStartFeed.astro",
-          "site/src/components/PersonalFeedSlot.astro",
-          "site/src/components/listings/PopularListingSurface.astro",
-          "site/src/components/InterestClubCard.astro",
-          "site/src/components/artifacts/ArtifactCollection.astro",
-          "site/src/pages/kluby-po-interesam/index.astro"
+        "exclude_m0_roots": [
+          "site/src/components/AdaptiveEventCardGrid.astro",
+          "site/src/components/EventCard.astro",
+          "site/src/components/listings/ListingEventCard.astro",
+          "site/src/components/EventMediaRail.astro",
+          "site/src/components/listings/MobileListingRailRow.astro",
+          "site/src/components/media-frame.css",
+          "site/src/components/OptimizedEventCardGrid.astro"
         ],
-        "regression_paths": [
-          "site/tests/a0-adaptive-grid-consumer-ownership.test.mjs",
-          "site/tests/a0-consumer-ownership.test.mjs"
+        "clusters": {
+          "A0-MECH-01": "remove final InterestProfile local icon-role dimensions",
+          "A0-MECH-02": "publish AuthorizedEventSearch and SearchResultsComposition identity without forcing an Adaptive grid",
+          "A0-MECH-03": "remove MobileListingRailSurface MediaFrame/icon/font duplicate ownership",
+          "A0-MECH-04": "converge DesktopEventPage, EventLayout, EventHero and MobileEventProductionStyles on current M0 roots",
+          "A0-MECH-05": "add exhibitions/festivals route identity and canonical guide icons"
+        },
+        "n0_amendments": [
+          "A0-MECH-04 must remove or raise EventLayout's 36px not-interested override so the computed target is at least 44px",
+          "the stable selector contract is data-ds family/version/variant/state plus existing family hooks; do not add data-ui aliases",
+          "target=_blank remains allowed only with rel noopener and noreferrer"
         ],
-        "accepted_effects": [
-          "Popular Large/Compact choice controls exactly two visible representations",
-          "PersonalFeed, Home and Favorites delegate Adaptive diagnostics to the canonical root",
-          "interest-club route consumes the F0 foundation and canonical catalog-grid icon",
-          "InterestClubCard and ArtifactCollection remove local icon dimensions"
-        ]
+        "semantic_decisions_complete": true,
+        "source_checkpoint_tests_executed_by_A0": false,
+        "candidate_integrated": false,
+        "browser_verdict_claimed": false,
+        "rollback_unit": "each A0-MECH cluster"
       },
-      "excluded_from_nearest_projection": [
-        "site/src/components/OptimizedEventCardGrid.astro",
-        "site/src/components/design-system/a0-media-frame-exceptions.v1.json",
-        "site/tests/event-hero-media-frame-exception.test.mjs"
-      ],
-      "remaining_owned_paths": [
-        "site/src/pages/festivali/index.astro",
-        "site/src/components/ExhibitionsPersonalSurface.astro",
-        "site/src/components/DesktopEventPage.astro",
-        "site/src/layouts/EventLayout.astro",
-        "site/src/components/listings/MobileListingRailSurface.astro"
-      ],
-      "remaining": [
-        "four route families remain PARTIAL",
-        "M0-owned OptimizedEventCardGrid may not be imported from the A0 branch",
-        "temporary EventHero exception is not accepted into the first-real candidate",
-        "remaining five consumer/layout paths require later A0 source closure"
-      ],
       "must_preserve_without_owner_decision": [
         "visible Large/Compact choice",
         "localStorage restoration",
@@ -297,34 +347,41 @@
   "candidate_plan": {
     "nearest_full_real_candidate": {
       "base": "9152994b026b34d60d21d68bfa2a4d7d8dc20f3e",
-      "status": "PARTIAL_INTEGRATION_REQUIRED",
+      "status": "BLOCKED_BY_V0_TARGET_HEIGHT_FIX_AND_PARTIAL_INTEGRATION",
       "include": [
         {
           "source": "work/ui-normalization-n0-checklist-20260903",
           "selection": "CURRENT_REMOTE_HEAD_IF_DESCENDANT_OF_MINIMUM_REVIEWED_COMMIT_AND_NO_NEW_UNREVIEWED_N0_SOURCE",
-          "reason": "contract-1.9 acceptance, one-pipeline policy, public identity and downstream gate regression"
+          "reason": "contract-1.9 acceptance, one-pipeline policy, public identity, V0 drift classification and downstream gate regression"
         },
         {
           "source": "work/ui-normalization-f0-wave-3-20260903",
-          "selection": "REVIEWED_SOURCE_PATHS_THROUGH_de92dabd",
+          "selection": "EXACT_FROZEN_HEAD_de92dabd4551e117ca1af1be7915ff223321cc32",
           "reason": "foundation owner closure, exactly-four icon roles and typography authority"
         },
         {
           "source": "work/ui-normalization-m0-continuity-20260903",
-          "selection": "EIGHTEEN_COMMITS_AFTER_1d145d5_THROUGH_4c83fc77",
+          "selection": "EXACT_FROZEN_HEAD_4c83fc7769b1dec2d92469373e3b15154af437f4",
           "reason": "complete reviewed M0 delta through canonical icon roles and natural document sizing"
         },
         {
           "source": "work/ui-normalization-a0-wave-3-20260903",
-          "selection": "ONLY_role_outputs.A0.accepted_latest_projection.source_paths_AND_regression_paths_AT_ec926580",
-          "reason": "remove duplicate grid/icon ownership and preserve visible Popular density behavior"
+          "selection": "NET_A0_CONSUMER_DIFF_THROUGH_ec926580fa2cc003318006f4c1d671fc459ea26c_EXCLUDING_M0_ROOTS_PLUS_A0_MECH_01_TO_05",
+          "reason": "actual-consumer convergence, preserved Popular density behavior and exact route/search/event-detail bindings"
+        }
+      ],
+      "blocking_source_fixes": [
+        {
+          "code": "EVENT_CARD_AUXILIARY_TARGET_HEIGHT_BELOW_44PX",
+          "owner": "A0",
+          "path": "site/src/layouts/EventLayout.astro",
+          "required": "specific not-interested target min-height absent or >=44px",
+          "verification": "N0_REQUIRE_V0_GOLDEN_DRIFT_FIXED=1 npm run test:n0-v0-golden-drift"
         }
       ],
       "hold_for_next_successor": [
-        "all A0 paths outside the accepted latest projection",
-        "A0 remaining_owned_paths",
-        "any F0/M0/A0 commit newer than latest_reviewed_head until N0 reviews it",
-        "fresh-real V0 DRIFT fixes"
+        "any role commit newer than the frozen reviewed head until N0 reviews it",
+        "fresh-real V0 DRIFT fixes after the next published preview"
       ],
       "preserve": [
         "c124ca2a810f100122230b7f51ec1221f7e74be4 responsive specificity correction",
@@ -338,17 +395,18 @@
         "5e466d65bc2b71a814c26c063f90aa07709de08f semantic removal as final state",
         "local full-preview publication commands",
         "whole-current-A0-tip merge",
-        "A0 projection of the M0-owned OptimizedEventCardGrid",
-        "temporary EventHero exception in the first-real candidate",
+        "A0 replay of M0-owned roots",
+        "parallel data-ui identity aliases",
+        "blanket target=_blank ban",
         "runtime inheritance from an earlier build"
       ]
     },
     "post_real_successor": {
-      "status": "WAITING_FOR_A0_REMAINING_PATHS_AND_V0_DRIFT",
+      "status": "WAITING_FOR_FRESH_REAL_V0_DRIFT",
       "inputs": [
-        "completed A0 route-family source matrix or exact later selective projections",
         "fresh-real V0 DRIFT findings",
-        "any later N0-reviewed F0/M0 tips"
+        "any later N0-reviewed role tips",
+        "remaining source fixes not included in the accepted A0 materialization batch"
       ]
     }
   },
@@ -356,12 +414,13 @@
     {
       "id": "CURRENT_SOURCE_CANDIDATE",
       "owner": "R0",
-      "status": "PARTIAL",
+      "status": "BLOCKED_BY_ONE_A0_SOURCE_FIX_AND_INTEGRATION",
       "requires": [
         "integrate candidate_plan.nearest_full_real_candidate.include onto its exact base",
+        "apply candidate_plan.nearest_full_real_candidate.blocking_source_fixes",
         "preserve candidate_plan.nearest_full_real_candidate.preserve",
         "exclude candidate_plan.nearest_full_real_candidate.reject",
-        "stop if any role head is newer than its latest reviewed boundary and changes selected paths",
+        "stop if a role head is newer than its frozen reviewed boundary and changes selected paths",
         "run required_source_commands_after_integration"
       ],
       "output": "one exact tested successor SHA"
@@ -455,11 +514,11 @@
   },
   "v0_triggers": {
     "golden": {
-      "status": "READY_REQUIRES_PROPER_BROWSER_ACTIVATION",
+      "status": "AUDITED_DRIFT",
       "url": "https://kenigevents.ru/preview-golden-84504f30-20270604-v1/__preview/",
       "scope": "Golden route/media/grid/state audit; no fresh-real voice-review credit",
-      "latest_v0_comment": 5527356024,
-      "v0_observations": 0,
+      "latest_v0_comment": 5527892153,
+      "v0_document_loads": 40,
       "v0_pass": false
     },
     "fresh_real": {
@@ -469,11 +528,13 @@
   },
   "required_source_commands_after_integration": [
     "cd site && npm run test:n0-successor-acceptance",
+    "cd site && npm run test:n0-v0-golden-drift",
+    "cd site && N0_REQUIRE_V0_GOLDEN_DRIFT_FIXED=1 npm run test:n0-v0-golden-drift",
     "cd site && npm run test:golden-preview-contract",
     "cd site && npm run check:preview",
     "cd site && npm run check:design-system-production-surfaces",
     "cd site && npm run check:design-system-iconography",
-    "cd site && node --test tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/listing-event-card-media-fallback.test.mjs tests/event-card-flex-placement.test.mjs tests/m0-card-icon-role-contract.test.mjs tests/media-frame-style-owner.test.mjs tests/a0-adaptive-grid-consumer-ownership.test.mjs tests/a0-consumer-ownership.test.mjs",
+    "cd site && node --test tests/a0-consumer-ownership.test.mjs tests/a0-adaptive-grid-consumer-ownership.test.mjs tests/a0-route-family-normalization.test.mjs tests/a0-foundation-reference-integrity.test.mjs tests/interest-profile-normalization.test.mjs tests/search-learning.test.mjs tests/personal-feed-surface.test.mjs tests/favorites-home-contract.test.mjs tests/adaptive-grid-diagnostic-cardinality.test.mjs tests/media-frame-style-owner.test.mjs tests/event-media-rail-hardening.test.mjs tests/m0-card-icon-role-contract.test.mjs tests/mobile-listing-rails.test.mjs tests/visual-keyboard-regressions.test.mjs",
     "cd site && node src/components/design-system/check-f0-typography-authority.mjs",
     "cd site && node src/components/design-system/check-f0-interest-club-and-icon-contract.mjs"
   ],
@@ -483,7 +544,10 @@
     "do not infer runtime acceptance from an earlier exact-SHA build",
     "do not integrate the invalid M0 result SHA",
     "do not merge the current A0 branch wholesale",
+    "do not replay A0 versions of M0-owned roots",
     "do not delete or silently retire the Popular density choice without an owner product decision",
+    "do not add a parallel data-ui identity system",
+    "do not treat safe external target=_blank links as product drift",
     "do not treat R0 browser smoke as a V0 verdict",
     "do not treat Golden as fresh-real preview evidence",
     "do not open thin-S or Penpot materialization before accepted executable Astro and required V0 evidence"
