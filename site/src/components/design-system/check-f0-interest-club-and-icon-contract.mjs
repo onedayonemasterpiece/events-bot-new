@@ -94,7 +94,10 @@ for (const fragment of [
   assert.ok(foundationsTs.includes(fragment), `foundations.ts misses ${fragment}`);
 }
 assert.ok(semanticIcon.includes("name === 'catalog-grid'"), 'SemanticIcon misses catalog-grid rendering');
+assert.ok(semanticIcon.includes("'ke-icon-contract--four-role-v1'"), 'delegated semantic icons miss the role contract class');
+assert.ok(semanticIcon.includes("'ke-icon-size-owner--foundations'"), 'delegated semantic icons miss the size-owner class');
 assert.ok(semanticIcon.includes('data-ke-icon-contract="four-role-v1"'), 'local semantic icons miss role diagnostics');
+assert.ok(semanticIcon.includes('data-ke-icon-size-owner="foundations.css"'), 'local semantic icons miss size-owner diagnostics');
 
 const transitionalConsumers = [
   ['site/src/components/InterestProfile.astro', '--ke-personalization-consent-icon-size', 'action'],
@@ -121,6 +124,8 @@ console.log(JSON.stringify({
   contract: 'F0_INTEREST_CLUB_AND_ICON_ROLE_V1',
   icon_role_count: 4,
   icon_alias_count: declarations.size - canonicalTokens.size,
+  delegated_icon_diagnostics: 'CLASS_CONTRACT_PASS',
+  local_icon_diagnostics: 'DATA_AND_CLASS_CONTRACT_PASS',
   pending_local_override_consumers: pendingLocalOverrides,
   route_catalog_state: routeCatalogState,
   club_route_foundation: 'TOKEN_ONLY_PASS',
