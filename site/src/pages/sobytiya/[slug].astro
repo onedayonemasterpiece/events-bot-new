@@ -8,7 +8,7 @@ import EventBusTransportSchedule from '../../components/EventBusTransportSchedul
 import KaupTransportSchedule from '../../components/KaupTransportSchedule.astro';
 import EventTokenMedallions from '../../components/EventTokenMedallions.astro';
 import EventParticipants from '../../components/EventParticipants.astro';
-import EventCard from '../../components/EventCard.astro';
+import AdaptiveEventCardGrid from '../../components/AdaptiveEventCardGrid.astro';
 import Icon from '../../components/Icon.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
 import MobileEventProductionStyles from '../../components/MobileEventProductionStyles.astro';
@@ -22,7 +22,6 @@ import { buildDesktopEventPresentation } from '../../lib/desktopEventPresentatio
 import { desktopEventWithExplicitEnd } from '../../lib/desktopEventTransport';
 import { IS_PRODUCTION_FAMILY, PREVIEW_BUILD_ID, siteHomeHref, displayDateTime, displayUpdatedAtKaliningrad, eventAbsoluteUrl, eventActionHref, eventCalendarHref, eventCalendarStateExpiryDay, eventHref, eventTicketActionLabel, getEventBySlug, getEventDetailEvents, getOccurrencePresentation, eventDetailRelatedAlgorithmId, getPreloadedDiscoveryEvents, isArchivedEventDetail, isEventDetailCalendarEligible, isTelephoneUrl, withBase } from '../../lib/events';
 
-type FeedCardVariant = 'split-actions';
 const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
   5878: 'poster-billboard',
   6322: 'photo-cinematic-sheet',
@@ -30,7 +29,6 @@ const HERO_COMPOSITION_BY_EVENT_ID: Record<number, HeroComposition> = {
   5370: 'photo-parallax-sheet',
   4512: 'photo-parallax-sheet',
 };
-const feedCardVariant: FeedCardVariant = 'split-actions';
 
 export function getStaticPaths() {
   return getEventDetailEvents().map((event) => ({ params: { slug: event.slug } }));
@@ -189,18 +187,20 @@ const keyboardEventNavigationEnabled = (IS_PRODUCTION_FAMILY
       <section id="discovery-feed" class="section-card mobile-event-production__discovery" style="margin-top: 1rem;" data-hide-sticky-after>
         <div class="section-card__inner">
           <h2>Смотрите дальше</h2>
-          <div
-            class="cards-grid cards-grid--immersive"
-            data-discovery-feed
-            data-surface="event_detail_related"
-            data-layout-mode="module"
-            data-algorithm-id={discoveryAlgorithmId}
-            data-current-event-id={event.id}
-            data-discovery-src={withBase(`/data/discovery/${event.id}.json`)}
-            data-feed-card-variant={feedCardVariant}
-          >
-            {discoveryFeed.map((candidate) => <EventCard event={candidate} variant={feedCardVariant} />)}
-          </div>
+          <AdaptiveEventCardGrid
+            events={discoveryFeed}
+            mode="flow"
+            rowSize={1}
+            responsive="fixed"
+            mobileFlowMedia={false}
+            discoveryFeed
+            className="cards-grid--immersive"
+            surface="event_detail_related"
+            algorithmId={discoveryAlgorithmId}
+            currentEventId={event.id}
+            discoverySrc={withBase(`/data/discovery/${event.id}.json`)}
+            rootAttributes={{ 'data-layout-mode':'module' }}
+          />
           <button type="button" class="secondary-button discovery-load-more" data-discovery-load-more hidden>Показать ещё</button>
         </div>
       </section>

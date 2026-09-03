@@ -2,6 +2,7 @@
 import EventLayout from '../../layouts/EventLayout.astro';
 import DateListingSurface from '../../components/listings/DateListingSurface.astro';
 import PersonalFeedSlot from '../../components/PersonalFeedSlot.astro';
+import '../../components/design-system/foundations.css';
 import { absoluteUrl, getCurrentDate, getPreviewBuild, getTodayPrimaryEvents, SITE_NAME, withBase } from '../../lib/events';
 import { getStaticEventDateManifest } from '../../lib/staticEventDates';
 
@@ -39,22 +40,22 @@ const dateLabel = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'nume
 
 <style>
   .today-review-notice {
-    width:min(1180px, calc(100% - 32px));
-    margin:18px auto 0;
-    padding:14px 16px;
-    border:1px solid rgba(165,72,33,.22);
-    border-radius:14px;
-    background:#fff4df;
-    color:#5d2c19;
+    width:min(var(--ke-review-notice-max-width), calc(100% - var(--ke-space-8)));
+    margin:var(--ke-review-notice-margin-top) auto 0;
+    padding:var(--ke-review-notice-padding-block) var(--ke-review-notice-padding-inline);
+    border:var(--ke-shape-border-hairline) solid var(--ke-color-review-notice-border);
+    border-radius:var(--ke-review-notice-radius);
+    background:var(--ke-color-review-notice-background);
+    color:var(--ke-color-review-notice-text);
   }
   .today-review-notice strong,
   .today-review-notice span { display:block; }
-  .today-review-notice span { margin-top:4px; font-size:.9rem; }
+  .today-review-notice span { margin-top:var(--ke-review-notice-copy-gap); font-size:.9rem; }
   @media (max-width:720px) {
     .today-review-notice {
       width:auto;
-      margin:8px 12px 0;
-      padding:11px 12px;
+      margin:var(--ke-space-sm) var(--ke-space-md) 0;
+      padding:11px var(--ke-space-md);
       font-size:.82rem;
     }
   }

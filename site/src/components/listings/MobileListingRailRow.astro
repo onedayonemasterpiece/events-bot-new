@@ -6,6 +6,7 @@ import { occurrenceTime } from '../../lib/eventOccurrences';
 import { selectListingImage } from '../../lib/listingPresentation';
 import { resolveMobileListingRailMediaItems } from '../../lib/mobileListingRailMedia.mjs';
 import { getListingIdentityMedallions } from '../../lib/listingVenueMedallions';
+import './mobile-listing-foundation-bindings.css';
 import Icon from '../Icon.astro';
 import AmberRailArtifact from './AmberRailArtifact.astro';
 
@@ -36,12 +37,31 @@ const likesCount = event.likes_count || 0;
 const href = eventHref(event);
 const useDatePrimary = occurrenceMode === 'per-family' && Boolean(occurrence);
 const noExactTime = !timeLine;
+const scheduleState = compactRailDateRange ? 'date-range' : noExactTime ? 'no-time' : 'exact-time';
+const mediaCountState = railMediaItems.length > 1 ? 'multi-media' : 'single-media';
+const rowState = [
+  scheduleState,
+  mediaCountState,
+  priority ? 'priority' : 'lazy',
+  `identity-${identities.length}`,
+  event.ticket?.is_free ? 'free-admission' : null,
+  amberArtifactTail ? 'amber-tail' : null,
+].filter(Boolean).join(' ');
+const mediaFrameKind = (railMedia: (typeof railMediaItems)[number]) => railMedia.imageTextMode === 'visual_only'
+  ? 'visual'
+  : railMedia.imageTextMode === 'ocr_text'
+    ? 'document'
+    : 'unknown';
 const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medallion.avatarUrl.endsWith('.webp')
   ? (medallion.fallbackPngUrl || medallion.avatarUrl)
   : medallion.avatarUrl;
 ---
 <article
   class="event-row"
+  data-ds-family="MobileListingRailRow"
+  data-ds-version="1"
+  data-ds-variant={occurrenceMode}
+  data-ds-state={rowState}
   data-mobile-listing-row
   data-feedback-scope
   data-event={event.id}
@@ -56,7 +76,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
 >
   <div class="rail-window" tabindex="0" aria-label={`${event.title}. ${scheduleAria}. ${railMediaItems.length > 1 ? `${railMediaItems.length} фото, ` : 'Фото, '}описание и действия доступны горизонтальным листанием`}>
     <span class="dislike-underlay" aria-hidden="true"><span>Неинтересно</span></span>
-    <span class="like-underlay" aria-hidden="true"><Icon name="heart" /></span>
+    <span class="like-underlay" aria-hidden="true"><Icon name="heart" className="ke-icon-role ke-icon-role--feature" /></span>
     <span class="event-track">
       <a class="event-link" href={href} data-prefetch aria-label={`${event.title}. ${scheduleAria}`}>
         <span class="track-start"></span>
@@ -75,7 +95,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
             <span class="event-description">{place}</span>
             <span class="event-signals">
               <span class="event-signal event-signal--like" data-small-like hidden={likesCount <= 0}>
-                <Icon name="heart" />
+                <Icon name="heart" className="ke-icon-role ke-icon-role--inline" />
                 <span data-small-like-count>{likesCount}</span>
               </span>
             </span>
@@ -87,10 +107,24 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         {railMediaItems.map((railMedia, mediaIndex) => {
           const imageUrl = railMedia.src.startsWith('/') ? withBase(railMedia.src) : eventImageUrl(railMedia.src);
           const [focusX = '50%', focusY = '50%'] = railMedia.objectPosition.split(/\s+/u);
-          const style = `--media-width:${railMedia.width}px;--focus-x:${focusX};--focus-y:${focusY};--rail-media-fit:${railMedia.fit}`;
+          const loading = priority && mediaIndex === 0 ? 'eager' : 'lazy';
+          const style = `--media-width:${railMedia.width}px;--focus-x:${focusX};--focus-y:${focusY};--rail-media-fit:${railMedia.fit};--media-frame-ratio:${railMedia.ratio};--media-frame-object-position:${railMedia.objectPosition}`;
           return imageUrl ? (
             <span
               class:list={['event-media', 'is-loading', railMedia.fit === 'contain' && 'event-media--natural', railMedia.imageTextMode === 'ocr_text' && 'event-media--ocr']}
+              data-media-frame
+              data-media-frame-contract="v1"
+              data-media-frame-surface="mobile-listing-rail"
+              data-media-frame-kind={mediaFrameKind(railMedia)}
+              data-media-frame-fit={railMedia.fit}
+              data-media-frame-ratio={railMedia.ratio}
+              data-media-frame-object-position={railMedia.objectPosition}
+              data-media-frame-crop-reason={railMedia.reason}
+              data-media-frame-source-width={railMedia.asset?.width || undefined}
+              data-media-frame-source-height={railMedia.asset?.height || undefined}
+              data-media-frame-loading={loading}
+              data-media-frame-priority={priority && mediaIndex === 0 ? 'true' : undefined}
+              data-media-frame-interaction-owner="caller"
               data-image-text-mode={railMedia.imageTextMode}
               data-media-state="loading"
               data-rail-media-reason={railMedia.reason}
@@ -101,11 +135,12 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
               style={style}
             >
               <img
+                data-media-frame-image
                 src={imageUrl}
                 width={railMedia.asset?.width || undefined}
                 height={railMedia.asset?.height || undefined}
                 alt=""
-                loading={priority && mediaIndex === 0 ? 'eager' : 'lazy'}
+                loading={loading}
                 fetchpriority={priority && mediaIndex === 0 ? 'high' : 'auto'}
                 decoding="async"
               />
@@ -142,7 +177,7 @@ const medallionFallbackSrc = (medallion: (typeof identities)[number]) => medalli
         aria-pressed="false"
         aria-label={`Поставить лайк: ${event.title}. Сейчас ${likesCount}`}
       >
-        <Icon name="heart" />
+        <Icon name="heart" className="ke-icon-role ke-icon-role--action" />
         <strong data-like-count data-feedback-count>{likesCount}</strong>
       </button>
       <button

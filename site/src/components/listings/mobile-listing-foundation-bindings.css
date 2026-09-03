@@ -1,0 +1,233 @@
+@import "../design-system/foundations.css";
+
+/*
+ * A0 Wave 3 compatibility binding for the established mobile listing rail.
+ * The historical surface keeps its product-tested selectors and runtime, while
+ * this higher-specificity layer makes the F0 semantic registry the effective
+ * owner of exact shared palette, typography, spacing, shape, elevation and
+ * icon roles. Near-match values remain with the established surface.
+ */
+
+@media (max-width: 720px) {
+  html:root:has(.ke-mobile-listing-rails--v23),
+  body.mobile-shell-reference4:has(.ke-mobile-listing-rails--v23),
+  body.mobile-shell-reference4:has(.ke-mobile-listing-rails--v23) .ke-listing-page {
+    background: var(--ke-color-mobile-rail-canvas);
+  }
+
+  body.mobile-shell-reference4:has(.ke-mobile-listing-rails--v23) .site-header,
+  body.mobile-shell-reference4:has(.ke-mobile-listing-rails--v23) .site-header__inner {
+    height: var(--ke-size-mobile-header);
+    min-height: var(--ke-size-mobile-header);
+  }
+
+  body.mobile-shell-reference4:has(.ke-mobile-listing-rails--v23) .ke-listing-page {
+    padding-top: var(--ke-size-mobile-header);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 {
+    --rail-bg: var(--ke-color-mobile-rail-canvas);
+    --rail-surface: var(--ke-color-mobile-rail-surface);
+    --rail-text: var(--ke-color-mobile-rail-text);
+    --rail-muted: var(--ke-color-mobile-rail-muted);
+    --rail-line: var(--ke-color-mobile-rail-line);
+    --rail-primary: var(--ke-color-mobile-rail-primary);
+    --rail-primary-strong: var(--ke-color-mobile-rail-primary-strong);
+    --rail-time-surface: var(--ke-color-mobile-rail-time-surface);
+    --rail-time-ink: var(--ke-color-mobile-rail-time-ink);
+    --rail-cue: var(--ke-color-mobile-rail-cue);
+    color: var(--ke-color-mobile-rail-text);
+    font-family: var(--ke-font-family-sans);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .page-head {
+    height: var(--ke-mobile-rail-page-head-height);
+    padding-right: var(--ke-container-gutter-mobile);
+    padding-left: var(--ke-container-gutter-mobile);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .page-head h1 {
+    font: var(--ke-type-h1-compact);
+    letter-spacing: var(--ke-type-h1-compact-letter);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .mobile-listing-sticky-title {
+    z-index: var(--ke-layer-sticky-title);
+    height: var(--ke-size-mobile-header);
+    padding-right: var(--ke-container-gutter-mobile);
+    padding-left: var(--ke-container-gutter-mobile);
+    gap: var(--ke-space-xs);
+    border-bottom: var(--ke-shape-border-hairline) solid var(--ke-color-border-brand-subtle);
+    background: var(--ke-color-mobile-rail-sticky-background);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .mobile-listing-sticky-title strong,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .mobile-listing-sticky-title span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .feed-head__copy strong,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .feed-head__copy span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .city-picker > summary,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .city-pill,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .city-picker__panel button,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .group-head h2,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .group-head p,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .group-head > span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-time strong,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-time span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-title,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-description,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-signals,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-digest b,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-digest span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-like-cta strong,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-confirm-panel h2,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-confirm-panel p,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-confirm-panel button,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-action-toast,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-action-toast button,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .date-chip span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .date-chip strong,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .date-chip small,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-panel h2,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-panel p,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-month-nav button,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-month-nav strong,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-weekdays span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-grid > [data-calendar-date] > span,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-grid > [data-calendar-date] > b {
+    font-family: var(--ke-font-family-sans);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .feed-head {
+    height: var(--ke-mobile-rail-feed-head-height);
+    padding-right: var(--ke-container-gutter-mobile);
+    padding-left: var(--ke-container-gutter-mobile);
+    border-bottom-color: var(--ke-color-mobile-rail-line);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .city-picker > summary,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .city-pill {
+    border-radius: var(--ke-shape-radius-pill);
+    background: var(--ke-color-mobile-rail-surface);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .city-picker__panel {
+    background: var(--ke-color-mobile-rail-surface);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .group-head {
+    z-index: var(--ke-layer-sticky);
+    top: var(--ke-size-mobile-header);
+    min-height: var(--ke-mobile-rail-group-head-min-height);
+    padding-right: var(--ke-container-gutter-mobile);
+    padding-left: var(--ke-container-gutter-mobile);
+    border-color: var(--ke-color-mobile-rail-line);
+    background: var(--ke-color-mobile-rail-group-background);
+    box-shadow: var(--ke-elevation-mobile-sticky);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .group-head__icon {
+    width: var(--ke-icon-size-control);
+    height: var(--ke-icon-size-control);
+    flex-basis: var(--ke-icon-size-control);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-list {
+    gap: var(--ke-mobile-rail-section-gap);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-row,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-window,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-track,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-summary,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-media,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-digest,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-medallion-slot {
+    height: var(--ke-size-mobile-rail-row);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-link:focus-visible .event-summary {
+    outline-color: var(--ke-color-mobile-rail-focus);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-summary {
+    flex-basis: var(--ke-mobile-rail-card-width);
+    width: var(--ke-mobile-rail-card-width);
+    background: var(--ke-color-mobile-rail-surface);
+    box-shadow: var(--ke-elevation-mobile-card);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-time {
+    flex-basis: var(--ke-mobile-rail-time-width);
+    width: var(--ke-mobile-rail-time-width);
+    border-radius: var(--ke-shape-radius-compact);
+    background: var(--ke-color-mobile-rail-time-surface);
+    color: var(--ke-color-mobile-rail-time-ink);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-info {
+    flex-basis: var(--ke-mobile-rail-info-width);
+    width: var(--ke-mobile-rail-info-width);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .dislike-underlay {
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ke-color-gesture-negative) 94%, transparent),
+      color-mix(in srgb, var(--ke-color-gesture-negative) 34%, transparent) 55%,
+      transparent
+    );
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .like-underlay {
+    background: linear-gradient(
+      270deg,
+      color-mix(in srgb, var(--ke-color-gesture-positive) 96%, transparent),
+      color-mix(in srgb, var(--ke-color-gesture-positive) 42%, transparent) 58%,
+      transparent
+    );
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .like-underlay svg {
+    width: var(--ke-icon-size-feature);
+    height: var(--ke-icon-size-feature);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-signal svg {
+    width: var(--ke-icon-size-inline);
+    height: var(--ke-icon-size-inline);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-like-cta svg,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .date-calendar-trigger svg {
+    width: var(--ke-icon-size-action);
+    height: var(--ke-icon-size-action);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .event-medallion,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-panel header button,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-month-nav button {
+    border-radius: var(--ke-shape-radius-pill);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .empty,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-confirm-panel,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .rail-action-toast,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-panel {
+    background-color: var(--ke-color-mobile-rail-surface);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 [data-rail-confirm-cancel] {
+    background: var(--ke-color-mobile-rail-time-surface);
+  }
+
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .date-chip[aria-current="date"],
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .calendar-grid > a[aria-current="date"] {
+    background: var(--ke-color-mobile-rail-primary);
+  }
+
+  body.mobile-shell-reference4:has(.ke-mobile-listing-rails--v23) .mobile-bottom-nav,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .date-accessory,
+  .ke-mobile-listing-rails.ke-mobile-listing-rails--v23 .date-calendar-trigger {
+    background-color: var(--ke-color-mobile-rail-surface);
+  }
+}

@@ -1,6 +1,8 @@
 ---
 import { getAvailableWeekendRanges, getWeekendRange, withBase } from '../../lib/events';
 import { getStaticEventDateAvailability } from '../../lib/staticEventDates';
+import Icon from '../Icon.astro';
+import './mobile-listing-foundation-bindings.css';
 
 interface Props {
   today: string;
@@ -84,6 +86,10 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
 ---
 <div
   class="date-accessory"
+  data-ds-family="MobileDateAccessory"
+  data-ds-version="1"
+  data-ds-variant={current}
+  data-ds-state={selectedDate < today ? 'archived-selection' : 'current-horizon'}
   data-mobile-date-accessory
   data-selected-date={selectedDate}
   data-calendar-horizon={availability.horizonEnd}
@@ -119,7 +125,7 @@ const dateAria = (item: typeof dates[number]) => item.isWeekendRange
     ))}
   </nav>
   <button type="button" class="date-calendar-trigger" data-calendar-open aria-haspopup="dialog" aria-label="Открыть календарь">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h.25A2.75 2.75 0 0 1 21 6.75v11.5A2.75 2.75 0 0 1 18.25 21H5.75A2.75 2.75 0 0 1 3 18.25V6.75A2.75 2.75 0 0 1 5.75 4H6V3a1 1 0 0 1 1-1ZM5 9v9.25c0 .41.34.75.75.75h12.5c.41 0 .75-.34.75-.75V9H5Z" clip-rule="evenodd"></path></svg>
+    <Icon name="calendar" className="ke-icon-role ke-icon-role--action" />
   </button>
 </div>
 <div class="calendar-sheet" data-calendar-sheet hidden aria-hidden="true">
