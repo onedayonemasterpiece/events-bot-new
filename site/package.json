@@ -33,7 +33,7 @@
     "check:listing-desktop-geometry": "bash scripts/check-listing-desktop-geometry-playwright.sh",
     "check:secret-candidate": "node scripts/check-secret-candidate.mjs",
     "deploy:preview": "node scripts/deploy-preview-yc.mjs",
-    "deploy:golden-preview": "node scripts/deploy-preview-yc.mjs",
+    "deploy:golden-preview": "node scripts/deploy-golden-preview.mjs",
     "plan:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs plan",
     "publish:secret-candidate": "node scripts/deploy-secret-candidate-yc.mjs publish",
     "test:static-release": "node --test scripts/static-release.behavior.test.mjs",
