@@ -11,7 +11,7 @@ test('adaptive grid publishes full input, admitted source and rendered populatio
   const source = await read('src/components/AdaptiveEventCardGrid.astro');
 
   assert.match(source, /const inputOrder = events\.map\(\(item\) => item\.id\)\.join\(','\);/u);
-  assert.match(source, /const admittedSource = resolved[\s\S]*sourceIndex: sourceIndexByItem\.get\(item\)[\s\S]*\.filter\(\(\{ sourceIndex \}\) => sourceIndex >= 0\)[\s\S]*\.sort\(\(left, right\) => left\.sourceIndex - right\.sourceIndex\);/u);
+  assert.match(source, /const admittedSource = resolved[\s\S]*sourceIndex: resolvedSourceIndexes\[renderedIndex\] \?\? -1[\s\S]*\.filter\(\(\{ sourceIndex \}\) => sourceIndex >= 0\)[\s\S]*\.sort\(\(left, right\) => left\.sourceIndex - right\.sourceIndex\);/u);
   assert.match(source, /const sourceOrder = admittedSource\.map\(\(\{ item \}\) => item\.id\)\.join\(','\);/u);
   assert.match(source, /const renderedOrder = resolved\.map\(\(\{ item \}\) => item\.id\)\.join\(','\);/u);
 
@@ -36,6 +36,22 @@ test('adaptive grid publishes full input, admitted source and rendered populatio
   assert.match(source, /data-adaptive-grid-rendered-order=\{renderedOrder\}/u);
   assert.doesNotMatch(source, /data-adaptive-grid-source-count=\{events\.length\}/u,
     'source count must not describe the full input while source order describes an admitted subset');
+});
+
+test('duplicate object references receive distinct source indexes and item-root keys', async () => {
+  const source = await read('src/components/AdaptiveEventCardGrid.astro');
+
+  assert.match(source, /const sourceIndexesByItem = new Map<PreviewEvent, number\[\]>\(\);/u);
+  assert.match(source, /const sourceIndexesByEventId = new Map<string, number\[\]>\(\);/u);
+  assert.match(source, /itemIndexes\.push\(index\);[\s\S]*eventIndexes\.push\(index\);/u);
+  assert.match(source, /const claimedSourceIndexes = new Set<number>\(\);/u);
+  assert.match(source, /sourceIndexesByItem\.get\(item\)\?\.find\(\(index\) => !claimedSourceIndexes\.has\(index\)\)/u);
+  assert.match(source, /sourceIndexesByEventId\.get\(String\(item\.id\)\)\?\.find\(\(index\) => !claimedSourceIndexes\.has\(index\)\)/u);
+  assert.match(source, /if \(sourceIndex >= 0\) claimedSourceIndexes\.add\(sourceIndex\);/u);
+  assert.match(source, /itemRoots\[`\$\{item\.id\}:\$\{sourceIndex\}`\] \|\| itemRoots\[String\(item\.id\)\]/u);
+  assert.match(source, /const itemRoot = itemRootFor\(item, resolvedSourceIndexes\[renderedIndex\] \?\? -1\);/u);
+  assert.doesNotMatch(source, /new Map\(events\.map\(\(item, index\) => \[item, index\]\)\)/u,
+    'one object key must not collapse repeated input positions');
 });
 
 test('runtime source policies always mutate each count/order pair together', async () => {
